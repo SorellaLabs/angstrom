@@ -1,13 +1,15 @@
 #![allow(unused)]
 
-use crate::{
-    table::{Decode, Encode},
-    DatabaseError,
-};
 use postcard::{from_bytes, to_allocvec, to_vec};
 use reth_primitives::*;
 
-// Just add `Serialize` and `Deserialize`, and set impl_heapless_postcard!(T, MaxSize(T))
+use crate::{
+    table::{Decode, Encode},
+    DatabaseError
+};
+
+// Just add `Serialize` and `Deserialize`, and set impl_heapless_postcard!(T,
+// MaxSize(T))
 //
 //
 // use serde::{Deserialize, Serialize};
@@ -40,4 +42,5 @@ macro_rules! impl_postcard {
 type VecU8 = Vec<u8>;
 
 //#[cfg(feature = "bench-postcard")]
-//impl_postcard!(VecU8, Receipt, H256, U256, H160, u8, u16, u64, Header, Account, Log, TxType);
+//impl_postcard!(VecU8, Receipt, H256, U256, H160, u8, u16, u64, Header,
+// Account, Log, TxType);

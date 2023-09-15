@@ -1,19 +1,21 @@
+use reth_primitives::*;
+
 use crate::{
     table::{Compress, Decompress},
-    DatabaseError,
+    DatabaseError
 };
-use reth_primitives::*;
 
 mod sealed {
     pub trait Sealed {}
 }
 
-/// Marker trait type to restrict the [`Compress`] and [`Decompress`] with scale to chosen types.
+/// Marker trait type to restrict the [`Compress`] and [`Decompress`] with scale
+/// to chosen types.
 pub trait ScaleValue: sealed::Sealed {}
 
 impl<T> Compress for T
 where
-    T: ScaleValue + parity_scale_codec::Encode + Sync + Send + std::fmt::Debug,
+    T: ScaleValue + parity_scale_codec::Encode + Sync + Send + std::fmt::Debug
 {
     type Compressed = Vec<u8>;
 
@@ -28,7 +30,7 @@ where
 
 impl<T> Decompress for T
 where
-    T: ScaleValue + parity_scale_codec::Decode + Sync + Send + std::fmt::Debug,
+    T: ScaleValue + parity_scale_codec::Decode + Sync + Send + std::fmt::Debug
 {
     fn decompress<B: AsRef<[u8]>>(value: B) -> Result<T, DatabaseError> {
         parity_scale_codec::Decode::decode(&mut value.as_ref())

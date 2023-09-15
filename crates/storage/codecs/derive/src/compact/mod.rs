@@ -22,8 +22,8 @@ type IsCompact = bool;
 type FieldName = String;
 // Helper Alias type
 type FieldType = String;
-/// `Compact` has alternative functions that can be used as a workaround for type
-/// specialization of fixed sized types.
+/// `Compact` has alternative functions that can be used as a workaround for
+/// type specialization of fixed sized types.
 ///
 /// Example: `Vec<H256>` vs `Vec<U256>`. The first does not
 /// require the len of the element, while the latter one does.
@@ -37,7 +37,7 @@ type FieldList = Vec<FieldTypes>;
 pub enum FieldTypes {
     StructField(StructFieldDescriptor),
     EnumVariant(String),
-    EnumUnnamedField((FieldType, UseAlternative)),
+    EnumUnnamedField((FieldType, UseAlternative))
 }
 
 /// Derives the `Compact` trait and its from/to implementations.
@@ -70,7 +70,7 @@ pub fn get_fields(data: &Data) -> FieldList {
                 );
                 load_field(&data_fields.unnamed[0], &mut fields, false);
             }
-            syn::Fields::Unit => todo!(),
+            syn::Fields::Unit => todo!()
         },
         Data::Enum(data) => {
             for variant in &data.variants {
@@ -78,7 +78,10 @@ pub fn get_fields(data: &Data) -> FieldList {
 
                 match &variant.fields {
                     syn::Fields::Named(_) => {
-                        panic!("Not allowed to have Enum Variants with multiple named fields. Make it a struct instead.")
+                        panic!(
+                            "Not allowed to have Enum Variants with multiple named fields. Make \
+                             it a struct instead."
+                        )
                     }
                     syn::Fields::Unnamed(data_fields) => {
                         assert!(
@@ -87,11 +90,11 @@ pub fn get_fields(data: &Data) -> FieldList {
                         );
                         load_field(&data_fields.unnamed[0], &mut fields, true);
                     }
-                    syn::Fields::Unit => (),
+                    syn::Fields::Unit => ()
                 }
             }
         }
-        Data::Union(_) => todo!(),
+        Data::Union(_) => todo!()
     }
 
     fields
@@ -117,24 +120,32 @@ fn load_field(field: &syn::Field, fields: &mut FieldList, is_enum: bool) {
             if is_enum {
                 fields.push(FieldTypes::EnumUnnamedField((ftype.to_string(), use_alt_impl)));
             } else {
-                let should_compact = is_flag_type(&ftype) ||
-                    field.attrs.iter().any(|attr| {
-                        attr.path().segments.iter().any(|path| path.ident == "maybe_zero")
+                let should_compact = is_flag_type(&ftype)
+                    || field.attrs.iter().any(|attr| {
+                        attr.path()
+                            .segments
+                            .iter()
+                            .any(|path| path.ident == "maybe_zero")
                     });
 
                 fields.push(FieldTypes::StructField((
-                    field.ident.as_ref().map(|i| i.to_string()).unwrap_or_default(),
+                    field
+                        .ident
+                        .as_ref()
+                        .map(|i| i.to_string())
+                        .unwrap_or_default(),
                     ftype,
                     should_compact,
-                    use_alt_impl,
+                    use_alt_impl
                 )));
             }
         }
     }
 }
 
-/// Since there's no impl specialization in rust stable atm, once we find we have a
-/// Vec/Option we try to find out if it's a Vec/Option of a fixed size data type, e.g. `Vec<H256>`.
+/// Since there's no impl specialization in rust stable atm, once we find we
+/// have a Vec/Option we try to find out if it's a Vec/Option of a fixed size
+/// data type, e.g. `Vec<H256>`.
 ///
 /// If so, we use another impl to code/decode its data.
 fn should_use_alt_impl(ftype: &String, segment: &syn::PathSegment) -> bool {
@@ -156,8 +167,8 @@ fn should_use_alt_impl(ftype: &String, segment: &syn::PathSegment) -> bool {
     false
 }
 
-/// Given the field type in a string format, return the amount of bits necessary to save its maximum
-/// length.
+/// Given the field type in a string format, return the amount of bits necessary
+/// to save its maximum length.
 pub fn get_bit_size(ftype: &str) -> u8 {
     match ftype {
         "TransactionKind" | "bool" | "Option" | "Signature" => 1,
@@ -165,20 +176,21 @@ pub fn get_bit_size(ftype: &str) -> u8 {
         "u64" | "BlockNumber" | "TxNumber" | "ChainId" | "NumTransactions" => 4,
         "u128" => 5,
         "U256" => 6,
-        _ => 0,
+        _ => 0
     }
 }
 
-/// Given the field type in a string format, checks if its type should be added to the
-/// StructFlags.
+/// Given the field type in a string format, checks if its type should be added
+/// to the StructFlags.
 pub fn is_flag_type(ftype: &str) -> bool {
     get_bit_size(ftype) > 0
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use syn::parse2;
+
+    use super::*;
 
     #[test]
     fn gen() {

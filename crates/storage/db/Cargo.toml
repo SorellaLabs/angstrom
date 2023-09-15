@@ -1,12 +1,12 @@
 [package]
-name = "reth-db"
+name = "guard-db"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = "Staged syncing primitives used in reth."
+description = "Staged syncing primitives used in the guard network."
 
 [dependencies]
 # reth
@@ -61,7 +61,7 @@ pprof = { version = "0.12", features = ["flamegraph", "frame-pointer", "criterio
 criterion = "0.5"
 iai = "0.1.1"
 tokio = { workspace = true, features = ["full"] }
-reth-db = { path = ".", features = ["test-utils", "bench"] }
+guard-db = { path = ".", features = ["test-utils", "bench"] }
 
 # needed for test-fuzz to work properly, see https://github.com/paradigmxyz/reth/pull/177#discussion_r1021172198
 secp256k1.workspace = true

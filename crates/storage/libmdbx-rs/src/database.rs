@@ -1,30 +1,33 @@
+use std::{ffi::CString, marker::PhantomData, ptr};
+
+use ffi::MDBX_db_flags_t;
+
 use crate::{
     environment::EnvironmentKind,
     error::{mdbx_result, Result},
     transaction::{txn_execute, TransactionKind},
-    Transaction,
+    Transaction
 };
-use ffi::MDBX_db_flags_t;
-use std::{ffi::CString, marker::PhantomData, ptr};
 
 /// A handle to an individual database in an environment.
 ///
-/// A database handle denotes the name and parameters of a database in an environment.
+/// A database handle denotes the name and parameters of a database in an
+/// environment.
 #[derive(Debug)]
 pub struct Database<'txn> {
-    dbi: ffi::MDBX_dbi,
-    _marker: PhantomData<&'txn ()>,
+    dbi:     ffi::MDBX_dbi,
+    _marker: PhantomData<&'txn ()>
 }
 
 impl<'txn> Database<'txn> {
     /// Opens a new database handle in the given transaction.
     ///
-    /// Prefer using `Environment::open_db`, `Environment::create_db`, `TransactionExt::open_db`,
-    /// or `RwTransaction::create_db`.
+    /// Prefer using `Environment::open_db`, `Environment::create_db`,
+    /// `TransactionExt::open_db`, or `RwTransaction::create_db`.
     pub(crate) fn new<'env, K: TransactionKind, E: EnvironmentKind>(
         txn: &'txn Transaction<'env, K, E>,
         name: Option<&str>,
-        flags: MDBX_db_flags_t,
+        flags: MDBX_db_flags_t
     ) -> Result<Self> {
         let c_name = name.map(|n| CString::new(n).unwrap());
         let name_ptr = if let Some(c_name) = &c_name { c_name.as_ptr() } else { ptr::null() };
@@ -45,8 +48,8 @@ impl<'txn> Database<'txn> {
 
     /// Returns the underlying MDBX database handle.
     ///
-    /// The caller **must** ensure that the handle is not used after the lifetime of the
-    /// environment, or after the database has been closed.
+    /// The caller **must** ensure that the handle is not used after the
+    /// lifetime of the environment, or after the database has been closed.
     pub fn dbi(&self) -> ffi::MDBX_dbi {
         self.dbi
     }

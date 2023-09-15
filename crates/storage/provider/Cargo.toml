@@ -1,19 +1,19 @@
 [package]
-name = "reth-provider"
+name = "guard-provider"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = "Reth storage provider."
+description = "guard storage provider."
 
 [dependencies]
 # reth
 reth-primitives.workspace = true
 reth-interfaces.workspace = true
 reth-revm-primitives = { path = "../../revm/revm-primitives" }
-reth-db = { path = "../db" }
+storage-db = { path = "../db" }
 reth-trie = { path = "../../trie" }
 
 # async

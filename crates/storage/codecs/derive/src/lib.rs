@@ -122,19 +122,21 @@ pub fn use_compact(args: TokenStream, input: TokenStream) -> TokenStream {
     derive_arbitrary(TokenStream::from_iter(args), compact)
 }
 
-/// Adds `Arbitrary` and `proptest::Arbitrary` imports into scope and derives the struct/enum.
+/// Adds `Arbitrary` and `proptest::Arbitrary` imports into scope and derives
+/// the struct/enum.
 ///
-/// If `compact` or `rlp` is passed to `derive_arbitrary`, there will be proptest roundtrip tests
-/// generated. An integer value passed will limit the number of proptest cases generated (default:
-/// 256).
+/// If `compact` or `rlp` is passed to `derive_arbitrary`, there will be
+/// proptest roundtrip tests generated. An integer value passed will limit the
+/// number of proptest cases generated (default: 256).
 ///
 /// Examples:
 /// * `#[derive_arbitrary]`: will derive arbitrary with no tests.
-/// * `#[derive_arbitrary(rlp)]`: will derive arbitrary and generate rlp roundtrip proptests.
-/// * `#[derive_arbitrary(rlp, 10)]`: will derive arbitrary and generate rlp roundtrip proptests.
-///   Limited to 10 cases.
-/// * `#[derive_arbitrary(compact, rlp)]`. will derive arbitrary and generate rlp and compact
+/// * `#[derive_arbitrary(rlp)]`: will derive arbitrary and generate rlp
 ///   roundtrip proptests.
+/// * `#[derive_arbitrary(rlp, 10)]`: will derive arbitrary and generate rlp
+///   roundtrip proptests. Limited to 10 cases.
+/// * `#[derive_arbitrary(compact, rlp)]`. will derive arbitrary and generate
+///   rlp and compact roundtrip proptests.
 #[proc_macro_attribute]
 pub fn derive_arbitrary(args: TokenStream, input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -160,7 +162,8 @@ pub fn derive_arbitrary(args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// To be used for types that implement `Arbitrary` manually. See [`derive_arbitrary()`] for more.
+/// To be used for types that implement `Arbitrary` manually. See
+/// [`derive_arbitrary()`] for more.
 #[proc_macro_attribute]
 pub fn add_arbitrary_tests(args: TokenStream, input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);

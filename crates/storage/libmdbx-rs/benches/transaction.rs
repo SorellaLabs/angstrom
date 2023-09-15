@@ -1,12 +1,13 @@
 mod utils;
 
+use std::ptr;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ffi::*;
 use libc::size_t;
 use rand::{prelude::SliceRandom, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use reth_libmdbx::{ObjectLength, WriteFlags};
-use std::ptr;
 use utils::*;
 
 fn bench_get_rand(c: &mut Criterion) {
@@ -22,7 +23,10 @@ fn bench_get_rand(c: &mut Criterion) {
         b.iter(|| {
             let mut i = 0usize;
             for key in &keys {
-                i += *txn.get::<ObjectLength>(db.dbi(), key.as_bytes()).unwrap().unwrap();
+                i += *txn
+                    .get::<ObjectLength>(db.dbi(), key.as_bytes())
+                    .unwrap()
+                    .unwrap();
             }
             black_box(i);
         })

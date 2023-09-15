@@ -3,16 +3,16 @@ use super::*;
 #[derive(Debug)]
 pub struct EnumHandler<'a> {
     current_variant_index: u8,
-    fields_iterator: std::iter::Peekable<std::slice::Iter<'a, FieldTypes>>,
-    enum_lines: Vec<TokenStream2>,
+    fields_iterator:       std::iter::Peekable<std::slice::Iter<'a, FieldTypes>>,
+    enum_lines:            Vec<TokenStream2>
 }
 
 impl<'a> EnumHandler<'a> {
     pub fn new(fields: &'a FieldList) -> Self {
         EnumHandler {
             current_variant_index: 0u8,
-            enum_lines: vec![],
-            fields_iterator: fields.iter().peekable(),
+            enum_lines:            vec![],
+            fields_iterator:       fields.iter().peekable()
         }
     }
 
@@ -27,7 +27,7 @@ impl<'a> EnumHandler<'a> {
                 // `fields_iterator` by itself and stop right before the next variant.
                 FieldTypes::EnumVariant(name) => self.to(name, ident),
                 FieldTypes::EnumUnnamedField(_) => unreachable!(),
-                FieldTypes::StructField(_) => unreachable!(),
+                FieldTypes::StructField(_) => unreachable!()
             }
         }
         self.enum_lines
@@ -40,7 +40,7 @@ impl<'a> EnumHandler<'a> {
                 // `fields_iterator` by itself and stop right before the next variant.
                 FieldTypes::EnumVariant(name) => self.from(name, ident),
                 FieldTypes::EnumUnnamedField(_) => unreachable!(),
-                FieldTypes::StructField(_) => unreachable!(),
+                FieldTypes::StructField(_) => unreachable!()
             }
         }
         self.enum_lines
@@ -48,8 +48,8 @@ impl<'a> EnumHandler<'a> {
 
     /// Generates `from_compact` code for an enum variant.
     ///
-    /// `fields_iterator` might look something like \[VariantUnit, VariantUnamedField, Field,
-    /// VariantUnit...\].
+    /// `fields_iterator` might look something like \[VariantUnit,
+    /// VariantUnamedField, Field, VariantUnit...\].
     pub fn from(&mut self, variant_name: &str, ident: &Ident) {
         let variant_name = format_ident!("{variant_name}");
         let current_variant_index = self.current_variant_index;
@@ -78,7 +78,7 @@ impl<'a> EnumHandler<'a> {
                 FieldTypes::EnumVariant(_) => self.enum_lines.push(quote! {
                     #current_variant_index => #ident::#variant_name,
                 }),
-                FieldTypes::StructField(_) => unreachable!(),
+                FieldTypes::StructField(_) => unreachable!()
             };
         } else {
             // This variant has no fields: Unit type
@@ -91,8 +91,8 @@ impl<'a> EnumHandler<'a> {
 
     /// Generates `to_compact` code for an enum variant.
     ///
-    /// `fields_iterator` might look something like [VariantUnit, VariantUnamedField, Field,
-    /// VariantUnit...].
+    /// `fields_iterator` might look something like [VariantUnit,
+    /// VariantUnamedField, Field, VariantUnit...].
     pub fn to(&mut self, variant_name: &str, ident: &Ident) {
         let variant_name = format_ident!("{variant_name}");
         let current_variant_index = self.current_variant_index;
@@ -118,7 +118,7 @@ impl<'a> EnumHandler<'a> {
                 FieldTypes::EnumVariant(_) => self.enum_lines.push(quote! {
                     #ident::#variant_name => #current_variant_index,
                 }),
-                FieldTypes::StructField(_) => unreachable!(),
+                FieldTypes::StructField(_) => unreachable!()
             };
         } else {
             // This variant has no fields: Unit type

@@ -1,7 +1,8 @@
 //! Code generator for the `Compact` trait.
 
-use super::*;
 use convert_case::{Case, Casing};
+
+use super::*;
 
 /// Generates code to implement the `Compact` trait for a data type.
 pub fn generate_from_to(ident: &Ident, fields: &FieldList, is_zstd: bool) -> TokenStream2 {
@@ -54,8 +55,9 @@ fn generate_from_compact(fields: &FieldList, ident: &Ident, is_zstd: bool) -> To
     let mut lines = vec![];
     let mut known_types = vec!["H256", "H160", "Address", "Bloom", "Vec", "TxHash"];
 
-    // Only types without `bytes::Bytes` should be added here. It's currently manually added, since
-    // it's hard to figure out with derive_macro which types have bytes::Bytes fields.
+    // Only types without `bytes::Bytes` should be added here. It's currently
+    // manually added, since it's hard to figure out with derive_macro which
+    // types have bytes::Bytes fields.
     //
     // This removes the requirement of the field to be placed last in the struct.
     known_types.append(&mut vec![
@@ -66,7 +68,9 @@ fn generate_from_compact(fields: &FieldList, ident: &Ident, is_zstd: bool) -> To
     ]);
 
     // let mut handle = FieldListHandler::new(fields);
-    let is_enum = fields.iter().any(|field| matches!(field, FieldTypes::EnumVariant(_)));
+    let is_enum = fields
+        .iter()
+        .any(|field| matches!(field, FieldTypes::EnumVariant(_)));
 
     if is_enum {
         let enum_lines = EnumHandler::new(fields).generate_from(ident);
@@ -89,7 +93,7 @@ fn generate_from_compact(fields: &FieldList, ident: &Ident, is_zstd: bool) -> To
             });
         } else {
             let fields = fields.iter().filter_map(|field| {
-                if let FieldTypes::StructField((name, _, _, _)) = field {
+                if let FieldTypes::StructField((name, ..)) = field {
                     let ident = format_ident!("{name}");
                     return Some(quote! {
                         #ident: #ident,
@@ -106,9 +110,10 @@ fn generate_from_compact(fields: &FieldList, ident: &Ident, is_zstd: bool) -> To
         }
     }
 
-    // If the type has compression support, then check the `__zstd` flag. Otherwise, use the default
-    // code branch. However, even if it's a type with compression support, not all values are
-    // to be compressed (thus the zstd flag). Ideally only the bigger ones.
+    // If the type has compression support, then check the `__zstd` flag. Otherwise,
+    // use the default code branch. However, even if it's a type with
+    // compression support, not all values are to be compressed (thus the zstd
+    // flag). Ideally only the bigger ones.
     is_zstd
         .then(|| {
             let decompressor = format_ident!("{}_DECOMPRESSOR", ident.to_string().to_uppercase());
@@ -152,7 +157,9 @@ fn generate_to_compact(fields: &FieldList, ident: &Ident, is_zstd: bool) -> Vec<
         let mut buffer = bytes::BytesMut::new();
     }];
 
-    let is_enum = fields.iter().any(|field| matches!(field, FieldTypes::EnumVariant(_)));
+    let is_enum = fields
+        .iter()
+        .any(|field| matches!(field, FieldTypes::EnumVariant(_)));
 
     if is_enum {
         let enum_lines = EnumHandler::new(fields).generate_to(ident);
@@ -166,9 +173,9 @@ fn generate_to_compact(fields: &FieldList, ident: &Ident, is_zstd: bool) -> Vec<
         lines.append(&mut StructHandler::new(fields).generate_to());
     }
 
-    // Just because a type supports compression, doesn't mean all its values are to be compressed.
-    // We skip the smaller ones, and thus require a flag `__zstd` to specify if this value is
-    // compressed or not.
+    // Just because a type supports compression, doesn't mean all its values are to
+    // be compressed. We skip the smaller ones, and thus require a flag `__zstd`
+    // to specify if this value is compressed or not.
     if is_zstd {
         lines.push(quote! {
             let mut zstd = buffer.len() > 7;

@@ -9,13 +9,19 @@ fn test_open() {
     let dir = tempdir().unwrap();
 
     // opening non-existent env with read-only should fail
-    assert!(Environment::new().set_flags(Mode::ReadOnly.into()).open(dir.path()).is_err());
+    assert!(Environment::new()
+        .set_flags(Mode::ReadOnly.into())
+        .open(dir.path())
+        .is_err());
 
     // opening non-existent env should succeed
     assert!(Environment::new().open(dir.path()).is_ok());
 
     // opening env with read-only should succeed
-    assert!(Environment::new().set_flags(Mode::ReadOnly.into()).open(dir.path()).is_ok());
+    assert!(Environment::new()
+        .set_flags(Mode::ReadOnly.into())
+        .open(dir.path())
+        .is_ok());
 }
 
 #[test]
@@ -32,7 +38,10 @@ fn test_begin_txn() {
 
     {
         // read-only environment
-        let env = Environment::new().set_flags(Mode::ReadOnly.into()).open(dir.path()).unwrap();
+        let env = Environment::new()
+            .set_flags(Mode::ReadOnly.into())
+            .open(dir.path())
+            .unwrap();
 
         assert!(env.begin_rw_txn().is_err());
         assert!(env.begin_ro_txn().is_ok());
@@ -56,7 +65,9 @@ fn test_create_db() {
 
     let txn = env.begin_rw_txn().unwrap();
     assert!(txn.open_db(Some("testdb")).is_err());
-    assert!(txn.create_db(Some("testdb"), DatabaseFlags::empty()).is_ok());
+    assert!(txn
+        .create_db(Some("testdb"), DatabaseFlags::empty())
+        .is_ok());
     assert!(txn.open_db(Some("testdb")).is_ok())
 }
 
@@ -78,7 +89,10 @@ fn test_sync() {
         env.sync(true).unwrap();
     }
     {
-        let env = Environment::new().set_flags(Mode::ReadOnly.into()).open(dir.path()).unwrap();
+        let env = Environment::new()
+            .set_flags(Mode::ReadOnly.into())
+            .open(dir.path())
+            .unwrap();
         env.sync(true).unwrap_err();
     }
 }

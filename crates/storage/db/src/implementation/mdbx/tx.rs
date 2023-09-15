@@ -1,32 +1,34 @@
 //! Transaction wrapper for libmdbx-sys.
 
+use std::{marker::PhantomData, str::FromStr, sync::Arc, time::Instant};
+
+use parking_lot::RwLock;
+use reth_interfaces::db::DatabaseWriteOperation;
+use reth_libmdbx::{ffi::DBI, EnvironmentKind, Transaction, TransactionKind, WriteFlags, RW};
+use reth_metrics::metrics::histogram;
+
 use super::cursor::Cursor;
 use crate::{
     table::{Compress, DupSort, Encode, Table, TableImporter},
     tables::{utils::decode_one, Tables, NUM_TABLES},
     transaction::{DbTx, DbTxGAT, DbTxMut, DbTxMutGAT},
-    DatabaseError,
+    DatabaseError
 };
-use parking_lot::RwLock;
-use reth_interfaces::db::DatabaseWriteOperation;
-use reth_libmdbx::{ffi::DBI, EnvironmentKind, Transaction, TransactionKind, WriteFlags, RW};
-use reth_metrics::metrics::histogram;
-use std::{marker::PhantomData, str::FromStr, sync::Arc, time::Instant};
 
 /// Wrapper for the libmdbx transaction.
 #[derive(Debug)]
 pub struct Tx<'a, K: TransactionKind, E: EnvironmentKind> {
     /// Libmdbx-sys transaction.
-    pub inner: Transaction<'a, K, E>,
+    pub inner:      Transaction<'a, K, E>,
     /// Database table handle cache
-    pub db_handles: Arc<RwLock<[Option<DBI>; NUM_TABLES]>>,
+    pub db_handles: Arc<RwLock<[Option<DBI>; NUM_TABLES]>>
 }
 
 impl<'env, K: TransactionKind, E: EnvironmentKind> Tx<'env, K, E> {
     /// Creates new `Tx` object with a `RO` or `RW` transaction.
     pub fn new<'a>(inner: Transaction<'a, K, E>) -> Self
     where
-        'a: 'env,
+        'a: 'env
     {
         Self { inner, db_handles: Default::default() }
     }
@@ -48,7 +50,7 @@ impl<'env, K: TransactionKind, E: EnvironmentKind> Tx<'env, K, E> {
                 self.inner
                     .open_db(Some(T::NAME))
                     .map_err(|e| DatabaseError::InitCursor(e.into()))?
-                    .dbi(),
+                    .dbi()
             );
         }
 
@@ -63,8 +65,8 @@ impl<'env, K: TransactionKind, E: EnvironmentKind> Tx<'env, K, E> {
                 .cursor_with_dbi(self.get_dbi::<T>()?)
                 .map_err(|e| DatabaseError::InitCursor(e.into()))?,
             table: T::NAME,
-            _dbi: PhantomData,
-            buf: vec![],
+            _dbi:  PhantomData,
+            buf:   vec![]
         })
     }
 }
@@ -92,7 +94,10 @@ impl<'tx, K: TransactionKind, E: EnvironmentKind> DbTx<'tx> for Tx<'tx, K, E> {
 
     fn commit(self) -> Result<bool, DatabaseError> {
         let start = Instant::now();
-        let result = self.inner.commit().map_err(|e| DatabaseError::Commit(e.into()));
+        let result = self
+            .inner
+            .commit()
+            .map_err(|e| DatabaseError::Commit(e.into()));
         histogram!("tx.commit", start.elapsed());
         result
     }
@@ -108,7 +113,7 @@ impl<'tx, K: TransactionKind, E: EnvironmentKind> DbTx<'tx> for Tx<'tx, K, E> {
 
     /// Iterate over read only values in database.
     fn cursor_dup_read<T: DupSort>(
-        &self,
+        &self
     ) -> Result<<Self as DbTxGAT<'_>>::DupCursor<T>, DatabaseError> {
         self.new_cursor()
     }
@@ -129,17 +134,17 @@ impl<E: EnvironmentKind> DbTxMut<'_> for Tx<'_, RW, E> {
         self.inner
             .put(self.get_dbi::<T>()?, key.as_ref(), &value.compress(), WriteFlags::UPSERT)
             .map_err(|e| DatabaseError::Write {
-                code: e.into(),
-                operation: DatabaseWriteOperation::Put,
+                code:       e.into(),
+                operation:  DatabaseWriteOperation::Put,
                 table_name: T::NAME,
-                key: Box::from(key.as_ref()),
+                key:        Box::from(key.as_ref())
             })
     }
 
     fn delete<T: Table>(
         &self,
         key: T::Key,
-        value: Option<T::Value>,
+        value: Option<T::Value>
     ) -> Result<bool, DatabaseError> {
         let mut data = None;
 
@@ -154,19 +159,21 @@ impl<E: EnvironmentKind> DbTxMut<'_> for Tx<'_, RW, E> {
     }
 
     fn clear<T: Table>(&self) -> Result<(), DatabaseError> {
-        self.inner.clear_db(self.get_dbi::<T>()?).map_err(|e| DatabaseError::Delete(e.into()))?;
+        self.inner
+            .clear_db(self.get_dbi::<T>()?)
+            .map_err(|e| DatabaseError::Delete(e.into()))?;
 
         Ok(())
     }
 
     fn cursor_write<T: Table>(
-        &self,
+        &self
     ) -> Result<<Self as DbTxMutGAT<'_>>::CursorMut<T>, DatabaseError> {
         self.new_cursor()
     }
 
     fn cursor_dup_write<T: DupSort>(
-        &self,
+        &self
     ) -> Result<<Self as DbTxMutGAT<'_>>::DupCursorMut<T>, DatabaseError> {
         self.new_cursor()
     }

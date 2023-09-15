@@ -1,12 +1,13 @@
 //! Implements data structures specific to the database
-use crate::{
-    table::{Decode, Encode},
-    DatabaseError,
-};
 use reth_codecs::Compact;
 use reth_primitives::{
     trie::{StoredNibbles, StoredNibblesSubKey},
-    Address, PrunePart, H256,
+    Address, PrunePart, H256
+};
+
+use crate::{
+    table::{Decode, Encode},
+    DatabaseError
 };
 
 pub mod accounts;
@@ -50,6 +51,7 @@ impl_uints!(u64, u32, u16, u8);
 
 impl Encode for Vec<u8> {
     type Encoded = Vec<u8>;
+
     fn encode(self) -> Self::Encoded {
         self
     }
@@ -63,6 +65,7 @@ impl Decode for Vec<u8> {
 
 impl Encode for Address {
     type Encoded = [u8; 20];
+
     fn encode(self) -> Self::Encoded {
         self.to_fixed_bytes()
     }
@@ -76,6 +79,7 @@ impl Decode for Address {
 
 impl Encode for H256 {
     type Encoded = [u8; 32];
+
     fn encode(self) -> Self::Encoded {
         self.to_fixed_bytes()
     }
@@ -89,6 +93,7 @@ impl Decode for H256 {
 
 impl Encode for String {
     type Encoded = Vec<u8>;
+
     fn encode(self) -> Self::Encoded {
         self.into_bytes()
     }

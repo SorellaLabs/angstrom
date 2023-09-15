@@ -3,8 +3,8 @@ members = [
   "crates/guard-net/network",
   "crates/guard-net/eth-wire",
   "crates/guard-net/discv4",
+  "crates/storage/db",
   "crates/action",
-  "crates/db",
   "crates/sync",
   "crates/consensus",
   "crates/types",
@@ -53,7 +53,6 @@ tokio-stream.workspace = true
 serde.workspace = true
 anyhow.workspace = true
 url.workspace = true
-reth-db.workspace = true
 reth-tracing.workspace = true
 serde_json.workspace = true
 hex-literal.workspace = true
@@ -119,7 +118,7 @@ consensus = { path = "./crates/consensus/" }
 guard-types = { path = "./crates/types/" }
 action = { path = "./crates/action/" }
 sim = { path = "./crates/sim/" }
-db = { path = "./crates/db" }
+guard-db = { path = "./crates/storage/db/" }
 
 anvil = { git = "https://github.com/SorellaLabs/fastfoundry" }
 anvil-core = { git = "https://github.com/SorellaLabs/fastfoundry" }
@@ -174,7 +173,9 @@ c-kzg = { git = "https://github.com/ethereum/c-kzg-4844" }
 
 ### misc-testing
 proptest = "1.0"
+proptest-derive = "0.4"
 arbitrary = "1.1"
+assert_matches = "1.5.0"
 
 
 [features]

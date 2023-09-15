@@ -1,8 +1,9 @@
 //! Block related models and types.
 
+use std::ops::Range;
+
 use reth_codecs::{main_codec, Compact};
 use reth_primitives::{Header, TxNumber, Withdrawal, H256};
-use std::ops::Range;
 
 /// Total number of transactions.
 pub type NumTransactions = u64;
@@ -22,8 +23,9 @@ pub struct StoredBlockBodyIndices {
     /// The total number of transactions in the block
     ///
     /// NOTE: Number of transitions is equal to number of transactions with
-    /// additional transition for block change if block has block reward or withdrawal.
-    pub tx_count: NumTransactions,
+    /// additional transition for block change if block has block reward or
+    /// withdrawal.
+    pub tx_count:     NumTransactions
 }
 
 impl StoredBlockBodyIndices {
@@ -36,13 +38,15 @@ impl StoredBlockBodyIndices {
     /// is empty in which case it refers to the last transaction in a previous
     /// non-empty block
     pub fn last_tx_num(&self) -> TxNumber {
-        self.first_tx_num.saturating_add(self.tx_count).saturating_sub(1)
+        self.first_tx_num
+            .saturating_add(self.tx_count)
+            .saturating_sub(1)
     }
 
     /// First transaction index.
     ///
-    /// Caution: If the block is empty, this is the number of the first transaction
-    /// in the next non-empty block.
+    /// Caution: If the block is empty, this is the number of the first
+    /// transaction in the next non-empty block.
     pub fn first_tx_num(&self) -> TxNumber {
         self.first_tx_num
     }
@@ -73,7 +77,7 @@ impl StoredBlockBodyIndices {
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct StoredBlockOmmers {
     /// The block headers of this block's uncles.
-    pub ommers: Vec<Header>,
+    pub ommers: Vec<Header>
 }
 
 /// The storage representation of block withdrawals.
@@ -81,10 +85,11 @@ pub struct StoredBlockOmmers {
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct StoredBlockWithdrawals {
     /// The block withdrawals.
-    pub withdrawals: Vec<Withdrawal>,
+    pub withdrawals: Vec<Withdrawal>
 }
 
-/// Hash of the block header. Value for [`CanonicalHeaders`][crate::tables::CanonicalHeaders]
+/// Hash of the block header. Value for
+/// [`CanonicalHeaders`][crate::tables::CanonicalHeaders]
 pub type HeaderHash = H256;
 
 #[cfg(test)]

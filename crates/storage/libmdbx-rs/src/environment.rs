@@ -1,12 +1,3 @@
-use crate::{
-    database::Database,
-    error::{mdbx_result, Error, Result},
-    flags::EnvironmentFlags,
-    transaction::{RO, RW},
-    Mode, Transaction, TransactionKind,
-};
-use byteorder::{ByteOrder, NativeEndian};
-use mem::size_of;
 use std::{
     ffi::CString,
     fmt,
@@ -18,7 +9,18 @@ use std::{
     ptr, result,
     sync::mpsc::{sync_channel, SyncSender},
     thread::sleep,
-    time::Duration,
+    time::Duration
+};
+
+use byteorder::{ByteOrder, NativeEndian};
+use mem::size_of;
+
+use crate::{
+    database::Database,
+    error::{mdbx_result, Error, Result},
+    flags::EnvironmentFlags,
+    transaction::{RO, RW},
+    Mode, Transaction, TransactionKind
 };
 
 mod private {
@@ -59,46 +61,48 @@ unsafe impl Sync for EnvPtr {}
 pub(crate) enum TxnManagerMessage {
     Begin { parent: TxnPtr, flags: ffi::MDBX_txn_flags_t, sender: SyncSender<Result<TxnPtr>> },
     Abort { tx: TxnPtr, sender: SyncSender<Result<bool>> },
-    Commit { tx: TxnPtr, sender: SyncSender<Result<bool>> },
+    Commit { tx: TxnPtr, sender: SyncSender<Result<bool>> }
 }
 
-/// An environment supports multiple databases, all residing in the same shared-memory map.
+/// An environment supports multiple databases, all residing in the same
+/// shared-memory map.
 pub struct Environment<E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
-    env: *mut ffi::MDBX_env,
+    env:                    *mut ffi::MDBX_env,
     pub(crate) txn_manager: Option<SyncSender<TxnManagerMessage>>,
-    _marker: PhantomData<E>,
+    _marker:                PhantomData<E>
 }
 
 impl<E> Environment<E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
-    /// Creates a new builder for specifying options for opening an MDBX environment.
+    /// Creates a new builder for specifying options for opening an MDBX
+    /// environment.
     #[allow(clippy::new_ret_no_self)]
     pub fn new() -> EnvironmentBuilder<E> {
         EnvironmentBuilder {
-            flags: EnvironmentFlags::default(),
-            max_readers: None,
-            max_dbs: None,
-            rp_augment_limit: None,
-            loose_limit: None,
-            dp_reserve_limit: None,
-            txn_dp_limit: None,
+            flags:                 EnvironmentFlags::default(),
+            max_readers:           None,
+            max_dbs:               None,
+            rp_augment_limit:      None,
+            loose_limit:           None,
+            dp_reserve_limit:      None,
+            txn_dp_limit:          None,
             spill_max_denominator: None,
             spill_min_denominator: None,
-            geometry: None,
-            log_level: None,
-            _marker: PhantomData,
+            geometry:              None,
+            log_level:             None,
+            _marker:               PhantomData
         }
     }
 
     /// Returns a raw pointer to the underlying MDBX environment.
     ///
-    /// The caller **must** ensure that the pointer is not dereferenced after the lifetime of the
-    /// environment.
+    /// The caller **must** ensure that the pointer is not dereferenced after
+    /// the lifetime of the environment.
     pub fn env(&self) -> *mut ffi::MDBX_env {
         self.env
     }
@@ -108,8 +112,9 @@ where
         Transaction::new(self)
     }
 
-    /// Create a read-write transaction for use with the environment. This method will block while
-    /// there are any other read-write transactions open on the environment.
+    /// Create a read-write transaction for use with the environment. This
+    /// method will block while there are any other read-write transactions
+    /// open on the environment.
     pub fn begin_rw_txn(&self) -> Result<Transaction<'_, RW, E>> {
         let sender = self.txn_manager.as_ref().ok_or(Error::Access)?;
         let txn = loop {
@@ -117,8 +122,8 @@ where
             sender
                 .send(TxnManagerMessage::Begin {
                     parent: TxnPtr(ptr::null_mut()),
-                    flags: RW::OPEN_FLAGS,
-                    sender: tx,
+                    flags:  RW::OPEN_FLAGS,
+                    sender: tx
                 })
                 .unwrap();
             let res = rx.recv().unwrap();
@@ -145,7 +150,7 @@ where
                 self.env(),
                 ptr::null(),
                 stat.mdb_stat(),
-                size_of::<Stat>(),
+                size_of::<Stat>()
             ))?;
             Ok(stat)
         }
@@ -159,7 +164,7 @@ where
                 self.env(),
                 ptr::null(),
                 &mut info.0,
-                size_of::<Info>(),
+                size_of::<Info>()
             ))?;
             Ok(info)
         }
@@ -167,8 +172,9 @@ where
 
     /// Retrieves the total number of pages on the freelist.
     ///
-    /// Along with [Environment::info()], this can be used to calculate the exact number
-    /// of used pages as well as free pages in this environment.
+    /// Along with [Environment::info()], this can be used to calculate the
+    /// exact number of used pages as well as free pages in this
+    /// environment.
     ///
     /// ```
     /// # use reth_libmdbx::Environment;
@@ -186,9 +192,9 @@ where
     ///
     /// Note:
     ///
-    /// * MDBX stores all the freelists in the designated database 0 in each environment, and the
-    ///   freelist count is stored at the beginning of the value as `libc::uint32_t` in the native
-    ///   byte order.
+    /// * MDBX stores all the freelists in the designated database 0 in each
+    ///   environment, and the freelist count is stored at the beginning of the
+    ///   value as `libc::uint32_t` in the native byte order.
     ///
     /// * It will create a read transaction to traverse the freelist database.
     pub fn freelist(&self) -> Result<usize> {
@@ -213,7 +219,8 @@ where
 
 /// Environment statistics.
 ///
-/// Contains information about the size and layout of an MDBX environment or database.
+/// Contains information about the size and layout of an MDBX environment or
+/// database.
 #[repr(transparent)]
 pub struct Stat(ffi::MDBX_stat);
 
@@ -230,7 +237,8 @@ impl Stat {
 }
 
 impl Stat {
-    /// Size of a database page. This is the same for all databases in the environment.
+    /// Size of a database page. This is the same for all databases in the
+    /// environment.
     #[inline]
     pub fn page_size(&self) -> u32 {
         self.0.ms_psize
@@ -278,7 +286,8 @@ impl GeometryInfo {
 
 /// Environment information.
 ///
-/// Contains environment information about the map size, readers, last txn id etc.
+/// Contains environment information about the map size, readers, last txn id
+/// etc.
 #[repr(transparent)]
 pub struct Info(ffi::MDBX_envinfo);
 
@@ -323,7 +332,7 @@ unsafe impl<E> Sync for Environment<E> where E: EnvironmentKind {}
 
 impl<E> fmt::Debug for Environment<E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("Environment").finish()
@@ -332,7 +341,7 @@ where
 
 impl<E> Drop for Environment<E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     fn drop(&mut self) {
         unsafe {
@@ -348,20 +357,25 @@ where
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PageSize {
     MinimalAcceptable,
-    Set(usize),
+    Set(usize)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Geometry<R> {
-    pub size: Option<R>,
-    pub growth_step: Option<isize>,
+    pub size:             Option<R>,
+    pub growth_step:      Option<isize>,
     pub shrink_threshold: Option<isize>,
-    pub page_size: Option<PageSize>,
+    pub page_size:        Option<PageSize>
 }
 
 impl<R> Default for Geometry<R> {
     fn default() -> Self {
-        Self { size: None, growth_step: None, shrink_threshold: None, page_size: None }
+        Self {
+            size:             None,
+            growth_step:      None,
+            shrink_threshold: None,
+            page_size:        None
+        }
     }
 }
 
@@ -369,25 +383,25 @@ impl<R> Default for Geometry<R> {
 #[derive(Debug, Clone)]
 pub struct EnvironmentBuilder<E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
-    flags: EnvironmentFlags,
-    max_readers: Option<u64>,
-    max_dbs: Option<u64>,
-    rp_augment_limit: Option<u64>,
-    loose_limit: Option<u64>,
-    dp_reserve_limit: Option<u64>,
-    txn_dp_limit: Option<u64>,
+    flags:                 EnvironmentFlags,
+    max_readers:           Option<u64>,
+    max_dbs:               Option<u64>,
+    rp_augment_limit:      Option<u64>,
+    loose_limit:           Option<u64>,
+    dp_reserve_limit:      Option<u64>,
+    txn_dp_limit:          Option<u64>,
     spill_max_denominator: Option<u64>,
     spill_min_denominator: Option<u64>,
-    geometry: Option<Geometry<(Option<usize>, Option<usize>)>>,
-    log_level: Option<ffi::MDBX_log_level_t>,
-    _marker: PhantomData<E>,
+    geometry:              Option<Geometry<(Option<usize>, Option<usize>)>>,
+    log_level:             Option<ffi::MDBX_log_level_t>,
+    _marker:               PhantomData<E>
 }
 
 impl<E> EnvironmentBuilder<E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     /// Open an environment.
     ///
@@ -402,7 +416,7 @@ where
     pub fn open_with_permissions(
         &self,
         path: &Path,
-        mode: ffi::mdbx_mode_t,
+        mode: ffi::mdbx_mode_t
     ) -> Result<Environment<E>> {
         let mut env: *mut ffi::MDBX_env = ptr::null_mut();
         unsafe {
@@ -439,8 +453,8 @@ where
                         match geometry.page_size {
                             None => -1,
                             Some(PageSize::MinimalAcceptable) => 0,
-                            Some(PageSize::Set(size)) => size as isize,
-                        },
+                            Some(PageSize::Set(size)) => size as isize
+                        }
                     ))?;
                 }
                 for (opt, v) in [
@@ -450,7 +464,7 @@ where
                     (ffi::MDBX_opt_dp_reserve_limit, self.dp_reserve_limit),
                     (ffi::MDBX_opt_txn_dp_limit, self.txn_dp_limit),
                     (ffi::MDBX_opt_spill_max_denominator, self.spill_max_denominator),
-                    (ffi::MDBX_opt_spill_min_denominator, self.spill_min_denominator),
+                    (ffi::MDBX_opt_spill_min_denominator, self.spill_min_denominator)
                 ] {
                     if let Some(v) = v {
                         mdbx_result(ffi::mdbx_env_set_option(env, opt, v))?;
@@ -462,7 +476,7 @@ where
                     mdbx_result(ffi::mdbx_env_set_option(
                         env,
                         ffi::MDBX_opt_max_readers,
-                        max_readers,
+                        max_readers
                     ))?;
                 }
 
@@ -482,13 +496,13 @@ where
 
                 let path = match CString::new(path_to_bytes(path)) {
                     Ok(path) => path,
-                    Err(_) => return Err(Error::Invalid),
+                    Err(_) => return Err(Error::Invalid)
                 };
                 mdbx_result(ffi::mdbx_env_open(
                     env,
                     path.as_ptr(),
                     self.flags.make_flags() | E::EXTRA_FLAGS,
-                    mode,
+                    mode
                 ))?;
 
                 Ok(())
@@ -519,15 +533,17 @@ where
                                             parent.0,
                                             flags,
                                             &mut txn,
-                                            ptr::null_mut(),
+                                            ptr::null_mut()
                                         )
                                     })
-                                    .map(|_| TxnPtr(txn)),
+                                    .map(|_| TxnPtr(txn))
                                 )
                                 .unwrap()
                         }
                         TxnManagerMessage::Abort { tx, sender } => {
-                            sender.send(mdbx_result(unsafe { ffi::mdbx_txn_abort(tx.0) })).unwrap();
+                            sender
+                                .send(mdbx_result(unsafe { ffi::mdbx_txn_abort(tx.0) }))
+                                .unwrap();
                         }
                         TxnManagerMessage::Commit { tx, sender } => {
                             sender
@@ -537,7 +553,7 @@ where
                                 .unwrap();
                         }
                     },
-                    Err(_) => return,
+                    Err(_) => return
                 }
             });
 
@@ -555,9 +571,10 @@ where
 
     /// Sets the maximum number of threads or reader slots for the environment.
     ///
-    /// This defines the number of slots in the lock table that is used to track readers in the
-    /// the environment. The default is 126. Starting a read-only transaction normally ties a lock
-    /// table slot to the [Transaction] object until it or the [Environment] object is destroyed.
+    /// This defines the number of slots in the lock table that is used to track
+    /// readers in the the environment. The default is 126. Starting a
+    /// read-only transaction normally ties a lock table slot to the
+    /// [Transaction] object until it or the [Environment] object is destroyed.
     pub fn set_max_readers(&mut self, max_readers: u64) -> &mut Self {
         self.max_readers = Some(max_readers);
         self
@@ -570,8 +587,8 @@ where
     /// unnamed database can ignore this option.
     ///
     /// Currently a moderate number of slots are cheap but a huge number gets
-    /// expensive: 7-120 words per transaction, and every [Transaction::open_db()]
-    /// does a linear search of the opened slots.
+    /// expensive: 7-120 words per transaction, and every
+    /// [Transaction::open_db()] does a linear search of the opened slots.
     pub fn set_max_dbs(&mut self, v: usize) -> &mut Self {
         self.max_dbs = Some(v as u64);
         self
@@ -607,20 +624,20 @@ where
         self
     }
 
-    /// Set all size-related parameters of environment, including page size and the min/max size of
-    /// the memory map.
+    /// Set all size-related parameters of environment, including page size and
+    /// the min/max size of the memory map.
     pub fn set_geometry<R: RangeBounds<usize>>(&mut self, geometry: Geometry<R>) -> &mut Self {
         let convert_bound = |bound: Bound<&usize>| match bound {
             Bound::Included(v) | Bound::Excluded(v) => Some(*v),
-            _ => None,
+            _ => None
         };
         self.geometry = Some(Geometry {
-            size: geometry.size.map(|range| {
+            size:             geometry.size.map(|range| {
                 (convert_bound(range.start_bound()), convert_bound(range.end_bound()))
             }),
-            growth_step: geometry.growth_step,
+            growth_step:      geometry.growth_step,
             shrink_threshold: geometry.shrink_threshold,
-            page_size: geometry.page_size,
+            page_size:        geometry.page_size
         });
         self
     }

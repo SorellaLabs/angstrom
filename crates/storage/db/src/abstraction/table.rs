@@ -1,21 +1,24 @@
-use crate::{
-    abstraction::cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
-    transaction::{DbTx, DbTxMut},
-    DatabaseError,
+use std::{
+    fmt::Debug,
+    marker::{Send, Sync}
 };
 
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Debug,
-    marker::{Send, Sync},
+
+use crate::{
+    abstraction::cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
+    transaction::{DbTx, DbTxMut},
+    DatabaseError
 };
 
-/// Trait that will transform the data to be saved in the DB in a (ideally) compressed format
+/// Trait that will transform the data to be saved in the DB in a (ideally)
+/// compressed format
 pub trait Compress: Send + Sync + Sized + Debug {
     /// Compressed type.
     type Compressed: bytes::BufMut + AsMut<[u8]> + Default + AsRef<[u8]> + Send + Sync;
 
-    /// If the type cannot be compressed, return its inner reference as `Some(self.as_ref())`
+    /// If the type cannot be compressed, return its inner reference as
+    /// `Some(self.as_ref())`
     fn uncompressable_ref(&self) -> Option<&[u8]> {
         None
     }
@@ -52,24 +55,26 @@ pub trait Decode: Send + Sync + Sized + Debug {
     fn decode<B: AsRef<[u8]>>(value: B) -> Result<Self, DatabaseError>;
 }
 
-/// Generic trait that enforces the database key to implement [`Encode`] and [`Decode`].
+/// Generic trait that enforces the database key to implement [`Encode`] and
+/// [`Decode`].
 pub trait Key: Encode + Decode + Ord + Clone + Serialize + for<'a> Deserialize<'a> {}
 
 impl<T> Key for T where T: Encode + Decode + Ord + Clone + Serialize + for<'a> Deserialize<'a> {}
 
-/// Generic trait that enforces the database value to implement [`Compress`] and [`Decompress`].
+/// Generic trait that enforces the database value to implement [`Compress`] and
+/// [`Decompress`].
 pub trait Value: Compress + Decompress + Serialize {}
 
 impl<T> Value for T where T: Compress + Decompress + Serialize {}
 
 /// Generic trait that a database table should follow.
 ///
-/// The [`Table::Key`] and [`Table::Value`] types should implement [`Encode`] and
-/// [`Decode`] when appropriate. These traits define how the data is stored and read from the
-/// database.
+/// The [`Table::Key`] and [`Table::Value`] types should implement [`Encode`]
+/// and [`Decode`] when appropriate. These traits define how the data is stored
+/// and read from the database.
 ///
-/// It allows for the use of codecs. See [`crate::models::ShardedKey`] for a custom
-/// implementation.
+/// It allows for the use of codecs. See [`crate::models::ShardedKey`] for a
+/// custom implementation.
 pub trait Table: Send + Sync + Debug + 'static {
     /// Return table name as it is present inside the MDBX.
     const NAME: &'static str;
@@ -115,17 +120,17 @@ pub trait TableImporter<'tx>: for<'a> DbTxMut<'a> {
         &self,
         source_tx: &R,
         from: Option<<T as Table>::Key>,
-        to: <T as Table>::Key,
+        to: <T as Table>::Key
     ) -> Result<(), DatabaseError>
     where
-        T::Key: Default,
+        T::Key: Default
     {
         let mut destination_cursor = self.cursor_write::<T>()?;
         let mut source_cursor = source_tx.cursor_read::<T>()?;
 
         let source_range = match from {
             Some(from) => source_cursor.walk_range(from..=to),
-            None => source_cursor.walk_range(..=to),
+            None => source_cursor.walk_range(..=to)
         };
         for row in source_range? {
             let (key, value) = row?;

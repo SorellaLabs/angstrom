@@ -13,11 +13,11 @@ pub use crate::{
     database::Database,
     environment::{
         Environment, EnvironmentBuilder, EnvironmentKind, Geometry, Info, NoWriteMap, PageSize,
-        Stat, WriteMap,
+        Stat, WriteMap
     },
     error::{Error, Result},
     flags::*,
-    transaction::{Transaction, TransactionKind, RO, RW},
+    transaction::{Transaction, TransactionKind, RO, RW}
 };
 pub mod ffi {
     pub use ffi::{MDBX_dbi as DBI, MDBX_log_level_t as LogLevel};
@@ -33,15 +33,16 @@ mod transaction;
 
 #[cfg(test)]
 mod test_utils {
-    use super::*;
     use byteorder::{ByteOrder, LittleEndian};
     use tempfile::tempdir;
+
+    use super::*;
 
     type Environment = crate::Environment<NoWriteMap>;
 
     /// Regression test for https://github.com/danburkert/lmdb-rs/issues/21.
-    /// This test reliably segfaults when run against lmbdb compiled with opt level -O3 and newer
-    /// GCC compilers.
+    /// This test reliably segfaults when run against lmbdb compiled with opt
+    /// level -O3 and newer GCC compilers.
     #[test]
     fn issue_21_regression() {
         const HEIGHT_KEY: [u8; 1] = [0];
@@ -60,8 +61,11 @@ mod test_utils {
             let mut value = [0u8; 8];
             LittleEndian::write_u64(&mut value, height);
             let tx = env.begin_rw_txn().expect("begin_rw_txn");
-            let index = tx.create_db(None, DatabaseFlags::DUP_SORT).expect("open index db");
-            tx.put(index.dbi(), HEIGHT_KEY, value, WriteFlags::empty()).expect("tx.put");
+            let index = tx
+                .create_db(None, DatabaseFlags::DUP_SORT)
+                .expect("open index db");
+            tx.put(index.dbi(), HEIGHT_KEY, value, WriteFlags::empty())
+                .expect("tx.put");
             tx.commit().expect("tx.commit");
         }
     }

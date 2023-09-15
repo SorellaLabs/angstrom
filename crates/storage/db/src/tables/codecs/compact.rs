@@ -1,9 +1,10 @@
-use crate::{
-    table::{Compress, Decompress},
-    tables::models::*,
-};
 use reth_codecs::{main_codec, Compact};
 use reth_primitives::{stage::StageCheckpoint, trie::*, *};
+
+use crate::{
+    table::{Compress, Decompress},
+    tables::models::*
+};
 
 /// Implements compression for Compact type.
 macro_rules! impl_compression_for_compact {
@@ -83,8 +84,8 @@ macro_rules! impl_compression_fixed_compact {
 
 impl_compression_fixed_compact!(H256, H160);
 
-/// Adds wrapper structs for some primitive types so they can use StructFlags from Compact, when
-/// used as pure table values.
+/// Adds wrapper structs for some primitive types so they can use StructFlags
+/// from Compact, when used as pure table values.
 macro_rules! add_wrapper_struct {
     ($(($name:tt, $wrapper:tt)),+) => {
         $(

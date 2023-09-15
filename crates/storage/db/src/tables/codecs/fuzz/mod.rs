@@ -2,11 +2,12 @@
 
 mod inputs;
 
-/// Fuzzer generates a random instance of the object and proceeds to encode and decode it. It then
-/// makes sure that it matches the original object.
+/// Fuzzer generates a random instance of the object and proceeds to encode and
+/// decode it. It then makes sure that it matches the original object.
 ///
-/// Some types like [`IntegerList`] might have some restrictions on how they're fuzzed. For example,
-/// the list is assumed to be sorted before creating the object.
+/// Some types like [`IntegerList`] might have some restrictions on how they're
+/// fuzzed. For example, the list is assumed to be sorted before creating the
+/// object.
 macro_rules! impl_fuzzer_with_input {
     ($(($name:tt, $input_type:tt, $encode:tt, $encode_method:tt, $decode:tt, $decode_method:tt)),+) => {
         $(
@@ -54,8 +55,8 @@ macro_rules! impl_fuzzer_with_input {
     };
 }
 
-/// Fuzzer generates a random instance of the object and proceeds to encode and decode it. It then
-/// makes sure that it matches the original object.
+/// Fuzzer generates a random instance of the object and proceeds to encode and
+/// decode it. It then makes sure that it matches the original object.
 macro_rules! impl_fuzzer_key {
     ($($name:tt),+) => {
         $(
@@ -64,8 +65,8 @@ macro_rules! impl_fuzzer_key {
     };
 }
 
-/// Fuzzer generates a random instance of the object and proceeds to compress and decompress it. It
-/// then makes sure that it matches the original object.
+/// Fuzzer generates a random instance of the object and proceeds to compress
+/// and decompress it. It then makes sure that it matches the original object.
 #[allow(unused)]
 macro_rules! impl_fuzzer_value {
     ($($name:tt),+) => {
@@ -75,9 +76,10 @@ macro_rules! impl_fuzzer_value {
     };
 }
 
-/// Fuzzer generates a random instance of the object and proceeds to compress and decompress it. It
-/// then makes sure that it matches the original object. It supports being fed a different kind of
-/// input, as long as it supports `Into<T>`.
+/// Fuzzer generates a random instance of the object and proceeds to compress
+/// and decompress it. It then makes sure that it matches the original object.
+/// It supports being fed a different kind of input, as long as it supports
+/// `Into<T>`.
 macro_rules! impl_fuzzer_value_with_input {
     ($(($name:tt, $input:tt)),+) => {
         $(

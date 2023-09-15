@@ -1,20 +1,21 @@
 #![allow(dead_code, unused_imports, non_snake_case)]
 
+use std::{collections::HashSet, time::Instant};
+
 use criterion::{
-    black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
+    black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion
 };
 use pprof::criterion::{Output, PProfProfiler};
 use proptest::{
     arbitrary::Arbitrary,
     prelude::{any_with, ProptestConfig},
     strategy::{Strategy, ValueTree},
-    test_runner::TestRunner,
+    test_runner::TestRunner
 };
 use reth_db::{
     cursor::{DbCursorRW, DbDupCursorRO, DbDupCursorRW},
-    TxHashNumber,
+    TxHashNumber
 };
-use std::{collections::HashSet, time::Instant};
 use test_fuzz::runtime::num_traits::Zero;
 
 criterion_group! {
@@ -26,13 +27,16 @@ criterion_main!(benches);
 
 /// It benchmarks the insertion of rows into a table where `Keys` are hashes.
 /// * `append`: Table is empty. Sorts during benchmark.
-/// * `insert_sorted`: Table is preloaded with rows (same as batch size). Sorts during benchmark.
+/// * `insert_sorted`: Table is preloaded with rows (same as batch size). Sorts
+///   during benchmark.
 /// * `insert_unsorted`: Table is preloaded with rows (same as batch size).
-/// * `put_sorted`: Table is preloaded with rows (same as batch size). Sorts during benchmark.
+/// * `put_sorted`: Table is preloaded with rows (same as batch size). Sorts
+///   during benchmark.
 /// * `put_unsorted`: Table is preloaded with rows (same as batch size).
 ///
-/// It does the above steps with different batches of rows. 10_000, 100_000, 1_000_000. In the
-/// end, the table statistics are shown (eg. number of pages, table size...)
+/// It does the above steps with different batches of rows. 10_000, 100_000,
+/// 1_000_000. In the end, the table statistics are shown (eg. number of pages,
+/// table size...)
 pub fn hash_keys(c: &mut Criterion) {
     let mut group = c.benchmark_group("Hash-Keys Table Insertion");
 
@@ -53,7 +57,7 @@ where
         + serde::Serialize
         + Ord
         + std::hash::Hash,
-    T::Value: Default + Clone + for<'de> serde::Deserialize<'de> + Arbitrary + serde::Serialize,
+    T::Value: Default + Clone + for<'de> serde::Deserialize<'de> + Arbitrary + serde::Serialize
 {
     let bench_db_path = Path::new(BENCH_DB_PATH);
 
@@ -66,8 +70,8 @@ where
         (put::<T>, "put_sorted"),
     ];
 
-    // `preload` is to be inserted into the database during the setup phase in all scenarios but
-    // `append`.
+    // `preload` is to be inserted into the database during the setup phase in all
+    // scenarios but `append`.
     let (preload, unsorted_input) = generate_batches::<T>(size);
 
     for (scenario, scenario_str) in scenarios {
@@ -122,7 +126,7 @@ where
             ),
             |b| {
                 b.iter_with_setup(setup, execution);
-            },
+            }
         );
 
         // Execute once more to show table stats (doesn't count for benchmarking speed)
@@ -131,21 +135,21 @@ where
     }
 }
 
-/// Generates two batches. The first is to be inserted into the database before running the
-/// benchmark. The second is to be benchmarked with.
+/// Generates two batches. The first is to be inserted into the database before
+/// running the benchmark. The second is to be benchmarked with.
 #[allow(clippy::type_complexity)]
 fn generate_batches<T>(size: usize) -> (Vec<TableRow<T>>, Vec<TableRow<T>>)
 where
     T: Table + Default,
     T::Key: std::hash::Hash + Arbitrary,
-    T::Value: Arbitrary,
+    T::Value: Arbitrary
 {
     let strat = proptest::collection::vec(
         any_with::<TableRow<T>>((
             <T::Key as Arbitrary>::Parameters::default(),
-            <T::Value as Arbitrary>::Parameters::default(),
+            <T::Value as Arbitrary>::Parameters::default()
         )),
-        size,
+        size
     )
     .no_shrink()
     .boxed();
@@ -163,7 +167,7 @@ where
 
 fn append<T>(db: DatabaseEnv, input: Vec<(<T as Table>::Key, <T as Table>::Value)>) -> DatabaseEnv
 where
-    T: Table + Default,
+    T: Table + Default
 {
     {
         let tx = db.tx_mut().expect("tx");
@@ -181,7 +185,7 @@ where
 
 fn insert<T>(db: DatabaseEnv, input: Vec<(<T as Table>::Key, <T as Table>::Value)>) -> DatabaseEnv
 where
-    T: Table + Default,
+    T: Table + Default
 {
     {
         let tx = db.tx_mut().expect("tx");
@@ -199,7 +203,7 @@ where
 
 fn put<T>(db: DatabaseEnv, input: Vec<(<T as Table>::Key, <T as Table>::Value)>) -> DatabaseEnv
 where
-    T: Table + Default,
+    T: Table + Default
 {
     {
         let tx = db.tx_mut().expect("tx");
@@ -216,20 +220,24 @@ where
 
 #[derive(Debug)]
 struct TableStats {
-    page_size: usize,
-    leaf_pages: usize,
-    branch_pages: usize,
+    page_size:      usize,
+    leaf_pages:     usize,
+    branch_pages:   usize,
     overflow_pages: usize,
-    num_pages: usize,
-    size: usize,
+    num_pages:      usize,
+    size:           usize
 }
 
 fn get_table_stats<T>(db: DatabaseEnv)
 where
-    T: Table + Default,
+    T: Table + Default
 {
     db.view(|tx| {
-        let table_db = tx.inner.open_db(Some(T::NAME)).map_err(|_| "Could not open db.").unwrap();
+        let table_db = tx
+            .inner
+            .open_db(Some(T::NAME))
+            .map_err(|_| "Could not open db.")
+            .unwrap();
 
         println!(
             "{:?}\n",
@@ -247,7 +255,7 @@ where
                         branch_pages: stats.branch_pages(),
                         overflow_pages: stats.overflow_pages(),
                         num_pages,
-                        size,
+                        size
                     }
                 })
                 .unwrap()

@@ -1,5 +1,6 @@
-use libc::c_int;
 use std::{ffi::CStr, fmt, result, str};
+
+use libc::c_int;
 
 /// An MDBX error kind.
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
@@ -24,21 +25,23 @@ pub enum Error {
     DbsFull,
     /// Environment reached the maximum number of readers.
     ReadersFull,
-    /// The transaction has too many dirty pages (i.e. the transaction is too big).
+    /// The transaction has too many dirty pages (i.e. the transaction is too
+    /// big).
     TxnFull,
     /// The cursor stack is too deep.
     CursorFull,
     /// The page does not have enough space.
     PageFull,
-    /// The database engine was unable to extend mapping, e.g. the address space is unavailable or
-    /// busy.
+    /// The database engine was unable to extend mapping, e.g. the address space
+    /// is unavailable or busy.
     ///
     /// This can mean:
-    /// - The database size was extended by other processes beyond the environment map size, and
-    ///   the engine was unable to extend the mapping while starting a read transaction. The
-    ///   environment should be re-opened to continue.
-    /// - The engine was unable to extend the mapping during a write transaction or an explicit
-    ///   call to change the geometry of the environment.
+    /// - The database size was extended by other processes beyond the
+    ///   environment map size, and the engine was unable to extend the mapping
+    ///   while starting a read transaction. The environment should be re-opened
+    ///   to continue.
+    /// - The engine was unable to extend the mapping during a write transaction
+    ///   or an explicit call to change the geometry of the environment.
     UnableExtendMapSize,
     Incompatible,
     BadRslot,
@@ -55,7 +58,7 @@ pub enum Error {
     Access,
     TooLarge,
     DecodeErrorLenDiff,
-    Other(i32),
+    Other(i32)
 }
 
 impl Error {
@@ -91,7 +94,7 @@ impl Error {
             ffi::MDBX_EACCESS => Error::Access,
             ffi::MDBX_TOO_LARGE => Error::TooLarge,
             ffi::MDBX_EBADSIGN => Error::BadSignature,
-            other => Error::Other(other),
+            other => Error::Other(other)
         }
     }
 
@@ -128,7 +131,7 @@ impl Error {
             Error::TooLarge => ffi::MDBX_TOO_LARGE,
             Error::BadSignature => ffi::MDBX_EBADSIGN,
             Error::Other(err_code) => *err_code,
-            _ => unreachable!(),
+            _ => unreachable!()
         }
     }
 }
@@ -146,7 +149,7 @@ impl fmt::Display for Error {
             _ => unsafe {
                 let err = ffi::mdbx_strerror(self.to_err_code());
                 str::from_utf8_unchecked(CStr::from_ptr(err).to_bytes())
-            },
+            }
         };
         write!(fmt, "{value}")
     }
@@ -159,7 +162,7 @@ pub fn mdbx_result(err_code: c_int) -> Result<bool> {
     match err_code {
         ffi::MDBX_SUCCESS => Ok(false),
         ffi::MDBX_RESULT_TRUE => Ok(true),
-        other => Err(Error::from_err_code(other)),
+        other => Err(Error::from_err_code(other))
     }
 }
 
@@ -169,7 +172,7 @@ macro_rules! mdbx_try_optional {
         match $expr {
             Err(Error::NotFound | Error::NoData) => return Ok(None),
             Err(e) => return Err(e),
-            Ok(v) => v,
+            Ok(v) => v
         }
     }};
 }

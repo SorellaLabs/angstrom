@@ -1,14 +1,15 @@
 #![allow(dead_code, unused_imports, non_snake_case)]
 
+use std::time::Instant;
+
 use criterion::{
-    black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
+    black_box, criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion
 };
 use pprof::criterion::{Output, PProfProfiler};
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
-    tables::*,
+    tables::*
 };
-use std::time::Instant;
 
 criterion_group! {
     name = benches;
@@ -56,7 +57,7 @@ fn measure_table_serialization<T>(group: &mut BenchmarkGroup<WallTime>)
 where
     T: Table + Default,
     T::Key: Default + Clone + for<'de> serde::Deserialize<'de>,
-    T::Value: Default + Clone + for<'de> serde::Deserialize<'de>,
+    T::Value: Default + Clone + for<'de> serde::Deserialize<'de>
 {
     let input = &load_vectors::<T>();
     group.bench_function(format!("{}.KeyEncode", T::NAME), move |b| {
@@ -64,12 +65,12 @@ where
             || input.clone(),
             |input| {
                 {
-                    for (k, _, _, _) in input {
+                    for (k, ..) in input {
                         k.encode();
                     }
                 };
                 black_box(());
-            },
+            }
         )
     });
 
@@ -78,12 +79,12 @@ where
             || input.clone(),
             |input| {
                 {
-                    for (_, k, _, _) in input {
+                    for (_, k, ..) in input {
                         let _ = <T as Table>::Key::decode(k);
                     }
                 };
                 black_box(());
-            },
+            }
         )
     });
 
@@ -97,7 +98,7 @@ where
                     }
                 };
                 black_box(());
-            },
+            }
         )
     });
 
@@ -111,17 +112,18 @@ where
                     }
                 };
                 black_box(());
-            },
+            }
         )
     });
 }
 
-/// Measures `SeqWrite`, `RandomWrite`, `SeqRead` and `RandomRead` using `cursor` and `tx.put`.
+/// Measures `SeqWrite`, `RandomWrite`, `SeqRead` and `RandomRead` using
+/// `cursor` and `tx.put`.
 fn measure_table_db<T>(group: &mut BenchmarkGroup<WallTime>)
 where
     T: Table + Default,
     T::Key: Default + Clone + for<'de> serde::Deserialize<'de>,
-    T::Value: Default + Clone + for<'de> serde::Deserialize<'de>,
+    T::Value: Default + Clone + for<'de> serde::Deserialize<'de>
 {
     let input = &load_vectors::<T>();
     let bench_db_path = Path::new(BENCH_DB_PATH);
@@ -133,7 +135,7 @@ where
                 let _ = fs::remove_dir_all(bench_db_path);
                 (
                     input.clone(),
-                    Arc::try_unwrap(create_test_rw_db_with_path(bench_db_path)).unwrap(),
+                    Arc::try_unwrap(create_test_rw_db_with_path(bench_db_path)).unwrap()
                 )
             },
             |(input, db)| {
@@ -148,7 +150,7 @@ where
 
                     tx.inner.commit().unwrap()
                 });
-            },
+            }
         )
     });
 
@@ -172,7 +174,7 @@ where
 
                     tx.inner.commit().unwrap()
                 });
-            },
+            }
         )
     });
 
@@ -204,7 +206,9 @@ where
             {
                 for index in RANDOM_INDEXES {
                     let mut cursor = tx.cursor_read::<T>().expect("cursor");
-                    cursor.seek_exact(input.get(index).unwrap().0.clone()).unwrap();
+                    cursor
+                        .seek_exact(input.get(index).unwrap().0.clone())
+                        .unwrap();
                 }
             };
             black_box(());
@@ -212,13 +216,14 @@ where
     });
 }
 
-/// Measures `SeqWrite`, `RandomWrite` and `SeqRead`  using `cursor_dup` and `tx.put`.
+/// Measures `SeqWrite`, `RandomWrite` and `SeqRead`  using `cursor_dup` and
+/// `tx.put`.
 fn measure_dupsort_db<T>(group: &mut BenchmarkGroup<WallTime>)
 where
     T: Table + Default + DupSort,
     T::Key: Default + Clone + for<'de> serde::Deserialize<'de>,
     T::Value: Default + Clone + for<'de> serde::Deserialize<'de>,
-    T::SubKey: Default + Clone + for<'de> serde::Deserialize<'de>,
+    T::SubKey: Default + Clone + for<'de> serde::Deserialize<'de>
 {
     let input = &load_vectors::<T>();
     let bench_db_path = Path::new(BENCH_DB_PATH);
@@ -230,7 +235,7 @@ where
                 let _ = fs::remove_dir_all(bench_db_path);
                 (
                     input.clone(),
-                    Arc::try_unwrap(create_test_rw_db_with_path(bench_db_path)).unwrap(),
+                    Arc::try_unwrap(create_test_rw_db_with_path(bench_db_path)).unwrap()
                 )
             },
             |(input, db)| {
@@ -245,7 +250,7 @@ where
 
                     tx.inner.commit().unwrap()
                 });
-            },
+            }
         )
     });
 
@@ -267,7 +272,7 @@ where
                 }
 
                 tx.inner.commit().unwrap();
-            },
+            }
         )
     });
 

@@ -2,9 +2,11 @@
 //!
 //! # Overview
 //!
-//! This module defines the tables in reth, as well as some table-related abstractions:
+//! This module defines the tables in reth, as well as some table-related
+//! abstractions:
 //!
-//! - [`codecs`] integrates different codecs into [`Encode`](crate::abstraction::table::Encode) and
+//! - [`codecs`] integrates different codecs into
+//!   [`Encode`](crate::abstraction::table::Encode) and
 //!   [`Decode`](crate::abstraction::table::Decode)
 //! - [`models`] defines the values written to tables
 //!
@@ -17,10 +19,17 @@ pub mod models;
 mod raw;
 pub(crate) mod utils;
 
-use crate::abstraction::table::Table;
-pub use raw::{RawDupSort, RawKey, RawTable, RawValue, TableRawRow};
 use std::{fmt::Display, str::FromStr};
 
+pub use raw::{RawDupSort, RawKey, RawTable, RawValue, TableRawRow};
+use reth_primitives::{
+    stage::StageCheckpoint,
+    trie::{BranchNodeCompact, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey},
+    Account, Address, BlockHash, BlockNumber, Bytecode, Header, IntegerList, PruneCheckpoint,
+    PrunePart, Receipt, StorageEntry, TransactionSignedNoHash, TxHash, TxNumber, H256
+};
+
+use crate::abstraction::table::Table;
 /// Declaration of all Database tables.
 use crate::{
     table::DupSort,
@@ -30,15 +39,9 @@ use crate::{
             accounts::{AccountBeforeTx, BlockNumberAddress},
             blocks::{HeaderHash, StoredBlockOmmers},
             storage_sharded_key::StorageShardedKey,
-            ShardedKey, StoredBlockBodyIndices, StoredBlockWithdrawals,
-        },
-    },
-};
-use reth_primitives::{
-    stage::StageCheckpoint,
-    trie::{BranchNodeCompact, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey},
-    Account, Address, BlockHash, BlockNumber, Bytecode, Header, IntegerList, PruneCheckpoint,
-    PrunePart, Receipt, StorageEntry, TransactionSignedNoHash, TxHash, TxNumber, H256,
+            ShardedKey, StoredBlockBodyIndices, StoredBlockWithdrawals
+        }
+    }
 };
 
 /// Enum for the types of tables present in libmdbx.
@@ -47,14 +50,15 @@ pub enum TableType {
     /// key value table
     Table,
     /// Duplicate key value table
-    DupSort,
+    DupSort
 }
 
 /// Number of tables that should be present inside database.
 pub const NUM_TABLES: usize = 26;
 
 /// The general purpose of this is to use with a combination of Tables enum,
-/// by implementing a `TableViewer` trait you can operate on db tables in an abstract way.
+/// by implementing a `TableViewer` trait you can operate on db tables in an
+/// abstract way.
 ///
 /// # Example
 ///
@@ -460,7 +464,7 @@ mod tests {
         (TableType::Table, TxSenders::const_name()),
         (TableType::Table, SyncStage::const_name()),
         (TableType::Table, SyncStageProgress::const_name()),
-        (TableType::Table, PruneCheckpoints::const_name()),
+        (TableType::Table, PruneCheckpoints::const_name())
     ];
 
     #[test]

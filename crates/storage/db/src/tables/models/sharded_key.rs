@@ -2,18 +2,19 @@
 
 use std::hash::Hash;
 
-use crate::{
-    table::{Decode, Encode},
-    DatabaseError,
-};
 use reth_primitives::BlockNumber;
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    table::{Decode, Encode},
+    DatabaseError
+};
 
 /// Number of indices in one shard.
 pub const NUM_OF_INDICES_IN_SHARD: usize = 2_000;
 
-/// Sometimes data can be too big to be saved for a single key. This helps out by dividing the data
-/// into different shards. Example:
+/// Sometimes data can be too big to be saved for a single key. This helps out
+/// by dividing the data into different shards. Example:
 ///
 /// `Address | 200` -> data is from block 0 to 200.
 ///
@@ -21,9 +22,9 @@ pub const NUM_OF_INDICES_IN_SHARD: usize = 2_000;
 #[derive(Debug, Default, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct ShardedKey<T> {
     /// The key for this type.
-    pub key: T,
+    pub key:                  T,
     /// Highest block number to which `value` is related to.
-    pub highest_block_number: BlockNumber,
+    pub highest_block_number: BlockNumber
 }
 
 impl<T> AsRef<ShardedKey<T>> for ShardedKey<T> {
@@ -48,7 +49,7 @@ impl<T> ShardedKey<T> {
 impl<T> Encode for ShardedKey<T>
 where
     T: Encode,
-    Vec<u8>: From<<T as Encode>::Encoded>,
+    Vec<u8>: From<<T as Encode>::Encoded>
 {
     type Encoded = Vec<u8>;
 
@@ -61,7 +62,7 @@ where
 
 impl<T> Decode for ShardedKey<T>
 where
-    T: Decode,
+    T: Decode
 {
     fn decode<B: AsRef<[u8]>>(value: B) -> Result<Self, DatabaseError> {
         let value = value.as_ref();
@@ -69,7 +70,9 @@ where
         let tx_num_index = value.len() - 8;
 
         let highest_tx_number = u64::from_be_bytes(
-            value[tx_num_index..].try_into().map_err(|_| DatabaseError::DecodeError)?,
+            value[tx_num_index..]
+                .try_into()
+                .map_err(|_| DatabaseError::DecodeError)?
         );
         let key = T::decode(&value[..tx_num_index])?;
 
@@ -79,7 +82,7 @@ where
 
 impl<T> Hash for ShardedKey<T>
 where
-    T: Hash,
+    T: Hash
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.key.hash(state);

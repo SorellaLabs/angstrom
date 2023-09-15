@@ -2,17 +2,19 @@
 
 use std::ops::{Range, RangeInclusive};
 
-use crate::{
-    impl_fixed_arbitrary,
-    table::{Decode, Encode},
-    DatabaseError,
-};
 use bytes::Buf;
 use reth_codecs::{derive_arbitrary, Compact};
 use reth_primitives::{Account, Address, BlockNumber};
 use serde::{Deserialize, Serialize};
 
-/// Account as it is saved inside [`AccountChangeSet`][crate::tables::AccountChangeSet].
+use crate::{
+    impl_fixed_arbitrary,
+    table::{Decode, Encode},
+    DatabaseError
+};
+
+/// Account as it is saved inside
+/// [`AccountChangeSet`][crate::tables::AccountChangeSet].
 ///
 /// [`Address`] is the subkey.
 #[derive_arbitrary(compact)]
@@ -21,16 +23,17 @@ pub struct AccountBeforeTx {
     /// Address for the account. Acts as `DupSort::SubKey`.
     pub address: Address,
     /// Account state before the transaction.
-    pub info: Option<Account>,
+    pub info:    Option<Account>
 }
 
 // NOTE: Removing main_codec and manually encode subkey
 // and compress second part of the value. If we have compression
-// over whole value (Even SubKey) that would mess up fetching of values with seek_by_key_subkey
+// over whole value (Even SubKey) that would mess up fetching of values with
+// seek_by_key_subkey
 impl Compact for AccountBeforeTx {
     fn to_compact<B>(self, buf: &mut B) -> usize
     where
-        B: bytes::BufMut + AsMut<[u8]>,
+        B: bytes::BufMut + AsMut<[u8]>
     {
         // for now put full bytes and later compress it.
         buf.put_slice(&self.address.to_fixed_bytes()[..]);
@@ -44,7 +47,7 @@ impl Compact for AccountBeforeTx {
 
     fn from_compact(mut buf: &[u8], len: usize) -> (Self, &[u8])
     where
-        Self: Sized,
+        Self: Sized
     {
         let address = Address::from_slice(&buf[..20]);
         buf.advance(20);
@@ -117,8 +120,11 @@ impl Encode for BlockNumberAddress {
 impl Decode for BlockNumberAddress {
     fn decode<B: AsRef<[u8]>>(value: B) -> Result<Self, DatabaseError> {
         let value = value.as_ref();
-        let num =
-            u64::from_be_bytes(value[..8].try_into().map_err(|_| DatabaseError::DecodeError)?);
+        let num = u64::from_be_bytes(
+            value[..8]
+                .try_into()
+                .map_err(|_| DatabaseError::DecodeError)?
+        );
         let hash = Address::from_slice(&value[8..]);
 
         Ok(BlockNumberAddress((num, hash)))
@@ -129,9 +135,11 @@ impl_fixed_arbitrary!(BlockNumberAddress, 28);
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use rand::{thread_rng, Rng};
     use std::str::FromStr;
+
+    use rand::{thread_rng, Rng};
+
+    use super::*;
 
     #[test]
     fn test_tx_number_address() {

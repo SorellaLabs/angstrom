@@ -1,12 +1,12 @@
 use std::{
     marker::PhantomData,
-    ops::{Bound, RangeBounds},
+    ops::{Bound, RangeBounds}
 };
 
 use crate::{
     common::{IterPairResult, PairResult, ValueOnlyResult},
     table::{DupSort, Table, TableRow},
-    DatabaseError,
+    DatabaseError
 };
 
 /// A read-only cursor over table `T`.
@@ -35,11 +35,12 @@ pub trait DbCursorRO<'tx, T: Table> {
 
     /// Get an iterator that walks through the table.
     ///
-    /// If `start_key` is `None`, then the walker will start from the first entry of the table,
-    /// otherwise it starts at the entry greater than or equal to the provided key.
+    /// If `start_key` is `None`, then the walker will start from the first
+    /// entry of the table, otherwise it starts at the entry greater than or
+    /// equal to the provided key.
     fn walk<'cursor>(
         &'cursor mut self,
-        start_key: Option<T::Key>,
+        start_key: Option<T::Key>
     ) -> Result<Walker<'cursor, 'tx, T, Self>, DatabaseError>
     where
         Self: Sized;
@@ -47,18 +48,19 @@ pub trait DbCursorRO<'tx, T: Table> {
     /// Get an iterator that walks over a range of keys in the table.
     fn walk_range<'cursor>(
         &'cursor mut self,
-        range: impl RangeBounds<T::Key>,
+        range: impl RangeBounds<T::Key>
     ) -> Result<RangeWalker<'cursor, 'tx, T, Self>, DatabaseError>
     where
         Self: Sized;
 
     /// Get an iterator that walks through the table in reverse order.
     ///
-    /// If `start_key` is `None`, then the walker will start from the last entry of the table,
-    /// otherwise it starts at the entry greater than or equal to the provided key.
+    /// If `start_key` is `None`, then the walker will start from the last entry
+    /// of the table, otherwise it starts at the entry greater than or equal
+    /// to the provided key.
     fn walk_back<'cursor>(
         &'cursor mut self,
-        start_key: Option<T::Key>,
+        start_key: Option<T::Key>
     ) -> Result<ReverseWalker<'cursor, 'tx, T, Self>, DatabaseError>
     where
         Self: Sized;
@@ -69,24 +71,26 @@ pub trait DbDupCursorRO<'tx, T: DupSort> {
     /// Positions the cursor at the next KV pair of the table, returning it.
     fn next_dup(&mut self) -> PairResult<T>;
 
-    /// Positions the cursor at the next KV pair of the table, skipping duplicates.
+    /// Positions the cursor at the next KV pair of the table, skipping
+    /// duplicates.
     fn next_no_dup(&mut self) -> PairResult<T>;
 
     /// Positions the cursor at the next duplicate value of the current key.
     fn next_dup_val(&mut self) -> ValueOnlyResult<T>;
 
-    /// Positions the cursor at the entry greater than or equal to the provided key/subkey pair.
+    /// Positions the cursor at the entry greater than or equal to the provided
+    /// key/subkey pair.
     ///
     /// # Note
     ///
-    /// The position of the cursor might not correspond to the key/subkey pair if the entry does not
-    /// exist.
+    /// The position of the cursor might not correspond to the key/subkey pair
+    /// if the entry does not exist.
     fn seek_by_key_subkey(&mut self, key: T::Key, subkey: T::SubKey) -> ValueOnlyResult<T>;
 
     /// Get an iterator that walks through the dup table.
     ///
-    /// The cursor will start at different points in the table depending on the values of `key` and
-    /// `subkey`:
+    /// The cursor will start at different points in the table depending on the
+    /// values of `key` and `subkey`:
     ///
     /// | `key`  | `subkey` | **Equivalent starting position**        |
     /// |--------|----------|-----------------------------------------|
@@ -97,7 +101,7 @@ pub trait DbDupCursorRO<'tx, T: DupSort> {
     fn walk_dup<'cursor>(
         &'cursor mut self,
         key: Option<T::Key>,
-        subkey: Option<T::SubKey>,
+        subkey: Option<T::SubKey>
     ) -> Result<DupWalker<'cursor, 'tx, T, Self>, DatabaseError>
     where
         Self: Sized;
@@ -105,18 +109,19 @@ pub trait DbDupCursorRO<'tx, T: DupSort> {
 
 /// Read write cursor over table.
 pub trait DbCursorRW<'tx, T: Table> {
-    /// Database operation that will update an existing row if a specified value already
-    /// exists in a table, and insert a new row if the specified value doesn't already exist
+    /// Database operation that will update an existing row if a specified value
+    /// already exists in a table, and insert a new row if the specified
+    /// value doesn't already exist
     fn upsert(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError>;
 
-    /// Database operation that will insert a row at a given key. If the key is already
-    /// present, the operation will result in an error.
+    /// Database operation that will insert a row at a given key. If the key is
+    /// already present, the operation will result in an error.
     fn insert(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError>;
 
     /// Append value to next cursor item.
     ///
-    /// This is efficient for pre-sorted data. If the data is not pre-sorted, use
-    /// [`DbCursorRW::insert`].
+    /// This is efficient for pre-sorted data. If the data is not pre-sorted,
+    /// use [`DbCursorRW::insert`].
     fn append(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError>;
 
     /// Delete current value that cursor points to
@@ -130,28 +135,30 @@ pub trait DbDupCursorRW<'tx, T: DupSort> {
 
     /// Append duplicate value.
     ///
-    /// This is efficient for pre-sorted data. If the data is not pre-sorted, use `insert`.
+    /// This is efficient for pre-sorted data. If the data is not pre-sorted,
+    /// use `insert`.
     fn append_dup(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError>;
 }
 
 /// Provides an iterator to `Cursor` when handling `Table`.
 ///
-/// Reason why we have two lifetimes is to distinguish between `'cursor` lifetime
-/// and inherited `'tx` lifetime. If there is only one, rust would short circle
-/// the Cursor lifetime and it wouldn't be possible to use Walker.
+/// Reason why we have two lifetimes is to distinguish between `'cursor`
+/// lifetime and inherited `'tx` lifetime. If there is only one, rust would
+/// short circle the Cursor lifetime and it wouldn't be possible to use Walker.
 pub struct Walker<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> {
     /// Cursor to be used to walk through the table.
-    cursor: &'cursor mut CURSOR,
+    cursor:      &'cursor mut CURSOR,
     /// `(key, value)` where to start the walk.
-    start: IterPairResult<T>,
+    start:       IterPairResult<T>,
     /// Phantom data for 'tx. As it is only used for `DbCursorRO`.
-    _tx_phantom: PhantomData<&'tx T>,
+    _tx_phantom: PhantomData<&'tx T>
 }
 
 impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> std::iter::Iterator
     for Walker<'cursor, 'tx, T, CURSOR>
 {
     type Item = Result<TableRow<T>, DatabaseError>;
+
     fn next(&mut self) -> Option<Self::Item> {
         let start = self.start.take();
         if start.is_some() {
@@ -188,11 +195,11 @@ impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRW<'tx, T> + DbCursorRO<'tx, T>>
 /// Also check [`Walker`]
 pub struct ReverseWalker<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> {
     /// Cursor to be used to walk through the table.
-    cursor: &'cursor mut CURSOR,
+    cursor:      &'cursor mut CURSOR,
     /// `(key, value)` where to start the walk.
-    start: IterPairResult<T>,
+    start:       IterPairResult<T>,
     /// Phantom data for 'tx. As it is only used for `DbCursorRO`.
-    _tx_phantom: PhantomData<&'tx T>,
+    _tx_phantom: PhantomData<&'tx T>
 }
 
 impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> ReverseWalker<'cursor, 'tx, T, CURSOR> {
@@ -236,21 +243,22 @@ impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> std::iter::Iterator
 /// Also check [`Walker`]
 pub struct RangeWalker<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> {
     /// Cursor to be used to walk through the table.
-    cursor: &'cursor mut CURSOR,
+    cursor:      &'cursor mut CURSOR,
     /// `(key, value)` where to start the walk.
-    start: IterPairResult<T>,
+    start:       IterPairResult<T>,
     /// `key` where to stop the walk.
-    end_key: Bound<T::Key>,
+    end_key:     Bound<T::Key>,
     /// flag whether is ended
-    is_done: bool,
+    is_done:     bool,
     /// Phantom data for 'tx. As it is only used for `DbCursorRO`.
-    _tx_phantom: PhantomData<&'tx T>,
+    _tx_phantom: PhantomData<&'tx T>
 }
 
 impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> std::iter::Iterator
     for RangeWalker<'cursor, 'tx, T, CURSOR>
 {
     type Item = Result<TableRow<T>, DatabaseError>;
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_done {
             return None
@@ -273,7 +281,7 @@ impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> std::iter::Iterator
                 self.is_done = true;
                 None
             }
-            _ => None,
+            _ => None
         }
     }
 }
@@ -283,17 +291,17 @@ impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRO<'tx, T>> RangeWalker<'cursor, 't
     pub fn new(
         cursor: &'cursor mut CURSOR,
         start: IterPairResult<T>,
-        end_key: Bound<T::Key>,
+        end_key: Bound<T::Key>
     ) -> Self {
         // mark done if range is empty.
         let is_done = match start {
             Some(Ok((ref start_key, _))) => match &end_key {
                 Bound::Included(end_key) if start_key > end_key => true,
                 Bound::Excluded(end_key) if start_key >= end_key => true,
-                _ => false,
+                _ => false
             },
             None => true,
-            _ => false,
+            _ => false
         };
         Self { cursor, start, end_key, is_done, _tx_phantom: std::marker::PhantomData }
     }
@@ -310,16 +318,16 @@ impl<'cursor, 'tx, T: Table, CURSOR: DbCursorRW<'tx, T> + DbCursorRO<'tx, T>>
 
 /// Provides an iterator to `Cursor` when handling a `DupSort` table.
 ///
-/// Reason why we have two lifetimes is to distinguish between `'cursor` lifetime
-/// and inherited `'tx` lifetime. If there is only one, rust would short circle
-/// the Cursor lifetime and it wouldn't be possible to use Walker.
+/// Reason why we have two lifetimes is to distinguish between `'cursor`
+/// lifetime and inherited `'tx` lifetime. If there is only one, rust would
+/// short circle the Cursor lifetime and it wouldn't be possible to use Walker.
 pub struct DupWalker<'cursor, 'tx, T: DupSort, CURSOR: DbDupCursorRO<'tx, T>> {
     /// Cursor to be used to walk through the table.
-    pub cursor: &'cursor mut CURSOR,
+    pub cursor:      &'cursor mut CURSOR,
     /// Value where to start the walk.
-    pub start: IterPairResult<T>,
+    pub start:       IterPairResult<T>,
     /// Phantom data for 'tx. As it is only used for `DbDupCursorRO`.
-    pub _tx_phantom: PhantomData<&'tx T>,
+    pub _tx_phantom: PhantomData<&'tx T>
 }
 
 impl<'cursor, 'tx, T: DupSort, CURSOR: DbCursorRW<'tx, T> + DbDupCursorRO<'tx, T>>
@@ -335,6 +343,7 @@ impl<'cursor, 'tx, T: DupSort, CURSOR: DbDupCursorRO<'tx, T>> std::iter::Iterato
     for DupWalker<'cursor, 'tx, T, CURSOR>
 {
     type Item = Result<TableRow<T>, DatabaseError>;
+
     fn next(&mut self) -> Option<Self::Item> {
         let start = self.start.take();
         if start.is_some() {

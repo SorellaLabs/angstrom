@@ -1,9 +1,10 @@
 //! Small database table utilities and helper functions.
+use std::borrow::Cow;
+
 use crate::{
     table::{Decode, Decompress, Table, TableRow},
-    DatabaseError,
+    DatabaseError
 };
-use std::borrow::Cow;
 
 #[macro_export]
 /// Implements the `Arbitrary` trait for types with fixed array types.
@@ -27,7 +28,7 @@ macro_rules! impl_fixed_arbitrary {
             type Parameters = ();
             type Strategy = proptest::strategy::Map<
                 proptest::collection::VecStrategy<<u8 as proptest::arbitrary::Arbitrary>::Strategy>,
-                fn(Vec<u8>) -> Self,
+                fn(Vec<u8>) -> Self
             >;
 
             fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
@@ -41,44 +42,44 @@ macro_rules! impl_fixed_arbitrary {
 
 /// Helper function to decode a `(key, value)` pair.
 pub(crate) fn decoder<'a, T>(
-    kv: (Cow<'a, [u8]>, Cow<'a, [u8]>),
+    kv: (Cow<'a, [u8]>, Cow<'a, [u8]>)
 ) -> Result<TableRow<T>, DatabaseError>
 where
     T: Table,
     T::Key: Decode,
-    T::Value: Decompress,
+    T::Value: Decompress
 {
     let key = match kv.0 {
         Cow::Borrowed(k) => Decode::decode(k)?,
-        Cow::Owned(k) => Decode::decode(k)?,
+        Cow::Owned(k) => Decode::decode(k)?
     };
     let value = match kv.1 {
         Cow::Borrowed(v) => Decompress::decompress(v)?,
-        Cow::Owned(v) => Decompress::decompress(v)?,
+        Cow::Owned(v) => Decompress::decompress(v)?
     };
     Ok((key, value))
 }
 
 /// Helper function to decode only a value from a `(key, value)` pair.
 pub(crate) fn decode_value<'a, T>(
-    kv: (Cow<'a, [u8]>, Cow<'a, [u8]>),
+    kv: (Cow<'a, [u8]>, Cow<'a, [u8]>)
 ) -> Result<T::Value, DatabaseError>
 where
-    T: Table,
+    T: Table
 {
     Ok(match kv.1 {
         Cow::Borrowed(v) => Decompress::decompress(v)?,
-        Cow::Owned(v) => Decompress::decompress(v)?,
+        Cow::Owned(v) => Decompress::decompress(v)?
     })
 }
 
 /// Helper function to decode a value. It can be a key or subkey.
 pub(crate) fn decode_one<T>(value: Cow<'_, [u8]>) -> Result<T::Value, DatabaseError>
 where
-    T: Table,
+    T: Table
 {
     Ok(match value {
         Cow::Borrowed(v) => Decompress::decompress(v)?,
-        Cow::Owned(v) => Decompress::decompress(v)?,
+        Cow::Owned(v) => Decompress::decompress(v)?
     })
 }

@@ -1,10 +1,11 @@
 //! Implements [`Compress`] and [`Decompress`] for [`IntegerList`]
 
+use reth_primitives::IntegerList;
+
 use crate::{
     table::{Compress, Decompress},
-    DatabaseError,
+    DatabaseError
 };
-use reth_primitives::IntegerList;
 
 impl Compress for IntegerList {
     type Compressed = Vec<u8>;
@@ -12,6 +13,7 @@ impl Compress for IntegerList {
     fn compress(self) -> Self::Compressed {
         self.to_bytes()
     }
+
     fn compress_to_buf<B: bytes::BufMut + AsMut<[u8]>>(self, buf: &mut B) {
         self.to_mut_bytes(buf)
     }

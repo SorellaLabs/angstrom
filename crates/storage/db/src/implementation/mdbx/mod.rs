@@ -1,18 +1,20 @@
 //! Module that interacts with MDBX.
 
+use std::{ops::Deref, path::Path};
+
+use reth_interfaces::db::LogLevel;
+use reth_libmdbx::{
+    DatabaseFlags, Environment, EnvironmentFlags, EnvironmentKind, Geometry, Mode, PageSize,
+    SyncMode, RO, RW
+};
+use tx::Tx;
+
 use crate::{
     database::{Database, DatabaseGAT},
     tables::{TableType, Tables},
     utils::default_page_size,
-    DatabaseError,
+    DatabaseError
 };
-use reth_interfaces::db::LogLevel;
-use reth_libmdbx::{
-    DatabaseFlags, Environment, EnvironmentFlags, EnvironmentKind, Geometry, Mode, PageSize,
-    SyncMode, RO, RW,
-};
-use std::{ops::Deref, path::Path};
-use tx::Tx;
 
 pub mod cursor;
 pub mod tx;
@@ -20,7 +22,8 @@ pub mod tx;
 const GIGABYTE: usize = 1024 * 1024 * 1024;
 const TERABYTE: usize = GIGABYTE * 1024;
 
-/// MDBX allows up to 32767 readers (`MDBX_READERS_LIMIT`), but we limit it to slightly below that
+/// MDBX allows up to 32767 readers (`MDBX_READERS_LIMIT`), but we limit it to
+/// slightly below that
 const DEFAULT_MAX_READERS: u64 = 32_000;
 
 /// Environment used when opening a MDBX environment. RO/RW.
@@ -29,14 +32,14 @@ pub enum EnvKind {
     /// Read-only MDBX environment.
     RO,
     /// Read-write MDBX environment.
-    RW,
+    RW
 }
 
 /// Wrapper for the libmdbx environment.
 #[derive(Debug)]
 pub struct Env<E: EnvironmentKind> {
     /// Libmdbx-sys environment.
-    pub inner: Environment<E>,
+    pub inner: Environment<E>
 }
 
 impl<'a, E: EnvironmentKind> DatabaseGAT<'a> for Env<E> {
@@ -47,13 +50,17 @@ impl<'a, E: EnvironmentKind> DatabaseGAT<'a> for Env<E> {
 impl<E: EnvironmentKind> Database for Env<E> {
     fn tx(&self) -> Result<<Self as DatabaseGAT<'_>>::TX, DatabaseError> {
         Ok(Tx::new(
-            self.inner.begin_ro_txn().map_err(|e| DatabaseError::InitTransaction(e.into()))?,
+            self.inner
+                .begin_ro_txn()
+                .map_err(|e| DatabaseError::InitTransaction(e.into()))?
         ))
     }
 
     fn tx_mut(&self) -> Result<<Self as DatabaseGAT<'_>>::TXMut, DatabaseError> {
         Ok(Tx::new(
-            self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTransaction(e.into()))?,
+            self.inner
+                .begin_rw_txn()
+                .map_err(|e| DatabaseError::InitTransaction(e.into()))?
         ))
     }
 }
@@ -65,23 +72,23 @@ impl<E: EnvironmentKind> Env<E> {
     pub fn open(
         path: &Path,
         kind: EnvKind,
-        log_level: Option<LogLevel>,
+        log_level: Option<LogLevel>
     ) -> Result<Env<E>, DatabaseError> {
         let mode = match kind {
             EnvKind::RO => Mode::ReadOnly,
-            EnvKind::RW => Mode::ReadWrite { sync_mode: SyncMode::Durable },
+            EnvKind::RW => Mode::ReadWrite { sync_mode: SyncMode::Durable }
         };
 
         let mut inner_env = Environment::new();
         inner_env.set_max_dbs(Tables::ALL.len());
         inner_env.set_geometry(Geometry {
             // Maximum database size of 4 terabytes
-            size: Some(0..(4 * TERABYTE)),
+            size:             Some(0..(4 * TERABYTE)),
             // We grow the database in increments of 4 gigabytes
-            growth_step: Some(4 * GIGABYTE as isize),
+            growth_step:      Some(4 * GIGABYTE as isize),
             // The database never shrinks
             shrink_threshold: None,
-            page_size: Some(PageSize::Set(default_page_size())),
+            page_size:        Some(PageSize::Set(default_page_size()))
         });
         inner_env.set_flags(EnvironmentFlags {
             mode,
@@ -95,7 +102,8 @@ impl<E: EnvironmentKind> Env<E> {
         inner_env.set_max_readers(DEFAULT_MAX_READERS);
 
         if let Some(log_level) = log_level {
-            // Levels higher than [LogLevel::Notice] require libmdbx built with `MDBX_DEBUG` option.
+            // Levels higher than [LogLevel::Notice] require libmdbx built with `MDBX_DEBUG`
+            // option.
             let is_log_level_available = if cfg!(debug_assertions) {
                 true
             } else {
@@ -113,27 +121,33 @@ impl<E: EnvironmentKind> Env<E> {
                     LogLevel::Verbose => 4,
                     LogLevel::Debug => 5,
                     LogLevel::Trace => 6,
-                    LogLevel::Extra => 7,
+                    LogLevel::Extra => 7
                 });
             } else {
                 return Err(DatabaseError::LogLevelUnavailable(log_level))
             }
         }
 
-        let env =
-            Env { inner: inner_env.open(path).map_err(|e| DatabaseError::FailedToOpen(e.into()))? };
+        let env = Env {
+            inner: inner_env
+                .open(path)
+                .map_err(|e| DatabaseError::FailedToOpen(e.into()))?
+        };
 
         Ok(env)
     }
 
     /// Creates all the defined tables, if necessary.
     pub fn create_tables(&self) -> Result<(), DatabaseError> {
-        let tx = self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTransaction(e.into()))?;
+        let tx = self
+            .inner
+            .begin_rw_txn()
+            .map_err(|e| DatabaseError::InitTransaction(e.into()))?;
 
         for table in Tables::ALL {
             let flags = match table.table_type() {
                 TableType::Table => DatabaseFlags::default(),
-                TableType::DupSort => DatabaseFlags::DUP_SORT,
+                TableType::DupSort => DatabaseFlags::DUP_SORT
             };
 
             tx.create_db(Some(table.name()), flags)
@@ -156,6 +170,13 @@ impl<E: EnvironmentKind> Deref for Env<E> {
 
 #[cfg(test)]
 mod tests {
+    use std::{path::Path, str::FromStr, sync::Arc};
+
+    use reth_interfaces::db::DatabaseWriteOperation;
+    use reth_libmdbx::{NoWriteMap, WriteMap};
+    use reth_primitives::{Account, Address, Header, IntegerList, StorageEntry, H160, H256, U256};
+    use tempfile::TempDir;
+
     use super::*;
     use crate::{
         abstraction::table::{Encode, Table},
@@ -165,19 +186,14 @@ mod tests {
         tables::{AccountHistory, CanonicalHeaders, Headers, PlainAccountState, PlainStorageState},
         test_utils::*,
         transaction::{DbTx, DbTxMut},
-        AccountChangeSet, DatabaseError,
+        AccountChangeSet, DatabaseError
     };
-    use reth_interfaces::db::DatabaseWriteOperation;
-    use reth_libmdbx::{NoWriteMap, WriteMap};
-    use reth_primitives::{Account, Address, Header, IntegerList, StorageEntry, H160, H256, U256};
-    use std::{path::Path, str::FromStr, sync::Arc};
-    use tempfile::TempDir;
 
     /// Create database for testing
     fn create_test_db<E: EnvironmentKind>(kind: EnvKind) -> Arc<Env<E>> {
         Arc::new(create_test_db_with_path(
             kind,
-            &tempfile::TempDir::new().expect(ERROR_TEMPDIR).into_path(),
+            &tempfile::TempDir::new().expect(ERROR_TEMPDIR).into_path()
         ))
     }
 
@@ -339,7 +355,11 @@ mod tests {
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<AccountChangeSet>().unwrap();
 
-        let entries = cursor.walk_range(..).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        let entries = cursor
+            .walk_range(..)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(entries.len(), 7);
 
         let mut walker = cursor.walk_range(0..=1).unwrap();
@@ -530,10 +550,10 @@ mod tests {
         assert_eq!(
             cursor.insert(key_to_insert, H256::zero()),
             Err(DatabaseError::Write {
-                code: -30799,
-                operation: DatabaseWriteOperation::CursorInsert,
+                code:       -30799,
+                operation:  DatabaseWriteOperation::CursorInsert,
                 table_name: CanonicalHeaders::NAME,
-                key: Box::from(key_to_insert.encode().as_ref())
+                key:        Box::from(key_to_insert.encode().as_ref())
             })
         );
         assert_eq!(cursor.current(), Ok(Some((key_to_insert, H256::zero()))));
@@ -543,7 +563,11 @@ mod tests {
         // Confirm the result
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
-        let res = cursor.walk(None).unwrap().map(|res| res.unwrap().0).collect::<Vec<_>>();
+        let res = cursor
+            .walk(None)
+            .unwrap()
+            .map(|res| res.unwrap().0)
+            .collect::<Vec<_>>();
         assert_eq!(res, vec![0, 1, 2, 3, 4, 5]);
         tx.commit().expect(ERROR_COMMIT);
     }
@@ -622,7 +646,11 @@ mod tests {
         // Confirm the result
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
-        let res = cursor.walk(None).unwrap().map(|res| res.unwrap().0).collect::<Vec<_>>();
+        let res = cursor
+            .walk(None)
+            .unwrap()
+            .map(|res| res.unwrap().0)
+            .collect::<Vec<_>>();
         assert_eq!(res, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         tx.commit().expect(ERROR_COMMIT);
     }
@@ -649,7 +677,11 @@ mod tests {
         // Confirm the result
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
-        let res = cursor.walk(None).unwrap().map(|res| res.unwrap().0).collect::<Vec<_>>();
+        let res = cursor
+            .walk(None)
+            .unwrap()
+            .map(|res| res.unwrap().0)
+            .collect::<Vec<_>>();
         assert_eq!(res, vec![0, 1, 2, 3, 4, 5]);
         tx.commit().expect(ERROR_COMMIT);
     }
@@ -673,10 +705,10 @@ mod tests {
         assert_eq!(
             cursor.append(key_to_append, H256::zero()),
             Err(DatabaseError::Write {
-                code: -30418,
-                operation: DatabaseWriteOperation::CursorAppend,
+                code:       -30418,
+                operation:  DatabaseWriteOperation::CursorAppend,
                 table_name: CanonicalHeaders::NAME,
-                key: Box::from(key_to_append.encode().as_ref())
+                key:        Box::from(key_to_append.encode().as_ref())
             })
         );
         assert_eq!(cursor.current(), Ok(Some((5, H256::zero())))); // the end of table
@@ -685,7 +717,11 @@ mod tests {
         // Confirm the result
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
-        let res = cursor.walk(None).unwrap().map(|res| res.unwrap().0).collect::<Vec<_>>();
+        let res = cursor
+            .walk(None)
+            .unwrap()
+            .map(|res| res.unwrap().0)
+            .collect::<Vec<_>>();
         assert_eq!(res, vec![0, 1, 3, 4, 5]);
         tx.commit().expect(ERROR_COMMIT);
     }
@@ -738,7 +774,7 @@ mod tests {
             .try_for_each(|val| {
                 cursor.append(
                     transition_id,
-                    AccountBeforeTx { address: Address::from_low_u64_be(val), info: None },
+                    AccountBeforeTx { address: Address::from_low_u64_be(val), info: None }
                 )
             })
             .expect(ERROR_APPEND);
@@ -751,31 +787,40 @@ mod tests {
         assert_eq!(
             cursor.append_dup(
                 transition_id,
-                AccountBeforeTx { address: Address::from_low_u64_be(subkey_to_append), info: None }
+                AccountBeforeTx {
+                    address: Address::from_low_u64_be(subkey_to_append),
+                    info:    None
+                }
             ),
             Err(DatabaseError::Write {
-                code: -30418,
-                operation: DatabaseWriteOperation::CursorAppendDup,
+                code:       -30418,
+                operation:  DatabaseWriteOperation::CursorAppendDup,
                 table_name: AccountChangeSet::NAME,
-                key: Box::from(transition_id.encode().as_ref())
+                key:        Box::from(transition_id.encode().as_ref())
             })
         );
         assert_eq!(
             cursor.append(
                 transition_id - 1,
-                AccountBeforeTx { address: Address::from_low_u64_be(subkey_to_append), info: None }
+                AccountBeforeTx {
+                    address: Address::from_low_u64_be(subkey_to_append),
+                    info:    None
+                }
             ),
             Err(DatabaseError::Write {
-                code: -30418,
-                operation: DatabaseWriteOperation::CursorAppend,
+                code:       -30418,
+                operation:  DatabaseWriteOperation::CursorAppend,
                 table_name: AccountChangeSet::NAME,
-                key: Box::from((transition_id - 1).encode().as_ref())
+                key:        Box::from((transition_id - 1).encode().as_ref())
             })
         );
         assert_eq!(
             cursor.append(
                 transition_id,
-                AccountBeforeTx { address: Address::from_low_u64_be(subkey_to_append), info: None }
+                AccountBeforeTx {
+                    address: Address::from_low_u64_be(subkey_to_append),
+                    info:    None
+                }
             ),
             Ok(())
         );
@@ -786,9 +831,9 @@ mod tests {
         let path = TempDir::new().expect(ERROR_TEMPDIR).into_path();
 
         let value = Account {
-            nonce: 18446744073709551615,
+            nonce:         18446744073709551615,
             bytecode_hash: Some(H256::random()),
-            balance: U256::MAX,
+            balance:       U256::MAX
         };
         let key = Address::from_str("0xa2c122be93b0074270ebee7f6b7292c7deb45047")
             .expect(ERROR_ETH_ADDRESS);
@@ -807,8 +852,9 @@ mod tests {
         let env = Env::<WriteMap>::open(&path, EnvKind::RO, None).expect(ERROR_DB_CREATION);
 
         // GET
-        let result =
-            env.view(|tx| tx.get::<PlainAccountState>(key).expect(ERROR_GET)).expect(ERROR_GET);
+        let result = env
+            .view(|tx| tx.get::<PlainAccountState>(key).expect(ERROR_GET))
+            .expect(ERROR_GET);
 
         assert!(result == Some(value))
     }
@@ -821,15 +867,18 @@ mod tests {
 
         // PUT (0,0)
         let value00 = StorageEntry::default();
-        env.update(|tx| tx.put::<PlainStorageState>(key, value00).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key, value00).expect(ERROR_PUT))
+            .unwrap();
 
         // PUT (2,2)
         let value22 = StorageEntry { key: H256::from_low_u64_be(2), value: U256::from(2) };
-        env.update(|tx| tx.put::<PlainStorageState>(key, value22).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key, value22).expect(ERROR_PUT))
+            .unwrap();
 
         // PUT (1,1)
         let value11 = StorageEntry { key: H256::from_low_u64_be(1), value: U256::from(1) };
-        env.update(|tx| tx.put::<PlainStorageState>(key, value11).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key, value11).expect(ERROR_PUT))
+            .unwrap();
 
         // Iterate with cursor
         {
@@ -846,7 +895,9 @@ mod tests {
         {
             let tx = env.tx().expect(ERROR_INIT_TX);
             let mut cursor = tx.cursor_dup_read::<PlainStorageState>().unwrap();
-            let mut walker = cursor.walk_dup(Some(key), Some(H256::from_low_u64_be(1))).unwrap();
+            let mut walker = cursor
+                .walk_dup(Some(key), Some(H256::from_low_u64_be(1)))
+                .unwrap();
             assert_eq!(
                 (key, value11),
                 walker
@@ -867,15 +918,18 @@ mod tests {
 
         // PUT key1 (0,0)
         let value00 = StorageEntry::default();
-        env.update(|tx| tx.put::<PlainStorageState>(key1, value00).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key1, value00).expect(ERROR_PUT))
+            .unwrap();
 
         // PUT key1 (1,1)
         let value11 = StorageEntry { key: H256::from_low_u64_be(1), value: U256::from(1) };
-        env.update(|tx| tx.put::<PlainStorageState>(key1, value11).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key1, value11).expect(ERROR_PUT))
+            .unwrap();
 
         // PUT key2 (2,2)
         let value22 = StorageEntry { key: H256::from_low_u64_be(2), value: U256::from(2) };
-        env.update(|tx| tx.put::<PlainStorageState>(key2, value22).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key2, value22).expect(ERROR_PUT))
+            .unwrap();
 
         // Iterate with walk_dup
         {
@@ -886,8 +940,9 @@ mod tests {
             // Notice that value11 and value22 have been ordered in the DB.
             assert_eq!(Some(Ok((key1, value00))), walker.next());
             assert_eq!(Some(Ok((key1, value11))), walker.next());
-            // NOTE: Dup cursor does NOT iterates on all values but only on duplicated values of the
-            // same key. assert_eq!(Ok(Some(value22.clone())), walker.next());
+            // NOTE: Dup cursor does NOT iterates on all values but only on duplicated
+            // values of the same key. assert_eq!(Ok(Some(value22.clone())),
+            // walker.next());
             assert_eq!(None, walker.next());
         }
 
@@ -911,15 +966,18 @@ mod tests {
 
         // PUT key1 (0,1)
         let value01 = StorageEntry { key: H256::from_low_u64_be(0), value: U256::from(1) };
-        env.update(|tx| tx.put::<PlainStorageState>(key1, value01).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key1, value01).expect(ERROR_PUT))
+            .unwrap();
 
         // PUT key1 (0,0)
         let value00 = StorageEntry::default();
-        env.update(|tx| tx.put::<PlainStorageState>(key1, value00).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key1, value00).expect(ERROR_PUT))
+            .unwrap();
 
         // PUT key2 (2,2)
         let value22 = StorageEntry { key: H256::from_low_u64_be(2), value: U256::from(2) };
-        env.update(|tx| tx.put::<PlainStorageState>(key2, value22).expect(ERROR_PUT)).unwrap();
+        env.update(|tx| tx.put::<PlainStorageState>(key2, value22).expect(ERROR_PUT))
+            .unwrap();
 
         // Iterate with walk
         {
@@ -955,7 +1013,11 @@ mod tests {
             let key = ShardedKey::new(real_key, i * 100);
             let list: IntegerList = vec![i * 100u64].into();
 
-            db.update(|tx| tx.put::<AccountHistory>(key.clone(), list.clone()).expect("")).unwrap();
+            db.update(|tx| {
+                tx.put::<AccountHistory>(key.clone(), list.clone())
+                    .expect("")
+            })
+            .unwrap();
         }
 
         // Seek value with non existing key.
@@ -963,9 +1025,9 @@ mod tests {
             let tx = db.tx().expect(ERROR_INIT_TX);
             let mut cursor = tx.cursor_read::<AccountHistory>().unwrap();
 
-            // It will seek the one greater or equal to the query. Since we have `Address | 100`,
-            // `Address | 200` in the database and we're querying `Address | 150` it will return us
-            // `Address | 200`.
+            // It will seek the one greater or equal to the query. Since we have `Address |
+            // 100`, `Address | 200` in the database and we're querying `Address
+            // | 150` it will return us `Address | 200`.
             let mut walker = cursor.walk(Some(ShardedKey::new(real_key, 150))).unwrap();
             let (key, list) = walker
                 .next()
@@ -981,9 +1043,11 @@ mod tests {
             let tx = db.tx().expect(ERROR_INIT_TX);
             let mut cursor = tx.cursor_read::<AccountHistory>().unwrap();
 
-            // It will seek the MAX value of transition index and try to use prev to get first
-            // biggers.
-            let _unknown = cursor.seek_exact(ShardedKey::new(real_key, u64::MAX)).unwrap();
+            // It will seek the MAX value of transition index and try to use prev to get
+            // first biggers.
+            let _unknown = cursor
+                .seek_exact(ShardedKey::new(real_key, u64::MAX))
+                .unwrap();
             let (key, list) = cursor
                 .prev()
                 .expect("element should exist.")

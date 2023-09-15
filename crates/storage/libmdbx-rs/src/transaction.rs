@@ -1,17 +1,19 @@
+use std::{
+    fmt, fmt::Debug, marker::PhantomData, mem::size_of, ptr, rc::Rc, result, slice,
+    sync::mpsc::sync_channel
+};
+
+use ffi::{MDBX_txn_flags_t, MDBX_TXN_RDONLY, MDBX_TXN_READWRITE};
+use indexmap::IndexSet;
+use libc::{c_uint, c_void};
+use parking_lot::Mutex;
+
 use crate::{
     database::Database,
     environment::{Environment, EnvironmentKind, NoWriteMap, TxnManagerMessage, TxnPtr},
     error::{mdbx_result, Result},
     flags::{DatabaseFlags, WriteFlags},
-    Cursor, Error, Stat, TableObject,
-};
-use ffi::{MDBX_txn_flags_t, MDBX_TXN_RDONLY, MDBX_TXN_READWRITE};
-use indexmap::IndexSet;
-use libc::{c_uint, c_void};
-use parking_lot::Mutex;
-use std::{
-    fmt, fmt::Debug, marker::PhantomData, mem::size_of, ptr, rc::Rc, result, slice,
-    sync::mpsc::sync_channel,
+    Cursor, Error, Stat, TableObject
 };
 
 mod private {
@@ -51,19 +53,19 @@ impl TransactionKind for RW {
 pub struct Transaction<'env, K, E>
 where
     K: TransactionKind,
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
-    txn: Rc<Mutex<*mut ffi::MDBX_txn>>,
+    txn:         Rc<Mutex<*mut ffi::MDBX_txn>>,
     primed_dbis: Mutex<IndexSet<ffi::MDBX_dbi>>,
-    committed: bool,
-    env: &'env Environment<E>,
-    _marker: PhantomData<fn(K)>,
+    committed:   bool,
+    env:         &'env Environment<E>,
+    _marker:     PhantomData<fn(K)>
 }
 
 impl<'env, K, E> Transaction<'env, K, E>
 where
     K: TransactionKind,
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     pub(crate) fn new(env: &'env Environment<E>) -> Result<Self> {
         let mut txn: *mut ffi::MDBX_txn = ptr::null_mut();
@@ -73,7 +75,7 @@ where
                 ptr::null_mut(),
                 K::OPEN_FLAGS,
                 &mut txn,
-                ptr::null_mut(),
+                ptr::null_mut()
             ))?;
             Ok(Self::new_from_ptr(env, txn))
         }
@@ -85,7 +87,7 @@ where
             primed_dbis: Mutex::new(IndexSet::new()),
             committed: false,
             env,
-            _marker: PhantomData,
+            _marker: PhantomData
         }
     }
 
@@ -121,7 +123,7 @@ where
     /// [None] will be returned.
     pub fn get<'txn, Key>(&'txn self, dbi: ffi::MDBX_dbi, key: &[u8]) -> Result<Option<Key>>
     where
-        Key: TableObject<'txn>,
+        Key: TableObject<'txn>
     {
         let key_val: ffi::MDBX_val =
             ffi::MDBX_val { iov_len: key.len(), iov_base: key.as_ptr() as *mut c_void };
@@ -131,7 +133,7 @@ where
             match ffi::mdbx_get(txn, dbi, &key_val, &mut data_val) {
                 ffi::MDBX_SUCCESS => Key::decode_val::<K>(txn, &data_val).map(Some),
                 ffi::MDBX_NOTFOUND => Ok(None),
-                err_code => Err(Error::from_err_code(err_code)),
+                err_code => Err(Error::from_err_code(err_code))
             }
         })
     }
@@ -147,8 +149,8 @@ where
         self.primed_dbis.lock().insert(db.dbi());
     }
 
-    /// Commits the transaction and returns table handles permanently open for the lifetime of
-    /// `Environment`.
+    /// Commits the transaction and returns table handles permanently open for
+    /// the lifetime of `Environment`.
     pub fn commit_and_rebind_open_dbs(mut self) -> Result<(bool, Vec<Database<'env>>)> {
         let txnlck = self.txn.lock();
         let txn = *txnlck;
@@ -166,19 +168,29 @@ where
         };
         self.committed = true;
         result.map(|v| {
-            (v, self.primed_dbis.lock().iter().map(|&dbi| Database::new_from_ptr(dbi)).collect())
+            (
+                v,
+                self.primed_dbis
+                    .lock()
+                    .iter()
+                    .map(|&dbi| Database::new_from_ptr(dbi))
+                    .collect()
+            )
         })
     }
 
     /// Opens a handle to an MDBX database.
     ///
-    /// If `name` is [None], then the returned handle will be for the default database.
+    /// If `name` is [None], then the returned handle will be for the default
+    /// database.
     ///
-    /// If `name` is not [None], then the returned handle will be for a named database. In this
-    /// case the environment must be configured to allow named databases through
+    /// If `name` is not [None], then the returned handle will be for a named
+    /// database. In this case the environment must be configured to allow
+    /// named databases through
     /// [EnvironmentBuilder::set_max_dbs()](crate::EnvironmentBuilder::set_max_dbs).
     ///
-    /// The returned database handle may be shared among any transaction in the environment.
+    /// The returned database handle may be shared among any transaction in the
+    /// environment.
     ///
     /// The database name may not contain the null character.
     pub fn open_db<'txn>(&'txn self, name: Option<&str>) -> Result<Database<'txn>> {
@@ -228,7 +240,7 @@ where
 
 pub(crate) fn txn_execute<F: FnOnce(*mut ffi::MDBX_txn) -> T, T>(
     txn: &Mutex<*mut ffi::MDBX_txn>,
-    f: F,
+    f: F
 ) -> T {
     let lck = txn.lock();
     (f)(*lck)
@@ -236,32 +248,36 @@ pub(crate) fn txn_execute<F: FnOnce(*mut ffi::MDBX_txn) -> T, T>(
 
 impl<'env, E> Transaction<'env, RW, E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     fn open_db_with_flags<'txn>(
         &'txn self,
         name: Option<&str>,
-        flags: DatabaseFlags,
+        flags: DatabaseFlags
     ) -> Result<Database<'txn>> {
         Database::new(self, name, flags.bits())
     }
 
     /// Opens a handle to an MDBX database, creating the database if necessary.
     ///
-    /// If the database is already created, the given option flags will be added to it.
+    /// If the database is already created, the given option flags will be added
+    /// to it.
     ///
-    /// If `name` is [None], then the returned handle will be for the default database.
+    /// If `name` is [None], then the returned handle will be for the default
+    /// database.
     ///
-    /// If `name` is not [None], then the returned handle will be for a named database. In this
-    /// case the environment must be configured to allow named databases through
+    /// If `name` is not [None], then the returned handle will be for a named
+    /// database. In this case the environment must be configured to allow
+    /// named databases through
     /// [EnvironmentBuilder::set_max_dbs()](crate::EnvironmentBuilder::set_max_dbs).
     ///
-    /// This function will fail with [Error::BadRslot](crate::error::Error::BadRslot) if called by a
+    /// This function will fail with
+    /// [Error::BadRslot](crate::error::Error::BadRslot) if called by a
     /// thread with an open transaction.
     pub fn create_db<'txn>(
         &'txn self,
         name: Option<&str>,
-        flags: DatabaseFlags,
+        flags: DatabaseFlags
     ) -> Result<Database<'txn>> {
         self.open_db_with_flags(name, flags | DatabaseFlags::CREATE)
     }
@@ -277,7 +293,7 @@ where
         dbi: ffi::MDBX_dbi,
         key: impl AsRef<[u8]>,
         data: impl AsRef<[u8]>,
-        flags: WriteFlags,
+        flags: WriteFlags
     ) -> Result<()> {
         let key = key.as_ref();
         let data = data.as_ref();
@@ -300,7 +316,7 @@ where
         db: &Database<'txn>,
         key: impl AsRef<[u8]>,
         len: usize,
-        flags: WriteFlags,
+        flags: WriteFlags
     ) -> Result<&'txn mut [u8]> {
         let key = key.as_ref();
         let key_val: ffi::MDBX_val =
@@ -314,7 +330,7 @@ where
                     db.dbi(),
                     &key_val,
                     &mut data_val,
-                    flags.bits() | ffi::MDBX_RESERVE,
+                    flags.bits() | ffi::MDBX_RESERVE
                 )
             }))?;
             Ok(slice::from_raw_parts_mut(data_val.iov_base as *mut u8, data_val.iov_len))
@@ -324,9 +340,10 @@ where
     /// Delete items from a database.
     /// This function removes key/data pairs from the database.
     ///
-    /// The data parameter is NOT ignored regardless the database does support sorted duplicate data
-    /// items or not. If the data parameter is [Some] only the matching data item will be
-    /// deleted. Otherwise, if data parameter is [None], any/all value(s) for specified key will
+    /// The data parameter is NOT ignored regardless the database does support
+    /// sorted duplicate data items or not. If the data parameter is [Some]
+    /// only the matching data item will be deleted. Otherwise, if data
+    /// parameter is [None], any/all value(s) for specified key will
     /// be deleted.
     ///
     /// Returns `true` if the key/value pair was present.
@@ -334,14 +351,14 @@ where
         &self,
         dbi: ffi::MDBX_dbi,
         key: impl AsRef<[u8]>,
-        data: Option<&[u8]>,
+        data: Option<&[u8]>
     ) -> Result<bool> {
         let key = key.as_ref();
         let key_val: ffi::MDBX_val =
             ffi::MDBX_val { iov_len: key.len(), iov_base: key.as_ptr() as *mut c_void };
         let data_val: Option<ffi::MDBX_val> = data.map(|data| ffi::MDBX_val {
-            iov_len: data.len(),
-            iov_base: data.as_ptr() as *mut c_void,
+            iov_len:  data.len(),
+            iov_base: data.as_ptr() as *mut c_void
         });
 
         mdbx_result({
@@ -356,7 +373,7 @@ where
         .map(|_| true)
         .or_else(|e| match e {
             Error::NotFound => Ok(false),
-            other => Err(other),
+            other => Err(other)
         })
     }
 
@@ -370,8 +387,8 @@ where
     /// Drops the database from the environment.
     ///
     /// # Safety
-    /// Caller must close ALL other [Database] and [Cursor] instances pointing to the same dbi
-    /// BEFORE calling this function.
+    /// Caller must close ALL other [Database] and [Cursor] instances pointing
+    /// to the same dbi BEFORE calling this function.
     pub unsafe fn drop_db<'txn>(&'txn self, db: Database<'txn>) -> Result<()> {
         mdbx_result(txn_execute(&self.txn, |txn| ffi::mdbx_drop(txn, db.dbi(), true)))?;
 
@@ -381,13 +398,13 @@ where
 
 impl<'env, E> Transaction<'env, RO, E>
 where
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     /// Closes the database handle.
     ///
     /// # Safety
-    /// Caller must close ALL other [Database] and [Cursor] instances pointing to the same dbi
-    /// BEFORE calling this function.
+    /// Caller must close ALL other [Database] and [Cursor] instances pointing
+    /// to the same dbi BEFORE calling this function.
     pub unsafe fn close_db(&self, db: Database<'_>) -> Result<()> {
         mdbx_result(ffi::mdbx_dbi_close(self.env.env(), db.dbi()))?;
 
@@ -406,12 +423,14 @@ impl<'env> Transaction<'env, RW, NoWriteMap> {
                 .unwrap()
                 .send(TxnManagerMessage::Begin {
                     parent: TxnPtr(txn),
-                    flags: RW::OPEN_FLAGS,
-                    sender: tx,
+                    flags:  RW::OPEN_FLAGS,
+                    sender: tx
                 })
                 .unwrap();
 
-            rx.recv().unwrap().map(|ptr| Transaction::new_from_ptr(self.env, ptr.0))
+            rx.recv()
+                .unwrap()
+                .map(|ptr| Transaction::new_from_ptr(self.env, ptr.0))
         })
     }
 }
@@ -419,7 +438,7 @@ impl<'env> Transaction<'env, RW, NoWriteMap> {
 impl<'env, K, E> fmt::Debug for Transaction<'env, K, E>
 where
     K: TransactionKind,
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("RoTransaction").finish()
@@ -429,7 +448,7 @@ where
 impl<'env, K, E> Drop for Transaction<'env, K, E>
 where
     K: TransactionKind,
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
     fn drop(&mut self) {
         txn_execute(&self.txn, |txn| {
@@ -456,13 +475,13 @@ where
 unsafe impl<'env, K, E> Send for Transaction<'env, K, E>
 where
     K: TransactionKind,
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
 }
 
 unsafe impl<'env, K, E> Sync for Transaction<'env, K, E>
 where
     K: TransactionKind,
-    E: EnvironmentKind,
+    E: EnvironmentKind
 {
 }

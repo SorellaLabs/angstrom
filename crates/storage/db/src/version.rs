@@ -2,13 +2,13 @@
 
 use std::{
     fs, io,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}
 };
 
 /// The name of the file that contains the version of the database.
 pub const DB_VERSION_FILE_NAME: &str = "database.version";
-/// The version of the database stored in the [DB_VERSION_FILE_NAME] file in the same directory as
-/// database. Example: `1`.
+/// The version of the database stored in the [DB_VERSION_FILE_NAME] file in the
+/// same directory as database. Example: `1`.
 pub const DB_VERSION: u64 = 1;
 
 /// Error when checking a database version using [check_db_version_file]
@@ -26,7 +26,7 @@ pub enum DatabaseVersionError {
     )]
     VersionMismatch { version: u64 },
     #[error("IO error occurred while reading {path}: {err}")]
-    IORead { err: io::Error, path: PathBuf },
+    IORead { err: io::Error, path: PathBuf }
 }
 
 /// Checks the database version file with [DB_VERSION_FILE_NAME] name.
@@ -49,15 +49,16 @@ pub fn check_db_version_file<P: AsRef<Path>>(db_path: P) -> Result<(), DatabaseV
 pub fn get_db_version<P: AsRef<Path>>(db_path: P) -> Result<u64, DatabaseVersionError> {
     let version_file_path = db_version_file_path(db_path);
     match fs::read_to_string(&version_file_path) {
-        Ok(raw_version) => {
-            Ok(raw_version.parse::<u64>().map_err(|_| DatabaseVersionError::MalformedFile)?)
-        }
+        Ok(raw_version) => Ok(raw_version
+            .parse::<u64>()
+            .map_err(|_| DatabaseVersionError::MalformedFile)?),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Err(DatabaseVersionError::MissingFile),
-        Err(err) => Err(DatabaseVersionError::IORead { err, path: version_file_path }),
+        Err(err) => Err(DatabaseVersionError::IORead { err, path: version_file_path })
     }
 }
 
-/// Creates a database version file with [DB_VERSION_FILE_NAME] name containing [DB_VERSION] string.
+/// Creates a database version file with [DB_VERSION_FILE_NAME] name containing
+/// [DB_VERSION] string.
 ///
 /// This function will create a file if it does not exist,
 /// and will entirely replace its contents if it does.
@@ -72,10 +73,12 @@ pub fn db_version_file_path<P: AsRef<Path>>(db_path: P) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_db_version_file, db_version_file_path, DatabaseVersionError};
-    use assert_matches::assert_matches;
     use std::fs;
+
+    use assert_matches::assert_matches;
     use tempfile::tempdir;
+
+    use super::{check_db_version_file, db_version_file_path, DatabaseVersionError};
 
     #[test]
     fn missing_file() {

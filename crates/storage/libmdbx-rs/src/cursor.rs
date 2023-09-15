@@ -1,37 +1,39 @@
+use std::{borrow::Cow, fmt, marker::PhantomData, mem, ptr, rc::Rc, result};
+
+use ffi::{
+    MDBX_cursor_op, MDBX_FIRST, MDBX_FIRST_DUP, MDBX_GET_BOTH, MDBX_GET_BOTH_RANGE,
+    MDBX_GET_CURRENT, MDBX_GET_MULTIPLE, MDBX_LAST, MDBX_LAST_DUP, MDBX_NEXT, MDBX_NEXT_DUP,
+    MDBX_NEXT_MULTIPLE, MDBX_NEXT_NODUP, MDBX_PREV, MDBX_PREV_DUP, MDBX_PREV_MULTIPLE,
+    MDBX_PREV_NODUP, MDBX_SET, MDBX_SET_KEY, MDBX_SET_LOWERBOUND, MDBX_SET_RANGE
+};
+use libc::c_void;
+use parking_lot::Mutex;
+
 use crate::{
     error::{mdbx_result, Error, Result},
     flags::*,
     mdbx_try_optional,
     transaction::{txn_execute, TransactionKind, RW},
-    EnvironmentKind, TableObject, Transaction,
+    EnvironmentKind, TableObject, Transaction
 };
-use ffi::{
-    MDBX_cursor_op, MDBX_FIRST, MDBX_FIRST_DUP, MDBX_GET_BOTH, MDBX_GET_BOTH_RANGE,
-    MDBX_GET_CURRENT, MDBX_GET_MULTIPLE, MDBX_LAST, MDBX_LAST_DUP, MDBX_NEXT, MDBX_NEXT_DUP,
-    MDBX_NEXT_MULTIPLE, MDBX_NEXT_NODUP, MDBX_PREV, MDBX_PREV_DUP, MDBX_PREV_MULTIPLE,
-    MDBX_PREV_NODUP, MDBX_SET, MDBX_SET_KEY, MDBX_SET_LOWERBOUND, MDBX_SET_RANGE,
-};
-use libc::c_void;
-use parking_lot::Mutex;
-use std::{borrow::Cow, fmt, marker::PhantomData, mem, ptr, rc::Rc, result};
 
 /// A cursor for navigating the items within a database.
 pub struct Cursor<'txn, K>
 where
-    K: TransactionKind,
+    K: TransactionKind
 {
-    txn: Rc<Mutex<*mut ffi::MDBX_txn>>,
-    cursor: *mut ffi::MDBX_cursor,
-    _marker: PhantomData<fn(&'txn (), K)>,
+    txn:     Rc<Mutex<*mut ffi::MDBX_txn>>,
+    cursor:  *mut ffi::MDBX_cursor,
+    _marker: PhantomData<fn(&'txn (), K)>
 }
 
 impl<'txn, K> Cursor<'txn, K>
 where
-    K: TransactionKind,
+    K: TransactionKind
 {
     pub(crate) fn new<E: EnvironmentKind>(
         txn: &'txn Transaction<K, E>,
-        dbi: ffi::MDBX_dbi,
+        dbi: ffi::MDBX_dbi
     ) -> Result<Self> {
         let mut cursor: *mut ffi::MDBX_cursor = ptr::null_mut();
 
@@ -70,11 +72,11 @@ where
         &self,
         key: Option<&[u8]>,
         data: Option<&[u8]>,
-        op: MDBX_cursor_op,
+        op: MDBX_cursor_op
     ) -> Result<(Option<Key>, Value, bool)>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         unsafe {
             let mut key_val = slice_to_val(key);
@@ -86,7 +88,7 @@ where
                     self.cursor,
                     &mut key_val,
                     &mut data_val,
-                    op,
+                    op
                 ))?;
                 assert_ne!(data_ptr, data_val.iov_base);
                 let key_out = {
@@ -107,10 +109,10 @@ where
         &mut self,
         key: Option<&[u8]>,
         data: Option<&[u8]>,
-        op: MDBX_cursor_op,
+        op: MDBX_cursor_op
     ) -> Result<Option<Value>>
     where
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         let (_, v, _) = mdbx_try_optional!(self.get::<(), Value>(key, data, op));
 
@@ -121,11 +123,11 @@ where
         &mut self,
         key: Option<&[u8]>,
         data: Option<&[u8]>,
-        op: MDBX_cursor_op,
+        op: MDBX_cursor_op
     ) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         let (k, v, _) = mdbx_try_optional!(self.get(key, data, op));
 
@@ -136,15 +138,16 @@ where
     pub fn first<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_FIRST)
     }
 
-    /// [DatabaseFlags::DUP_SORT]-only: Position at first data item of current key.
+    /// [DatabaseFlags::DUP_SORT]-only: Position at first data item of current
+    /// key.
     pub fn first_dup<Value>(&mut self) -> Result<Option<Value>>
     where
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_value(None, None, MDBX_FIRST_DUP)
     }
@@ -152,16 +155,16 @@ where
     /// [DatabaseFlags::DUP_SORT]-only: Position at key/data pair.
     pub fn get_both<Value>(&mut self, k: &[u8], v: &[u8]) -> Result<Option<Value>>
     where
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_value(Some(k), Some(v), MDBX_GET_BOTH)
     }
 
-    /// [DatabaseFlags::DUP_SORT]-only: Position at given key and at first data greater than or
-    /// equal to specified data.
+    /// [DatabaseFlags::DUP_SORT]-only: Position at given key and at first data
+    /// greater than or equal to specified data.
     pub fn get_both_range<Value>(&mut self, k: &[u8], v: &[u8]) -> Result<Option<Value>>
     where
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_value(Some(k), Some(v), MDBX_GET_BOTH_RANGE)
     }
@@ -170,16 +173,16 @@ where
     pub fn get_current<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_GET_CURRENT)
     }
 
-    /// DupFixed-only: Return up to a page of duplicate data items from current cursor position.
-    /// Move cursor to prepare for [Self::next_multiple()].
+    /// DupFixed-only: Return up to a page of duplicate data items from current
+    /// cursor position. Move cursor to prepare for [Self::next_multiple()].
     pub fn get_multiple<Value>(&mut self) -> Result<Option<Value>>
     where
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_value(None, None, MDBX_GET_MULTIPLE)
     }
@@ -188,7 +191,7 @@ where
     pub fn last<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_LAST)
     }
@@ -196,7 +199,7 @@ where
     /// DupSort-only: Position at last data item of current key.
     pub fn last_dup<Value>(&mut self) -> Result<Option<Value>>
     where
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_value(None, None, MDBX_LAST_DUP)
     }
@@ -206,26 +209,28 @@ where
     pub fn next<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_NEXT)
     }
 
-    /// [DatabaseFlags::DUP_SORT]-only: Position at next data item of current key.
+    /// [DatabaseFlags::DUP_SORT]-only: Position at next data item of current
+    /// key.
     pub fn next_dup<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_NEXT_DUP)
     }
 
-    /// [DatabaseFlags::DUP_FIXED]-only: Return up to a page of duplicate data items from next
-    /// cursor position. Move cursor to prepare for MDBX_NEXT_MULTIPLE.
+    /// [DatabaseFlags::DUP_FIXED]-only: Return up to a page of duplicate data
+    /// items from next cursor position. Move cursor to prepare for
+    /// MDBX_NEXT_MULTIPLE.
     pub fn next_multiple<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_NEXT_MULTIPLE)
     }
@@ -234,7 +239,7 @@ where
     pub fn next_nodup<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_NEXT_NODUP)
     }
@@ -243,16 +248,17 @@ where
     pub fn prev<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_PREV)
     }
 
-    /// [DatabaseFlags::DUP_SORT]-only: Position at previous data item of current key.
+    /// [DatabaseFlags::DUP_SORT]-only: Position at previous data item of
+    /// current key.
     pub fn prev_dup<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_PREV_DUP)
     }
@@ -261,7 +267,7 @@ where
     pub fn prev_nodup<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_PREV_NODUP)
     }
@@ -269,7 +275,7 @@ where
     /// Position at specified key.
     pub fn set<Value>(&mut self, key: &[u8]) -> Result<Option<Value>>
     where
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_value(Some(key), None, MDBX_SET)
     }
@@ -278,7 +284,7 @@ where
     pub fn set_key<Key, Value>(&mut self, key: &[u8]) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(Some(key), None, MDBX_SET_KEY)
     }
@@ -287,34 +293,37 @@ where
     pub fn set_range<Key, Value>(&mut self, key: &[u8]) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(Some(key), None, MDBX_SET_RANGE)
     }
 
-    /// [DatabaseFlags::DUP_FIXED]-only: Position at previous page and return up to a page of
-    /// duplicate data items.
+    /// [DatabaseFlags::DUP_FIXED]-only: Position at previous page and return up
+    /// to a page of duplicate data items.
     pub fn prev_multiple<Key, Value>(&mut self) -> Result<Option<(Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         self.get_full(None, None, MDBX_PREV_MULTIPLE)
     }
 
-    /// Position at first key-value pair greater than or equal to specified, return both key and
-    /// data, and the return code depends on a exact match.
+    /// Position at first key-value pair greater than or equal to specified,
+    /// return both key and data, and the return code depends on a exact
+    /// match.
     ///
-    /// For non DupSort-ed collections this works the same as [Self::set_range()], but returns
-    /// [false] if key found exactly and [true] if greater key was found.
+    /// For non DupSort-ed collections this works the same as
+    /// [Self::set_range()], but returns [false] if key found exactly and
+    /// [true] if greater key was found.
     ///
-    /// For DupSort-ed a data value is taken into account for duplicates, i.e. for a pairs/tuples of
-    /// a key and an each data value of duplicates. Returns [false] if key-value pair found
-    /// exactly and [true] if the next pair was returned.
+    /// For DupSort-ed a data value is taken into account for duplicates, i.e.
+    /// for a pairs/tuples of a key and an each data value of duplicates.
+    /// Returns [false] if key-value pair found exactly and [true] if the
+    /// next pair was returned.
     pub fn set_lowerbound<Key, Value>(&mut self, key: &[u8]) -> Result<Option<(bool, Key, Value)>>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         let (k, v, found) = mdbx_try_optional!(self.get(Some(key), None, MDBX_SET_LOWERBOUND));
 
@@ -332,7 +341,7 @@ where
     where
         Self: Sized,
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         Iter::new(self, ffi::MDBX_NEXT, ffi::MDBX_NEXT)
     }
@@ -346,7 +355,7 @@ where
     where
         Self: Sized,
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         Iter::new(self, ffi::MDBX_FIRST, ffi::MDBX_NEXT)
     }
@@ -359,7 +368,7 @@ where
     pub fn iter_from<Key, Value>(&mut self, key: &[u8]) -> Iter<'txn, '_, K, Key, Value>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         let res: Result<Option<((), ())>> = self.set_range(key);
         if let Err(error) = res {
@@ -374,7 +383,7 @@ where
     pub fn iter_dup<Key, Value>(&mut self) -> IterDup<'txn, '_, K, Key, Value>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         IterDup::new(self, ffi::MDBX_NEXT)
     }
@@ -384,7 +393,7 @@ where
     pub fn iter_dup_start<Key, Value>(&mut self) -> IterDup<'txn, '_, K, Key, Value>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         IterDup::new(self, ffi::MDBX_FIRST)
     }
@@ -394,7 +403,7 @@ where
     pub fn iter_dup_from<Key, Value>(&mut self, key: &[u8]) -> IterDup<'txn, '_, K, Key, Value>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         let res: Result<Option<((), ())>> = self.set_range(key);
         if let Err(error) = res {
@@ -403,11 +412,12 @@ where
         IterDup::new(self, ffi::MDBX_GET_CURRENT)
     }
 
-    /// Iterate over the duplicates of the item in the database with the given key.
+    /// Iterate over the duplicates of the item in the database with the given
+    /// key.
     pub fn iter_dup_of<Key, Value>(&mut self, key: &[u8]) -> Iter<'txn, '_, K, Key, Value>
     where
         Key: TableObject<'txn>,
-        Value: TableObject<'txn>,
+        Value: TableObject<'txn>
     {
         let res: Result<Option<()>> = self.set(key);
         match res {
@@ -416,7 +426,7 @@ where
                 let _: Result<Option<((), ())>> = self.last();
                 return Iter::new(self, ffi::MDBX_NEXT, ffi::MDBX_NEXT)
             }
-            Err(error) => return Iter::Err(Some(error)),
+            Err(error) => return Iter::Err(Some(error))
         };
         Iter::new(self, ffi::MDBX_GET_CURRENT, ffi::MDBX_NEXT_DUP)
     }
@@ -456,7 +466,7 @@ impl<'txn> Cursor<'txn, RW> {
 
 impl<'txn, K> Clone for Cursor<'txn, K>
 where
-    K: TransactionKind,
+    K: TransactionKind
 {
     fn clone(&self) -> Self {
         txn_execute(&self.txn, |_| Self::new_at_position(self).unwrap())
@@ -465,7 +475,7 @@ where
 
 impl<'txn, K> fmt::Debug for Cursor<'txn, K>
 where
-    K: TransactionKind,
+    K: TransactionKind
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("Cursor").finish()
@@ -474,7 +484,7 @@ where
 
 impl<'txn, K> Drop for Cursor<'txn, K>
 where
-    K: TransactionKind,
+    K: TransactionKind
 {
     fn drop(&mut self) {
         txn_execute(&self.txn, |_| unsafe { ffi::mdbx_cursor_close(self.cursor) })
@@ -486,7 +496,7 @@ unsafe fn slice_to_val(slice: Option<&[u8]>) -> ffi::MDBX_val {
         Some(slice) => {
             ffi::MDBX_val { iov_len: slice.len(), iov_base: slice.as_ptr() as *mut c_void }
         }
-        None => ffi::MDBX_val { iov_len: 0, iov_base: ptr::null_mut() },
+        None => ffi::MDBX_val { iov_len: 0, iov_base: ptr::null_mut() }
     }
 }
 
@@ -495,10 +505,10 @@ unsafe impl<'txn, K> Sync for Cursor<'txn, K> where K: TransactionKind {}
 
 impl<'txn, K> IntoIterator for Cursor<'txn, K>
 where
-    K: TransactionKind,
+    K: TransactionKind
 {
-    type Item = Result<(Cow<'txn, [u8]>, Cow<'txn, [u8]>)>;
     type IntoIter = IntoIter<'txn, K, Cow<'txn, [u8]>, Cow<'txn, [u8]>>;
+    type Item = Result<(Cow<'txn, [u8]>, Cow<'txn, [u8]>)>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter::new(self, MDBX_NEXT, MDBX_NEXT)
@@ -511,7 +521,7 @@ pub enum IntoIter<'txn, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     /// An iterator that returns an error on every call to [Iter::next()].
     /// Cursor.iter*() creates an Iter of this type when MDBX returns an error
@@ -528,21 +538,22 @@ where
         /// The MDBX cursor with which to iterate.
         cursor: Cursor<'txn, K>,
 
-        /// The first operation to perform when the consumer calls [Iter::next()].
+        /// The first operation to perform when the consumer calls
+        /// [Iter::next()].
         op: ffi::MDBX_cursor_op,
 
         /// The next and subsequent operations to perform.
         next_op: ffi::MDBX_cursor_op,
 
-        _marker: PhantomData<fn(&'txn (), K, Key, Value)>,
-    },
+        _marker: PhantomData<fn(&'txn (), K, Key, Value)>
+    }
 }
 
 impl<'txn, K, Key, Value> IntoIter<'txn, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     /// Creates a new iterator backed by the given cursor.
     fn new(cursor: Cursor<'txn, K>, op: ffi::MDBX_cursor_op, next_op: ffi::MDBX_cursor_op) -> Self {
@@ -554,7 +565,7 @@ impl<'txn, K, Key, Value> Iterator for IntoIter<'txn, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     type Item = Result<(Key, Value)>;
 
@@ -570,11 +581,11 @@ where
                             ffi::MDBX_SUCCESS => {
                                 let key = match Key::decode_val::<K>(txn, &key) {
                                     Ok(v) => v,
-                                    Err(e) => return Some(Err(e)),
+                                    Err(e) => return Some(Err(e))
                                 };
                                 let data = match Value::decode_val::<K>(txn, &data) {
                                     Ok(v) => v,
-                                    Err(e) => return Some(Err(e)),
+                                    Err(e) => return Some(Err(e))
                                 };
                                 Some(Ok((key, data)))
                             }
@@ -582,12 +593,12 @@ where
                             // non-existent value, e.g. iter_from with a
                             // key greater than all values in the database.
                             ffi::MDBX_NOTFOUND | ffi::MDBX_ENODATA => None,
-                            error => Some(Err(Error::from_err_code(error))),
+                            error => Some(Err(Error::from_err_code(error)))
                         }
                     })
                 }
             }
-            Self::Err(err) => err.take().map(Err),
+            Self::Err(err) => err.take().map(Err)
         }
     }
 }
@@ -598,7 +609,7 @@ pub enum Iter<'txn, 'cur, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     /// An iterator that returns an error on every call to [Iter::next()].
     /// Cursor.iter*() creates an Iter of this type when MDBX returns an error
@@ -615,27 +626,28 @@ where
         /// The MDBX cursor with which to iterate.
         cursor: &'cur mut Cursor<'txn, K>,
 
-        /// The first operation to perform when the consumer calls [Iter::next()].
+        /// The first operation to perform when the consumer calls
+        /// [Iter::next()].
         op: ffi::MDBX_cursor_op,
 
         /// The next and subsequent operations to perform.
         next_op: ffi::MDBX_cursor_op,
 
-        _marker: PhantomData<fn(&'txn (Key, Value))>,
-    },
+        _marker: PhantomData<fn(&'txn (Key, Value))>
+    }
 }
 
 impl<'txn, 'cur, K, Key, Value> Iter<'txn, 'cur, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     /// Creates a new iterator backed by the given cursor.
     fn new(
         cursor: &'cur mut Cursor<'txn, K>,
         op: ffi::MDBX_cursor_op,
-        next_op: ffi::MDBX_cursor_op,
+        next_op: ffi::MDBX_cursor_op
     ) -> Self {
         Iter::Ok { cursor, op, next_op, _marker: PhantomData }
     }
@@ -645,7 +657,7 @@ impl<'txn, 'cur, K, Key, Value> Iterator for Iter<'txn, 'cur, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     type Item = Result<(Key, Value)>;
 
@@ -661,11 +673,11 @@ where
                             ffi::MDBX_SUCCESS => {
                                 let key = match Key::decode_val::<K>(txn, &key) {
                                     Ok(v) => v,
-                                    Err(e) => return Some(Err(e)),
+                                    Err(e) => return Some(Err(e))
                                 };
                                 let data = match Value::decode_val::<K>(txn, &data) {
                                     Ok(v) => v,
-                                    Err(e) => return Some(Err(e)),
+                                    Err(e) => return Some(Err(e))
                                 };
                                 Some(Ok((key, data)))
                             }
@@ -673,25 +685,25 @@ where
                             // non-existent value, e.g. iter_from with a
                             // key greater than all values in the database.
                             ffi::MDBX_NOTFOUND | ffi::MDBX_ENODATA => None,
-                            error => Some(Err(Error::from_err_code(error))),
+                            error => Some(Err(Error::from_err_code(error)))
                         }
                     })
                 }
             }
-            Iter::Err(err) => err.take().map(Err),
+            Iter::Err(err) => err.take().map(Err)
         }
     }
 }
 
 /// An iterator over the keys and duplicate values in an MDBX database.
 ///
-/// The yielded items of the iterator are themselves iterators over the duplicate values for a
-/// specific key.
+/// The yielded items of the iterator are themselves iterators over the
+/// duplicate values for a specific key.
 pub enum IterDup<'txn, 'cur, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     /// An iterator that returns an error on every call to Iter.next().
     /// Cursor.iter*() creates an Iter of this type when MDBX returns an error
@@ -711,15 +723,15 @@ where
         /// The first operation to perform when the consumer calls Iter.next().
         op: MDBX_cursor_op,
 
-        _marker: PhantomData<fn(&'txn (Key, Value))>,
-    },
+        _marker: PhantomData<fn(&'txn (Key, Value))>
+    }
 }
 
 impl<'txn, 'cur, K, Key, Value> IterDup<'txn, 'cur, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     /// Creates a new iterator backed by the given cursor.
     fn new(cursor: &'cur mut Cursor<'txn, K>, op: MDBX_cursor_op) -> Self {
@@ -731,7 +743,7 @@ impl<'txn, 'cur, K, Key, Value> fmt::Debug for IterDup<'txn, 'cur, K, Key, Value
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> result::Result<(), fmt::Error> {
         f.debug_struct("IterDup").finish()
@@ -742,7 +754,7 @@ impl<'txn, 'cur, K, Key, Value> Iterator for IterDup<'txn, 'cur, K, Key, Value>
 where
     K: TransactionKind,
     Key: TableObject<'txn>,
-    Value: TableObject<'txn>,
+    Value: TableObject<'txn>
 {
     type Item = IntoIter<'txn, K, Key, Value>;
 
@@ -761,12 +773,12 @@ where
                         IntoIter::new(
                             Cursor::new_at_position(&**cursor).unwrap(),
                             ffi::MDBX_GET_CURRENT,
-                            ffi::MDBX_NEXT_DUP,
+                            ffi::MDBX_NEXT_DUP
                         )
                     })
                 })
             }
-            IterDup::Err(err) => err.take().map(|e| IntoIter::Err(Some(e))),
+            IterDup::Err(err) => err.take().map(|e| IntoIter::Err(Some(e)))
         }
     }
 }

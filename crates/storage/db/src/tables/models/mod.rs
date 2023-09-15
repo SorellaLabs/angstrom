@@ -38,7 +38,9 @@ macro_rules! impl_uints {
                 fn decode<B: AsRef<[u8]>>(value: B) -> Result<Self, $crate::DatabaseError> {
                     Ok(
                         $name::from_be_bytes(
-                            value.as_ref().try_into().map_err(|_| $crate::DatabaseError::DecodeError)?
+                            value.as_ref()
+                                .try_into()
+                                .map_err(|_| $crate::DatabaseError::DecodeError)?
                         )
                     )
                 }

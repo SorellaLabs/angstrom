@@ -9,7 +9,8 @@ mod inputs;
 /// fuzzed. For example, the list is assumed to be sorted before creating the
 /// object.
 macro_rules! impl_fuzzer_with_input {
-    ($(($name:tt, $input_type:tt, $encode:tt, $encode_method:tt, $decode:tt, $decode_method:tt)),+) => {
+    ($(($name:tt, $input_type:tt, $encode:tt,
+        $encode_method:tt, $decode:tt, $decode_method:tt)),+) => {
         $(
             /// Macro generated module to be used by test-fuzz and `bench` if it applies.
             #[allow(non_snake_case)]

@@ -5,7 +5,8 @@ use paste::paste;
 
 macro_rules! impl_iai_inner {
     (
-        $(($name:tt, $mod:tt, $compress:tt, $decompress:tt, $encode:tt, $decode:tt, $seqread:tt, $randread:tt, $seqwrite:tt, $randwrite:tt))+
+        $(($name:tt, $mod:tt, $compress:tt, $decompress:tt, $encode:tt,
+           $decode:tt, $seqread:tt, $randread:tt, $seqwrite:tt, $randwrite:tt))+
     ) => {
             $(
                 mod $mod {
@@ -19,7 +20,10 @@ macro_rules! impl_iai_inner {
                     }
                     pub fn $decompress() {
                         for (_, _, _, comp) in black_box(load_vectors::<reth_db::tables::$name>()) {
-                            let _ = black_box(<reth_db::tables::$name as Table>::Value::decompress(comp));
+                            let _ =
+                                black_box(
+                                    <reth_db::tables::$name as Table>::Value::decompress(comp)
+                                    );
                         }
                     }
                     pub fn $encode() {
@@ -56,7 +60,15 @@ macro_rules! impl_iai {
             paste! {
                 impl_iai_inner!(
                     $(
-                        ( $name, [<$name _mod>], [<$name _ValueCompress>], [<$name _ValueDecompress>], [<$name _ValueEncode>], [<$name _ValueDecode>], [<$name _SeqRead>], [<$name _RandomRead>], [<$name _SeqWrite>], [<$name _RandomWrite>])
+                        ( $name, [<$name _mod>],
+                          [<$name _ValueCompress>],
+                          [<$name _ValueDecompress>],
+                          [<$name _ValueEncode>],
+                          [<$name _ValueDecode>],
+                          [<$name _SeqRead>],
+                          [<$name _RandomRead>],
+                          [<$name _SeqWrite>],
+                          [<$name _RandomWrite>])
                     )+
                 );
             }

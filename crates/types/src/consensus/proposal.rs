@@ -1,7 +1,7 @@
 use super::Time;
 use crate::on_chain::Signature;
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Proposal {
     pub proposal_type: ProposalType,
     pub height:        u64,

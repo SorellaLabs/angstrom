@@ -11,12 +11,11 @@ pub struct Vote {
     pub block_id:  Option<BlockId>,
     pub timestamp: Option<Time>,
 
-    /// Validator address
-    pub validator_address: account::Id,
-
-    /// Validator index
-    pub validator_index: ValidatorIndex,
-
+    // /// Validator address
+    // pub validator_address: account::Id,
+    //
+    // /// Validator index
+    // pub validator_index: ValidatorIndex,
     /// Signature
     pub signature: Option<Signature>
 }
@@ -34,9 +33,9 @@ pub struct CanonicalVote {
 /// SignedVote is the union of a canonicalized vote, the signature on
 /// the sign bytes of that vote and the id of the validator who signed it.
 pub struct SignedVote {
-    pub vote:              CanonicalVote,
-    pub validator_address: account::Id,
-    pub signature:         Signature
+    pub vote:      CanonicalVote,
+    // pub validator_address: account::Id,
+    pub signature: Signature
 }
 
 impl SignedVote {
@@ -49,7 +48,7 @@ impl SignedVote {
         signature: Signature
     ) -> SignedVote {
         let canonical_vote = CanonicalVote::new(vote, chain_id);
-        SignedVote { vote: canonical_vote, signature, validator_address }
+        SignedVote { vote: canonical_vote, signature } //validator_address }
     }
 
     pub fn from_vote(vote: Vote, chain_id: u64) -> Option<Self> {

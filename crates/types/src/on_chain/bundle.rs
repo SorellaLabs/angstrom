@@ -30,6 +30,12 @@ pub struct SimmedBundle {
     pub gas_used: U256
 }
 
+impl SimmedBundle {
+    pub fn get_cumulative_lp_bribe(&self) -> u128 {
+        self.raw.get_cumulative_lp_bribe()
+    }
+}
+
 impl From<SimmedBundle> for H256 {
     fn from(value: SimmedBundle) -> Self {
         let mut buf = BytesMut::new();
@@ -81,8 +87,6 @@ impl From<SimmedBundle> for RawBundle {
     }
 }
 
-impl RawBundle {}
-
 impl Into<TxEnv> for RawBundle {
     fn into(self) -> TxEnv {
         let mut gas_limit = U256::from_dec_str("0").unwrap();
@@ -104,6 +108,12 @@ impl Into<TxEnv> for RawBundle {
             nonce:            None,
             access_list:      Default::default()
         }
+    }
+}
+
+impl RawBundle {
+    pub fn get_cumulative_lp_bribe(&self) -> u128 {
+        todo!()
     }
 }
 

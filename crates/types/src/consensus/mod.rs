@@ -1,4 +1,5 @@
 pub mod block;
+pub mod bundle;
 pub mod commit;
 pub mod evidence;
 pub mod genesis;
@@ -8,6 +9,7 @@ pub mod time;
 pub mod vote;
 
 pub use block::*;
+pub use bundle::*;
 pub use commit::*;
 pub use evidence::*;
 pub use genesis::*;

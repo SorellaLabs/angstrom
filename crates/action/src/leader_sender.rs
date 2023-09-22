@@ -44,36 +44,7 @@ impl<M: Middleware + 'static> LeaderSender<M> {
         self.future.is_some()
     }
 
-    pub fn has_selected_bundle(&self) -> bool {
-        self.bundle.is_some()
-    }
-
-    pub fn set_selected_bundle(&mut self, bundle: SimmedBundle) {
-        self.bundle = Some(bundle);
-    }
-
-    pub fn on_new_block(&mut self) {
-        self.signatures.clear();
-        self.bundle = None;
-    }
-
-    /// keeps collecting new signatures for specified bundle request.
-    /// once the amount of signatures are met, we go ahead and send out
-    /// the bundle
-    pub fn new_signature(&mut self, sig: BundleSignature) {
-        if self.signatures.contains(&sig) {
-            debug!(?sig, "got a duplicate signature");
-        }
-
-        if let Ok(key) = sig.recover_key(&self.bundle.as_ref().unwrap().into_call_data()) {
-            if self.valid_stakers.contains(&key) {
-                info!(?key, "got new signature for bundle");
-                self.signatures.push(sig);
-            }
-        }
-        if self.signatures.len() % self.valid_stakers.len() < 67 {
-            return
-        }
+    pub fn submit_bundle(&mut self, bundle: SimmedBundle) {
         let client = self.signer.clone();
 
         self.future = Some(Box::pin(async move {

@@ -1,5 +1,6 @@
-use reth_primitives::ChainSpec;
 use std::sync::Arc;
+
+use reth_primitives::ChainSpec;
 
 /// A trait for reading the current chainspec.
 pub trait ChainSpecProvider: Send + Sync {

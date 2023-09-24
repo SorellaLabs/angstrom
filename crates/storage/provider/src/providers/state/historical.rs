@@ -1,25 +1,28 @@
-use crate::{
-    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, PostState,
-    ProviderError, StateProvider, StateRootProvider,
-};
+use std::marker::PhantomData;
+
 use reth_db::{
     cursor::{DbCursorRO, DbDupCursorRO},
     models::{storage_sharded_key::StorageShardedKey, ShardedKey},
     table::Table,
     tables,
     transaction::DbTx,
-    BlockNumberList,
+    BlockNumberList
 };
 use reth_interfaces::Result;
 use reth_primitives::{
-    Account, Address, BlockNumber, Bytecode, Bytes, StorageKey, StorageValue, H256,
+    Account, Address, BlockNumber, Bytecode, Bytes, StorageKey, StorageValue, H256
 };
-use std::marker::PhantomData;
+
+use crate::{
+    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, PostState,
+    ProviderError, StateProvider, StateRootProvider
+};
 
 /// State provider for a given block number which takes a tx reference.
 ///
-/// Historical state provider accesses the state at the start of the provided block number.
-/// It means that all changes made in the provided block number are not included.
+/// Historical state provider accesses the state at the start of the provided
+/// block number. It means that all changes made in the provided block number
+/// are not included.
 ///
 /// Historical state provider reads the following tables:
 /// - [tables::AccountHistory]
@@ -30,12 +33,13 @@ use std::marker::PhantomData;
 pub struct HistoricalStateProviderRef<'a, 'b, TX: DbTx<'a>> {
     /// Transaction
     tx: &'b TX,
-    /// Block number is main index for the history state of accounts and storages.
+    /// Block number is main index for the history state of accounts and
+    /// storages.
     block_number: BlockNumber,
     /// Lowest blocks at which different parts of the state are available.
     lowest_available_blocks: LowestAvailableBlocks,
     /// Phantom lifetime `'a`
-    _phantom: PhantomData<&'a TX>,
+    _phantom: PhantomData<&'a TX>
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -43,7 +47,7 @@ pub enum HistoryInfo {
     NotYetWritten,
     InChangeset(u64),
     InPlainState,
-    MaybeInPlainState,
+    MaybeInPlainState
 }
 
 impl<'a, 'b, TX: DbTx<'a>> HistoricalStateProviderRef<'a, 'b, TX> {
@@ -53,23 +57,26 @@ impl<'a, 'b, TX: DbTx<'a>> HistoricalStateProviderRef<'a, 'b, TX> {
             tx,
             block_number,
             lowest_available_blocks: Default::default(),
-            _phantom: PhantomData {},
+            _phantom: PhantomData {}
         }
     }
 
-    /// Create new StateProvider for historical block number and lowest block numbers at which
-    /// account & storage histories are available.
+    /// Create new StateProvider for historical block number and lowest block
+    /// numbers at which account & storage histories are available.
     pub fn new_with_lowest_available_blocks(
         tx: &'b TX,
         block_number: BlockNumber,
-        lowest_available_blocks: LowestAvailableBlocks,
+        lowest_available_blocks: LowestAvailableBlocks
     ) -> Self {
         Self { tx, block_number, lowest_available_blocks, _phantom: PhantomData {} }
     }
 
     /// Lookup an account in the AccountHistory table
     pub fn account_history_lookup(&self, address: Address) -> Result<HistoryInfo> {
-        if !self.lowest_available_blocks.is_account_history_available(self.block_number) {
+        if !self
+            .lowest_available_blocks
+            .is_account_history_available(self.block_number)
+        {
             return Err(ProviderError::StateAtBlockPruned(self.block_number).into())
         }
 
@@ -78,7 +85,7 @@ impl<'a, 'b, TX: DbTx<'a>> HistoricalStateProviderRef<'a, 'b, TX> {
         self.history_info::<tables::AccountHistory, _>(
             history_key,
             |key| key.key == address,
-            self.lowest_available_blocks.account_history_block_number,
+            self.lowest_available_blocks.account_history_block_number
         )
     }
 
@@ -86,9 +93,12 @@ impl<'a, 'b, TX: DbTx<'a>> HistoricalStateProviderRef<'a, 'b, TX> {
     pub fn storage_history_lookup(
         &self,
         address: Address,
-        storage_key: StorageKey,
+        storage_key: StorageKey
     ) -> Result<HistoryInfo> {
-        if !self.lowest_available_blocks.is_storage_history_available(self.block_number) {
+        if !self
+            .lowest_available_blocks
+            .is_storage_history_available(self.block_number)
+        {
             return Err(ProviderError::StateAtBlockPruned(self.block_number).into())
         }
 
@@ -97,7 +107,7 @@ impl<'a, 'b, TX: DbTx<'a>> HistoricalStateProviderRef<'a, 'b, TX> {
         self.history_info::<tables::StorageHistory, _>(
             history_key,
             |key| key.address == address && key.sharded_key.key == storage_key,
-            self.lowest_available_blocks.storage_history_block_number,
+            self.lowest_available_blocks.storage_history_block_number
         )
     }
 
@@ -105,31 +115,35 @@ impl<'a, 'b, TX: DbTx<'a>> HistoricalStateProviderRef<'a, 'b, TX> {
         &self,
         key: K,
         key_filter: impl Fn(&K) -> bool,
-        lowest_available_block_number: Option<BlockNumber>,
+        lowest_available_block_number: Option<BlockNumber>
     ) -> Result<HistoryInfo>
     where
-        T: Table<Key = K, Value = BlockNumberList>,
+        T: Table<Key = K, Value = BlockNumberList>
     {
         let mut cursor = self.tx.cursor_read::<T>()?;
 
-        // Lookup the history chunk in the history index. If they key does not appear in the
-        // index, the first chunk for the next key will be returned so we filter out chunks that
-        // have a different key.
-        if let Some(chunk) = cursor.seek(key)?.filter(|(key, _)| key_filter(key)).map(|x| x.1 .0) {
+        // Lookup the history chunk in the history index. If they key does not appear in
+        // the index, the first chunk for the next key will be returned so we
+        // filter out chunks that have a different key.
+        if let Some(chunk) = cursor
+            .seek(key)?
+            .filter(|(key, _)| key_filter(key))
+            .map(|x| x.1 .0)
+        {
             let chunk = chunk.enable_rank();
 
             // Get the rank of the first entry after our block.
             let rank = chunk.rank(self.block_number as usize);
 
-            // If our block is before the first entry in the index chunk and this first entry
-            // doesn't equal to our block, it might be before the first write ever. To check, we
-            // look at the previous entry and check if the key is the same.
-            // This check is worth it, the `cursor.prev()` check is rarely triggered (the if will
-            // short-circuit) and when it passes we save a full seek into the changeset/plain state
-            // table.
-            if rank == 0 &&
-                chunk.select(rank) as u64 != self.block_number &&
-                !cursor.prev()?.is_some_and(|(key, _)| key_filter(&key))
+            // If our block is before the first entry in the index chunk and this first
+            // entry doesn't equal to our block, it might be before the first
+            // write ever. To check, we look at the previous entry and check if
+            // the key is the same. This check is worth it, the `cursor.prev()`
+            // check is rarely triggered (the if will short-circuit) and when it
+            // passes we save a full seek into the changeset/plain state table.
+            if rank == 0
+                && chunk.select(rank) as u64 != self.block_number
+                && !cursor.prev()?.is_some_and(|(key, _)| key_filter(&key))
             {
                 if lowest_available_block_number.is_some() {
                     // The key may have been written, but due to pruning we may not have changesets
@@ -143,13 +157,14 @@ impl<'a, 'b, TX: DbTx<'a>> HistoricalStateProviderRef<'a, 'b, TX> {
                 // The chunk contains an entry for a write after our block, return it.
                 Ok(HistoryInfo::InChangeset(chunk.select(rank) as u64))
             } else {
-                // The chunk does not contain an entry for a write after our block. This can only
-                // happen if this is the last chunk and so we need to look in the plain state.
+                // The chunk does not contain an entry for a write after our block. This can
+                // only happen if this is the last chunk and so we need to look
+                // in the plain state.
                 Ok(HistoryInfo::InPlainState)
             }
         } else if lowest_available_block_number.is_some() {
-            // The key may have been written, but due to pruning we may not have changesets and
-            // history, so we need to make a plain state lookup.
+            // The key may have been written, but due to pruning we may not have changesets
+            // and history, so we need to make a plain state lookup.
             Ok(HistoryInfo::MaybeInPlainState)
         } else {
             // The key has not been written to at all.
@@ -170,7 +185,7 @@ impl<'a, 'b, TX: DbTx<'a>> AccountReader for HistoricalStateProviderRef<'a, 'b, 
                 .filter(|acc| acc.address == address)
                 .ok_or(ProviderError::AccountChangesetNotFound {
                     block_number: changeset_block_number,
-                    address,
+                    address
                 })?
                 .info),
             HistoryInfo::InPlainState | HistoryInfo::MaybeInPlainState => {
@@ -183,7 +198,9 @@ impl<'a, 'b, TX: DbTx<'a>> AccountReader for HistoricalStateProviderRef<'a, 'b, 
 impl<'a, 'b, TX: DbTx<'a>> BlockHashReader for HistoricalStateProviderRef<'a, 'b, TX> {
     /// Get block hash by number.
     fn block_hash(&self, number: u64) -> Result<Option<H256>> {
-        self.tx.get::<tables::CanonicalHeaders>(number).map_err(Into::into)
+        self.tx
+            .get::<tables::CanonicalHeaders>(number)
+            .map_err(Into::into)
     }
 
     fn canonical_hashes_range(&self, start: BlockNumber, end: BlockNumber) -> Result<Vec<H256>> {
@@ -219,9 +236,9 @@ impl<'a, 'b, TX: DbTx<'a>> StateProvider for HistoricalStateProviderRef<'a, 'b, 
                     .ok_or(ProviderError::StorageChangesetNotFound {
                         block_number: changeset_block_number,
                         address,
-                        storage_key,
+                        storage_key
                     })?
-                    .value,
+                    .value
             )),
             HistoryInfo::InPlainState | HistoryInfo::MaybeInPlainState => Ok(self
                 .tx
@@ -229,20 +246,22 @@ impl<'a, 'b, TX: DbTx<'a>> StateProvider for HistoricalStateProviderRef<'a, 'b, 
                 .seek_by_key_subkey(address, storage_key)?
                 .filter(|entry| entry.key == storage_key)
                 .map(|entry| entry.value)
-                .or(Some(StorageValue::ZERO))),
+                .or(Some(StorageValue::ZERO)))
         }
     }
 
     /// Get account code by its hash
     fn bytecode_by_hash(&self, code_hash: H256) -> Result<Option<Bytecode>> {
-        self.tx.get::<tables::Bytecodes>(code_hash).map_err(Into::into)
+        self.tx
+            .get::<tables::Bytecodes>(code_hash)
+            .map_err(Into::into)
     }
 
     /// Get account and storage proofs.
     fn proof(
         &self,
         _address: Address,
-        _keys: &[H256],
+        _keys: &[H256]
     ) -> Result<(Vec<Bytes>, H256, Vec<Vec<Bytes>>)> {
         Err(ProviderError::StateRootNotAvailableForHistoricalBlock.into())
     }
@@ -258,7 +277,7 @@ pub struct HistoricalStateProvider<'a, TX: DbTx<'a>> {
     /// Lowest blocks at which different parts of the state are available.
     lowest_available_blocks: LowestAvailableBlocks,
     /// Phantom lifetime `'a`
-    _phantom: PhantomData<&'a TX>,
+    _phantom: PhantomData<&'a TX>
 }
 
 impl<'a, TX: DbTx<'a>> HistoricalStateProvider<'a, TX> {
@@ -268,14 +287,14 @@ impl<'a, TX: DbTx<'a>> HistoricalStateProvider<'a, TX> {
             tx,
             block_number,
             lowest_available_blocks: Default::default(),
-            _phantom: PhantomData {},
+            _phantom: PhantomData {}
         }
     }
 
     /// Set the lowest block number at which the account history is available.
     pub fn with_lowest_available_account_history_block_number(
         mut self,
-        block_number: BlockNumber,
+        block_number: BlockNumber
     ) -> Self {
         self.lowest_available_blocks.account_history_block_number = Some(block_number);
         self
@@ -284,7 +303,7 @@ impl<'a, TX: DbTx<'a>> HistoricalStateProvider<'a, TX> {
     /// Set the lowest block number at which the storage history is available.
     pub fn with_lowest_available_storage_history_block_number(
         mut self,
-        block_number: BlockNumber,
+        block_number: BlockNumber
     ) -> Self {
         self.lowest_available_blocks.storage_history_block_number = Some(block_number);
         self
@@ -296,7 +315,7 @@ impl<'a, TX: DbTx<'a>> HistoricalStateProvider<'a, TX> {
         HistoricalStateProviderRef::new_with_lowest_available_blocks(
             &self.tx,
             self.block_number,
-            self.lowest_available_blocks,
+            self.lowest_available_blocks
         )
     }
 }
@@ -308,46 +327,53 @@ delegate_provider_impls!(HistoricalStateProvider<'a, TX> where [TX: DbTx<'a>]);
 /// They may be [Some] if pruning is enabled.
 #[derive(Default, Copy, Clone)]
 pub struct LowestAvailableBlocks {
-    /// Lowest block number at which the account history is available. It may not be available if
-    /// [reth_primitives::PrunePart::AccountHistory] was pruned.
-    /// [Option::None] means all history is available.
+    /// Lowest block number at which the account history is available. It may
+    /// not be available if [reth_primitives::PrunePart::AccountHistory] was
+    /// pruned. [Option::None] means all history is available.
     pub account_history_block_number: Option<BlockNumber>,
-    /// Lowest block number at which the storage history is available. It may not be available if
-    /// [reth_primitives::PrunePart::StorageHistory] was pruned.
-    /// [Option::None] means all history is available.
-    pub storage_history_block_number: Option<BlockNumber>,
+    /// Lowest block number at which the storage history is available. It may
+    /// not be available if [reth_primitives::PrunePart::StorageHistory] was
+    /// pruned. [Option::None] means all history is available.
+    pub storage_history_block_number: Option<BlockNumber>
 }
 
 impl LowestAvailableBlocks {
-    /// Check if account history is available at the provided block number, i.e. lowest available
-    /// block number for account history is less than or equal to the provided block number.
+    /// Check if account history is available at the provided block number, i.e.
+    /// lowest available block number for account history is less than or
+    /// equal to the provided block number.
     pub fn is_account_history_available(&self, at: BlockNumber) -> bool {
-        self.account_history_block_number.map(|block_number| block_number <= at).unwrap_or(true)
+        self.account_history_block_number
+            .map(|block_number| block_number <= at)
+            .unwrap_or(true)
     }
 
-    /// Check if storage history is available at the provided block number, i.e. lowest available
-    /// block number for storage history is less than or equal to the provided block number.
+    /// Check if storage history is available at the provided block number, i.e.
+    /// lowest available block number for storage history is less than or
+    /// equal to the provided block number.
     pub fn is_storage_history_available(&self, at: BlockNumber) -> bool {
-        self.storage_history_block_number.map(|block_number| block_number <= at).unwrap_or(true)
+        self.storage_history_block_number
+            .map(|block_number| block_number <= at)
+            .unwrap_or(true)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        providers::state::historical::{HistoryInfo, LowestAvailableBlocks},
-        AccountReader, HistoricalStateProvider, HistoricalStateProviderRef, StateProvider,
-    };
     use reth_db::{
         database::Database,
         models::{storage_sharded_key::StorageShardedKey, AccountBeforeTx, ShardedKey},
         tables,
         test_utils::create_test_rw_db,
         transaction::{DbTx, DbTxMut},
-        BlockNumberList,
+        BlockNumberList
     };
     use reth_interfaces::provider::ProviderError;
     use reth_primitives::{hex_literal::hex, Account, StorageEntry, H160, H256, U256};
+
+    use crate::{
+        providers::state::historical::{HistoryInfo, LowestAvailableBlocks},
+        AccountReader, HistoricalStateProvider, HistoricalStateProviderRef, StateProvider
+    };
 
     const ADDRESS: H160 = H160(hex!("0000000000000000000000000000000000000001"));
     const HIGHER_ADDRESS: H160 = H160(hex!("0000000000000000000000000000000000000005"));
@@ -367,60 +393,66 @@ mod tests {
 
         tx.put::<tables::AccountHistory>(
             ShardedKey { key: ADDRESS, highest_block_number: 7 },
-            BlockNumberList::new([1, 3, 7]).unwrap(),
+            BlockNumberList::new([1, 3, 7]).unwrap()
         )
         .unwrap();
         tx.put::<tables::AccountHistory>(
             ShardedKey { key: ADDRESS, highest_block_number: u64::MAX },
-            BlockNumberList::new([10, 15]).unwrap(),
+            BlockNumberList::new([10, 15]).unwrap()
         )
         .unwrap();
         tx.put::<tables::AccountHistory>(
             ShardedKey { key: HIGHER_ADDRESS, highest_block_number: u64::MAX },
-            BlockNumberList::new([4]).unwrap(),
+            BlockNumberList::new([4]).unwrap()
         )
         .unwrap();
 
-        let acc_plain = Account { nonce: 100, balance: U256::ZERO, bytecode_hash: None };
-        let acc_at15 = Account { nonce: 15, balance: U256::ZERO, bytecode_hash: None };
-        let acc_at10 = Account { nonce: 10, balance: U256::ZERO, bytecode_hash: None };
+        let acc_plain =
+            Account { nonce: 100, balance: U256::ZERO, bytecode_hash: None };
+        let acc_at15 =
+            Account { nonce: 15, balance: U256::ZERO, bytecode_hash: None };
+        let acc_at10 =
+            Account { nonce: 10, balance: U256::ZERO, bytecode_hash: None };
         let acc_at7 = Account { nonce: 7, balance: U256::ZERO, bytecode_hash: None };
         let acc_at3 = Account { nonce: 3, balance: U256::ZERO, bytecode_hash: None };
 
-        let higher_acc_plain = Account { nonce: 4, balance: U256::ZERO, bytecode_hash: None };
+        let higher_acc_plain =
+            Account { nonce: 4, balance: U256::ZERO, bytecode_hash: None };
 
         // setup
         tx.put::<tables::AccountChangeSet>(1, AccountBeforeTx { address: ADDRESS, info: None })
             .unwrap();
         tx.put::<tables::AccountChangeSet>(
             3,
-            AccountBeforeTx { address: ADDRESS, info: Some(acc_at3) },
+            AccountBeforeTx { address: ADDRESS, info: Some(acc_at3) }
         )
         .unwrap();
         tx.put::<tables::AccountChangeSet>(
             4,
-            AccountBeforeTx { address: HIGHER_ADDRESS, info: None },
+            AccountBeforeTx { address: HIGHER_ADDRESS, info: None }
         )
         .unwrap();
         tx.put::<tables::AccountChangeSet>(
             7,
-            AccountBeforeTx { address: ADDRESS, info: Some(acc_at7) },
+            AccountBeforeTx { address: ADDRESS, info: Some(acc_at7) }
         )
         .unwrap();
         tx.put::<tables::AccountChangeSet>(
             10,
-            AccountBeforeTx { address: ADDRESS, info: Some(acc_at10) },
+            AccountBeforeTx { address: ADDRESS, info: Some(acc_at10) }
         )
         .unwrap();
         tx.put::<tables::AccountChangeSet>(
             15,
-            AccountBeforeTx { address: ADDRESS, info: Some(acc_at15) },
+            AccountBeforeTx { address: ADDRESS, info: Some(acc_at15) }
         )
         .unwrap();
 
         // setup plain state
-        tx.put::<tables::PlainAccountState>(ADDRESS, acc_plain).unwrap();
-        tx.put::<tables::PlainAccountState>(HIGHER_ADDRESS, higher_acc_plain).unwrap();
+        tx.put::<tables::PlainAccountState>(ADDRESS, acc_plain)
+            .unwrap();
+        tx.put::<tables::PlainAccountState>(HIGHER_ADDRESS, higher_acc_plain)
+            .unwrap();
         tx.commit().unwrap();
 
         let tx = db.tx().unwrap();
@@ -474,26 +506,32 @@ mod tests {
 
         tx.put::<tables::StorageHistory>(
             StorageShardedKey {
-                address: ADDRESS,
-                sharded_key: ShardedKey { key: STORAGE, highest_block_number: 7 },
+                address:     ADDRESS,
+                sharded_key: ShardedKey { key: STORAGE, highest_block_number: 7 }
             },
-            BlockNumberList::new([3, 7]).unwrap(),
+            BlockNumberList::new([3, 7]).unwrap()
         )
         .unwrap();
         tx.put::<tables::StorageHistory>(
             StorageShardedKey {
-                address: ADDRESS,
-                sharded_key: ShardedKey { key: STORAGE, highest_block_number: u64::MAX },
+                address:     ADDRESS,
+                sharded_key: ShardedKey {
+                    key:                  STORAGE,
+                    highest_block_number: u64::MAX
+                }
             },
-            BlockNumberList::new([10, 15]).unwrap(),
+            BlockNumberList::new([10, 15]).unwrap()
         )
         .unwrap();
         tx.put::<tables::StorageHistory>(
             StorageShardedKey {
-                address: HIGHER_ADDRESS,
-                sharded_key: ShardedKey { key: STORAGE, highest_block_number: u64::MAX },
+                address:     HIGHER_ADDRESS,
+                sharded_key: ShardedKey {
+                    key:                  STORAGE,
+                    highest_block_number: u64::MAX
+                }
             },
-            BlockNumberList::new([4]).unwrap(),
+            BlockNumberList::new([4]).unwrap()
         )
         .unwrap();
 
@@ -506,15 +544,22 @@ mod tests {
         let entry_at3 = StorageEntry { key: STORAGE, value: U256::from(0) };
 
         // setup
-        tx.put::<tables::StorageChangeSet>((3, ADDRESS).into(), entry_at3).unwrap();
-        tx.put::<tables::StorageChangeSet>((4, HIGHER_ADDRESS).into(), higher_entry_at4).unwrap();
-        tx.put::<tables::StorageChangeSet>((7, ADDRESS).into(), entry_at7).unwrap();
-        tx.put::<tables::StorageChangeSet>((10, ADDRESS).into(), entry_at10).unwrap();
-        tx.put::<tables::StorageChangeSet>((15, ADDRESS).into(), entry_at15).unwrap();
+        tx.put::<tables::StorageChangeSet>((3, ADDRESS).into(), entry_at3)
+            .unwrap();
+        tx.put::<tables::StorageChangeSet>((4, HIGHER_ADDRESS).into(), higher_entry_at4)
+            .unwrap();
+        tx.put::<tables::StorageChangeSet>((7, ADDRESS).into(), entry_at7)
+            .unwrap();
+        tx.put::<tables::StorageChangeSet>((10, ADDRESS).into(), entry_at10)
+            .unwrap();
+        tx.put::<tables::StorageChangeSet>((15, ADDRESS).into(), entry_at15)
+            .unwrap();
 
         // setup plain state
-        tx.put::<tables::PlainStorageState>(ADDRESS, entry_plain).unwrap();
-        tx.put::<tables::PlainStorageState>(HIGHER_ADDRESS, higher_entry_plain).unwrap();
+        tx.put::<tables::PlainStorageState>(ADDRESS, entry_plain)
+            .unwrap();
+        tx.put::<tables::PlainStorageState>(HIGHER_ADDRESS, higher_entry_plain)
+            .unwrap();
         tx.commit().unwrap();
 
         let tx = db.tx().unwrap();
@@ -571,8 +616,8 @@ mod tests {
             2,
             LowestAvailableBlocks {
                 account_history_block_number: Some(3),
-                storage_history_block_number: Some(3),
-            },
+                storage_history_block_number: Some(3)
+            }
         );
         assert_eq!(
             provider.account_history_lookup(ADDRESS),
@@ -590,8 +635,8 @@ mod tests {
             2,
             LowestAvailableBlocks {
                 account_history_block_number: Some(2),
-                storage_history_block_number: Some(2),
-            },
+                storage_history_block_number: Some(2)
+            }
         );
         assert_eq!(provider.account_history_lookup(ADDRESS), Ok(HistoryInfo::MaybeInPlainState));
         assert_eq!(
@@ -606,8 +651,8 @@ mod tests {
             2,
             LowestAvailableBlocks {
                 account_history_block_number: Some(1),
-                storage_history_block_number: Some(1),
-            },
+                storage_history_block_number: Some(1)
+            }
         );
         assert_eq!(provider.account_history_lookup(ADDRESS), Ok(HistoryInfo::MaybeInPlainState));
         assert_eq!(

@@ -1,7 +1,7 @@
 use reth_interfaces::Result;
 use reth_primitives::{
     stage::{StageCheckpoint, StageId},
-    BlockNumber,
+    BlockNumber
 };
 
 /// The trait for fetching stage checkpoint related data.
@@ -27,6 +27,6 @@ pub trait StageCheckpointWriter: Send + Sync {
     fn update_pipeline_stages(
         &self,
         block_number: BlockNumber,
-        drop_stage_checkpoint: bool,
+        drop_stage_checkpoint: bool
     ) -> Result<()>;
 }

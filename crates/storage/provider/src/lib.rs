@@ -11,8 +11,8 @@
     attr(deny(warnings, rust_2018_idioms), allow(dead_code, unused_variables))
 ))]
 
-//! This crate contains a collection of traits and trait implementations for common database
-//! operations.
+//! This crate contains a collection of traits and trait implementations for
+//! common database operations.
 //!
 //! ## Feature Flags
 //!
@@ -29,14 +29,14 @@ pub use traits::{
     HeaderProvider, HistoryWriter, PostStateDataProvider, PruneCheckpointReader,
     PruneCheckpointWriter, ReceiptProvider, ReceiptProviderIdExt, StageCheckpointReader,
     StageCheckpointWriter, StateProvider, StateProviderBox, StateProviderFactory,
-    StateRootProvider, StorageReader, TransactionsProvider, WithdrawalsProvider,
+    StateRootProvider, StorageReader, TransactionsProvider, WithdrawalsProvider
 };
 
 /// Provider trait implementations.
 pub mod providers;
 pub use providers::{
     DatabaseProvider, DatabaseProviderRO, DatabaseProviderRW, HistoricalStateProvider,
-    HistoricalStateProviderRef, LatestStateProvider, LatestStateProviderRef, ProviderFactory,
+    HistoricalStateProviderRef, LatestStateProvider, LatestStateProviderRef, ProviderFactory
 };
 
 /// Execution result

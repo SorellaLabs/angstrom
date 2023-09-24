@@ -1,8 +1,10 @@
-use crate::{post_state::PostState, BlockExecutor, ExecutorFactory, StateProvider};
+use std::sync::Arc;
+
 use parking_lot::Mutex;
 use reth_interfaces::executor::BlockExecutionError;
 use reth_primitives::{Address, Block, ChainSpec, U256};
-use std::sync::Arc;
+
+use crate::{post_state::PostState, BlockExecutor, ExecutorFactory, StateProvider};
 /// Test executor with mocked result.
 pub struct TestExecutor(pub Option<PostState>);
 
@@ -11,18 +13,22 @@ impl<SP: StateProvider> BlockExecutor<SP> for TestExecutor {
         &mut self,
         _block: &Block,
         _total_difficulty: U256,
-        _senders: Option<Vec<Address>>,
+        _senders: Option<Vec<Address>>
     ) -> Result<PostState, BlockExecutionError> {
-        self.0.clone().ok_or(BlockExecutionError::UnavailableForTest)
+        self.0
+            .clone()
+            .ok_or(BlockExecutionError::UnavailableForTest)
     }
 
     fn execute_and_verify_receipt(
         &mut self,
         _block: &Block,
         _total_difficulty: U256,
-        _senders: Option<Vec<Address>>,
+        _senders: Option<Vec<Address>>
     ) -> Result<PostState, BlockExecutionError> {
-        self.0.clone().ok_or(BlockExecutionError::UnavailableForTest)
+        self.0
+            .clone()
+            .ok_or(BlockExecutionError::UnavailableForTest)
     }
 }
 
@@ -30,7 +36,7 @@ impl<SP: StateProvider> BlockExecutor<SP> for TestExecutor {
 #[derive(Clone, Debug)]
 pub struct TestExecutorFactory {
     exec_results: Arc<Mutex<Vec<PostState>>>,
-    chain_spec: Arc<ChainSpec>,
+    chain_spec:   Arc<ChainSpec>
 }
 
 impl TestExecutorFactory {

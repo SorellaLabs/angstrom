@@ -22,16 +22,19 @@ pub trait ReceiptProvider: Send + Sync {
     fn receipts_by_block(&self, block: BlockHashOrNumber) -> Result<Option<Vec<Receipt>>>;
 }
 
-/// Trait extension for `ReceiptProvider`, for types that implement `BlockId` conversion.
+/// Trait extension for `ReceiptProvider`, for types that implement `BlockId`
+/// conversion.
 ///
-/// The `Receipt` trait should be implemented on types that can retrieve receipts from either
-/// a block number or hash. However, it might be desirable to fetch receipts from a `BlockId` type,
-/// which can be a number, hash, or tag such as `BlockNumberOrTag::Safe`.
+/// The `Receipt` trait should be implemented on types that can retrieve
+/// receipts from either a block number or hash. However, it might be desirable
+/// to fetch receipts from a `BlockId` type, which can be a number, hash, or tag
+/// such as `BlockNumberOrTag::Safe`.
 ///
-/// Resolving tags requires keeping track of block hashes or block numbers associated with the tag,
-/// so this trait can only be implemented for types that implement `BlockIdReader`. The
-/// `BlockIdReader` methods should be used to resolve `BlockId`s to block numbers or hashes, and
-/// retrieving the receipts should be done using the type's `ReceiptProvider` methods.
+/// Resolving tags requires keeping track of block hashes or block numbers
+/// associated with the tag, so this trait can only be implemented for types
+/// that implement `BlockIdReader`. The `BlockIdReader` methods should be used
+/// to resolve `BlockId`s to block numbers or hashes, and retrieving the
+/// receipts should be done using the type's `ReceiptProvider` methods.
 pub trait ReceiptProviderIdExt: ReceiptProvider + BlockIdReader {
     /// Get receipt by block id
     fn receipts_by_block_id(&self, block: BlockId) -> Result<Option<Vec<Receipt>>> {
@@ -54,7 +57,7 @@ pub trait ReceiptProviderIdExt: ReceiptProvider + BlockIdReader {
     /// Returns `None` if block is not found.
     fn receipts_by_number_or_tag(
         &self,
-        number_or_tag: BlockNumberOrTag,
+        number_or_tag: BlockNumberOrTag
     ) -> Result<Option<Vec<Receipt>>> {
         self.receipts_by_block_id(number_or_tag.into())
     }

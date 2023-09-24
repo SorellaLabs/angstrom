@@ -1,9 +1,10 @@
-use derive_more::Deref;
-use reth_primitives::{Account, Address, BlockNumber};
 use std::collections::{btree_map::Entry, BTreeMap};
 
-/// A mapping of `block -> address -> account` that represents what accounts were changed, and what
-/// their state were prior to that change.
+use derive_more::Deref;
+use reth_primitives::{Account, Address, BlockNumber};
+
+/// A mapping of `block -> address -> account` that represents what accounts
+/// were changed, and what their state were prior to that change.
 ///
 /// If the prior state was `None`, then the account is new.
 #[derive(Default, Clone, Eq, PartialEq, Debug, Deref)]
@@ -12,18 +13,18 @@ pub struct AccountChanges {
     #[deref]
     pub inner: BTreeMap<BlockNumber, BTreeMap<Address, Option<Account>>>,
     /// Hand tracked change size.
-    pub size: usize,
+    pub size:  usize
 }
 
 impl AccountChanges {
-    /// Insert account change at specified block number. The value is **not** updated if it already
-    /// exists.
+    /// Insert account change at specified block number. The value is **not**
+    /// updated if it already exists.
     pub fn insert(
         &mut self,
         block: BlockNumber,
         address: Address,
         old: Option<Account>,
-        new: Option<Account>,
+        new: Option<Account>
     ) {
         match self.inner.entry(block).or_default().entry(address) {
             Entry::Vacant(entry) => {
@@ -31,8 +32,8 @@ impl AccountChanges {
                 entry.insert(old);
             }
             Entry::Occupied(entry) => {
-                // If the account state is the same before and after this block, collapse the state
-                // changes.
+                // If the account state is the same before and after this block, collapse the
+                // state changes.
                 if entry.get() == &new {
                     entry.remove();
                     self.size -= 1;
@@ -41,12 +42,12 @@ impl AccountChanges {
         }
     }
 
-    /// Insert account changes at specified block number. The values are **not** updated if they
-    /// already exist.
+    /// Insert account changes at specified block number. The values are **not**
+    /// updated if they already exist.
     pub fn insert_for_block(
         &mut self,
         block: BlockNumber,
-        changes: BTreeMap<Address, Option<Account>>,
+        changes: BTreeMap<Address, Option<Account>>
     ) {
         let block_entry = self.inner.entry(block).or_default();
         for (address, account) in changes {
@@ -60,7 +61,7 @@ impl AccountChanges {
     /// Drain and return any entries above the target block number.
     pub fn drain_above(
         &mut self,
-        target_block: BlockNumber,
+        target_block: BlockNumber
     ) -> BTreeMap<BlockNumber, BTreeMap<Address, Option<Account>>> {
         let mut evicted = BTreeMap::new();
         self.inner.retain(|block_number, accounts| {

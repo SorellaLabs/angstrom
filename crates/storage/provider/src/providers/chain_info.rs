@@ -1,17 +1,18 @@
-use parking_lot::RwLock;
-use reth_primitives::{BlockNumHash, BlockNumber, ChainInfo, SealedHeader};
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc,
+        Arc
     },
-    time::Instant,
+    time::Instant
 };
+
+use parking_lot::RwLock;
+use reth_primitives::{BlockNumHash, BlockNumber, ChainInfo, SealedHeader};
 
 /// Tracks the chain info: canonical head, safe block, finalized block.
 #[derive(Debug, Clone)]
 pub(crate) struct ChainInfoTracker {
-    inner: Arc<ChainInfoInner>,
+    inner: Arc<ChainInfoInner>
 }
 
 impl ChainInfoTracker {
@@ -24,8 +25,8 @@ impl ChainInfoTracker {
                 canonical_head_number: AtomicU64::new(head.number),
                 canonical_head: RwLock::new(head),
                 safe_block: RwLock::new(None),
-                finalized_block: RwLock::new(None),
-            }),
+                finalized_block: RwLock::new(None)
+            })
         }
     }
 
@@ -37,7 +38,10 @@ impl ChainInfoTracker {
 
     /// Update the timestamp when we received a forkchoice update.
     pub(crate) fn on_forkchoice_update_received(&self) {
-        self.inner.last_forkchoice_update.write().replace(Instant::now());
+        self.inner
+            .last_forkchoice_update
+            .write()
+            .replace(Instant::now());
     }
 
     /// Returns the instant when we received the latest forkchoice update.
@@ -47,10 +51,14 @@ impl ChainInfoTracker {
 
     /// Update the timestamp when we exchanged a transition configuration.
     pub(crate) fn on_transition_configuration_exchanged(&self) {
-        self.inner.last_transition_configuration_exchange.write().replace(Instant::now());
+        self.inner
+            .last_transition_configuration_exchange
+            .write()
+            .replace(Instant::now());
     }
 
-    /// Returns the instant when we exchanged the transition configuration last time.
+    /// Returns the instant when we exchanged the transition configuration last
+    /// time.
     pub(crate) fn last_transition_configuration_exchanged_at(&self) -> Option<Instant> {
         *self.inner.last_transition_configuration_exchange.read()
     }
@@ -101,7 +109,9 @@ impl ChainInfoTracker {
         *self.inner.canonical_head.write() = header;
 
         // also update the atomic number.
-        self.inner.canonical_head_number.store(number, Ordering::Relaxed);
+        self.inner
+            .canonical_head_number
+            .store(number, Ordering::Relaxed);
     }
 
     /// Sets the safe header of the chain.
@@ -133,5 +143,5 @@ struct ChainInfoInner {
     /// The block that the beacon node considers safe.
     safe_block: RwLock<Option<SealedHeader>>,
     /// The block that the beacon node considers finalized.
-    finalized_block: RwLock<Option<SealedHeader>>,
+    finalized_block: RwLock<Option<SealedHeader>>
 }

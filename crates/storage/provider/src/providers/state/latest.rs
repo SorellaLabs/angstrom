@@ -1,24 +1,26 @@
-use crate::{
-    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, PostState,
-    StateProvider, StateRootProvider,
-};
+use std::marker::PhantomData;
+
 use reth_db::{
     cursor::{DbCursorRO, DbDupCursorRO},
     tables,
-    transaction::DbTx,
+    transaction::DbTx
 };
 use reth_interfaces::{provider::ProviderError, Result};
 use reth_primitives::{
-    keccak256, Account, Address, BlockNumber, Bytecode, Bytes, StorageKey, StorageValue, H256,
+    keccak256, Account, Address, BlockNumber, Bytecode, Bytes, StorageKey, StorageValue, H256
 };
-use std::marker::PhantomData;
+
+use crate::{
+    providers::state::macros::delegate_provider_impls, AccountReader, BlockHashReader, PostState,
+    StateProvider, StateRootProvider
+};
 
 /// State provider over latest state that takes tx reference.
 pub struct LatestStateProviderRef<'a, 'b, TX: DbTx<'a>> {
     /// database transaction
-    db: &'b TX,
+    db:      &'b TX,
     /// Phantom data over lifetime
-    phantom: PhantomData<&'a TX>,
+    phantom: PhantomData<&'a TX>
 }
 
 impl<'a, 'b, TX: DbTx<'a>> LatestStateProviderRef<'a, 'b, TX> {
@@ -31,14 +33,18 @@ impl<'a, 'b, TX: DbTx<'a>> LatestStateProviderRef<'a, 'b, TX> {
 impl<'a, 'b, TX: DbTx<'a>> AccountReader for LatestStateProviderRef<'a, 'b, TX> {
     /// Get basic account information.
     fn basic_account(&self, address: Address) -> Result<Option<Account>> {
-        self.db.get::<tables::PlainAccountState>(address).map_err(Into::into)
+        self.db
+            .get::<tables::PlainAccountState>(address)
+            .map_err(Into::into)
     }
 }
 
 impl<'a, 'b, TX: DbTx<'a>> BlockHashReader for LatestStateProviderRef<'a, 'b, TX> {
     /// Get block hash by number.
     fn block_hash(&self, number: u64) -> Result<Option<H256>> {
-        self.db.get::<tables::CanonicalHeaders>(number).map_err(Into::into)
+        self.db
+            .get::<tables::CanonicalHeaders>(number)
+            .map_err(Into::into)
     }
 
     fn canonical_hashes_range(&self, start: BlockNumber, end: BlockNumber) -> Result<Vec<H256>> {
@@ -77,13 +83,15 @@ impl<'a, 'b, TX: DbTx<'a>> StateProvider for LatestStateProviderRef<'a, 'b, TX> 
 
     /// Get account code by its hash
     fn bytecode_by_hash(&self, code_hash: H256) -> Result<Option<Bytecode>> {
-        self.db.get::<tables::Bytecodes>(code_hash).map_err(Into::into)
+        self.db
+            .get::<tables::Bytecodes>(code_hash)
+            .map_err(Into::into)
     }
 
     fn proof(
         &self,
         address: Address,
-        _keys: &[H256],
+        _keys: &[H256]
     ) -> Result<(Vec<Bytes>, H256, Vec<Vec<Bytes>>)> {
         let _hashed_address = keccak256(address);
         let _root = self
@@ -101,9 +109,9 @@ impl<'a, 'b, TX: DbTx<'a>> StateProvider for LatestStateProviderRef<'a, 'b, TX> 
 /// State provider for the latest state.
 pub struct LatestStateProvider<'a, TX: DbTx<'a>> {
     /// database transaction
-    db: TX,
+    db:       TX,
     /// Phantom lifetime `'a`
-    _phantom: PhantomData<&'a TX>,
+    _phantom: PhantomData<&'a TX>
 }
 
 impl<'a, TX: DbTx<'a>> LatestStateProvider<'a, TX> {

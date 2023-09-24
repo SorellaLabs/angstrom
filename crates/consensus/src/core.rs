@@ -60,7 +60,8 @@ pub struct ConsensusCore<S: Simulator + 'static> {
     stage:              Stage,
     guards:             GuardSet,
     executor:           Executor<S>,
-    outbound:           VecDeque<ConsensusMessage>
+
+    outbound: VecDeque<ConsensusMessage>
 }
 
 impl<S: Simulator + 'static> ConsensusCore<S> {

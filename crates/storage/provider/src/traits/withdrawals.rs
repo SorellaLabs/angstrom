@@ -8,7 +8,7 @@ pub trait WithdrawalsProvider: Send + Sync {
     fn withdrawals_by_block(
         &self,
         id: BlockHashOrNumber,
-        timestamp: u64,
+        timestamp: u64
     ) -> Result<Option<Vec<Withdrawal>>>;
 
     /// Get latest withdrawal from this block or earlier .

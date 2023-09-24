@@ -1,13 +1,10 @@
-use crate::{
-    post_state::StorageChangeset,
-    traits::{
-        AccountExtReader, BlockSource, ChangeSetReader, ReceiptProvider, StageCheckpointWriter,
-    },
-    AccountReader, BlockExecutionWriter, BlockHashReader, BlockNumReader, BlockReader, BlockWriter,
-    EvmEnvProvider, HashingWriter, HeaderProvider, HistoryWriter, PostState, ProviderError,
-    PruneCheckpointReader, PruneCheckpointWriter, StageCheckpointReader, StorageReader,
-    TransactionsProvider, WithdrawalsProvider,
+use std::{
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt::Debug,
+    ops::{Deref, DerefMut, Range, RangeBounds, RangeInclusive},
+    sync::Arc
 };
+
 use itertools::{izip, Itertools};
 use reth_db::{
     common::KeyValue,
@@ -15,16 +12,16 @@ use reth_db::{
     database::{Database, DatabaseGAT},
     models::{
         sharded_key, storage_sharded_key::StorageShardedKey, AccountBeforeTx, BlockNumberAddress,
-        ShardedKey, StoredBlockBodyIndices, StoredBlockOmmers, StoredBlockWithdrawals,
+        ShardedKey, StoredBlockBodyIndices, StoredBlockOmmers, StoredBlockWithdrawals
     },
     table::{Table, TableRow},
     tables,
     transaction::{DbTx, DbTxMut},
-    BlockNumberList, DatabaseError,
+    BlockNumberList, DatabaseError
 };
 use reth_interfaces::{
     executor::{BlockExecutionError, BlockValidationError},
-    Result,
+    Result
 };
 use reth_primitives::{
     keccak256,
@@ -34,19 +31,24 @@ use reth_primitives::{
     ChainInfo, ChainSpec, Hardfork, Head, Header, PruneCheckpoint, PruneModes, PrunePart, Receipt,
     SealedBlock, SealedBlockWithSenders, SealedHeader, StorageEntry, TransactionMeta,
     TransactionSigned, TransactionSignedEcRecovered, TransactionSignedNoHash, TxHash, TxNumber,
-    Withdrawal, H256, U256,
+    Withdrawal, H256, U256
 };
 use reth_revm_primitives::{
     config::revm_spec,
     env::{fill_block_env, fill_cfg_and_block_env, fill_cfg_env},
-    primitives::{BlockEnv, CfgEnv, SpecId},
+    primitives::{BlockEnv, CfgEnv, SpecId}
 };
 use reth_trie::{prefix_set::PrefixSetMut, StateRoot};
-use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
-    fmt::Debug,
-    ops::{Deref, DerefMut, Range, RangeBounds, RangeInclusive},
-    sync::Arc,
+
+use crate::{
+    post_state::StorageChangeset,
+    traits::{
+        AccountExtReader, BlockSource, ChangeSetReader, ReceiptProvider, StageCheckpointWriter
+    },
+    AccountReader, BlockExecutionWriter, BlockHashReader, BlockNumReader, BlockReader, BlockWriter,
+    EvmEnvProvider, HashingWriter, HeaderProvider, HistoryWriter, PostState, ProviderError,
+    PruneCheckpointReader, PruneCheckpointWriter, StageCheckpointReader, StorageReader,
+    TransactionsProvider, WithdrawalsProvider
 };
 
 /// A [`DatabaseProvider`] that holds a read-only database transaction.
@@ -55,10 +57,11 @@ pub type DatabaseProviderRO<'this, DB> = DatabaseProvider<'this, <DB as Database
 /// A [`DatabaseProvider`] that holds a read-write database transaction.
 ///
 /// Ideally this would be an alias type. However, there's some weird compiler error (<https://github.com/rust-lang/rust/issues/102211>), that forces us to wrap this in a struct instead.
-/// Once that issue is solved, we can probably revert back to being an alias type.
+/// Once that issue is solved, we can probably revert back to being an alias
+/// type.
 #[derive(Debug)]
 pub struct DatabaseProviderRW<'this, DB: Database>(
-    pub DatabaseProvider<'this, <DB as DatabaseGAT<'this>>::TXMut>,
+    pub DatabaseProvider<'this, <DB as DatabaseGAT<'this>>::TXMut>
 );
 
 impl<'this, DB: Database> Deref for DatabaseProviderRW<'this, DB> {
@@ -88,17 +91,18 @@ impl<'this, DB: Database> DatabaseProviderRW<'this, DB> {
 }
 
 /// A provider struct that fetchs data from the database.
-/// Wrapper around [`DbTx`] and [`DbTxMut`]. Example: [`HeaderProvider`] [`BlockHashReader`]
+/// Wrapper around [`DbTx`] and [`DbTxMut`]. Example: [`HeaderProvider`]
+/// [`BlockHashReader`]
 #[derive(Debug)]
 pub struct DatabaseProvider<'this, TX>
 where
-    Self: 'this,
+    Self: 'this
 {
     /// Database transaction.
-    tx: TX,
+    tx:            TX,
     /// Chain spec
-    chain_spec: Arc<ChainSpec>,
-    _phantom_data: std::marker::PhantomData<&'this TX>,
+    chain_spec:    Arc<ChainSpec>,
+    _phantom_data: std::marker::PhantomData<&'this TX>
 }
 
 impl<'this, TX: DbTxMut<'this>> DatabaseProvider<'this, TX> {
@@ -108,28 +112,29 @@ impl<'this, TX: DbTxMut<'this>> DatabaseProvider<'this, TX> {
     }
 }
 
-/// For a given key, unwind all history shards that are below the given block number.
+/// For a given key, unwind all history shards that are below the given block
+/// number.
 ///
 /// S - Sharded key subtype.
 /// T - Table to walk over.
 /// C - Cursor implementation.
 ///
-/// This function walks the entries from the given start key and deletes all shards that belong to
-/// the key and are below the given block number.
+/// This function walks the entries from the given start key and deletes all
+/// shards that belong to the key and are below the given block number.
 ///
-/// The boundary shard (the shard is split by the block number) is removed from the database. Any
-/// indices that are above the block number are filtered out. The boundary shard is returned for
-/// reinsertion (if it's not empty).
+/// The boundary shard (the shard is split by the block number) is removed from
+/// the database. Any indices that are above the block number are filtered out.
+/// The boundary shard is returned for reinsertion (if it's not empty).
 fn unwind_history_shards<'a, S, T, C>(
     cursor: &mut C,
     start_key: T::Key,
     block_number: BlockNumber,
-    mut shard_belongs_to_key: impl FnMut(&T::Key) -> bool,
+    mut shard_belongs_to_key: impl FnMut(&T::Key) -> bool
 ) -> Result<Vec<usize>>
 where
     T: Table<Value = BlockNumberList>,
     T::Key: AsRef<ShardedKey<S>>,
-    C: DbCursorRO<'a, T> + DbCursorRW<'a, T>,
+    C: DbCursorRO<'a, T> + DbCursorRW<'a, T>
 {
     let mut item = cursor.seek_exact(start_key)?;
     while let Some((sharded_key, list)) = item {
@@ -147,7 +152,10 @@ where
             continue
         } else if block_number <= sharded_key.as_ref().highest_block_number {
             // Filter out all elements greater than block number.
-            return Ok(list.iter(0).take_while(|i| *i < block_number as usize).collect::<Vec<_>>())
+            return Ok(list
+                .iter(0)
+                .take_while(|i| *i < block_number as usize)
+                .collect::<Vec<_>>())
         } else {
             return Ok(list.iter(0).collect::<Vec<_>>())
         }
@@ -180,7 +188,7 @@ impl<'this, TX: DbTx<'this>> DatabaseProvider<'this, TX> {
     /// Return full table as Vec
     pub fn table<T: Table>(&self) -> std::result::Result<Vec<KeyValue<T>>, DatabaseError>
     where
-        T::Key: Default + Ord,
+        T::Key: Default + Ord
     {
         self.tx
             .cursor_read::<T>()?
@@ -197,32 +205,36 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
 
     // TODO(joshie) TEMPORARY should be moved to trait providers
 
-    /// Traverse over changesets and plain state and recreate the [`PostState`]s for the given range
-    /// of blocks.
+    /// Traverse over changesets and plain state and recreate the [`PostState`]s
+    /// for the given range of blocks.
     ///
-    /// 1. Iterate over the [BlockBodyIndices][tables::BlockBodyIndices] table to get all
+    /// 1. Iterate over the [BlockBodyIndices][tables::BlockBodyIndices] table
+    ///    to get all
     /// the transaction ids.
     /// 2. Iterate over the [StorageChangeSet][tables::StorageChangeSet] table
-    /// and the [AccountChangeSet][tables::AccountChangeSet] tables in reverse order to reconstruct
-    /// the changesets.
-    ///     - In order to have both the old and new values in the changesets, we also access the
-    ///       plain state tables.
-    /// 3. While iterating over the changeset tables, if we encounter a new account or storage slot,
+    /// and the [AccountChangeSet][tables::AccountChangeSet] tables in reverse
+    /// order to reconstruct the changesets.
+    ///     - In order to have both the old and new values in the changesets, we
+    ///       also access the plain state tables.
+    /// 3. While iterating over the changeset tables, if we encounter a new
+    ///    account or storage slot,
     /// we:
     ///     1. Take the old value from the changeset
     ///     2. Take the new value from the plain state
     ///     3. Save the old value to the local state
-    /// 4. While iterating over the changeset tables, if we encounter an account/storage slot we
+    /// 4. While iterating over the changeset tables, if we encounter an
+    ///    account/storage slot we
     /// have seen before we:
     ///     1. Take the old value from the changeset
     ///     2. Take the new value from the local state
     ///     3. Set the local state to the value in the changeset
     ///
-    /// If `TAKE` is `true`, the local state will be written to the plain state tables.
+    /// If `TAKE` is `true`, the local state will be written to the plain state
+    /// tables.
     /// 5. Get all receipts from table
     fn get_take_block_execution_result_range<const TAKE: bool>(
         &self,
-        range: RangeInclusive<BlockNumber>,
+        range: RangeInclusive<BlockNumber>
     ) -> Result<Vec<PostState>> {
         if range.is_empty() {
             return Ok(Vec::new())
@@ -232,10 +244,16 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         let block_bodies = self.get_or_take::<tables::BlockBodyIndices, false>(range.clone())?;
 
         // get transaction receipts
-        let from_transaction_num =
-            block_bodies.first().expect("already checked if there are blocks").1.first_tx_num();
-        let to_transaction_num =
-            block_bodies.last().expect("already checked if there are blocks").1.last_tx_num();
+        let from_transaction_num = block_bodies
+            .first()
+            .expect("already checked if there are blocks")
+            .1
+            .first_tx_num();
+        let to_transaction_num = block_bodies
+            .last()
+            .expect("already checked if there are blocks")
+            .1
+            .last_tx_num();
         let receipts =
             self.get_or_take::<tables::Receipts, TAKE>(from_transaction_num..=to_transaction_num)?;
 
@@ -246,8 +264,8 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         let account_changeset = self.get_or_take::<tables::AccountChangeSet, TAKE>(range)?;
 
         // iterate previous value and get plain state value to create changeset
-        // Double option around Account represent if Account state is know (first option) and
-        // account is removed (Second Option)
+        // Double option around Account represent if Account state is know (first
+        // option) and account is removed (Second Option)
         type LocalPlainState = BTreeMap<Address, (Option<Option<Account>>, BTreeMap<H256, U256>)>;
 
         let mut local_plain_state: LocalPlainState = BTreeMap::new();
@@ -255,8 +273,11 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         // iterate in reverse and get plain state.
 
         // Bundle execution changeset to its particular transaction and block
-        let mut block_states =
-            BTreeMap::from_iter(block_bodies.iter().map(|(num, _)| (*num, PostState::default())));
+        let mut block_states = BTreeMap::from_iter(
+            block_bodies
+                .iter()
+                .map(|(num, _)| (*num, PostState::default()))
+        );
 
         let mut plain_accounts_cursor = self.tx.cursor_write::<tables::PlainAccountState>()?;
         let mut plain_storage_cursor = self.tx.cursor_dup_write::<tables::PlainStorageState>()?;
@@ -272,7 +293,10 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
                 }
                 Entry::Occupied(mut entry) => {
                     let new_account = std::mem::replace(&mut entry.get_mut().0, Some(old_info));
-                    new_account.expect("As we are stacking account first, account would always be Some(Some) or Some(None)")
+                    new_account.expect(
+                        "As we are stacking account first, account would always be Some(Some) or \
+                         Some(None)"
+                    )
                 }
             };
 
@@ -282,13 +306,18 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
                     if new != old {
                         post_state.change_account(block_number, address, old, new);
                     } else {
-                        unreachable!("Junk data in database: an account changeset did not represent any change");
+                        unreachable!(
+                            "Junk data in database: an account changeset did not represent any \
+                             change"
+                        );
                     }
                 }
-                (None, Some(account)) =>  post_state.create_account(block_number, address, account),
-                (Some(old), None) =>
-                    post_state.destroy_account(block_number, address, old),
-                (None, None) => unreachable!("Junk data in database: an account changeset transitioned from no account to no account"),
+                (None, Some(account)) => post_state.create_account(block_number, address, account),
+                (Some(old), None) => post_state.destroy_account(block_number, address, old),
+                (None, None) => unreachable!(
+                    "Junk data in database: an account changeset transitioned from no account to \
+                     no account"
+                )
             };
         }
 
@@ -296,34 +325,40 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         let mut storage_changes: BTreeMap<BlockNumberAddress, StorageChangeset> = BTreeMap::new();
         for (block_and_address, storage_entry) in storage_changeset.into_iter().rev() {
             let BlockNumberAddress((_, address)) = block_and_address;
-            let new_storage =
-                match local_plain_state.entry(address).or_default().1.entry(storage_entry.key) {
-                    Entry::Vacant(entry) => {
-                        let new_storage = plain_storage_cursor
-                            .seek_by_key_subkey(address, storage_entry.key)?
-                            .filter(|storage| storage.key == storage_entry.key)
-                            .unwrap_or_default();
-                        entry.insert(storage_entry.value);
-                        new_storage.value
-                    }
-                    Entry::Occupied(mut entry) => {
-                        std::mem::replace(entry.get_mut(), storage_entry.value)
-                    }
-                };
-            storage_changes.entry(block_and_address).or_default().insert(
-                U256::from_be_bytes(storage_entry.key.0),
-                (storage_entry.value, new_storage),
-            );
+            let new_storage = match local_plain_state
+                .entry(address)
+                .or_default()
+                .1
+                .entry(storage_entry.key)
+            {
+                Entry::Vacant(entry) => {
+                    let new_storage = plain_storage_cursor
+                        .seek_by_key_subkey(address, storage_entry.key)?
+                        .filter(|storage| storage.key == storage_entry.key)
+                        .unwrap_or_default();
+                    entry.insert(storage_entry.value);
+                    new_storage.value
+                }
+                Entry::Occupied(mut entry) => {
+                    std::mem::replace(entry.get_mut(), storage_entry.value)
+                }
+            };
+            storage_changes
+                .entry(block_and_address)
+                .or_default()
+                .insert(
+                    U256::from_be_bytes(storage_entry.key.0),
+                    (storage_entry.value, new_storage)
+                );
         }
 
         for (BlockNumberAddress((block_number, address)), storage_changeset) in
             storage_changes.into_iter()
         {
-            block_states.entry(block_number).or_default().change_storage(
-                block_number,
-                address,
-                storage_changeset,
-            );
+            block_states
+                .entry(block_number)
+                .or_default()
+                .change_storage(block_number, address, storage_changeset);
         }
 
         if TAKE {
@@ -380,11 +415,12 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
 
     /// Return list of entries from table
     ///
-    /// If TAKE is true, opened cursor would be write and it would delete all values from db.
+    /// If TAKE is true, opened cursor would be write and it would delete all
+    /// values from db.
     #[inline]
     pub fn get_or_take<T: Table, const TAKE: bool>(
         &self,
-        range: impl RangeBounds<T::Key>,
+        range: impl RangeBounds<T::Key>
     ) -> std::result::Result<Vec<KeyValue<T>>, DatabaseError> {
         if TAKE {
             let mut cursor_write = self.tx.cursor_write::<T>()?;
@@ -406,7 +442,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
     /// Get requested blocks transaction with signer
     pub(crate) fn get_take_block_transaction_range<const TAKE: bool>(
         &self,
-        range: impl RangeBounds<BlockNumber> + Clone,
+        range: impl RangeBounds<BlockNumber> + Clone
     ) -> Result<Vec<(BlockNumber, Vec<TransactionSignedEcRecovered>)>> {
         // Raad range of block bodies to get all transactions id's of this range.
         let block_bodies = self.get_or_take::<tables::BlockBodyIndices, false>(range)?;
@@ -416,12 +452,19 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         }
 
         // Compute the first and last tx ID in the range
-        let first_transaction = block_bodies.first().expect("If we have headers").1.first_tx_num();
+        let first_transaction = block_bodies
+            .first()
+            .expect("If we have headers")
+            .1
+            .first_tx_num();
         let last_transaction = block_bodies.last().expect("Not empty").1.last_tx_num();
 
         // If this is the case then all of the blocks in the range are empty
         if last_transaction < first_transaction {
-            return Ok(block_bodies.into_iter().map(|(n, _)| (n, Vec::new())).collect())
+            return Ok(block_bodies
+                .into_iter()
+                .map(|(n, _)| (n, Vec::new()))
+                .collect())
         }
 
         // Get transactions and senders
@@ -439,18 +482,21 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         // senders might be pruned.
         if senders.len() != transactions.len() {
             senders.reserve(transactions.len() - senders.len());
-            // Find all missing senders, their corresponding tx numbers and indexes to the original
-            // `senders` vector at which the recovered senders will be inserted.
+            // Find all missing senders, their corresponding tx numbers and indexes to the
+            // original `senders` vector at which the recovered senders will be
+            // inserted.
             let mut missing_senders = Vec::with_capacity(transactions.len() - senders.len());
             {
                 let mut senders = senders.iter().peekable();
 
-                // `transactions` contain all entries. `senders` contain _some_ of the senders for
-                // these transactions. Both are sorted and indexed by `TxNumber`.
+                // `transactions` contain all entries. `senders` contain _some_ of the senders
+                // for these transactions. Both are sorted and indexed by
+                // `TxNumber`.
                 //
-                // The general idea is to iterate on both `transactions` and `senders`, and advance
-                // the `senders` iteration only if it matches the current `transactions` entry's
-                // `TxNumber`. Otherwise, add the transaction to the list of missing senders.
+                // The general idea is to iterate on both `transactions` and `senders`, and
+                // advance the `senders` iteration only if it matches the
+                // current `transactions` entry's `TxNumber`. Otherwise, add the
+                // transaction to the list of missing senders.
                 for (i, (tx_number, transaction)) in transactions.iter().enumerate() {
                     if let Some((sender_tx_number, _)) = senders.peek() {
                         if sender_tx_number == tx_number {
@@ -472,20 +518,23 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
 
             // Recover senders
             let recovered_senders = TransactionSigned::recover_signers(
-                missing_senders.iter().map(|(_, _, tx)| *tx).collect::<Vec<_>>(),
-                missing_senders.len(),
+                missing_senders
+                    .iter()
+                    .map(|(_, _, tx)| *tx)
+                    .collect::<Vec<_>>(),
+                missing_senders.len()
             )
             .ok_or(BlockExecutionError::Validation(BlockValidationError::SenderRecoveryError))?;
 
-            // Insert recovered senders along with tx numbers at the corresponding indexes to the
-            // original `senders` vector
+            // Insert recovered senders along with tx numbers at the corresponding indexes
+            // to the original `senders` vector
             for ((i, tx_number, _), sender) in missing_senders.into_iter().zip(recovered_senders) {
                 // Insert will put recovered senders at necessary positions and shift the rest
                 senders.insert(i, (*tx_number, sender));
             }
 
-            // Debug assertions which are triggered during the test to ensure that all senders are
-            // present and sorted
+            // Debug assertions which are triggered during the test to ensure that all
+            // senders are present and sorted
             debug_assert_eq!(senders.len(), transactions.len(), "missing one or more senders");
             debug_assert!(
                 senders.iter().tuple_windows().all(|(a, b)| a.0 < b.0),
@@ -530,7 +579,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
                     (Some((tx_id, _)), _) | (_, Some((tx_id, _))) => {
                         Err(ProviderError::MismatchOfTransactionAndSenderId { tx_id })
                     }
-                    (None, None) => Err(ProviderError::BlockBodyTransactionCount),
+                    (None, None) => Err(ProviderError::BlockBodyTransactionCount)
                 }?;
                 one_block_tx.push(recovered)
             }
@@ -544,7 +593,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
     fn get_take_block_range<const TAKE: bool>(
         &self,
         chain_spec: &ChainSpec,
-        range: impl RangeBounds<BlockNumber> + Clone,
+        range: impl RangeBounds<BlockNumber> + Clone
     ) -> Result<Vec<SealedBlockWithSenders>> {
         // For block we need Headers, Bodies, Uncles, withdrawals, Transactions, Signers
 
@@ -602,8 +651,9 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
             };
 
             // withdrawal can be missing
-            let shanghai_is_active =
-                chain_spec.fork(Hardfork::Shanghai).active_at_timestamp(header.timestamp);
+            let shanghai_is_active = chain_spec
+                .fork(Hardfork::Shanghai)
+                .active_at_timestamp(header.timestamp);
             let mut withdrawals = Some(Vec::new());
             if shanghai_is_active {
                 if let Some((block_number, _)) = block_withdrawals.as_ref() {
@@ -618,7 +668,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
 
             blocks.push(SealedBlockWithSenders {
                 block: SealedBlock { header, body, ommers, withdrawals },
-                senders,
+                senders
             })
         }
 
@@ -632,7 +682,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
     #[inline]
     pub fn unwind_table_by_num<T>(&self, num: u64) -> std::result::Result<usize, DatabaseError>
     where
-        T: Table<Key = u64>,
+        T: Table<Key = u64>
     {
         self.unwind_table::<T, _>(num, |key| key)
     }
@@ -644,11 +694,11 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
     pub(crate) fn unwind_table<T, F>(
         &self,
         key: u64,
-        mut selector: F,
+        mut selector: F
     ) -> std::result::Result<usize, DatabaseError>
     where
         T: Table,
-        F: FnMut(T::Key) -> u64,
+        F: FnMut(T::Key) -> u64
     {
         let mut cursor = self.tx.cursor_write::<T>()?;
         let mut reverse_walker = cursor.walk_back(None)?;
@@ -665,14 +715,15 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         Ok(deleted)
     }
 
-    /// Unwind a table forward by a [Walker][reth_db::abstraction::cursor::Walker] on another table
+    /// Unwind a table forward by a
+    /// [Walker][reth_db::abstraction::cursor::Walker] on another table
     pub fn unwind_table_by_walker<T1, T2>(
         &self,
-        start_at: T1::Key,
+        start_at: T1::Key
     ) -> std::result::Result<(), DatabaseError>
     where
         T1: Table,
-        T2: Table<Key = T1::Value>,
+        T2: Table<Key = T1::Value>
     {
         let mut cursor = self.tx.cursor_write::<T1>()?;
         let mut walker = cursor.walk(Some(start_at))?;
@@ -689,7 +740,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         &self,
         keys: impl IntoIterator<Item = T::Key>,
         limit: usize,
-        mut delete_callback: impl FnMut(TableRow<T>),
+        mut delete_callback: impl FnMut(TableRow<T>)
     ) -> std::result::Result<(usize, bool), DatabaseError> {
         let mut cursor = self.tx.cursor_write::<T>()?;
         let mut deleted = 0;
@@ -719,7 +770,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
         keys: impl RangeBounds<T::Key> + Clone + Debug,
         limit: usize,
         mut skip_filter: impl FnMut(&TableRow<T>) -> bool,
-        mut delete_callback: impl FnMut(TableRow<T>),
+        mut delete_callback: impl FnMut(TableRow<T>)
     ) -> std::result::Result<(usize, bool), DatabaseError> {
         let mut cursor = self.tx.cursor_write::<T>()?;
         let mut walker = cursor.walk_range(keys)?;
@@ -744,7 +795,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
     /// there are no shards at all.
     fn take_shard<T>(&self, key: T::Key) -> Result<Vec<u64>>
     where
-        T: Table<Value = BlockNumberList>,
+        T: Table<Value = BlockNumberList>
     {
         let mut cursor = self.tx.cursor_read::<T>()?;
         let shard = cursor.seek_exact(key)?;
@@ -760,18 +811,19 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
     /// Insert history index to the database.
     ///
     /// For each updated partial key, this function removes the last shard from
-    /// the database (if any), appends the new indices to it, chunks the resulting integer list and
-    /// inserts the new shards back into the database.
+    /// the database (if any), appends the new indices to it, chunks the
+    /// resulting integer list and inserts the new shards back into the
+    /// database.
     ///
     /// This function is used by history indexing stages.
     fn append_history_index<P, T>(
         &self,
         index_updates: BTreeMap<P, Vec<u64>>,
-        mut sharded_key_factory: impl FnMut(P, BlockNumber) -> T::Key,
+        mut sharded_key_factory: impl FnMut(P, BlockNumber) -> T::Key
     ) -> Result<()>
     where
         P: Copy,
-        T: Table<Value = BlockNumberList>,
+        T: Table<Value = BlockNumberList>
     {
         for (partial_key, indices) in index_updates {
             let last_shard = self.take_shard::<T>(sharded_key_factory(partial_key, u64::MAX))?;
@@ -793,7 +845,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> DatabaseProvider<'this, TX> {
                 };
                 self.tx.put::<T>(
                     sharded_key_factory(partial_key, highest_block_number),
-                    BlockNumberList::new_pre_sorted(list),
+                    BlockNumberList::new_pre_sorted(list)
                 )?;
             }
         }
@@ -810,31 +862,37 @@ impl<'this, TX: DbTx<'this>> AccountReader for DatabaseProvider<'this, TX> {
 impl<'this, TX: DbTx<'this>> AccountExtReader for DatabaseProvider<'this, TX> {
     fn changed_accounts_with_range(
         &self,
-        range: impl RangeBounds<BlockNumber>,
+        range: impl RangeBounds<BlockNumber>
     ) -> Result<BTreeSet<Address>> {
         self.tx
             .cursor_read::<tables::AccountChangeSet>()?
             .walk_range(range)?
             .map(|entry| {
-                entry.map(|(_, account_before)| account_before.address).map_err(Into::into)
+                entry
+                    .map(|(_, account_before)| account_before.address)
+                    .map_err(Into::into)
             })
             .collect()
     }
 
     fn basic_accounts(
         &self,
-        iter: impl IntoIterator<Item = Address>,
+        iter: impl IntoIterator<Item = Address>
     ) -> Result<Vec<(Address, Option<Account>)>> {
         let mut plain_accounts = self.tx.cursor_read::<tables::PlainAccountState>()?;
         Ok(iter
             .into_iter()
-            .map(|address| plain_accounts.seek_exact(address).map(|a| (address, a.map(|(_, v)| v))))
+            .map(|address| {
+                plain_accounts
+                    .seek_exact(address)
+                    .map(|a| (address, a.map(|(_, v)| v)))
+            })
             .collect::<std::result::Result<Vec<_>, _>>()?)
     }
 
     fn changed_accounts_and_blocks_with_range(
         &self,
-        range: RangeInclusive<BlockNumber>,
+        range: RangeInclusive<BlockNumber>
     ) -> Result<BTreeMap<Address, Vec<u64>>> {
         let mut changeset_cursor = self.tx.cursor_read::<tables::AccountChangeSet>()?;
 
@@ -844,7 +902,7 @@ impl<'this, TX: DbTx<'this>> AccountExtReader for DatabaseProvider<'this, TX> {
                 let (index, account) = entry?;
                 accounts.entry(account.address).or_default().push(index);
                 Ok(accounts)
-            },
+            }
         )?;
 
         Ok(account_transitions)
@@ -888,8 +946,8 @@ impl<'this, TX: DbTx<'this>> HeaderProvider for DatabaseProvider<'this, TX> {
 
     fn header_td_by_number(&self, number: BlockNumber) -> Result<Option<U256>> {
         if let Some(td) = self.chain_spec.final_paris_total_difficulty(number) {
-            // if this block is higher than the final paris(merge) block, return the final paris
-            // difficulty
+            // if this block is higher than the final paris(merge) block, return the final
+            // paris difficulty
             return Ok(Some(td))
         }
 
@@ -906,10 +964,14 @@ impl<'this, TX: DbTx<'this>> HeaderProvider for DatabaseProvider<'this, TX> {
 
     fn sealed_headers_range(
         &self,
-        range: impl RangeBounds<BlockNumber>,
+        range: impl RangeBounds<BlockNumber>
     ) -> Result<Vec<SealedHeader>> {
         let mut headers = vec![];
-        for entry in self.tx.cursor_read::<tables::Headers>()?.walk_range(range)? {
+        for entry in self
+            .tx
+            .cursor_read::<tables::Headers>()?
+            .walk_range(range)?
+        {
             let (number, header) = entry?;
             let hash = self
                 .block_hash(number)?
@@ -961,7 +1023,12 @@ impl<'this, TX: DbTx<'this>> BlockNumReader for DatabaseProvider<'this, TX> {
     }
 
     fn last_block_number(&self) -> Result<BlockNumber> {
-        Ok(self.tx.cursor_read::<tables::CanonicalHeaders>()?.last()?.unwrap_or_default().0)
+        Ok(self
+            .tx
+            .cursor_read::<tables::CanonicalHeaders>()?
+            .last()?
+            .unwrap_or_default()
+            .0)
     }
 
     fn block_number(&self, hash: H256) -> Result<Option<BlockNumber>> {
@@ -981,20 +1048,21 @@ impl<'this, TX: DbTx<'this>> BlockReader for DatabaseProvider<'this, TX> {
     /// Returns the block with matching number from database.
     ///
     /// If the header for this block is not found, this returns `None`.
-    /// If the header is found, but the transactions either do not exist, or are not indexed, this
-    /// will return None.
+    /// If the header is found, but the transactions either do not exist, or are
+    /// not indexed, this will return None.
     fn block(&self, id: BlockHashOrNumber) -> Result<Option<Block>> {
         if let Some(number) = self.convert_hash_or_number(id)? {
             if let Some(header) = self.header_by_number(number)? {
                 let withdrawals = self.withdrawals_by_block(number.into(), header.timestamp)?;
                 let ommers = self.ommers(number.into())?.unwrap_or_default();
-                // If the body indices are not found, this means that the transactions either do not
-                // exist in the database yet, or they do exit but are not indexed.
-                // If they exist but are not indexed, we don't have enough
-                // information to return the block anyways, so we return `None`.
+                // If the body indices are not found, this means that the transactions either do
+                // not exist in the database yet, or they do exit but are not
+                // indexed. If they exist but are not indexed, we don't have
+                // enough information to return the block anyways, so we return
+                // `None`.
                 let transactions = match self.transactions_by_block(number.into())? {
                     Some(transactions) => transactions,
-                    None => return Ok(None),
+                    None => return Ok(None)
                 };
 
                 return Ok(Some(Block { header, body: transactions, ommers, withdrawals }))
@@ -1014,13 +1082,20 @@ impl<'this, TX: DbTx<'this>> BlockReader for DatabaseProvider<'this, TX> {
 
     fn ommers(&self, id: BlockHashOrNumber) -> Result<Option<Vec<Header>>> {
         if let Some(number) = self.convert_hash_or_number(id)? {
-            // If the Paris (Merge) hardfork block is known and block is after it, return empty
-            // ommers.
-            if self.chain_spec.final_paris_total_difficulty(number).is_some() {
+            // If the Paris (Merge) hardfork block is known and block is after it, return
+            // empty ommers.
+            if self
+                .chain_spec
+                .final_paris_total_difficulty(number)
+                .is_some()
+            {
                 return Ok(Some(Vec::new()))
             }
 
-            let ommers = self.tx.get::<tables::BlockOmmers>(number)?.map(|o| o.ommers);
+            let ommers = self
+                .tx
+                .get::<tables::BlockOmmers>(number)?
+                .map(|o| o.ommers);
             return Ok(ommers)
         }
 
@@ -1033,12 +1108,12 @@ impl<'this, TX: DbTx<'this>> BlockReader for DatabaseProvider<'this, TX> {
 
     /// Returns the block with senders with matching number from database.
     ///
-    /// **NOTE: The transactions have invalid hashes, since they would need to be calculated on the
-    /// spot, and we want fast querying.**
+    /// **NOTE: The transactions have invalid hashes, since they would need to
+    /// be calculated on the spot, and we want fast querying.**
     ///
     /// If the header for this block is not found, this returns `None`.
-    /// If the header is found, but the transactions either do not exist, or are not indexed, this
-    /// will return None.
+    /// If the header is found, but the transactions either do not exist, or are
+    /// not indexed, this will return None.
     fn block_with_senders(&self, block_number: BlockNumber) -> Result<Option<BlockWithSenders>> {
         let header = self
             .header_by_number(block_number)?
@@ -1049,13 +1124,13 @@ impl<'this, TX: DbTx<'this>> BlockReader for DatabaseProvider<'this, TX> {
 
         // Get the block body
         //
-        // If the body indices are not found, this means that the transactions either do not exist
-        // in the database yet, or they do exit but are not indexed. If they exist but are not
-        // indexed, we don't have enough information to return the block anyways, so we return
-        // `None`.
+        // If the body indices are not found, this means that the transactions either do
+        // not exist in the database yet, or they do exit but are not indexed.
+        // If they exist but are not indexed, we don't have enough information
+        // to return the block anyways, so we return `None`.
         let body = match self.block_body_indices(block_number)? {
             Some(body) => body,
-            None => return Ok(None),
+            None => return Ok(None)
         };
 
         let tx_range = body.tx_num_range();
@@ -1072,9 +1147,9 @@ impl<'this, TX: DbTx<'this>> BlockReader for DatabaseProvider<'this, TX> {
                 TransactionSigned {
                     // TODO: This is the fastest way right now to make everything just work with
                     // a dummy transaction hash.
-                    hash: Default::default(),
-                    signature: tx.signature,
-                    transaction: tx.transaction,
+                    hash:        Default::default(),
+                    signature:   tx.signature,
+                    transaction: tx.transaction
                 }
             })
             .collect();
@@ -1098,11 +1173,13 @@ impl<'this, TX: DbTx<'this>> TransactionsProvider for DatabaseProvider<'this, TX
 
     fn transaction_by_hash(&self, hash: TxHash) -> Result<Option<TransactionSigned>> {
         if let Some(id) = self.transaction_id(hash)? {
-            Ok(self.transaction_by_id_no_hash(id)?.map(|tx| TransactionSigned {
-                hash,
-                signature: tx.signature,
-                transaction: tx.transaction,
-            }))
+            Ok(self
+                .transaction_by_id_no_hash(id)?
+                .map(|tx| TransactionSigned {
+                    hash,
+                    signature: tx.signature,
+                    transaction: tx.transaction
+                }))
         } else {
             Ok(None)
         }
@@ -1111,18 +1188,19 @@ impl<'this, TX: DbTx<'this>> TransactionsProvider for DatabaseProvider<'this, TX
 
     fn transaction_by_hash_with_meta(
         &self,
-        tx_hash: TxHash,
+        tx_hash: TxHash
     ) -> Result<Option<(TransactionSigned, TransactionMeta)>> {
         let mut transaction_cursor = self.tx.cursor_read::<tables::TransactionBlock>()?;
         if let Some(transaction_id) = self.transaction_id(tx_hash)? {
             if let Some(tx) = self.transaction_by_id_no_hash(transaction_id)? {
                 let transaction = TransactionSigned {
-                    hash: tx_hash,
-                    signature: tx.signature,
-                    transaction: tx.transaction,
+                    hash:        tx_hash,
+                    signature:   tx.signature,
+                    transaction: tx.transaction
                 };
-                if let Some(block_number) =
-                    transaction_cursor.seek(transaction_id).map(|b| b.map(|(_, bn)| bn))?
+                if let Some(block_number) = transaction_cursor
+                    .seek(transaction_id)
+                    .map(|b| b.map(|(_, bn)| bn))?
                 {
                     if let Some(sealed_header) = self.sealed_header(block_number)? {
                         let (header, block_hash) = sealed_header.split();
@@ -1139,7 +1217,7 @@ impl<'this, TX: DbTx<'this>> TransactionsProvider for DatabaseProvider<'this, TX
                                 block_hash,
                                 block_number,
                                 base_fee: header.base_fee_per_gas,
-                                excess_blob_gas: header.excess_blob_gas,
+                                excess_blob_gas: header.excess_blob_gas
                             };
 
                             return Ok(Some((transaction, meta)))
@@ -1159,7 +1237,7 @@ impl<'this, TX: DbTx<'this>> TransactionsProvider for DatabaseProvider<'this, TX
 
     fn transactions_by_block(
         &self,
-        id: BlockHashOrNumber,
+        id: BlockHashOrNumber
     ) -> Result<Option<Vec<TransactionSigned>>> {
         let mut tx_cursor = self.tx.cursor_read::<tables::Transactions>()?;
         if let Some(block_number) = self.convert_hash_or_number(id)? {
@@ -1181,7 +1259,7 @@ impl<'this, TX: DbTx<'this>> TransactionsProvider for DatabaseProvider<'this, TX
 
     fn transactions_by_block_range(
         &self,
-        range: impl RangeBounds<BlockNumber>,
+        range: impl RangeBounds<BlockNumber>
     ) -> Result<Vec<Vec<TransactionSigned>>> {
         let mut results = Vec::new();
         let mut body_cursor = self.tx.cursor_read::<tables::BlockBodyIndices>()?;
@@ -1196,7 +1274,7 @@ impl<'this, TX: DbTx<'this>> TransactionsProvider for DatabaseProvider<'this, TX
                     tx_cursor
                         .walk_range(tx_num_range)?
                         .map(|result| result.map(|(_, tx)| tx.into()))
-                        .collect::<std::result::Result<Vec<_>, _>>()?,
+                        .collect::<std::result::Result<Vec<_>, _>>()?
                 );
             }
         }
@@ -1205,7 +1283,7 @@ impl<'this, TX: DbTx<'this>> TransactionsProvider for DatabaseProvider<'this, TX
 
     fn transactions_by_tx_range(
         &self,
-        range: impl RangeBounds<TxNumber>,
+        range: impl RangeBounds<TxNumber>
     ) -> Result<Vec<TransactionSignedNoHash>> {
         Ok(self
             .tx
@@ -1266,12 +1344,15 @@ impl<'this, TX: DbTx<'this>> WithdrawalsProvider for DatabaseProvider<'this, TX>
     fn withdrawals_by_block(
         &self,
         id: BlockHashOrNumber,
-        timestamp: u64,
+        timestamp: u64
     ) -> Result<Option<Vec<Withdrawal>>> {
-        if self.chain_spec.is_shanghai_activated_at_timestamp(timestamp) {
+        if self
+            .chain_spec
+            .is_shanghai_activated_at_timestamp(timestamp)
+        {
             if let Some(number) = self.convert_hash_or_number(id)? {
-                // If we are past shanghai, then all blocks should have a withdrawal list, even if
-                // empty
+                // If we are past shanghai, then all blocks should have a withdrawal list, even
+                // if empty
                 let withdrawals = self
                     .tx
                     .get::<tables::BlockWithdrawals>(number)
@@ -1295,10 +1376,14 @@ impl<'this, TX: DbTx<'this>> EvmEnvProvider for DatabaseProvider<'this, TX> {
         &self,
         cfg: &mut CfgEnv,
         block_env: &mut BlockEnv,
-        at: BlockHashOrNumber,
+        at: BlockHashOrNumber
     ) -> Result<()> {
-        let hash = self.convert_number(at)?.ok_or(ProviderError::HeaderNotFound(at))?;
-        let header = self.header(&hash)?.ok_or(ProviderError::HeaderNotFound(at))?;
+        let hash = self
+            .convert_number(at)?
+            .ok_or(ProviderError::HeaderNotFound(at))?;
+        let header = self
+            .header(&hash)?
+            .ok_or(ProviderError::HeaderNotFound(at))?;
         self.fill_env_with_header(cfg, block_env, &header)
     }
 
@@ -1306,7 +1391,7 @@ impl<'this, TX: DbTx<'this>> EvmEnvProvider for DatabaseProvider<'this, TX> {
         &self,
         cfg: &mut CfgEnv,
         block_env: &mut BlockEnv,
-        header: &Header,
+        header: &Header
     ) -> Result<()> {
         let total_difficulty = self
             .header_td_by_number(header.number)?
@@ -1316,8 +1401,12 @@ impl<'this, TX: DbTx<'this>> EvmEnvProvider for DatabaseProvider<'this, TX> {
     }
 
     fn fill_block_env_at(&self, block_env: &mut BlockEnv, at: BlockHashOrNumber) -> Result<()> {
-        let hash = self.convert_number(at)?.ok_or(ProviderError::HeaderNotFound(at))?;
-        let header = self.header(&hash)?.ok_or(ProviderError::HeaderNotFound(at))?;
+        let hash = self
+            .convert_number(at)?
+            .ok_or(ProviderError::HeaderNotFound(at))?;
+        let header = self
+            .header(&hash)?
+            .ok_or(ProviderError::HeaderNotFound(at))?;
 
         self.fill_block_env_with_header(block_env, &header)
     }
@@ -1334,8 +1423,8 @@ impl<'this, TX: DbTx<'this>> EvmEnvProvider for DatabaseProvider<'this, TX> {
                 difficulty: header.difficulty,
                 total_difficulty,
                 // Not required
-                hash: Default::default(),
-            },
+                hash: Default::default()
+            }
         );
         let after_merge = spec_id >= SpecId::MERGE;
         fill_block_env(block_env, &self.chain_spec, header, after_merge);
@@ -1343,8 +1432,12 @@ impl<'this, TX: DbTx<'this>> EvmEnvProvider for DatabaseProvider<'this, TX> {
     }
 
     fn fill_cfg_env_at(&self, cfg: &mut CfgEnv, at: BlockHashOrNumber) -> Result<()> {
-        let hash = self.convert_number(at)?.ok_or(ProviderError::HeaderNotFound(at))?;
-        let header = self.header(&hash)?.ok_or(ProviderError::HeaderNotFound(at))?;
+        let hash = self
+            .convert_number(at)?
+            .ok_or(ProviderError::HeaderNotFound(at))?;
+        let header = self
+            .header(&hash)?
+            .ok_or(ProviderError::HeaderNotFound(at))?;
         self.fill_cfg_env_with_header(cfg, &header)
     }
 
@@ -1371,18 +1464,22 @@ impl<'this, TX: DbTx<'this>> StageCheckpointReader for DatabaseProvider<'this, T
 impl<'this, TX: DbTxMut<'this>> StageCheckpointWriter for DatabaseProvider<'this, TX> {
     /// Save stage checkpoint progress.
     fn save_stage_checkpoint_progress(&self, id: StageId, checkpoint: Vec<u8>) -> Result<()> {
-        Ok(self.tx.put::<tables::SyncStageProgress>(id.to_string(), checkpoint)?)
+        Ok(self
+            .tx
+            .put::<tables::SyncStageProgress>(id.to_string(), checkpoint)?)
     }
 
     /// Save stage checkpoint.
     fn save_stage_checkpoint(&self, id: StageId, checkpoint: StageCheckpoint) -> Result<()> {
-        Ok(self.tx.put::<tables::SyncStage>(id.to_string(), checkpoint)?)
+        Ok(self
+            .tx
+            .put::<tables::SyncStage>(id.to_string(), checkpoint)?)
     }
 
     fn update_pipeline_stages(
         &self,
         block_number: BlockNumber,
-        drop_stage_checkpoint: bool,
+        drop_stage_checkpoint: bool
     ) -> Result<()> {
         // iterate over all existing stages in the table and update its progress.
         let mut cursor = self.tx.cursor_write::<tables::SyncStage>()?;
@@ -1393,7 +1490,7 @@ impl<'this, TX: DbTxMut<'this>> StageCheckpointWriter for DatabaseProvider<'this
                 StageCheckpoint {
                     block_number,
                     ..if drop_stage_checkpoint { Default::default() } else { checkpoint }
-                },
+                }
             )?;
         }
 
@@ -1404,7 +1501,7 @@ impl<'this, TX: DbTxMut<'this>> StageCheckpointWriter for DatabaseProvider<'this
 impl<'this, TX: DbTx<'this>> StorageReader for DatabaseProvider<'this, TX> {
     fn plainstate_storages(
         &self,
-        addresses_with_keys: impl IntoIterator<Item = (Address, impl IntoIterator<Item = H256>)>,
+        addresses_with_keys: impl IntoIterator<Item = (Address, impl IntoIterator<Item = H256>)>
     ) -> Result<Vec<(Address, Vec<StorageEntry>)>> {
         let mut plain_storage = self.tx.cursor_dup_read::<tables::PlainStorageState>()?;
 
@@ -1427,7 +1524,7 @@ impl<'this, TX: DbTx<'this>> StorageReader for DatabaseProvider<'this, TX> {
 
     fn changed_storages_with_range(
         &self,
-        range: RangeInclusive<BlockNumber>,
+        range: RangeInclusive<BlockNumber>
     ) -> Result<BTreeMap<Address, BTreeSet<H256>>> {
         self.tx
             .cursor_read::<tables::StorageChangeSet>()?
@@ -1436,19 +1533,23 @@ impl<'this, TX: DbTx<'this>> StorageReader for DatabaseProvider<'this, TX> {
             // it is needed as it is dup table.
             .try_fold(BTreeMap::new(), |mut accounts: BTreeMap<Address, BTreeSet<H256>>, entry| {
                 let (BlockNumberAddress((_, address)), storage_entry) = entry?;
-                accounts.entry(address).or_default().insert(storage_entry.key);
+                accounts
+                    .entry(address)
+                    .or_default()
+                    .insert(storage_entry.key);
                 Ok(accounts)
             })
     }
 
     fn changed_storages_and_blocks_with_range(
         &self,
-        range: RangeInclusive<BlockNumber>,
+        range: RangeInclusive<BlockNumber>
     ) -> Result<BTreeMap<(Address, H256), Vec<u64>>> {
         let mut changeset_cursor = self.tx.cursor_read::<tables::StorageChangeSet>()?;
 
-        let storage_changeset_lists =
-            changeset_cursor.walk_range(BlockNumberAddress::range(range))?.try_fold(
+        let storage_changeset_lists = changeset_cursor
+            .walk_range(BlockNumberAddress::range(range))?
+            .try_fold(
                 BTreeMap::new(),
                 |mut storages: BTreeMap<(Address, H256), Vec<u64>>, entry| -> Result<_> {
                     let (index, storage) = entry?;
@@ -1457,7 +1558,7 @@ impl<'this, TX: DbTx<'this>> StorageReader for DatabaseProvider<'this, TX> {
                         .or_default()
                         .push(index.block_number());
                     Ok(storages)
-                },
+                }
             )?;
 
         Ok(storage_changeset_lists)
@@ -1469,7 +1570,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
         &self,
         range: RangeInclusive<BlockNumber>,
         end_block_hash: H256,
-        expected_state_root: H256,
+        expected_state_root: H256
     ) -> Result<()> {
         // Initialize prefix sets.
         let mut account_prefix_set = PrefixSetMut::default();
@@ -1507,22 +1608,25 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
 
         // merkle tree
         {
-            // This is the same as `StateRoot::incremental_root_with_updates`, only the prefix sets
-            // are pre-loaded.
+            // This is the same as `StateRoot::incremental_root_with_updates`, only the
+            // prefix sets are pre-loaded.
             let (state_root, trie_updates) = StateRoot::new(&self.tx)
                 .with_changed_account_prefixes(account_prefix_set.freeze())
                 .with_changed_storage_prefixes(
-                    storage_prefix_set.into_iter().map(|(k, v)| (k, v.freeze())).collect(),
+                    storage_prefix_set
+                        .into_iter()
+                        .map(|(k, v)| (k, v.freeze()))
+                        .collect()
                 )
                 .with_destroyed_accounts(destroyed_accounts)
                 .root_with_updates()
                 .map_err(Into::<reth_db::DatabaseError>::into)?;
             if state_root != expected_state_root {
                 return Err(ProviderError::StateRootMismatch {
-                    got: state_root,
-                    expected: expected_state_root,
+                    got:          state_root,
+                    expected:     expected_state_root,
                     block_number: *range.end(),
-                    block_hash: end_block_hash,
+                    block_hash:   end_block_hash
                 }
                 .into())
             }
@@ -1533,11 +1637,12 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
 
     fn unwind_storage_hashing(
         &self,
-        range: Range<BlockNumberAddress>,
+        range: Range<BlockNumberAddress>
     ) -> Result<HashMap<H256, BTreeSet<H256>>> {
         let mut hashed_storage = self.tx.cursor_dup_write::<tables::HashedStorage>()?;
 
-        // Aggregate all block changesets and make list of accounts that have been changed.
+        // Aggregate all block changesets and make list of accounts that have been
+        // changed.
         let hashed_storages = self
             .tx
             .cursor_read::<tables::StorageChangeSet>()?
@@ -1552,7 +1657,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
                  (BlockNumberAddress((_, address)), storage_entry)| {
                     accounts.insert((address, storage_entry.key), storage_entry.value);
                     accounts
-                },
+                }
             )
             .into_iter()
             // hash addresses and collect it inside sorted BTreeMap.
@@ -1562,7 +1667,10 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
 
         let mut hashed_storage_keys: HashMap<H256, BTreeSet<H256>> = HashMap::default();
         for (hashed_address, hashed_slot) in hashed_storages.keys() {
-            hashed_storage_keys.entry(*hashed_address).or_default().insert(*hashed_slot);
+            hashed_storage_keys
+                .entry(*hashed_address)
+                .or_default()
+                .insert(*hashed_slot);
         }
 
         hashed_storages
@@ -1588,18 +1696,20 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
 
     fn insert_storage_for_hashing(
         &self,
-        storages: impl IntoIterator<Item = (Address, impl IntoIterator<Item = StorageEntry>)>,
+        storages: impl IntoIterator<Item = (Address, impl IntoIterator<Item = StorageEntry>)>
     ) -> Result<HashMap<H256, BTreeSet<H256>>> {
         // hash values
         let hashed_storages =
-            storages.into_iter().fold(BTreeMap::new(), |mut map, (address, storage)| {
-                let storage = storage.into_iter().fold(BTreeMap::new(), |mut map, entry| {
-                    map.insert(keccak256(entry.key), entry.value);
+            storages
+                .into_iter()
+                .fold(BTreeMap::new(), |mut map, (address, storage)| {
+                    let storage = storage.into_iter().fold(BTreeMap::new(), |mut map, entry| {
+                        map.insert(keccak256(entry.key), entry.value);
+                        map
+                    });
+                    map.insert(keccak256(address), storage);
                     map
                 });
-                map.insert(keccak256(address), storage);
-                map
-            });
 
         let hashed_storage_keys =
             HashMap::from_iter(hashed_storages.iter().map(|(hashed_address, entries)| {
@@ -1609,33 +1719,39 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
         let mut hashed_storage_cursor = self.tx.cursor_dup_write::<tables::HashedStorage>()?;
         // Hash the address and key and apply them to HashedStorage (if Storage is None
         // just remove it);
-        hashed_storages.into_iter().try_for_each(|(hashed_address, storage)| {
-            storage.into_iter().try_for_each(|(key, value)| -> Result<()> {
-                if hashed_storage_cursor
-                    .seek_by_key_subkey(hashed_address, key)?
-                    .filter(|entry| entry.key == key)
-                    .is_some()
-                {
-                    hashed_storage_cursor.delete_current()?;
-                }
+        hashed_storages
+            .into_iter()
+            .try_for_each(|(hashed_address, storage)| {
+                storage
+                    .into_iter()
+                    .try_for_each(|(key, value)| -> Result<()> {
+                        if hashed_storage_cursor
+                            .seek_by_key_subkey(hashed_address, key)?
+                            .filter(|entry| entry.key == key)
+                            .is_some()
+                        {
+                            hashed_storage_cursor.delete_current()?;
+                        }
 
-                if value != U256::ZERO {
-                    hashed_storage_cursor.upsert(hashed_address, StorageEntry { key, value })?;
-                }
-                Ok(())
-            })
-        })?;
+                        if value != U256::ZERO {
+                            hashed_storage_cursor
+                                .upsert(hashed_address, StorageEntry { key, value })?;
+                        }
+                        Ok(())
+                    })
+            })?;
 
         Ok(hashed_storage_keys)
     }
 
     fn unwind_account_hashing(
         &self,
-        range: RangeInclusive<BlockNumber>,
+        range: RangeInclusive<BlockNumber>
     ) -> Result<BTreeMap<H256, Option<Account>>> {
         let mut hashed_accounts_cursor = self.tx.cursor_write::<tables::HashedAccount>()?;
 
-        // Aggregate all block changesets and make a list of accounts that have been changed.
+        // Aggregate all block changesets and make a list of accounts that have been
+        // changed.
         let hashed_accounts = self
             .tx
             .cursor_read::<tables::AccountChangeSet>()?
@@ -1649,7 +1765,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
                 |mut accounts: BTreeMap<Address, Option<Account>>, (_, account_before)| {
                     accounts.insert(account_before.address, account_before.info);
                     accounts
-                },
+                }
             )
             .into_iter()
             // hash addresses and collect it inside sorted BTreeMap.
@@ -1663,7 +1779,10 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
             .try_for_each(|(hashed_address, account)| -> Result<()> {
                 if let Some(account) = account {
                     hashed_accounts_cursor.upsert(*hashed_address, *account)?;
-                } else if hashed_accounts_cursor.seek_exact(*hashed_address)?.is_some() {
+                } else if hashed_accounts_cursor
+                    .seek_exact(*hashed_address)?
+                    .is_some()
+                {
                     hashed_accounts_cursor.delete_current()?;
                 }
                 Ok(())
@@ -1674,7 +1793,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
 
     fn insert_account_for_hashing(
         &self,
-        accounts: impl IntoIterator<Item = (Address, Option<Account>)>,
+        accounts: impl IntoIterator<Item = (Address, Option<Account>)>
     ) -> Result<BTreeMap<H256, Option<Account>>> {
         let mut hashed_accounts_cursor = self.tx.cursor_write::<tables::HashedAccount>()?;
 
@@ -1683,17 +1802,22 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
             |mut map: BTreeMap<H256, Option<Account>>, (address, account)| {
                 map.insert(keccak256(address), account);
                 map
-            },
+            }
         );
 
-        hashed_accounts.iter().try_for_each(|(hashed_address, account)| -> Result<()> {
-            if let Some(account) = account {
-                hashed_accounts_cursor.upsert(*hashed_address, *account)?
-            } else if hashed_accounts_cursor.seek_exact(*hashed_address)?.is_some() {
-                hashed_accounts_cursor.delete_current()?;
-            }
-            Ok(())
-        })?;
+        hashed_accounts
+            .iter()
+            .try_for_each(|(hashed_address, account)| -> Result<()> {
+                if let Some(account) = account {
+                    hashed_accounts_cursor.upsert(*hashed_address, *account)?
+                } else if hashed_accounts_cursor
+                    .seek_exact(*hashed_address)?
+                    .is_some()
+                {
+                    hashed_accounts_cursor.delete_current()?;
+                }
+                Ok(())
+            })?;
 
         Ok(hashed_accounts)
     }
@@ -1718,19 +1842,19 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HistoryWriter for DatabaseProvider
 
     fn insert_storage_history_index(
         &self,
-        storage_transitions: BTreeMap<(Address, H256), Vec<u64>>,
+        storage_transitions: BTreeMap<(Address, H256), Vec<u64>>
     ) -> Result<()> {
         self.append_history_index::<_, tables::StorageHistory>(
             storage_transitions,
             |(address, storage_key), highest_block_number| {
                 StorageShardedKey::new(address, storage_key, highest_block_number)
-            },
+            }
         )
     }
 
     fn insert_account_history_index(
         &self,
-        account_transitions: BTreeMap<Address, Vec<u64>>,
+        account_transitions: BTreeMap<Address, Vec<u64>>
     ) -> Result<()> {
         self.append_history_index::<_, tables::AccountHistory>(account_transitions, ShardedKey::new)
     }
@@ -1754,7 +1878,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HistoryWriter for DatabaseProvider
                     // we just need address and lowest block number.
                     accounts.insert((index.address(), storage.key), index.block_number());
                     accounts
-                },
+                }
             );
 
         let mut cursor = self.tx.cursor_write::<tables::StorageHistory>()?;
@@ -1764,9 +1888,9 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HistoryWriter for DatabaseProvider
                 StorageShardedKey::last(address, storage_key),
                 rem_index,
                 |storage_sharded_key| {
-                    storage_sharded_key.address == address &&
-                        storage_sharded_key.sharded_key.key == storage_key
-                },
+                    storage_sharded_key.address == address
+                        && storage_sharded_key.sharded_key.key == storage_key
+                }
             )?;
 
             // Check the last returned partial shard.
@@ -1774,7 +1898,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HistoryWriter for DatabaseProvider
             if !partial_shard.is_empty() {
                 cursor.insert(
                     StorageShardedKey::last(address, storage_key),
-                    BlockNumberList::new_pre_sorted(partial_shard),
+                    BlockNumberList::new_pre_sorted(partial_shard)
                 )?;
             }
         }
@@ -1808,7 +1932,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HistoryWriter for DatabaseProvider
                 &mut cursor,
                 ShardedKey::last(address),
                 rem_index,
-                |sharded_key| sharded_key.key == address,
+                |sharded_key| sharded_key.key == address
             )?;
 
             // Check the last returned partial shard.
@@ -1816,7 +1940,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HistoryWriter for DatabaseProvider
             if !partial_shard.is_empty() {
                 cursor.insert(
                     ShardedKey::last(address),
-                    BlockNumberList::new_pre_sorted(partial_shard),
+                    BlockNumberList::new_pre_sorted(partial_shard)
                 )?;
             }
         }
@@ -1829,7 +1953,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockExecutionWriter for DatabaseP
     fn get_or_take_block_and_execution_range<const TAKE: bool>(
         &self,
         chain_spec: &ChainSpec,
-        range: RangeInclusive<BlockNumber>,
+        range: RangeInclusive<BlockNumber>
     ) -> Result<Vec<(SealedBlockWithSenders, PostState)>> {
         if TAKE {
             let storage_range = BlockNumberAddress::range(range.clone());
@@ -1851,8 +1975,8 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockExecutionWriter for DatabaseP
             // Unwind account history indices.
             self.unwind_account_history_indices(range.clone())?;
 
-            // Unwind storage hashes. Add changed account and storage keys to corresponding prefix
-            // sets.
+            // Unwind storage hashes. Add changed account and storage keys to corresponding
+            // prefix sets.
             let storage_entries = self.unwind_storage_hashing(storage_range.clone())?;
             for (hashed_address, hashed_slots) in storage_entries {
                 account_prefix_set.insert(Nibbles::unpack(hashed_address));
@@ -1868,12 +1992,15 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockExecutionWriter for DatabaseP
             self.unwind_storage_history_indices(storage_range)?;
 
             // Calculate the reverted merkle root.
-            // This is the same as `StateRoot::incremental_root_with_updates`, only the prefix sets
-            // are pre-loaded.
+            // This is the same as `StateRoot::incremental_root_with_updates`, only the
+            // prefix sets are pre-loaded.
             let (new_state_root, trie_updates) = StateRoot::new(&self.tx)
                 .with_changed_account_prefixes(account_prefix_set.freeze())
                 .with_changed_storage_prefixes(
-                    storage_prefix_set.into_iter().map(|(k, v)| (k, v.freeze())).collect(),
+                    storage_prefix_set
+                        .into_iter()
+                        .map(|(k, v)| (k, v.freeze()))
+                        .collect()
                 )
                 .with_destroyed_accounts(destroyed_accounts)
                 .root_with_updates()
@@ -1892,10 +2019,10 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockExecutionWriter for DatabaseP
                     .block_hash(parent_number)?
                     .ok_or_else(|| ProviderError::HeaderNotFound(parent_number.into()))?;
                 return Err(ProviderError::UnwindStateRootMismatch {
-                    got: new_state_root,
-                    expected: parent_state_root,
+                    got:          new_state_root,
+                    expected:     parent_state_root,
                     block_number: parent_number,
-                    block_hash: parent_hash,
+                    block_hash:   parent_hash
                 }
                 .into())
             }
@@ -1909,8 +2036,8 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockExecutionWriter for DatabaseP
         // combine them
         let blocks_with_exec_result: Vec<_> = blocks.into_iter().zip(execution_res).collect();
 
-        // remove block bodies it is needed for both get block range and get block execution results
-        // that is why it is deleted afterwards.
+        // remove block bodies it is needed for both get block range and get block
+        // execution results that is why it is deleted afterwards.
         if TAKE {
             // rm block bodies
             self.get_or_take::<tables::BlockBodyIndices, TAKE>(range)?;
@@ -1931,20 +2058,25 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockWriter for DatabaseProvider<'
         &self,
         block: SealedBlock,
         senders: Option<Vec<Address>>,
-        prune_modes: Option<&PruneModes>,
+        prune_modes: Option<&PruneModes>
     ) -> Result<StoredBlockBodyIndices> {
         let block_number = block.number;
-        self.tx.put::<tables::CanonicalHeaders>(block.number, block.hash())?;
+        self.tx
+            .put::<tables::CanonicalHeaders>(block.number, block.hash())?;
         // Put header with canonical hashes.
-        self.tx.put::<tables::Headers>(block.number, block.header.as_ref().clone())?;
-        self.tx.put::<tables::HeaderNumbers>(block.hash(), block.number)?;
+        self.tx
+            .put::<tables::Headers>(block.number, block.header.as_ref().clone())?;
+        self.tx
+            .put::<tables::HeaderNumbers>(block.hash(), block.number)?;
 
         // total difficulty
         let ttd = if block.number == 0 {
             block.difficulty
         } else {
             let parent_block_number = block.number - 1;
-            let parent_ttd = self.header_td_by_number(parent_block_number)?.unwrap_or_default();
+            let parent_ttd = self
+                .header_td_by_number(parent_block_number)?
+                .unwrap_or_default();
             parent_ttd + block.difficulty
         };
 
@@ -1954,7 +2086,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockWriter for DatabaseProvider<'
         if !block.ommers.is_empty() {
             self.tx.put::<tables::BlockOmmers>(
                 block.number,
-                StoredBlockOmmers { ommers: block.ommers },
+                StoredBlockOmmers { ommers: block.ommers }
             )?;
         }
 
@@ -1970,10 +2102,14 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockWriter for DatabaseProvider<'
 
         let senders_len = senders.as_ref().map(|s| s.len());
         let tx_iter = if Some(block.body.len()) == senders_len {
-            block.body.into_iter().zip(senders.unwrap()).collect::<Vec<(_, _)>>()
+            block
+                .body
+                .into_iter()
+                .zip(senders.unwrap())
+                .collect::<Vec<(_, _)>>()
         } else {
             let senders = TransactionSigned::recover_signers(&block.body, block.body.len()).ok_or(
-                BlockExecutionError::Validation(BlockValidationError::SenderRecoveryError),
+                BlockExecutionError::Validation(BlockValidationError::SenderRecoveryError)
             )?;
             debug_assert_eq!(senders.len(), block.body.len(), "missing one or more senders");
             block.body.into_iter().zip(senders).collect()
@@ -1990,7 +2126,8 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockWriter for DatabaseProvider<'
                 self.tx.put::<tables::TxSenders>(next_tx_num, sender)?;
             }
 
-            self.tx.put::<tables::Transactions>(next_tx_num, transaction.into())?;
+            self.tx
+                .put::<tables::Transactions>(next_tx_num, transaction.into())?;
 
             if prune_modes
                 .and_then(|modes| modes.transaction_lookup)
@@ -2006,16 +2143,18 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockWriter for DatabaseProvider<'
             if !withdrawals.is_empty() {
                 self.tx.put::<tables::BlockWithdrawals>(
                     block_number,
-                    StoredBlockWithdrawals { withdrawals },
+                    StoredBlockWithdrawals { withdrawals }
                 )?;
             }
         }
 
         let block_indices = StoredBlockBodyIndices { first_tx_num, tx_count };
-        self.tx.put::<tables::BlockBodyIndices>(block_number, block_indices.clone())?;
+        self.tx
+            .put::<tables::BlockBodyIndices>(block_number, block_indices.clone())?;
 
         if !block_indices.is_empty() {
-            self.tx.put::<tables::TransactionBlock>(block_indices.last_tx_num(), block_number)?;
+            self.tx
+                .put::<tables::TransactionBlock>(block_indices.last_tx_num(), block_number)?;
         }
 
         Ok(block_indices)
@@ -2025,7 +2164,7 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockWriter for DatabaseProvider<'
         &self,
         blocks: Vec<SealedBlockWithSenders>,
         state: PostState,
-        prune_modes: Option<&PruneModes>,
+        prune_modes: Option<&PruneModes>
     ) -> Result<()> {
         if blocks.is_empty() {
             return Ok(())

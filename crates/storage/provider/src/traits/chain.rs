@@ -1,15 +1,17 @@
 //! Canonical chain state notification trait and types.
-use crate::{chain::BlockReceipts, Chain};
-use auto_impl::auto_impl;
-use reth_primitives::SealedBlockWithSenders;
 use std::{
     pin::Pin,
     sync::Arc,
-    task::{ready, Context, Poll},
+    task::{ready, Context, Poll}
 };
+
+use auto_impl::auto_impl;
+use reth_primitives::SealedBlockWithSenders;
 use tokio::sync::broadcast;
 use tokio_stream::{wrappers::BroadcastStream, Stream};
 use tracing::debug;
+
+use crate::{chain::BlockReceipts, Chain};
 
 /// Type alias for a receiver that receives [CanonStateNotification]
 pub type CanonStateNotifications = broadcast::Receiver<CanonStateNotification>;
@@ -28,7 +30,7 @@ pub trait CanonStateSubscriptions: Send + Sync {
     /// Convenience method to get a stream of [`CanonStateNotification`].
     fn canonical_state_stream(&self) -> CanonStateNotificationStream {
         CanonStateNotificationStream {
-            st: BroadcastStream::new(self.subscribe_to_canonical_state()),
+            st: BroadcastStream::new(self.subscribe_to_canonical_state())
         }
     }
 }
@@ -38,7 +40,7 @@ pub trait CanonStateSubscriptions: Send + Sync {
 #[pin_project::pin_project]
 pub struct CanonStateNotificationStream {
     #[pin]
-    st: BroadcastStream<CanonStateNotification>,
+    st: BroadcastStream<CanonStateNotification>
 }
 
 impl Stream for CanonStateNotificationStream {
@@ -52,15 +54,16 @@ impl Stream for CanonStateNotificationStream {
                     debug!(%err, "canonical state notification stream lagging behind");
                     continue
                 }
-                None => Poll::Ready(None),
+                None => Poll::Ready(None)
             }
         }
     }
 }
 
-/// Chain action that is triggered when a new block is imported or old block is reverted.
-/// and will return all [`crate::PostState`] and [`reth_primitives::SealedBlockWithSenders`] of both
-/// reverted and committed blocks.
+/// Chain action that is triggered when a new block is imported or old block is
+/// reverted. and will return all [`crate::PostState`] and
+/// [`reth_primitives::SealedBlockWithSenders`] of both reverted and committed
+/// blocks.
 #[derive(Clone, Debug)]
 #[allow(missing_docs)]
 pub enum CanonStateNotification {
@@ -68,11 +71,11 @@ pub enum CanonStateNotification {
     Commit { new: Arc<Chain> },
     /// Chain reorgs and both old and new chain are returned.
     /// Revert is just a subset of reorg where the new chain is empty.
-    Reorg { old: Arc<Chain>, new: Arc<Chain> },
+    Reorg { old: Arc<Chain>, new: Arc<Chain> }
 }
 
-// For one reason or another, the compiler can't derive PartialEq for CanonStateNotification.
-// so we are forced to implement it manually.
+// For one reason or another, the compiler can't derive PartialEq for
+// CanonStateNotification. so we are forced to implement it manually.
 impl PartialEq for CanonStateNotification {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -80,7 +83,7 @@ impl PartialEq for CanonStateNotification {
                 old1 == old2 && new1 == new2
             }
             (Self::Commit { new: new1 }, Self::Commit { new: new2 }) => new1 == new2,
-            _ => false,
+            _ => false
         }
     }
 }
@@ -90,28 +93,29 @@ impl CanonStateNotification {
     pub fn reverted(&self) -> Option<Arc<Chain>> {
         match self {
             Self::Reorg { old, .. } => Some(old.clone()),
-            Self::Commit { .. } => None,
+            Self::Commit { .. } => None
         }
     }
 
     /// Get the new chain if any.
     ///
-    /// Returns the new committed [Chain] for [Self::Reorg] and [Self::Commit] variants.
+    /// Returns the new committed [Chain] for [Self::Reorg] and [Self::Commit]
+    /// variants.
     pub fn committed(&self) -> Option<Arc<Chain>> {
         match self {
             Self::Reorg { new, .. } => Some(new.clone()),
-            Self::Commit { new } => Some(new.clone()),
+            Self::Commit { new } => Some(new.clone())
         }
     }
 
     /// Returns the new tip of the chain.
     ///
-    /// Returns the new tip for [Self::Reorg] and [Self::Commit] variants which commit at least 1
-    /// new block.
+    /// Returns the new tip for [Self::Reorg] and [Self::Commit] variants which
+    /// commit at least 1 new block.
     pub fn tip(&self) -> &SealedBlockWithSenders {
         match self {
             Self::Reorg { new, .. } => new.tip(),
-            Self::Commit { new } => new.tip(),
+            Self::Commit { new } => new.tip()
         }
     }
 
@@ -123,13 +127,19 @@ impl CanonStateNotification {
 
         // get old receipts
         if let Some(old) = self.reverted() {
-            receipts
-                .extend(old.receipts_with_attachment().into_iter().map(|receipt| (receipt, true)));
+            receipts.extend(
+                old.receipts_with_attachment()
+                    .into_iter()
+                    .map(|receipt| (receipt, true))
+            );
         }
         // get new receipts
         if let Some(new) = self.committed() {
-            receipts
-                .extend(new.receipts_with_attachment().into_iter().map(|receipt| (receipt, false)));
+            receipts.extend(
+                new.receipts_with_attachment()
+                    .into_iter()
+                    .map(|receipt| (receipt, false))
+            );
         }
         receipts
     }

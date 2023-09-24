@@ -12,9 +12,9 @@ description = "guard storage provider."
 # reth
 reth-primitives.workspace = true
 reth-interfaces.workspace = true
-reth-revm-primitives = { path = "../../revm/revm-primitives" }
-storage-db = { path = "../db" }
-reth-trie = { path = "../../trie" }
+reth-revm-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "d8b1609" }
+guard-db = { path = "../db" }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", rev = "d8b1609" }
 
 # async
 tokio = { workspace = true, features = ["sync", "macros", "rt-multi-thread"] }
@@ -34,10 +34,10 @@ parking_lot.workspace = true
 reth-rlp = { workspace = true, optional = true }
 
 [dev-dependencies]
-reth-db = { path = "../db", features = ["test-utils"] }
+guard-db = { path = "../db", features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["arbitrary", "test-utils"] }
 reth-rlp.workspace = true
-reth-trie = { path = "../../trie", features = ["test-utils"] }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", rev = "d8b1609" }
 reth-interfaces = { workspace = true, features = ["test-utils"] }
 parking_lot.workspace = true
 tempfile = "3.3"

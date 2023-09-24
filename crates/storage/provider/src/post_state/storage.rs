@@ -1,17 +1,19 @@
-use derive_more::Deref;
-use reth_primitives::{Address, BlockNumber, U256};
 use std::collections::{btree_map::Entry, BTreeMap};
 
-/// Storage for an account with the old and new values for each slot: (slot -> (old, new)).
+use derive_more::Deref;
+use reth_primitives::{Address, BlockNumber, U256};
+
+/// Storage for an account with the old and new values for each slot: (slot ->
+/// (old, new)).
 pub type StorageChangeset = BTreeMap<U256, (U256, U256)>;
 
 /// The storage state of the account before the state transition.
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct StorageTransition {
     /// The indicator of the storage wipe.
-    pub wipe: StorageWipe,
+    pub wipe:    StorageWipe,
     /// The storage slots.
-    pub storage: BTreeMap<U256, U256>,
+    pub storage: BTreeMap<U256, U256>
 }
 
 /// The indicator of the storage wipe.
@@ -22,11 +24,12 @@ pub enum StorageWipe {
     None,
     /// The storage was wiped for the first time in the current in-memory state.
     ///
-    /// When writing history to the database, on the primary storage wipe the pre-existing storage
-    /// will be inserted as the storage state before this transition.
+    /// When writing history to the database, on the primary storage wipe the
+    /// pre-existing storage will be inserted as the storage state before
+    /// this transition.
     Primary,
     /// The storage had been already wiped before.
-    Secondary,
+    Secondary
 }
 
 impl StorageWipe {
@@ -46,16 +49,18 @@ impl StorageWipe {
 ///
 /// # Wiped Storage
 ///
-/// The `times_wiped` field indicates the number of times the storage was wiped in this poststate.
+/// The `times_wiped` field indicates the number of times the storage was wiped
+/// in this poststate.
 ///
-/// If `times_wiped` is greater than 0, then the account was selfdestructed at some point, and the
-/// values contained in `storage` should be the only values written to the database.
+/// If `times_wiped` is greater than 0, then the account was selfdestructed at
+/// some point, and the values contained in `storage` should be the only values
+/// written to the database.
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct Storage {
     /// The number of times the storage was wiped.
     pub times_wiped: u64,
     /// The storage slots.
-    pub storage: BTreeMap<U256, U256>,
+    pub storage:     BTreeMap<U256, U256>
 }
 
 impl Storage {
@@ -65,15 +70,15 @@ impl Storage {
     }
 }
 
-/// A mapping of `block -> account -> slot -> old value` that represents what slots were changed,
-/// and what their values were prior to that change.
+/// A mapping of `block -> account -> slot -> old value` that represents what
+/// slots were changed, and what their values were prior to that change.
 #[derive(Default, Clone, Eq, PartialEq, Debug, Deref)]
 pub struct StorageChanges {
     /// The inner mapping of block changes.
     #[deref]
     pub inner: BTreeMap<BlockNumber, BTreeMap<Address, StorageTransition>>,
     /// Hand tracked change size.
-    pub size: usize,
+    pub size:  usize
 }
 
 impl StorageChanges {
@@ -83,9 +88,9 @@ impl StorageChanges {
         block: BlockNumber,
         address: Address,
         wipe: StorageWipe,
-        storage: I,
+        storage: I
     ) where
-        I: Iterator<Item = (U256, U256)>,
+        I: Iterator<Item = (U256, U256)>
     {
         let block_entry = self.inner.entry(block).or_default();
         let storage_entry = block_entry.entry(address).or_default();
@@ -103,14 +108,15 @@ impl StorageChanges {
     /// Drain and return any entries above the target block number.
     pub fn drain_above(
         &mut self,
-        target_block: BlockNumber,
+        target_block: BlockNumber
     ) -> BTreeMap<BlockNumber, BTreeMap<Address, StorageTransition>> {
         let mut evicted = BTreeMap::new();
         self.inner.retain(|block_number, storages| {
             if *block_number > target_block {
                 // This is fine, because it's called only on post state splits
-                self.size -=
-                    storages.iter().fold(0, |acc, (_, storage)| acc + storage.storage.len());
+                self.size -= storages
+                    .iter()
+                    .fold(0, |acc, (_, storage)| acc + storage.storage.len());
                 evicted.insert(*block_number, storages.clone());
                 false
             } else {
@@ -146,8 +152,9 @@ impl StorageChanges {
                 true
             } else {
                 // This is fine, because it's called only on post state splits
-                self.size -=
-                    storages.iter().fold(0, |acc, (_, storage)| acc + storage.storage.len());
+                self.size -= storages
+                    .iter()
+                    .fold(0, |acc, (_, storage)| acc + storage.storage.len());
                 false
             }
         });

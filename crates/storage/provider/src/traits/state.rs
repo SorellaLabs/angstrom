@@ -1,11 +1,12 @@
-use super::AccountReader;
-use crate::{post_state::PostState, BlockHashReader, BlockIdReader};
 use auto_impl::auto_impl;
 use reth_interfaces::{provider::ProviderError, Result};
 use reth_primitives::{
     Address, BlockHash, BlockId, BlockNumHash, BlockNumber, BlockNumberOrTag, Bytecode, Bytes,
-    StorageKey, StorageValue, H256, KECCAK_EMPTY, U256,
+    StorageKey, StorageValue, H256, KECCAK_EMPTY, U256
 };
+
+use super::AccountReader;
+use crate::{post_state::PostState, BlockHashReader, BlockIdReader};
 
 /// Type alias of boxed [StateProvider].
 pub type StateProviderBox<'a> = Box<dyn StateProvider + 'a>;
@@ -31,7 +32,7 @@ pub trait StateProvider: BlockHashReader + AccountReader + StateRootProvider + S
         // Returns None if acc doesn't exist
         let acc = match self.basic_account(addr)? {
             Some(acc) => acc,
-            None => return Ok(None),
+            None => return Ok(None)
         };
 
         if let Some(code_hash) = acc.bytecode_hash {
@@ -54,7 +55,7 @@ pub trait StateProvider: BlockHashReader + AccountReader + StateRootProvider + S
         // Returns None if acc doesn't exist
         match self.basic_account(addr)? {
             Some(acc) => Ok(Some(acc.balance)),
-            None => Ok(None),
+            None => Ok(None)
         }
     }
 
@@ -66,54 +67,60 @@ pub trait StateProvider: BlockHashReader + AccountReader + StateRootProvider + S
         // Returns None if acc doesn't exist
         match self.basic_account(addr)? {
             Some(acc) => Ok(Some(acc.nonce)),
-            None => Ok(None),
+            None => Ok(None)
         }
     }
 }
 
-/// Light wrapper that returns `StateProvider` implementations that correspond to the given
-/// `BlockNumber`, the latest state, or the pending state.
+/// Light wrapper that returns `StateProvider` implementations that correspond
+/// to the given `BlockNumber`, the latest state, or the pending state.
 ///
-/// This type differentiates states into `historical`, `latest` and `pending`, where the `latest`
-/// block determines what is historical or pending: `[historical..latest..pending]`.
+/// This type differentiates states into `historical`, `latest` and `pending`,
+/// where the `latest` block determines what is historical or pending:
+/// `[historical..latest..pending]`.
 ///
-/// The `latest` state represents the state after the most recent block has been committed to the
-/// database, `historical` states are states that have been committed to the database before the
-/// `latest` state, and `pending` states are states that have not yet been committed to the
-/// database which may or may not become the `latest` state, depending on consensus.
+/// The `latest` state represents the state after the most recent block has been
+/// committed to the database, `historical` states are states that have been
+/// committed to the database before the `latest` state, and `pending` states
+/// are states that have not yet been committed to the database which may or may
+/// not become the `latest` state, depending on consensus.
 ///
-/// Note: the `pending` block is considered the block that extends the canonical chain but one and
-/// has the `latest` block as its parent.
+/// Note: the `pending` block is considered the block that extends the canonical
+/// chain but one and has the `latest` block as its parent.
 ///
-/// All states are _inclusive_, meaning they include _all_ all changes made (executed transactions)
-/// in their respective blocks. For example [StateProviderFactory::history_by_block_number] for
-/// block number `n` will return the state after block `n` was executed (transactions, withdrawals).
-/// In other words, all states point to the end of the state's respective block, which is equivalent
-/// to state at the beginning of the child block.
+/// All states are _inclusive_, meaning they include _all_ all changes made
+/// (executed transactions) in their respective blocks. For example
+/// [StateProviderFactory::history_by_block_number] for block number `n` will
+/// return the state after block `n` was executed (transactions, withdrawals).
+/// In other words, all states point to the end of the state's respective block,
+/// which is equivalent to state at the beginning of the child block.
 ///
-/// This affects tracing, or replaying blocks, which will need to be executed on top of the state of
-/// the parent block. For example, in order to trace block `n`, the state after block `n - 1` needs
-/// to be used, since block `n` was executed on its parent block's state.
+/// This affects tracing, or replaying blocks, which will need to be executed on
+/// top of the state of the parent block. For example, in order to trace block
+/// `n`, the state after block `n - 1` needs to be used, since block `n` was
+/// executed on its parent block's state.
 pub trait StateProviderFactory: BlockIdReader + Send + Sync {
     /// Storage provider for latest block.
     fn latest(&self) -> Result<StateProviderBox<'_>>;
 
     /// Returns a [StateProvider] indexed by the given [BlockId].
     ///
-    /// Note: if a number or hash is provided this will only look at historical(canonical) state.
+    /// Note: if a number or hash is provided this will only look at
+    /// historical(canonical) state.
     fn state_by_block_id(&self, block_id: BlockId) -> Result<StateProviderBox<'_>> {
         match block_id {
             BlockId::Number(block_number) => self.state_by_block_number_or_tag(block_number),
-            BlockId::Hash(block_hash) => self.history_by_block_hash(block_hash.into()),
+            BlockId::Hash(block_hash) => self.history_by_block_hash(block_hash.into())
         }
     }
 
     /// Returns a [StateProvider] indexed by the given block number or tag.
     ///
-    /// Note: if a number is provided this will only look at historical(canonical) state.
+    /// Note: if a number is provided this will only look at
+    /// historical(canonical) state.
     fn state_by_block_number_or_tag(
         &self,
-        number_or_tag: BlockNumberOrTag,
+        number_or_tag: BlockNumberOrTag
     ) -> Result<StateProviderBox<'_>> {
         match number_or_tag {
             BlockNumberOrTag::Latest => self.latest(),
@@ -121,7 +128,7 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
                 // we can only get the finalized state by hash, not by num
                 let hash = match self.finalized_block_hash()? {
                     Some(hash) => hash,
-                    None => return Err(ProviderError::FinalizedBlockNotFound.into()),
+                    None => return Err(ProviderError::FinalizedBlockNotFound.into())
                 };
                 // only look at historical state
                 self.history_by_block_hash(hash)
@@ -130,7 +137,7 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
                 // we can only get the safe state by hash, not by num
                 let hash = match self.safe_block_hash()? {
                     Some(hash) => hash,
-                    None => return Err(ProviderError::SafeBlockNotFound.into()),
+                    None => return Err(ProviderError::SafeBlockNotFound.into())
                 };
 
                 self.history_by_block_hash(hash)
@@ -144,7 +151,8 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
         }
     }
 
-    /// Returns a historical [StateProvider] indexed by the given historic block number.
+    /// Returns a historical [StateProvider] indexed by the given historic block
+    /// number.
     ///
     ///
     /// Note: this only looks at historical blocks, not pending blocks.
@@ -157,13 +165,15 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
 
     /// Returns _any_[StateProvider] with matching block hash.
     ///
-    /// This will return a [StateProvider] for either a historical or pending block.
+    /// This will return a [StateProvider] for either a historical or pending
+    /// block.
     fn state_by_block_hash(&self, block: BlockHash) -> Result<StateProviderBox<'_>>;
 
     /// Storage provider for pending state.
     ///
-    /// Represents the state at the block that extends the canonical chain by one.
-    /// If there's no `pending` block, then this is equal to [StateProviderFactory::latest]
+    /// Represents the state at the block that extends the canonical chain by
+    /// one. If there's no `pending` block, then this is equal to
+    /// [StateProviderFactory::latest]
     fn pending(&self) -> Result<StateProviderBox<'_>>;
 
     /// Storage provider for pending state for the given block hash.
@@ -177,20 +187,21 @@ pub trait StateProviderFactory: BlockIdReader + Send + Sync {
     /// Used to inspect or execute transaction on the pending state.
     fn pending_with_provider(
         &self,
-        post_state_data: Box<dyn PostStateDataProvider>,
+        post_state_data: Box<dyn PostStateDataProvider>
     ) -> Result<StateProviderBox<'_>>;
 }
 
-/// Blockchain trait provider that gives access to the blockchain state that is not yet committed
-/// (pending).
+/// Blockchain trait provider that gives access to the blockchain state that is
+/// not yet committed (pending).
 pub trait BlockchainTreePendingStateProvider: Send + Sync {
-    /// Returns a state provider that includes all state changes of the given (pending) block hash.
+    /// Returns a state provider that includes all state changes of the given
+    /// (pending) block hash.
     ///
-    /// In other words, the state provider will return the state after all transactions of the given
-    /// hash have been executed.
+    /// In other words, the state provider will return the state after all
+    /// transactions of the given hash have been executed.
     fn pending_state_provider(
         &self,
-        block_hash: BlockHash,
+        block_hash: BlockHash
     ) -> Result<Box<dyn PostStateDataProvider>> {
         Ok(self
             .find_pending_state_provider(block_hash)
@@ -200,7 +211,7 @@ pub trait BlockchainTreePendingStateProvider: Send + Sync {
     /// Returns state provider if a matching block exists.
     fn find_pending_state_provider(
         &self,
-        block_hash: BlockHash,
+        block_hash: BlockHash
     ) -> Option<Box<dyn PostStateDataProvider>>;
 }
 
@@ -208,7 +219,8 @@ pub trait BlockchainTreePendingStateProvider: Send + Sync {
 /// This trait is used to create a state provider over pending state.
 ///
 /// Pending state contains:
-/// * [`PostState`] contains all changed of accounts and storage of pending chain
+/// * [`PostState`] contains all changed of accounts and storage of pending
+///   chain
 /// * block hashes of pending chain and canonical blocks.
 /// * canonical fork, the block on what pending chain was forked from.
 #[auto_impl[Box,&]]

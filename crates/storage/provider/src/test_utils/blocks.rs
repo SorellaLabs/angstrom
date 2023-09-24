@@ -1,13 +1,15 @@
 //! Dummy blocks and data for tests
 
-use crate::{post_state::PostState, DatabaseProviderRW};
+use std::collections::BTreeMap;
+
 use reth_db::{database::Database, models::StoredBlockBodyIndices, tables};
 use reth_primitives::{
     hex_literal::hex, Account, BlockNumber, Bytes, Header, Log, Receipt, SealedBlock,
-    SealedBlockWithSenders, TxType, Withdrawal, H160, H256, U256,
+    SealedBlockWithSenders, TxType, Withdrawal, H160, H256, U256
 };
 use reth_rlp::Decodable;
-use std::collections::BTreeMap;
+
+use crate::{post_state::PostState, DatabaseProviderRW};
 
 /// Assert genesis block
 pub fn assert_genesis_block<DB: Database>(provider: &DatabaseProviderRW<'_, DB>, g: SealedBlock) {
@@ -36,7 +38,8 @@ pub fn assert_genesis_block<DB: Database>(provider: &DatabaseProviderRW<'_, DB>,
     assert_eq!(tx.table::<tables::AccountHistory>().unwrap(), vec![]);
     assert_eq!(tx.table::<tables::StorageHistory>().unwrap(), vec![]);
     // TODO check after this gets done: https://github.com/paradigmxyz/reth/issues/1588
-    // Bytecodes are not reverted assert_eq!(tx.table::<tables::Bytecodes>().unwrap(), vec![]);
+    // Bytecodes are not reverted
+    // assert_eq!(tx.table::<tables::Bytecodes>().unwrap(), vec![]);
     assert_eq!(tx.table::<tables::AccountChangeSet>().unwrap(), vec![]);
     assert_eq!(tx.table::<tables::StorageChangeSet>().unwrap(), vec![]);
     assert_eq!(tx.table::<tables::HashedAccount>().unwrap(), vec![]);
@@ -53,11 +56,12 @@ pub struct BlockChainTestData {
     /// Genesis
     pub genesis: SealedBlock,
     /// Blocks with its execution result
-    pub blocks: Vec<(SealedBlockWithSenders, PostState)>,
+    pub blocks:  Vec<(SealedBlockWithSenders, PostState)>
 }
 
 impl BlockChainTestData {
-    /// Create test data with two blocks that are connected, specifying their block numbers.
+    /// Create test data with two blocks that are connected, specifying their
+    /// block numbers.
     pub fn default_with_numbers(one: BlockNumber, two: BlockNumber) -> Self {
         let one = block1(one);
         let hash = one.0.hash;
@@ -76,11 +80,11 @@ impl Default for BlockChainTestData {
 /// Genesis block
 pub fn genesis() -> SealedBlock {
     SealedBlock {
-        header: Header { number: 0, difficulty: U256::from(1), ..Default::default() }
+        header:      Header { number: 0, difficulty: U256::from(1), ..Default::default() }
             .seal(H256::zero()),
-        body: vec![],
-        ommers: vec![],
-        withdrawals: Some(vec![]),
+        body:        vec![],
+        ommers:      vec![],
+        withdrawals: Some(vec![])
     }
 }
 
@@ -101,31 +105,31 @@ fn block1(number: BlockNumber) -> (SealedBlockWithSenders, PostState) {
     post_state.create_account(
         number,
         H160([0x61; 20]),
-        Account { nonce: 1, balance: U256::from(10), bytecode_hash: None },
+        Account { nonce: 1, balance: U256::from(10), bytecode_hash: None }
     );
     post_state.create_account(
         number,
         H160([0x60; 20]),
-        Account { nonce: 1, balance: U256::from(10), bytecode_hash: None },
+        Account { nonce: 1, balance: U256::from(10), bytecode_hash: None }
     );
     post_state.change_storage(
         number,
         H160([0x60; 20]),
-        BTreeMap::from([(U256::from(5), (U256::ZERO, U256::from(10)))]),
+        BTreeMap::from([(U256::from(5), (U256::ZERO, U256::from(10)))])
     );
 
     post_state.add_receipt(
         number,
         Receipt {
-            tx_type: TxType::EIP2930,
-            success: true,
+            tx_type:             TxType::EIP2930,
+            success:             true,
             cumulative_gas_used: 300,
-            logs: vec![Log {
+            logs:                vec![Log {
                 address: H160([0x60; 20]),
-                topics: vec![H256::from_low_u64_be(1), H256::from_low_u64_be(2)],
-                data: Bytes::default(),
-            }],
-        },
+                topics:  vec![H256::from_low_u64_be(1), H256::from_low_u64_be(2)],
+                data:    Bytes::default()
+            }]
+        }
     );
 
     (SealedBlockWithSenders { block, senders: vec![H160([0x30; 20])] }, post_state)
@@ -150,25 +154,25 @@ fn block2(number: BlockNumber, parent_hash: H256) -> (SealedBlockWithSenders, Po
         number,
         H160([0x60; 20]),
         Account { nonce: 1, balance: U256::from(10), bytecode_hash: None },
-        Account { nonce: 3, balance: U256::from(20), bytecode_hash: None },
+        Account { nonce: 3, balance: U256::from(20), bytecode_hash: None }
     );
     post_state.change_storage(
         number,
         H160([0x60; 20]),
-        BTreeMap::from([(U256::from(5), (U256::from(10), U256::from(15)))]),
+        BTreeMap::from([(U256::from(5), (U256::from(10), U256::from(15)))])
     );
     post_state.add_receipt(
         number,
         Receipt {
-            tx_type: TxType::EIP1559,
-            success: false,
+            tx_type:             TxType::EIP1559,
+            success:             false,
             cumulative_gas_used: 400,
-            logs: vec![Log {
+            logs:                vec![Log {
                 address: H160([0x61; 20]),
-                topics: vec![H256::from_low_u64_be(3), H256::from_low_u64_be(4)],
-                data: Bytes::default(),
-            }],
-        },
+                topics:  vec![H256::from_low_u64_be(3), H256::from_low_u64_be(4)],
+                data:    Bytes::default()
+            }]
+        }
     );
 
     (SealedBlockWithSenders { block, senders: vec![H160([0x31; 20])] }, post_state)

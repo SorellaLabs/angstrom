@@ -1,7 +1,8 @@
+use std::ops::RangeBounds;
+
 use auto_impl::auto_impl;
 use reth_interfaces::Result;
 use reth_primitives::{BlockHash, BlockHashOrNumber, BlockNumber, Header, SealedHeader, U256};
-use std::ops::RangeBounds;
 
 /// Client trait for fetching `Header` related data.
 #[auto_impl(&, Arc)]
@@ -21,7 +22,7 @@ pub trait HeaderProvider: Send + Sync {
     fn header_by_hash_or_number(&self, hash_or_num: BlockHashOrNumber) -> Result<Option<Header>> {
         match hash_or_num {
             BlockHashOrNumber::Hash(hash) => self.header(&hash),
-            BlockHashOrNumber::Number(num) => self.header_by_number(num),
+            BlockHashOrNumber::Number(num) => self.header_by_number(num)
         }
     }
 
@@ -37,7 +38,7 @@ pub trait HeaderProvider: Send + Sync {
     /// Get headers in range of block numbers
     fn sealed_headers_range(
         &self,
-        range: impl RangeBounds<BlockNumber>,
+        range: impl RangeBounds<BlockNumber>
     ) -> Result<Vec<SealedHeader>>;
 
     /// Get a single sealed header by block number

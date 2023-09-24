@@ -1,11 +1,5 @@
-use crate::{
-    traits::{BlockSource, ReceiptProvider},
-    AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, BlockReader, BlockReaderIdExt,
-    ChainSpecProvider, ChangeSetReader, EvmEnvProvider, HeaderProvider, PostState,
-    PruneCheckpointReader, ReceiptProviderIdExt, StageCheckpointReader, StateProvider,
-    StateProviderBox, StateProviderFactory, StateRootProvider, TransactionsProvider,
-    WithdrawalsProvider,
-};
+use std::{ops::RangeBounds, sync::Arc};
+
 use reth_db::models::{AccountBeforeTx, StoredBlockBodyIndices};
 use reth_interfaces::Result;
 use reth_primitives::{
@@ -13,10 +7,18 @@ use reth_primitives::{
     Account, Address, Block, BlockHash, BlockHashOrNumber, BlockId, BlockNumber, Bytecode, Bytes,
     ChainInfo, ChainSpec, Header, PruneCheckpoint, PrunePart, Receipt, SealedBlock, SealedHeader,
     StorageKey, StorageValue, TransactionMeta, TransactionSigned, TransactionSignedNoHash, TxHash,
-    TxNumber, H256, KECCAK_EMPTY, MAINNET, U256,
+    TxNumber, H256, KECCAK_EMPTY, MAINNET, U256
 };
 use reth_revm_primitives::primitives::{BlockEnv, CfgEnv};
-use std::{ops::RangeBounds, sync::Arc};
+
+use crate::{
+    traits::{BlockSource, ReceiptProvider},
+    AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, BlockReader, BlockReaderIdExt,
+    ChainSpecProvider, ChangeSetReader, EvmEnvProvider, HeaderProvider, PostState,
+    PruneCheckpointReader, ReceiptProviderIdExt, StageCheckpointReader, StateProvider,
+    StateProviderBox, StateProviderFactory, StateRootProvider, TransactionsProvider,
+    WithdrawalsProvider
+};
 
 /// Supports various api interfaces for testing purposes.
 #[derive(Debug, Clone, Default, Copy)]
@@ -85,7 +87,7 @@ impl BlockReader for NoopProvider {
 
     fn block_with_senders(
         &self,
-        _number: BlockNumber,
+        _number: BlockNumber
     ) -> Result<Option<reth_primitives::BlockWithSenders>> {
         Ok(None)
     }
@@ -142,7 +144,7 @@ impl TransactionsProvider for NoopProvider {
 
     fn transaction_by_hash_with_meta(
         &self,
-        _hash: TxHash,
+        _hash: TxHash
     ) -> Result<Option<(TransactionSigned, TransactionMeta)>> {
         Ok(None)
     }
@@ -153,14 +155,14 @@ impl TransactionsProvider for NoopProvider {
 
     fn transactions_by_block(
         &self,
-        _block_id: BlockHashOrNumber,
+        _block_id: BlockHashOrNumber
     ) -> Result<Option<Vec<TransactionSigned>>> {
         Ok(None)
     }
 
     fn transactions_by_block_range(
         &self,
-        _range: impl RangeBounds<BlockNumber>,
+        _range: impl RangeBounds<BlockNumber>
     ) -> Result<Vec<Vec<TransactionSigned>>> {
         Ok(Vec::default())
     }
@@ -171,7 +173,7 @@ impl TransactionsProvider for NoopProvider {
 
     fn transactions_by_tx_range(
         &self,
-        _range: impl RangeBounds<TxNumber>,
+        _range: impl RangeBounds<TxNumber>
     ) -> Result<Vec<reth_primitives::TransactionSignedNoHash>> {
         Ok(Vec::default())
     }
@@ -220,7 +222,7 @@ impl HeaderProvider for NoopProvider {
 
     fn sealed_headers_range(
         &self,
-        _range: impl RangeBounds<BlockNumber>,
+        _range: impl RangeBounds<BlockNumber>
     ) -> Result<Vec<SealedHeader>> {
         Ok(vec![])
     }
@@ -260,7 +262,7 @@ impl StateProvider for NoopProvider {
     fn proof(
         &self,
         _address: Address,
-        _keys: &[H256],
+        _keys: &[H256]
     ) -> Result<(Vec<Bytes>, H256, Vec<Vec<Bytes>>)> {
         Ok((vec![], KECCAK_EMPTY, vec![]))
     }
@@ -271,7 +273,7 @@ impl EvmEnvProvider for NoopProvider {
         &self,
         _cfg: &mut CfgEnv,
         _block_env: &mut BlockEnv,
-        _at: BlockHashOrNumber,
+        _at: BlockHashOrNumber
     ) -> Result<()> {
         Ok(())
     }
@@ -280,7 +282,7 @@ impl EvmEnvProvider for NoopProvider {
         &self,
         _cfg: &mut CfgEnv,
         _block_env: &mut BlockEnv,
-        _header: &Header,
+        _header: &Header
     ) -> Result<()> {
         Ok(())
     }
@@ -292,7 +294,7 @@ impl EvmEnvProvider for NoopProvider {
     fn fill_block_env_with_header(
         &self,
         _block_env: &mut BlockEnv,
-        _header: &Header,
+        _header: &Header
     ) -> Result<()> {
         Ok(())
     }
@@ -333,7 +335,7 @@ impl StateProviderFactory for NoopProvider {
 
     fn pending_with_provider<'a>(
         &'a self,
-        _post_state_data: Box<dyn crate::PostStateDataProvider + 'a>,
+        _post_state_data: Box<dyn crate::PostStateDataProvider + 'a>
     ) -> Result<StateProviderBox<'a>> {
         Ok(Box::new(*self))
     }
@@ -353,10 +355,11 @@ impl WithdrawalsProvider for NoopProvider {
     fn latest_withdrawal(&self) -> Result<Option<reth_primitives::Withdrawal>> {
         Ok(None)
     }
+
     fn withdrawals_by_block(
         &self,
         _id: BlockHashOrNumber,
-        _timestamp: u64,
+        _timestamp: u64
     ) -> Result<Option<Vec<reth_primitives::Withdrawal>>> {
         Ok(None)
     }

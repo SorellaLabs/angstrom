@@ -1,18 +1,21 @@
+use std::fmt::Debug;
+
 use reth_interfaces::{db::DatabaseError as DbError, provider::ProviderError};
 use reth_primitives::{BlockHash, BlockNumber, H256};
 use reth_trie::StateRootError;
-use std::fmt::Debug;
 
 #[cfg(test)]
 mod test {
-    use crate::{test_utils::blocks::*, ProviderFactory, TransactionsProvider};
+    use std::sync::Arc;
+
     use reth_db::{
         models::{storage_sharded_key::StorageShardedKey, ShardedKey},
         tables,
-        test_utils::create_test_rw_db,
+        test_utils::create_test_rw_db
     };
     use reth_primitives::{ChainSpecBuilder, IntegerList, H160, MAINNET, U256};
-    use std::sync::Arc;
+
+    use crate::{test_utils::blocks::*, ProviderFactory, TransactionsProvider};
 
     #[test]
     fn insert_block_and_hashes_get_take() {
@@ -42,7 +45,9 @@ mod test {
 
         assert_genesis_block(&provider, data.genesis);
 
-        provider.append_blocks_with_post_state(vec![block1.clone()], exec_res1.clone()).unwrap();
+        provider
+            .append_blocks_with_post_state(vec![block1.clone()], exec_res1.clone())
+            .unwrap();
 
         assert_eq!(
             provider.table::<tables::AccountHistory>().unwrap(),
@@ -57,14 +62,18 @@ mod test {
         );
 
         // get one block
-        let get = provider.get_block_and_execution_range(&chain_spec, 1..=1).unwrap();
+        let get = provider
+            .get_block_and_execution_range(&chain_spec, 1..=1)
+            .unwrap();
         let get_block = get[0].0.clone();
         let get_state = get[0].1.clone();
         assert_eq!(get_block, block1);
         assert_eq!(get_state, exec_res1);
 
         // take one block
-        let take = provider.take_block_and_execution_range(&chain_spec, 1..=1).unwrap();
+        let take = provider
+            .take_block_and_execution_range(&chain_spec, 1..=1)
+            .unwrap();
         assert_eq!(take, vec![(block1.clone(), exec_res1.clone())]);
         assert_genesis_block(&provider, genesis.clone());
 
@@ -72,8 +81,12 @@ mod test {
         assert_eq!(provider.table::<tables::AccountHistory>().unwrap(), vec![]);
         assert_eq!(provider.table::<tables::StorageHistory>().unwrap(), vec![]);
 
-        provider.append_blocks_with_post_state(vec![block1.clone()], exec_res1.clone()).unwrap();
-        provider.append_blocks_with_post_state(vec![block2.clone()], exec_res2.clone()).unwrap();
+        provider
+            .append_blocks_with_post_state(vec![block1.clone()], exec_res1.clone())
+            .unwrap();
+        provider
+            .append_blocks_with_post_state(vec![block2.clone()], exec_res2.clone())
+            .unwrap();
 
         // check history of two blocks
         assert_eq!(
@@ -111,18 +124,24 @@ mod test {
 
         let provider = factory.provider_rw().unwrap();
         // get second block
-        let get = provider.get_block_and_execution_range(&chain_spec, 2..=2).unwrap();
+        let get = provider
+            .get_block_and_execution_range(&chain_spec, 2..=2)
+            .unwrap();
         assert_eq!(get, vec![(block2.clone(), exec_res2.clone())]);
 
         // get two blocks
-        let get = provider.get_block_and_execution_range(&chain_spec, 1..=2).unwrap();
+        let get = provider
+            .get_block_and_execution_range(&chain_spec, 1..=2)
+            .unwrap();
         assert_eq!(get[0].0, block1);
         assert_eq!(get[1].0, block2);
         assert_eq!(get[0].1, exec_res1);
         assert_eq!(get[1].1, exec_res2);
 
         // take two blocks
-        let get = provider.take_block_and_execution_range(&chain_spec, 1..=2).unwrap();
+        let get = provider
+            .take_block_and_execution_range(&chain_spec, 1..=2)
+            .unwrap();
         assert_eq!(get, vec![(block1, exec_res1), (block2, exec_res2)]);
 
         // assert genesis state
@@ -140,7 +159,7 @@ mod test {
                 .chain(MAINNET.chain)
                 .genesis(MAINNET.genesis.clone())
                 .shanghai_activated()
-                .build(),
+                .build()
         );
 
         let factory = ProviderFactory::new(db.as_ref(), chain_spec.clone());
@@ -155,14 +174,20 @@ mod test {
 
         assert_genesis_block(&provider, data.genesis);
 
-        provider.append_blocks_with_post_state(vec![block1.clone()], exec_res1.clone()).unwrap();
+        provider
+            .append_blocks_with_post_state(vec![block1.clone()], exec_res1.clone())
+            .unwrap();
 
         // get one block
-        let get = provider.get_block_and_execution_range(&chain_spec, 1..=1).unwrap();
+        let get = provider
+            .get_block_and_execution_range(&chain_spec, 1..=1)
+            .unwrap();
         assert_eq!(get, vec![(block1.clone(), exec_res1.clone())]);
 
         // take one block
-        let take = provider.take_block_and_execution_range(&chain_spec, 1..=1).unwrap();
+        let take = provider
+            .take_block_and_execution_range(&chain_spec, 1..=1)
+            .unwrap();
         assert_eq!(take, vec![(block1.clone(), exec_res1.clone())]);
         assert_genesis_block(&provider, genesis.clone());
 
@@ -172,23 +197,29 @@ mod test {
         provider
             .append_blocks_with_post_state(
                 vec![block1.clone(), block2.clone()],
-                merged_state.clone(),
+                merged_state.clone()
             )
             .unwrap();
 
         // get second block
-        let get = provider.get_block_and_execution_range(&chain_spec, 2..=2).unwrap();
+        let get = provider
+            .get_block_and_execution_range(&chain_spec, 2..=2)
+            .unwrap();
         assert_eq!(get, vec![(block2.clone(), exec_res2.clone())]);
 
         // get two blocks
-        let get = provider.get_block_and_execution_range(&chain_spec, 1..=2).unwrap();
+        let get = provider
+            .get_block_and_execution_range(&chain_spec, 1..=2)
+            .unwrap();
         assert_eq!(
             get,
             vec![(block1.clone(), exec_res1.clone()), (block2.clone(), exec_res2.clone())]
         );
 
         // take two blocks
-        let get = provider.take_block_and_execution_range(&chain_spec, 1..=2).unwrap();
+        let get = provider
+            .take_block_and_execution_range(&chain_spec, 1..=2)
+            .unwrap();
         assert_eq!(get, vec![(block1, exec_res1), (block2, exec_res2)]);
 
         // assert genesis state

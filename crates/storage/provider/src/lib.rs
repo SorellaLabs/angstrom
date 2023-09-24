@@ -20,17 +20,7 @@
 
 /// Various provider traits.
 mod traits;
-pub use traits::{
-    AccountExtReader, AccountReader, BlockExecutionWriter, BlockExecutor, BlockHashReader,
-    BlockIdReader, BlockNumReader, BlockReader, BlockReaderIdExt, BlockSource, BlockWriter,
-    BlockchainTreePendingStateProvider, CanonChainTracker, CanonStateNotification,
-    CanonStateNotificationSender, CanonStateNotifications, CanonStateSubscriptions,
-    ChainSpecProvider, ChangeSetReader, EvmEnvProvider, ExecutorFactory, HashingWriter,
-    HeaderProvider, HistoryWriter, PostStateDataProvider, PruneCheckpointReader,
-    PruneCheckpointWriter, ReceiptProvider, ReceiptProviderIdExt, StageCheckpointReader,
-    StageCheckpointWriter, StateProvider, StateProviderBox, StateProviderFactory,
-    StateRootProvider, StorageReader, TransactionsProvider, WithdrawalsProvider
-};
+pub use traits::*;
 
 /// Provider trait implementations.
 pub mod providers;

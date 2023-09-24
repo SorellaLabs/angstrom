@@ -162,6 +162,35 @@ macro_rules! tables {
     };
 }
 
+// type Store interface {
+// 	// LoadFromDBOrGenesisFile loads the most recent state.
+// 	// If the chain is new it will use the genesis file from the provided genesis file path as the current state.
+// 	LoadFromDBOrGenesisFile(string) (State, error)
+// 	// LoadFromDBOrGenesisDoc loads the most recent state.
+// 	// If the chain is new it will use the genesis doc as the current state.
+// 	LoadFromDBOrGenesisDoc(*types.GenesisDoc) (State, error)
+// 	// Load loads the current state of the blockchain
+// 	Load() (State, error)
+// 	// LoadValidators loads the validator set at a given height
+// 	LoadValidators(int64) (*types.ValidatorSet, error)
+// 	// LoadABCIResponses loads the abciResponse for a given height
+// 	LoadABCIResponses(int64) (*tmstate.ABCIResponses, error)
+// 	// LoadLastABCIResponse loads the last abciResponse for a given height
+// 	LoadLastABCIResponse(int64) (*tmstate.ABCIResponses, error)
+// 	// LoadConsensusParams loads the consensus params for a given height
+// 	LoadConsensusParams(int64) (tmproto.ConsensusParams, error)
+// 	// Save overwrites the previous state with the updated one
+// 	Save(State) error
+// 	// SaveABCIResponses saves ABCIResponses for a given height
+// 	SaveABCIResponses(int64, *tmstate.ABCIResponses) error
+// 	// Bootstrap is used for bootstrapping state when not starting from a initial height.
+// 	Bootstrap(State) error
+// 	// PruneStates takes the height from which to start prning and which height stop at
+// 	PruneStates(int64, int64) error
+// 	// Close closes the connection with the database
+// 	Close() error
+// }
+
 tables!([
     (CanonicalHeaders, TableType::Table),
     (HeaderTD, TableType::Table),

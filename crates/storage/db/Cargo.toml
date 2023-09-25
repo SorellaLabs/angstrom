@@ -13,8 +13,8 @@ guard-types.workspace = true
 # reth
 reth-primitives.workspace = true
 reth-interfaces.workspace = true
-reth-codecs = { path = "../codecs" }
-reth-libmdbx = { path = "../libmdbx-rs", optional = true, features = [
+reth-codecs = { git = "https://github.com/paradigmxyz/reth", rev = "d8b1609" }
+reth-libmdbx = { workspace = true, optional = true, features = [
   "return-borrowed",
 ] }
 

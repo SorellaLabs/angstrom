@@ -3,7 +3,7 @@ use reth_codecs::{main_codec, Compact};
 use serde::{Deserialize, Serialize};
 
 use super::BlockId;
-use crate::consensus::{GuardSet, Time};
+use crate::consensus::{Block, GuardSet, Time};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct State {
@@ -15,9 +15,9 @@ pub struct State {
     pub last_block_time:   Time,
 
     // guard info
-    pub next_guards:                Vec<GuardSet>,
-    pub guards:                     Vec<GuardSet>,
-    pub last_guards:                Vec<GuardSet>,
+    pub next_guards:                GuardSet,
+    pub guards:                     GuardSet,
+    pub last_guards:                GuardSet,
     pub last_height_guards_changed: u64,
 
     pub consensus_params:                     u8,
@@ -26,4 +26,11 @@ pub struct State {
     /// Merkle root of the results from executing prev block
     pub last_root: Bytes,
     pub app_hash:  Bytes
+}
+
+impl State {
+    /// moves to the new block state. returns old state.
+    pub fn transition(&mut self, block: Block) -> State {
+        todo!()
+    }
 }

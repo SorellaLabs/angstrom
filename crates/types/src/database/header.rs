@@ -1,6 +1,6 @@
 use bytes::BytesMut;
 use reth_codecs::{main_codec, Compact};
-use reth_primitives::{H256, H512};
+use reth_primitives::{Bytes, H256, H512};
 use reth_rlp::{Decodable, DecodeError, Encodable, RlpDecodable, RlpEncodable};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -33,16 +33,16 @@ pub struct BlockHeader {
     pub ethereum_height: u64,
 
     // hashes of stored data
-    pub last_commit_hash: Vec<u8>,
-    pub data_hash:        Vec<u8>,
+    pub last_commit_hash: Bytes,
+    pub data_hash:        Bytes,
 
-    pub guard_hashes:      Vec<u8>,
-    pub next_guard_hashes: Vec<u8>,
-    pub consensus_hash:    Vec<u8>,
-    pub app_hash:          Vec<u8>,
+    pub guard_hashes:      Bytes,
+    pub next_guard_hashes: Bytes,
+    pub consensus_hash:    Bytes,
+    pub app_hash:          Bytes,
 
-    pub last_result_hash: Vec<u8>,
-    pub evidence_hash:    Vec<u8>,
+    pub last_result_hash: Bytes,
+    pub evidence_hash:    Bytes,
     pub proposer_address: H512
 }
 

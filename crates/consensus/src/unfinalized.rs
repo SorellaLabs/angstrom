@@ -1,24 +1,27 @@
 use std::collections::VecDeque;
 
-use guard_types::consensus::Block;
+use guard_types::{consensus::Block, database::RewardHeader};
 
-pub struct UnfinalizedBlockQueue(pub VecDeque<Block>);
+pub struct UnfinalizedQueue(pub VecDeque<(Block, RewardHeader)>);
 
-impl UnfinalizedBlockQueue {
+impl UnfinalizedQueue {
     pub fn new() -> Self {
-        UnfinalizedBlockQueue(VecDeque::default())
+        UnfinalizedQueue(VecDeque::default())
     }
 
-    pub fn on_new_block(&mut self, block: Block) {
-        self.0.push_back(block);
+    pub fn on_new_block(&mut self, rewards: (Block, RewardHeader)) {
+        self.0.push_back(rewards);
     }
 
-    pub fn new_finalized_ethereum_block(&mut self, eth_block: u64) -> Vec<Block> {
+    pub fn new_finalized_ethereum_block(
+        &mut self,
+        eth_height: u64
+    ) -> Vec<(Block, RewardHeader)> {
         let mut res = Vec::new();
         while self
             .0
             .front()
-            .filter(|b| b.header.ethereum_height <= eth_block)
+            .filter(|b| b.0.header.ethereum_height <= eth_height)
             .is_some()
         {
             res.push(self.0.pop_front().unwrap())

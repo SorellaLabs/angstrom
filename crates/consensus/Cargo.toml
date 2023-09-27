@@ -28,11 +28,13 @@ serde.workspace = true
 anyhow.workspace = true
 url.workspace = true
 reth-db.workspace = true
+reth-provider.workspace = true
 reth-tracing.workspace = true
 serde_json.workspace = true
 hex-literal.workspace = true
 revm-primitives.workspace = true
 reth-rlp.workspace = true
+rayon.workspace = true
 
 guard-types.workspace = true
 # guard-provider.workspace = true

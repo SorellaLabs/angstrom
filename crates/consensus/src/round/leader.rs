@@ -15,7 +15,10 @@ pub struct ProposalManager {
 }
 
 impl ProposalManager {
-    pub fn new_proposal(&mut self, proposal: LeaderProposal) {}
+    /// this assumes that there have been pre-checks on the proposal
+    pub fn new_proposal(&mut self, proposal: LeaderProposal) {
+        self.current_proposal = Some(proposal)
+    }
 
     pub fn new_proposal_vote(&mut self, vote: SignedLeaderProposal, guards: &GuardSet) -> bool {
         let Some(proposal) = self.current_proposal.as_ref() else { return false };

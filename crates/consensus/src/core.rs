@@ -12,7 +12,7 @@ use guard_types::{
         Block, BundleVote, EvidenceError, GuardSet, LeaderProposal, SignedLeaderProposal,
         Valid23Bundle
     },
-    database::BlockId,
+    database::{BlockId, State},
     on_chain::SimmedBundle
 };
 use reth_db::{mdbx::Env, DatabaseEnv};
@@ -22,11 +22,9 @@ use tokio::task::{JoinError, JoinHandle, JoinSet};
 use tracing::{error, warn};
 
 use crate::{
-    bundle::BundleVoteManager,
     evidence::EvidenceCollector,
     executor::{Executor, ExecutorMessage},
-    leader::ProposalManager,
-    stage::Stage,
+    round::RoundState,
     state::ChainMaintainer
 };
 
@@ -59,13 +57,12 @@ pub enum ConsensusError {
 /// 5) Signing Votes, Commitments & Proposals
 pub struct ConsensusCore<S: Simulator + 'static> {
     evidence_collector: EvidenceCollector,
-    bundle_data:        BundleVoteManager,
-    proposal_manager:   ProposalManager,
-    stage:              Stage,
-    guards:             GuardSet,
-    executor:           Executor<S>,
+    round_state:        RoundState,
+    state:              State,
+
+    executor:         Executor<S>,
     /// u8 is a placeholder till we unblackbox db
-    chain_maintainer:   ChainMaintainer<u8>,
+    chain_maintainer: ChainMaintainer<u8>,
 
     outbound: VecDeque<ConsensusMessage>
 }
@@ -76,10 +73,11 @@ impl<S: Simulator + 'static> ConsensusCore<S> {
     }
 
     pub fn new_proposal_vote(&mut self, vote: SignedLeaderProposal) {
-        if !self.stage.is_past_proposal_vote_cutoff()
+        if !self.round_state.stage().is_past_proposal_vote_cutoff()
             && self
-                .proposal_manager
-                .new_proposal_vote(vote.clone(), &self.guards)
+                .round_state
+                .proposal_manager()
+                .new_proposal_vote(vote.clone(), &self.state.guards)
         {
             self.outbound
                 .push_back(ConsensusMessage::SignedProposal(vote))
@@ -87,16 +85,16 @@ impl<S: Simulator + 'static> ConsensusCore<S> {
     }
 
     pub fn new_proposal(&mut self, proposal: LeaderProposal) {
-        if self.stage.is_past_proposal_cutoff() {
+        if self.round_state.stage().is_past_proposal_cutoff() {
             warn!(?proposal, "received proposal to late");
             return
         }
 
-        if self.proposal_manager.has_proposal() {
+        if self.round_state.proposal_manager().has_proposal() {
             return
         }
 
-        let Some(current_leader) = self.guards.get_current_leader() else { return };
+        let Some(current_leader) = self.state.guards.get_current_leader() else { return };
 
         // validate signatures on proposal
         if !proposal.validate_signature(current_leader.pub_key) {
@@ -110,13 +108,13 @@ impl<S: Simulator + 'static> ConsensusCore<S> {
         };
 
         // verify the bundle is the best
-        if !self.bundle_data.is_best_bundle(&proposal.bundle) {
+        if !self.round_state.bundle().is_best_bundle(&proposal.bundle) {
             error!(?proposal, "the proposed bundle doesn't match our best bundle");
         }
 
-        self.proposal_manager.new_proposal(proposal.clone());
-        self.proposal_manager
-            .new_proposal_vote(proposal_vote.clone(), &self.guards);
+        self.round_state.proposal_manager().new_proposal(proposal.clone());
+        self.round_state.proposal_manager()
+            .new_proposal_vote(proposal_vote.clone(), &self.state.guards);
 
         self.outbound.extend(
             vec![
@@ -128,15 +126,15 @@ impl<S: Simulator + 'static> ConsensusCore<S> {
     }
 
     pub fn new_bundle(&mut self, bundle: SimmedBundle) {
-        if self.stage.is_past_bundle_signing_cutoff() {
+        if self.round_state.stage().is_past_bundle_signing_cutoff() {
             return
         }
 
-        if let Some(hash) = self.bundle_data.new_simmed_bundle(bundle) {
+        if let Some(hash) = self.round_state.bundle().new_simmed_bundle(bundle) {
             // new bundle, lets sign and propagate our hash
             let Ok(signed_bundle) =
                 self.executor
-                    .sign_bundle_vote(hash, self.stage.height(), self.stage.round())
+                    .sign_bundle_vote(hash, self.round_state.stage().height(), self.round_state.stage().round())
             else {
                 return
             };
@@ -145,9 +143,10 @@ impl<S: Simulator + 'static> ConsensusCore<S> {
                 .push_back(ConsensusMessage::NewBundleVote(signed_bundle.clone()));
 
             // add vote to underlying and if we hit 2/3 we fully propagate
-            if let Some(msg) = self
-                .bundle_data
-                .new_bundle_vote(signed_bundle, &self.guards)
+            if let Some(msg) = self.
+                round_state
+                .bundle()
+                .new_bundle_vote(signed_bundle, &self.state.guards)
             {
                 self.outbound.push_back(ConsensusMessage::NewBundle23(msg));
             }
@@ -155,12 +154,12 @@ impl<S: Simulator + 'static> ConsensusCore<S> {
     }
 
     pub fn new_bundle_vote(&mut self, vote: BundleVote) {
-        if self.stage.is_past_bundle_signing_cutoff() {
+        if self.round_state.stage().is_past_bundle_signing_cutoff() {
             return
         }
 
-        if !self.bundle_data.contains_vote(&vote) {
-            if let Some(valid23) = self.bundle_data.new_bundle_vote(vote.clone(), &self.guards) {
+        if !self.round_state.bundle().contains_vote(&vote) {
+            if let Some(valid23) = self.round_state.bundle().new_bundle_vote(vote.clone(), &self.state.guards) {
                 self.outbound
                     .push_back(ConsensusMessage::NewBundle23(valid23));
             }
@@ -170,11 +169,11 @@ impl<S: Simulator + 'static> ConsensusCore<S> {
     }
 
     pub fn new_bundle_23(&mut self, bundle: Valid23Bundle) {
-        if self.stage.is_past_bundle23_prop_cutoff() {
+        if self.round_state.stage().is_past_bundle23_prop_cutoff() {
             return
         }
 
-        if self.bundle_data.new_bundle23(bundle.clone(), &self.guards) {
+        if self.round_state.bundle().new_bundle23(bundle.clone(), &self.state.guards) {
             self.outbound
                 .push_back(ConsensusMessage::NewBundle23(bundle.clone()))
         }
@@ -193,7 +192,7 @@ impl<S: Simulator + 'static> Stream for ConsensusCore<S> {
     type Item = Result<ConsensusMessage, ConsensusError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.stage.update_current_stage();
+        self.round_state.stage().update_current_stage();
 
         let stuff = self.executor.poll(cx);
 

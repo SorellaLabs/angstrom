@@ -84,8 +84,6 @@ pub struct Swarm {
     net_connection_state: NetworkConnectionState,
     /// All listeners for high level network events.
     event_listeners:      EventListeners<NetworkEvent>,
-    /// Event listener for updated staking addresses
-    staking_listener:     UnboundedReceiver<GaurdStakingEvent>,
     /// Tracks the number of active session (connected peers).
     ///
     /// This is updated via internal events and shared via `Arc` with the
@@ -98,10 +96,7 @@ pub struct Swarm {
 
 impl Swarm {
     /// Configures a new swarm instance.
-    pub async fn new(
-        config: NetworkConfig,
-        staking_listener: UnboundedReceiver<GaurdStakingEvent>
-    ) -> Result<Self, NetworkError> {
+    pub async fn new(config: NetworkConfig) -> Result<Self, NetworkError> {
         let NetworkConfig {
             secret_key,
             mut discovery_v4_config,
@@ -165,13 +160,21 @@ impl Swarm {
             state,
             net_connection_state: NetworkConnectionState::default(),
             event_listeners: Default::default(),
-            staking_listener,
             num_active_peers
         })
     }
 
+    /// propagates a message to the guard network
     pub fn propagate_msg(&mut self, msg: PeerMessages) {
         self.sessions_mut().propagate_msg(msg)
+    }
+
+    /// On a addition/removal of a staker --> update vec
+    pub fn on_staker_change(&mut self, event: GuardStakingEvent) {
+        match event {
+            GuardStakingEvent::NewStaker(address) => self.sessions.add_valid_staker(address),
+            GuardStakingEvent::RemovedStaker(address) => self.sessions.remove_staker(address)
+        }
     }
 
     /// Access to the state.
@@ -392,15 +395,6 @@ impl Swarm {
         None
     }
 
-    /// On a addition/removal of a staker --> update vec
-    fn on_staker_change(&mut self, event: GaurdStakingEvent) -> Option<GaurdStakingEvent> {
-        match event {
-            GaurdStakingEvent::NewStaker(address) => self.sessions.add_valid_staker(address),
-            GaurdStakingEvent::RemovedStaker(address) => self.sessions.remove_staker(address)
-        }
-        None
-    }
-
     /// Set network connection state to `ShuttingDown`
     pub(crate) fn on_shutdown_requested(&mut self) {
         self.net_connection_state = NetworkConnectionState::ShuttingDown;
@@ -428,13 +422,6 @@ impl Stream for Swarm {
         let this = self.get_mut();
 
         loop {
-            /*
-                        while let Poll::Ready(msg) = this.staking_listener.poll_recv(cx) {
-                            if let Some(change) = msg {
-                                this.on_staker_change(change);
-                            }
-                        }
-            */
             while let Poll::Ready(action) = this.state.poll(cx) {
                 if let Some(event) = this.on_state_action(action) {
                     return Poll::Ready(Some(event))
@@ -614,7 +601,7 @@ pub enum DiscoveredEvent {
 
 #[derive(Debug, Clone)]
 /// event triggered on addition or deletion of a staked gaurd from the network
-pub enum GaurdStakingEvent {
+pub enum GuardStakingEvent {
     NewStaker(PeerId),
     RemovedStaker(PeerId)
 }
@@ -645,12 +632,11 @@ pub mod test_harness {
     impl NetworkTestClient {
         pub async fn new(
             network_config: NetworkConfig,
-            staker_rx: UnboundedReceiver<GaurdStakingEvent>,
             swarm_sender: Sender<SwarmEvent>
         ) -> anyhow::Result<Self> {
             let (network_tx, network_rx) = channel(10);
 
-            let swarm = Swarm::new(network_config, staker_rx).await?;
+            let swarm = Swarm::new(network_config).await?;
             let wrapper = NetworkWrapper { swarm, receiver: network_rx, sender: swarm_sender };
             let _handle = tokio::spawn(wrapper);
 

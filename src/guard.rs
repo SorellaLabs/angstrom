@@ -15,7 +15,7 @@ use ethers_middleware::SignerMiddleware;
 use ethers_providers::{Middleware, PubsubClient};
 use futures::{Future, FutureExt};
 use futures_util::StreamExt;
-use guard_network::{GaurdStakingEvent, NetworkConfig, PeerMessages, Swarm, SwarmEvent};
+use guard_network::{GuardStakingEvent, NetworkConfig, PeerMessages, Swarm, SwarmEvent};
 use guard_types::on_chain::{RawLvrSettlement, RawUserSettlement};
 use sim::Simulator;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
@@ -56,14 +56,12 @@ where
     <M as Middleware>::Provider: PubsubClient
 {
     /// All of the sources that we read and write to
-    sources:          Sources<M>,
+    sources:   Sources<M>,
     /// guard network connection
-    consensus:        ConsensusCore<S>,
+    consensus: ConsensusCore<S>,
     /// deals with all action related requests and actions including bundle
     /// building
-    action:           ActionCore<S>,
-    /// TODO: remove this terrorism joe added
-    valid_stakers_tx: UnboundedSender<GaurdStakingEvent>
+    action:    ActionCore<S>
 }
 
 impl<M: Middleware + Unpin, S: Simulator + Unpin> Guard<M, S>
@@ -76,9 +74,8 @@ where
         action_config: ActionConfig<S>,
         server_config: SubmissionServerConfig
     ) -> anyhow::Result<Self> {
-        let (valid_stakers_tx, valid_stakers_rx) = tokio::sync::mpsc::unbounded_channel();
         let sub_server = SubmissionServerInner::new(server_config).await?;
-        let swarm = Swarm::new(network_config, valid_stakers_rx).await?;
+        let swarm = Swarm::new(network_config).await?;
         let relay_sender = RelaySender::new(Arc::new(SignerMiddleware::new(
             BroadcasterMiddleware::new(
                 middleware,
@@ -97,7 +94,7 @@ where
         let action = ActionCore::new(action_config).await?;
         let consensus = ConsensusCore::new().await;
 
-        Ok(Self { action, consensus, valid_stakers_tx, sources })
+        Ok(Self { action, consensus, sources })
     }
 
     fn on_submission(&mut self, msg: Submission) {

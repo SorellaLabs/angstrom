@@ -45,6 +45,8 @@ impl RoundState {
     }
 
     pub fn new_height(&mut self, block_height: u64, is_leader: bool) {
+        assert!(block_height > self.height);
+
         self.height = block_height;
         self.is_leader.set_leader(is_leader);
         self.consensus.reset();
@@ -71,9 +73,9 @@ impl Stream for RoundState {
         {
             self.current_state = new_action;
             return_if!(msg => { is_some() } map(Poll::Ready));
-        };
+        }
 
-        todo!()
+        return Poll::Pending
     }
 }
 

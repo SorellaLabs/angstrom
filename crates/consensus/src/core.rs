@@ -14,10 +14,11 @@ use guard_types::{
     on_chain::SimmedBundle
 };
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::error;
 
 use crate::{
-    evidence::EvidenceCollector, guard_stages::GuardStages, round::RoundState, signer::Signer
+    evidence::EvidenceCollector, round::RoundState, round_robin_algo::RoundRobinAlgo,
+    signer::Signer
 };
 
 #[derive(Debug)]
@@ -55,14 +56,14 @@ pub enum ConsensusError {
 /// as proper functionality is critical here to ensure that Angstrom works
 /// properly.
 pub struct ConsensusCore {
-    /// collects + formulates evidence of byzantine guards
-    evidence_collector: EvidenceCollector,
     /// keeps track of the current round state
     round_state:        RoundState,
     /// the current overlook of the network stage
     state:              State,
-    /// keeps track of what stage of consensus all guards are on
-    guard_stages:       GuardStages,
+    /// leader selection algo
+    leader_selection:   RoundRobinAlgo,
+    /// collects + formulates evidence of byzantine guards
+    evidence_collector: EvidenceCollector,
     /// deals with all signing and signature verification
     signer:             Signer,
     /// messages to share with others
@@ -80,8 +81,10 @@ impl ConsensusCore {
     }
 
     pub fn new_block(&mut self, block: Block) {
-        // TODO: wire in guard selection stuff
-        self.round_state.new_height(block.header.height, false)
+        if self.round_state.current_height() < block.header.height {
+            // TODO: wire in guard selection stuff
+            self.round_state.new_height(block.header.height, false)
+        }
     }
 
     pub fn new_proposal_vote(&mut self, vote: SignedLeaderProposal) {}

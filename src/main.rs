@@ -2,6 +2,7 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use action::action_core::ActionConfig;
 use clap::Parser;
+use common::{AtomicConsensus, IsLeader};
 use ethers_providers::{Provider, Ws};
 use ethers_signers::LocalWallet;
 use guard_network::{config::SecretKey, NetworkConfig};
@@ -66,7 +67,13 @@ impl Args {
 
         let fake_bundle = LocalWallet::new(&mut rand::thread_rng());
         let network_config = NetworkConfig::new(fake_key, fake_pub_key.into());
-        let action_config = ActionConfig { simulator: sim, edsca_key, bundle_key: fake_bundle };
+        let action_config = ActionConfig {
+            simulator: sim,
+            edsca_key,
+            bundle_key: fake_bundle,
+            consensus_lifecycle: AtomicConsensus::default(),
+            is_leader: IsLeader::default()
+        };
 
         let fake_addr = "127.0.0.1:6969".parse()?;
         let server_config = SubmissionServerConfig {

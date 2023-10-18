@@ -1,7 +1,6 @@
 use std::{
     sync::Arc,
-    task::{Context, Poll},
-    time::SystemTime
+    task::{Context, Poll}
 };
 
 use common::{AtomicConsensus, IsLeader};
@@ -13,9 +12,11 @@ use sim::Simulator;
 use crate::{CowMsg, CowSolver};
 
 pub struct ActionConfig<S: Simulator + 'static> {
-    pub simulator:  S,
-    pub edsca_key:  LocalWallet,
-    pub bundle_key: LocalWallet
+    pub simulator:           S,
+    pub edsca_key:           LocalWallet,
+    pub bundle_key:          LocalWallet,
+    pub consensus_lifecycle: AtomicConsensus,
+    pub is_leader:           IsLeader
 }
 
 #[derive(Debug, Clone)]
@@ -54,13 +55,13 @@ pub struct ActionCore<S: Simulator + 'static> {
 
 impl<S: Simulator + Unpin> ActionCore<S> {
     pub async fn new(config: ActionConfig<S>) -> anyhow::Result<Self> {
-        let ActionConfig { simulator, .. } = config;
+        let ActionConfig { simulator, consensus_lifecycle, is_leader, .. } = config;
 
         Ok(Self {
             cow_solver: CowSolver::new(simulator.clone(), vec![]),
             // placeholders
-            lifecycle:  AtomicConsensus::default(),
-            is_leader:  IsLeader::default()
+            lifecycle: consensus_lifecycle,
+            is_leader
         })
     }
 

@@ -7,7 +7,7 @@
 ///         .guard_net
 ///         .poll_next_unpin(cx)
 ///         .filter_map(|poll| poll)
-///         .map(|event| Some(SourceMessages::Swarm(event))) => is_ready()
+///         .map(|event| Some(SourceMessages::Swarm(event))) => { is_ready() }
 /// );
 /// ```
 ///

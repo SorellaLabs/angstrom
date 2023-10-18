@@ -28,7 +28,7 @@ impl StateTransition for OrderAccumulationState {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>
     ) -> Poll<(RoundAction, ConsensusState, Option<RoundStateMessage>)> {
-        self.timeout.poll_unpin(cx).map(|best_bundle| {
+        self.timeout.poll_unpin(cx).map(|_| {
             (
                 RoundAction::PrePropose(PreProposeState::new(
                     // TODO: placeholder

@@ -107,10 +107,12 @@ where
 
         match msg {
             Submission::ArbTx(arb_tx) => {
-                self.action.get_cow().new_searcher_transaction(arb_tx);
+                self.action
+                    .get_bundle_solver()
+                    .new_searcher_transaction(arb_tx);
             }
             Submission::UserTx(user) => {
-                self.action.get_cow().new_user_transaction(user);
+                self.action.get_bundle_solver().new_user_transaction(user);
             }
             Submission::Subscription(..) => {
                 unreachable!("this is handled in the subscription server")
@@ -125,17 +127,18 @@ where
             SwarmEvent::ValidMessage { peer_id, request } => {
                 debug!(?peer_id, ?request, "got data from peer");
                 match request {
-                    PeerMessages::PropagateBundle(bundle) => {
-                        self.action.get_cow().new_bundle((*bundle).clone().into())
-                    }
+                    PeerMessages::PropagateBundle(bundle) => self
+                        .action
+                        .get_bundle_solver()
+                        .new_bundle((*bundle).clone().into()),
                     PeerMessages::PropagateSearcherTransaction(tx) => {
                         self.action
-                            .get_cow()
+                            .get_bundle_solver()
                             .new_searcher_transaction((*tx).clone().into());
                     }
                     PeerMessages::PropagateUserTransaction(tx) => {
                         self.action
-                            .get_cow()
+                            .get_bundle_solver()
                             .new_user_transaction((*tx).clone().into());
                     }
                     PeerMessages::NewBlock(b) => {}

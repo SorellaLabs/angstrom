@@ -109,6 +109,9 @@ reth-network-api = { git = "https://github.com/paradigmxyz/reth", rev = "d8b1609
 reth-rpc-types-compat = { git = "https://github.com/paradigmxyz/reth", rev = "d8b1609" }
 reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", rev = "d8b1609" }
 
+## alloy
+alloy-sol-macro = "0.4.2"
+alloy-sol-types = "0.4.2"
 
 hex-literal = "0.4.1"
 ethers-core = { version = "2.0", default-features = false }

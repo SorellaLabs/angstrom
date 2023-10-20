@@ -20,7 +20,7 @@ use sim::{
 use tracing::{debug, info, trace};
 
 #[derive(Debug, Clone)]
-pub enum CowMsg {
+pub enum BundleSolverMsg {
     NewBestBundle(Arc<SimmedBundle>),
     NewUserTransaction(Arc<SimmedUserSettlement>),
     NewSearcherTransaction(Arc<SimmedLvrSettlement>)
@@ -30,7 +30,7 @@ pub type SimFut = Pin<Box<dyn Future<Output = Result<SimResult, SimError>> + Sen
 
 /// Handles what is the currently best bundle and tries
 /// to beat it
-pub struct CowSolver<S: Simulator + 'static> {
+pub struct BundleSolver<S: Simulator + 'static> {
     all_user_txes:     HashSet<SimmedUserSettlement>,
     // need to know this to properly route multihop transactions
     best_searcher_tx:  HashMap<PoolKey, SimmedLvrSettlement>,
@@ -42,7 +42,7 @@ pub struct CowSolver<S: Simulator + 'static> {
     pending_simulations: FuturesUnordered<SimFut>
 }
 
-impl<S: Simulator + 'static> CowSolver<S> {
+impl<S: Simulator + 'static> BundleSolver<S> {
     pub fn new(sim: S, bytes_to_pool_key: Vec<PoolKey>) -> Self {
         Self {
             sim,
@@ -84,7 +84,7 @@ impl<S: Simulator + 'static> CowSolver<S> {
             .push(Box::pin(async move { handle.simulate_hooks(tx, call_info).await }));
     }
 
-    fn on_sim_res(&mut self, sim_results: Result<SimResult, SimError>) -> Option<CowMsg> {
+    fn on_sim_res(&mut self, sim_results: Result<SimResult, SimError>) -> Option<BundleSolverMsg> {
         debug!(?sim_results);
 
         sim_results
@@ -121,8 +121,8 @@ impl<S: Simulator + 'static> CowSolver<S> {
     }
 }
 
-impl<S: Simulator + Unpin> Stream for CowSolver<S> {
-    type Item = CowMsg;
+impl<S: Simulator + Unpin> Stream for BundleSolver<S> {
+    type Item = BundleSolverMsg;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.pending_simulations
@@ -138,7 +138,7 @@ fn convert_simmed_results(
     bytes_to_pool_key: &HashMap<[u8; 32], PoolKey>,
     best_searcher_tx: &mut HashMap<PoolKey, SimmedLvrSettlement>,
     all_user_tx: &mut HashSet<SimmedUserSettlement>
-) -> Option<CowMsg> {
+) -> Option<BundleSolverMsg> {
     match tx {
         guard_types::on_chain::SearcherOrUser::User(user) => {
             let simed_user = SimmedUserSettlement {
@@ -152,7 +152,7 @@ fn convert_simmed_results(
             }
             all_user_tx.insert(simed_user.clone());
 
-            return Some(CowMsg::NewUserTransaction(simed_user.into()))
+            return Some(BundleSolverMsg::NewUserTransaction(simed_user.into()))
         }
         guard_types::on_chain::SearcherOrUser::Searcher(searcher) => {
             let Some(pool) = bytes_to_pool_key.get(&searcher.order.pool) else { return None };
@@ -164,14 +164,14 @@ fn convert_simmed_results(
             match best_searcher_tx.entry(pool.clone()) {
                 std::collections::hash_map::Entry::Vacant(v) => {
                     v.insert(simmed_searcher.clone());
-                    return Some(CowMsg::NewSearcherTransaction(simmed_searcher.into()))
+                    return Some(BundleSolverMsg::NewSearcherTransaction(simmed_searcher.into()))
                 }
                 std::collections::hash_map::Entry::Occupied(mut o) => {
                     if o.get().raw.order.bribe > simmed_searcher.raw.order.bribe {
                         return None
                     }
                     o.insert(simmed_searcher.clone());
-                    return Some(CowMsg::NewSearcherTransaction(simmed_searcher.into()))
+                    return Some(BundleSolverMsg::NewSearcherTransaction(simmed_searcher.into()))
                 }
             }
         }
@@ -185,7 +185,7 @@ pub mod test_harness {
 
     use super::*;
 
-    impl<S: Simulator + 'static> CowSolver<S> {
+    impl<S: Simulator + 'static> UniformClearingSolver<S> {
         /// takes our current best bundle. and then runs it through the sim.
         /// because we don't have a current best. it should then be propagated
         /// through the network since this is our best bundle

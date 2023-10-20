@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use alloy_sol_types::sol;
 use ethers_core::types::U256;
 use reth_primitives::{bytes::BytesMut, H256};
 use reth_rlp::Encodable;
@@ -10,11 +11,12 @@ use super::{
     CurrencySettlement, PoolFees, PoolSwap, RawLvrSettlement, RawUserSettlement, RlpDecodable,
     RlpEncodable, SimmedLvrSettlement, SimmedUserSettlement, ANGSTROM_CONTRACT_ADDR
 };
+use crate::on_chain::Order;
 
 #[derive(Debug, Clone, Serialize, Deserialize, RlpDecodable, RlpEncodable, PartialEq, Eq, Hash)]
 pub struct SimmedBundle {
     // Univ4 swaps
-    pub raw:      RawBundle,
+    pub raw:      Bundle,
     // metadata that shouldn't be encoded or taken into account for hash
     pub gas_used: U256
 }
@@ -32,26 +34,87 @@ impl SimmedBundle {
     }
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Serialize,
-    Deserialize,
-    RlpDecodable,
-    RlpEncodable,
-    PartialEq,
-    Eq,
-    Hash,
-    ethers_contract::EthAbiType,
-    ethers_contract::EthAbiCodec,
-)]
-pub struct RawBundle {
-    pub lvr:        Vec<SimmedLvrSettlement>,
-    pub users:      Vec<SimmedUserSettlement>,
-    pub swaps:      Vec<PoolSwap>,
-    pub currencies: Vec<CurrencySettlement>,
-    pub pools:      Vec<PoolFees>
+sol! {
+    type Currency is address;
+    /// @notice Returns the key for identifying a pool
+    struct PoolKey {
+        /// @notice The lower currency of the pool, sorted numerically
+        Currency currency0;
+        /// @notice The higher currency of the pool, sorted numerically
+        Currency currency1;
+        /// @notice The pool swap fee, capped at 1_000_000. The upper 4 bits determine if the hook sets any fees.
+        uint24 fee;
+        /// @notice Ticks that involve positions must be a multiple of tick spacing
+        int24 tickSpacing;
+        /// @notice The hooks of the pool
+        IHooks hooks;
+    }
+
+
+    /// @notice Complete Angstrom bundle.
+    struct Bundle {
+        /// @member All executed user orders.
+        ExecutedOrder[] orders;
+        /// @member Abi-encoded UniswapData.
+        bytes uniswapData;
+    }
+
+    /// @notice Instruction to execute a swap on UniswapV4.
+    struct PoolSwap {
+        /// @member The pool to perform the swap on.
+        PoolKey pool;
+        /// @member The input currency.
+        Currency currencyIn;
+        /// @member The amount of input.
+        uint256 amountIn;
+    }
+
+    /// @notice Signed order with actual execution amounts.
+    struct ExecutedOrder {
+        /// @member The original order from the user.
+        Order order;
+        /// @member The user's EIP-712 signature of the Order.
+        bytes signature;
+        /// @member The actual executed input amount.
+        uint256 amountInActual;
+        /// @member The actual executed output amount.
+        uint256 amountOutActual;
+    }
+
+    /// @notice Instruction to settle an amount of currency.
+    struct CurrencySettlement {
+        /// @member The currency to settle.
+        Currency currency;
+        /// @member The amount to settle, positive indicates we must pay, negative
+        ///         indicates we are paid.
+        int256 amountNet;
+    }
+
+    /// @notice Instruction to donate revenue to a pool.
+    struct PoolFees {
+        /// @member The pool to pay fees to.
+        PoolKey pool;
+        /// @member The amount0 fee.
+        uint256 fees0;
+        /// @member The amount1 fee.
+        uint256 fees1;
+    }
+
+    /// @notice Uniswap instructions to execute after lock is taken.
+    struct UniswapData {
+        /// @member The discrete swaps to perform, there should be at most one entry
+        ///         per pool.
+        PoolSwap[] swaps;
+        /// @member The currency settlements to perform, there should be at most one
+        ///         entry per currency.
+        CurrencySettlement[] currencies;
+        /// @member The fees to pay to each pool, there should be at most one entry
+        ///         per pool.
+        PoolFees[] pools;
+    }
+
 }
+
 impl RawBundle {
     pub fn hash(&self) -> H256 {
         let mut buf = BytesMut::new();

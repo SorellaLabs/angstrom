@@ -21,7 +21,7 @@ use crate::{
     signer::Signer
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConsensusMessage {
     /// All guards lock there lower-bound and broadcast it
     PrePropose(PreProposal),

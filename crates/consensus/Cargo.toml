@@ -32,3 +32,4 @@ alloy-rlp.workspace = true
 
 guard-types.workspace = true
 common.workspace = true
+tokio-stream.workspace = true

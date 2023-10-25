@@ -6,16 +6,20 @@ mod round;
 mod round_robin_algo;
 mod signer;
 
+pub use core::{ConsensusCore, ConsensusMessage};
 use std::pin::Pin;
 
-use common::ConsensusState;
 use futures::Stream;
 pub use manager::*;
 
+/// Listener for consensus data
 pub trait ConsensusListener: Send + Sync + 'static {
-    fn subscribe_transitions(&self) -> Pin<Box<dyn Stream<Item = ConsensusState>>>;
+    /// subscribes to new messages from our consensus
+    fn subscribe_messages(&self) -> Pin<Box<dyn Stream<Item = ConsensusMessage>>>;
 }
 
+/// Feeds Ethereum updates to consensus
 pub trait ConsensusUpdater: Send + Sync + 'static {
+    /// sends a new block to the consensus
     fn new_block(&self, block: ());
 }

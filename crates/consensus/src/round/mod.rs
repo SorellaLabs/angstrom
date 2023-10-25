@@ -142,10 +142,10 @@ trait StateTransition {
 }
 
 #[repr(transparent)]
-pub struct Timeout(Pin<Box<dyn Future<Output = ()>>>);
+pub struct Timeout(Pin<Box<dyn Future<Output = ()> + Send>>);
 
 impl Deref for Timeout {
-    type Target = Pin<Box<dyn Future<Output = ()>>>;
+    type Target = Pin<Box<dyn Future<Output = ()> + Send>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

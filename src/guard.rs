@@ -6,7 +6,7 @@ use std::{
 };
 
 use common::PollExt;
-use consensus::{ConsensusCore, ConsensusMessage};
+use consensus::{ConsensusCore, ConsensusHandle, ConsensusManager, ConsensusMessage};
 use ethers_flashbots::BroadcasterMiddleware;
 use ethers_middleware::SignerMiddleware;
 use ethers_providers::{Middleware, PubsubClient};
@@ -50,7 +50,7 @@ where
     /// Manager of Network State
     network_manager: NetworkManager<M>,
     /// guard network connection
-    consensus:       ConsensusCore,
+    consensus:       ConsensusHandle,
     /// deals with round robin sycning
     syncing:         Option<RoundRobinSync<M>>,
     /// placeholder for txpool
@@ -81,7 +81,7 @@ where
         )));
         let network_manager = NetworkManager::new(middleware, swarm, relay_sender).await?;
 
-        let (consensus, current_height) = ConsensusCore::new().await;
+        let (consensus, current_height) = ConsensusManager::new().await;
         let syncing = RoundRobinSync::new(middleware, current_height).await;
 
         Ok(Self { consensus, network_manager, syncing: Some(syncing), _p: Default::default() })
@@ -142,12 +142,6 @@ where
             self.network_manager
                 .poll_relay_submission(cx)
                 .apply(|result| todo!());
-
-            // poll consensus
-            self.consensus
-                .poll_next_unpin(cx)
-                .filter_map(|f| f.transpose().ok().flatten())
-                .apply(|msg| self.on_consensus(msg));
 
             work -= 1;
             if work == 0 {

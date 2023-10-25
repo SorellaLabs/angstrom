@@ -19,10 +19,7 @@ use tracing::debug;
 use url::Url;
 
 use crate::{
-    relay_sender::RelaySender,
-    round_robin_sync::RoundRobinSync,
-    submission_server::{Submission, SubmissionServerConfig, SubmissionServerInner},
-    GeneralConfig, NetworkManager
+    relay_sender::RelaySender, round_robin_sync::RoundRobinSync, GeneralConfig, NetworkManager
 };
 
 // TODO: these values should be moved somewhere else bc there ugly
@@ -67,10 +64,8 @@ where
     pub async fn new(
         middleware: &'static M,
         network_config: NetworkConfig,
-        general_config: GeneralConfig<S>,
-        server_config: SubmissionServerConfig
+        general_config: GeneralConfig<S>
     ) -> anyhow::Result<Self> {
-        let sub_server = SubmissionServerInner::new(server_config).await?;
         let swarm = Swarm::new(network_config).await?;
         let relay_sender = RelaySender::new(Arc::new(SignerMiddleware::new(
             BroadcasterMiddleware::new(
@@ -84,26 +79,12 @@ where
             ),
             general_config.ecdsa_key.clone()
         )));
-        let network_manager =
-            NetworkManager::new(middleware, swarm, sub_server, relay_sender).await?;
+        let network_manager = NetworkManager::new(middleware, swarm, relay_sender).await?;
 
         let (consensus, current_height) = ConsensusCore::new().await;
         let syncing = RoundRobinSync::new(middleware, current_height).await;
 
         Ok(Self { consensus, network_manager, syncing: Some(syncing), _p: Default::default() })
-    }
-
-    fn on_submission(&mut self, msg: Submission) {
-        debug!(?msg, "handling new submission");
-
-        match msg {
-            Submission::UserOrder(order) => {
-                todo!()
-            }
-            Submission::Subscription(..) => {
-                unreachable!("this is handled in the subscription server")
-            }
-        }
     }
 
     fn on_guard_net(&mut self, event: SwarmEvent) {
@@ -150,10 +131,6 @@ where
             self.network_manager
                 .poll_swarm(cx)
                 .apply(|swarm_event| self.on_guard_net(swarm_event));
-
-            self.network_manager
-                .poll_submission_server(cx)
-                .apply(|msg| self.on_submission(msg));
 
             self.network_manager.poll_block_stream(cx).apply(|block| {
                 let block = Arc::new(block);

@@ -8,7 +8,7 @@ use guard_network::{config::SecretKey, NetworkConfig};
 use hex_literal::hex;
 use reth_primitives::{mainnet_nodes, NodeRecord, PeerId, H512};
 use sim::{lru_db::RevmLRU, spawn_revm_sim};
-use stale_guard::{GeneralConfig, Guard, SubmissionServerConfig};
+use stale_guard::{GeneralConfig, Guard};
 use tokio::runtime::Runtime;
 use url::Url;
 
@@ -74,16 +74,9 @@ impl Args {
             is_leader: IsLeader::default()
         };
 
-        let fake_addr = "127.0.0.1:6969".parse()?;
-        let server_config = SubmissionServerConfig {
-            addr:                fake_addr,
-            cors_domains:        "*".into(),
-            allow_subscriptions: self.enable_subscriptions
-        };
         println!("spawning guard");
 
-        let guard =
-            rt.block_on(Guard::new(middleware, network_config, general_config, server_config))?;
+        let guard = rt.block_on(Guard::new(middleware, network_config, general_config))?;
         rt.block_on(guard);
 
         Ok(())

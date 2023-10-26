@@ -22,5 +22,6 @@ ethers-middleware.workspace = true
 ethers-signers.workspace = true
 ethers-providers.workspace = true
 ethers-flashbots = "0.14.0"
+async-trait.workspace = true
 
 futures-util = "0.3.28"

@@ -4,6 +4,7 @@ use std::{
 };
 
 use common::{ConsensusState, PollExt};
+use ethers_core::types::{Block, H256};
 use futures::{Future, Stream, StreamExt};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
@@ -77,12 +78,6 @@ pub enum ConsensusCommand {
 #[derive(Debug, Clone)]
 pub struct ConsensusHandle {
     sender: Sender<ConsensusCommand>
-}
-
-impl ConsensusUpdater for ConsensusHandle {
-    fn new_block(&self, _block: ()) {
-        todo!()
-    }
 }
 
 impl ConsensusListener for ConsensusHandle {

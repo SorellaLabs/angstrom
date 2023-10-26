@@ -13,6 +13,7 @@ exclude.workspace = true
 [dependencies]
 guard-types.workspace = true
 common.workspace = true
+consensus.workspace = true
 
 reth-primitives.workspace = true
 

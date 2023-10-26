@@ -3,15 +3,13 @@ use std::{
     task::{Context, Poll}
 };
 
-use common::{PollExt, ThreadStream};
+use common::PollExt;
 use ethers_core::types::{Block, H256};
 use ethers_flashbots::PendingBundleError;
 use ethers_providers::{Middleware, PubsubClient, SubscriptionStream};
 use futures::Future;
 use futures_util::StreamExt;
-use guard_types::{
-    primitive::Angstrom::Bundle, rpc::SignedLimitOrder, submission::SubmissionBundle
-};
+use guard_types::submission::SubmissionBundle;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 

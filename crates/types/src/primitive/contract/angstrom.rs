@@ -4,7 +4,6 @@ use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use alloy_sol_macro::sol;
 use alloy_sol_types::{eip712_domain, Eip712Domain};
 use serde::{Deserialize, Serialize};
-pub use Angstrom::*;
 
 sol! {
     #![sol(all_derives = true)]
@@ -193,6 +192,8 @@ sol! {
         function transferOwnership(address newOwner) external payable;
     }
 }
+
+pub use Angstrom::*;
 
 impl Encodable for PoolKey {
     fn encode(&self, out: &mut dyn bytes::BufMut) {

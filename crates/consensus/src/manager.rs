@@ -3,16 +3,15 @@ use std::{
     task::{Context, Poll}
 };
 
-use common::{ConsensusState, PollExt};
-use ethers_core::types::{Block, H256};
+use common::PollExt;
 use futures::{Future, Stream, StreamExt};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
 use crate::{
     core::{ConsensusCore, ConsensusMessage},
-    ConsensusListener, ConsensusUpdater
+    ConsensusListener
 };
 
 pub struct ConsensusManager {

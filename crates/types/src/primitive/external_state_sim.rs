@@ -1,12 +1,12 @@
 use alloy_primitives::{Address, Bytes};
 
-use crate::rpc::SignedLimitOrder;
+use crate::rpc::SignedComposableLimitOrder;
 
 pub type ExternalStateCall = (Address, Bytes);
 
 #[derive(Debug)]
 pub struct ExternalStateSim {
-    pub tx:               SignedLimitOrder,
+    pub tx:               SignedComposableLimitOrder,
     // the address of the user.
     pub addr:             Address,
     // gas in
@@ -33,7 +33,7 @@ impl ExternalStateSim {
     }
 }
 
-impl TryInto<ExternalStateSim> for SignedLimitOrder {
+impl TryInto<ExternalStateSim> for SignedComposableLimitOrder {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<ExternalStateSim, Self::Error> {

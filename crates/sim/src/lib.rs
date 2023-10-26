@@ -5,7 +5,7 @@ use errors::{SimError, SimResult};
 use ethers_core::types::{transaction::eip2718::TypedTransaction, I256, U256};
 use guard_types::{
     primitive::{Angstrom::Bundle, ExternalStateSim},
-    rpc::{CallerInfo, SignedLimitOrder}
+    rpc::{CallerInfo, SignedComposableLimitOrder, SignedLimitOrder}
 };
 use tokio::sync::{mpsc::unbounded_channel, oneshot::Sender};
 
@@ -41,7 +41,7 @@ pub enum BundleOrTransactionResult {
     /// it finishes execution
     MevBundle(Bundle),
     HookSimResult {
-        tx:            SignedLimitOrder,
+        tx:            SignedComposableLimitOrder,
         pre_hook_gas:  U256,
         post_hook_gas: U256
     },

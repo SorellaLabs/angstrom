@@ -6,6 +6,7 @@ use std::{
     task::{Context, Poll}
 };
 
+use alloy_rlp::Bytes;
 use futures_util::{ready, Stream};
 use reth_primitives::{
     AccessList, Address, BlobTransactionSidecar, FromRecoveredPooledTransaction,
@@ -36,8 +37,16 @@ use crate::{
 #[async_trait::async_trait]
 #[auto_impl::auto_impl(Arc)]
 pub trait OrderPool: Send + Sync + Clone {
-    /// The order type of the pool
+    /// The regular limit order type
     type Order: PoolOrder;
+    /// A composable limit order type that accesses external state through pre
+    /// or post hooks
+    type ComposableOrder: ComposablePoolOrder;
+    /// A searcher order
+    type SearcherOrder: SearcherPoolOrder;
+    /// A composable limit order type that accesses external state through pre
+    /// or post hooks
+    type SearcherComposableOrder: SearcherComposablePoolOrder;
 
     /// Returns stats about the pool and all sub-pools.
     fn pool_size(&self) -> PoolSize;
@@ -54,7 +63,14 @@ pub trait OrderPool: Send + Sync + Clone {
     ///
     /// Consumer: P2P
     async fn add_external_order(&self, transaction: Self::Order) -> PoolResult<TxHash> {
-        self.add_transaction(OrderOrigin::External, transaction)
+        self.add_order(OrderOrigin::External, transaction).await
+    }
+
+    async fn add_external_searcher_order(
+        &self,
+        transaction: Self::SearcherOrder
+    ) -> PoolResult<TxHash> {
+        self.add_searcher_order(OrderOrigin::External, transaction)
             .await
     }
 
@@ -64,7 +80,7 @@ pub trait OrderPool: Send + Sync + Clone {
     /// Consumer: Utility
     async fn add_external_orders(
         &self,
-        transactions: Vec<Self::Order>
+        orders: Vec<Self::Order>
     ) -> PoolResult<Vec<PoolResult<TxHash>>> {
         self.add_transactions(OrderOrigin::External, transactions)
             .await
@@ -77,42 +93,62 @@ pub trait OrderPool: Send + Sync + Clone {
     /// event stream for the given transaction.
     ///
     /// Consumer: Custom
-    async fn add_transaction_and_subscribe(
+    async fn add_order_and_subscribe(
         &self,
         origin: OrderOrigin,
-        transaction: Self::Order
+        order: Self::Order
     ) -> PoolResult<TransactionEvents>;
 
-    /// Adds an _unvalidated_ transaction into the pool.
+    /// Adds an _unvalidated_ limit order into the pool.
     ///
     /// Consumer: RPC
-    async fn add_transaction(
-        &self,
-        origin: OrderOrigin,
-        transaction: Self::Order
-    ) -> PoolResult<TxHash>;
+    async fn add_order(&self, origin: OrderOrigin, order: Self::Order) -> PoolResult<TxHash>;
 
-    /// Adds the given _unvalidated_ transaction into the pool.
+    /// Adds the given _unvalidated_ limit orders into the pool.
     ///
     /// Returns a list of results.
     ///
     /// Consumer: RPC
-    async fn add_transactions(
+    async fn add_orders(
+        &self,
+        origin: OrderOrigin,
+        orders: Vec<Self::Order>
+    ) -> PoolResult<Vec<PoolResult<TxHash>>>;
+
+    /// Adds the given _unvalidated_ searcher orders into the pool.
+    ///
+    /// Returns a list of results.
+    ///
+    /// Consumer: RPC
+    async fn add_searcher_orders(
         &self,
         origin: OrderOrigin,
         transactions: Vec<Self::Order>
     ) -> PoolResult<Vec<PoolResult<TxHash>>>;
 
-    /// Returns a new transaction change event stream for the given transaction.
+    /// Adds an _unvalidated_ searcher order into the pool and subscribe to
+    /// state changes.
+    ///
+    /// This is the same as [TransactionPool::add_transaction] but returns an
+    /// event stream for the given transaction.
+    ///
+    /// Consumer: Custom
+    async fn add_searcher_order_and_subscribe(
+        &self,
+        origin: OrderOrigin,
+        order: Self::Order
+    ) -> PoolResult<TransactionEvents>;
+
+    /// Returns a new order change event stream for the given order.
     ///
     /// Returns `None` if the transaction is not in the pool.
-    fn transaction_event_listener(&self, tx_hash: TxHash) -> Option<TransactionEvents>;
+    fn order_event_listener(&self, tx_hash: TxHash) -> Option<TransactionEvents>;
 
-    /// Returns a new transaction change event stream for _all_ transactions in
+    /// Returns a new order change event stream for _all_  orders in
     /// the pool.
-    fn all_transactions_event_listener(&self) -> AllTransactionsEvents<Self::Order>;
+    fn all_orders_event_listener(&self) -> AllTransactionsEvents<Self::Order>;
 
-    /// Returns a new Stream that yields transactions hashes for new __pending__
+    /// Returns a new Stream that yields order hashes for new __pending__
     /// transactions inserted into the pool that are allowed to be
     /// propagated.
     ///
@@ -120,24 +156,24 @@ pub trait OrderPool: Send + Sync + Clone {
     /// transactions that are allowed to be propagated over the network.
     ///
     /// Consumer: RPC/P2P
-    fn pending_transactions_listener(&self) -> Receiver<TxHash> {
-        self.pending_transactions_listener_for(TransactionListenerKind::PropagateOnly)
+    fn pending_orders_listener(&self) -> Receiver<TxHash> {
+        self.pending_orders_listener_for(TransactionListenerKind::PropagateOnly)
     }
 
-    /// Returns a new Stream that yields transactions hashes for new __pending__
+    /// Returns a new Stream that yields order hashes for new __pending__
     /// transactions inserted into the pool depending on the given
     /// [TransactionListenerKind] argument.
-    fn pending_transactions_listener_for(&self, kind: TransactionListenerKind) -> Receiver<TxHash>;
+    fn pending_orders_listener_for(&self, kind: TransactionListenerKind) -> Receiver<TxHash>;
 
-    /// Returns a new stream that yields new valid transactions added to the
+    /// Returns a new stream that yields new valid orders added to the
     /// pool.
-    fn new_transactions_listener(&self) -> Receiver<NewTransactionEvent<Self::Order>> {
+    fn new_orders_listener(&self) -> Receiver<NewTransactionEvent<Self::Order>> {
         self.new_transactions_listener_for(TransactionListenerKind::PropagateOnly)
     }
 
     /// Returns a new stream that yields new valid transactions added to the
     /// pool depending on the given [TransactionListenerKind] argument.
-    fn new_transactions_listener_for(
+    fn new_orders_listener_for(
         &self,
         kind: TransactionListenerKind
     ) -> Receiver<NewTransactionEvent<Self::Order>>;
@@ -147,7 +183,7 @@ pub trait OrderPool: Send + Sync + Clone {
     ///
     /// This is a convenience wrapper around [Self::new_transactions_listener]
     /// that filters for [SubPool::Pending](crate::SubPool).
-    fn new_pending_pool_transactions_listener(&self) -> NewSubpoolTransactionStream<Self::Order> {
+    fn new_pending_pool_orders_listener(&self) -> NewSubpoolTransactionStream<Self::Order> {
         NewSubpoolTransactionStream::new(
             self.new_transactions_listener_for(TransactionListenerKind::PropagateOnly),
             SubPool::Pending
@@ -159,7 +195,7 @@ pub trait OrderPool: Send + Sync + Clone {
     ///
     /// This is a convenience wrapper around [Self::new_transactions_listener]
     /// that filters for [SubPool::BaseFee](crate::SubPool).
-    fn new_basefee_pool_transactions_listener(&self) -> NewSubpoolTransactionStream<Self::Order> {
+    fn new_basefee_pool_orders_listener(&self) -> NewSubpoolTransactionStream<Self::Order> {
         NewSubpoolTransactionStream::new(self.new_transactions_listener(), SubPool::BaseFee)
     }
 
@@ -168,7 +204,7 @@ pub trait OrderPool: Send + Sync + Clone {
     ///
     /// This is a convenience wrapper around [Self::new_transactions_listener]
     /// that filters for [SubPool::Queued](crate::SubPool).
-    fn new_queued_transactions_listener(&self) -> NewSubpoolTransactionStream<Self::Order> {
+    fn new_queued_orders_listener(&self) -> NewSubpoolTransactionStream<Self::Order> {
         NewSubpoolTransactionStream::new(self.new_transactions_listener(), SubPool::Queued)
     }
 
@@ -178,12 +214,12 @@ pub trait OrderPool: Send + Sync + Clone {
     /// unique.
     ///
     /// Consumer: P2P
-    fn pooled_transaction_hashes(&self) -> Vec<TxHash>;
+    fn pooled_order_hashes(&self) -> Vec<TxHash>;
 
     /// Returns only the first `max` hashes of transactions in the pool.
     ///
     /// Consumer: P2P
-    fn pooled_transaction_hashes_max(&self, max: usize) -> Vec<TxHash>;
+    fn pooled_order_hashes_max(&self, max: usize) -> Vec<TxHash>;
 
     /// Returns the _full_ transaction objects all transactions in the pool.
     ///
@@ -197,12 +233,12 @@ pub trait OrderPool: Send + Sync + Clone {
     /// sidecar.
     ///
     /// Consumer: P2P
-    fn pooled_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
+    fn pooled_orders(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
 
     /// Returns only the first `max` transactions in the pool.
     ///
     /// Consumer: P2P
-    fn pooled_transactions_max(&self, max: usize) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
+    fn pooled_orders_max(&self, max: usize) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
 
     /// Returns converted [PooledTransactionsElement] for the given transaction
     /// hashes.
@@ -214,7 +250,7 @@ pub trait OrderPool: Send + Sync + Clone {
     /// If the transaction is a blob transaction, the sidecar will be included.
     ///
     /// Consumer: P2P
-    fn get_pooled_transaction_elements(
+    fn get_pooled_orders_elements(
         &self,
         tx_hashes: Vec<TxHash>,
         limit: GetPooledTransactionLimit
@@ -224,7 +260,7 @@ pub trait OrderPool: Send + Sync + Clone {
     /// production.
     ///
     /// Consumer: Block production
-    fn best_transactions(
+    fn best_orders(
         &self
     ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolTransaction<Self::Order>>>>;
 
@@ -232,7 +268,7 @@ pub trait OrderPool: Send + Sync + Clone {
     /// production with the given base fee.
     ///
     /// Consumer: Block production
-    fn best_transactions_with_base_fee(
+    fn best_orders_with_base_fee(
         &self,
         base_fee: u64
     ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolTransaction<Self::Order>>>>;
@@ -242,14 +278,14 @@ pub trait OrderPool: Send + Sync + Clone {
     /// This is primarily used for the `txpool_` RPC namespace: <https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-txpool> which distinguishes between `pending` and `queued` transactions, where `pending` are transactions ready for inclusion in the next block and `queued` are transactions that are ready for inclusion in future blocks.
     ///
     /// Consumer: RPC
-    fn pending_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
+    fn pending_orders(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
 
     /// Returns all transactions that can be included in _future_ blocks.
     ///
     /// This and [Self::pending_transactions] are mutually exclusive.
     ///
     /// Consumer: RPC
-    fn queued_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
+    fn queued_orders(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
 
     /// Returns all transactions that are currently in the pool grouped by
     /// whether they are ready for inclusion in the next block or not.
@@ -257,17 +293,14 @@ pub trait OrderPool: Send + Sync + Clone {
     /// This is primarily used for the `txpool_` namespace: <https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-txpool>
     ///
     /// Consumer: RPC
-    fn all_transactions(&self) -> AllPoolTransactions<Self::Order>;
+    fn all_orders(&self) -> AllPoolTransactions<Self::Order>;
 
     /// Removes all transactions corresponding to the given hashes.
     ///
     /// Also removes all _dependent_ transactions.
     ///
     /// Consumer: Block production
-    fn remove_transactions(
-        &self,
-        hashes: Vec<TxHash>
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
+    fn remove_orders(&self, hashes: Vec<TxHash>) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
 
     /// Retains only those hashes that are unknown to the pool.
     /// In other words, removes all transactions from the given set that are
@@ -297,10 +330,7 @@ pub trait OrderPool: Send + Sync + Clone {
     fn on_propagated(&self, txs: PropagatedTransactions);
 
     /// Returns all transactions sent by a given user
-    fn get_transactions_by_sender(
-        &self,
-        sender: Address
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
+    fn get_orders_by_sender(&self, sender: Address) -> Vec<Arc<ValidPoolTransaction<Self::Order>>>;
 
     /// Returns a set of all senders of transactions in the pool
     fn unique_senders(&self) -> HashSet<Address>;
@@ -607,6 +637,27 @@ impl BestTransactionsAttributes {
     pub fn base_fee(basefee: u64) -> Self {
         Self::new(basefee)
     }
+}
+
+pub trait ComposablePoolOrder: PoolOrder {}
+pub trait SearcherPoolOrder: PoolOrder {
+    /// Value of the searcher bid
+    fn lvr_bid(&self) -> u64;
+
+    /// Proportion
+    fn bid_proportion(&self) -> u64;
+
+    /// The pool's price post arbitrage
+    fn pool_price(&self) -> u64;
+}
+
+pub trait SearcherComposablePoolOrder: SearcherPoolOrder {
+    /// Builder Bribe
+    fn coinbase_tip(&self) -> u64;
+
+    fn pre_hook_access_list(&self) -> AccessList;
+
+    fn post_hook_access_list(&self) -> AccessList;
 }
 
 /// Trait for transaction types used inside the pool

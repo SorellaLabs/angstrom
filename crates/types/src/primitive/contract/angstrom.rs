@@ -51,8 +51,6 @@ sol! {
             uint128 amountIn;
             uint128 amountOutMin;
             uint256 deadline;
-            bytes preHook;
-            bytes postHook;
         }
 
         #[derive(Serialize, Deserialize, RlpEncodable, RlpDecodable)]

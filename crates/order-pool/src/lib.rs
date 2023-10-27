@@ -337,12 +337,12 @@ where
     ) -> PoolResult<TxHash> {
         let (_, tx) = self.validate(origin, transaction).await;
         self.pool
-            .add_transactions(origin, std::iter::once(tx))
+            .add_orders(origin, std::iter::once(tx))
             .pop()
             .expect("exists; qed")
     }
 
-    async fn add_transactions(
+    async fn add_orders(
         &self,
         origin: OrderOrigin,
         transactions: Vec<Self::Order>
@@ -351,7 +351,7 @@ where
 
         let transactions = self
             .pool
-            .add_transactions(origin, validated.into_iter().map(|(_, tx)| tx));
+            .add_orders(origin, validated.into_iter().map(|(_, tx)| tx));
         Ok(transactions)
     }
 
@@ -367,7 +367,7 @@ where
         self.pool.add_pending_listener(kind)
     }
 
-    fn new_transactions_listener_for(
+    fn new_orders_listener_for(
         &self,
         kind: TransactionListenerKind
     ) -> Receiver<NewTransactionEvent<Self::Order>> {

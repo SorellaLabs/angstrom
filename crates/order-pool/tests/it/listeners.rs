@@ -72,8 +72,8 @@ async fn txpool_listener_new_propagate_only() {
     let mut mock_tx_factory = MockTransactionFactory::default();
     let transaction = mock_tx_factory.create_eip1559();
     let expected = *transaction.hash();
-    let mut listener_network = txpool.new_transactions_listener();
-    let mut listener_all = txpool.new_transactions_listener_for(TransactionListenerKind::All);
+    let mut listener_network = txpool.new_orders_listener();
+    let mut listener_all = txpool.new_orders_listener_for(TransactionListenerKind::All);
     let result = txpool
         .add_transaction(OrderOrigin::Local, transaction.transaction.clone())
         .await;

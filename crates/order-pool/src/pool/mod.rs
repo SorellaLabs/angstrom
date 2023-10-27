@@ -344,7 +344,7 @@ where
 
     /// Add a single validated transaction into the pool.
     ///
-    /// Note: this is only used internally by [`Self::add_transactions()`], all
+    /// Note: this is only used internally by [`Self::add_orders()`], all
     /// new transaction(s) come in through that function, either as a batch
     /// or `std::iter::once`.
     fn add_transaction(
@@ -403,7 +403,7 @@ where
         }
     }
 
-    pub(crate) fn add_transaction_and_subscribe(
+    pub(crate) fn add_orders_and_subscribe(
         &self,
         origin: OrderOrigin,
         tx: TransactionValidationOutcome<T::Order>
@@ -412,7 +412,7 @@ where
             let mut listener = self.event_listener.write();
             listener.subscribe(tx.tx_hash())
         };
-        self.add_transactions(origin, std::iter::once(tx))
+        self.add_orders(origin, std::iter::once(tx))
             .pop()
             .expect("exists; qed")?;
         Ok(listener)
@@ -420,7 +420,7 @@ where
 
     /// Adds all transactions in the iterator to the pool, returning a list of
     /// results.
-    pub fn add_transactions(
+    pub fn add_orders(
         &self,
         origin: OrderOrigin,
         transactions: impl IntoIterator<Item = TransactionValidationOutcome<T::Order>>

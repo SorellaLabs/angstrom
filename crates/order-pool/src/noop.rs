@@ -59,7 +59,7 @@ impl OrderPool for NoopOrderPool {
         Err(PoolError::Other(hash, Box::new(NoopInsertError::new(transaction))))
     }
 
-    async fn add_transactions(
+    async fn add_orders(
         &self,
         _origin: OrderOrigin,
         transactions: Vec<Self::Order>
@@ -88,11 +88,11 @@ impl OrderPool for NoopOrderPool {
         mpsc::channel(1).1
     }
 
-    fn new_transactions_listener(&self) -> Receiver<NewTransactionEvent<Self::Order>> {
+    fn new_orders_listener(&self) -> Receiver<NewTransactionEvent<Self::Order>> {
         mpsc::channel(1).1
     }
 
-    fn new_transactions_listener_for(
+    fn new_orders_listener_for(
         &self,
         _kind: TransactionListenerKind
     ) -> Receiver<NewTransactionEvent<Self::Order>> {

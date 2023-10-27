@@ -19,7 +19,7 @@ impl EthHandle {
 impl EthSubscribe for EthHandle {
     async fn subscribe_new_blocks(&self) -> ReceiverStream<Block<H256>> {
         let (tx, rx) = channel(5);
-        let rec = ReceiverStream::new(rx);
+        let rec: ReceiverStream<EthNetworkEvent> = ReceiverStream::new(rx);
         let _ = self.sender.try_send(EthCommand::Subscribe(tx));
 
         todo!()

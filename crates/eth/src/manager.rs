@@ -18,7 +18,25 @@ use crate::{
     relay_sender::RelaySender
 };
 
-pub enum EthNetworkEvent {}
+pub enum EthNetworkEvent {
+    NewBlock(Block<H256>),
+    NewSyncBlock(Block<H256>),
+    NewSubmission(Result<(), PendingBundleError>)
+}
+
+impl EthNetworkEvent {
+    pub fn is_new_block(&self) -> bool {
+        matches!(self, EthNetworkEvent::NewBlock(_))
+    }
+
+    pub fn is_sync_block(&self) -> bool {
+        matches!(self, EthNetworkEvent::NewSyncBlock(_))
+    }
+
+    pub fn is_submission(&self) -> bool {
+        matches!(self, EthNetworkEvent::NewSubmission(_))
+    }
+}
 
 /// Holds all of our eth network state
 pub struct EthNetworkManager<M: Middleware + 'static>

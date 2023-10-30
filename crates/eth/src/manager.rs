@@ -19,21 +19,31 @@ use crate::{
 };
 
 pub enum EthNetworkEvent {
-    NewBlock(Block<H256>),
-    NewSyncBlock(Block<H256>),
+    NewBlock(Arc<Block<H256>>),
+    NewSyncBlock(Arc<Block<H256>>),
     NewSubmission(Result<(), PendingBundleError>)
 }
 
 impl EthNetworkEvent {
-    pub fn is_new_block(&self) -> bool {
+    pub fn try_new_block(&self) -> Option<Arc<Block<H256>>> {
+        let Self::NewBlock(b) = self else { return None };
+        Some(b.clone())
+    }
+
+    pub fn try_sync_block(&self) -> Option<Arc<Block<H256>>> {
+        let Self::NewSyncBlock(b) = self else { return None };
+        Some(b.clone())
+    }
+
+    pub const fn is_new_block(&self) -> bool {
         matches!(self, EthNetworkEvent::NewBlock(_))
     }
 
-    pub fn is_sync_block(&self) -> bool {
+    pub const fn is_sync_block(&self) -> bool {
         matches!(self, EthNetworkEvent::NewSyncBlock(_))
     }
 
-    pub fn is_submission(&self) -> bool {
+    pub const fn is_submission(&self) -> bool {
         matches!(self, EthNetworkEvent::NewSubmission(_))
     }
 }

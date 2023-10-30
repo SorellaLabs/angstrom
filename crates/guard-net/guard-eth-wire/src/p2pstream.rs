@@ -14,7 +14,7 @@ use reth_codecs::{derive_arbitrary, Compact};
 use reth_metrics::metrics::counter;
 use reth_primitives::{
     bytes::{Buf, BufMut, Bytes, BytesMut},
-    hex, keccak256, Address, PeerId, Signature, H256, H512
+    hex, keccak256, Address, PeerId, Signature, B512, H256
 };
 use secp256k1::{
     ecdsa::{RecoverableSignature, RecoveryId},
@@ -194,13 +194,13 @@ where
             .try_into()
             .unwrap();
 
-        if H512::from_slice(&pub_key) != their_hello.id {
+        if B512::from_slice(&pub_key) != their_hello.id {
             self.send_disconnect(DisconnectReason::NoRecoveredSigner)
                 .await?;
             return Err(P2PStreamError::HandshakeError(P2PHandshakeError::UnableToRecoverSigner(
                 format!(
                     "Address Mismatch {:#x}, {:#x}",
-                    H512::from_slice(&pub_key),
+                    B512::from_slice(&pub_key),
                     their_hello.id
                 )
             )))
@@ -911,8 +911,8 @@ pub(crate) fn convert_sig(sig: Bytes) -> Signature {
     let s: [u8; 32] = sig[32..64].try_into().unwrap();
     let y = if sig[64] == 1 { true } else { false };
     let sig = Signature {
-        r:            reth_primitives::H256::from_slice(&r).into(),
-        s:            reth_primitives::H256::from_slice(&s).into(),
+        r:            reth_primitives::B256::from_slice(&r).into(),
+        s:            reth_primitives::B256::from_slice(&s).into(),
         odd_y_parity: y
     };
 

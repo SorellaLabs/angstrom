@@ -1,7 +1,7 @@
 use alloy_rlp::{RlpDecodable, RlpEncodable};
 use guard_discv4::DEFAULT_DISCOVERY_PORT;
 use reth_codecs::derive_arbitrary;
-use reth_primitives::{constants::RETH_CLIENT_VERSION, PeerId, H256};
+use reth_primitives::{constants::RETH_CLIENT_VERSION, PeerId, B256};
 use secp256k1::ecdsa::RecoverableSignature;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ pub struct HelloMessage {
     /// not listening.
     pub port:             u16,
     /// Signed Noop "Hello" message to allow public key verification
-    pub signed_hello:     H256,
+    pub signed_hello:     B256,
     /// Signature from signing the above message
     pub signature:        Vec<u8>,
     /// recovery id for sig

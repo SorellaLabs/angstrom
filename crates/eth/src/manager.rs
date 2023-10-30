@@ -44,9 +44,9 @@ where
     <M as Middleware>::Provider: PubsubClient
 {
     /// our command receiver
-    commander:       ReceiverStream<EthCommand>,
+    _commander:       ReceiverStream<EthCommand>,
     /// people listening to events
-    event_listeners: Vec<Sender<EthNetworkEvent>>,
+    _event_listeners: Vec<Sender<EthNetworkEvent>>,
 
     /// for the leader to submit to relays
     relay_sender: RelaySender<M>,
@@ -69,7 +69,7 @@ where
         let stream = ReceiverStream::new(rx);
 
         let this =
-            Self { relay_sender, block_stream, commander: stream, event_listeners: Vec::new() };
+            Self { relay_sender, block_stream, _commander: stream, _event_listeners: Vec::new() };
         let handle = EthHandle::new(tx);
         tokio::spawn(this);
 

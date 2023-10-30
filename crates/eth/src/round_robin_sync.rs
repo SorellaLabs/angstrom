@@ -5,7 +5,7 @@ use std::{
 };
 
 use ethers_core::types::{Block, H256};
-use ethers_providers::{Middleware, ProviderError};
+use ethers_providers::Middleware;
 use futures::Stream;
 use futures_util::{Future, FutureExt};
 
@@ -36,10 +36,7 @@ impl<M: Middleware> RoundRobinSync<M> {
 impl<M: Middleware> Stream for RoundRobinSync<M> {
     type Item = Block<H256>;
 
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>
-    ) -> std::task::Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // TODO: clean this shit up
         if let Poll::Ready(val) = self.catchup.poll_unpin(cx) {
             let res = val.unwrap();

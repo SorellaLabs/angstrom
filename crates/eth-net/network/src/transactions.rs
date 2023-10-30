@@ -25,7 +25,7 @@ use reth_primitives::{
 use alloy_rlp::Encodable;
 use order_pool::{
     error::PoolResult, GetPooledTransactionLimit,  PoolOrder, PropagateKind,
-    PropagatedTransactions, TransactionPool, ValidPoolTransaction,
+    PropagatedTransactions, TransactionPool, ValidPoolOrder,
 };
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -711,7 +711,7 @@ enum PooledTransactionsHashesBuilder {
 
 impl PooledTransactionsHashesBuilder {
     /// Push a transaction from the pool to the list.
-    fn push_pooled<T:  PoolOrder>(&mut self, pooled_tx: Arc<ValidPoolTransaction<T>>) {
+    fn push_pooled<T:  PoolOrder>(&mut self, pooled_tx: Arc<ValidPoolOrder<T>>) {
         match self {
             PooledTransactionsHashesBuilder::Eth66(msg) => msg.0.push(*pooled_tx.hash()),
             PooledTransactionsHashesBuilder::Eth68(msg) => {
@@ -833,7 +833,7 @@ enum TransactionsCommand {
 /// All events related to transactions emitted by the network.
 #[derive(Debug)]
 #[allow(missing_docs)]
-pub enum NetworkTransactionEvent {
+pub enum NetworkOrderEvents{
     /// Received list of transactions from the given peer.
     ///
     /// This represents transactions that were broadcasted to use from the peer.

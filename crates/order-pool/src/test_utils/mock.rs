@@ -20,12 +20,12 @@ use crate::{
     identifier::{SenderIdentifiers, TransactionId},
     pool::txpool::TxPool,
     traits::OrderOrigin,
-    OrderSorting, PoolOrder, Priority, ValidPoolTransaction
+    OrderSorting, PoolOrder, Priority, ValidPoolOrder
 };
 
 pub type MockTxPool = TxPool<MockOrdering>;
 
-pub type MockValidTx = ValidPoolTransaction<MockTransaction>;
+pub type MockValidTx = ValidPoolOrder<MockTransaction>;
 
 /// Create an empty `TxPool`
 pub fn mock_tx_pool() -> MockTxPool {

@@ -9,7 +9,7 @@ use tracing::debug;
 
 use crate::{
     identifier::TransactionId, pool::pending::PendingTransaction, OrderSorting, PoolOrder,
-    ValidPoolTransaction
+    ValidPoolOrder
 };
 
 /// An iterator that returns transactions that can be executed on the current
@@ -36,7 +36,7 @@ impl<T: OrderSorting> crate::traits::BestTransactions for BestTransactionsWithBa
 }
 
 impl<T: OrderSorting> Iterator for BestTransactionsWithBasefee<T> {
-    type Item = Arc<ValidPoolTransaction<T::Order>>;
+    type Item = Arc<ValidPoolOrder<T::Order>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // find the next transaction that satisfies the base fee
@@ -86,7 +86,7 @@ pub(crate) struct BestTransactions<T: OrderSorting> {
 
 impl<T: OrderSorting> BestTransactions<T> {
     /// Mark the transaction and it's descendants as invalid.
-    pub(crate) fn mark_invalid(&mut self, tx: &Arc<ValidPoolTransaction<T::Order>>) {
+    pub(crate) fn mark_invalid(&mut self, tx: &Arc<ValidPoolOrder<T::Order>>) {
         self.invalid.insert(*tx.hash());
     }
 
@@ -149,7 +149,7 @@ impl<T: OrderSorting> crate::traits::BestTransactions for BestTransactions<T> {
 }
 
 impl<T: OrderSorting> Iterator for BestTransactions<T> {
-    type Item = Arc<ValidPoolTransaction<T::Order>>;
+    type Item = Arc<ValidPoolOrder<T::Order>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {

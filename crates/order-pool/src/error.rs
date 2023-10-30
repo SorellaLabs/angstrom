@@ -42,7 +42,7 @@ pub enum PoolError {
     DiscardedOnInsert(TxHash),
     /// Thrown when the transaction is considered invalid.
     #[error("[{0:?}] {1:?}")]
-    InvalidTransaction(TxHash, InvalidPoolTransactionError),
+    InvalidTransaction(TxHash, InValidPoolOrderError),
     /// Thrown if the mutual exclusivity constraint (blob vs normal transaction)
     /// is violated.
     #[error("[{1:?}] Transaction type {2} conflicts with existing transaction for {0:?}")]
@@ -75,7 +75,7 @@ impl PoolError {
     /// peer penalization.
     ///
     /// Not all error variants are caused by the incorrect composition of the
-    /// transaction (See also [InvalidPoolTransactionError]) and can be
+    /// transaction (See also [InValidPoolOrderError]) and can be
     /// caused by the current state of the transaction pool. For example the
     /// transaction pool is already full or the error was caused my an
     /// internal error, such as database errors.
@@ -169,7 +169,7 @@ pub enum Eip4844PoolTransactionError {
 ///
 /// See [OrderValidator](crate::OrderValidator).
 #[derive(Debug, thiserror::Error)]
-pub enum InvalidPoolTransactionError {
+pub enum InValidPoolOrderError {
     /// Hard consensus errors
     #[error(transparent)]
     Consensus(#[from] InvalidTransactionError),
@@ -205,9 +205,9 @@ pub enum InvalidPoolTransactionError {
     IntrinsicGasTooLow
 }
 
-// === impl InvalidPoolTransactionError ===
+// === impl InValidPoolOrderError ===
 
-impl InvalidPoolTransactionError {
+impl InValidPoolOrderError {
     /// Returns `true` if the error was caused by a transaction that is
     /// considered bad in the context of the transaction pool and warrants
     /// peer penalization.
@@ -216,7 +216,7 @@ impl InvalidPoolTransactionError {
     #[inline]
     fn is_bad_transaction(&self) -> bool {
         match self {
-            InvalidPoolTransactionError::Consensus(err) => {
+            InValidPoolOrderError::Consensus(err) => {
                 // transaction considered invalid by the consensus rules
                 // We do not consider the following errors to be erroneous transactions, since
                 // they depend on dynamic environmental conditions and should
@@ -251,17 +251,17 @@ impl InvalidPoolTransactionError {
                     InvalidTransactionError::SignerAccountHasBytecode => true
                 }
             }
-            InvalidPoolTransactionError::ExceedsGasLimit(..) => true,
-            InvalidPoolTransactionError::ExceedsMaxInitCodeSize(..) => true,
-            InvalidPoolTransactionError::OversizedData(..) => true,
-            InvalidPoolTransactionError::Underpriced => {
+            InValidPoolOrderError::ExceedsGasLimit(..) => true,
+            InValidPoolOrderError::ExceedsMaxInitCodeSize(..) => true,
+            InValidPoolOrderError::OversizedData(..) => true,
+            InValidPoolOrderError::Underpriced => {
                 // local setting
                 false
             }
-            InvalidPoolTransactionError::IntrinsicGasTooLow => true,
-            InvalidPoolTransactionError::Overdraft => false,
-            InvalidPoolTransactionError::Other(err) => err.is_bad_transaction(),
-            InvalidPoolTransactionError::Eip4844(eip4844_err) => {
+            InValidPoolOrderError::IntrinsicGasTooLow => true,
+            InValidPoolOrderError::Overdraft => false,
+            InValidPoolOrderError::Other(err) => err.is_bad_transaction(),
+            InValidPoolOrderError::Eip4844(eip4844_err) => {
                 match eip4844_err {
                     Eip4844PoolTransactionError::MissingEip4844BlobSidecar => {
                         // this is only reachable when blob transactions are reinjected and we're

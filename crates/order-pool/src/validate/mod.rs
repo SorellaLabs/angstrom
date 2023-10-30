@@ -7,7 +7,7 @@ use reth_primitives::{
 };
 
 use crate::{
-    error::InvalidPoolTransactionError,
+    error::InValidPoolOrderError,
     identifier::{SenderId, TransactionId},
     traits::{OrderOrigin, PoolOrder}
 };
@@ -45,7 +45,7 @@ pub enum TransactionValidationOutcome<T: PoolOrder> {
     },
     /// The transaction is considered invalid indefinitely: It violates
     /// constraints that prevent this transaction from ever becoming valid.
-    Invalid(T, InvalidPoolTransactionError),
+    Invalid(T, InValidPoolOrderError),
     /// An error occurred while trying to validate the transaction
     Error(TxHash, Box<dyn std::error::Error + Send + Sync>)
 }
@@ -131,7 +131,7 @@ pub trait OrderValidator: Send + Sync {
 ///
 /// For EIP-4844 blob transactions this will _not_ contain the blob sidecar
 /// which is stored separately in the [BlobStore](crate::blobstore::BlobStore).
-pub struct ValidPoolTransaction<T: PoolOrder> {
+pub struct ValidPoolOrder<T: PoolOrder> {
     /// The transaction
     pub transaction:    T,
     /// The identifier for this transaction.
@@ -144,9 +144,9 @@ pub struct ValidPoolTransaction<T: PoolOrder> {
     pub origin:         OrderOrigin
 }
 
-// === impl ValidPoolTransaction ===
+// === impl ValidPoolOrder ===
 
-impl<T: PoolOrder> ValidPoolTransaction<T> {
+impl<T: PoolOrder> ValidPoolOrder<T> {
     /// Returns the hash of the transaction.
     pub fn hash(&self) -> &TxHash {
         self.transaction.hash()
@@ -235,14 +235,14 @@ impl<T: PoolOrder> ValidPoolTransaction<T> {
     }
 }
 
-impl<T: PoolOrder> IntoRecoveredTransaction for ValidPoolTransaction<T> {
+impl<T: PoolOrder> IntoRecoveredTransaction for ValidPoolOrder<T> {
     fn to_recovered_transaction(&self) -> TransactionSignedEcRecovered {
         self.transaction.to_recovered_transaction()
     }
 }
 
 #[cfg(test)]
-impl<T: FullOrderEvent + Clone> Clone for ValidPoolTransaction<T> {
+impl<T: FullOrderEvent + Clone> Clone for ValidPoolOrder<T> {
     fn clone(&self) -> Self {
         Self {
             transaction:    self.transaction.clone(),
@@ -254,7 +254,7 @@ impl<T: FullOrderEvent + Clone> Clone for ValidPoolTransaction<T> {
     }
 }
 
-impl<T: PoolOrder> fmt::Debug for ValidPoolTransaction<T> {
+impl<T: PoolOrder> fmt::Debug for ValidPoolOrder<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "Transaction {{ ")?;
         write!(fmt, "hash: {:?}, ", &self.transaction.hash())?;

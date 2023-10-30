@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::BTreeSet, ops::Deref, sync::Arc};
 
 use fnv::FnvHashMap;
 
-use crate::{identifier::TransactionId, pool::size::SizeTracker, PoolOrder, ValidPoolTransaction};
+use crate::{identifier::TransactionId, pool::size::SizeTracker, PoolOrder, ValidPoolOrder};
 
 /// A pool of transactions that are currently parked and are waiting for
 /// external changes (e.g. basefee, ancestor transactions, balance) that
@@ -12,7 +12,7 @@ use crate::{identifier::TransactionId, pool::size::SizeTracker, PoolOrder, Valid
 /// the same transactions.
 ///
 /// Note: This type is generic over [ParkedPool] which enforces that the
-/// underlying transaction type is [ValidPoolTransaction] wrapped in an [Arc].
+/// underlying transaction type is [ValidPoolOrder] wrapped in an [Arc].
 #[derive(Clone)]
 pub(crate) struct ParkedPool<T: ParkedOrd> {
     /// Keeps track of transactions inserted in the pool.
@@ -40,7 +40,7 @@ impl<T: ParkedOrd> ParkedPool<T> {
     /// # Panics
     ///
     /// If the transaction is already included.
-    pub(crate) fn add_transaction(&mut self, tx: Arc<ValidPoolTransaction<T::Order>>) {
+    pub(crate) fn add_transaction(&mut self, tx: Arc<ValidPoolOrder<T::Order>>) {
         let id = *tx.id();
         assert!(
             !self.by_id.contains_key(&id),
@@ -59,7 +59,7 @@ impl<T: ParkedOrd> ParkedPool<T> {
     }
 
     /// Returns an iterator over all transactions in the pool
-    pub(crate) fn all(&self) -> impl Iterator<Item = Arc<ValidPoolTransaction<T::Order>>> + '_ {
+    pub(crate) fn all(&self) -> impl Iterator<Item = Arc<ValidPoolOrder<T::Order>>> + '_ {
         self.by_id.values().map(|tx| tx.transaction.clone().into())
     }
 
@@ -67,7 +67,7 @@ impl<T: ParkedOrd> ParkedPool<T> {
     pub(crate) fn remove_transaction(
         &mut self,
         id: &TransactionId
-    ) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         // remove from queues
         let tx = self.by_id.remove(id)?;
         self.best.remove(&tx);
@@ -79,7 +79,7 @@ impl<T: ParkedOrd> ParkedPool<T> {
     }
 
     /// Removes the worst transaction from this pool.
-    pub(crate) fn pop_worst(&mut self) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn pop_worst(&mut self) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         let worst = self.best.iter().next().map(|tx| *tx.transaction.id())?;
         self.remove_transaction(&worst)
     }
@@ -128,7 +128,7 @@ impl<T: PoolOrder> ParkedPool<BasefeeOrd<T>> {
     pub(crate) fn satisfy_base_fee_transactions(
         &self,
         basefee: u64
-    ) -> Vec<Arc<ValidPoolTransaction<T>>> {
+    ) -> Vec<Arc<ValidPoolOrder<T>>> {
         let ids = self.satisfy_base_fee_ids(basefee);
         let mut txs = Vec::with_capacity(ids.len());
         for id in ids {
@@ -171,7 +171,7 @@ impl<T: PoolOrder> ParkedPool<BasefeeOrd<T>> {
     /// subpool that no longer satisfy the given basefee.
     ///
     /// Note: the transactions are not returned in a particular order.
-    pub(crate) fn enforce_basefee(&mut self, basefee: u64) -> Vec<Arc<ValidPoolTransaction<T>>> {
+    pub(crate) fn enforce_basefee(&mut self, basefee: u64) -> Vec<Arc<ValidPoolOrder<T>>> {
         let to_remove = self.satisfy_base_fee_ids(basefee);
 
         let mut removed = Vec::with_capacity(to_remove.len());
@@ -235,14 +235,14 @@ impl<T: ParkedOrd> Ord for ParkedPoolTransaction<T> {
 
 /// Helper trait used for custom `Ord` wrappers around a transaction.
 ///
-/// This is effectively a wrapper for `Arc<ValidPoolTransaction>` with custom
+/// This is effectively a wrapper for `Arc<ValidPoolOrder>` with custom
 /// `Ord` implementation.
 pub(crate) trait ParkedOrd:
     Ord
     + Clone
-    + From<Arc<ValidPoolTransaction<Self::Order>>>
-    + Into<Arc<ValidPoolTransaction<Self::Order>>>
-    + Deref<Target = Arc<ValidPoolTransaction<Self::Order>>>
+    + From<Arc<ValidPoolOrder<Self::Order>>>
+    + Into<Arc<ValidPoolOrder<Self::Order>>>
+    + Deref<Target = Arc<ValidPoolOrder<Self::Order>>>
 {
     /// The wrapper order type.
     type Order: PoolOrder;
@@ -271,7 +271,7 @@ macro_rules! impl_ord_wrapper {
             }
         }
         impl<T: PoolOrder> Deref for $name<T> {
-            type Target = Arc<ValidPoolTransaction<T>>;
+            type Target = Arc<ValidPoolOrder<T>>;
 
             fn deref(&self) -> &Self::Target {
                 &self.0
@@ -282,28 +282,28 @@ macro_rules! impl_ord_wrapper {
             type Order = T;
         }
 
-        impl<T: PoolOrder> From<Arc<ValidPoolTransaction<T>>> for $name<T> {
-            fn from(value: Arc<ValidPoolTransaction<T>>) -> Self {
+        impl<T: PoolOrder> From<Arc<ValidPoolOrder<T>>> for $name<T> {
+            fn from(value: Arc<ValidPoolOrder<T>>) -> Self {
                 Self(value)
             }
         }
 
-        impl<T: PoolOrder> From<$name<T>> for Arc<ValidPoolTransaction<T>> {
-            fn from(value: $name<T>) -> Arc<ValidPoolTransaction<T>> {
+        impl<T: PoolOrder> From<$name<T>> for Arc<ValidPoolOrder<T>> {
+            fn from(value: $name<T>) -> Arc<ValidPoolOrder<T>> {
                 value.0
             }
         }
     };
 }
 
-/// A new type wrapper for [`ValidPoolTransaction`]
+/// A new type wrapper for [`ValidPoolOrder`]
 ///
 /// This sorts transactions by their base fee.
 ///
 /// Caution: This assumes all transaction in the `BaseFee` sub-pool have a fee
 /// value.
 #[derive(Debug)]
-pub(crate) struct BasefeeOrd<T: PoolOrder>(Arc<ValidPoolTransaction<T>>);
+pub(crate) struct BasefeeOrd<T: PoolOrder>(Arc<ValidPoolOrder<T>>);
 
 impl_ord_wrapper!(BasefeeOrd);
 
@@ -316,7 +316,7 @@ impl<T: PoolOrder> Ord for BasefeeOrd<T> {
     }
 }
 
-/// A new type wrapper for [`ValidPoolTransaction`]
+/// A new type wrapper for [`ValidPoolOrder`]
 ///
 /// This sorts transactions by their distance.
 ///
@@ -327,7 +327,7 @@ impl<T: PoolOrder> Ord for BasefeeOrd<T> {
 /// case these are equal, it compares the timestamps when the transactions were
 /// created.
 #[derive(Debug)]
-pub(crate) struct QueuedOrd<T: PoolOrder>(Arc<ValidPoolTransaction<T>>);
+pub(crate) struct QueuedOrd<T: PoolOrder>(Arc<ValidPoolOrder<T>>);
 
 impl_ord_wrapper!(QueuedOrd);
 

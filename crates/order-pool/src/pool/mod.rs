@@ -101,7 +101,7 @@ use crate::{
         AllPoolTransactions, BlockInfo, NewTransactionEvent, OrderOrigin, PoolOrder, PoolSize,
         PropagatedTransactions
     },
-    validate::{TransactionValidationOutcome, ValidPoolTransaction},
+    validate::{TransactionValidationOutcome, ValidPoolOrder},
     CanonicalStateUpdate, ChangedAccount, OrderSorting, OrderValidator, PoolConfig
 };
 mod events;
@@ -109,11 +109,11 @@ pub use events::{FullOrderEvent, TransactionEvent};
 
 mod listener;
 use alloy_rlp::Encodable;
-pub use listener::{AllTransactionsEvents, TransactionEvents};
+pub use listener::{AllTransactionsEvents, OrderEvents};
 
 use crate::{
     pool::txpool::UpdateOutcome,
-    traits::{GetPooledTransactionLimit, TransactionListenerKind}
+    traits::{GetPooledTransactionLimit, OrderListenerKind}
 };
 
 mod best;
@@ -222,7 +222,7 @@ where
 
     /// Adds a new transaction listener to the pool that gets notified about
     /// every new _pending_ transaction inserted into the pool
-    pub fn add_pending_listener(&self, kind: TransactionListenerKind) -> mpsc::Receiver<TxHash> {
+    pub fn add_pending_listener(&self, kind: OrderListenerKind) -> mpsc::Receiver<TxHash> {
         let (sender, rx) = mpsc::channel(PENDING_TX_LISTENER_BUFFER_SIZE);
         let listener = PendingTransactionHashListener { sender, kind };
         self.pending_transaction_listener.lock().push(listener);
@@ -233,7 +233,7 @@ where
     /// every new transaction.
     pub fn add_new_transaction_listener(
         &self,
-        kind: TransactionListenerKind
+        kind: OrderListenerKind
     ) -> mpsc::Receiver<NewTransactionEvent<T::Order>> {
         let (sender, rx) = mpsc::channel(NEW_TX_LISTENER_BUFFER_SIZE);
         let listener = TransactionListener { sender, kind };
@@ -243,10 +243,7 @@ where
 
     /// If the pool contains the transaction, this adds a new listener that gets
     /// notified about transaction events.
-    pub(crate) fn add_transaction_event_listener(
-        &self,
-        tx_hash: TxHash
-    ) -> Option<TransactionEvents> {
+    pub(crate) fn add_transaction_event_listener(&self, tx_hash: TxHash) -> Option<OrderEvents> {
         let pool = self.pool.read();
         if pool.contains(&tx_hash) {
             Some(self.event_listener.write().subscribe(tx_hash))
@@ -271,7 +268,7 @@ where
     }
 
     /// Returns _all_ transactions in the pool.
-    pub(crate) fn pooled_transactions(&self) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn pooled_transactions(&self) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         let pool = self.pool.read();
         pool.all()
             .transactions_iter()
@@ -347,10 +344,10 @@ where
     /// Note: this is only used internally by [`Self::add_orders()`], all
     /// new transaction(s) come in through that function, either as a batch
     /// or `std::iter::once`.
-    fn add_transaction(
+    fn add_order(
         &self,
         origin: OrderOrigin,
-        tx: TransactionValidationOutcome<T::Order>
+        order: TransactionValidationOutcome<T::Order>
     ) -> PoolResult<TxHash> {
         match tx {
             TransactionValidationOutcome::Valid {
@@ -363,7 +360,7 @@ where
                 let transaction_id = TransactionId::new(sender_id, transaction.nonce());
                 let _encoded_length = transaction.encoded_length();
 
-                let tx = ValidPoolTransaction {
+                let tx = ValidPoolOrder {
                     transaction,
                     transaction_id,
                     propagate,
@@ -407,7 +404,7 @@ where
         &self,
         origin: OrderOrigin,
         tx: TransactionValidationOutcome<T::Order>
-    ) -> PoolResult<TransactionEvents> {
+    ) -> PoolResult<OrderEvents> {
         let listener = {
             let mut listener = self.event_listener.write();
             listener.subscribe(tx.tx_hash())
@@ -553,17 +550,17 @@ where
     pub(crate) fn best_transactions_with_base_fee(
         &self,
         base_fee: u64
-    ) -> Box<dyn crate::traits::BestTransactions<Item = Arc<ValidPoolTransaction<T::Order>>>> {
+    ) -> Box<dyn crate::traits::BestTransactions<Item = Arc<ValidPoolOrder<T::Order>>>> {
         self.pool.read().best_transactions_with_base_fee(base_fee)
     }
 
     /// Returns all transactions from the pending sub-pool
-    pub(crate) fn pending_transactions(&self) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn pending_transactions(&self) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         self.pool.read().pending_transactions()
     }
 
     /// Returns all transactions from parked pools
-    pub(crate) fn queued_transactions(&self) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn queued_transactions(&self) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         self.pool.read().queued_transactions()
     }
 
@@ -580,7 +577,7 @@ where
     pub(crate) fn remove_transactions(
         &self,
         hashes: Vec<TxHash>
-    ) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         if hashes.is_empty() {
             return Vec::new()
         }
@@ -603,7 +600,7 @@ where
     }
 
     /// Returns the transaction by hash.
-    pub(crate) fn get(&self, tx_hash: &TxHash) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn get(&self, tx_hash: &TxHash) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         self.pool.read().get(tx_hash)
     }
 
@@ -611,7 +608,7 @@ where
     pub(crate) fn get_transactions_by_sender(
         &self,
         sender: Address
-    ) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         let sender_id = self.get_sender_id(sender);
         self.pool.read().get_transactions_by_sender(sender_id)
     }
@@ -619,7 +616,7 @@ where
     /// Returns all the transactions belonging to the hashes.
     ///
     /// If no transaction exists, it is skipped.
-    pub(crate) fn get_all(&self, txs: Vec<TxHash>) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn get_all(&self, txs: Vec<TxHash>) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         if txs.is_empty() {
             return Vec::new()
         }
@@ -674,7 +671,7 @@ struct PendingTransactionHashListener {
     sender: mpsc::Sender<TxHash>,
     /// Whether to include transactions that should not be propagated over the
     /// network.
-    kind:   TransactionListenerKind
+    kind:   OrderListenerKind
 }
 
 impl PendingTransactionHashListener {
@@ -709,7 +706,7 @@ struct TransactionListener<T: PoolOrder> {
     sender: mpsc::Sender<NewTransactionEvent<T>>,
     /// Whether to include transactions that should not be propagated over the
     /// network.
-    kind:   TransactionListenerKind
+    kind:   OrderListenerKind
 }
 
 impl<T: PoolOrder> TransactionListener<T> {
@@ -749,24 +746,24 @@ impl<T: PoolOrder> TransactionListener<T> {
 #[derive(Debug, Clone)]
 pub struct AddedPendingTransaction<T: PoolOrder> {
     /// Inserted transaction.
-    transaction: Arc<ValidPoolTransaction<T>>,
+    transaction: Arc<ValidPoolOrder<T>>,
     /// Replaced transaction.
-    replaced:    Option<Arc<ValidPoolTransaction<T>>>,
+    replaced:    Option<Arc<ValidPoolOrder<T>>>,
     /// transactions promoted to the pending queue
-    promoted:    Vec<Arc<ValidPoolTransaction<T>>>,
+    promoted:    Vec<Arc<ValidPoolOrder<T>>>,
     /// transactions that failed and became discarded
-    discarded:   Vec<Arc<ValidPoolTransaction<T>>>
+    discarded:   Vec<Arc<ValidPoolOrder<T>>>
 }
 
 impl<T: PoolOrder> AddedPendingTransaction<T> {
     /// Returns all transactions that were promoted to the pending pool and
-    /// adhere to the given [TransactionListenerKind].
+    /// adhere to the given [OrderListenerKind].
     ///
-    /// If the kind is [TransactionListenerKind::PropagateOnly], then only
+    /// If the kind is [OrderListenerKind::PropagateOnly], then only
     /// transactions that are allowed to be propagated are returned.
     pub(crate) fn pending_transactions(
         &self,
-        kind: TransactionListenerKind
+        kind: OrderListenerKind
     ) -> impl Iterator<Item = B256> + '_ {
         let iter = std::iter::once(&self.transaction).chain(self.promoted.iter());
         PendingTransactionIter { kind, iter }
@@ -779,13 +776,13 @@ impl<T: PoolOrder> AddedPendingTransaction<T> {
 }
 
 pub(crate) struct PendingTransactionIter<Iter> {
-    kind: TransactionListenerKind,
+    kind: OrderListenerKind,
     iter: Iter
 }
 
 impl<'a, Iter, T> Iterator for PendingTransactionIter<Iter>
 where
-    Iter: Iterator<Item = &'a Arc<ValidPoolTransaction<T>>>,
+    Iter: Iterator<Item = &'a Arc<ValidPoolOrder<T>>>,
     T: PoolOrder + 'a
 {
     type Item = B256;
@@ -803,13 +800,13 @@ where
 
 /// An iterator over full pending transactions
 pub(crate) struct FullPendingTransactionIter<Iter> {
-    kind: TransactionListenerKind,
+    kind: OrderListenerKind,
     iter: Iter
 }
 
 impl<'a, Iter, T> Iterator for FullPendingTransactionIter<Iter>
 where
-    Iter: Iterator<Item = &'a Arc<ValidPoolTransaction<T>>>,
+    Iter: Iterator<Item = &'a Arc<ValidPoolOrder<T>>>,
     T: PoolOrder + 'a
 {
     type Item = NewTransactionEvent<T>;
@@ -820,10 +817,7 @@ where
             if self.kind.is_propagate_only() && !next.propagate {
                 continue
             }
-            return Some(NewTransactionEvent {
-                subpool:     SubPool::Pending,
-                transaction: next.clone()
-            })
+            return Some(NewOrderEvents { subpool: SubPool::Pending, transaction: next.clone() })
         }
     }
 }
@@ -837,9 +831,9 @@ pub enum AddedTransaction<T: PoolOrder> {
     /// moved to a parked pool instead.
     Parked {
         /// Inserted transaction.
-        transaction: Arc<ValidPoolTransaction<T>>,
+        transaction: Arc<ValidPoolOrder<T>>,
         /// Replaced transaction.
-        replaced:    Option<Arc<ValidPoolTransaction<T>>>,
+        replaced:    Option<Arc<ValidPoolOrder<T>>>,
         /// The subpool it was moved to.
         subpool:     SubPool
     }
@@ -855,7 +849,7 @@ impl<T: PoolOrder> AddedTransaction<T> {
     }
 
     /// Returns the replaced transaction if there was one
-    pub(crate) fn replaced(&self) -> Option<&Arc<ValidPoolTransaction<T>>> {
+    pub(crate) fn replaced(&self) -> Option<&Arc<ValidPoolOrder<T>>> {
         match self {
             AddedTransaction::Pending(tx) => tx.replaced.as_ref(),
             AddedTransaction::Parked { replaced, .. } => replaced.as_ref()
@@ -863,7 +857,7 @@ impl<T: PoolOrder> AddedTransaction<T> {
     }
 
     /// Returns the discarded transactions if there were any
-    pub(crate) fn discarded_transactions(&self) -> Option<&[Arc<ValidPoolTransaction<T>>]> {
+    pub(crate) fn discarded_transactions(&self) -> Option<&[Arc<ValidPoolOrder<T>>]> {
         match self {
             AddedTransaction::Pending(tx) => Some(&tx.discarded),
             AddedTransaction::Parked { .. } => None
@@ -917,33 +911,33 @@ pub(crate) struct OnNewCanonicalStateOutcome<T: PoolOrder> {
     /// All mined transactions.
     pub(crate) mined:      Vec<TxHash>,
     /// Transactions promoted to the pending pool.
-    pub(crate) promoted:   Vec<Arc<ValidPoolTransaction<T>>>,
+    pub(crate) promoted:   Vec<Arc<ValidPoolOrder<T>>>,
     /// transaction that were discarded during the update
-    pub(crate) discarded:  Vec<Arc<ValidPoolTransaction<T>>>
+    pub(crate) discarded:  Vec<Arc<ValidPoolOrder<T>>>
 }
 
 impl<T: PoolOrder> OnNewCanonicalStateOutcome<T> {
     /// Returns all transactions that were promoted to the pending pool and
-    /// adhere to the given [TransactionListenerKind].
+    /// adhere to the given [OrderListenerKind].
     ///
-    /// If the kind is [TransactionListenerKind::PropagateOnly], then only
+    /// If the kind is [OrderListenerKind::PropagateOnly], then only
     /// transactions that are allowed to be propagated are returned.
     pub(crate) fn pending_transactions(
         &self,
-        kind: TransactionListenerKind
+        kind: OrderListenerKind
     ) -> impl Iterator<Item = B256> + '_ {
         let iter = self.promoted.iter();
         PendingTransactionIter { kind, iter }
     }
 
     /// Returns all FULL transactions that were promoted to the pending pool and
-    /// adhere to the given [TransactionListenerKind].
+    /// adhere to the given [OrderListenerKind].
     ///
-    /// If the kind is [TransactionListenerKind::PropagateOnly], then only
+    /// If the kind is [OrderListenerKind::PropagateOnly], then only
     /// transactions that are allowed to be propagated are returned.
     pub(crate) fn full_pending_transactions(
         &self,
-        kind: TransactionListenerKind
+        kind: OrderListenerKind
     ) -> impl Iterator<Item = NewTransactionEvent<T>> + '_ {
         let iter = self.promoted.iter();
         FullPendingTransactionIter { kind, iter }

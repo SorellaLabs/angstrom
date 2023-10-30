@@ -13,7 +13,7 @@ use reth_tasks::TaskSpawner;
 use tokio::sync::Mutex;
 
 use crate::{
-    error::InvalidPoolTransactionError,
+    error::InValidPoolOrderError,
     traits::OrderOrigin,
     validate::{ValidationTask, TX_MAX_SIZE},
     OrderValidator, PoolOrder, TransactionValidationOutcome, TransactionValidationTaskExecutor
@@ -126,7 +126,7 @@ where
             let size = transaction.size();
             return TransactionValidationOutcome::Invalid(
                 transaction,
-                InvalidPoolTransactionError::OversizedData(size, TX_MAX_SIZE)
+                InValidPoolOrderError::OversizedData(size, TX_MAX_SIZE)
             )
         }
 
@@ -153,7 +153,7 @@ where
         if transaction.gas_limit() < calculate_intrinsic_gas(transaction.kind()) {
             return TransactionValidationOutcome::Invalid(
                 transaction,
-                InvalidPoolTransactionError::IntrinsicGasTooLow
+                InValidPoolOrderError::IntrinsicGasTooLow
             )
         }*/
 
@@ -362,12 +362,9 @@ impl ForkTracker {
 pub fn ensure_max_init_code_size<T: PoolOrder>(
     transaction: &T,
     max_init_code_size: usize
-) -> Result<(), InvalidPoolTransactionError> {
+) -> Result<(), InValidPoolOrderError> {
     if transaction.kind().is_create() && transaction.input().len() > max_init_code_size {
-        Err(InvalidPoolTransactionError::ExceedsMaxInitCodeSize(
-            transaction.size(),
-            max_init_code_size
-        ))
+        Err(InValidPoolOrderError::ExceedsMaxInitCodeSize(transaction.size(), max_init_code_size))
     } else {
         Ok(())
     }

@@ -10,10 +10,10 @@ use tokio::sync::{mpsc, mpsc::Receiver};
 
 use crate::{
     error::PoolError,
-    traits::{GetPooledTransactionLimit, TransactionListenerKind},
+    traits::{GetPooledTransactionLimit, OrderListenerKind},
     AllPoolTransactions, AllTransactionsEvents, AngstromPooledOrder, BestTransactions, BlockInfo,
     NewTransactionEvent, OrderOrigin, OrderPool, OrderValidator, PoolOrder, PoolResult, PoolSize,
-    PropagatedTransactions, TransactionEvents, TransactionValidationOutcome, ValidPoolTransaction
+    PropagatedTransactions, OrderEvents, TransactionValidationOutcome, ValidPoolOrder
 };
 
 /// A [`TransactionPool`] implementation that does nothing.
@@ -45,7 +45,7 @@ impl OrderPool for NoopOrderPool {
         &self,
         _origin: OrderOrigin,
         transaction: Self::Order
-    ) -> PoolResult<TransactionEvents> {
+    ) -> PoolResult<OrderEvents> {
         let hash = *transaction.hash();
         Err(PoolError::Other(hash, Box::new(NoopInsertError::new(transaction))))
     }
@@ -73,7 +73,7 @@ impl OrderPool for NoopOrderPool {
             .collect())
     }
 
-    fn transaction_event_listener(&self, _tx_hash: TxHash) -> Option<TransactionEvents> {
+    fn transaction_event_listener(&self, _tx_hash: TxHash) -> Option<OrderEvents> {
         None
     }
 
@@ -81,10 +81,7 @@ impl OrderPool for NoopOrderPool {
         AllTransactionsEvents { events: mpsc::channel(1).1 }
     }
 
-    fn pending_transactions_listener_for(
-        &self,
-        _kind: TransactionListenerKind
-    ) -> Receiver<TxHash> {
+    fn pending_transactions_listener_for(&self, _kind: OrderListenerKind) -> Receiver<TxHash> {
         mpsc::channel(1).1
     }
 
@@ -94,7 +91,7 @@ impl OrderPool for NoopOrderPool {
 
     fn new_orders_listener_for(
         &self,
-        _kind: TransactionListenerKind
+        _kind: OrderListenerKind
     ) -> Receiver<NewTransactionEvent<Self::Order>> {
         mpsc::channel(1).1
     }
@@ -107,11 +104,11 @@ impl OrderPool for NoopOrderPool {
         vec![]
     }
 
-    fn pooled_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn pooled_transactions(&self) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         vec![]
     }
 
-    fn pooled_transactions_max(&self, _max: usize) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn pooled_transactions_max(&self, _max: usize) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         vec![]
     }
 
@@ -125,22 +122,22 @@ impl OrderPool for NoopOrderPool {
 
     fn best_transactions(
         &self
-    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolTransaction<Self::Order>>>> {
+    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolOrder<Self::Order>>>> {
         Box::new(std::iter::empty())
     }
 
     fn best_transactions_with_base_fee(
         &self,
         _: u64
-    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolTransaction<Self::Order>>>> {
+    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolOrder<Self::Order>>>> {
         Box::new(std::iter::empty())
     }
 
-    fn pending_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn pending_transactions(&self) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         vec![]
     }
 
-    fn queued_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn queued_transactions(&self) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         vec![]
     }
 
@@ -148,20 +145,17 @@ impl OrderPool for NoopOrderPool {
         AllPoolTransactions::default()
     }
 
-    fn remove_transactions(
-        &self,
-        _hashes: Vec<TxHash>
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn remove_transactions(&self, _hashes: Vec<TxHash>) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         vec![]
     }
 
     fn retain_unknown(&self, _hashes: &mut Vec<TxHash>) {}
 
-    fn get(&self, _tx_hash: &TxHash) -> Option<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn get(&self, _tx_hash: &TxHash) -> Option<Arc<ValidPoolOrder<Self::Order>>> {
         None
     }
-
-    fn get_all(&self, _txs: Vec<TxHash>) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+ValidPoolOrder
+    fn get_all(&self, _txs: Vec<TxHash>) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         vec![]
     }
 
@@ -170,7 +164,7 @@ impl OrderPool for NoopOrderPool {
     fn get_transactions_by_sender(
         &self,
         _sender: Address
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    ) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         vec![]
     }
 

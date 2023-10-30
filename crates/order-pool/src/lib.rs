@@ -161,13 +161,11 @@ pub use crate::{
     },
     error::PoolResult,
     ordering::{CoinbaseTipOrdering, OrderSorting, Priority},
-    pool::{
-        state::SubPool, AllTransactionsEvents, FullOrderEvent, TransactionEvent, TransactionEvents
-    },
+    pool::{state::SubPool, AllTransactionsEvents, FullOrderEvent, OrderEvents, TransactionEvent},
     traits::*,
     validate::{
         AngstromOrderValidator, OrderValidator, TransactionValidationOutcome,
-        TransactionValidationTaskExecutor, ValidPoolTransaction
+        TransactionValidationTaskExecutor, ValidPoolOrder
     }
 };
 
@@ -303,10 +301,10 @@ where
     }
 }
 
-/// implements the `TransactionPool` interface for various transaction pool API
+/// implements the `OrderPool` interface for various transaction pool API
 /// consumers.
 #[async_trait::async_trait]
-impl<V, T> OrderPool for Pool<V, T>
+impl<V, O, C, S, S> OrderPool for Pool<V, T>
 where
     V: OrderValidator,
     T: OrderSorting<Order = <V as OrderValidator>::Order>
@@ -321,13 +319,13 @@ where
         self.pool.block_info()
     }
 
-    async fn add_transaction_and_subscribe(
+    async fn add_order_and_subscribe(
         &self,
         origin: OrderOrigin,
-        transaction: Self::Order
-    ) -> PoolResult<TransactionEvents> {
-        let (_, tx) = self.validate(origin, transaction).await;
-        self.pool.add_transaction_and_subscribe(origin, tx)
+        order: Self::Order
+    ) -> PoolResult<OrderEvents> {
+        let (_, order) = self.validate(origin, order).await;
+        self.pool.add_order_and_subscribe(origin, tx)
     }
 
     async fn add_transaction(
@@ -355,7 +353,7 @@ where
         Ok(transactions)
     }
 
-    fn transaction_event_listener(&self, tx_hash: TxHash) -> Option<TransactionEvents> {
+    fn transaction_event_listener(&self, tx_hash: TxHash) -> Option<OrderEvents> {
         self.pool.add_transaction_event_listener(tx_hash)
     }
 
@@ -363,13 +361,13 @@ where
         self.pool.add_all_transactions_event_listener()
     }
 
-    fn pending_transactions_listener_for(&self, kind: TransactionListenerKind) -> Receiver<TxHash> {
+    fn pending_transactions_listener_for(&self, kind: OrderListenerKind) -> Receiver<TxHash> {
         self.pool.add_pending_listener(kind)
     }
 
     fn new_orders_listener_for(
         &self,
-        kind: TransactionListenerKind
+        kind: OrderListenerKind
     ) -> Receiver<NewTransactionEvent<Self::Order>> {
         self.pool.add_new_transaction_listener(kind)
     }
@@ -385,11 +383,11 @@ where
             .collect()
     }
 
-    fn pooled_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn pooled_transactions(&self) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         self.pool.pooled_transactions()
     }
 
-    fn pooled_transactions_max(&self, max: usize) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn pooled_transactions_max(&self, max: usize) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         self.pooled_transactions().into_iter().take(max).collect()
     }
 
@@ -403,22 +401,22 @@ where
 
     fn best_transactions(
         &self
-    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolTransaction<Self::Order>>>> {
+    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolOrder<Self::Order>>>> {
         Box::new(self.pool.best_transactions())
     }
 
     fn best_transactions_with_base_fee(
         &self,
         base_fee: u64
-    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolTransaction<Self::Order>>>> {
+    ) -> Box<dyn BestTransactions<Item = Arc<ValidPoolOrder<Self::Order>>>> {
         self.pool.best_transactions_with_base_fee(base_fee)
     }
 
-    fn pending_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn pending_transactions(&self) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         self.pool.pending_transactions()
     }
 
-    fn queued_transactions(&self) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn queued_transactions(&self) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         self.pool.queued_transactions()
     }
 
@@ -426,10 +424,7 @@ where
         self.pool.all_transactions()
     }
 
-    fn remove_transactions(
-        &self,
-        hashes: Vec<TxHash>
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn remove_transactions(&self, hashes: Vec<TxHash>) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         self.pool.remove_transactions(hashes)
     }
 
@@ -437,11 +432,11 @@ where
         self.pool.retain_unknown(hashes)
     }
 
-    fn get(&self, tx_hash: &TxHash) -> Option<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn get(&self, tx_hash: &TxHash) -> Option<Arc<ValidPoolOrder<Self::Order>>> {
         self.inner().get(tx_hash)
     }
 
-    fn get_all(&self, txs: Vec<TxHash>) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn get_all(&self, txs: Vec<TxHash>) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         self.inner().get_all(txs)
     }
 
@@ -449,10 +444,7 @@ where
         self.inner().on_propagated(txs)
     }
 
-    fn get_transactions_by_sender(
-        &self,
-        sender: Address
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Order>>> {
+    fn get_transactions_by_sender(&self, sender: Address) -> Vec<Arc<ValidPoolOrder<Self::Order>>> {
         self.pool.get_transactions_by_sender(sender)
     }
 

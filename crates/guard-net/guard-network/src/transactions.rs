@@ -23,7 +23,7 @@ use reth_primitives::{
 };
 use reth_transaction_pool::{
     error::PoolResult, GetPooledTransactionLimit, PoolTransaction, PropagateKind,
-    PropagatedTransactions, TransactionPool, ValidPoolTransaction
+    PropagatedTransactions, TransactionPool, ValidPoolOrder
 };
 use tokio::sync::{mpsc, oneshot, oneshot::error::RecvError};
 use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
@@ -875,7 +875,7 @@ impl PropagateTransaction {
     }
 
     /// Create a new instance from a pooled transaction
-    fn new<T: PoolTransaction>(tx: Arc<ValidPoolTransaction<T>>) -> Self {
+    fn new<T: PoolTransaction>(tx: Arc<ValidPoolOrder<T>>) -> Self {
         let size = tx.encoded_length();
         let transaction = Arc::new(tx.transaction.to_recovered_transaction().into_signed());
         Self { size, transaction }
@@ -921,7 +921,7 @@ impl FullTransactionsBuilder {
 // impl PooledTransactionsHashesBuilder {
 //     /// Push a transaction from the pool to the list.
 //     fn push_pooled<T: PoolTransaction>(&mut self, pooled_tx:
-// Arc<ValidPoolTransaction<T>>) {         match self {
+// Arc<ValidPoolOrder<T>>) {         match self {
 //             PooledTransactionsHashesBuilder::Eth66(msg) =>
 // msg.0.push(*pooled_tx.hash()),
 // PooledTransactionsHashesBuilder::Eth68(msg) => {
@@ -1060,7 +1060,7 @@ enum TransactionsCommand {
 /// All events related to transactions emitted by the network.
 #[derive(Debug)]
 #[allow(missing_docs)]
-pub enum NetworkTransactionEvent {
+pub enum NetworkOrderEvents {
     /// Received list of transactions from the given peer.
     ///
     /// This represents transactions that were broadcasted to use from the peer.

@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{
 use crate::{
     pool::events::{FullOrderEvent, TransactionEvent},
     traits::PropagateKind,
-    PoolOrder, ValidPoolTransaction
+    PoolOrder, ValidPoolOrder
 };
 
 /// The size of the event channel used to propagate transaction events.
@@ -26,19 +26,19 @@ const TX_POOL_EVENT_CHANNEL_SIZE: usize = 1024;
 /// given hash.
 #[derive(Debug)]
 #[must_use = "streams do nothing unless polled"]
-pub struct TransactionEvents {
+pub struct OrderEvents {
     hash:   TxHash,
     events: UnboundedReceiver<TransactionEvent>
 }
 
-impl TransactionEvents {
+impl OrderEvents {
     /// The hash for this transaction
     pub fn hash(&self) -> TxHash {
         self.hash
     }
 }
 
-impl Stream for TransactionEvents {
+impl Stream for OrderEvents {
     type Item = TransactionEvent;
 
     fn poll_next(
@@ -108,7 +108,7 @@ impl<T: PoolOrder> PoolEventBroadcast<T> {
     }
 
     /// Create a new subscription for the given transaction hash.
-    pub(crate) fn subscribe(&mut self, tx_hash: TxHash) -> TransactionEvents {
+    pub(crate) fn subscribe(&mut self, tx_hash: TxHash) -> OrderEvents {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         match self.broadcasters_by_hash.entry(tx_hash) {
@@ -119,7 +119,7 @@ impl<T: PoolOrder> PoolEventBroadcast<T> {
                 entry.insert(PoolEventBroadcaster { senders: vec![tx] });
             }
         };
-        TransactionEvents { hash: tx_hash, events: rx }
+        OrderEvents { hash: tx_hash, events: rx }
     }
 
     /// Create a new subscription for all transactions.
@@ -131,7 +131,7 @@ impl<T: PoolOrder> PoolEventBroadcast<T> {
 
     /// Notify listeners about a transaction that was added to the pending
     /// queue.
-    pub(crate) fn pending(&mut self, tx: &TxHash, replaced: Option<Arc<ValidPoolTransaction<T>>>) {
+    pub(crate) fn pending(&mut self, tx: &TxHash, replaced: Option<Arc<ValidPoolOrder<T>>>) {
         self.broadcast_event(tx, TransactionEvent::Pending, FullOrderEvent::Pending(*tx));
 
         if let Some(replaced) = replaced {
@@ -141,7 +141,7 @@ impl<T: PoolOrder> PoolEventBroadcast<T> {
     }
 
     /// Notify listeners about a transaction that was replaced.
-    pub(crate) fn replaced(&mut self, tx: Arc<ValidPoolTransaction<T>>, replaced_by: TxHash) {
+    pub(crate) fn replaced(&mut self, tx: Arc<ValidPoolOrder<T>>, replaced_by: TxHash) {
         let transaction = Arc::clone(&tx);
         self.broadcast_event(
             tx.hash(),

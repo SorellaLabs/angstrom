@@ -4,7 +4,7 @@ use reth_primitives::{TxHash, B256};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{traits::PropagateKind, PoolOrder, ValidPoolTransaction};
+use crate::{traits::PropagateKind, PoolOrder, ValidPoolOrder};
 
 /// An event that happened to a transaction and contains its full body where
 /// possible.
@@ -29,7 +29,7 @@ pub enum FullOrderEvent<T: PoolOrder> {
     /// E.g. same (sender + nonce) pair
     Replaced {
         /// The transaction that was replaced.
-        transaction: Arc<ValidPoolTransaction<T>>,
+        transaction: Arc<ValidPoolOrder<T>>,
         /// The transaction that replaced the event subject.
         replaced_by: TxHash
     },
@@ -64,7 +64,7 @@ impl<T: PoolOrder> Clone for FullOrderEvent<T> {
 /// Various events that describe status changes of a transaction.
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum TransactionEvent {
+pub enum OrderEvents {
     /// Transaction has been added to the pending pool.
     Pending,
     /// Transaction has been added to the queued pool.
@@ -83,7 +83,7 @@ pub enum TransactionEvent {
     Propagated(Arc<Vec<PropagateKind>>)
 }
 
-impl TransactionEvent {
+impl OrderEvents {
     /// Returns `true` if the event is final and no more events are expected for
     /// this transaction hash.
     pub fn is_final(&self) -> bool {

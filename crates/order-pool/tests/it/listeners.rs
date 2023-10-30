@@ -4,7 +4,7 @@ use assert_matches::assert_matches;
 use order_pool::{
     noop::MockOrderValidator,
     test_utils::{testing_pool, testing_pool_with_validator, MockTransactionFactory},
-    FullOrderEvent, OrderOrigin, TransactionEvent, TransactionListenerKind, TransactionPool
+    FullOrderEvent, OrderListenerKind, OrderOrigin, TransactionEvent, TransactionPool
 };
 use tokio_stream::StreamExt;
 
@@ -49,7 +49,7 @@ async fn txpool_listener_propagate_only() {
     let transaction = mock_tx_factory.create_eip1559();
     let expected = *transaction.hash();
     let mut listener_network = txpool.pending_transactions_listener();
-    let mut listener_all = txpool.pending_transactions_listener_for(TransactionListenerKind::All);
+    let mut listener_all = txpool.pending_transactions_listener_for(OrderListenerKind::All);
     let result = txpool
         .add_transaction(OrderOrigin::Local, transaction.transaction.clone())
         .await;
@@ -73,7 +73,7 @@ async fn txpool_listener_new_propagate_only() {
     let transaction = mock_tx_factory.create_eip1559();
     let expected = *transaction.hash();
     let mut listener_network = txpool.new_orders_listener();
-    let mut listener_all = txpool.new_orders_listener_for(TransactionListenerKind::All);
+    let mut listener_all = txpool.new_orders_listener_for(OrderListenerKind::All);
     let result = txpool
         .add_transaction(OrderOrigin::Local, transaction.transaction.clone())
         .await;

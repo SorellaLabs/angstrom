@@ -17,7 +17,7 @@ use reth_primitives::{
 
 use crate::{
     config::TXPOOL_MAX_ACCOUNT_SLOTS_PER_SENDER,
-    error::{InvalidPoolTransactionError, PoolError},
+    error::{InValidPoolOrderError, PoolError},
     identifier::{SenderId, TransactionId},
     metrics::OrderPoolMetrics,
     pool::{
@@ -29,7 +29,7 @@ use crate::{
         AddedPendingTransaction, AddedTransaction, OnNewCanonicalStateOutcome
     },
     traits::{BlockInfo, PoolSize},
-    OrderSorting, PoolConfig, PoolOrder, PoolResult, PriceBumpConfig, ValidPoolTransaction, U256
+    OrderSorting, PoolConfig, PoolOrder, PoolResult, PriceBumpConfig, ValidPoolOrder, U256
 };
 
 /// A pool that manages transactions.
@@ -221,7 +221,7 @@ impl<T: OrderSorting> TxPool<T> {
     pub(crate) fn best_transactions_with_base_fee(
         &self,
         basefee: u64
-    ) -> Box<dyn crate::traits::BestTransactions<Item = Arc<ValidPoolTransaction<T::Order>>>> {
+    ) -> Box<dyn crate::traits::BestTransactions<Item = Arc<ValidPoolOrder<T::Order>>>> {
         match basefee.cmp(&self.all_transactions.pending_basefee) {
             Ordering::Equal => {
                 // fee unchanged, nothing to shift
@@ -244,12 +244,12 @@ impl<T: OrderSorting> TxPool<T> {
     }
 
     /// Returns all transactions from the pending sub-pool
-    pub(crate) fn pending_transactions(&self) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn pending_transactions(&self) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         self.pending_pool.all().collect()
     }
 
     /// Returns all transactions from parked pools
-    pub(crate) fn queued_transactions(&self) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn queued_transactions(&self) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         let mut queued = self.basefee_pool.all().collect::<Vec<_>>();
         queued.extend(self.queued_pool.all());
         queued
@@ -274,7 +274,7 @@ impl<T: OrderSorting> TxPool<T> {
     }
 
     /// Returns the transaction for the given hash.
-    pub(crate) fn get(&self, tx_hash: &TxHash) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn get(&self, tx_hash: &TxHash) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         self.all_transactions.by_hash.get(tx_hash).cloned()
     }
 
@@ -282,7 +282,7 @@ impl<T: OrderSorting> TxPool<T> {
     pub(crate) fn get_all(
         &self,
         txs: Vec<TxHash>
-    ) -> impl Iterator<Item = Arc<ValidPoolTransaction<T::Order>>> + '_ {
+    ) -> impl Iterator<Item = Arc<ValidPoolOrder<T::Order>>> + '_ {
         txs.into_iter().filter_map(|tx| self.get(&tx))
     }
 
@@ -290,7 +290,7 @@ impl<T: OrderSorting> TxPool<T> {
     pub(crate) fn get_transactions_by_sender(
         &self,
         sender: SenderId
-    ) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         self.all_transactions
             .txs_iter(sender)
             .map(|(_, tx)| Arc::clone(&tx.transaction))
@@ -395,7 +395,7 @@ impl<T: OrderSorting> TxPool<T> {
     /// the `feeCap` satisfies the block's `baseFee`.
     pub(crate) fn add_transaction(
         &mut self,
-        tx: ValidPoolTransaction<T::Order>,
+        tx: ValidPoolOrder<T::Order>,
         on_chain_balance: U256,
         on_chain_nonce: u64
     ) -> PoolResult<AddedTransaction<T::Order>> {
@@ -458,12 +458,12 @@ impl<T: OrderSorting> TxPool<T> {
                         tx_gas_limit
                     } => Err(PoolError::InvalidTransaction(
                         *transaction.hash(),
-                        InvalidPoolTransactionError::ExceedsGasLimit(block_gas_limit, tx_gas_limit)
+                        InValidPoolOrderError::ExceedsGasLimit(block_gas_limit, tx_gas_limit)
                     )),
 
                     InsertErr::Overdraft { transaction } => Err(PoolError::InvalidTransaction(
                         *transaction.hash(),
-                        InvalidPoolTransactionError::Overdraft
+                        InValidPoolOrderError::Overdraft
                     )),
                     InsertErr::TxTypeConflict { transaction } => {
                         Err(PoolError::ExistingConflictingTransactionType(
@@ -516,7 +516,7 @@ impl<T: OrderSorting> TxPool<T> {
         from: SubPool,
         to: SubPool,
         id: &TransactionId
-    ) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         let tx = self.remove_from_subpool(from, id)?;
         self.add_transaction_to_subpool(to, tx.clone());
         Some(tx)
@@ -529,7 +529,7 @@ impl<T: OrderSorting> TxPool<T> {
     pub(crate) fn remove_transactions(
         &mut self,
         hashes: Vec<TxHash>
-    ) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         hashes
             .into_iter()
             .filter_map(|hash| self.remove_transaction_by_hash(&hash))
@@ -540,10 +540,7 @@ impl<T: OrderSorting> TxPool<T> {
     ///
     /// This includes the total set of transaction and the subpool it currently
     /// resides in.
-    fn remove_transaction(
-        &mut self,
-        id: &TransactionId
-    ) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    fn remove_transaction(&mut self, id: &TransactionId) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         let (tx, pool) = self.all_transactions.remove_transaction(id)?;
         self.remove_from_subpool(pool, tx.id())
     }
@@ -555,7 +552,7 @@ impl<T: OrderSorting> TxPool<T> {
     fn remove_transaction_by_hash(
         &mut self,
         tx_hash: &B256
-    ) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         let (tx, pool) = self.all_transactions.remove_transaction_by_hash(tx_hash)?;
         self.remove_from_subpool(pool, tx.id())
     }
@@ -568,7 +565,7 @@ impl<T: OrderSorting> TxPool<T> {
     fn prune_transaction_by_hash(
         &mut self,
         tx_hash: &B256
-    ) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         let (tx, pool) = self.all_transactions.remove_transaction_by_hash(tx_hash)?;
         self.prune_from_subpool(pool, tx.id())
     }
@@ -581,7 +578,7 @@ impl<T: OrderSorting> TxPool<T> {
         &mut self,
         pool: SubPool,
         tx: &TransactionId
-    ) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         match pool {
             SubPool::Queued => self.queued_pool.remove_transaction(tx),
             SubPool::Pending => self.pending_pool.remove_transaction(tx),
@@ -596,7 +593,7 @@ impl<T: OrderSorting> TxPool<T> {
         &mut self,
         pool: SubPool,
         tx: &TransactionId
-    ) -> Option<Arc<ValidPoolTransaction<T::Order>>> {
+    ) -> Option<Arc<ValidPoolOrder<T::Order>>> {
         match pool {
             SubPool::Pending => self.pending_pool.prune_transaction(tx),
             SubPool::Queued => self.queued_pool.remove_transaction(tx),
@@ -611,7 +608,7 @@ impl<T: OrderSorting> TxPool<T> {
     fn remove_descendants(
         &mut self,
         tx: &TransactionId,
-        removed: &mut Vec<Arc<ValidPoolTransaction<T::Order>>>
+        removed: &mut Vec<Arc<ValidPoolOrder<T::Order>>>
     ) {
         let mut id = *tx;
 
@@ -634,11 +631,7 @@ impl<T: OrderSorting> TxPool<T> {
     }
 
     /// Inserts the transaction into the given sub-pool.
-    fn add_transaction_to_subpool(
-        &mut self,
-        pool: SubPool,
-        tx: Arc<ValidPoolTransaction<T::Order>>
-    ) {
+    fn add_transaction_to_subpool(&mut self, pool: SubPool, tx: Arc<ValidPoolOrder<T::Order>>) {
         match pool {
             SubPool::Queued => {
                 self.queued_pool.add_transaction(tx);
@@ -657,8 +650,8 @@ impl<T: OrderSorting> TxPool<T> {
     /// Optionally, removes the replacement transaction.
     fn add_new_transaction(
         &mut self,
-        transaction: Arc<ValidPoolTransaction<T::Order>>,
-        replaced: Option<(Arc<ValidPoolTransaction<T::Order>>, SubPool)>,
+        transaction: Arc<ValidPoolOrder<T::Order>>,
+        replaced: Option<(Arc<ValidPoolOrder<T::Order>>, SubPool)>,
         pool: SubPool
     ) {
         if let Some((replaced, replaced_pool)) = replaced {
@@ -674,7 +667,7 @@ impl<T: OrderSorting> TxPool<T> {
     ///
     /// If the current size exceeds the given bounds, the worst transactions are
     /// evicted from the pool and returned.
-    pub(crate) fn discard_worst(&mut self) -> Vec<Arc<ValidPoolTransaction<T::Order>>> {
+    pub(crate) fn discard_worst(&mut self) -> Vec<Arc<ValidPoolOrder<T::Order>>> {
         let mut removed = Vec::new();
 
         // Helper macro that discards the worst transactions for the pools
@@ -806,7 +799,7 @@ pub(crate) struct AllTransactions<T: PoolOrder> {
     /// Max number of executable transaction slots guaranteed per account
     max_account_slots: usize,
     /// _All_ transactions identified by their hash.
-    by_hash: HashMap<TxHash, Arc<ValidPoolTransaction<T>>>,
+    by_hash: HashMap<TxHash, Arc<ValidPoolOrder<T>>>,
     /// _All_ transaction in the pool sorted by their sender and nonce pair.
     txs: BTreeMap<TransactionId, PoolInternalTransaction<T>>,
     /// Tracks the number of transactions by sender that are currently in the
@@ -841,9 +834,7 @@ impl<T: PoolOrder> AllTransactions<T> {
     }
 
     /// Returns an iterator over all _unique_ hashes in the pool
-    pub(crate) fn transactions_iter(
-        &self
-    ) -> impl Iterator<Item = Arc<ValidPoolTransaction<T>>> + '_ {
+    pub(crate) fn transactions_iter(&self) -> impl Iterator<Item = Arc<ValidPoolOrder<T>>> + '_ {
         self.by_hash.values().cloned()
     }
 
@@ -1137,7 +1128,7 @@ impl<T: PoolOrder> AllTransactions<T> {
     pub(crate) fn remove_transaction_by_hash(
         &mut self,
         tx_hash: &B256
-    ) -> Option<(Arc<ValidPoolTransaction<T>>, SubPool)> {
+    ) -> Option<(Arc<ValidPoolOrder<T>>, SubPool)> {
         let tx = self.by_hash.remove(tx_hash)?;
         let internal = self.txs.remove(&tx.transaction_id)?;
         // decrement the counter for the sender.
@@ -1153,7 +1144,7 @@ impl<T: PoolOrder> AllTransactions<T> {
     pub(crate) fn remove_transaction(
         &mut self,
         id: &TransactionId
-    ) -> Option<(Arc<ValidPoolTransaction<T>>, SubPool)> {
+    ) -> Option<(Arc<ValidPoolOrder<T>>, SubPool)> {
         let internal = self.txs.remove(id)?;
 
         // decrement the counter for the sender.
@@ -1175,8 +1166,8 @@ impl<T: PoolOrder> AllTransactions<T> {
     ///     vs normal transactions are mutually exclusive for the same sender.
     fn ensure_valid(
         &self,
-        transaction: ValidPoolTransaction<T>
-    ) -> Result<ValidPoolTransaction<T>, InsertErr<T>> {
+        transaction: ValidPoolOrder<T>
+    ) -> Result<ValidPoolOrder<T>, InsertErr<T>> {
         if !transaction.origin.is_local() {
             let current_txs = self
                 .tx_counter
@@ -1204,8 +1195,8 @@ impl<T: PoolOrder> AllTransactions<T> {
     /// replace the existing transaction.
     #[inline]
     fn is_underpriced(
-        existing_transaction: &ValidPoolTransaction<T>,
-        maybe_replacement: &ValidPoolTransaction<T>,
+        existing_transaction: &ValidPoolOrder<T>,
+        maybe_replacement: &ValidPoolOrder<T>,
         price_bumps: &PriceBumpConfig
     ) -> bool {
         let price_bump = price_bumps.price_bump(existing_transaction.tx_type());
@@ -1273,7 +1264,7 @@ impl<T: PoolOrder> AllTransactions<T> {
     /// replacement candidate must not be underpriced
     pub(crate) fn insert_tx(
         &mut self,
-        transaction: ValidPoolTransaction<T>,
+        transaction: ValidPoolOrder<T>,
         on_chain_balance: U256,
         on_chain_nonce: u64
     ) -> InsertResult<T> {
@@ -1495,47 +1486,44 @@ pub(crate) enum InsertErr<T: PoolOrder> {
     /// Attempted to replace existing transaction, but was underpriced
     Underpriced {
         #[allow(unused)]
-        transaction: Arc<ValidPoolTransaction<T>>,
+        transaction: Arc<ValidPoolOrder<T>>,
         existing:    TxHash
     },
     /// Attempted to insert a transaction that would overdraft the sender's
     /// balance at the time of insertion.
-    Overdraft { transaction: Arc<ValidPoolTransaction<T>> },
+    Overdraft { transaction: Arc<ValidPoolOrder<T>> },
     /// The transactions feeCap is lower than the chain's minimum fee
     /// requirement.
     ///
     /// See also [`MIN_PROTOCOL_BASE_FEE`]
-    FeeCapBelowMinimumProtocolFeeCap {
-        transaction: Arc<ValidPoolTransaction<T>>,
-        fee_cap:     u128
-    },
+    FeeCapBelowMinimumProtocolFeeCap { transaction: Arc<ValidPoolOrder<T>>, fee_cap: u128 },
     /// Sender currently exceeds the configured limit for max account slots.
     ///
     /// The sender can be considered a spammer at this point.
-    ExceededSenderTransactionsCapacity { transaction: Arc<ValidPoolTransaction<T>> },
+    ExceededSenderTransactionsCapacity { transaction: Arc<ValidPoolOrder<T>> },
     /// Transaction gas limit exceeds block's gas limit
     TxGasLimitMoreThanAvailableBlockGas {
-        transaction:     Arc<ValidPoolTransaction<T>>,
+        transaction:     Arc<ValidPoolOrder<T>>,
         block_gas_limit: u64,
         tx_gas_limit:    u64
     },
     /// Thrown if the mutual exclusivity constraint (blob vs normal transaction)
     /// is violated.
-    TxTypeConflict { transaction: Arc<ValidPoolTransaction<T>> }
+    TxTypeConflict { transaction: Arc<ValidPoolOrder<T>> }
 }
 
 /// Transaction was successfully inserted into the pool
 #[derive(Debug)]
 pub(crate) struct InsertOk<T: PoolOrder> {
     /// Ref to the inserted transaction.
-    transaction: Arc<ValidPoolTransaction<T>>,
+    transaction: Arc<ValidPoolOrder<T>>,
     /// Where to move the transaction to.
     move_to:     SubPool,
     /// Current state of the inserted tx.
     #[allow(unused)]
     state:       TxState,
     /// The transaction that was replaced by this.
-    replaced_tx: Option<(Arc<ValidPoolTransaction<T>>, SubPool)>,
+    replaced_tx: Option<(Arc<ValidPoolOrder<T>>, SubPool)>,
     /// Additional updates to transactions affected by this change.
     updates:     Vec<PoolUpdate>
 }
@@ -1545,7 +1533,7 @@ pub(crate) struct InsertOk<T: PoolOrder> {
 #[derive(Debug)]
 pub(crate) struct PoolInternalTransaction<T: PoolOrder> {
     /// The actual transaction object.
-    pub(crate) transaction:     Arc<ValidPoolTransaction<T>>,
+    pub(crate) transaction:     Arc<ValidPoolOrder<T>>,
     /// The `SubPool` that currently contains this transaction.
     pub(crate) subpool:         SubPool,
     /// Keeps track of the current state of the transaction and therefor in
@@ -1570,9 +1558,9 @@ impl<T: PoolOrder> PoolInternalTransaction<T> {
 #[derive(Debug)]
 pub(crate) struct UpdateOutcome<T: PoolOrder> {
     /// transactions promoted to the pending pool
-    pub(crate) promoted:  Vec<Arc<ValidPoolTransaction<T>>>,
+    pub(crate) promoted:  Vec<Arc<ValidPoolOrder<T>>>,
     /// transaction that failed and were discarded
-    pub(crate) discarded: Vec<Arc<ValidPoolTransaction<T>>>
+    pub(crate) discarded: Vec<Arc<ValidPoolOrder<T>>>
 }
 
 impl<T: PoolOrder> Default for UpdateOutcome<T> {
@@ -1588,7 +1576,7 @@ pub struct PruneResult<T: PoolOrder> {
     /// all transactions that failed to be promoted and now are discarded
     pub failed:   Vec<TxHash>,
     /// all transactions that were pruned from the ready pool
-    pub pruned:   Vec<Arc<ValidPoolTransaction<T>>>
+    pub pruned:   Vec<Arc<ValidPoolOrder<T>>>
 }
 
 impl<T: PoolOrder> fmt::Debug for PruneResult<T> {

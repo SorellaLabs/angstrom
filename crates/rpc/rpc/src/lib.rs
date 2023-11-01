@@ -11,7 +11,8 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    str::FromStr
+    str::FromStr,
+    time::Duration
 };
 
 use errors::RpcError;
@@ -23,11 +24,16 @@ use jsonrpsee::{
 use metrics::RpcServerMetrics;
 use serde::{Deserialize, Serialize, Serializer};
 use strum::{AsRefStr, EnumString, EnumVariantNames, ParseError, VariantNames};
-use tower::layer::util::{Identity, Stack};
+use tower::{
+    layer::util::{Identity, Stack},
+    limit::RateLimitLayer
+};
 use tower_http::cors::CorsLayer;
 use tracing::{instrument, trace};
 
 use crate::{constants::*, errors::*, id_provider::EthSubscriptionIdProvider};
+
+const REQUESTS_PER_SECOND: usize = 100;
 
 pub async fn launch<Consensus, OrderPool, Tasks>(
     consensus: Consensus,
@@ -652,9 +658,9 @@ impl Default for WsHttpServers {
 /// Http Servers Enum
 enum WsHttpServerKind {
     /// Http server
-    Plain(Server<Identity, RpcServerMetrics>),
+    Plain(Server<Stack<RateLimitLayer, Identity>, RpcServerMetrics>),
     /// Http server with cors
-    WithCors(Server<Stack<CorsLayer, Identity>, RpcServerMetrics>)
+    WithCors(Server<Stack<RateLimitLayer, Stack<CorsLayer, Identity>>, RpcServerMetrics>)
 }
 
 // === impl WsHttpServerKind ===
@@ -676,9 +682,13 @@ impl WsHttpServerKind {
         server_kind: ServerKind,
         metrics: RpcServerMetrics
     ) -> Result<(Self, SocketAddr), RpcError> {
+        let rate_limiting = RateLimitLayer::new(REQUESTS_PER_SECOND, Duration::from_secs(1));
+
         if let Some(cors) = cors_domains.as_deref().map(cors::create_cors_layer) {
             let cors = cors.map_err(|err| RpcError::Custom(err.to_string()))?;
-            let middleware = tower::ServiceBuilder::new().layer(cors);
+            let middleware = tower::ServiceBuilder::new()
+                .layer(cors)
+                .layer(rate_limiting);
             let server = builder
                 .set_middleware(middleware)
                 .set_logger(metrics)
@@ -689,7 +699,10 @@ impl WsHttpServerKind {
             let server = WsHttpServerKind::WithCors(server);
             Ok((server, local_addr))
         } else {
+            let middleware = tower::ServiceBuilder::new().layer(rate_limiting);
+
             let server = builder
+                .set_middleware(middleware)
                 .set_logger(metrics)
                 .build(socket_addr)
                 .await

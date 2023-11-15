@@ -5,6 +5,8 @@ use std::{
     task::{Context, Poll}
 };
 
+use reth_provider::CanonStateNotifications;
+
 use ethers_core::types::{Block, H256};
 use futures::{Stream, StreamExt};
 use guard_types::{

@@ -9,6 +9,7 @@ members = [
   "crates/rpc/*",
   "crates/eth/",
   "it-harness",
+  "bin",
 ]
 
 [workspace.package]
@@ -86,6 +87,13 @@ revm = { git = "https://github.com/bluealloy/revm", rev = "1609e07c68048909ad168
 revm-primitives = { git = "https://github.com/bluealloy/revm", rev = "1609e07c68048909ad1682c98cf2b9baa76310b5" }
 
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-config = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-prune = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-revm-inspectors = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-rpc-engine-api = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-snapshot = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-stages= { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-downloaders = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
 reth-interfaces = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
 reth-provider = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }

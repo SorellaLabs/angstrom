@@ -26,7 +26,7 @@ pub enum EthNetworkEvent {}
 /// 1) Deal with submitting bundles
 /// 2) Deal with fetching block state differences + fmt (need for validation and
 ///    orderpool)
-pub struct EthNetworkManager<M: Middleware + 'static, > {
+pub struct EthNetworkManager<M: Middleware + 'static> {
     /// our command receiver
     commander:       ReceiverStream<EthCommand>,
     /// people listening to events

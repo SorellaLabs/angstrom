@@ -1,0 +1,33 @@
+[package]
+name = "bin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reth = { git = "https://github.com/paradigmxyz/reth", rev = "a389a2b" }
+reth-config.workspace = true
+reth-db.workspace = true
+reth-downloaders.workspace = true
+reth-interfaces.workspace = true
+reth-network.workspace = true
+reth-network-api.workspace = true
+reth-primitives.workspace = true
+reth-provider.workspace = true
+reth-prune.workspace = true
+reth-revm.workspace = true
+reth-revm-inspectors.workspace = true
+reth-rpc-engine-api.workspace = true
+reth-snapshot.workspace = true
+reth-stages.workspace = true
+reth-tasks.workspace = true
+reth-transaction-pool.workspace = true
+secp256k1.workspace = true
+tokio.workspace = true
+tracing.workspace = true

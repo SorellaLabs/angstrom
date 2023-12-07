@@ -24,7 +24,8 @@ pub struct StromNetworkManager {
     from_handle_rx:       UnboundedReceiverStream<StromNetworkHandleMsg>,
     to_pool_manager:      Option<UnboundedMeteredSender<NetworkOrderEvent>>,
     to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>,
-    subscriptions:        Vec<UnboundedSender<UnboundedSender<StromNetworkEvent>>>,
+
+    event_listeners: Vec<UnboundedSender<StromNetworkEvent>>,
 
     swarm:            Swarm,
     /// This is updated via internal events and shared via `Arc` with the
@@ -62,11 +63,9 @@ impl StromNetworkManager {
         }
     }
 
-    /// Sends an event to the pool manager.
-    fn notify_pool_manager(&self, event: NetworkOrderEvent) {
-        if let Some(ref tx) = self.to_pool_manager {
-            let _ = tx.send(event);
-        }
+    fn notify_listeners(&mut self, event: StromNetworkEvent) {
+        self.event_listeners
+            .retain(|tx| tx.send(event.clone()).is_ok());
     }
 }
 
@@ -93,13 +92,13 @@ impl Future for StromNetworkManager {
                         $(
                             StromMessage::$var(a) => {
                                 self.to_consensus_manager
-                                    .as_mut()
+                                    .as_ref()
                                     .map(|tx| tx.send(StromConsensusEvent::$var($peer_id, a)));
                             },
                         )+
                         StromMessage::PropagatePooledOrders(a) => {
                             self.to_pool_manager
-                                .as_mut()
+                                .as_ref()
                                 .map(|tx| tx.send(NetworkOrderEvent::IncomingOrders {
                                     $peer_id,
                                     orders: a
@@ -115,14 +114,6 @@ impl Future for StromNetworkManager {
                     SwarmEvent::ValidMessage { peer_id, msg } => {
                         send_msgs!(msg, peer_id, Commit, Propose, PrePropose)
                     }
-                    // StromMessage::Commit(c) => self
-                    //     .to_consensus_manager
-                    //     .as_mut()
-                    //     .map(|tx| tx.send(StromConsensusEvent::Commit(peer_id, c))),
-                    // StromMessage::Propose(p) => self
-                    //     .to_consensus_manager
-                    //     .as_mut()
-                    //     .map(|tx| tx.send(StromConsensusEvent::Commit(peer_id, c)))
                     SwarmEvent::Disconnected { peer_id } => {}
                 }
             }

@@ -71,10 +71,8 @@ impl StromSessionManager {
 impl Stream for StromSessionManager {
     type Item = SessionEvent;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<SessionEvent>> {
-        let this = self.get_mut();
-
-        match this.from_sessions.poll_recv(cx) {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<SessionEvent>> {
+        match self.from_sessions.poll_recv(cx) {
             Poll::Ready(None) => {
                 // channel closed
                 return Poll::Ready(None)
@@ -83,18 +81,18 @@ impl Stream for StromSessionManager {
             Poll::Ready(Some(message)) => {
                 return match message {
                     StromSessionMessage::Disconnected { peer_id } => {
-                        this.remove_session(&peer_id);
+                        self.remove_session(&peer_id);
                         Poll::Ready(Some(SessionEvent::Disconnected { peer_id }))
                     }
                     StromSessionMessage::Established { handle } => {
-                        this.counter.inc_active(&handle.direction);
+                        self.counter.inc_active(&handle.direction);
 
                         let event = SessionEvent::SessionEstablished {
                             peer_id:   handle.remote_id,
                             direction: handle.direction,
                             timeout:   Arc::new(AtomicU64::new(40))
                         };
-                        this.active_sessions.insert(handle.remote_id, handle);
+                        self.active_sessions.insert(handle.remote_id, handle);
 
                         Poll::Ready(Some(event))
                     }

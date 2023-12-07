@@ -17,25 +17,15 @@ use crate::{types::message::StromProtocolMessage, StromSessionMessage};
 #[allow(dead_code)]
 pub struct StromSession {
     /// Keeps track of request ids.
-    pub(crate) next_id: u64,
+    pub(crate) next_id:            u64,
     /// The underlying connection.
-    pub(crate) conn: ProtocolConnection,
+    pub(crate) conn:               ProtocolConnection,
     /// Identifier of the node we're connected to.
-    pub(crate) remote_peer_id: PeerId,
+    pub(crate) remote_peer_id:     PeerId,
     /// Incoming commands from the manager
-    pub(crate) commands_rx: ReceiverStream<SessionCommand>,
+    pub(crate) commands_rx:        ReceiverStream<SessionCommand>,
     /// Sink to send messages to the [`SessionManager`](super::SessionManager).
     pub(crate) to_session_manager: MeteredPollSender<StromSessionMessage>,
-    /// A message that needs to be delivered to the session manager
-
-    /// All requests sent to the remote peer we're waiting on a response
-    //pub(crate) inflight_requests: FnvHashMap<u64, InflightRequest>,
-    /// All requests that were sent by the remote peer and we're waiting on an
-    /// internal response
-    //lub(crate) received_requests_from_remote: Vec<ReceivedRequest>,
-    /// Buffered messages that should be handled and sent to the peer.
-    //pub(crate) queued_outgoing: VecDeque<OutgoingMessage>,
-    /// The maximum time we wait for a response from a peer.
 
     /// If an [ActiveSession] does not receive a response at all within this
     /// duration then it is considered a protocol violation and the session

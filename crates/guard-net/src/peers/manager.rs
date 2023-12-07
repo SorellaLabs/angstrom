@@ -104,14 +104,27 @@ impl PeersManager {
         trace!(target: "net::peers",  ?peer_id, "remove discovered node");
         self.queued_actions
             .push_back(PeerAction::PeerRemoved(peer_id));
+    }
 
-        /*if peer.state.is_connected() {
-            self.peers.insert(peer_id, peer);
-            self.queued_actions.push_back(PeerAction::Disconnect {
-                peer_id,
-                reason: Some(DisconnectReason::DisconnectRequested)
-            })
-        }*/
+    pub fn change_weight(&mut self, peer_id: PeerId, weight: ReputationChangeKind) {
+        if let Some(outcome) = self
+            .peers
+            .get_mut(&peer_id)
+            .map(|peer| peer.apply_reputation(self.reputation_weights.change(weight).into()))
+        {
+            match outcome {
+                ReputationChangeOutcome::Ban => self.ban_list.ban_peer(peer_id),
+                ReputationChangeOutcome::DisconnectAndBan => {
+                    self.ban_list.ban_peer(peer_id);
+                    self.queued_actions
+                        .push_back(PeerAction::DisconnectBannedIncoming { peer_id })
+                }
+                ReputationChangeOutcome::Unban => self
+                    .queued_actions
+                    .push_back(PeerAction::UnBanPeer { peer_id }),
+                ReputationChangeOutcome::None => {}
+            }
+        }
     }
 
     /// Removes the tracked node from the trusted set.
@@ -124,6 +137,10 @@ impl PeersManager {
         let peer = entry.get_mut();
 
         peer.kind = PeerKind::Basic;
+    }
+
+    pub fn poll(&mut self) -> Option<PeerAction> {
+        self.queued_actions.pop_front()
     }
 }
 

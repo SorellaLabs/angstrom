@@ -51,9 +51,9 @@ impl RethCliExt for StromRethExt {
 struct StaleGuardConfig {
     #[clap(long)]
     pub mev_guard: bool,
-    #[clap(skip)]
     /// init state. Set when network is started. We store the data here
     /// so that we can give handles to rpc modules
+    #[clap(skip)]
     state:         GuardInitState
 }
 
@@ -96,6 +96,9 @@ impl RethNodeCommandConfig for StaleGuardConfig {
             timestamp: 0
         };
 
+        let verification =
+            VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
+
         let eth_handle = EthDataCleanser::new(
             components.events().subscribe_to_canonical_state(),
             components.provider(),
@@ -105,9 +108,6 @@ impl RethNodeCommandConfig for StaleGuardConfig {
 
         let validator =
             init_validation(components.provider(), eth_handle.subscribe_network_stream());
-
-        let verification =
-            VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
 
         let (pool_tx, pool_rx) =
             reth_metrics::common::mpsc::metered_unbounded_channel("order pool");

@@ -9,9 +9,8 @@ members = [
   "crates/order-pool",
   "crates/rpc",
   "crates/eth/",
-  "crates/submission"
+  "crates/submission",
 ]
-
 
 
 #default-members = ["bin/stale-guard"]
@@ -61,8 +60,13 @@ pin-project = "1.1.3"
 futures-util = "0.3.29"
 
 # revm
-revm = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze",  features = ["std", "secp256k1"], default-features = false }
-revm-primitives = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze", features = ["std"], default-features = false }
+revm = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze", features = [
+  "std",
+  "secp256k1",
+], default-features = false }
+revm-primitives = { git = "https://github.com/bluealloy/revm", branch = "reth_freeze", features = [
+  "std",
+], default-features = false }
 
 # reth
 reth = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878" }
@@ -90,7 +94,7 @@ reth-network-api = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878
 reth-rpc-types-compat = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878" }
 reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878" }
 reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878" }
-reth-tokio-util = {git =  "https://github.com/paradigmxyz/reth", rev = "f15e878" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878" }
 
 # alloy
 alloy-sol-types = { version = "0.5.0", features = ["json"] }
@@ -141,7 +145,6 @@ tokio = { version = "1.21", features = ["full"], default-features = false }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 
 
-
 ## json
 jsonrpsee = { version = "0.20" }
 jsonrpsee-core = { version = "0.20" }
@@ -156,9 +159,15 @@ secp256k1 = { version = "0.27.0", default-features = false, features = [
 ] }
 enr = { version = "0.9", default-features = false, features = ["k256"] }
 
-### misc-testing
-proptest = "1.0"
-proptest-derive = "0.4"
+
+aquamarine = "0.3"
+
+# misc-testing
 arbitrary = "1.1"
 assert_matches = "1.5.0"
-aquamarine = "0.3"
+tempfile = "3.8"
+criterion = "0.5"
+pprof = "0.13"
+proptest = "1.0"
+proptest-derive = "0.4"
+serial_test = "2"

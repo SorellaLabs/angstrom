@@ -93,28 +93,38 @@ ethers-core = { workspace = true, default-features = false, optional = true }
 tempfile = { version = "3.3", optional = true }
 
 [dev-dependencies]
+guard-network.workspace = true
 # reth
-
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878", features = [
   "test-utils",
 ] }
 reth-interfaces = { workspace = true, features = ["test-utils"] }
+reth-primitives = { workspace = true, features = ["test-utils"] }
 
 # we need to enable the test-utils feature in our own crate to use utils in
 # integration tests
-# guard-network = { path = ".", features = ["test-utils"] }
+reth-network = { workspace = true, features = ["test-utils"] }
+reth-metrics.workspace = true
 
 reth-provider = { workspace = true, features = ["test-utils"] }
-reth-tracing = { git = "https://github.com/paradigmxyz/reth", rev = "f15e878" }
+reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
-enr = { workspace = true, features = ["serde", "rust-secp256k1"] }
 
+ethers-core = { workspace = true, default-features = false }
+ethers-providers = { workspace = true, default-features = false, features = [
+  "ws",
+] }
+ethers-signers = { workspace = true, default-features = false }
+ethers-middleware = { workspace = true, default-features = false }
+
+enr = { workspace = true, features = ["serde", "rust-secp256k1"] }
 rand.workspace = true
+secp256k1.workspace = true
 
 # misc
-hex = "0.4"
-tempfile = "3.3"
-serial_test = "2.0"
+serial_test.workspace = true
+tempfile.workspace = true
+
 
 [features]
 default = ["serde"]

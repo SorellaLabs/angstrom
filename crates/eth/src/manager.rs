@@ -1,9 +1,12 @@
-use std::task::{Context, Poll};
+use std::{
+    sync::Arc,
+    task::{Context, Poll}
+};
 
 use alloy_primitives::{Address, B256};
 use futures::Future;
 use futures_util::FutureExt;
-use reth_provider::{CanonStateNotification, CanonStateNotifications, StateProviderFactory};
+use reth_provider::{CanonStateNotification, CanonStateNotifications, Chain, StateProviderFactory};
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{channel, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
@@ -45,12 +48,38 @@ where
         Ok(handle)
     }
 
+    fn send_events(&mut self, event: EthEvent) {
+        self.event_listeners
+            .retain(|e| e.send(event.clone()).is_ok());
+    }
+
     #[allow(dead_code)]
     fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) {
         match canonical_updates {
-            CanonStateNotification::Reorg { old: _old, new: _ } => {}
-            CanonStateNotification::Commit { new: _new } => {}
+            CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new),
+            CanonStateNotification::Commit { new } => self.handle_commit(new)
         }
+    }
+
+    fn handle_reorg(&mut self, old: Arc<Chain>, new: Arc<Chain>) {}
+
+    fn handle_commit(&mut self, new: Arc<Chain>) {
+        let filled_orders = Self::fetch_filled_orders(new.clone());
+        let eoas = Self::get_eoa(new.clone());
+        let tip = new.tip().number;
+
+        // check for ne
+    }
+
+    /// TODO: check contract for state change. if there is change. fetch the
+    /// transaction on Angstrom and process call-data to pull order-hashes.
+    fn fetch_filled_orders(_chain: Arc<Chain>) -> Vec<B256> {
+        vec![]
+    }
+
+    /// fetches all eoa addresses touched
+    fn get_eoa(chain: Arc<Chain>) -> Vec<Address> {
+        chain.state().state().state().keys().copied().collect()
     }
 }
 
@@ -64,6 +93,8 @@ where
         todo!()
     }
 }
+
+#[derive(Debug, Clone)]
 pub enum EthEvent {
     //TODO: add shit here
     NewBlock,

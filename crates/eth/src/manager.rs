@@ -14,7 +14,7 @@ use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use crate::handle::{EthCommand, EthHandle};
 
-/// Listens for CanonStateNotifications and sends the appropriate updatdes to be
+/// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
 #[allow(dead_code)]
 pub struct EthDataCleanser<DB> {
@@ -26,6 +26,7 @@ pub struct EthDataCleanser<DB> {
     /// Notifications for Canonical Block updates
     canonical_updates: BroadcastStream<CanonStateNotification>,
     /// used to fetch data from db
+    #[allow(dead_code)]
     db:                DB
 }
 

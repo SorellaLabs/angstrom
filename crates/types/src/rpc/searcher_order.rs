@@ -91,24 +91,24 @@ pub struct EcRecoveredComposableSearcherOrder {
     pub signed_order: SignedComposableSearcherOrder
 }
 
-impl TryFrom<alloy_primitives::Bytes> for EcRecoveredComposableSearcherOrder {
+impl TryFrom<alloy_primitives::Bytes> for SignedComposableSearcherOrder {
     type Error = alloy_rlp::Error;
 
     fn try_from(value: alloy_primitives::Bytes) -> Result<Self, Self::Error> {
         let veced = value.0.to_vec();
         let mut sliced = veced.as_slice();
 
-        EcRecoveredComposableSearcherOrder::decode(&mut sliced)
+        SignedComposableSearcherOrder::decode(&mut sliced)
     }
 }
 
-impl TryFrom<alloy_primitives::Bytes> for EcRecoveredSearcherOrder {
+impl TryFrom<alloy_primitives::Bytes> for SignedSearcherOrder {
     type Error = alloy_rlp::Error;
 
     fn try_from(value: alloy_primitives::Bytes) -> Result<Self, Self::Error> {
         let veced = value.0.to_vec();
         let mut sliced = veced.as_slice();
 
-        EcRecoveredSearcherOrder::decode(&mut sliced)
+        SignedSearcherOrder::decode(&mut sliced)
     }
 }

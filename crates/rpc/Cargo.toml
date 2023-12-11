@@ -13,6 +13,8 @@ exclude.workspace = true
 [dependencies]
 guard-types.workspace = true
 guard-utils.workspace = true
+guard-network.workspace = true
+order-pool.workspace = true
 
 reth-primitives.workspace = true
 

@@ -162,8 +162,8 @@ impl RethNodeCommandConfig for StaleGuardConfig {
         Reth: RethNodeComponents
     {
         //TODO: Add the handle to the order pool & consensus module
-        let pool = rpc_components.registry.pool();
         let consensus = _components.network();
+        let pool = self.state.pool_handle.clone().unwrap();
 
         let order_api = OrderApi { pool: pool.clone() };
         let quotes_api = QuotesApi { pool: pool.clone() };

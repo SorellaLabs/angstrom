@@ -10,15 +10,6 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::handle::{EthCommand, EthHandle};
 
-/// Commands to send to the [`TransactionsManager`]
-// #[derive(Debug)]
-// #[allow(dead_code)]
-// enum Command {
-//     /// Submit a bundle to the [`TransactionsManager`]
-//     RemoveFilledOrders(SubmissionBundle),
-//     Subscribe(Sender<EthEvent>)
-// }
-
 /// Listens for CanonStateNotifications and sends the appropriate updatdes to be
 /// executed by the order pool
 #[allow(dead_code)]

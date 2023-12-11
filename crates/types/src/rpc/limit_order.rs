@@ -98,24 +98,23 @@ pub struct CallerInfo {
     pub overrides: HashMap<Address, HashMap<U256, U256>>
 }
 
-impl TryFrom<alloy_primitives::Bytes> for EcRecoveredLimitOrder {
+impl TryFrom<alloy_primitives::Bytes> for SignedLimitOrder {
     type Error = alloy_rlp::Error;
 
     fn try_from(value: alloy_primitives::Bytes) -> Result<Self, Self::Error> {
         let veced = value.0.to_vec();
         let mut sliced = veced.as_slice();
-
-        EcRecoveredLimitOrder::decode(&mut sliced)
+        SignedLimitOrder::decode(&mut sliced)
     }
 }
 
-impl TryFrom<alloy_primitives::Bytes> for EcRecoveredComposableLimitOrder {
+impl TryFrom<alloy_primitives::Bytes> for SignedComposableLimitOrder {
     type Error = alloy_rlp::Error;
 
     fn try_from(value: alloy_primitives::Bytes) -> Result<Self, Self::Error> {
         let veced = value.0.to_vec();
         let mut sliced = veced.as_slice();
 
-        EcRecoveredComposableLimitOrder::decode(&mut sliced)
+        SignedComposableLimitOrder::decode(&mut sliced)
     }
 }

@@ -65,7 +65,7 @@ pub trait PooledComposableOrder: PoolOrder {
 }
 
 pub trait OrderConversion {
-    type Order: Send + Sync + Clone + Debug;
+    type Order: Send + Sync + Clone + Debug + TryFrom<Bytes>;
 
     fn try_from_order(order: Self::Order) -> Result<Self, secp256k1::Error>
     where

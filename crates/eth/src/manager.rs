@@ -6,11 +6,11 @@ use std::{
 
 use alloy_primitives::{Address, B256};
 use futures::Future;
-use futures_util::FutureExt;
+use futures_util::{FutureExt, StreamExt};
 use reth_provider::{CanonStateNotification, CanonStateNotifications, Chain, StateProviderFactory};
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{channel, UnboundedSender};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use crate::handle::{EthCommand, EthHandle};
 
@@ -24,7 +24,7 @@ pub struct EthDataCleanser<DB> {
     event_listeners: Vec<UnboundedSender<EthEvent>>,
 
     /// Notifications for Canonical Block updates
-    canonical_updates: CanonStateNotifications,
+    canonical_updates: BroadcastStream<CanonStateNotification>,
     /// used to fetch data from db
     db:                DB
 }
@@ -41,7 +41,12 @@ where
         let (tx, rx) = channel(10);
         let stream = ReceiverStream::new(rx);
 
-        let this = Self { canonical_updates, commander: stream, event_listeners: Vec::new(), db };
+        let this = Self {
+            canonical_updates: BroadcastStream::new(canonical_updates),
+            commander: stream,
+            event_listeners: Vec::new(),
+            db
+        };
         tp.spawn_critical("eth handle", this.boxed());
 
         let handle = EthHandle::new(tx);
@@ -54,7 +59,12 @@ where
             .retain(|e| e.send(event.clone()).is_ok());
     }
 
-    #[allow(dead_code)]
+    fn on_command(&mut self, command: EthCommand) {
+        match command {
+            EthCommand::SubscribeEthNetworkEvents(tx) => self.event_listeners.push(tx)
+        }
+    }
+
     fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) {
         match canonical_updates {
             CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new),
@@ -105,8 +115,25 @@ where
 {
     type Output = ();
 
-    fn poll(self: std::pin::Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
-        todo!()
+    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // poll all canonical updates
+        while let Poll::Ready(is_some) = self.canonical_updates.poll_next_unpin(cx).map(|res| {
+            res.transpose()
+                .ok()
+                .flatten()
+                .map(|update| self.on_canon_update(update))
+                .is_some()
+        }) {
+            if !is_some {
+                return Poll::Ready(())
+            }
+        }
+
+        while let Poll::Ready(Some(command)) = self.commander.poll_next_unpin(cx) {
+            self.on_command(command)
+        }
+
+        Poll::Pending
     }
 }
 

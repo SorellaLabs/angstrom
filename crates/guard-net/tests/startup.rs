@@ -46,7 +46,6 @@ async fn test_startup() {
         let verification =
             VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
 
-
         let (pool_tx, pool_rx) =
             reth_metrics::common::mpsc::metered_unbounded_channel("order pool");
 

@@ -18,6 +18,19 @@ pub trait PollExt<T> {
     fn apply(self, predicate: impl FnMut(T)) -> bool;
 }
 
+pub trait PollFlatten<T> {
+    fn flatten(self) -> Poll<T>;
+}
+
+impl<T> PollFlatten<T> for Poll<Poll<T>> {
+    fn flatten(self) -> Poll<T> {
+        match self {
+            Poll::Ready(inner) => inner,
+            Poll::Pending => Poll::Pending
+        }
+    }
+}
+
 impl<T> PollExt<T> for Poll<T> {
     fn filter(self, mut predicate: impl FnMut(&T) -> bool) -> Poll<T> {
         let Poll::Ready(val) = self else { return Poll::Pending };

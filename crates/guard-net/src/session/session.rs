@@ -10,6 +10,7 @@ use futures::{
     task::{Context, Poll},
     Stream, StreamExt
 };
+use guard_utils::{GenericExt, PollFlatten};
 use reth_eth_wire::multiplex::ProtocolConnection;
 use reth_metrics::common::mpsc::MeteredPollSender;
 use reth_network_api::Direction;
@@ -130,27 +131,27 @@ impl StromSession {
     }
 
     fn poll_commands(&mut self, cx: &mut Context<'_>) -> Option<Poll<Option<BytesMut>>> {
-        if let Poll::Ready(inner) = self.commands_rx.poll_next_unpin(cx).map(|inner| {
-            inner.map_or_else(
-                || Poll::Ready(None),
-                |msg| match msg {
-                    SessionCommand::Disconnect { .. } => self.emit_disconnect(cx),
-                    SessionCommand::Message(msg) => {
-                        let msg = StromProtocolMessage {
-                            message_type: msg.message_id(),
-                            message:      msg
-                        };
-                        let mut bytes = BytesMut::with_capacity(msg.length());
-                        msg.encode(&mut bytes);
-                        Poll::Ready(Some(bytes))
+        self.commands_rx
+            .poll_next_unpin(cx)
+            .map(|inner| {
+                inner.map_or_else(
+                    || Poll::Ready(None),
+                    |msg| match msg {
+                        SessionCommand::Disconnect { .. } => self.emit_disconnect(cx),
+                        SessionCommand::Message(msg) => {
+                            let msg = StromProtocolMessage {
+                                message_type: msg.message_id(),
+                                message:      msg
+                            };
+                            let mut bytes = BytesMut::with_capacity(msg.length());
+                            msg.encode(&mut bytes);
+                            Poll::Ready(Some(bytes))
+                        }
                     }
-                }
-            )
-        }) {
-            Some(inner)
-        } else {
-            None
-        }
+                )
+            })
+            .flatten()
+            .some_if(|f| f.is_ready())
     }
 
     fn poll_incoming(&mut self, cx: &mut Context<'_>) -> Option<Poll<Option<BytesMut>>> {
@@ -166,7 +167,7 @@ impl StromSession {
                     .unwrap_or(StromSessionMessage::BadMessage { peer_id: self.remote_peer_id })
                 );
 
-                Poll::<()>::Pending
+                ()
             })
             .ok_or_else(|| self.emit_disconnect(cx))
         }) {
@@ -194,31 +195,30 @@ impl StromSession {
             return Poll::Ready(Some(bytes))
         }
 
-        if let Poll::Ready(verification) = self.conn.poll_next_unpin(cx).map(|msg| {
-            // mark status as received. we do this here as the first message should be
-            // status. if its not we want to disconnect which will be polled.
-            self.verification_sidecar.has_received = true;
+        self.conn
+            .poll_next_unpin(cx)
+            .map(|msg| {
+                // mark status as received. we do this here as the first message should be
+                // status. if its not we want to disconnect which will be polled.
+                self.verification_sidecar.has_received = true;
 
-            msg.map(|bytes| {
-                let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
-                msg.map_or(false, |msg| {
-                    // first message has to be status
-                    if let StromMessage::Status(status) = msg.message {
-                        self.verify_incoming_status(status)
-                    } else {
-                        false
-                    }
+                msg.map(|bytes| {
+                    let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
+                    msg.map_or(false, |msg| {
+                        // first message has to be status
+                        if let StromMessage::Status(status) = msg.message {
+                            self.verify_incoming_status(status)
+                        } else {
+                            false
+                        }
+                    })
                 })
+                // if false, i.e verification failed. then we disconnect
+                .filter(|f| *f)
+                .map(|f| Poll::Pending)
+                .unwrap_or_else(|| self.emit_disconnect(cx))
             })
-            .filter(|f| *f)
-            .ok_or_else(|| self.emit_disconnect(cx))
-        }) {
-            if let Err(e) = verification {
-                return e
-            }
-        }
-
-        Poll::Pending
+            .flatten()
     }
 
     fn verify_incoming_status(&self, status: Status) -> bool {

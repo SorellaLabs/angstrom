@@ -46,8 +46,6 @@ async fn test_startup() {
         let verification =
             VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
 
-        let validator =
-            init_validation(NoopProvider::default(), Box::pin(futures::stream::empty()));
 
         let (pool_tx, pool_rx) =
             reth_metrics::common::mpsc::metered_unbounded_channel("order pool");
@@ -61,8 +59,8 @@ async fn test_startup() {
             .with_validator_set(validator_set.clone())
             .build(tp.clone());
 
-        let peer_launched = peer.launch().await.unwrap();
-        // let network = peer_launched.network_mut();
-        // network.add_rlpx_sub_protocol(protocol);
+        let mut peer_launched = peer.launch().await.unwrap();
+        let network = peer_launched.network_mut();
+        network.add_rlpx_sub_protocol(protocol);
     }
 }

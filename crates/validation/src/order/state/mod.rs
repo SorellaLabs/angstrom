@@ -37,6 +37,7 @@ pub enum StateVerificationType {
 /// 3) checking token approvals
 /// 4) deals with possible pending state
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct StateValidation<DB> {
     db:        Arc<RevmLRU<DB>>,
     /// upkeeps all state specific checks.

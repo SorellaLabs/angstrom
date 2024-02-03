@@ -35,7 +35,7 @@ pub struct Validator<DB> {
 
 impl<DB> Validator<DB>
 where
-    DB: StateProviderFactory + Unpin + 'static
+    DB: StateProviderFactory + Clone + Unpin + 'static
 {
     fn new_block(&mut self, state: BundleState) {
         // TODO: update the db + deal with reseting the validation;
@@ -53,7 +53,7 @@ where
 
 impl<DB> Future for Validator<DB>
 where
-    DB: StateProviderFactory + Unpin + 'static
+    DB: StateProviderFactory + Clone + Unpin + 'static
 {
     type Output = ();
 

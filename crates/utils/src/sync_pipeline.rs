@@ -10,7 +10,8 @@ use futures::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
 
 pub enum PipelineAction<T: PipelineOperation> {
     Next(T),
-    Return(T::End)
+    Return(T::End),
+    Err
 }
 
 pub trait ThreadPool: Unpin {
@@ -40,16 +41,14 @@ pub trait PipelineOperation: Unpin + Send + 'static {
 
 pub struct PipelineBuilder<OP, CX>
 where
-    OP: PipelineOperation
+    OP: PipelineOperation,
+    CX: Unpin
 {
     operations: HashMap<
         u8,
         Box<
-            dyn for<'a> Fn(
-                OP,
-                &'a mut CX
-            )
-                -> Box<dyn Future<Output = PipelineAction<OP>> + Unpin + Send>
+            dyn Fn(OP, &mut CX) -> Pin<Box<dyn Future<Output = PipelineAction<OP>> + Unpin + Send>>
+                + Unpin
         >
     >,
     _p:         PhantomData<CX>
@@ -57,7 +56,8 @@ where
 
 impl<OP, CX> PipelineBuilder<OP, CX>
 where
-    OP: PipelineOperation
+    OP: PipelineOperation,
+    CX: Unpin
 {
     pub fn new() -> Self {
         Self { operations: HashMap::new(), _p: PhantomData::default() }
@@ -67,11 +67,8 @@ where
         mut self,
         id: u8,
         item: Box<
-            dyn for<'a> Fn(
-                OP,
-                &'a mut CX
-            )
-                -> Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>
+            dyn Fn(OP, &mut CX) -> Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>
+                + Unpin
         >
     ) -> Self {
         self.operations.insert(id, item);
@@ -90,17 +87,15 @@ where
 
 pub struct PipelineWithIntermediary<T, OP, CX>
 where
-    OP: PipelineOperation
+    OP: PipelineOperation,
+    CX: Unpin
 {
     threadpool: T,
     operations: HashMap<
         u8,
         Box<
-            dyn for<'a> Fn(
-                OP,
-                &'a mut CX
-            )
-                -> Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>
+            dyn Fn(OP, &mut CX) -> Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>
+                + Unpin
         >
     >,
 
@@ -135,7 +130,8 @@ where
                 PipelineAction::Next(item) => {
                     self.spawn_task(item, pipeline_cx);
                 }
-                PipelineAction::Return(r) => return Poll::Ready(Some(r))
+                PipelineAction::Return(r) => return Poll::Ready(Some(r)),
+                PipelineAction::Err => return Poll::Ready(None)
             }
         }
 

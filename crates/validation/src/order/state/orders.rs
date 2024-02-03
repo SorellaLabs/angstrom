@@ -25,6 +25,10 @@ pub struct PendingState {
 pub struct UserOrders(HashMap<UserAddress, (PendingState, Vec<OrderNonce>)>);
 
 impl UserOrders {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
     pub fn new_searcher_order<O: PooledSearcherOrder<ValidationData = SearcherPriorityData>>(
         &mut self,
         order: O,

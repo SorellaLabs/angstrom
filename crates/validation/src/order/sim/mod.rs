@@ -9,14 +9,19 @@ use super::OrderValidationRequest;
 use crate::common::lru_db::RevmLRU;
 
 /// sims the pre and post hook assuming
+#[derive(Clone)]
 pub struct SimValidation<DB> {
     db: Arc<RevmLRU<DB>>
 }
 
 impl<DB> SimValidation<DB>
 where
-    DB: StateProviderFactory + Unpin + 'static
+    DB: StateProviderFactory + Unpin +Clone + 'static
 {
+    pub fn new(db: Arc<RevmLRU<DB>>) -> Self {
+        Self { db }
+    }
+
     pub fn validate_pre_hook(
         &self,
         order: OrderValidationRequest

@@ -96,6 +96,12 @@ pub enum OrderValidationOutcome<O: PoolOrder> {
     Error(TxHash, Box<dyn std::error::Error + Send + Sync>)
 }
 
+impl<O: PoolOrder> OrderValidationOutcome<O> {
+    pub fn is_valid(&self) -> bool {
+        matches!(self, OrderValidationOutcome::Valid { .. })
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ValidationError {
     #[error("{0}")]

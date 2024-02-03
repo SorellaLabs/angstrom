@@ -1,15 +1,34 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
+use alloy_primitives::{Address, U256};
+use futures_util::stream::FuturesUnordered;
+use reth_provider::StateProviderFactory;
+use tokio::task::JoinHandle;
+
+use super::OrderValidationRequest;
 use crate::common::lru_db::RevmLRU;
 
-/// The SimValidation module is responsible for dealing with orders that
-/// need to be partly simulated to prove their possible validity.
-/// These are composable orders where pre and post hooks add uncertainty in
-/// execution validity
-/// 1) This will Sim the pre-hook, do state validation with the updated pre-hook
-/// data (Approvals transfers etc)
-/// 2) Then normal State sim will occur
-/// 3) post-hook will be simmed with updated data to ensure success
+/// sims the pre and post hook assuming
 pub struct SimValidation<DB> {
     db: Arc<RevmLRU<DB>>
+}
+
+impl<DB> SimValidation<DB>
+where
+    DB: StateProviderFactory + Unpin + 'static
+{
+    pub fn validate_pre_hook(
+        &self,
+        order: OrderValidationRequest
+    ) -> (OrderValidationRequest, HashMap<Address, HashMap<U256, U256>>) {
+        todo!()
+    }
+
+    pub fn validate_post_hook(
+        &self,
+        order: OrderValidationRequest,
+        overrides: HashMap<Address, HashMap<U256, U256>>
+    ) -> (OrderValidationRequest, HashMap<Address, HashMap<U256, U256>>) {
+        todo!()
+    }
 }

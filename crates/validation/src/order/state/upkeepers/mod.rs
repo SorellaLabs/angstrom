@@ -79,6 +79,55 @@ impl Upkeepers {
         )
     }
 
+    pub fn verify_composable_order<O: PoolOrder, DB: Send + StateProviderFactory>(
+        &self,
+        order: O,
+        db: Arc<RevmLRU<DB>>,
+        overrides: HashMap<Address, HashMap<U256, U256>>
+    ) -> (UserAccountDetails, O) {
+        let is_valid_nonce = self
+            .nonces
+            .is_valid_nonce(order.from(), order.nonce(), db.clone());
+
+        let (is_valid_pool, is_bid, pool_id) = self
+            .pools
+            .order_info(order.token_in(), order.token_out())
+            .map(|(bid, pool_id)| (true, bid, pool_id))
+            .unwrap_or_default();
+
+        let approvals = self
+            .approvals
+            .fetch_approval_balance_for_token_overrides(
+                order.from(),
+                order.token_in(),
+                db.clone(),
+                &overrides
+            )
+            .unwrap_or_default();
+
+        let balances = self
+            .balances
+            .fetch_balance_for_token_overrides(
+                order.from(),
+                order.token_in(),
+                db.clone(),
+                &overrides
+            )
+            .unwrap_or_default();
+
+        (
+            UserAccountDetails {
+                pool_id,
+                is_bid,
+                is_valid_nonce,
+                token_bals: (order.token_in(), balances),
+                is_valid_pool,
+                token_approvals: (order.token_in(), approvals)
+            },
+            order
+        )
+    }
+
     // update
     pub fn on_new_block(&mut self) {
         todo!()

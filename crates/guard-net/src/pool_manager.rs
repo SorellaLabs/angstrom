@@ -35,7 +35,7 @@ use crate::{
     LruCache, NetworkOrderEvent, ReputationChangeKind, StromMessage, StromNetworkEvent,
     StromNetworkHandle
 };
-///
+
 /// Cache limit of transactions to keep track of for a single peer.
 const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
 

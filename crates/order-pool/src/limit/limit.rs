@@ -3,9 +3,9 @@ use guard_types::orders::{OrderId, OrderPriorityData, PoolOrder, PooledLimitOrde
 use super::{parked::ParkedPool, pending::PendingPool, LimitPoolError, OrderLocation};
 use crate::{common::ValidOrder, BidsAndAsks};
 
-pub struct LimitPool<T: PooledLimitOrder> {
-    pending_orders: Vec<PendingPool<T>>,
-    parked_orders:  Vec<ParkedPool<T>>
+pub struct LimitPool<O: PooledLimitOrder> {
+    pending_orders: Vec<PendingPool<O>>,
+    parked_orders:  Vec<ParkedPool<O>>
 }
 
 impl<O: PooledLimitOrder> LimitPool<O>

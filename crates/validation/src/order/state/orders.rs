@@ -9,16 +9,20 @@ use guard_types::orders::{
 
 use super::upkeepers::UserAccountDetails;
 
+type Amount = U256;
+type OrderNonce = U256;
+type UserAddress = Address;
+
 /// the sum of all pending orders for a given user. This is done
 /// so that validation of specific orders is not dependant on all other orders.
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 pub struct PendingState {
-    token_balances:  HashMap<Address, U256>,
-    token_approvals: HashMap<Address, U256>
+    token_balances:  HashMap<Address, Amount>,
+    token_approvals: HashMap<Address, Amount>
 }
 
-pub struct UserOrders(HashMap<Address, (PendingState, Vec<U256>)>);
+pub struct UserOrders(HashMap<UserAddress, (PendingState, Vec<OrderNonce>)>);
 
 impl UserOrders {
     pub fn new_searcher_order<O: PooledSearcherOrder<ValidationData = SearcherPriorityData>>(
@@ -77,7 +81,7 @@ impl UserOrders {
                 ValidationError::StateValidationError(StateValidationError::InvalidNonce(
                     hash, nonce
                 ))
-            );
+            )
         }
 
         let user = order.from();

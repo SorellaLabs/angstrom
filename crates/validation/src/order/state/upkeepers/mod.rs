@@ -8,9 +8,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use guard_types::orders::PoolOrder;
+use reth_primitives::revm_primitives::{Env, TransactTo, TxEnv};
 use reth_provider::StateProviderFactory;
-use revm::{db::WrapDatabaseRef, interpreter::opcode, new, Database, Inspector, EVM};
-use revm_primitives::{Env, TransactTo, TxEnv};
+use reth_revm::{new, EVM};
+use revm::{db::WrapDatabaseRef, interpreter::opcode, Database, Inspector};
 
 use self::{
     angstrom_pools::AngstromPools, angstrom_tokens::AngstromTokens, approvals::Approvals,

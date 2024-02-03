@@ -4,7 +4,7 @@ use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_sol_macro::sol;
 use parking_lot::RwLock;
 use reth_provider::{StateProvider, StateProviderFactory};
-use revm::DatabaseRef;
+use reth_revm::DatabaseRef;
 
 use crate::order::state::RevmLRU;
 

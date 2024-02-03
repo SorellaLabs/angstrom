@@ -8,9 +8,9 @@ use alloy_sol_types::SolCall;
 use futures::Future;
 use futures_util::FutureExt;
 use guard_types::primitive::ERC20;
+use reth_primitives::revm_primitives::{Address, ExecutionResult, TransactTo, TxEnv, U256};
 use reth_provider::StateProviderFactory;
-use revm::new;
-use revm_primitives::{Address, TransactTo, TxEnv, U256};
+use reth_revm::{new, EVM};
 use tokio::{runtime::Handle, task::JoinHandle};
 
 use crate::common::lru_db::RevmLRU;
@@ -84,9 +84,7 @@ where
 
                     // this is just a balance_of call. should never fail
                     let output = match evm.transact_ref().unwrap().result {
-                        revm_primitives::ExecutionResult::Success { output, .. } => {
-                            output.into_data()
-                        }
+                        ExecutionResult::Success { output, .. } => output.into_data(),
                         _ => unreachable!()
                     };
 

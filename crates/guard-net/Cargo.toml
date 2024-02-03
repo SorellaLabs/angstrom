@@ -28,11 +28,11 @@ reth-provider.workspace = true
 reth-rpc-types.workspace = true
 reth-eth-wire.workspace = true
 reth-network.workspace = true
-reth-net-common = { git = "https://github.com/paradigmxyz/reth", rev = "43cdd73acffa9b5ec0ec5cdadc99829a9c1ec427" }
-reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", rev = "43cdd73acffa9b5ec0ec5cdadc99829a9c1ec427" }
-reth-discv4 = { git = "https://github.com/paradigmxyz/reth", rev = "43cdd73acffa9b5ec0ec5cdadc99829a9c1ec427" }
-reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", rev = "43cdd73acffa9b5ec0ec5cdadc99829a9c1ec427" }
-reth-ecies = { git = "https://github.com/paradigmxyz/reth", rev = "43cdd73acffa9b5ec0ec5cdadc99829a9c1ec427" }
+reth-net-common = { git = "https://github.com/paradigmxyz/reth", rev = "d8a9b58" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", rev = "d8a9b58" }
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", rev = "d8a9b58" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", rev = "d8a9b58" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", rev = "d8a9b58" }
 
 alloy-sol-macro.workspace = true
 alloy-sol-types.workspace = true
@@ -95,7 +95,7 @@ tempfile = { version = "3.3", optional = true }
 [dev-dependencies]
 guard-network.workspace = true
 # reth
-reth-discv4 = { git = "https://github.com/paradigmxyz/reth", rev = "43cdd73acffa9b5ec0ec5cdadc99829a9c1ec427", features = [
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", rev = "d8a9b58", features = [
   "test-utils",
 ] }
 reth-interfaces = { workspace = true, features = ["test-utils"] }

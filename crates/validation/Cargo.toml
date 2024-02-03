@@ -32,7 +32,6 @@ derive_more = "0.99.17"
 
 # revm
 revm.workspace = true
-revm-primitives.workspace = true
 
 # reth
 reth-primitives.workspace = true

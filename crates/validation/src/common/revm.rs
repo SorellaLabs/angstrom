@@ -3,8 +3,8 @@ use std::{collections::HashMap, sync::Arc, task::Poll};
 use ethers_core::abi::Bytes;
 use futures_util::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
 use guard_utils::PollExt;
+use reth_primitives::revm_primitives::{Address, Bytecode};
 use reth_provider::StateProviderFactory;
-use revm_primitives::{Address, Bytecode};
 use tokio::{runtime::Handle, sync::mpsc::UnboundedReceiver, task::JoinHandle};
 
 use crate::{

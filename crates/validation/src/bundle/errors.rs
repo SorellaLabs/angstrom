@@ -1,7 +1,9 @@
 use ethers_core::types::transaction::eip712::{Eip712Error, TypedData};
 use guard_types::rpc::SignedLimitOrder;
-use reth_primitives::Signature;
-use revm_primitives::{Account, Address, HashMap, TxEnv};
+use reth_primitives::{
+    revm_primitives::{Account, Address, HashMap, TxEnv},
+    Signature
+};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 

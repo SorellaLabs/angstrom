@@ -27,6 +27,7 @@ use reth::{
         ext::{RethCliExt, RethNodeCommandConfig},
         Cli
     },
+    dirs::{DataDirPath, MaybePlatformPath},
     primitives::{Chain, PeerId},
     providers::CanonStateSubscriptions
 };
@@ -51,10 +52,14 @@ impl RethCliExt for StromRethExt {
 struct StaleGuardConfig {
     #[clap(long)]
     pub mev_guard: bool,
+
+    #[arg(long, value_name = "DATA_DIR", verbatim_doc_comment, default_value_t)]
+    pub datadir: MaybePlatformPath<DataDirPath>,
+
     /// init state. Set when network is started. We store the data here
     /// so that we can give handles to rpc modules
     #[clap(skip)]
-    state:         GuardInitState
+    state: GuardInitState
 }
 
 type DefaultPoolHandle = PoolHandle<

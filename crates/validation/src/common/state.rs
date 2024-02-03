@@ -7,9 +7,9 @@ use guard_types::{
     primitive::{Angstrom::Bundle, *},
     rpc::CallerInfo
 };
+use reth_primitives::revm_primitives::{Bytecode, ExecutionResult, TransactTo, TxEnv};
 use reth_provider::StateProviderFactory;
-use revm::EVM;
-use revm_primitives::{db::DatabaseRef, Bytecode, ExecutionResult, TransactTo, TxEnv};
+use reth_revm::{DatabaseRef, EVM};
 
 use crate::{
     bundle::{

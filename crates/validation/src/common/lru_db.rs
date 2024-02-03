@@ -3,10 +3,13 @@ use std::{collections::HashMap, sync::Arc};
 use alloy_primitives::Address;
 use parking_lot::RwLock;
 use reth_interfaces::RethError;
-use reth_primitives::KECCAK_EMPTY;
+use reth_primitives::{
+    revm_primitives::{AccountInfo, Bytecode, B256, U256},
+    KECCAK_EMPTY
+};
 use reth_provider::{AccountReader, StateProvider, StateProviderFactory};
+use reth_revm::DatabaseRef;
 use revm::db::DbAccount;
-use revm_primitives::{db::DatabaseRef, AccountInfo, Bytecode, B256, U256};
 use schnellru::{ByMemoryUsage, LruMap};
 
 use crate::{

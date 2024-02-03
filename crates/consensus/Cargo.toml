@@ -28,7 +28,6 @@ anyhow.workspace = true
 url.workspace = true
 serde_json.workspace = true
 hex-literal.workspace = true
-revm-primitives.workspace = true
 rayon.workspace = true
 alloy-rlp.workspace = true
 reth-tasks.workspace = true

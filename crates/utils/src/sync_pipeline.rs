@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, VecDeque},
     marker::PhantomData,
+    ops::Deref,
     pin::Pin,
     process::Output,
     task::{Context, Poll}
@@ -39,18 +40,35 @@ pub trait PipelineOperation: Unpin + Send + 'static {
     fn get_next_operation(&self) -> u8;
 }
 
+pub type PipelineFut<OP> = Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>;
+
+pub struct FnPtr<OP, CX> {
+    ptr: usize,
+    _p:  PhantomData<(OP, CX)>
+}
+
+impl<OP, CX> FnPtr<OP, CX>
+where
+    OP: PipelineOperation,
+    CX: Unpin
+{
+    pub fn new(f: fn(OP, &mut CX) -> PipelineFut<OP>) -> Self {
+        Self { ptr: f as usize, _p: PhantomData::default() }
+    }
+
+    pub fn get_fn<'a>(&'a self) -> &'a fn(OP, &mut CX) -> PipelineFut<OP> {
+        let fnptr = self.ptr as *const ();
+        let ptr: fn(OP, &mut CX) -> PipelineFut<OP> = unsafe { std::mem::transmute(fnptr) };
+        unsafe { std::mem::transmute(&ptr) }
+    }
+}
+
 pub struct PipelineBuilder<OP, CX>
 where
     OP: PipelineOperation,
     CX: Unpin
 {
-    operations: HashMap<
-        u8,
-        Box<
-            dyn Fn(OP, &mut CX) -> Pin<Box<dyn Future<Output = PipelineAction<OP>> + Unpin + Send>>
-                + Unpin
-        >
-    >,
+    operations: HashMap<u8, FnPtr<OP, CX>>,
     _p:         PhantomData<CX>
 }
 
@@ -63,15 +81,8 @@ where
         Self { operations: HashMap::new(), _p: PhantomData::default() }
     }
 
-    pub fn add_step(
-        mut self,
-        id: u8,
-        item: Box<
-            dyn Fn(OP, &mut CX) -> Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>
-                + Unpin
-        >
-    ) -> Self {
-        self.operations.insert(id, item);
+    pub fn add_step(mut self, id: u8, item: FnPtr<OP, CX>) -> Self {
+        self.operations.insert(id, item.into());
         self
     }
 
@@ -91,16 +102,10 @@ where
     CX: Unpin
 {
     threadpool: T,
-    operations: HashMap<
-        u8,
-        Box<
-            dyn Fn(OP, &mut CX) -> Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>
-                + Unpin
-        >
-    >,
+    operations: HashMap<u8, FnPtr<OP, CX>>,
 
     needing_queue: VecDeque<OP>,
-    tasks: FuturesUnordered<Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>>
+    tasks:         FuturesUnordered<PipelineFut<OP>>
 }
 
 impl<T, OP, CX> PipelineWithIntermediary<T, OP, CX>
@@ -115,7 +120,7 @@ where
 
     fn spawn_task(&mut self, op: OP, pipeline_cx: &mut CX) {
         let id = op.get_next_operation();
-        let c_fn = self.operations.get(&id).unwrap();
+        let c_fn = self.operations.get(&id).unwrap().get_fn();
         self.tasks
             .push(self.threadpool.spawn(c_fn(op, pipeline_cx)))
     }

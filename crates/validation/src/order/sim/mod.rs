@@ -16,7 +16,7 @@ pub struct SimValidation<DB> {
 
 impl<DB> SimValidation<DB>
 where
-    DB: StateProviderFactory + Unpin +Clone + 'static
+    DB: StateProviderFactory + Unpin + Clone + 'static
 {
     pub fn new(db: Arc<RevmLRU<DB>>) -> Self {
         Self { db }

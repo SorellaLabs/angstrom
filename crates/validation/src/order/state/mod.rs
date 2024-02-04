@@ -22,13 +22,7 @@ use crate::common::{executor::ThreadPool, lru_db::RevmLRU};
 pub mod orders;
 pub mod upkeepers;
 
-type PostHookOverrides = HashMap<Address, HashMap<U256, U256>>;
-
-pub enum StateVerificationType {
-    Regular(OrderValidationRequest, UserAccountDetails),
-    Prehook(OrderValidationRequest, UserAccountDetails, PostHookOverrides),
-    PostHook(OrderValidationRequest, UserAccountDetails)
-}
+type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 
 /// State validation is all validation that requires reading from the Ethereum
 /// database, these operations are:
@@ -75,7 +69,7 @@ where
     pub fn validate_state_prehook(
         &self,
         order: OrderValidationRequest,
-        prehook_state_deltas: HashMap<Address, HashMap<U256, U256>>
+        prehook_state_deltas: &HookOverrides
     ) -> (OrderValidationRequest, UserAccountDetails) {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();
@@ -102,7 +96,7 @@ where
     pub fn validate_state_posthook(
         &self,
         order: OrderValidationRequest,
-        prehook_state_deltas: HashMap<Address, HashMap<U256, U256>>
+        prehook_state_deltas: &HookOverrides
     ) -> (OrderValidationRequest, UserAccountDetails) {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();

@@ -53,6 +53,24 @@ impl UserOrders {
         })
     }
 
+    pub fn new_composable_limit_order<O: PooledLimitOrder<ValidationData = OrderPriorityData>>(
+        &mut self,
+        order: O,
+        deltas: UserAccountDetails
+    ) -> (OrderValidationOutcome<O>, HashMap<Address, HashMap<U256, U256>>) {
+        todo!()
+    }
+
+    pub fn new_composable_searcher_order<
+        O: PooledSearcherOrder<ValidationData = SearcherPriorityData>
+    >(
+        &mut self,
+        order: O,
+        deltas: UserAccountDetails
+    ) -> (OrderValidationOutcome<O>, HashMap<Address, HashMap<U256, U256>>) {
+        todo!()
+    }
+
     /// called when a user has a state change on their address. When this
     /// happens we re-evaluate all of there pending orders so we do a
     /// hard-reset here.

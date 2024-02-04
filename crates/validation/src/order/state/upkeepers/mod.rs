@@ -83,7 +83,7 @@ impl Upkeepers {
         &self,
         order: O,
         db: Arc<RevmLRU<DB>>,
-        overrides: HashMap<Address, HashMap<U256, U256>>
+        overrides: &HashMap<Address, HashMap<U256, U256>>
     ) -> (UserAccountDetails, O) {
         let is_valid_nonce = self
             .nonces
@@ -101,7 +101,7 @@ impl Upkeepers {
                 order.from(),
                 order.token_in(),
                 db.clone(),
-                &overrides
+                overrides
             )
             .unwrap_or_default();
 
@@ -111,7 +111,7 @@ impl Upkeepers {
                 order.from(),
                 order.token_in(),
                 db.clone(),
-                &overrides
+                overrides
             )
             .unwrap_or_default();
 

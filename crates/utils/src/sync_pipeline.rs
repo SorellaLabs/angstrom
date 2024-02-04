@@ -125,7 +125,7 @@ where
             .push(self.threadpool.spawn(c_fn(op, pipeline_cx)))
     }
 
-    pub fn poll(&mut self, pipeline_cx: &mut CX, cx: &mut Context<'_>) -> Poll<Option<OP::End>> {
+    pub fn poll(&mut self, cx: &mut Context<'_>, pipeline_cx: &mut CX) -> Poll<Option<OP::End>> {
         while let Some(item) = self.needing_queue.pop_front() {
             self.spawn_task(item, pipeline_cx)
         }

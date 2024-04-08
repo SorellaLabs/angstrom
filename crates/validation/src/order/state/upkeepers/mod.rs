@@ -10,7 +10,7 @@ use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use angstrom_types::orders::PoolOrder;
 use reth_primitives::revm_primitives::{Env, TransactTo, TxEnv};
 use reth_provider::StateProviderFactory;
-use reth_revm::{new, EVM};
+use reth_revm::EvmBuilder;
 use revm::{db::WrapDatabaseRef, interpreter::opcode, Database, Inspector};
 
 use self::{
@@ -144,17 +144,17 @@ where
 {
     let prob_address = Address::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0]);
 
-    let mut evm: EVM<RevmLRU<DB>> = new();
-    evm.database(db.clone());
-
     let mut tx_env = TxEnv::default();
-
     tx_env.transact_to = TransactTo::Call(wanted_address);
     tx_env.data = call_data.clone();
     tx_env.caller = prob_address.clone();
-    evm.env = Env { tx: tx_env, ..Default::default() };
 
-    let res = U256::from_be_slice(&evm.transact_ref().unwrap().result.output().unwrap().0);
+    let mut evm = EvmBuilder::default()
+        .with_db(db.clone())
+        .with_tx_env(tx_env.clone())
+        .build();
+
+    let res = U256::from_be_slice(&evm.transact().unwrap().result.output().unwrap().0);
 
     let one = U256::from(1);
     let prob_value = if res == U256::MAX { res - one } else { res + one };
@@ -171,15 +171,17 @@ where
         let mut db = db.clone();
         db.set_state_overrides(overrides);
 
-        let mut evm: EVM<RevmLRU<DB>> = new();
-        evm.database(db);
         let mut tx_env = TxEnv::default();
         tx_env.transact_to = TransactTo::Call(wanted_address);
         tx_env.data = call_data.clone();
         tx_env.caller = prob_address.clone();
-        evm.env = Env { tx: tx_env, ..Default::default() };
 
-        let res = U256::from_be_slice(&evm.transact_ref().unwrap().result.output().unwrap().0);
+        let mut evm = EvmBuilder::default()
+            .with_db(db)
+            .with_tx_env(tx_env.clone())
+            .build();
+
+        let res = U256::from_be_slice(&evm.transact().unwrap().result.output().unwrap().0);
 
         if res == prob_value {
             return Ok(U256::from(i))

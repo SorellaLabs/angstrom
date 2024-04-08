@@ -198,10 +198,10 @@ where
             .with_tx_env(tx_env)
             .build();
 
-        let tx = evm.tx();
+        let tx = evm.tx().clone();
         let _ = match tx.transact_to {
             TransactTo::Call(a) => a,
-            TransactTo::Create(_) => return Err(SimError::CallInsteadOfCreateError(tx))
+            TransactTo::Create(_) => return Err(SimError::CallInsteadOfCreateError(tx.clone()))
         };
 
         let result = evm

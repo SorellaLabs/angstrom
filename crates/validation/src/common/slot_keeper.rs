@@ -84,7 +84,7 @@ where
                         .build();
 
                     // this is just a balance_of call. should never fail
-                    let output = match evm.transact_ref().unwrap().result {
+                    let output = match evm.transact().unwrap().result {
                         ExecutionResult::Success { output, .. } => output.into_data(),
                         _ => unreachable!()
                     };

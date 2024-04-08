@@ -1,17 +1,11 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashMap, task::Poll};
 mod strom_peer;
-
-use angstrom_network::{NetworkBuilder, StatusState, VerificationSidecar};
-use parking_lot::RwLock;
-use rand::thread_rng;
-use reth_network::test_utils::{PeerConfig, Testnet};
+use angstrom_network::StromNetworkEvent;
+use futures::stream::StreamExt;
 use reth_primitives::*;
 use reth_provider::test_utils::NoopProvider;
-use reth_rpc_types::pk_to_id;
-use reth_tasks::TokioTaskExecutor;
-use reth_transaction_pool::test_utils::TestPool;
-use secp256k1::{Secp256k1, SecretKey};
-use validation::init_validation;
+use secp256k1::SecretKey;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use self::strom_peer::StromPeer;
 
@@ -19,15 +13,83 @@ use self::strom_peer::StromPeer;
 /// as-well as expand appon to allow for composing tests and ensuring full
 /// performance
 pub struct AngstromTestnet {
-    pub peers: Vec<StromPeer>
+    pub peers:       HashMap<PeerId, StromPeer>,
+    pub peer_events: HashMap<PeerId, UnboundedReceiverStream<StromNetworkEvent>>
 }
 
 impl AngstromTestnet {
-    pub fn new(peers: usize) -> Self {
-        Self { peers: vec![] }
+    pub async fn new(peers: usize, provider: NoopProvider) -> Self {
+        let peers = futures::stream::iter(0..peers)
+            .map(|_| async move {
+                let peer = StromPeer::new(provider.clone()).await;
+                let pk = peer.get_node_public_key();
+                (pk, peer)
+            })
+            .buffer_unordered(4)
+            .collect::<HashMap<_, _>>()
+            .await;
+
+        let peer_events = peers
+            .iter()
+            .map(|(k, p)| (*k, p.sub_network_events()))
+            .collect::<HashMap<_, _>>();
+
+        Self { peers, peer_events }
     }
 
     pub fn add_new_peer(&mut self, peer: StromPeer) {
-        self.peers.push(peer)
+        let pk = peer.get_node_public_key();
+        self.peers.insert(pk, peer);
+    }
+
+    pub fn peers(&self) -> impl Iterator<Item = (&PeerId, &StromPeer)> + '_ {
+        self.peers.iter()
+    }
+
+    pub fn peers_mut(&mut self) -> impl Iterator<Item = (&PeerId, &mut StromPeer)> + '_ {
+        self.peers.iter_mut()
+    }
+
+    /// ensures all peers have eachother on there validator list
+    pub async fn connect_all_peers(&mut self) -> bool {
+        let peer_set = self.peers.keys().collect::<Vec<_>>();
+        for (pk, peer) in &self.peers {
+            for other in &peer_set {
+                if pk == *other {
+                    continue
+                }
+                peer.add_validator(**other)
+            }
+        }
+
+
+        let needed_peers = self.peers.len() -1;
+        std::future::poll_fn(|cx| {
+
+        }).await
+        // wait on each peer to add all other peers
+
+        self.
+
+        true
+    }
+
+    /// returns the next event that any peer emits
+    pub async fn progress_to_next_event(&mut self) -> StromNetworkEvent {
+        let mut subscriptions = self
+            .peers()
+            .map(|(_, peer)| peer.sub_network_events())
+            .collect::<Vec<_>>();
+
+        std::future::poll_fn(|cx| {
+            for sub in &mut subscriptions {
+                if let Poll::Ready(Some(res)) = sub.poll_next_unpin(cx) {
+                    return Poll::Ready(res)
+                }
+            }
+
+            Poll::Pending
+        })
+        .await
     }
 }

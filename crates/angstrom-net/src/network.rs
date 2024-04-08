@@ -71,6 +71,12 @@ impl StromNetworkHandle {
     pub fn remove_peer(&self, peer: PeerId) {
         self.send_message(StromNetworkHandleMsg::RemovePeer(peer))
     }
+
+    pub fn peer_count(&self) -> usize {
+        self.inner
+            .num_active_peers
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 #[derive(Debug)]

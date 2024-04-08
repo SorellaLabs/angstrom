@@ -40,8 +40,11 @@ reth-primitives = { workspace = true, features = ["test-utils"] }
 # integration tests
 reth-network = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
-alloy-primitives.workspace = true
 
+tokio-util.workspace = true
+
+tokio.workspace = true
+tokio-stream.workspace = true
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }

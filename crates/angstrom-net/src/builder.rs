@@ -78,7 +78,7 @@ impl NetworkBuilder {
     /// builds the network spawning it on its own thread, returning the
     /// communication channel along with returning the protocol it
     /// represents.
-    pub fn build<TP: TaskSpawner, DB: Send + Unpin + 'static>(
+    pub fn build_handle<TP: TaskSpawner, DB: Send + Unpin + 'static>(
         mut self,
         tp: TP,
         db: DB

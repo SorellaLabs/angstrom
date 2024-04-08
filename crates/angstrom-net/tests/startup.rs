@@ -6,6 +6,7 @@ use rand::thread_rng;
 use reth_network::test_utils::{PeerConfig, Testnet};
 use reth_primitives::*;
 use reth_provider::test_utils::NoopProvider;
+use reth_rpc_types::pk_to_id;
 use reth_tasks::TokioTaskExecutor;
 use reth_transaction_pool::test_utils::TestPool;
 use secp256k1::{Secp256k1, SecretKey};
@@ -36,10 +37,12 @@ async fn test_startup() {
     let net: Testnet<NoopProvider, TestPool> = Testnet::default();
 
     for (secret_key, peer) in init {
+        let secp = Secp256k1::default();
+        let pub_key = secret_key.public_key(&secp);
         let state = StatusState {
             version:   0,
             chain:     Chain::mainnet(),
-            peer:      PeerId::default(),
+            peer:      pk_to_id(&pub_key),
             timestamp: 0
         };
 

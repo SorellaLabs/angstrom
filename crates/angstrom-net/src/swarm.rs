@@ -28,6 +28,10 @@ impl<DB: Unpin> Swarm<DB> {
         Swarm { sessions, state }
     }
 
+    pub fn state(&self) -> &StromState<DB> {
+        &self.state
+    }
+
     pub fn state_mut(&mut self) -> &mut StromState<DB> {
         &mut self.state
     }

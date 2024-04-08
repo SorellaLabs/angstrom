@@ -44,7 +44,8 @@ impl<DB: Unpin> StromNetworkManager<DB> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         let peers = Arc::new(AtomicUsize::default());
-        let handle = StromNetworkHandle::new(peers.clone(), UnboundedMeteredSender::new(tx, ""));
+        let handle =
+            StromNetworkHandle::new(peers.clone(), UnboundedMeteredSender::new(tx, "strom handle"));
 
         Self {
             handle: handle.clone(),
@@ -55,6 +56,14 @@ impl<DB: Unpin> StromNetworkManager<DB> {
             to_consensus_manager,
             event_listeners: Vec::new()
         }
+    }
+
+    pub fn swarm_mut(&mut self) -> &mut Swarm<DB> {
+        &mut self.swarm
+    }
+
+    pub fn swarm(&self) -> &Swarm<DB> {
+        &self.swarm
     }
 
     pub fn get_handle(&self) -> StromNetworkHandle {

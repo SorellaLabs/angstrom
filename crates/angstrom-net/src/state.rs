@@ -29,8 +29,8 @@ impl<DB> StromState<DB> {
         &mut self.peers_manager
     }
 
-    pub fn update_validators(&mut self) {
-        todo!("waiting for contracts");
+    pub fn validators(&self) -> Arc<RwLock<HashSet<Address>>> {
+        self.validators.clone()
     }
 
     pub fn poll(&mut self, cx: &mut Context<'_>) -> Option<StateEvent> {

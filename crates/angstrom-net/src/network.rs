@@ -68,7 +68,7 @@ impl StromNetworkHandle {
 
     /// Sends a message to the [`NetworkManager`](crate::NetworkManager) to
     /// remove a peer from the set corresponding to given kind.
-    fn remove_peer(&self, peer: PeerId) {
+    pub fn remove_peer(&self, peer: PeerId) {
         self.send_message(StromNetworkHandleMsg::RemovePeer(peer))
     }
 }

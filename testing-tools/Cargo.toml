@@ -1,0 +1,64 @@
+[package]
+name = "testing-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+consensus.workspace = true
+angstrom-types.workspace = true
+angstrom-utils.workspace = true
+angstrom-network.workspace = true
+angstrom-eth.workspace = true
+order-pool.workspace = true
+validation.workspace = true
+
+reth-network-api.workspace = true
+reth-codecs.workspace = true
+reth-tasks.workspace = true
+reth-rpc-types.workspace = true
+reth-eth-wire.workspace = true
+futures.workspace = true
+
+reth-net-common = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
+
+# reth
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc", features = [
+  "test-utils",
+] }
+reth-interfaces = { workspace = true, features = ["test-utils"] }
+reth-primitives = { workspace = true, features = ["test-utils"] }
+
+# we need to enable the test-utils feature in our own crate to use utils in
+# integration tests
+reth-network = { workspace = true, features = ["test-utils"] }
+reth-metrics.workspace = true
+alloy-primitives.workspace = true
+
+reth-provider = { workspace = true, features = ["test-utils"] }
+reth-tracing.workspace = true
+reth-transaction-pool = { workspace = true, features = ["test-utils"] }
+
+ethers-core = { workspace = true, default-features = false }
+ethers-providers = { workspace = true, default-features = false, features = [
+  "ws",
+] }
+ethers-signers = { workspace = true, default-features = false }
+ethers-middleware = { workspace = true, default-features = false }
+
+enr = { workspace = true, features = ["serde", "rust-secp256k1"] }
+rand.workspace = true
+secp256k1.workspace = true
+
+# misc
+serial_test.workspace = true
+tempfile.workspace = true
+
+parking_lot.workspace = true

@@ -4,7 +4,7 @@ use std::{
 };
 
 use angstrom_types::{consensus::Proposal, primitive::Angstrom::Bundle};
-use guard_utils::{ConsensusState, WAITING_NEXT_BLOCK};
+use angstrom_utils::{ConsensusState, WAITING_NEXT_BLOCK};
 
 use super::{
     completed::CompletedState, GlobalStateContext, RoundAction, RoundStateMessage, StateTransition

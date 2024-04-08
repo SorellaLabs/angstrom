@@ -7,6 +7,7 @@ use std::{
     task::{Context, Poll}
 };
 
+use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     orders::{
         OrderConversion, OrderOrigin, OrderPriorityData, PoolOrder, PooledComposableOrder,
@@ -15,7 +16,6 @@ use angstrom_types::{
     rpc::*
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
-use guard_eth::manager::EthEvent;
 use order_pool::{
     AllOrders, Order, OrderPoolHandle, OrderPoolInner, OrderSet, OrdersToPropagate, PoolConfig,
     PoolInnerEvent

@@ -9,8 +9,8 @@ use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     submission::BestBundles
 };
+use angstrom_utils::{return_if, AtomicConsensus, ConsensusState, IsLeader, ORDER_ACCUMULATION};
 use futures::{Future, Stream};
-use guard_utils::{return_if, AtomicConsensus, ConsensusState, IsLeader, ORDER_ACCUMULATION};
 use reth_primitives::B512;
 
 use self::{
@@ -31,7 +31,7 @@ pub mod submit;
 pub struct RoundState {
     /// The current ethereum height
     height:         u64,
-    /// If this guard is leader for the given height
+    /// If this angstrom is leader for the given height
     is_leader:      IsLeader,
     /// The current leader address,
     leader_address: B512,
@@ -120,7 +120,7 @@ impl Stream for RoundState {
 }
 
 pub enum RoundStateMessage {
-    /// All guards lock there lower-bound and broadcast it
+    /// All angstroms lock there lower-bound and broadcast it
     PrePropose(),
     /// the leader for this round will send out the vanilla bundle and
     /// lower-bound commit for the round

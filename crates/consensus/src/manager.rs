@@ -3,9 +3,9 @@ use std::{
     task::{Context, Poll}
 };
 
+use angstrom_network::{manager::StromConsensusEvent, StromNetworkHandle};
+use angstrom_utils::PollExt;
 use futures::{Future, FutureExt, Stream, StreamExt};
-use guard_network::{manager::StromConsensusEvent, StromNetworkHandle};
-use guard_utils::PollExt;
 use order_pool::OrderPoolHandle;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::CanonStateNotifications;

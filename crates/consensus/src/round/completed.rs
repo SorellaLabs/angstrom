@@ -3,7 +3,7 @@ use std::{
     task::{Context, Poll}
 };
 
-use guard_utils::ConsensusState;
+use angstrom_utils::ConsensusState;
 
 use super::{GlobalStateContext, RoundAction, RoundStateMessage, StateTransition};
 

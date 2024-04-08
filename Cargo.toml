@@ -102,13 +102,11 @@ alloy-rlp = { version = "0.3.4" }
 alloy-rlp-derive = { version = "0.3.4" }
 alloy-primitives = { version = "0.7.0", features = ["rlp"] }
 
-
 hex-literal = "0.4.1"
 ethers-core = { version = "2.0.10", default-features = false }
 ethers-providers = { version = "2.0.10", features = ["ws"] }
 ethers-signers = { version = "2.0.10", default-features = false }
 ethers-middleware = { version = "2.0.10", default-features = false }
-
 
 # anvil = { git = "https://github.com/SorellaLabs/fastfoundry" }
 # anvil-core = { git = "https://github.com/SorellaLabs/fastfoundry" }
@@ -148,7 +146,7 @@ jsonrpsee-types = { version = "0.22.3" }
 
 
 ## crypto
-secp256k1 = { version = "0.29.0", default-features = false, features = [
+secp256k1 = { version = "0.27.0", default-features = false, features = [
   "global-context",
   "rand-std",
   "recovery",

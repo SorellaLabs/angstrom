@@ -11,7 +11,7 @@ const ROUND_ROBIN_CACHE: &str = "./";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RoundRobinAlgo {
     /// this is just a placeholder
-    guards_with_score:    HashMap<B512, u64>,
+    angstroms_with_score: HashMap<B512, u64>,
     current_block_height: u64
 }
 
@@ -24,7 +24,7 @@ impl RoundRobinAlgo {
             let bh = cache.current_block_height;
             (cache, bh)
         } else {
-            (Self { guards_with_score: HashMap::new(), current_block_height: 0 }, 0)
+            (Self { angstroms_with_score: HashMap::new(), current_block_height: 0 }, 0)
         }
     }
 

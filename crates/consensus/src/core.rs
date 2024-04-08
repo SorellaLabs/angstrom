@@ -21,7 +21,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub enum ConsensusMessage {
-    /// All guards lock there lower-bound and broadcast it
+    /// All angstroms lock there lower-bound and broadcast it
     PrePropose(PreProposal),
     /// the leader for this round will send out the vanilla bundle and
     /// lower-bound commit for the round
@@ -37,7 +37,7 @@ pub enum ConsensusError {
 }
 
 /// The ConsensusCore module handles everything related to consensus.
-/// This includes tracking slashable events, other guards commits and votes
+/// This includes tracking slashable events, other angstroms commits and votes
 /// and submitting to consensus.
 /// # Design Principles
 /// The main interfacing idea for the ConsensusCore is that this module
@@ -46,7 +46,7 @@ pub enum ConsensusError {
 /// possible (Of course we cannot rid all of this, however there is always a
 /// focus to minimize this). all values that are handed to this module are true.
 /// for example, this means that the consensus module doesn't know of any other
-/// bundles that this guard has built except for the most profitable one. Nor
+/// bundles that this angstrom has built except for the most profitable one. Nor
 /// does it know what the proper pricing for a given storage slot is. We
 /// abstract all of this out in order to keep this module as clean as possible
 /// as proper functionality is critical here to ensure that angstrom works
@@ -57,7 +57,7 @@ pub struct ConsensusCore {
     round_state:        RoundState,
     /// leader selection algo
     leader_selection:   RoundRobinAlgo,
-    /// collects + formulates evidence of byzantine guards
+    /// collects + formulates evidence of byzantine angstroms
     evidence_collector: EvidenceCollector,
     /// deals with all signing and signature verification
     signer:             Signer,
@@ -75,7 +75,7 @@ impl ConsensusCore {
     pub fn new_block(&mut self, block: Arc<Block<H256>>) {
         // need to make sure that this is sequential
         if self.round_state.current_height() + 1 == block.number.unwrap().as_u64() {
-            // TODO: wire in guard selection stuff
+            // TODO: wire in angstrom selection stuff
             let new_leader = self.leader_selection.on_new_block(block.clone());
             let is_leader = self.signer.is_us(&new_leader);
 

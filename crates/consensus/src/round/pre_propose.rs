@@ -4,8 +4,8 @@ use std::{
 };
 
 use angstrom_types::submission::BestBundles;
+use angstrom_utils::{ConsensusState, COMMIT, PROPOSE};
 use futures::FutureExt;
-use guard_utils::{ConsensusState, COMMIT, PROPOSE};
 
 use super::{
     commit::CommitState, propose::ProposeState, GlobalStateContext, RoundAction, RoundStateMessage,

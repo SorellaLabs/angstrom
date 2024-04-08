@@ -2,6 +2,7 @@
 use std::path::{Path, PathBuf};
 
 use reth_node_builder::{FullNode, NodeHandle};
+use secp256k1::{PublicKey, Secp256k1};
 use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
 };
@@ -39,6 +40,7 @@ use reth::{
     dirs::{DataDirPath, MaybePlatformPath},
     primitives::{Chain, PeerId},
     providers::CanonStateSubscriptions,
+    rpc::types::pk_to_id,
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
@@ -104,12 +106,15 @@ pub fn init_network_builder(
     executor: &TaskExecutor
 ) -> eyre::Result<StromNetworkBuilder> {
     let secret_key = get_secret_key(&config.secret_key_location)?;
+    let public_key = PublicKey::from_secret_key(&Secp256k1::new(), &secret_key);
+
     let state = StatusState {
         version:   0,
         chain:     Chain::mainnet(),
-        peer:      PeerId::default(),
+        peer:      pk_to_id(&public_key),
         timestamp: 0
     };
+
     let verification =
         VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
 

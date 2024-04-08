@@ -115,7 +115,7 @@ impl Stream for RoundState {
             return_if!(msg => { is_some() } map(Poll::Ready));
         }
 
-        return Poll::Pending
+        Poll::Pending
     }
 }
 

@@ -32,9 +32,7 @@ impl TryInto<EcRecoveredLimitOrder> for SignedLimitOrder {
     type Error = SigError;
 
     fn try_into(self) -> Result<EcRecoveredLimitOrder, Self::Error> {
-        let sig = self
-            .recover_signer()
-            .ok_or_else(|| SigError::IncorrectSignature)?;
+        let sig = self.recover_signer().ok_or(SigError::IncorrectSignature)?;
 
         Ok(EcRecoveredLimitOrder { signer: sig, signed_order: self })
     }
@@ -72,9 +70,7 @@ impl TryInto<EcRecoveredComposableLimitOrder> for SignedComposableLimitOrder {
     type Error = SigError;
 
     fn try_into(self) -> Result<EcRecoveredComposableLimitOrder, Self::Error> {
-        let sig = self
-            .recover_signer()
-            .ok_or_else(|| SigError::IncorrectSignature)?;
+        let sig = self.recover_signer().ok_or(SigError::IncorrectSignature)?;
 
         Ok(EcRecoveredComposableLimitOrder { signer: sig, signed_order: self })
     }

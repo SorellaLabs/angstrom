@@ -9,7 +9,7 @@ use futures::Future;
 use futures_util::{FutureExt, StreamExt};
 use reth_provider::{CanonStateNotification, CanonStateNotifications, Chain, StateProviderFactory};
 use reth_tasks::TaskSpawner;
-use tokio::sync::mpsc::{channel, Receiver, Sender, UnboundedSender};
+use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use crate::handle::{EthCommand, EthHandle};

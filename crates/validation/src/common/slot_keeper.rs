@@ -74,7 +74,7 @@ where
                     let mut slot = HashMap::new();
                     slot.insert(user_balance_slot, prob_value);
                     let mut overrides = HashMap::new();
-                    overrides.insert((*token_addr).into(), slot);
+                    overrides.insert(*token_addr, slot);
 
                     let mut db = db.clone();
                     db.set_state_overrides(overrides);
@@ -95,7 +95,7 @@ where
                     });
 
                     if U256::MAX == result {
-                        return ((*token_addr).into(), U256::from(i))
+                        return ((*token_addr), U256::from(i))
                     }
                 }
                 unreachable!()

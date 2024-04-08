@@ -79,13 +79,6 @@ where
 
 #[cfg(test)]
 pub mod test {
-    use std::cmp::Ordering;
-
-    use alloy_primitives::{Address, U256};
-    use angstrom_types::orders::{ValidatedOrder, *};
-    use rand::Rng;
-
-    use super::*;
 
     // #[derive(Debug, Clone, Copy)]
     // pub struct NoopOrder {

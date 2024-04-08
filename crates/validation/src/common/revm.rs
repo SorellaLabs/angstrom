@@ -60,10 +60,7 @@ where
 
     fn update_slots(&mut self, touched_slots: AddressSlots) {
         for (addr, t_slots) in touched_slots.into_iter() {
-            let slot = self
-                .slot_changes
-                .entry(addr)
-                .or_insert_with(|| HashMap::new());
+            let slot = self.slot_changes.entry(addr).or_default();
             for (key, val) in t_slots.into_iter() {
                 slot.insert(key, val);
             }
@@ -144,7 +141,7 @@ where
                         sender.send(SimResult::SuccessfulRevmBlockUpdate)
                     };
                 };
-                let _ = self.threadpool.block_on_rt(fut);
+                self.threadpool.block_on_rt(fut);
                 self.slot_changes.clear();
             }
         };

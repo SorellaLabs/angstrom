@@ -82,6 +82,12 @@ pub struct PeersManager {
     ban_duration:       Duration
 }
 
+impl Default for PeersManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PeersManager {
     pub fn new() -> Self {
         Self {

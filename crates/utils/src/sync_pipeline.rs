@@ -1,9 +1,7 @@
 use std::{
     collections::{HashMap, VecDeque},
     marker::PhantomData,
-    ops::Deref,
     pin::Pin,
-    process::Output,
     task::{Context, Poll}
 };
 
@@ -53,10 +51,10 @@ where
     CX: Unpin
 {
     pub fn new(f: fn(OP, &mut CX) -> PipelineFut<OP>) -> Self {
-        Self { ptr: f as usize, _p: PhantomData::default() }
+        Self { ptr: f as usize, _p: PhantomData }
     }
 
-    pub fn get_fn<'a>(&'a self) -> &'a fn(OP, &mut CX) -> PipelineFut<OP> {
+    pub fn get_fn(&self) -> &fn(OP, &mut CX) -> PipelineFut<OP> {
         let fnptr = self.ptr as *const ();
         let ptr: fn(OP, &mut CX) -> PipelineFut<OP> = unsafe { std::mem::transmute(fnptr) };
         unsafe { std::mem::transmute(&ptr) }
@@ -72,17 +70,27 @@ where
     _p:         PhantomData<CX>
 }
 
+impl<OP, CX> Default for PipelineBuilder<OP, CX>
+where
+    OP: PipelineOperation,
+    CX: Unpin
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<OP, CX> PipelineBuilder<OP, CX>
 where
     OP: PipelineOperation,
     CX: Unpin
 {
     pub fn new() -> Self {
-        Self { operations: HashMap::new(), _p: PhantomData::default() }
+        Self { operations: HashMap::new(), _p: PhantomData }
     }
 
     pub fn add_step(mut self, id: u8, item: FnPtr<OP, CX>) -> Self {
-        self.operations.insert(id, item.into());
+        self.operations.insert(id, item);
         self
     }
 

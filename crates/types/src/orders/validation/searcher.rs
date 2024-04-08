@@ -61,7 +61,7 @@ where
     }
 
     pub fn priority_data(&self) -> SearcherPriorityData {
-        self.data.clone()
+        self.data
     }
 }
 

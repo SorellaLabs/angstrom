@@ -16,6 +16,7 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
+#[derive(Default)]
 pub struct Signature(pub ESignature);
 
 impl Signature {
@@ -45,12 +46,6 @@ pub struct CallerInfo {
     pub address:   Address,
     pub nonce:     u64,
     pub overrides: HashMap<Address, HashMap<U256, U256>>
-}
-
-impl Default for Signature {
-    fn default() -> Self {
-        Signature(ESignature::default())
-    }
 }
 
 impl Encodable for Signature {

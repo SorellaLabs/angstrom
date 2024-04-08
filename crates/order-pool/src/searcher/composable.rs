@@ -47,7 +47,7 @@ where
         self.sub_pools
             .iter()
             .filter_map(|pool| pool.winning_order())
-            .map(|validated_order| validated_order.clone())
+            .cloned()
             .collect()
     }
 }

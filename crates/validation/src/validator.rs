@@ -65,6 +65,6 @@ where
             self.on_new_validation_request(req);
         }
 
-        return self.order_validator.poll_unpin(cx)
+        self.order_validator.poll_unpin(cx)
     }
 }

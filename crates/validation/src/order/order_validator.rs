@@ -47,7 +47,7 @@ pub struct ProcessingCtx<DB> {
     pub state:   StateValidation<DB>
 }
 impl<DB> ProcessingCtx<DB> {
-    pub fn user_orders<'a>(&'a mut self) -> &'a mut UserOrders {
+    pub fn user_orders(&mut self) -> &mut UserOrders {
         unsafe { &mut (*self.user_orders) }
     }
 }
@@ -71,7 +71,7 @@ where
             .add_step(4, FnPtr::new(post_hook_sim))
             .build(tokio::runtime::Handle::current());
 
-        Self { state, sim, pipeline, orders: UserOrders::new(), _p: PhantomData::default() }
+        Self { state, sim, pipeline, orders: UserOrders::new(), _p: PhantomData }
     }
 
     /// only checks state

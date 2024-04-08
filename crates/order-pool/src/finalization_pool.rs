@@ -44,6 +44,6 @@ impl<L: PoolOrder, CL: PoolOrder, S: PoolOrder, CS: PoolOrder> FinalizationPool<
                     .filter_map(|hash| self.hashes_to_orders.remove(&hash))
                     .collect()
             })
-            .unwrap_or(vec![])
+            .unwrap_or_default()
     }
 }

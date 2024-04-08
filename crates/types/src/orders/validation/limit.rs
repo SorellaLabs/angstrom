@@ -81,7 +81,7 @@ where
     }
 
     pub fn priority_data(&self) -> OrderPriorityData {
-        self.data.clone()
+        self.data
     }
 }
 

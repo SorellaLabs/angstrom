@@ -166,8 +166,6 @@ impl StromSession {
                     })
                     .unwrap_or(StromSessionMessage::BadMessage { peer_id: self.remote_peer_id })
                 );
-
-                ()
             })
             .ok_or_else(|| self.emit_disconnect(cx))
         }) {

@@ -24,6 +24,12 @@ pub struct PendingState {
 
 pub struct UserOrders(HashMap<UserAddress, (PendingState, Vec<OrderNonce>)>);
 
+impl Default for UserOrders {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserOrders {
     pub fn new() -> Self {
         Self(HashMap::new())
@@ -127,8 +133,7 @@ impl UserOrders {
 
         // subtract token in from approval
         if let Some(token) = pending_state.token_approvals.get_mut(&order.token_in()) {
-            if token
-                .clone()
+            if (*token)
                 .checked_sub(U256::from(order.amount_in()))
                 .is_none()
             {
@@ -143,8 +148,7 @@ impl UserOrders {
         // if approvals passed check balances
         if has_balances {
             if let Some(token) = pending_state.token_balances.get_mut(&order.token_in()) {
-                if token
-                    .clone()
+                if (*token)
                     .checked_sub(U256::from(order.amount_in()))
                     .is_none()
                 {

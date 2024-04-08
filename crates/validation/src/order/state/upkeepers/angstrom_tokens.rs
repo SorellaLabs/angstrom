@@ -14,8 +14,7 @@ pub struct AngstromTokens {
 
 impl AngstromTokens {
     pub fn new<DB>(db: DB) -> Self {
-        let mut this = Self { current_tokens: HashSet::default() };
-        this
+        Self { current_tokens: HashSet::default() }
     }
 
     pub fn get_all_tokens(&self) -> &HashSet<Address> {

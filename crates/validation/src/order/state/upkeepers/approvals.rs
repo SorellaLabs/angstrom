@@ -39,7 +39,7 @@ impl Approvals {
     }
 
     fn get_slot(&self, token: Address, user: Address) -> Option<FixedBytes<32>> {
-        let slot_i: U256 = self.0.get(&token)?.clone();
+        let slot_i: U256 = *self.0.get(&token)?;
         let mut slot = user.to_vec();
         slot.extend(slot_i.to_be_bytes::<32>().to_vec());
         Some(keccak256(slot))

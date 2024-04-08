@@ -413,7 +413,10 @@ where
             }
             OrderValidationOutcome::Invalid(order, e) => {
                 warn!(?order, %e, "invalid order");
-                let peers = self.pending_orders.remove(&order.hash()).unwrap_or(vec![]);
+                let peers = self
+                    .pending_orders
+                    .remove(&order.hash())
+                    .unwrap_or_default();
 
                 OrderOrPeers::Peers(peers)
             }
@@ -431,7 +434,7 @@ where
         let id: OrderId = order.into();
 
         self.pending_orders.remove(&hash);
-        self.hash_to_order_id.insert(hash, id.clone());
+        self.hash_to_order_id.insert(hash, id);
         // nonce overlap is checked during validation so its ok we
         // don't check for duplicates
         self.address_to_orders.entry(user).or_default().push(id);

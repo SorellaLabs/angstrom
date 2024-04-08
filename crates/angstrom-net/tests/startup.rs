@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
-use guard_network::{NetworkBuilder, StatusState, VerificationSidecar};
+use angstrom_network::{NetworkBuilder, StatusState, VerificationSidecar};
 use parking_lot::RwLock;
 use rand::thread_rng;
 use reth_network::test_utils::{PeerConfig, Testnet};

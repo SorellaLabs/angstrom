@@ -147,7 +147,7 @@ where
     let mut tx_env = TxEnv::default();
     tx_env.transact_to = TransactTo::Call(wanted_address);
     tx_env.data = call_data.clone();
-    tx_env.caller = prob_address.clone();
+    tx_env.caller = prob_address;
 
     let mut evm = EvmBuilder::default()
         .with_db(db.clone())
@@ -165,16 +165,16 @@ where
 
         let user_slot = U256::from_be_bytes(*keccak256(user_addr_encoded));
         let mut slot = HashMap::new();
-        slot.insert(user_slot, prob_value.clone());
+        slot.insert(user_slot, prob_value);
         let mut overrides = HashMap::new();
-        overrides.insert(wanted_address.clone(), slot);
+        overrides.insert(wanted_address, slot);
         let mut db = db.clone();
         db.set_state_overrides(overrides);
 
         let mut tx_env = TxEnv::default();
         tx_env.transact_to = TransactTo::Call(wanted_address);
         tx_env.data = call_data.clone();
-        tx_env.caller = prob_address.clone();
+        tx_env.caller = prob_address;
 
         let mut evm = EvmBuilder::default()
             .with_db(db)

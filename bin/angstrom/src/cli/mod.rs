@@ -1,5 +1,5 @@
 //! CLI definition and entrypoint to executable
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use reth_node_builder::{FullNode, NodeHandle};
 use secp256k1::{PublicKey, Secp256k1};
@@ -9,13 +9,13 @@ use tokio::sync::mpsc::{
 mod network_builder;
 
 use angstrom_eth::{
-    handle::{self, Eth, EthCommand, EthHandle},
+    handle::{Eth, EthCommand},
     manager::EthDataCleanser
 };
 use angstrom_network::{
     pool_manager::{OrderCommand, PoolHandle},
     NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    StromNetworkHandle, StromProtocolHandler, VerificationSidecar
+    VerificationSidecar
 };
 use angstrom_rpc::{
     api::{ConsensusApiServer, OrderApiServer, QuotingApiServer},
@@ -29,27 +29,16 @@ use clap::Parser;
 use consensus::{ConsensusCommand, ConsensusHandle, ConsensusManager};
 use reth::{
     args::get_secret_key,
-    builder::{
-        components::{FullNodeComponents, NetworkBuilder},
-        Node
-    },
-    cli::{
-        config::{RethNetworkConfig, RethRpcConfig},
-        Cli
-    },
-    dirs::{DataDirPath, MaybePlatformPath},
-    primitives::{Chain, PeerId},
+    builder::{components::FullNodeComponents, Node},
+    cli::Cli,
+    primitives::Chain,
     providers::CanonStateSubscriptions,
     rpc::types::pk_to_id,
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
-use reth_network::NetworkConfigBuilder;
 use reth_node_ethereum::EthereumNode;
-use validation::{
-    init_validation,
-    validator::{ValidationClient, ValidationRequest}
-};
+use validation::{init_validation, validator::ValidationRequest};
 
 use self::network_builder::AngstromNetworkBuilder;
 

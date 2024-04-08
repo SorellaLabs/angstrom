@@ -53,7 +53,7 @@ where
         let mut prehook_env = TxEnv::default();
         let (prehook_addr, pre_hook_calldata) = txes.pre_hook();
         prehook_env.data = pre_hook_calldata;
-        prehook_env.transact_to = TransactTo::Call(prehook_addr.into());
+        prehook_env.transact_to = TransactTo::Call(prehook_addr);
 
         let (res, mut pre_slots) = self.simulate_single_tx(prehook_env, HashMap::default())?;
         let pre_hook_gas = match res {
@@ -64,7 +64,7 @@ where
         let mut post_env = TxEnv::default();
         let (posthook_addr, posthook_calldata) = txes.post_hook();
         post_env.data = posthook_calldata;
-        post_env.transact_to = TransactTo::Call(posthook_addr.into());
+        post_env.transact_to = TransactTo::Call(posthook_addr);
 
         let out_token_override = overrides.get(&txes.amount_out_token).unwrap();
 
@@ -75,7 +75,7 @@ where
 
         let mut slot_map = HashMap::default();
         slot_map.insert(*out_token_override, current_bal + U256::from(txes.amount_out_lim));
-        overrides.insert(posthook_addr.into(), slot_map);
+        overrides.insert(posthook_addr, slot_map);
 
         let (res, post_slots) = self.simulate_single_tx(post_env, overrides)?;
 
@@ -85,7 +85,7 @@ where
         };
         pre_slots.extend(post_slots);
 
-        return Ok((
+        Ok((
             SimResult::ExecutionResult(BundleOrTransactionResult::HookSimResult {
                 tx: txes.tx,
                 pre_hook_gas,
@@ -101,7 +101,7 @@ where
         contract_overrides: HashMap<Address, Bytecode>
     ) -> Result<SimResult, SimError> {
         let mut env = TxEnv::default();
-        env.data = Bytes::copy_from_slice(&*tx.data().cloned().unwrap());
+        env.data = Bytes::copy_from_slice(&tx.data().cloned().unwrap());
 
         env.transact_to = TransactTo::Call((tx.to_addr().unwrap().0).into());
         let mut db = self.db.clone();

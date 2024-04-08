@@ -19,7 +19,7 @@ impl Balances {
     }
 
     fn get_slot_address(&self, user: Address, token: Address) -> Option<FixedBytes<32>> {
-        let slot_i: U256 = self.0.get(&token)?.clone();
+        let slot_i: U256 = *self.0.get(&token)?;
         let mut slot = user.to_vec();
         slot.extend(slot_i.to_be_bytes::<32>().to_vec());
         Some(keccak256(slot))

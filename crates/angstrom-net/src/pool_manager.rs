@@ -502,7 +502,7 @@ where
                 orders.into_iter().for_each(|order| {
                     self.peers
                         .get_mut(&peer_id)
-                        .and_then(|peer| Some(peer.orders.insert(order.hash())));
+                        .map(|peer| peer.orders.insert(order.hash()));
 
                     match order {
                         PooledOrder::Limit(order) => {

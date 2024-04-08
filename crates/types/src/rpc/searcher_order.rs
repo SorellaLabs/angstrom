@@ -31,9 +31,7 @@ impl TryInto<EcRecoveredSearcherOrder> for SignedSearcherOrder {
     type Error = SigError;
 
     fn try_into(self) -> Result<EcRecoveredSearcherOrder, Self::Error> {
-        let sig = self
-            .recover_signer()
-            .ok_or_else(|| SigError::IncorrectSignature)?;
+        let sig = self.recover_signer().ok_or(SigError::IncorrectSignature)?;
 
         Ok(EcRecoveredSearcherOrder { signer: sig, signed_order: self })
     }
@@ -72,9 +70,7 @@ impl TryInto<EcRecoveredComposableSearcherOrder> for SignedComposableSearcherOrd
     type Error = SigError;
 
     fn try_into(self) -> Result<EcRecoveredComposableSearcherOrder, Self::Error> {
-        let sender = self
-            .recover_signer()
-            .ok_or_else(|| SigError::IncorrectSignature)?;
+        let sender = self.recover_signer().ok_or(SigError::IncorrectSignature)?;
 
         Ok(EcRecoveredComposableSearcherOrder { signer: sender, signed_order: self })
     }

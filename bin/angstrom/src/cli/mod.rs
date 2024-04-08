@@ -1,13 +1,20 @@
 //! CLI definition and entrypoint to executable
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use reth_node_builder::{FullNode, NodeHandle};
+use tokio::sync::mpsc::{
+    channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
+};
+mod network_builder;
 
 use angstrom_eth::{
-    handle::{Eth, EthHandle},
+    handle::{self, Eth, EthCommand, EthHandle},
     manager::EthDataCleanser
 };
 use angstrom_network::{
-    pool_manager::PoolHandle, NetworkBuilder, PoolManagerBuilder, StatusState, StromNetworkHandle,
-    VerificationSidecar
+    pool_manager::{OrderCommand, PoolHandle},
+    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
+    StromNetworkHandle, StromProtocolHandler, VerificationSidecar
 };
 use angstrom_rpc::{
     api::{ConsensusApiServer, OrderApiServer, QuotingApiServer},
@@ -18,48 +25,95 @@ use angstrom_types::rpc::{
     EcRecoveredSearcherOrder
 };
 use clap::Parser;
-use consensus::{ConsensusHandle, ConsensusManager};
+use consensus::{ConsensusCommand, ConsensusHandle, ConsensusManager};
 use reth::{
     args::get_secret_key,
+    builder::{
+        components::{FullNodeComponents, NetworkBuilder},
+        Node
+    },
     cli::{
-        components::{RethNodeComponents, RethRpcComponents},
         config::{RethNetworkConfig, RethRpcConfig},
-        ext::{RethCliExt, RethNodeCommandConfig},
         Cli
     },
     dirs::{DataDirPath, MaybePlatformPath},
     primitives::{Chain, PeerId},
-    providers::CanonStateSubscriptions
+    providers::CanonStateSubscriptions,
+    tasks::TaskExecutor
 };
-use validation::{init_validation, validator::ValidationClient};
+use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
+use reth_network::NetworkConfigBuilder;
+use reth_node_ethereum::EthereumNode;
+use validation::{
+    init_validation,
+    validator::{ValidationClient, ValidationRequest}
+};
+
+use self::network_builder::AngstromNetworkBuilder;
 
 /// Convenience function for parsing CLI options, set up logging and run the
 /// chosen command.
 #[inline]
 pub fn run() -> eyre::Result<()> {
-    Cli::<StromRethExt>::parse()
-        .with_node_extension(AngstromConfig::default())
-        .run()
+    Cli::<AngstromConfig>::parse().run(|builder, args| async move {
+        let executor = builder.task_executor().clone();
+
+        let mut network = init_network_builder(&args, &executor)?;
+        let protocol_handle = network.build_protocol_handler();
+        let channels = initialize_strom_handles();
+
+        // for rpc
+        let pool = channels.get_pool_handle();
+        let consensus = channels.get_consensus_handle();
+
+        let NodeHandle { node, node_exit_future } = builder
+            .with_types(EthereumNode::default())
+            .with_components(
+                EthereumNode::default()
+                    .components()
+                    .network(AngstromNetworkBuilder::new(protocol_handle))
+            )
+            .extend_rpc_modules(move |rpc_components| {
+                let order_api = OrderApi { pool: pool.clone() };
+                let quotes_api = QuotesApi { pool: pool.clone() };
+                let consensus_api = ConsensusApi { consensus: consensus.clone() };
+
+                rpc_components
+                    .modules
+                    .merge_configured(order_api.into_rpc())?;
+                rpc_components
+                    .modules
+                    .merge_configured(quotes_api.into_rpc())?;
+                rpc_components
+                    .modules
+                    .merge_configured(consensus_api.into_rpc())?;
+
+                Ok(())
+            })
+            .launch()
+            .await?;
+
+        initialize_strom_components(args, channels, network, node, &executor);
+
+        node_exit_future.await
+    })
 }
 
-struct StromRethExt;
+pub fn init_network_builder(
+    config: &AngstromConfig,
+    executor: &TaskExecutor
+) -> eyre::Result<StromNetworkBuilder> {
+    let secret_key = get_secret_key(&config.secret_key_location)?;
+    let state = StatusState {
+        version:   0,
+        chain:     Chain::mainnet(),
+        peer:      PeerId::default(),
+        timestamp: 0
+    };
+    let verification =
+        VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
 
-impl RethCliExt for StromRethExt {
-    type Node = AngstromConfig;
-}
-
-#[derive(Debug, Clone, Default, clap::Args)]
-struct AngstromConfig {
-    #[clap(long)]
-    pub mev_guard: bool,
-
-    #[arg(long, value_name = "DATA_DIR", verbatim_doc_comment, default_value_t)]
-    pub datadir: MaybePlatformPath<DataDirPath>,
-
-    /// init state. Set when network is started. We store the data here
-    /// so that we can give handles to rpc modules
-    #[clap(skip)]
-    state: AngstromInitState
+    Ok(StromNetworkBuilder::new(verification))
 }
 
 type DefaultPoolHandle = PoolHandle<
@@ -69,122 +123,113 @@ type DefaultPoolHandle = PoolHandle<
     EcRecoveredComposableSearcherOrder
 >;
 
-/// This holds all the handles that are started with the network that our rpc
-/// modules will need.
-#[derive(Debug, Clone, Default)]
-#[allow(unused)]
-struct AngstromInitState {
-    pub network_handle: Option<StromNetworkHandle>,
-    pub validation:     Option<ValidationClient>,
-    pub consensus:      Option<ConsensusHandle>,
-    pub eth_handle:     Option<EthHandle>,
-    pub pool_handle:    Option<DefaultPoolHandle>
+type DefaultOrderCommand = OrderCommand<
+    EcRecoveredLimitOrder,
+    EcRecoveredComposableLimitOrder,
+    EcRecoveredSearcherOrder,
+    EcRecoveredComposableSearcherOrder
+>;
+
+// due to how the init process works with reth. we need to init like this
+pub struct StromHandles {
+    eth_tx: Sender<EthCommand>,
+    eth_rx: Receiver<EthCommand>,
+
+    validation_tx: UnboundedSender<ValidationRequest>,
+    validation_rx: UnboundedReceiver<ValidationRequest>,
+
+    pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
+    pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
+
+    orderpool_tx: UnboundedSender<DefaultOrderCommand>,
+    orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
+
+    consensus_tx: Sender<ConsensusCommand>,
+    consensus_rx: Receiver<ConsensusCommand>
 }
 
-impl RethNodeCommandConfig for AngstromConfig {
-    fn configure_network<Conf, Reth>(
-        &mut self,
-        config: &mut Conf,
-        components: &Reth
-    ) -> eyre::Result<()>
-    where
-        Conf: RethNetworkConfig,
-        Reth: RethNodeComponents
-    {
-        let path = Path::new("");
-        let secret_key = get_secret_key(&path).unwrap();
-
-        let state = StatusState {
-            version:   0,
-            chain:     Chain::mainnet(),
-            peer:      PeerId::default(),
-            timestamp: 0
-        };
-
-        let verification =
-            VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
-
-        let eth_handle = EthDataCleanser::new(
-            components.events().subscribe_to_canonical_state(),
-            components.provider(),
-            components.task_executor()
-        )
-        .unwrap();
-
-        let validator =
-            init_validation(components.provider(), eth_handle.subscribe_network_stream());
-
-        let (pool_tx, pool_rx) =
-            reth_metrics::common::mpsc::metered_unbounded_channel("order pool");
-
-        let (consensus_tx, consensus_rx) =
-            reth_metrics::common::mpsc::metered_unbounded_channel("consensus");
-
-        let (protocol, network_handle) = NetworkBuilder::new(components.provider(), verification)
-            .with_pool_manager(pool_tx)
-            .with_consensus_manager(consensus_tx)
-            .build(components.task_executor());
-
-        // init our custom sub-protocol
-        config.add_rlpx_sub_protocol(protocol);
-
-        let pool_handle = PoolManagerBuilder::new(
-            validator.clone(),
-            network_handle.clone(),
-            eth_handle.subscribe_network(),
-            pool_rx
-        )
-        .build(components.task_executor());
-
-        let consensus_handle = ConsensusManager::new(
-            components.task_executor(),
-            network_handle.clone(),
-            pool_handle.clone(),
-            validator.clone(),
-            components.events().subscribe_to_canonical_state(),
-            consensus_rx
-        );
-
-        self.state = GuardInitState {
-            pool_handle:    Some(pool_handle),
-            eth_handle:     Some(eth_handle),
-            network_handle: Some(network_handle),
-            validation:     Some(validator),
-            consensus:      Some(consensus_handle)
-        };
-
-        Ok(())
+impl StromHandles {
+    pub fn get_pool_handle(&self) -> DefaultPoolHandle {
+        PoolHandle { manager_tx: self.orderpool_tx.clone() }
     }
 
-    fn extend_rpc_modules<Conf, Reth>(
-        &mut self,
-        _config: &Conf,
-        _components: &Reth,
-        rpc_components: RethRpcComponents<'_, Reth>
-    ) -> eyre::Result<()>
-    where
-        Conf: RethRpcConfig,
-        Reth: RethNodeComponents
-    {
-        //TODO: Add the handle to the order pool & consensus module
-        let consensus = _components.network();
-        let pool = self.state.pool_handle.clone().unwrap();
-
-        let order_api = OrderApi { pool: pool.clone() };
-        let quotes_api = QuotesApi { pool: pool.clone() };
-        let consensus_api = ConsensusApi { consensus };
-        rpc_components
-            .modules
-            .merge_configured(order_api.into_rpc())?;
-        rpc_components
-            .modules
-            .merge_configured(quotes_api.into_rpc())?;
-        rpc_components
-            .modules
-            .merge_configured(consensus_api.into_rpc())?;
-
-        //_components.task_executor().spawn_critical();
-
-        Ok(())
+    pub fn get_consensus_handle(&self) -> ConsensusHandle {
+        ConsensusHandle { sender: self.consensus_tx.clone() }
     }
+}
+
+pub fn initialize_strom_handles() -> StromHandles {
+    let (eth_tx, eth_rx) = channel(100);
+    let (consensus_tx, consensus_rx) = channel(100);
+    let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
+    let (validation_tx, validation_rx) = unbounded_channel();
+    let (orderpool_tx, orderpool_rx) = unbounded_channel();
+
+    StromHandles {
+        eth_tx,
+        eth_rx,
+        validation_tx,
+        validation_rx,
+        pool_tx,
+        pool_rx,
+        orderpool_tx,
+        orderpool_rx,
+        consensus_tx,
+        consensus_rx
+    }
+}
+
+pub fn initialize_strom_components<Node: FullNodeComponents>(
+    config: AngstromConfig,
+    handles: StromHandles,
+    network_builder: StromNetworkBuilder,
+    node: FullNode<Node>,
+    executor: &TaskExecutor
+) {
+    let (consensus_tx, consensus_rx) =
+        reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
+
+    let eth_handle = EthDataCleanser::new(
+        node.provider.subscribe_to_canonical_state(),
+        node.provider.clone(),
+        executor.clone(),
+        handles.eth_tx,
+        handles.eth_rx
+    )
+    .unwrap();
+
+    let network_handle = network_builder
+        .with_pool_manager(handles.pool_tx)
+        .with_consensus_manager(consensus_tx)
+        .build(executor.clone(), node.provider.clone());
+
+    let validator = init_validation(node.provider.clone(), eth_handle.subscribe_network_stream());
+
+    let pool_handle = PoolManagerBuilder::new(
+        validator.clone(),
+        network_handle.clone(),
+        eth_handle.subscribe_network(),
+        handles.pool_rx
+    )
+    .build_with_channels(executor.clone(), handles.orderpool_tx, handles.orderpool_rx);
+
+    let consensus_handle = ConsensusManager::new(
+        executor.clone(),
+        network_handle.clone(),
+        pool_handle.clone(),
+        validator.clone(),
+        node.provider.subscribe_to_canonical_state(),
+        consensus_rx,
+        handles.consensus_tx,
+        handles.consensus_rx
+    );
+}
+
+#[derive(Debug, Clone, Default, clap::Args)]
+struct AngstromConfig {
+    #[clap(long)]
+    pub mev_guard: bool,
+
+    #[clap(long)]
+    pub secret_key_location: PathBuf
 }

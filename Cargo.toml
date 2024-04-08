@@ -76,6 +76,8 @@ reth-db = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-rlp = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc", features = [
   "alloc",
 ] }
+
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-codecs = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-ecies = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
@@ -94,6 +96,7 @@ reth-rpc-types-compat = { git = "https://github.com/paradigmxyz/reth", rev = "6a
 reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 
 # alloy
 alloy-sol-types = { version = "0.7.0", features = ["json"] }

@@ -9,7 +9,7 @@ use futures::Future;
 use futures_util::{FutureExt, StreamExt};
 use reth_provider::{CanonStateNotification, CanonStateNotifications, Chain, StateProviderFactory};
 use reth_tasks::TaskSpawner;
-use tokio::sync::mpsc::{channel, UnboundedSender};
+use tokio::sync::mpsc::{channel, Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use crate::handle::{EthCommand, EthHandle};
@@ -37,9 +37,10 @@ where
     pub fn new<TP: TaskSpawner>(
         canonical_updates: CanonStateNotifications,
         db: DB,
-        tp: TP
+        tp: TP,
+        tx: Sender<EthCommand>,
+        rx: Receiver<EthCommand>
     ) -> anyhow::Result<EthHandle> {
-        let (tx, rx) = channel(10);
         let stream = ReceiverStream::new(rx);
 
         let this = Self {

@@ -10,7 +10,7 @@ use order_pool::OrderPoolHandle;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::CanonStateNotifications;
 use reth_tasks::TaskSpawner;
-use tokio::sync::mpsc::{channel, Sender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 use validation::bundle::BundleValidator;
@@ -48,9 +48,10 @@ where
         orderpool: OrderPool,
         validator: Validator,
         canonical_block_stream: CanonStateNotifications,
-        strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>
+        strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>,
+        tx: Sender<ConsensusCommand>,
+        rx: Receiver<ConsensusCommand>
     ) -> ConsensusHandle {
-        let (tx, rx) = channel(100);
         let stream = ReceiverStream::new(rx);
         let (core, _bn) = ConsensusCore::new();
 
@@ -120,7 +121,7 @@ pub enum ConsensusCommand {
 
 #[derive(Debug, Clone)]
 pub struct ConsensusHandle {
-    sender: Sender<ConsensusCommand>
+    pub sender: Sender<ConsensusCommand>
 }
 
 impl ConsensusUpdater for ConsensusHandle {

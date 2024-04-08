@@ -25,7 +25,7 @@ use reth_primitives::{PeerId, TxHash, B256};
 use reth_tasks::TaskSpawner;
 use tokio::sync::{
     mpsc,
-    mpsc::{unbounded_channel, UnboundedSender},
+    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot
 };
 use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
@@ -42,7 +42,7 @@ const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
 /// Api to interact with [`PoolManager`] task.
 #[derive(Debug, Clone)]
 pub struct PoolHandle<L: PoolOrder, CL: PoolOrder, S: PoolOrder, CS: PoolOrder> {
-    manager_tx: UnboundedSender<OrderCommand<L, CL, S, CS>>
+    pub manager_tx: UnboundedSender<OrderCommand<L, CL, S, CS>>
 }
 
 #[derive(Debug)]
@@ -323,6 +323,33 @@ where
     pub fn with_config(mut self, config: PoolConfig) -> Self {
         self.config = config;
         self
+    }
+
+    pub fn build_with_channels<TP: TaskSpawner>(
+        self,
+        task_spawner: TP,
+        tx: UnboundedSender<OrderCommand<L, CL, S, CS>>,
+        rx: UnboundedReceiver<OrderCommand<L, CL, S, CS>>
+    ) -> PoolHandle<L, CL, S, CS> {
+        let rx = UnboundedReceiverStream::new(rx);
+        let handle = PoolHandle { manager_tx: tx.clone() };
+        let inner = OrderPoolInner::new(self.validator, self.config);
+
+        task_spawner.spawn_critical(
+            "transaction manager",
+            Box::pin(PoolManager {
+                eth_network_events:   self.eth_network_events,
+                strom_network_events: self.strom_network_events,
+                order_events:         self.order_events,
+                peers:                HashMap::default(),
+                pool:                 inner,
+                network:              self.network_handle,
+                _command_tx:          tx,
+                command_rx:           rx
+            })
+        );
+
+        handle
     }
 
     pub fn build<TP: TaskSpawner>(self, task_spawner: TP) -> PoolHandle<L, CL, S, CS> {

@@ -18,6 +18,10 @@ normal = [
 
 [dependencies]
 reth.workspace = true
+reth-network.workspace = true
+reth-node-builder.workspace = true
+reth-provider.workspace = true
+
 
 angstrom-rpc.workspace = true
 angstrom-types.workspace = true
@@ -26,7 +30,7 @@ order-pool.workspace = true
 angstrom-network.workspace = true
 validation.workspace = true
 consensus.workspace = true
-
+reth-node-ethereum.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 reth-metrics.workspace = true

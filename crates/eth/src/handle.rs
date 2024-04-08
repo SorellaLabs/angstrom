@@ -20,7 +20,7 @@ pub enum EthCommand {
 
 #[derive(Debug, Clone)]
 pub struct EthHandle {
-    sender: Sender<EthCommand>
+    pub sender: Sender<EthCommand>
 }
 
 impl EthHandle {

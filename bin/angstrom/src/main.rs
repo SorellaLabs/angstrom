@@ -4,7 +4,7 @@
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn main() {
-    if let Err(err) = stale_guard::cli::run() {
+    if let Err(err) = angstrom::cli::run() {
         eprintln!("Error: {err:?}");
         std::process::exit(1);
     }

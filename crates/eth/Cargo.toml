@@ -1,5 +1,5 @@
 [package]
-name = "guard-eth"
+name = "angstrom-eth"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,8 +10,8 @@ exclude.workspace = true
 
 
 [dependencies]
-guard-types.workspace = true
-guard-utils.workspace = true
+angstrom-types.workspace = true
+angstrom-utils.workspace = true
 
 tokio.workspace = true
 futures.workspace = true
@@ -30,7 +30,7 @@ alloy-primitives.workspace = true
 ethers-middleware.workspace = true
 ethers-signers.workspace = true
 ethers-providers.workspace = true
-ethers-flashbots = "0.14.0"
+ethers-flashbots = "0.15.0"
 ethers-core.workspace = true
 
 # misc

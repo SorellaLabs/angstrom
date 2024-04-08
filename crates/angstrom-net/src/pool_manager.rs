@@ -7,15 +7,15 @@ use std::{
     task::{Context, Poll}
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
-use guard_eth::manager::EthEvent;
-use guard_types::{
+use angstrom_types::{
     orders::{
         OrderConversion, OrderOrigin, OrderPriorityData, PoolOrder, PooledComposableOrder,
         PooledLimitOrder, PooledOrder, PooledSearcherOrder, SearcherPriorityData
     },
     rpc::*
 };
+use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
+use guard_eth::manager::EthEvent;
 use order_pool::{
     AllOrders, Order, OrderPoolHandle, OrderPoolInner, OrderSet, OrdersToPropagate, PoolConfig,
     PoolInnerEvent

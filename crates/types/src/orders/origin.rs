@@ -11,6 +11,6 @@ pub enum OrderOrigin {
     /// Order originated locally and is intended to remain private.
     /// This type of Order should not be propagated to the network. It's
     /// meant for private usage within the local node, or other composable
-    /// mev-guards.
+    /// mev-angstroms.
     Private
 }

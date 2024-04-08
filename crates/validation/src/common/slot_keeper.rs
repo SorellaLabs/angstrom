@@ -5,12 +5,12 @@ use std::{
 };
 
 use alloy_sol_types::SolCall;
+use angstrom_types::primitive::ERC20;
 use futures::Future;
 use futures_util::FutureExt;
-use guard_types::primitive::ERC20;
 use reth_primitives::revm_primitives::{Address, ExecutionResult, TransactTo, TxEnv, U256};
 use reth_provider::StateProviderFactory;
-use reth_revm::{new, EVM};
+use reth_revm::{revm::Evm, Database, DatabaseRef, EvmBuilder};
 use tokio::{runtime::Handle, task::JoinHandle};
 
 use crate::common::lru_db::RevmLRU;
@@ -78,9 +78,10 @@ where
 
                     let mut db = db.clone();
                     db.set_state_overrides(overrides);
-                    let mut evm = new();
-                    evm.database(db);
-                    // evm.env = Env::from(tx_env.clone());
+                    let mut evm = EvmBuilder::default()
+                        .with_db(db)
+                        .with_tx_env(tx_env.clone())
+                        .build();
 
                     // this is just a balance_of call. should never fail
                     let output = match evm.transact_ref().unwrap().result {

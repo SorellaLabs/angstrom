@@ -1,4 +1,4 @@
-//! Stale-Guard binary executable.
+//! Angstrom binary executable.
 //!
 //! ## Feature Flags
 pub mod cli;

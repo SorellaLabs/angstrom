@@ -1,11 +1,11 @@
 use std::fmt::Debug;
 
 use alloy_primitives::B256;
-use composable::ComposableSearcherPool;
-use guard_types::{
+use angstrom_types::{
     orders::{OrderId, PooledComposableOrder, PooledSearcherOrder, SearcherPriorityData},
     primitive::PoolId
 };
+use composable::ComposableSearcherPool;
 
 use self::searcher::VanillaSearcherPool;
 use crate::common::{SizeTracker, ValidOrder};

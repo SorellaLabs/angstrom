@@ -1,6 +1,6 @@
 use std::{fmt::Debug, future::Future, pin::Pin};
 
-use guard_types::{
+use angstrom_types::{
     orders::{OrderOrigin, OrderValidationOutcome, PoolOrder},
     rpc::{
         EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,

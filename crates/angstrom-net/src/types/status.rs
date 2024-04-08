@@ -4,7 +4,7 @@ use std::{
 };
 
 use alloy_rlp::{RlpDecodable, RlpEncodable};
-use guard_types::primitive::Signature;
+use angstrom_types::primitive::Signature;
 use reth_codecs::derive_arbitrary;
 use reth_primitives::{
     alloy_primitives::FixedBytes, keccak256, Address, BufMut, BytesMut, Chain, ChainSpec, Head,

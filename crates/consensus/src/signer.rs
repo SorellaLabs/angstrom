@@ -1,9 +1,9 @@
 use alloy_primitives::B512;
-use ethers_signers::{LocalWallet, WalletError};
-use guard_types::{
+use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     primitive::Angstrom::{Bundle, LowerBound}
 };
+use ethers_signers::{LocalWallet, WalletError};
 /// The Signer deals with verifying external signatures as well as
 /// signing our payloads
 #[repr(transparent)]

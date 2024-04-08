@@ -3,7 +3,7 @@ use std::{
     task::{Context, Poll, Waker}
 };
 
-use guard_types::{consensus::Proposal, primitive::Angstrom::Bundle};
+use angstrom_types::{consensus::Proposal, primitive::Angstrom::Bundle};
 use guard_utils::{ConsensusState, WAITING_NEXT_BLOCK};
 
 use super::{

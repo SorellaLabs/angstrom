@@ -4,13 +4,13 @@ use std::{
     task::{Context, Poll}
 };
 
+use angstrom_types::submission::SubmissionBundle;
 use ethers_core::types::transaction::eip2718::TypedTransaction;
 use ethers_flashbots::{BroadcasterMiddleware, BundleRequest, PendingBundleError};
 use ethers_middleware::SignerMiddleware;
 use ethers_providers::Middleware;
 use ethers_signers::{LocalWallet, Signer};
 use futures::{Future, FutureExt};
-use guard_types::submission::SubmissionBundle;
 use tokio::sync::{mpsc, mpsc::UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 type StakedWallet = LocalWallet;

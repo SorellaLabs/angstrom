@@ -1,24 +1,24 @@
 //! CLI definition and entrypoint to executable
 use std::path::Path;
 
-use clap::Parser;
-use consensus::{ConsensusHandle, ConsensusManager};
-use guard_eth::{
+use angstrom_eth::{
     handle::{Eth, EthHandle},
     manager::EthDataCleanser
 };
-use guard_network::{
+use angstrom_network::{
     pool_manager::PoolHandle, NetworkBuilder, PoolManagerBuilder, StatusState, StromNetworkHandle,
     VerificationSidecar
 };
-use guard_rpc::{
+use angstrom_rpc::{
     api::{ConsensusApiServer, OrderApiServer, QuotingApiServer},
     ConsensusApi, OrderApi, QuotesApi
 };
-use guard_types::rpc::{
+use angstrom_types::rpc::{
     EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
     EcRecoveredSearcherOrder
 };
+use clap::Parser;
+use consensus::{ConsensusHandle, ConsensusManager};
 use reth::{
     args::get_secret_key,
     cli::{
@@ -38,18 +38,18 @@ use validation::{init_validation, validator::ValidationClient};
 #[inline]
 pub fn run() -> eyre::Result<()> {
     Cli::<StromRethExt>::parse()
-        .with_node_extension(StaleGuardConfig::default())
+        .with_node_extension(AngstromConfig::default())
         .run()
 }
 
 struct StromRethExt;
 
 impl RethCliExt for StromRethExt {
-    type Node = StaleGuardConfig;
+    type Node = AngstromConfig;
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]
-struct StaleGuardConfig {
+struct AngstromConfig {
     #[clap(long)]
     pub mev_guard: bool,
 
@@ -59,7 +59,7 @@ struct StaleGuardConfig {
     /// init state. Set when network is started. We store the data here
     /// so that we can give handles to rpc modules
     #[clap(skip)]
-    state: GuardInitState
+    state: AngstromInitState
 }
 
 type DefaultPoolHandle = PoolHandle<
@@ -73,7 +73,7 @@ type DefaultPoolHandle = PoolHandle<
 /// modules will need.
 #[derive(Debug, Clone, Default)]
 #[allow(unused)]
-struct GuardInitState {
+struct AngstromInitState {
     pub network_handle: Option<StromNetworkHandle>,
     pub validation:     Option<ValidationClient>,
     pub consensus:      Option<ConsensusHandle>,
@@ -81,7 +81,7 @@ struct GuardInitState {
     pub pool_handle:    Option<DefaultPoolHandle>
 }
 
-impl RethNodeCommandConfig for StaleGuardConfig {
+impl RethNodeCommandConfig for AngstromConfig {
     fn configure_network<Conf, Reth>(
         &mut self,
         config: &mut Conf,

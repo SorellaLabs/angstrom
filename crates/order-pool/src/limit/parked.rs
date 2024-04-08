@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use alloy_primitives::B256;
-use guard_types::orders::PoolOrder;
+use angstrom_types::orders::PoolOrder;
 
 use crate::common::ValidOrder;
 

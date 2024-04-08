@@ -3,8 +3,8 @@ use std::{
     task::{Context, Poll}
 };
 
+use angstrom_types::orders::{OrderOrigin, PoolOrder, ValidationResults};
 use futures_util::{stream::FuturesUnordered, Future, FutureExt, Stream, StreamExt};
-use guard_types::orders::{OrderOrigin, PoolOrder, ValidationResults};
 use validation::order::OrderValidator;
 
 type ValidationFuture<L, CL, S, CS> =

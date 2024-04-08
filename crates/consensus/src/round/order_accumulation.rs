@@ -4,8 +4,8 @@ use std::{
     time::Duration
 };
 
+use angstrom_types::submission::BestBundles;
 use futures::FutureExt;
-use guard_types::submission::BestBundles;
 use guard_utils::{ConsensusState, IsLeader, PRE_PROPOSE};
 
 use super::{

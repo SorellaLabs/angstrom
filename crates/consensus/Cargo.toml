@@ -32,9 +32,9 @@ rayon.workspace = true
 alloy-rlp.workspace = true
 reth-tasks.workspace = true
 
-guard-types.workspace = true
-guard-utils.workspace = true
-guard-network.workspace = true
+angstrom-types.workspace = true
+angstrom-utils.workspace = true
+angstrom-network.workspace = true
 order-pool.workspace = true
 validation.workspace = true
 tokio-stream.workspace = true

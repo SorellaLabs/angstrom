@@ -1,5 +1,5 @@
 [package]
-name = "stale-guard"
+name = "angstrom"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 description = """
-Stale Guard Sidecar implementation
+Angstrom Sidecar implementation
 """
 
 [package.metadata.cargo-udeps.ignore]
@@ -19,11 +19,11 @@ normal = [
 [dependencies]
 reth.workspace = true
 
-guard-rpc.workspace = true
-guard-types.workspace = true
-guard-eth.workspace = true
+angstrom-rpc.workspace = true
+angstrom-types.workspace = true
+angstrom-eth.workspace = true
 order-pool.workspace = true
-guard-network.workspace = true
+angstrom-network.workspace = true
 validation.workspace = true
 consensus.workspace = true
 
@@ -36,16 +36,17 @@ secp256k1 = { workspace = true, features = ["serde"] }
 clap = "4.4.8"
 eyre = "0.6.9"
 
-[target.'cfg(not(windows))'.dependencies]
-jemallocator = { version = "0.5.0", optional = true }
-jemalloc-ctl = { version = "0.5.0", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+tikv-jemallocator = { version = "0.5.0", optional = true }
 
 
 [features]
 default = ["jemalloc"]
-jemalloc = ["dep:jemallocator", "dep:jemalloc-ctl"]
+jemalloc = ["dep:tikv-jemallocator"]
+jemalloc-prof = ["jemalloc", "tikv-jemallocator?/profiling"]
 
 
 [[bin]]
-name = "stale-guard"
+name = "angstrom"
 path = "src/main.rs"

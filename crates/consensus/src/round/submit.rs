@@ -3,16 +3,16 @@ use std::{
     task::{Context, Poll}
 };
 
+use angstrom_types::submission::BestBundles;
+use angstrom_utils::{ConsensusState, WAITING_NEXT_BLOCK};
 use futures::FutureExt;
-use guard_types::submission::BestBundles;
-use guard_utils::{ConsensusState, WAITING_NEXT_BLOCK};
 
 use super::{
     completed::CompletedState, GlobalStateContext, RoundAction, RoundStateMessage, StateTransition,
     Timeout
 };
 
-/// This state is only reached if this guard is the leader
+/// This state is only reached if this node is the leader
 #[allow(dead_code)]
 pub struct SubmitState {
     submit_deadline: Timeout,

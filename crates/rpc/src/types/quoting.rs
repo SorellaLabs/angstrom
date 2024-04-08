@@ -1,5 +1,5 @@
 use alloy_primitives::U256;
-use guard_types::primitive::Angstrom::PoolKey;
+use angstrom_types::primitive::Angstrom::PoolKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]

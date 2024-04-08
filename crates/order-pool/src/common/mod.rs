@@ -1,8 +1,8 @@
 use alloy_primitives::B256;
-use guard_types::orders::PoolOrder;
+use angstrom_types::orders::PoolOrder;
 mod size;
 
-use guard_types::orders::ValidatedOrder;
+use angstrom_types::orders::ValidatedOrder;
 pub use size::*;
 
 pub type ValidOrder<O> = ValidatedOrder<O, <O as PoolOrder>::ValidationData>;

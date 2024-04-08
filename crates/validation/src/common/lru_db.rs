@@ -8,7 +8,7 @@ use reth_primitives::{
     KECCAK_EMPTY
 };
 use reth_provider::{AccountReader, StateProvider, StateProviderFactory};
-use reth_revm::DatabaseRef;
+use reth_revm::{Database, DatabaseRef};
 use revm::db::DbAccount;
 use schnellru::{ByMemoryUsage, LruMap};
 
@@ -105,6 +105,29 @@ where
             .storage(*address, index.into())
             .map(|inner| inner.unwrap_or_default())
             .map_err(RethError::from)
+    }
+}
+
+impl<DB> Database for RevmLRU<DB>
+where
+    DB: StateProviderFactory
+{
+    type Error = RethError;
+
+    fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        DatabaseRef::basic_ref(&self, address)
+    }
+
+    fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        DatabaseRef::storage_ref(&self, address, index)
+    }
+
+    fn block_hash(&mut self, number: U256) -> Result<B256, Self::Error> {
+        DatabaseRef::block_hash_ref(&self, number)
+    }
+
+    fn code_by_hash(&mut self, code_hash: B256) -> Result<Bytecode, Self::Error> {
+        DatabaseRef::code_by_hash_ref(&self, code_hash)
     }
 }
 

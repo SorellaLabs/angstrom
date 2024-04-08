@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use guard_types::{
+use angstrom_types::{
     orders::{OrderId, OrderLocation, OrderPriorityData, PooledComposableOrder, PooledLimitOrder},
     primitive::PoolId
 };

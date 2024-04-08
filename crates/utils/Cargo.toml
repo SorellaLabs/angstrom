@@ -1,5 +1,5 @@
 [package]
-name = "guard-utils"
+name = "angstrom-utils"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

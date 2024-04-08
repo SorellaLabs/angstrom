@@ -5,12 +5,12 @@ use std::{
     task::{Context, Poll}
 };
 
-use ethers_core::types::{Block, H256};
-use futures::{Stream, StreamExt};
-use guard_types::{
+use angstrom_types::{
     consensus::{Commit, EvidenceError, PreProposal, Proposal},
     submission::BestBundles
 };
+use ethers_core::types::{Block, H256};
+use futures::{Stream, StreamExt};
 use thiserror::Error;
 use tracing::error;
 

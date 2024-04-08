@@ -2,7 +2,7 @@
 use std::{fmt::Debug, sync::Arc};
 
 use alloy_rlp::{Decodable, Encodable};
-use guard_types::{
+use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     orders::PooledOrder
 };

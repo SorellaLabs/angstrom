@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use guard_types::{consensus::*, primitive::Angstrom::PoolKey, rpc::SignedLimitOrder};
+use angstrom_types::{consensus::*, primitive::Angstrom::PoolKey, rpc::SignedLimitOrder};
 use serde::{Deserialize, Serialize};
 
 use super::quoting::{Depth25, Depth5, BBO};

@@ -17,11 +17,11 @@ normal = [
 ]
 
 [dependencies]
-# guard 
-guard-types.workspace = true
+# angstrom 
+angstrom-types.workspace = true
 validation.workspace = true
-guard-eth.workspace = true
-guard-utils.workspace = true
+angstrom-eth.workspace = true
+angstrom-utils.workspace = true
 
 
 # reth

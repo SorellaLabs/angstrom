@@ -5,11 +5,11 @@ use std::{
     time::Duration
 };
 
-use futures::{Future, Stream};
-use guard_types::{
+use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     submission::BestBundles
 };
+use futures::{Future, Stream};
 use guard_utils::{return_if, AtomicConsensus, ConsensusState, IsLeader, ORDER_ACCUMULATION};
 use reth_primitives::B512;
 

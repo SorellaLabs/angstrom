@@ -3,8 +3,8 @@ use std::{
     task::{Context, Poll}
 };
 
+use angstrom_types::submission::BestBundles;
 use futures::FutureExt;
-use guard_types::submission::BestBundles;
 use guard_utils::{ConsensusState, COMMIT, PROPOSE};
 
 use super::{

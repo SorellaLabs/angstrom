@@ -1,6 +1,6 @@
 use std::{cmp::Reverse, collections::BTreeMap};
 
-use guard_types::orders::{OrderPriorityData, PoolOrder};
+use angstrom_types::orders::{OrderPriorityData, PoolOrder};
 use reth_primitives::B256;
 use revm::primitives::HashMap;
 
@@ -82,7 +82,7 @@ pub mod test {
     use std::cmp::Ordering;
 
     use alloy_primitives::{Address, U256};
-    use guard_types::orders::{ValidatedOrder, *};
+    use angstrom_types::orders::{ValidatedOrder, *};
     use rand::Rng;
 
     use super::*;

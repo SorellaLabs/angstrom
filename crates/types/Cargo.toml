@@ -1,5 +1,5 @@
 [package]
-name = "guard-types"
+name = "angstrom-types"
 version.workspace = true
 edition.workspace = true
 

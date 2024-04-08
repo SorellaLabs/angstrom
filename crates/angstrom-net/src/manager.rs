@@ -5,8 +5,8 @@ use std::{
     task::Context
 };
 
+use angstrom_types::consensus::{Commit, PreProposal, Proposal};
 use futures::{task::Poll, StreamExt};
-use guard_types::consensus::{Commit, PreProposal, Proposal};
 use reth_eth_wire::DisconnectReason;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_primitives::PeerId;

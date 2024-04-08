@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use guard_types::{
+use angstrom_types::{
     orders::{OrderId, OrderPriorityData, PooledComposableOrder, PooledLimitOrder},
     primitive::PoolId
 };

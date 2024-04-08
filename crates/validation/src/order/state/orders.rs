@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use alloy_primitives::{Address, U256};
-use guard_types::orders::{
+use angstrom_types::orders::{
     OrderLocation, OrderPriorityData, OrderValidationOutcome, PoolOrder, PooledLimitOrder,
     PooledSearcherOrder, SearcherPriorityData, StateValidationError, ValidatedOrder,
     ValidationError

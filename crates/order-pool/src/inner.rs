@@ -6,8 +6,7 @@ use std::{
 };
 
 use alloy_primitives::B256;
-use futures_util::{Stream, StreamExt};
-use guard_types::{
+use angstrom_types::{
     orders::{
         OrderConversion, OrderId, OrderLocation, OrderOrigin, OrderPriorityData,
         OrderValidationOutcome, PoolOrder, PooledComposableOrder, PooledLimitOrder, PooledOrder,
@@ -19,6 +18,7 @@ use guard_types::{
         SignedSearcherOrder
     }
 };
+use futures_util::{Stream, StreamExt};
 use reth_primitives::{Address, PeerId, U256};
 use tokio::sync::mpsc;
 use tracing::{error, trace, warn};

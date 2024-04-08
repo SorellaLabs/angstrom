@@ -3,14 +3,14 @@ use std::{
     task::{Context, Poll, Waker}
 };
 
-use guard_types::submission::BestBundles;
-use guard_utils::{ConsensusState, SUBMIT};
+use angstrom_types::submission::BestBundles;
+use angstrom_utils::{ConsensusState, SUBMIT};
 
 use super::{
     submit::SubmitState, GlobalStateContext, RoundAction, RoundStateMessage, StateTransition
 };
 
-/// This state is only reached if this guard is the leader
+/// This state is only reached if this node is the leader
 #[allow(dead_code)]
 pub struct ProposeState {
     data: BestBundles

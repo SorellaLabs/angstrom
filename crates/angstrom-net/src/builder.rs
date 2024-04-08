@@ -105,7 +105,7 @@ impl StatusBuilder {
         let message = self.state.to_message();
         let sig = reth_primitives::sign_message(FixedBytes(key.secret_bytes()), message).unwrap();
 
-        Status { state: self.state, signature: guard_types::primitive::Signature(sig) }
+        Status { state: self.state, signature: angstrom_types::primitive::Signature(sig) }
     }
 
     /// Sets the protocol version.

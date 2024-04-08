@@ -10,8 +10,8 @@ pub mod validator;
 
 use std::pin::Pin;
 
+use angstrom_eth::manager::EthEvent;
 use futures::Stream;
-use guard_eth::manager::EthEvent;
 use reth_provider::StateProviderFactory;
 use tokio::sync::mpsc::unbounded_channel;
 

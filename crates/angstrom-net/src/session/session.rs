@@ -190,13 +190,14 @@ impl StromSession {
             data.map(|bytes| {
                 let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
                 tracing::debug!(?msg, "poll incoming");
-                let _ = self.to_session_manager.send_item(
-                    msg.map(|m| StromSessionMessage::ValidMessage {
+
+                let msg = msg
+                    .map(|m| StromSessionMessage::ValidMessage {
                         peer_id: self.remote_peer_id,
                         message: m
                     })
-                    .unwrap_or(StromSessionMessage::BadMessage { peer_id: self.remote_peer_id })
-                );
+                    .unwrap_or(StromSessionMessage::BadMessage { peer_id: self.remote_peer_id });
+                self.outbound_buffer.push_back(msg);
             })
             .ok_or_else(|| self.emit_disconnect(cx))
         }) {

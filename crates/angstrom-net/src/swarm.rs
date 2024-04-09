@@ -88,7 +88,6 @@ impl<DB: Unpin> Stream for Swarm<DB> {
                 return Poll::Ready(Some(res))
             }
         }
-        // Poll the session manager
 
         Poll::Pending
     }

@@ -143,11 +143,9 @@ where
     ) -> std::task::Poll<Self::Output> {
         let this = self.get_mut();
         if let Poll::Ready(_) = this.strom_network.poll_unpin(cx) {
-            tracing::info!("strom network returned");
             return Poll::Ready(())
         }
         if let Poll::Ready(_) = this.eth_peer.poll_unpin(cx) {
-            tracing::info!("eth_peer returned");
             return Poll::Ready(())
         }
 

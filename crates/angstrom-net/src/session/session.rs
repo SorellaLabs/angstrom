@@ -112,7 +112,6 @@ impl StromSession {
 
     /// Report back that this session has been closed.
     fn emit_disconnect(&mut self, cx: &mut Context<'_>) -> Poll<Option<BytesMut>> {
-        tracing::debug!("emitting disconnect");
         let msg = StromSessionMessage::Disconnected { peer_id: self.remote_peer_id };
 
         self.terminate_message = Some((self.to_session_manager.inner().clone(), msg));
@@ -127,7 +126,6 @@ impl StromSession {
                     .to_session_manager
                     .send_item(StromSessionMessage::Established { handle })
                     .unwrap();
-                tracing::debug!("sent session handle");
                 return None
             }
             Poll::Ready(Err(_)) => {
@@ -189,8 +187,6 @@ impl StromSession {
         while let Poll::Ready(msg) = self.conn.poll_next_unpin(cx).map(|data| {
             data.map(|bytes| {
                 let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
-                tracing::debug!(?msg, "poll incoming");
-
                 let msg = msg
                     .map(|m| StromSessionMessage::ValidMessage {
                         peer_id: self.remote_peer_id,
@@ -210,7 +206,6 @@ impl StromSession {
     }
 
     fn poll_verification(&mut self, cx: &mut Context<'_>) -> Poll<Option<BytesMut>> {
-        tracing::debug!("polling verification");
         if !self.verification_sidecar.has_sent {
             let msg = StromMessage::Status(
                 self.verification_sidecar

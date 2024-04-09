@@ -16,6 +16,7 @@ use reth_rpc_types::{pk_to_id, PeerId};
 use secp256k1::{PublicKey, Secp256k1};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::PollSender;
+use tracing::{span, Level};
 
 use crate::network::SecretKey;
 
@@ -137,7 +138,7 @@ where
 
 impl<C> Future for StromPeer<C>
 where
-    C: BlockReader + HeaderProvider + Unpin
+    C: BlockReader + HeaderProvider + Unpin + Clone
 {
     type Output = ();
 
@@ -146,12 +147,18 @@ where
         cx: &mut std::task::Context<'_>
     ) -> std::task::Poll<Self::Output> {
         let this = self.get_mut();
+        let peer_id = this.get_node_public_key();
+        let span = span!(Level::TRACE, "peer_id: {:?}", ?peer_id);
+        let e = span.enter();
+
         if let Poll::Ready(_) = this.strom_network.poll_unpin(cx) {
             return Poll::Ready(())
         }
         if let Poll::Ready(_) = this.eth_peer.poll_unpin(cx) {
             return Poll::Ready(())
         }
+
+        drop(e);
 
         Poll::Pending
     }

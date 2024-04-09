@@ -568,7 +568,7 @@ where
                 self.peers.insert(
                     peer_id,
                     StromPeer {
-                        orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()),
+                        orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap())
                     }
                 );
             }
@@ -670,5 +670,5 @@ pub enum NetworkTransactionEvent {
 struct StromPeer {
     /// Keeps track of transactions that we know the peer has seen.
     #[allow(dead_code)]
-    orders:         LruCache<B256>,
+    orders: LruCache<B256>
 }

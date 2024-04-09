@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     fmt::Debug,
     ops::Deref,
     pin::Pin,
@@ -81,7 +82,9 @@ pub struct StromSession {
     /// has a value until verification has been completed.
     pub verification_sidecar: VerificationSidecar,
     /// has sent the handle to the receiver
-    pending_handle: Option<StromSessionHandle>
+    pending_handle: Option<StromSessionHandle>,
+    /// buffer for pending messages
+    outbound_buffer: VecDeque<StromSessionMessage>
 }
 
 impl StromSession {
@@ -102,7 +105,8 @@ impl StromSession {
             to_session_manager,
             protocol_breach_request_timeout,
             terminate_message: None,
-            pending_handle: Some(handle)
+            pending_handle: Some(handle),
+            outbound_buffer: VecDeque::default()
         }
     }
 
@@ -247,6 +251,16 @@ impl StromSession {
             .flatten()
     }
 
+    fn try_send_outbound(&mut self, cx: &mut Context<'_>) {
+        while let Poll::Ready(Ok(_)) = self.to_session_manager.poll_reserve(cx) {
+            if let Some(item) = self.outbound_buffer.pop_front() {
+                self.to_session_manager.send_item(item).unwrap();
+            } else {
+                return
+            }
+        }
+    }
+
     fn verify_incoming_status(&self, status: Status) -> bool {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -292,6 +306,8 @@ impl Stream for StromSession {
         if let Some(msg) = self.poll_incoming(cx) {
             return msg
         }
+
+        self.try_send_outbound(cx);
 
         Poll::Pending
     }

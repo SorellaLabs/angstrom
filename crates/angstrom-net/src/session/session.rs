@@ -254,10 +254,11 @@ impl StromSession {
 
         let status_time = status.state.timestamp + STATUS_TIMESTAMP_TIMEOUT_MS;
 
+        let verification_msg = status.state.to_message();
         let status = status.verify();
+
         tracing::debug!(?status, ?self.remote_peer_id);
-        let verification =
-            current_time >= status_time && status == Ok(self.remote_peer_id);
+        let verification = current_time >= status_time && status == Ok(verification_msg);
         tracing::debug!(%verification, "incomming connection results");
         verification
     }

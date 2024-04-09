@@ -170,6 +170,7 @@ impl StromSession {
                                 message_type: msg.message_id(),
                                 message:      msg
                             };
+                            tracing::debug!(?msg, "sendign message");
                             let mut bytes = BytesMut::with_capacity(msg.length());
                             msg.encode(&mut bytes);
                             Poll::Ready(Some(bytes))

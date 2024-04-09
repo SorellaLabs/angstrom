@@ -216,13 +216,13 @@ impl StromSession {
             let msg = StromProtocolMessage { message_type: msg.message_id(), message: msg };
             let mut bytes = BytesMut::with_capacity(msg.length());
             msg.encode(&mut bytes);
-
             return Poll::Ready(Some(bytes))
         }
 
         self.conn
             .poll_next_unpin(cx)
             .map(|msg| {
+                tracing::debug!(?msg, "got mes from connection");
                 // mark status as received. we do this here as the first message should be
                 // status. if its not we want to disconnect which will be polled.
                 self.verification_sidecar.has_received = true;

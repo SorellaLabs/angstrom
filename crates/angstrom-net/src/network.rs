@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::{
+    net::SocketAddr,
+    sync::{atomic::AtomicUsize, Arc}
+};
 
 use angstrom_types::orders::PooledOrder;
 use order_pool::OrderPoolHandle;

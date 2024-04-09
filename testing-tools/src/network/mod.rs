@@ -52,13 +52,15 @@ impl AngstromTestnet {
 
     /// ensures all peers have eachother on there validator list
     pub async fn connect_all_peers(&mut self) {
-        let peer_set = self.peers.keys().collect::<Vec<_>>();
+        let peer_set = self.peers.iter().collect::<Vec<_>>();
         for (pk, peer) in &self.peers {
-            for other in &peer_set {
+            for (other, o_p) in &peer_set {
                 if pk == *other {
                     continue
                 }
-                peer.add_validator(**other)
+                peer.add_validator(**other);
+                let socket = o_p.socket_addr();
+                peer.connect_to_peer(**other, socket);
             }
         }
 

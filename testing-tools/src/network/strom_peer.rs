@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc, task::Poll};
+use std::{collections::HashSet, net::SocketAddr, sync::Arc, task::Poll};
 
 use angstrom_network::{
     state::StromState, StatusState, StromNetworkEvent, StromNetworkHandle, StromNetworkManager,
@@ -9,6 +9,7 @@ use parking_lot::RwLock;
 use rand::thread_rng;
 use reth_metrics::common::mpsc::MeteredPollSender;
 use reth_network::test_utils::{Peer, PeerConfig};
+use reth_network_api::Peers;
 use reth_primitives::{Address, Chain};
 use reth_provider::{test_utils::NoopProvider, BlockReader, HeaderProvider};
 use reth_rpc_types::{pk_to_id, PeerId};
@@ -111,6 +112,14 @@ where
         let addr = Address::from_raw_public_key(id.as_slice());
         let set = self.get_validator_set();
         set.write().insert(addr);
+    }
+
+    pub fn connect_to_peer(&self, id: PeerId, addr: SocketAddr) {
+        self.eth_peer.peer_handle().network().add_peer(id, addr);
+    }
+
+    pub fn socket_addr(&self) -> SocketAddr {
+        self.eth_peer.local_addr()
     }
 
     fn get_validator_set(&self) -> Arc<RwLock<HashSet<Address>>> {

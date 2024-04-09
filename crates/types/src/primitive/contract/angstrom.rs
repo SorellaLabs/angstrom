@@ -195,7 +195,7 @@ sol! {
 
 impl Encodable for Angstrom::PoolKey {
     fn encode(&self, out: &mut dyn bytes::BufMut) {
-        Header { list: true, payload_length: 69 }.encode(out);
+        Header { list: false, payload_length: 69 }.encode(out);
 
         self.currency0.encode(out);
         self.currency1.encode(out);

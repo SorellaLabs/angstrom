@@ -39,7 +39,7 @@ fn generate_order(rng: &mut ThreadRng) -> Order {
 
     Order {
         nonce:        rng.gen(),
-        orderType:    angstrom_types::primitive::OrderType::User,
+        orderType:    angstrom_types::primitive::OrderType::Limit,
         currencyIn:   rng.gen(),
         preHook:      Bytes::new(),
         postHook:     Bytes::new(),

@@ -69,7 +69,9 @@ impl AngstromTestnet {
         std::future::poll_fn(|cx| {
             let mut all_connected = true;
             for peer in &mut peers {
-                let _ = peer.poll_unpin(cx);
+                if let Poll::Ready(_) = peer.poll_unpin(cx) {
+                    tracing::error!("peer failed");
+                }
                 all_connected &= peer.get_peer_count() == needed_peers
             }
             if all_connected {

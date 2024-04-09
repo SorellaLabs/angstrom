@@ -42,6 +42,7 @@ reth-network = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
 
 tokio-util.workspace = true
+tracing.workspace=true
 
 tokio.workspace = true
 tokio-stream.workspace = true

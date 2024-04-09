@@ -220,7 +220,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents>(
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]
-struct AngstromConfig {
+pub struct AngstromConfig {
     #[clap(long)]
     pub mev_guard: bool,
 

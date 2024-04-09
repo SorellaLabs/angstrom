@@ -18,6 +18,16 @@ async fn test_broadcast_order_propagation() {
     let res = tokio::time::timeout(
         Duration::from_secs(4),
         testnet.broadcast_message_orders(angstrom_network::StromMessage::PropagatePooledOrders(
+            orders.clone()
+        ))
+    )
+    .await;
+
+    assert_eq!(res, Ok(true), "failed to receive and react to order within 4 seconds");
+
+    let res = tokio::time::timeout(
+        Duration::from_secs(4),
+        testnet.broadcast_message_orders(angstrom_network::StromMessage::PropagatePooledOrders(
             orders
         ))
     )
@@ -40,7 +50,15 @@ async fn test_singular_order_propagation() {
 
     let res = tokio::time::timeout(
         Duration::from_secs(4),
-        testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(orders))
+        testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(orders.clone()))
+    )
+    .await;
+
+    assert_eq!(res, Ok(true), "failed to receive and react to order within 4 seconds");
+
+    let res = tokio::time::timeout(
+        Duration::from_secs(4),
+        testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(orders.clone()))
     )
     .await;
 

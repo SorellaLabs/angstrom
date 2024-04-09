@@ -222,13 +222,13 @@ impl StromSession {
         self.conn
             .poll_next_unpin(cx)
             .map(|msg| {
-                tracing::debug!(?msg, "got mes from connection");
                 // mark status as received. we do this here as the first message should be
                 // status. if its not we want to disconnect which will be polled.
                 self.verification_sidecar.has_received = true;
 
                 msg.map(|bytes| {
                     let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
+                    tracing::debug!(?msg, "got mes from connection");
                     msg.map_or(false, |msg| {
                         // first message has to be status
                         if let StromMessage::Status(status) = msg.message {

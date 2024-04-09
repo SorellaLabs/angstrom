@@ -7,6 +7,7 @@ async fn test_startup() {
     let noop = NoopProvider::default();
     let mut testnet = AngstromTestnet::new(3, noop).await;
 
+    tracing::info!("all peers started. connecting all of them");
     testnet.connect_all_peers().await;
     tracing::info!("shit connected");
 }

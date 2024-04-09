@@ -116,10 +116,8 @@ impl Stream for StromSessionManager {
     type Item = SessionEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<SessionEvent>> {
-        tracing::info!("polling sessions manager");
         cx.waker().wake_by_ref();
         let res = self.poll_session_msg(cx);
-        tracing::info!("polled sessions manager");
         res
     }
 }

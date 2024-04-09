@@ -121,7 +121,8 @@ impl StromSession {
                 let handle = self.pending_handle.take().unwrap();
                 let _ = self
                     .to_session_manager
-                    .send_item(StromSessionMessage::Established { handle }).unwrap();
+                    .send_item(StromSessionMessage::Established { handle })
+                    .unwrap();
                 tracing::debug!("sent session handle");
                 return None
             }

@@ -282,7 +282,6 @@ impl Stream for StromSession {
     type Item = BytesMut;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        tracing::debug!("loop");
         if self.pending_handle.is_some() {
             if let Some(res) = self.poll_init_connection(cx) {
                 return Poll::Pending
@@ -310,7 +309,6 @@ impl Stream for StromSession {
 
         self.try_send_outbound(cx);
 
-        cx.waker().wake_by_ref();
         Poll::Pending
     }
 }

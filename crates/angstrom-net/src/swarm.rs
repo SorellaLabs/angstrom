@@ -60,6 +60,7 @@ impl<DB: Unpin> Swarm<DB> {
                 Some(SwarmEvent::ValidMessage { peer_id, msg: message.message })
             }
             SessionEvent::Disconnected { peer_id } => Some(SwarmEvent::Disconnected { peer_id }),
+            SessionEvent::SessionEstablished { peer_id, direction, timeout } => Some(SwarmEvent::SessionEstablished { peer_id })
             _ => None
         }
     }
@@ -91,6 +92,7 @@ impl<DB: Unpin> Stream for Swarm<DB> {
 }
 
 pub enum SwarmEvent {
+    SessionEstablished { peer_id: PeerId },
     ValidMessage { peer_id: PeerId, msg: StromMessage },
     Disconnected { peer_id: PeerId }
 }

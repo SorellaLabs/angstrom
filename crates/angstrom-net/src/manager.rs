@@ -158,6 +158,11 @@ impl<DB: Unpin> Future for StromNetworkManager<DB> {
                             reason: None
                         })
                     }
+                    SwarmEvent::SessionEstablished { peer_id } => {
+                        self.num_active_peers
+                            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        self.notify_listeners(StromNetworkEvent::SessionEstablished { peer_id })
+                    }
                 }
             }
         }
@@ -183,9 +188,7 @@ pub enum StromNetworkEvent {
     /// Established a new session with the given peer.
     SessionEstablished {
         /// The identifier of the peer to which a session was established.
-        peer_id:        PeerId,
-        /// The client version of the peer to which a session was established.
-        client_version: Arc<str>
+        peer_id: PeerId
     },
     /// Event emitted when a new peer is added
     PeerAdded(PeerId),

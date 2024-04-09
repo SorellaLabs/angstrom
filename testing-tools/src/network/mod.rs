@@ -87,6 +87,7 @@ impl AngstromTestnet {
                 return Poll::Ready(())
             }
 
+            cx.waker().wake_by_ref();
             Poll::Pending
         })
         .await

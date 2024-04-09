@@ -195,7 +195,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents>(
     let network_handle = network_builder
         .with_pool_manager(handles.pool_tx)
         .with_consensus_manager(consensus_tx)
-        .build(executor.clone(), node.provider.clone());
+        .build_handle(executor.clone(), node.provider.clone());
 
     let validator = init_validation(node.provider.clone(), eth_handle.subscribe_network_stream());
 

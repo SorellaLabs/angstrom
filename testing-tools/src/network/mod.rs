@@ -1,8 +1,12 @@
 use std::{collections::HashMap, pin::Pin, task::Poll};
 
+use angstrom_types::{
+    consensus::{Commit, PreProposal, Proposal},
+    primitive::ComposableOrder
+};
 use futures::stream::Stream;
 mod strom_peer;
-use angstrom_network::{StromMessage, StromNetworkEvent};
+use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkEvent};
 use futures::{stream::StreamExt, FutureExt};
 use reth_metrics::common::mpsc::metered_unbounded_channel;
 use reth_primitives::*;
@@ -151,7 +155,6 @@ impl AngstromTestnet {
     /// takes a random peer and gets them to broadcast the message. we then
     /// take all other peers and ensure that they received the message.
     pub async fn broadcast_message_orders(&mut self, msg: StromMessage) -> bool {
-        // clear all of the channels from any message
         let (tx, rx) = metered_unbounded_channel("testing orders");
 
         self.peers.iter_mut().for_each(|(_, peer)| {
@@ -219,6 +222,65 @@ impl AngstromTestnet {
         result
     }
 
+    pub async fn send_consensus_message(&mut self, msg: StromMessage) -> bool {
+        let (tx, rx) = metered_unbounded_channel("testing consensus");
+        let mut peers = self.peers.iter_mut().take(2).collect::<Vec<_>>();
+
+        let (_, first) = peers.remove(0);
+        let (sid, second) = peers.remove(0);
+        second.manager_mut().install_consensus_manager(tx);
+
+        let Ok(expected) = msg.clone().try_into() else {
+            tracing::warn!("non-consensus message ");
+            return false
+        };
+
+        let rx = Box::pin(rx.map(ConsensusMsgTestCmp::from));
+
+        let sid = *sid;
+        first.handle.send_transactions(sid, msg);
+        let result = self.message_test(rx, expected, 1).await;
+
+        self.peers
+            .get_mut(&sid)
+            .unwrap()
+            .manager_mut()
+            .remove_consensus_manager();
+
+        result
+    }
+
+    pub async fn send_consensus_broadcast(&mut self, msg: StromMessage) -> bool {
+        let (tx, rx) = metered_unbounded_channel("testing consensus");
+
+        self.peers.iter_mut().for_each(|(_, peer)| {
+            peer.manager_mut().install_consensus_manager(tx.clone());
+        });
+
+        // fetch our sender peer
+        let (_, peer) = self.peers.iter_mut().take(1).collect::<Vec<_>>().remove(0);
+
+        // send message to other peers
+        peer.handle.broadcast_tx(msg.clone());
+        let expected_msg_cnt = self.peers.len() - 1;
+
+        let Ok(expected) = msg.clone().try_into() else {
+            tracing::warn!("non-consensus message ");
+            return false
+        };
+
+        let rx = Box::pin(rx.map(ConsensusMsgTestCmp::from));
+
+        let res = self.message_test(rx, expected, expected_msg_cnt).await;
+
+        // uninstall channel
+        self.peers.iter_mut().for_each(|(_, peer)| {
+            peer.manager_mut().remove_consensus_manager();
+        });
+
+        res
+    }
+
     /// returns the next event that any peer emits
     pub async fn progress_to_next_network_event(&mut self) -> StromNetworkEvent {
         std::future::poll_fn(|cx| {
@@ -231,5 +293,35 @@ impl AngstromTestnet {
             Poll::Pending
         })
         .await
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConsensusMsgTestCmp {
+    PrePropose(PreProposal),
+    Propose(Proposal),
+    Commit(Commit)
+}
+
+impl TryFrom<StromMessage> for ConsensusMsgTestCmp {
+    type Error = u8;
+
+    fn try_from(value: StromMessage) -> Result<Self, Self::Error> {
+        match value {
+            StromMessage::Commit(c) => Ok(ConsensusMsgTestCmp::Commit(c)),
+            StromMessage::Propose(p) => Ok(ConsensusMsgTestCmp::Propose(p)),
+            StromMessage::PrePropose(p) => Ok(ConsensusMsgTestCmp::PrePropose(p)),
+            _ => Err(0)
+        }
+    }
+}
+
+impl From<StromConsensusEvent> for ConsensusMsgTestCmp {
+    fn from(value: StromConsensusEvent) -> Self {
+        match value {
+            StromConsensusEvent::Commit(_, c) => ConsensusMsgTestCmp::Commit(c),
+            StromConsensusEvent::Propose(_, p) => ConsensusMsgTestCmp::Propose(p),
+            StromConsensusEvent::PrePropose(_, p) => ConsensusMsgTestCmp::PrePropose(p)
+        }
     }
 }

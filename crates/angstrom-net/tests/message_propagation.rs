@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use reth_provider::test_utils::NoopProvider;
-use testing_tools::{network::AngstromTestnet, orders::generate_valid_order};
+use testing_tools::{network::AngstromTestnet, type_generator::orders::generate_valid_order};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_broadcast_order_propagation() {
@@ -50,7 +50,9 @@ async fn test_singular_order_propagation() {
 
     let res = tokio::time::timeout(
         Duration::from_secs(4),
-        testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(orders.clone()))
+        testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(
+            orders.clone()
+        ))
     )
     .await;
 
@@ -58,7 +60,9 @@ async fn test_singular_order_propagation() {
 
     let res = tokio::time::timeout(
         Duration::from_secs(4),
-        testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(orders.clone()))
+        testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(
+            orders.clone()
+        ))
     )
     .await;
 

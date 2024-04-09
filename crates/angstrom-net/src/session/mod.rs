@@ -56,6 +56,7 @@ impl StromSessionManager {
     }
 
     pub fn broadcast_message(&mut self, msg: StromMessage) {
+        tracing::debug!("sending message");
         self.active_sessions.values_mut().for_each(|cmd| {
             let _ = cmd
                 .commands_to_session

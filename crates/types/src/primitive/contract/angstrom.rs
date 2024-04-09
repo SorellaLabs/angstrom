@@ -3,7 +3,6 @@ use alloy_rlp::{length_of_length, Decodable, Encodable, Error, Header};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use alloy_sol_macro::sol;
 use alloy_sol_types::{eip712_domain, Eip712Domain};
-use reth_primitives::hex::decode;
 use serde::{Deserialize, Serialize};
 
 sol! {

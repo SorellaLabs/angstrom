@@ -111,8 +111,11 @@ impl<DB: Unpin> StromNetworkManager<DB> {
                 .state_mut()
                 .peers_mut()
                 .change_weight(peer_id, kind),
-            _ => {
-                todo!()
+            StromNetworkHandleMsg::BroadcastOrder { msg } => {
+                self.swarm_mut().sessions_mut().broadcast_message(msg);
+            }
+            StromNetworkHandleMsg::DisconnectPeer(id, reason) => {
+                self.swarm_mut().sessions_mut().disconnect(id, reason);
             }
         }
     }

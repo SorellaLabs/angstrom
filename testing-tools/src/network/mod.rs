@@ -186,6 +186,39 @@ impl AngstromTestnet {
         res
     }
 
+    /// takes two random peers and tests order messages sending between them
+    pub async fn send_order_message(&mut self, msg: StromMessage) -> bool {
+        let (tx, rx) = metered_unbounded_channel("testing orders");
+        let mut peers = self.peers.iter_mut().take(2).collect::<Vec<_>>();
+
+        let (_, first) = peers.remove(0);
+        let (sid, second) = peers.remove(0);
+        second.manager_mut().install_pool_manager(tx);
+
+        let expected = if let StromMessage::PropagatePooledOrders(o) = msg.clone() {
+            o
+        } else {
+            tracing::warn!("broadcast message orders called with a non order message");
+            return false
+        };
+
+        let rx = Box::pin(rx.map(|msg| match msg {
+            angstrom_network::NetworkOrderEvent::IncomingOrders { orders, .. } => orders
+        }));
+
+        let sid = *sid;
+        first.handle.send_transactions(sid, msg);
+        let result = self.message_test(rx, expected, 1).await;
+
+        self.peers
+            .get_mut(&sid)
+            .unwrap()
+            .manager_mut()
+            .remove_pool_manager();
+
+        result
+    }
+
     /// returns the next event that any peer emits
     pub async fn progress_to_next_network_event(&mut self) -> StromNetworkEvent {
         std::future::poll_fn(|cx| {

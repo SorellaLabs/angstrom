@@ -58,6 +58,22 @@ impl<DB: Unpin> StromNetworkManager<DB> {
         }
     }
 
+    pub fn install_pool_manager(&mut self, tx: UnboundedMeteredSender<NetworkOrderEvent>) {
+        self.to_pool_manager = Some(tx);
+    }
+
+    pub fn install_consensus_manager(&mut self, tx: UnboundedMeteredSender<StromConsensusEvent>) {
+        self.to_consensus_manager = Some(tx);
+    }
+
+    pub fn remove_consensus_manager(&mut self) {
+        self.to_consensus_manager.take();
+    }
+
+    pub fn remove_pool_manager(&mut self) {
+        self.to_pool_manager.take();
+    }
+
     pub fn swarm_mut(&mut self) -> &mut Swarm<DB> {
         &mut self.swarm
     }

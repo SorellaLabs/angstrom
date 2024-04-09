@@ -115,9 +115,7 @@ impl Stream for StromSessionManager {
     type Item = SessionEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<SessionEvent>> {
-        cx.waker().wake_by_ref();
-        let res = self.poll_session_msg(cx);
-        res
+        self.poll_session_msg(cx)
     }
 }
 

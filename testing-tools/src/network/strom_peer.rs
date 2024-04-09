@@ -78,15 +78,15 @@ where
     }
 
     pub fn new_with_consensus() -> Self {
-        todo!()
+        todo!("consensus not configured for test peer")
     }
 
     pub fn new_with_tx_pool() -> Self {
-        todo!()
+        todo!("tx pool not configured for test peer")
     }
 
     pub fn new_fully_configed() -> Self {
-        todo!()
+        todo!("tx pool and consensus startup not built yet")
     }
 
     pub fn get_node_public_key(&self) -> PeerId {
@@ -128,6 +128,10 @@ where
 
     pub fn sub_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
         self.handle.subscribe_network_events()
+    }
+
+    pub fn manager_mut(&mut self) -> &mut StromNetworkManager<C> {
+        &mut self.strom_network
     }
 }
 

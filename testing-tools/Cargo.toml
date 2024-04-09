@@ -24,6 +24,9 @@ reth-rpc-types.workspace = true
 reth-eth-wire.workspace = true
 futures.workspace = true
 
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+
 reth-net-common = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
@@ -42,7 +45,7 @@ reth-network = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
 
 tokio-util.workspace = true
-tracing.workspace=true
+tracing.workspace = true
 
 tokio.workspace = true
 tokio-stream.workspace = true

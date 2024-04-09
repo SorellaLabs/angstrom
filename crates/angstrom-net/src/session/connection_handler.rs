@@ -97,17 +97,14 @@ impl ConnectionHandler for StromConnectionHandler {
             commands_to_session: tx
         };
 
-        let _ = self
-            .to_session_manager
-            .send_item(StromSessionMessage::Established { handle });
-
         PossibleStromSession::Session(StromSession::new(
             conn,
             peer_id,
             ReceiverStream::new(rx),
             self.to_session_manager,
             self.protocol_breach_request_timeout,
-            self.side_car
+            self.side_car,
+            handle
         ))
     }
 }

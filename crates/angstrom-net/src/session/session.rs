@@ -26,7 +26,7 @@ use crate::{
         message::StromProtocolMessage,
         status::{Status, StatusState}
     },
-    StatusBuilder, StromMessage, StromSessionMessage
+    StatusBuilder, StromMessage, StromSessionHandle, StromSessionMessage
 };
 
 const STATUS_TIMESTAMP_TIMEOUT_MS: u128 = 1500;
@@ -79,7 +79,9 @@ pub struct StromSession {
     /// delivered
     pub(crate) terminate_message: Option<(PollSender<StromSessionMessage>, StromSessionMessage)>,
     /// has a value until verification has been completed.
-    pub verification_sidecar:                   VerificationSidecar
+    pub verification_sidecar: VerificationSidecar,
+    /// has sent the handle to the receiver
+    pending_handle: Option<StromSessionHandle>
 }
 
 impl StromSession {
@@ -89,7 +91,8 @@ impl StromSession {
         commands_rx: ReceiverStream<SessionCommand>,
         to_session_manager: MeteredPollSender<StromSessionMessage>,
         protocol_breach_request_timeout: Duration,
-        verification_sidecar: VerificationSidecar
+        verification_sidecar: VerificationSidecar,
+        handle: StromSessionHandle
     ) -> Self {
         Self {
             verification_sidecar,
@@ -98,7 +101,8 @@ impl StromSession {
             commands_rx,
             to_session_manager,
             protocol_breach_request_timeout,
-            terminate_message: None
+            terminate_message: None,
+            pending_handle: Some(handle)
         }
     }
 
@@ -108,6 +112,23 @@ impl StromSession {
 
         self.terminate_message = Some((self.to_session_manager.inner().clone(), msg));
         self.poll_terminate_message(cx).expect("message is set")
+    }
+
+    fn poll_init_connection(&mut self, cx: &mut Context<'_>) -> Option<Poll<()>> {
+        match self.to_session_manager.poll_reserve(cx) {
+            Poll::Ready(Ok(())) => {
+                let handle = self.pending_handle.take().unwrap();
+                let _ = self
+                    .to_session_manager
+                    .send_item(StromSessionMessage::Established { handle });
+                return None
+            }
+            Poll::Ready(Err(_)) => {
+                // channel closed
+            }
+            Poll::Pending => return Some(Poll::Pending)
+        }
+        Some(Poll::Pending)
     }
 
     /// If a termination message is queued, this will try to send it to the
@@ -235,6 +256,11 @@ impl Stream for StromSession {
     type Item = BytesMut;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if self.pending_handle.is_some() {
+            if let Some(res) = self.poll_init_connection(cx) {
+                return Poll::Pending
+            }
+        }
         if !self.verification_sidecar.is_verified() {
             return self.poll_verification(cx)
         }

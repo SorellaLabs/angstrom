@@ -1,9 +1,6 @@
 use std::{collections::HashMap, pin::Pin, task::Poll};
 
-use angstrom_types::{
-    consensus::{Commit, PreProposal, Proposal},
-    primitive::ComposableOrder
-};
+use angstrom_types::consensus::{Commit, PreProposal, Proposal};
 use futures::stream::Stream;
 mod strom_peer;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkEvent};

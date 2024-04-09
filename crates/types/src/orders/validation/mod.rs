@@ -102,13 +102,15 @@ impl<O: PoolOrder> OrderValidationOutcome<O> {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum ValidationError {
     #[error("{0}")]
-    StateValidationError(#[from] StateValidationError)
+    StateValidationError(#[from] StateValidationError),
+    #[error("bad signer")]
+    BadSigner
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum StateValidationError {
     #[error("order: {0:?} nonce was invalid: {1}")]
     InvalidNonce(B256, U256),

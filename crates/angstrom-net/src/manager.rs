@@ -26,8 +26,7 @@ pub struct StromNetworkManager<DB> {
     to_pool_manager:      Option<UnboundedMeteredSender<NetworkOrderEvent>>,
     to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>,
 
-    event_listeners: Vec<UnboundedSender<StromNetworkEvent>>,
-
+    event_listeners:  Vec<UnboundedSender<StromNetworkEvent>>,
     swarm:            Swarm<DB>,
     /// This is updated via internal events and shared via `Arc` with the
     /// [`NetworkHandle`] Updated by the `NetworkWorker` and loaded by the

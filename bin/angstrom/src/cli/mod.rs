@@ -49,7 +49,7 @@ pub fn run() -> eyre::Result<()> {
     Cli::<AngstromConfig>::parse().run(|builder, args| async move {
         let executor = builder.task_executor().clone();
 
-        let mut network = init_network_builder(&args, &executor)?;
+        let mut network = init_network_builder(&args)?;
         let protocol_handle = network.build_protocol_handler();
         let channels = initialize_strom_handles();
 
@@ -90,10 +90,7 @@ pub fn run() -> eyre::Result<()> {
     })
 }
 
-pub fn init_network_builder(
-    config: &AngstromConfig,
-    executor: &TaskExecutor
-) -> eyre::Result<StromNetworkBuilder> {
+pub fn init_network_builder(config: &AngstromConfig) -> eyre::Result<StromNetworkBuilder> {
     let secret_key = get_secret_key(&config.secret_key_location)?;
     let public_key = PublicKey::from_secret_key(&Secp256k1::new(), &secret_key);
 

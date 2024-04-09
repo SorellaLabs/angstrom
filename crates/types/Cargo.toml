@@ -26,7 +26,7 @@ alloy-primitives = { workspace = true, features = ["rlp", "serde"] }
 alloy-rlp.workspace = true
 alloy-rlp-derive.workspace = true
 derive_more = "0.99.17"
+eyre = "0.6.12"
 
 [dev-dependencies]
 rand.workspace = true
-

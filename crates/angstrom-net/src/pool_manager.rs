@@ -576,8 +576,17 @@ where
                 // remove the peer
                 self.peers.remove(&peer_id);
             }
-
-            _ => {}
+            StromNetworkEvent::PeerRemoved(peer_id) => {
+                self.peers.remove(&peer_id);
+            }
+            StromNetworkEvent::PeerAdded(peer_id) => {
+                self.peers.insert(
+                    peer_id,
+                    StromPeer {
+                        orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap())
+                    }
+                );
+            }
         }
     }
 

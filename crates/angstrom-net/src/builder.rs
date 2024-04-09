@@ -13,7 +13,7 @@ use reth_primitives::{
     alloy_primitives::FixedBytes, keccak256, Address, BufMut, BytesMut, Chain, PeerId
 };
 use reth_tasks::TaskSpawner;
-use secp256k1::{Message, SecretKey};
+use secp256k1::{Message, SecretKey, SECP256K1};
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::PollSender;
@@ -115,7 +115,8 @@ impl StatusBuilder {
         self.state.timestamp_now();
 
         let message = self.state.to_message();
-        let sig = reth_primitives::sign_message(FixedBytes(key.secret_bytes()), message).unwrap();
+        let sig = SECP256K1
+            .sign_ecdsa_recoverable(&secp256k1::Message::from_slice(&*message).unwrap(), &key);
 
         Status { state: self.state, signature: angstrom_types::primitive::Signature(sig) }
     }

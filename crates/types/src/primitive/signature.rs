@@ -5,10 +5,9 @@ use std::{
 
 use alloy_primitives::{Address, FixedBytes, U256};
 use alloy_rlp::{Decodable, Encodable, Error};
-use reth_primitives::{PeerId, Signature as ESignature};
+use reth_primitives::{pk2id, PeerId, Signature as ESignature};
 use secp256k1::{
     ecdsa::{RecoverableSignature, RecoveryId},
-    ffi::CPtr,
     Message, SECP256K1
 };
 use serde::{Deserialize, Serialize};
@@ -35,9 +34,7 @@ impl Signature {
         )?;
 
         let public = SECP256K1.recover_ecdsa(&Message::from_slice(&message[..32])?, &sig)?;
-        let public_bytes = unsafe { public.as_c_ptr().as_ref().unwrap().underlying_bytes() };
-
-        Ok(PeerId::from(public_bytes))
+        Ok(pk2id(&public))
     }
 }
 

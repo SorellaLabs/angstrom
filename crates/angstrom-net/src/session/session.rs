@@ -161,7 +161,6 @@ impl StromSession {
         self.commands_rx
             .poll_next_unpin(cx)
             .map(|inner| {
-                tracing::debug!(?inner, "poll command");
                 inner.map_or_else(
                     || Poll::Ready(None),
                     |msg| match msg {
@@ -187,6 +186,7 @@ impl StromSession {
         while let Poll::Ready(msg) = self.conn.poll_next_unpin(cx).map(|data| {
             data.map(|bytes| {
                 let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
+                tracing::debug!(?msg, "received message");
                 let msg = msg
                     .map(|m| StromSessionMessage::ValidMessage {
                         peer_id: self.remote_peer_id,

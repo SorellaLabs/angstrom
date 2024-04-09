@@ -234,7 +234,6 @@ impl StromSession {
 
                 msg.map(|bytes| {
                     let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
-                    tracing::debug!(?msg, "got mes from connection");
                     msg.map_or(false, |msg| {
                         // first message has to be status
                         if let StromMessage::Status(status) = msg.message {
@@ -310,6 +309,7 @@ impl Stream for StromSession {
 
         self.try_send_outbound(cx);
 
+        cx.waker().wake_by_ref();
         Poll::Pending
     }
 }

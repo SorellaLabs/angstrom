@@ -158,6 +158,7 @@ impl StromSession {
         self.commands_rx
             .poll_next_unpin(cx)
             .map(|inner| {
+                tracing::debug!(?inner);
                 inner.map_or_else(
                     || Poll::Ready(None),
                     |msg| match msg {

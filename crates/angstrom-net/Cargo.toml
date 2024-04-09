@@ -93,6 +93,8 @@ ethers-core = { workspace = true, default-features = false, optional = true }
 tempfile = { version = "3.3", optional = true }
 
 [dev-dependencies]
+testing-tools.workspace = true
+
 angstrom-network.workspace = true
 # reth
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc", features = [

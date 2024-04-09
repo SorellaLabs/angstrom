@@ -1,7 +1,7 @@
 use std::{collections::HashMap, task::Poll};
 mod strom_peer;
 use angstrom_network::StromNetworkEvent;
-use futures::stream::StreamExt;
+use futures::{stream::StreamExt, FutureExt};
 use reth_primitives::*;
 use reth_provider::test_utils::NoopProvider;
 use secp256k1::SecretKey;
@@ -51,7 +51,7 @@ impl AngstromTestnet {
     }
 
     /// ensures all peers have eachother on there validator list
-    pub async fn connect_all_peers(&mut self) -> bool {
+    pub async fn connect_all_peers(&mut self) {
         let peer_set = self.peers.keys().collect::<Vec<_>>();
         for (pk, peer) in &self.peers {
             for other in &peer_set {
@@ -62,16 +62,23 @@ impl AngstromTestnet {
             }
         }
 
-
-        let needed_peers = self.peers.len() -1;
-        std::future::poll_fn(|cx| {
-
-        }).await
         // wait on each peer to add all other peers
+        let needed_peers = self.peers.len() - 1;
+        let mut peers = self.peers_mut().map(|(_, p)| p).collect::<Vec<_>>();
 
-        self.
+        std::future::poll_fn(|cx| {
+            let mut all_connected = true;
+            for peer in &mut peers {
+                let _ = peer.poll_unpin(cx);
+                all_connected &= peer.get_peer_count() == needed_peers
+            }
+            if all_connected {
+                return Poll::Ready(())
+            }
 
-        true
+            Poll::Pending
+        })
+        .await
     }
 
     /// returns the next event that any peer emits

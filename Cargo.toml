@@ -9,7 +9,8 @@ members = [
   "crates/order-pool",
   "crates/rpc",
   "crates/eth/",
-  "crates/submission", "testing-tools",
+  "crates/submission",
+  "testing-tools",
 ]
 
 
@@ -51,6 +52,7 @@ order-pool = { path = "./crates/order-pool/" }
 angstrom-eth = { path = "./crates/eth/" }
 angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
+testing-tools = { path = "./testing-tools/" }
 
 
 ## async

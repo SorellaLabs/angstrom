@@ -3,6 +3,7 @@ use alloy_rlp::{length_of_length, Decodable, Encodable, Error, Header};
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use alloy_sol_macro::sol;
 use alloy_sol_types::{eip712_domain, Eip712Domain};
+use reth_primitives::hex::decode;
 use serde::{Deserialize, Serialize};
 
 sol! {
@@ -195,27 +196,15 @@ sol! {
 
 impl Encodable for Angstrom::PoolKey {
     fn encode(&self, out: &mut dyn bytes::BufMut) {
-        Header { list: false, payload_length: 69 }.encode(out);
+        Header { list: false, payload_length: 68 }.encode(out);
 
         self.currency0.encode(out);
         self.currency1.encode(out);
         self.fee.encode(out);
 
-        if self.tickSpacing.is_negative() {
-            1_u8.encode(out);
-            let spacing = (!self.tickSpacing).overflowing_add(1).0 as u32;
-            spacing.encode(out);
-        } else {
-            0_u8.encode(out);
-            (self.tickSpacing as u32).encode(out);
-        }
-
+        let tick_spacing = self.tickSpacing.to_be_bytes();
+        tick_spacing.encode(out);
         self.hooks.encode(out);
-    }
-
-    fn length(&self) -> usize {
-        let payload_length = 69;
-        payload_length + length_of_length(payload_length)
     }
 }
 
@@ -223,8 +212,8 @@ impl Decodable for Angstrom::PoolKey {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
         let Header { list, payload_length } = Header::decode(buf)?;
 
-        if !list {
-            return Err(Error::UnexpectedString)
+        if list {
+            return Err(Error::UnexpectedList)
         }
 
         let started_len = buf.len();
@@ -235,15 +224,9 @@ impl Decodable for Angstrom::PoolKey {
         let cur_0 = Address::decode(buf)?;
         let cur_1 = Address::decode(buf)?;
         let fee = u32::decode(buf)?;
+        let spacing: [u8; 4] = Decodable::decode(buf)?;
+        let tick_spacing = i32::from_be_bytes(spacing);
 
-        let is_neg: bool = Decodable::decode(buf)?;
-
-        let tick_spacing = if is_neg {
-            let spacing = u32::decode(buf)?;
-            (!spacing).overflowing_add(1).0 as i32
-        } else {
-            u32::decode(buf)? as i32
-        };
         let hooks = Address::decode(buf)?;
 
         let consumed = started_len - buf.len();

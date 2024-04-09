@@ -170,7 +170,6 @@ impl StromSession {
                                 message_type: msg.message_id(),
                                 message:      msg
                             };
-                            tracing::debug!(?msg, "sendign message");
                             let mut bytes = BytesMut::with_capacity(msg.length());
                             msg.encode(&mut bytes);
                             Poll::Ready(Some(bytes))
@@ -185,13 +184,8 @@ impl StromSession {
     fn poll_incoming(&mut self, cx: &mut Context<'_>) -> Option<Poll<Option<BytesMut>>> {
         // processes incoming messages until there are none left or the stream closes
         while let Poll::Ready(msg) = self.conn.poll_next_unpin(cx).map(|data| {
-            if data.is_none() {
-                tracing::debug!("poll incoming was none");
-            }
-
             data.map(|bytes| {
                 let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
-                tracing::debug!(?msg, "received message");
                 let msg = msg
                     .map(|m| StromSessionMessage::ValidMessage {
                         peer_id: self.remote_peer_id,

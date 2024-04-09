@@ -84,6 +84,7 @@ impl StromSessionManager {
 
                         return None
                     }
+                    tracing::info!("got handle");
 
                     let event = SessionEvent::SessionEstablished {
                         peer_id:   handle.remote_id,

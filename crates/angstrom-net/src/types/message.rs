@@ -138,7 +138,6 @@ impl StromMessage {
             StromMessage::PrePropose(_) => StromMessageID::PrePropose,
             StromMessage::Propose(_) => StromMessageID::Propose,
             StromMessage::Commit(_) => StromMessageID::Commit,
-
             StromMessage::PropagatePooledOrders(_) => StromMessageID::PropagatePooledOrders
         }
     }

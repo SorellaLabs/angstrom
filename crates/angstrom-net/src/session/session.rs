@@ -184,6 +184,10 @@ impl StromSession {
     fn poll_incoming(&mut self, cx: &mut Context<'_>) -> Option<Poll<Option<BytesMut>>> {
         // processes incoming messages until there are none left or the stream closes
         while let Poll::Ready(msg) = self.conn.poll_next_unpin(cx).map(|data| {
+            if data.is_none() {
+                tracing::debug!("poll incoming was none");
+            }
+
             data.map(|bytes| {
                 let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
                 tracing::debug!(?msg, "received message");

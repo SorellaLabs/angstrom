@@ -56,7 +56,7 @@ impl Encodable for Signature {
 }
 impl Decodable for Signature {
     fn decode(buf: &mut &[u8]) -> Result<Self, Error> {
-        let sig = ESignature::decode(buf).unwrap();
+        let sig = ESignature::decode(buf)?;
         Ok(Signature(sig))
     }
 }

@@ -9,7 +9,7 @@ use reth_primitives::PeerId;
 use crate::{
     peers::PeersManager,
     session::StromSessionManager,
-    state::StromState,
+    state::{StateEvent, StromState},
     types::message::{StromMessage, StromProtocolMessage},
     PeerAction, PeerKind, SessionEvent
 };
@@ -67,7 +67,8 @@ impl<DB: Unpin> Swarm<DB> {
         }
     }
 
-    fn on_peer_action(&mut self, action: PeerAction) -> Option<SwarmEvent> {
+    fn on_state_event(&mut self, action: StateEvent) -> Option<SwarmEvent> {
+        tracing::warn!(?action, "no impl");
         None
     }
 }
@@ -82,11 +83,11 @@ impl<DB: Unpin> Stream for Swarm<DB> {
             }
         }
 
-        // while let Some(action) = self.state.poll() {
-        //     if let Some(res) = self.on_peer_action(action) {
-        //         return Poll::Ready(Some(res))
-        //     }
-        // }
+        while let Some(action) = self.state.poll(cx) {
+            if let Some(res) = self.on_state_event(action) {
+                return Poll::Ready(Some(res))
+            }
+        }
         // Poll the session manager
 
         Poll::Pending

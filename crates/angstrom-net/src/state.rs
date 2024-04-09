@@ -48,6 +48,7 @@ impl<DB> StromState<DB> {
     }
 }
 
+#[derive(Debug)]
 pub enum StateEvent {
     /// Disconnect an existing connection.
     Disconnect {

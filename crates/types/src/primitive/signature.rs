@@ -99,14 +99,7 @@ mod tests {
         let mut rng = thread_rng();
         let secp = secp256k1::Secp256k1::new();
         let secret_key = SecretKey::new(&mut rng);
-        let pub_key = unsafe {
-            secret_key
-                .public_key(&secp)
-                .as_c_ptr()
-                .as_ref()
-                .unwrap()
-                .underlying_bytes()
-        };
+        let pub_key = pk2id(&secret_key.public_key(&secp));
 
         let sig = Signature(
             reth_primitives::sign_message(FixedBytes(secret_key.secret_bytes()), message).unwrap()

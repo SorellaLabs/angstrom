@@ -85,7 +85,7 @@ impl StromSessionManager {
 
     fn poll_session_msg(&mut self, cx: &mut Context<'_>) -> Poll<Option<SessionEvent>> {
         self.from_sessions.poll_recv(cx).map(|msg| {
-            tracing::debug!(?msg, "got msg from session");
+            tracing::trace!(?msg, "got msg from session");
             msg.and_then(|msg_inner| match msg_inner {
                 StromSessionMessage::Disconnected { peer_id } => {
                     self.remove_session(&peer_id);

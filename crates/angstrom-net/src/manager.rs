@@ -112,16 +112,23 @@ impl<DB: Unpin> Future for StromNetworkManager<DB> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // process incoming messages from a handle
+        let mut work = 30;
         loop {
+            work -= 1;
+            if work == 0 {
+                cx.waker().wake_by_ref();
+                return Poll::Pending
+            }
+
             match self.from_handle_rx.poll_next_unpin(cx) {
-                Poll::Pending => break,
+                Poll::Ready(Some(msg)) => self.on_handle_message(msg),
                 Poll::Ready(None) => {
                     // This is only possible if the channel was deliberately closed since we always
                     // have an instance of `NetworkHandle`
                     error!("Strom network message channel closed.");
                     return Poll::Ready(())
                 }
-                Poll::Ready(Some(msg)) => self.on_handle_message(msg)
+                _ => {}
             };
 
             macro_rules! send_msgs {

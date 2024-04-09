@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use validation::order::OrderValidator;
 
 // all keys are the signer of the order
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MockValidator {
     pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationOutcome<EcRecoveredLimitOrder>>>>,
     pub searcher_orders:

@@ -69,6 +69,7 @@ impl AngstromTestnet {
 
         std::future::poll_fn(|cx| {
             let mut all_connected = true;
+            tracing::info!("pollin");
             for peer in &mut peers {
                 if let Poll::Ready(_) = peer.poll_unpin(cx) {
                     tracing::error!("peer failed");

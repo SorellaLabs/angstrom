@@ -115,8 +115,7 @@ impl StatusBuilder {
         self.state.timestamp_now();
 
         let message = self.state.to_message();
-        let sig = SECP256K1
-            .sign_ecdsa_recoverable(&secp256k1::Message::from_slice(&*message).unwrap(), &key);
+        let sig = reth_primitives::sign_message(FixedBytes(key.secret_bytes()), message).unwrap();
 
         Status { state: self.state, signature: angstrom_types::primitive::Signature(sig) }
     }

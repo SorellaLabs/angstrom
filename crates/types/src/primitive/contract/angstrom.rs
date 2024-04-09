@@ -211,15 +211,15 @@ impl Encodable for Angstrom::PoolKey {
 impl Decodable for Angstrom::PoolKey {
     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
         let Header { list, payload_length } = Header::decode(buf)?;
+        //
+        // if list {
+        //     return Err(Error::UnexpectedList)
+        // }
 
-        if list {
-            return Err(Error::UnexpectedList)
-        }
-
-        let started_len = buf.len();
-        if started_len < payload_length {
-            return Err(Error::InputTooShort)
-        }
+        // let started_len = buf.len();
+        // if started_len < payload_length {
+        //     return Err(Error::InputTooShort)
+        // }
 
         let cur_0 = Address::decode(buf)?;
         let cur_1 = Address::decode(buf)?;
@@ -229,10 +229,10 @@ impl Decodable for Angstrom::PoolKey {
 
         let hooks = Address::decode(buf)?;
 
-        let consumed = started_len - buf.len();
-        if consumed != payload_length {
-            return Err(Error::ListLengthMismatch { expected: payload_length, got: consumed })
-        }
+        // let consumed = started_len - buf.len();
+        // if consumed != payload_length {
+        //     return Err(Error::ListLengthMismatch { expected: payload_length, got:
+        // consumed }) }
 
         Ok(Self { hooks, fee, tickSpacing: tick_spacing, currency0: cur_0, currency1: cur_1 })
     }

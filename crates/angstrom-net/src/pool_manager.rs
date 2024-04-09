@@ -563,14 +563,12 @@ where
 
     fn on_network_event(&mut self, event: StromNetworkEvent) {
         match event {
-            StromNetworkEvent::SessionEstablished { peer_id, client_version } => {
+            StromNetworkEvent::SessionEstablished { peer_id } => {
                 // insert a new peer into the peerset
                 self.peers.insert(
                     peer_id,
                     StromPeer {
                         orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()),
-                        //request_tx: messages,
-                        client_version
                     }
                 );
             }
@@ -673,10 +671,4 @@ struct StromPeer {
     /// Keeps track of transactions that we know the peer has seen.
     #[allow(dead_code)]
     orders:         LruCache<B256>,
-    /// A communication channel directly to the peer's session task.
-    //request_tx:     PeerRequestSender,
-    /// negotiated version of the session.
-    /// The peer's client version.
-    #[allow(unused)]
-    client_version: Arc<str>
 }

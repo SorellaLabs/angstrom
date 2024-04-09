@@ -60,7 +60,9 @@ impl<DB: Unpin> Swarm<DB> {
                 Some(SwarmEvent::ValidMessage { peer_id, msg: message.message })
             }
             SessionEvent::Disconnected { peer_id } => Some(SwarmEvent::Disconnected { peer_id }),
-            SessionEvent::SessionEstablished { peer_id, direction, timeout } => Some(SwarmEvent::SessionEstablished { peer_id })
+            SessionEvent::SessionEstablished { peer_id, direction, timeout } => {
+                Some(SwarmEvent::SessionEstablished { peer_id })
+            }
             _ => None
         }
     }

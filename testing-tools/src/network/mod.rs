@@ -64,7 +64,8 @@ impl AngstromTestnet {
 
         // wait on each peer to add all other peers
         let needed_peers = self.peers.len() - 1;
-        let mut peers = self.peers_mut().map(|(_, p)| p).collect::<Vec<_>>();
+        let mut peers = self.peers.iter_mut().map(|(_, p)| p).collect::<Vec<_>>();
+        let mut chans = self.peer_events.values_mut().collect::<Vec<_>>();
 
         std::future::poll_fn(|cx| {
             let mut all_connected = true;
@@ -73,6 +74,12 @@ impl AngstromTestnet {
                     tracing::error!("peer failed");
                 }
                 all_connected &= peer.get_peer_count() == needed_peers
+            }
+
+            for chan in &mut chans {
+                if let Poll::Ready(Some(msg)) = chan.poll_next_unpin(cx) {
+                    tracing::debug!(?msg, "peer got msg");
+                }
             }
             if all_connected {
                 return Poll::Ready(())

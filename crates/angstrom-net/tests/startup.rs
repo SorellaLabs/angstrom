@@ -1,7 +1,7 @@
 use reth_provider::test_utils::NoopProvider;
 use testing_tools::network::AngstromTestnet;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread",worker_threads=10)]
 async fn test_startup() {
     reth_tracing::init_test_tracing();
     let noop = NoopProvider::default();

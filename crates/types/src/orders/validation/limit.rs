@@ -133,7 +133,7 @@ impl PoolOrder for EcRecoveredLimitOrder {
     }
 
     fn size(&self) -> usize {
-        unreachable!()
+        69
     }
 
     fn encoded_length(&self) -> usize {

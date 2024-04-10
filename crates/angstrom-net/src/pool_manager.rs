@@ -654,6 +654,7 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
+        tracing::debug!("pool manager poll");
 
         // pull all eth events
         while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {

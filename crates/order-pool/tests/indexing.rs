@@ -227,7 +227,7 @@ async fn test_order_fill() {
 
     // send order for re validation. this should fail and we should have one less
     // order in the pool
-    eth_handle.filled_orders(u64::MAX, hashes);
+    eth_handle.filled_orders(4232, hashes);
 
     let orders = orderpool.pool_handle.clone();
     let mut filled_orders = orders.subscribe_filled_orders();

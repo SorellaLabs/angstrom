@@ -36,3 +36,4 @@ validation.workspace = true
 tokio-stream.workspace = true
 
 alloy-primitives.workspace = true   
+eyre = "0.6.12"

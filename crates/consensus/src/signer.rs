@@ -3,14 +3,10 @@ use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     primitive::Angstrom::{Bundle, LowerBound}
 };
-use ethers_signers::{LocalWallet, WalletError};
 /// The Signer deals with verifying external signatures as well as
 /// signing our payloads
 #[repr(transparent)]
-pub struct Signer(
-    //TODO: this will prob change in future. placeholder for now
-    LocalWallet
-);
+pub struct Signer();
 
 impl Signer {
     #[allow(dead_code)]
@@ -19,16 +15,12 @@ impl Signer {
         _ethereum_block: u64,
         _vanilla_bundle: Bundle,
         _lower_bound: LowerBound
-    ) -> Result<Proposal, WalletError> {
+    ) -> eyre::Result<Proposal> {
         todo!()
     }
 
     #[allow(dead_code)]
-    pub fn sign_commit(
-        &self,
-        _ethereum_block: u64,
-        _proposal: Proposal
-    ) -> Result<Commit, WalletError> {
+    pub fn sign_commit(&self, _ethereum_block: u64, _proposal: Proposal) -> eyre::Result<Commit> {
         todo!()
     }
 
@@ -37,7 +29,7 @@ impl Signer {
         &self,
         _ethereum_block: u64,
         _bundle: Bundle
-    ) -> Result<PreProposal, WalletError> {
+    ) -> eyre::Result<PreProposal> {
         todo!()
     }
 

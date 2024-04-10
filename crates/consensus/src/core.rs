@@ -9,8 +9,8 @@ use angstrom_types::{
     consensus::{Commit, EvidenceError, PreProposal, Proposal},
     submission::BestBundles
 };
-use ethers_core::types::{Block, H256};
 use futures::{Stream, StreamExt};
+use reth_primitives::Block;
 use thiserror::Error;
 use tracing::error;
 
@@ -72,15 +72,15 @@ impl ConsensusCore {
         todo!()
     }
 
-    pub fn new_block(&mut self, block: Arc<Block<H256>>) {
+    pub fn new_block(&mut self, block: Arc<Block>) {
         // need to make sure that this is sequential
-        if self.round_state.current_height() + 1 == block.number.unwrap().as_u64() {
+        if self.round_state.current_height() + 1 == block.number {
             // TODO: wire in angstrom selection stuff
             let new_leader = self.leader_selection.on_new_block(block.clone());
             let is_leader = self.signer.is_us(&new_leader);
 
             self.round_state
-                .new_height(block.number.unwrap().as_u64(), new_leader, is_leader);
+                .new_height(block.number, new_leader, is_leader);
         } else {
             panic!("have a gap in blocks which will break the round robin algo");
         }

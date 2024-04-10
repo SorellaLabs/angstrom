@@ -122,8 +122,7 @@ impl StromSession {
         match self.to_session_manager.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let handle = self.pending_handle.take().unwrap();
-                self
-                    .to_session_manager
+                self.to_session_manager
                     .send_item(StromSessionMessage::Established { handle })
                     .unwrap();
                 return None

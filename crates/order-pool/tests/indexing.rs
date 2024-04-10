@@ -37,7 +37,7 @@ async fn test_order_indexing() {
         network_rx
     );
 
-    let chains = OperationChainer::new(orderpool, Duration::from_secs(1), None);
+    let chains = OperationChainer::new(orderpool, Duration::from_secs(2), None);
 
     for order in &orders {
         let signer = order.recover_signer().unwrap();

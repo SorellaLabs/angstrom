@@ -29,12 +29,5 @@ reth-provider.workspace = true
 alloy-primitives.workspace = true
 #alloy-providers.workspace = true
 
-# ethers
-ethers-middleware.workspace = true
-ethers-signers.workspace = true
-ethers-providers.workspace = true
-ethers-flashbots = "0.15.0"
-ethers-core.workspace = true
-
 # misc
 anyhow.workspace = true

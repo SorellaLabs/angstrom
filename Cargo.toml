@@ -108,13 +108,6 @@ alloy-rlp-derive = { version = "0.3.4" }
 alloy-primitives = { version = "0.7.0", features = ["rlp"] }
 
 hex-literal = "0.4.1"
-ethers-core = { version = "2.0.10", default-features = false }
-ethers-providers = { version = "2.0.10", features = ["ws"] }
-ethers-signers = { version = "2.0.10", default-features = false }
-ethers-middleware = { version = "2.0.10", default-features = false }
-
-# anvil = { git = "https://github.com/SorellaLabs/fastfoundry" }
-# anvil-core = { git = "https://github.com/SorellaLabs/fastfoundry" }
 
 ## misc
 bytes = "1.4"

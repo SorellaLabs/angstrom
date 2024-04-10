@@ -14,14 +14,8 @@ exclude.workspace = true
 angstrom-utils.workspace = true
 angstrom-eth.workspace = true
 rayon.workspace = true
-
-# ethers
-ethers = "2.0.10"
-ethers-middleware.workspace = true
-ethers-providers.workspace = true
-ethers-core.workspace = true
-ethers-signers.workspace = true
 auto_impl.workspace = true
+
 # anvil.workspace = true
 # anvil-core.workspace = true
 anyhow.workspace = true

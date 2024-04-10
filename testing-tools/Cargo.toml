@@ -53,12 +53,6 @@ reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
 
-ethers-core = { workspace = true, default-features = false }
-ethers-providers = { workspace = true, default-features = false, features = [
-  "ws",
-] }
-ethers-signers = { workspace = true, default-features = false }
-ethers-middleware = { workspace = true, default-features = false }
 
 enr = { workspace = true, features = ["serde", "rust-secp256k1"] }
 rand.workspace = true

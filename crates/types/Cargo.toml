@@ -6,11 +6,8 @@ edition.workspace = true
 [dependencies]
 bytes = "1.4"
 tracing.workspace = true
-ethers-contract = "2.0.10"
 thiserror.workspace = true
 serde_json.workspace = true
-ethers-core.workspace = true
-ethers = "2.0.10"
 reth-primitives.workspace = true
 revm.workspace = true
 serde.workspace = true

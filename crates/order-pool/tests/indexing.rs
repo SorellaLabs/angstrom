@@ -231,13 +231,14 @@ async fn test_order_fill() {
 
     let orders = orderpool.pool_handle.clone();
     let mut filled_orders = orders.subscribe_filled_orders();
+    tracing::debug!("subbed to filled orders");
     let mut filled = 0;
 
     let res = tokio::time::timeout(
         Duration::from_secs(5),
         orderpool.poll_until(|| {
             if let Ok(o) = filled_orders.as_mut().try_recv() {
-                tracing::debug!(?o);
+                tracing::debug!("got orders from sub");
                 filled += o.len();
             }
             filled == order_count

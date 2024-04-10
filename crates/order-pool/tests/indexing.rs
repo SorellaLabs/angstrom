@@ -157,7 +157,7 @@ async fn test_pool_eviction() {
     let _ = tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false)).await;
 
     let orders = orderpool.pool_handle.get_all_orders();
-    let (orders, _) = futures::join(
+    let (orders, _) = futures::join!(
         orders,
         tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false))
     );

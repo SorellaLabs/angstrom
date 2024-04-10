@@ -155,6 +155,12 @@ async fn test_pool_eviction() {
 
     // progress the pool for one second.
     let _ = tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false)).await;
-    let orders = orderpool.pool_handle.get_all_orders().await;
+
+    let orders = orderpool.pool_handle.get_all_orders();
+    let (orders, _) = futures::join(
+        orders,
+        tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false))
+    );
+
     assert_eq!(orders.vanilla.limit.len(), order_count - 1, "failed to evict stale order");
 }

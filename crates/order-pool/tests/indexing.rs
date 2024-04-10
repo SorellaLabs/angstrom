@@ -163,5 +163,12 @@ async fn test_pool_eviction() {
         tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false))
     );
 
-    assert_eq!(orders.vanilla.limit.len(), order_count - 1, "failed to evict stale order");
+    let pool_order_cnt = orders
+        .vanilla
+        .limit
+        .iter()
+        .map(|i| i.bids.len() + i.asks.len())
+        .sum::<usize>();
+
+    assert_eq!(pool_order_cnt, order_count - 1, "failed to evict stale order");
 }

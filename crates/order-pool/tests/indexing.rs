@@ -153,9 +153,6 @@ async fn test_pool_eviction() {
     // order in the pool
     eth_handle.state_changes(vec![to_evict]);
 
-    // progress the pool for one second.
-    let _ = tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false)).await;
-
     let orders = orderpool.pool_handle.clone();
     let orders = orders.get_all_orders();
     let (orders, _) = futures::join!(

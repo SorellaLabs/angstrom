@@ -1,4 +1,6 @@
-use angstrom_types::orders::{OrderValidationOutcome, ValidatedOrder};
+use std::time::Duration;
+
+use angstrom_types::orders::{OrderPriorityData, OrderValidationOutcome, ValidatedOrder};
 use order_pool::OrderPoolHandle;
 use rand::{thread_rng, Rng};
 use testing_tools::{
@@ -13,16 +15,16 @@ async fn test_order_indexing() {
     reth_tracing::init_test_tracing();
 
     let validator = MockValidator::default();
-    let (mock_handle, network_handle, network_rx, order_rx) = MockNetworkHandle::new();
-    let (mock_eth, eth_events) = MockEthEventHandle::new();
+    let (_, network_handle, network_rx, order_rx) = MockNetworkHandle::new();
+    let (_, eth_events) = MockEthEventHandle::new();
     let mut rng = thread_rng();
 
-    let orders = (0..rng.gen_range(3..10))
+    let orders = (0..rng.gen_range(3..5))
         .map(|_| generate_rand_valid_limit_order())
         .collect::<Vec<_>>();
 
-    let orderpool = TestnetOrderPool::new_full_mock(
-        validator,
+    let mut orderpool = TestnetOrderPool::new_full_mock(
+        validator.clone(),
         network_handle,
         eth_events,
         order_rx,
@@ -31,14 +33,42 @@ async fn test_order_indexing() {
 
     for order in &orders {
         let signer = order.recover_signer().unwrap();
-        // ValidatedOrder::
-        let validation_outcome = OrderValidationOutcome::Valid { order: (), propagate: false };
-        validator.add_limit_order(signer, order.clone());
+        let order = order.clone().try_into().unwrap();
+
+        let validated = ValidatedOrder {
+            order,
+            data: OrderPriorityData { gas: 69420, price: 12678, volume: 23123 },
+            is_bid: rng.gen(),
+            pool_id: rng.gen(),
+            location: angstrom_types::orders::OrderLocation::LimitPending
+        };
+
+        let validation_outcome =
+            OrderValidationOutcome::Valid { order: validated, propagate: false };
+
+        validator.add_limit_order(signer, validation_outcome);
     }
 
+    let order_count = orders.len();
     for order in orders {
         orderpool
             .pool_handle
             .new_limit_order(angstrom_types::orders::OrderOrigin::External, order)
     }
+
+    let mut new_orders = orderpool.pool_handle.subscribe_new_orders();
+    let mut have = 0;
+
+    let res = tokio::time::timeout(
+        Duration::from_secs(2),
+        orderpool.poll_until(|| {
+            if let Ok(_) = new_orders.as_mut().try_recv() {
+                have += 1;
+            }
+            order_count == have
+        })
+    )
+    .await;
+
+    assert_eq!(res, Ok(true), "orderpool failed to index new orders");
 }

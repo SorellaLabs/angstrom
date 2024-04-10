@@ -1,3 +1,5 @@
+use std::task::Poll;
+
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{
     pool_manager::{PoolHandle, PoolManager},
@@ -7,6 +9,7 @@ use angstrom_types::rpc::{
     EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
     EcRecoveredSearcherOrder
 };
+use futures::{future::poll_fn, FutureExt};
 use order_pool::{OrderPoolInner, PoolConfig};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio::sync::mpsc::unbounded_channel;
@@ -65,5 +68,21 @@ impl TestnetOrderPool {
 
     pub fn get_handle(&self) -> &DefaultPoolHandle {
         &self.pool_handle
+    }
+
+    pub async fn poll_until<F: FnMut() -> bool>(&mut self, mut finished: F) -> bool {
+        poll_fn(|cx| {
+            if let Poll::Ready(_) = self.pool_manager.poll_unpin(cx) {
+                return Poll::Ready(false)
+            }
+
+            if finished() {
+                return Poll::Ready(true)
+            } else {
+                cx.waker().wake_by_ref();
+            }
+            Poll::Pending
+        })
+        .await
     }
 }

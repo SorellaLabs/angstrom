@@ -42,6 +42,7 @@ pub struct TestnetOrderPool {
 impl TestnetOrderPool {
     pub fn new_full_mock(
         validator: MockValidator,
+        config: PoolConfig,
         network_handle: StromNetworkHandle,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
@@ -50,7 +51,7 @@ impl TestnetOrderPool {
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(validator, PoolConfig::default());
+        let inner = OrderPoolInner::new(validator, config);
 
         Self {
             pool_manager: PoolManager::new(

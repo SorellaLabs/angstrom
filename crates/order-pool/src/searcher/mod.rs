@@ -33,10 +33,10 @@ where
         + PooledSearcherOrder<ValidationData = SearcherPriorityData>
         + PooledComposableOrder
 {
-    pub fn new(max_size: Option<usize>) -> Self {
+    pub fn new(ids: &[PoolId], max_size: Option<usize>) -> Self {
         Self {
-            searcher_orders: VanillaSearcherPool::new(None),
-            composable_searcher_orders: ComposableSearcherPool::new(None),
+            searcher_orders: VanillaSearcherPool::new(ids),
+            composable_searcher_orders: ComposableSearcherPool::new(ids),
             _size: SizeTracker { max: max_size, current: 0 }
         }
     }

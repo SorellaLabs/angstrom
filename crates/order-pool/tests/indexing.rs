@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use angstrom_types::orders::{OrderPriorityData, OrderValidationOutcome, ValidatedOrder};
-use order_pool::OrderPoolHandle;
+use order_pool::{OrderPoolHandle, PoolConfig};
 use rand::{thread_rng, Rng};
 use testing_tools::{
     mocks::{
@@ -23,8 +23,12 @@ async fn test_order_indexing() {
         .map(|_| generate_rand_valid_limit_order())
         .collect::<Vec<_>>();
 
+    let mut pool_config = PoolConfig::default();
+    pool_config.ids = vec![0, 1, 2, 3, 4, 5];
+
     let mut orderpool = TestnetOrderPool::new_full_mock(
         validator.clone(),
+        pool_config,
         network_handle,
         eth_events,
         order_rx,
@@ -39,7 +43,7 @@ async fn test_order_indexing() {
             order,
             data: OrderPriorityData { gas: 69420, price: 12678, volume: 23123 },
             is_bid: rng.gen(),
-            pool_id: rng.gen(),
+            pool_id: rng.gen_range(0..=5),
             location: angstrom_types::orders::OrderLocation::LimitPending
         };
 

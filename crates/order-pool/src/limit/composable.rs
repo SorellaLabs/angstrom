@@ -16,8 +16,9 @@ impl<O: PooledComposableOrder + PooledLimitOrder> ComposableLimitPool<O>
 where
     O: PooledComposableOrder<ValidationData = OrderPriorityData>
 {
-    pub fn new() -> Self {
-        Self(HashMap::default())
+    pub fn new(ids: &[PoolId]) -> Self {
+        let inner = ids.iter().map(|id| (*id, PendingPool::new())).collect();
+        Self(inner)
     }
 
     pub fn add_order(&mut self, order: ValidOrder<O>) -> Result<(), LimitPoolError<O>> {

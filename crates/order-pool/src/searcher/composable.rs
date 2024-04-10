@@ -1,30 +1,31 @@
 use std::collections::{BTreeMap, HashMap};
 
 use alloy_primitives::B256;
-use angstrom_types::orders::{
-    OrderId, PooledComposableOrder, PooledSearcherOrder, SearcherPriorityData, ValidatedOrder
+use angstrom_types::{
+    orders::{
+        OrderId, PooledComposableOrder, PooledSearcherOrder, SearcherPriorityData, ValidatedOrder
+    },
+    primitive::PoolId
 };
 
 use super::{SearcherPoolError, V1_LP_POOlS, SEARCHER_POOL_MAX_SIZE};
 use crate::common::{SizeTracker, ValidOrder};
 pub struct ComposableSearcherPool<CS: PooledComposableOrder + PooledSearcherOrder> {
-    sub_pools: Vec<PendingPool<CS>>
+    sub_pools: HashMap<PoolId, PendingPool<CS>>
 }
 
 impl<CS: PooledComposableOrder + PooledSearcherOrder> ComposableSearcherPool<CS>
 where
     CS: PooledSearcherOrder<ValidationData = SearcherPriorityData>
 {
-    pub fn new(max_size: Option<usize>) -> Self {
-        let sub_pools = (0..max_size.unwrap_or(V1_LP_POOlS)) // Default to 15 if None
-            .map(|_| PendingPool::new())
-            .collect();
+    pub fn new(ids: &[PoolId]) -> Self {
+        let sub_pools = ids.iter().map(|id| (*id, PendingPool::new())).collect();
         ComposableSearcherPool { sub_pools }
     }
 
     pub fn add_order(&mut self, order: ValidatedOrder<CS>) -> Result<(), SearcherPoolError<CS>> {
         self.sub_pools
-            .get_mut(order.pool_id())
+            .get_mut(&order.pool_id())
             .ok_or(SearcherPoolError::NoPool(order.pool_id))?
             .add_order(order)
     }
@@ -34,7 +35,7 @@ where
         order_id: &OrderId
     ) -> Result<ValidOrder<CS>, SearcherPoolError<CS>> {
         self.sub_pools
-            .get_mut(order_id.pool_id)
+            .get_mut(&order_id.pool_id)
             .ok_or(SearcherPoolError::NoPool(order_id.pool_id))?
             .remove_order(order_id.hash)
     }
@@ -42,7 +43,7 @@ where
     #[allow(dead_code)]
     pub fn get_winning_orders(&self) -> Vec<ValidOrder<CS>> {
         self.sub_pools
-            .iter()
+            .values()
             .filter_map(|pool| pool.winning_order())
             .cloned()
             .collect()

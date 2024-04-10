@@ -1,3 +1,5 @@
+use angstrom_types::primitive::PoolId;
+
 /// Guarantees max orders per sender
 pub const ORDER_POOL_MAX_ACCOUNT_SLOTS_PER_SENDER: usize = 16;
 
@@ -16,6 +18,8 @@ pub const SEARCHER_SUBPOOL_MAX_SIZE_MB_DEFAULT: usize = 5;
 /// Configuration options for the Transaction pool.
 #[derive(Debug, Clone)]
 pub struct PoolConfig {
+    /// pool ids
+    pub ids:               Vec<PoolId>,
     /// Max number of transaction in the pending sub-pool
     pub lo_pending_limit:  LimitSubPoolLimit,
     /// Max number of transaction in the queued sub-pool
@@ -33,6 +37,7 @@ pub struct PoolConfig {
 impl Default for PoolConfig {
     fn default() -> Self {
         Self {
+            ids:               vec![],
             lo_pending_limit:  Default::default(),
             lo_queued_limit:   Default::default(),
             lo_parked_limit:   Default::default(),

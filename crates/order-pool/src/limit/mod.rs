@@ -34,10 +34,10 @@ where
     O: PooledLimitOrder<ValidationData = OrderPriorityData>,
     C: PooledComposableOrder + PooledLimitOrder<ValidationData = OrderPriorityData>
 {
-    pub fn new(max_size: Option<usize>) -> Self {
+    pub fn new(ids: &[PoolId], max_size: Option<usize>) -> Self {
         Self {
-            composable_orders: ComposableLimitPool::new(),
-            limit_orders:      LimitPool::new(),
+            composable_orders: ComposableLimitPool::new(ids),
+            limit_orders:      LimitPool::new(ids),
             size:              SizeTracker { max: max_size, current: 0 }
         }
     }

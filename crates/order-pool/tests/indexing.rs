@@ -60,6 +60,13 @@ async fn test_order_indexing() {
     let order_count = orders.len();
 
     chains
+        .add_operation(move |pool, _| {
+            async move {
+                let new_orders = Some(pool.pool_handle.subscribe_new_orders());
+                (pool, new_orders)
+            }
+            .boxed()
+        })
         .add_operation(|pool, s| {
             async move {
                 for order in orders {
@@ -67,13 +74,6 @@ async fn test_order_indexing() {
                         .new_limit_order(angstrom_types::orders::OrderOrigin::External, order)
                 }
                 (pool, s)
-            }
-            .boxed()
-        })
-        .add_operation(move |pool, _| {
-            async move {
-                let new_orders = Some(pool.pool_handle.subscribe_new_orders());
-                (pool, new_orders)
             }
             .boxed()
         })

@@ -343,7 +343,6 @@ where
             })
             .collect::<Vec<_>>();
 
-        tracing::debug!(?filled, "filled orders");
         self.subscriptions.filled_orders(filled.clone());
         self.finalization_pool.new_orders(block, filled);
     }

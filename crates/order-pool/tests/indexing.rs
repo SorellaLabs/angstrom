@@ -236,7 +236,7 @@ async fn test_order_fill() {
     let mut filled = 0;
 
     let res = tokio::time::timeout(
-        Duration::from_secs(5),
+        Duration::from_secs(1),
         orderpool.poll_until(|| {
             if let Ok(o) = filled_orders.as_mut().try_recv() {
                 tracing::debug!("got orders from sub");

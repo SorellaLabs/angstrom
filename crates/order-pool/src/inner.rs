@@ -172,6 +172,7 @@ where
     }
 
     pub fn subscribe_filled_orders(&mut self, tx: mpsc::Sender<Vec<Order<L, CL, S, CS>>>) {
+        tracing::debug!("new sub for filled orders");
         self.subscriptions.subscribe_filled_orders(tx);
     }
 

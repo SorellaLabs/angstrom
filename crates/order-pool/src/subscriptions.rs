@@ -56,7 +56,7 @@ where
     }
 
     pub fn subscribe_finalized_orders(&mut self, tx: mpsc::Sender<Vec<Order<L, CL, S, CS>>>) {
-        self.filled_orders.push(tx)
+        self.finalized_orders.push(tx)
     }
 
     pub fn subscribe_filled_orders(&mut self, tx: mpsc::Sender<Vec<Order<L, CL, S, CS>>>) {

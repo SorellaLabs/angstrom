@@ -227,14 +227,14 @@ async fn test_order_fill() {
 
     // send order for re validation. this should fail and we should have one less
     // order in the pool
-    eth_handle.filled_orders(69420, hashes);
+    eth_handle.filled_orders(u64::MAX, hashes);
 
     let orders = orderpool.pool_handle.clone();
     let mut filled_orders = orders.subscribe_filled_orders();
     let mut filled = 0;
 
     let res = tokio::time::timeout(
-        Duration::from_secs(10),
+        Duration::from_secs(5),
         orderpool.poll_until(|| {
             if let Ok(o) = filled_orders.as_mut().try_recv() {
                 tracing::debug!(?o);

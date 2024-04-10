@@ -96,7 +96,7 @@ where
                     let mut map = HashMap::new();
 
                     let bytecode = Bytecode {
-                        bytecode: Bytes::from(V4_BYTE_CODE).into(),
+                        bytecode: V4_BYTE_CODE,
                         ..Default::default()
                     };
 

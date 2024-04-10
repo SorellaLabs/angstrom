@@ -25,7 +25,7 @@ impl AngstromTestnet {
     pub async fn new(peers: usize, provider: NoopProvider) -> Self {
         let peers = futures::stream::iter(0..peers)
             .map(|_| async move {
-                let peer = StromPeer::new(provider.clone()).await;
+                let peer = StromPeer::new(provider).await;
                 let pk = peer.get_node_public_key();
                 (pk, peer)
             })
@@ -83,7 +83,7 @@ impl AngstromTestnet {
         std::future::poll_fn(|cx| {
             let mut all_connected = true;
             for peer in &mut peers {
-                if let Poll::Ready(_) = peer.poll_unpin(cx) {
+                if peer.poll_unpin(cx).is_ready() {
                     tracing::error!("peer failed");
                 }
                 all_connected &= peer.get_peer_count() == needed_peers
@@ -124,7 +124,7 @@ impl AngstromTestnet {
         std::future::poll_fn(|cx| {
             // make sure to progress our peers so they can receive msgs
             for peer in self.peers.values_mut() {
-                if let Poll::Ready(_) = peer.poll_unpin(cx) {
+                if peer.poll_unpin(cx).is_ready() {
                     tracing::warn!("peer returned early");
 
                     return Poll::Ready(false)

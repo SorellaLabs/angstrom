@@ -6,7 +6,7 @@ use angstrom_types::{
     primitive::PoolId
 };
 
-use super::{SearcherPoolError, V1_LP_POOlS, SEARCHER_POOL_MAX_SIZE};
+use super::{SearcherPoolError, SEARCHER_POOL_MAX_SIZE};
 use crate::common::{SizeTracker, ValidOrder};
 
 pub struct VanillaSearcherPool<O: PooledSearcherOrder> {

@@ -32,10 +32,10 @@ impl Commit {
         sk: &SecretKey
     ) -> Self {
         let mut hasher = Keccak256::new();
-        hasher.update(&block_height.to_be_bytes());
-        hasher.update(&vanilla_bundle_hash);
-        hasher.update(&lower_bound_hash);
-        hasher.update(&order_buffer_hash);
+        hasher.update(block_height.to_be_bytes());
+        hasher.update(vanilla_bundle_hash);
+        hasher.update(lower_bound_hash);
+        hasher.update(order_buffer_hash);
         let message = hasher.finalize();
 
         let message_sig =

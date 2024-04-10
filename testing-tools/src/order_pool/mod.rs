@@ -73,7 +73,7 @@ impl TestnetOrderPool {
 
     pub async fn poll_until<F: FnMut() -> bool>(&mut self, mut finished: F) -> bool {
         poll_fn(|cx| {
-            if let Poll::Ready(_) = self.pool_manager.poll_unpin(cx) {
+            if self.pool_manager.poll_unpin(cx).is_ready() {
                 return Poll::Ready(false)
             }
 
@@ -91,7 +91,7 @@ impl TestnetOrderPool {
         let _ = tokio::time::timeout(
             duration,
             poll_fn(|cx| {
-                if let Poll::Ready(_) = self.pool_manager.poll_unpin(cx) {
+                if self.pool_manager.poll_unpin(cx).is_ready() {
                     return Poll::Ready(())
                 }
                 cx.waker().wake_by_ref();
@@ -133,7 +133,7 @@ impl<T: 'static> OperationChainer<T> {
         let (mut pool, mut state) = (self.pool, self.state);
 
         for op in self.operations {
-            pool.poll_for(self.poll_duration.clone()).await;
+            pool.poll_for(self.poll_duration).await;
 
             // because we insta await. this is safe. so we can tell the rust analyzer to
             // stop being annoying

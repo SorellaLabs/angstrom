@@ -151,10 +151,10 @@ where
         let span = span!(Level::TRACE, "peer_id: {:?}", ?peer_id);
         let e = span.enter();
 
-        if let Poll::Ready(_) = this.strom_network.poll_unpin(cx) {
+        if this.strom_network.poll_unpin(cx).is_ready() {
             return Poll::Ready(())
         }
-        if let Poll::Ready(_) = this.eth_peer.poll_unpin(cx) {
+        if this.eth_peer.poll_unpin(cx).is_ready() {
             return Poll::Ready(())
         }
 

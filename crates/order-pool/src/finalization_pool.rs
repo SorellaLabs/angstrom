@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::Iterator};
+use std::collections::HashMap;
 
 use angstrom_types::orders::PoolOrder;
 use reth_primitives::B256;

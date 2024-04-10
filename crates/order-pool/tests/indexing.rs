@@ -8,7 +8,7 @@ use testing_tools::{
         eth_events::MockEthEventHandle, network_events::MockNetworkHandle, validator::MockValidator
     },
     order_pool::TestnetOrderPool,
-    type_generator::orders::{generate_rand_valid_limit_order, generate_random_valid_order}
+    type_generator::orders::generate_rand_valid_limit_order
 };
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_order_indexing() {

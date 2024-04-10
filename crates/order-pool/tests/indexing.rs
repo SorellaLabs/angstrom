@@ -222,6 +222,9 @@ async fn test_order_fill() {
             .new_limit_order(angstrom_types::orders::OrderOrigin::External, order)
     }
 
+    let orders = orderpool.pool_handle.clone();
+    let mut filled_orders = orders.subscribe_filled_orders();
+
     // make sure all of our orders are indexed and put into there respective pools
     let _ = tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false)).await;
 
@@ -229,8 +232,6 @@ async fn test_order_fill() {
     // order in the pool
     eth_handle.filled_orders(4232, hashes);
 
-    let orders = orderpool.pool_handle.clone();
-    let mut filled_orders = orders.subscribe_filled_orders();
     tracing::debug!("subbed to filled orders");
     let mut filled = 0;
 

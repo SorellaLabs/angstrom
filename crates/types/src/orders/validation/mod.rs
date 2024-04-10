@@ -12,14 +12,14 @@ pub use searcher::*;
 use crate::{orders::PoolOrder, primitive::PoolId};
 
 #[derive(Debug, AsRef, Deref, Clone)]
-pub struct ValidatedOrder<O: PoolOrder, Data: Clone + Debug> {
+pub struct ValidatedOrder<O: PoolOrder> {
     #[deref]
     #[as_ref]
     pub order:    O,
     pub pool_id:  usize,
     pub is_bid:   bool,
     pub location: OrderLocation,
-    pub data:     Data
+    pub data:     O::ValidationData
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,8 +37,8 @@ pub struct OrderId {
     pub location: OrderLocation
 }
 
-impl<O: PoolOrder, Data: Clone + Debug> From<ValidatedOrder<O, Data>> for OrderId {
-    fn from(order: ValidatedOrder<O, Data>) -> Self {
+impl<O: PoolOrder> From<ValidatedOrder<O>> for OrderId {
+    fn from(order: ValidatedOrder<O>) -> Self {
         Self {
             address:  order.order.from(),
             pool_id:  order.pool_id,
@@ -85,7 +85,7 @@ pub enum OrderValidationOutcome<O: PoolOrder> {
     /// the pool.
     Valid {
         /// The validated order
-        order:     ValidatedOrder<O, O::ValidationData>,
+        order:     ValidatedOrder<O>,
         /// Whether to propagate the order to the network.
         propagate: bool
     },

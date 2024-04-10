@@ -1,9 +1,6 @@
 use alloy_primitives::{Address, Bytes, TxHash, U256};
 
-use super::{
-    super::{PoolOrder, PooledComposableOrder},
-    ValidatedOrder
-};
+use super::super::{PoolOrder, PooledComposableOrder};
 use crate::{
     orders::OrderConversion,
     rpc::{
@@ -46,23 +43,6 @@ pub trait PooledSearcherOrder: PoolOrder {
     fn gas(&self) -> u128;
 
     fn donated(&self) -> u128;
-}
-
-impl<O> ValidatedOrder<O, SearcherPriorityData>
-where
-    O: PooledSearcherOrder
-{
-    pub fn pool_id(&self) -> usize {
-        self.pool_id
-    }
-
-    pub fn is_bid(&self) -> bool {
-        self.is_bid
-    }
-
-    pub fn priority_data(&self) -> SearcherPriorityData {
-        self.data
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -31,7 +31,7 @@ async fn test_order_indexing() {
 
     for order in &orders {
         let signer = order.recover_signer().unwrap();
-        ValidatedOrder::
+        // ValidatedOrder::
         let validation_outcome = OrderValidationOutcome::Valid { order: (), propagate: false };
         validator.add_limit_order(signer, order.clone());
     }

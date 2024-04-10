@@ -5,7 +5,7 @@ mod size;
 use angstrom_types::orders::ValidatedOrder;
 pub use size::*;
 
-pub type ValidOrder<O> = ValidatedOrder<O, <O as PoolOrder>::ValidationData>;
+pub type ValidOrder<O> = ValidatedOrder<O>;
 
 #[derive(Debug, Clone)]
 pub enum Order<L, CL, S, CS>

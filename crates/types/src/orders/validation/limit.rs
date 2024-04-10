@@ -68,7 +68,7 @@ impl Ord for OrderPriorityData {
     }
 }
 
-impl<O> ValidatedOrder<O, OrderPriorityData>
+impl<O> ValidatedOrder<O>
 where
     O: PoolOrder
 {
@@ -80,8 +80,8 @@ where
         self.is_bid
     }
 
-    pub fn priority_data(&self) -> OrderPriorityData {
-        self.data
+    pub fn priority_data(&self) -> O::ValidationData {
+        self.data.clone()
     }
 }
 

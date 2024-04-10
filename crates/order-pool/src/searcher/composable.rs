@@ -22,10 +22,7 @@ where
         ComposableSearcherPool { sub_pools }
     }
 
-    pub fn add_order(
-        &mut self,
-        order: ValidatedOrder<CS, SearcherPriorityData>
-    ) -> Result<(), SearcherPoolError<CS>> {
+    pub fn add_order(&mut self, order: ValidatedOrder<CS>) -> Result<(), SearcherPoolError<CS>> {
         self.sub_pools
             .get_mut(order.pool_id())
             .ok_or(SearcherPoolError::NoPool(order.pool_id))?
@@ -53,7 +50,7 @@ where
 }
 
 pub struct PendingPool<CS: PooledSearcherOrder + PooledComposableOrder> {
-    orders:        HashMap<B256, ValidatedOrder<CS, CS::ValidationData>>,
+    orders:        HashMap<B256, ValidatedOrder<CS>>,
     ordered_arbs:  BTreeMap<CS::ValidationData, B256>,
     _size_tracker: SizeTracker
 }

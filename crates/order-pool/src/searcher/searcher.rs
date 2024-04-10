@@ -58,7 +58,7 @@ where
 }
 
 pub struct PendingPool<O: PooledSearcherOrder> {
-    orders:        HashMap<B256, ValidatedOrder<O, O::ValidationData>>,
+    orders:        HashMap<B256, ValidatedOrder<O>>,
     ordered_arbs:  BTreeMap<O::ValidationData, B256>,
     _size_tracker: SizeTracker
 }

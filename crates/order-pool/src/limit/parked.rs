@@ -10,7 +10,7 @@ pub struct ParkedPool<O: PoolOrder>(HashMap<B256, ValidOrder<O>>);
 impl<O: PoolOrder> ParkedPool<O> {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        todo!()
+        Self(HashMap::new())
     }
 
     pub fn remove_order(&mut self, order_hash: &B256) -> Option<ValidOrder<O>> {

@@ -13,7 +13,10 @@ where
     O: PoolOrder<ValidationData = OrderPriorityData>
 {
     pub fn new() -> Self {
-        todo!()
+        Self {
+            parked_orders: vec![],
+            pending_orders: vec![]
+        }
     }
 
     pub fn add_order(&mut self, order: ValidOrder<O>) -> Result<(), LimitPoolError<O>> {

@@ -236,8 +236,8 @@ async fn test_order_fill() {
     let res = tokio::time::timeout(
         Duration::from_secs(1),
         orderpool.poll_until(|| {
-            if let Ok(_) = filled_orders.as_mut().try_recv() {
-                filled += 1;
+            if let Ok(o) = filled_orders.as_mut().try_recv() {
+                filled += o.len();
             }
             filled == order_count
         })

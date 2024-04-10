@@ -223,7 +223,7 @@ async fn test_order_fill() {
     }
 
     // make sure all of our orders are indexed and put into there respective pools
-    let _ = tokio::time::timeout(Duration::from_secs(10), orderpool.poll_until(|| false)).await;
+    let _ = tokio::time::timeout(Duration::from_secs(1), orderpool.poll_until(|| false)).await;
 
     // send order for re validation. this should fail and we should have one less
     // order in the pool

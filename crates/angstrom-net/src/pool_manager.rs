@@ -679,6 +679,7 @@ where
         while let Poll::Ready(Some(orders)) = this.pool.poll_next_unpin(cx) {
             this.on_pool_events(orders);
         }
+        tracing::debug!("pool manager poll");
 
         Poll::Pending
     }

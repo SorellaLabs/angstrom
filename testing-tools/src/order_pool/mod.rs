@@ -94,7 +94,7 @@ impl TestnetOrderPool {
                 if let Poll::Ready(_) = self.pool_manager.poll_unpin(cx) {
                     return Poll::Ready(())
                 }
-
+                cx.waker().wake_by_ref();
                 Poll::Pending
             })
         )

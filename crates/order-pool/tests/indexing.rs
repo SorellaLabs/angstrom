@@ -37,7 +37,7 @@ async fn test_order_indexing() {
         network_rx
     );
 
-    let chains = OperationChainer::new(orderpool, Duration::from_secs(2), None);
+    let chains = OperationChainer::new(orderpool, Duration::from_secs(1), None);
 
     for order in &orders {
         let signer = order.recover_signer().unwrap();
@@ -83,7 +83,7 @@ async fn test_order_indexing() {
 
                 let mut new_orders = new_orders.take().unwrap();
                 let res = tokio::time::timeout(
-                    Duration::from_secs(4),
+                    Duration::from_secs(1),
                     pool.poll_until(|| {
                         while let Ok(_) = new_orders.as_mut().try_recv() {
                             have += 1;

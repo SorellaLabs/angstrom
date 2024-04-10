@@ -1,13 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
-use alloy_primitives::{Address, Bytes, U256};
+use alloy_primitives::{Address, Bytes, I256, U256};
 use angstrom_types::{
     primitive::{Angstrom::Bundle, *},
     rpc::CallerInfo
 };
-use ethers_core::types::{transaction::eip2718::TypedTransaction, I256, U256 as EU256};
 use eyre::Result;
-use reth_primitives::revm_primitives::{Bytecode, ExecutionResult, TransactTo, TxEnv};
+use reth_primitives::{
+    revm_primitives::{Bytecode, ExecutionResult, TransactTo, TxEnv},
+    Transaction, TransactionSigned
+};
 use reth_provider::StateProviderFactory;
 use reth_revm::{DatabaseRef, EvmBuilder};
 
@@ -57,7 +59,7 @@ where
 
         let (res, mut pre_slots) = self.simulate_single_tx(prehook_env, HashMap::default())?;
         let pre_hook_gas = match res {
-            ExecutionResult::Success { gas_used, .. } => gas_used.into(),
+            ExecutionResult::Success { gas_used, .. } => U256::from(gas_used),
             _ => return Err(SimError::HookFailed)
         };
 
@@ -80,7 +82,7 @@ where
         let (res, post_slots) = self.simulate_single_tx(post_env, overrides)?;
 
         let post_hook_gas = match res {
-            ExecutionResult::Success { gas_used, .. } => gas_used.into(),
+            ExecutionResult::Success { gas_used, .. } => U256::from(gas_used),
             _ => return Err(SimError::HookFailed)
         };
         pre_slots.extend(post_slots);
@@ -97,13 +99,13 @@ where
 
     pub fn simulate_v4_tx(
         &self,
-        tx: TypedTransaction,
+        tx: Transaction,
         contract_overrides: HashMap<Address, Bytecode>
     ) -> Result<SimResult, SimError> {
         let mut env = TxEnv::default();
-        env.data = Bytes::copy_from_slice(&tx.data().cloned().unwrap());
+        env.data = tx.input().clone();
 
-        env.transact_to = TransactTo::Call((tx.to_addr().unwrap().0).into());
+        env.transact_to = TransactTo::Call(tx.to().unwrap());
         let mut db = self.db.clone();
         db.set_bytecode_overrides(contract_overrides);
 
@@ -118,11 +120,8 @@ where
 
         let (delta, gas) = match res.result {
             ExecutionResult::Success { gas_used, output, .. } => {
-                let delta = I256::from_raw(EU256::from(unsafe {
-                    *(output.into_data().to_vec().as_slice() as *const _ as *mut [u8; 32])
-                }));
-
-                (delta, gas_used.into())
+                let delta = I256::try_from_be_slice(&output.into_data()).unwrap();
+                (delta, U256::from(gas_used))
             }
             _ => return Err(SimError::HookFailed)
         };

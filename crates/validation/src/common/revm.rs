@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, task::Poll};
 
+use alloy_primitives::Bytes;
 use angstrom_utils::PollExt;
-use ethers_core::abi::Bytes;
 use futures_util::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
 use reth_primitives::revm_primitives::{Address, Bytecode};
 use reth_provider::StateProviderFactory;
@@ -21,7 +21,7 @@ use crate::{
 };
 
 ///TODO: replace once settled
-const V4_BYTE_CODE: Bytes = vec![];
+const V4_BYTE_CODE: Bytes = Bytes::new();
 ///TODO: replace once settled
 const ANGSTROM_ADDRESS: Address = Address::ZERO;
 

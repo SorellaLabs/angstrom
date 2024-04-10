@@ -1,11 +1,13 @@
 use std::fmt::Debug;
 
+// use ethers_core::types::{transaction::eip2718::TypedTransaction, I256, U256};
+use alloy_primitives::{I256, U256};
 use angstrom_types::{
     primitive::{Angstrom::Bundle, ExternalStateSim},
     rpc::{CallerInfo, SignedLimitOrder}
 };
 use errors::{SimError, SimResult};
-use ethers_core::types::{transaction::eip2718::TypedTransaction, I256, U256};
+use reth_primitives::Transaction;
 use tokio::sync::oneshot::{channel, Sender};
 
 use crate::validator::{ValidationClient, ValidationRequest};
@@ -35,7 +37,7 @@ pub enum BundleOrTransactionResult {
 /// enum of transaction type
 pub enum BundleSimRequest {
     Hook(ExternalStateSim, CallerInfo, Sender<SimResult>),
-    UniswapV4(TypedTransaction, Sender<SimResult>),
+    UniswapV4(Transaction, Sender<SimResult>),
     Bundle(Bundle, CallerInfo, Sender<SimResult>),
     MevBundle(Bundle, CallerInfo, Sender<SimResult>),
     NewBlock(Sender<SimResult>)
@@ -47,7 +49,7 @@ pub trait BundleValidator: Send + Sync + Clone + Unpin + 'static {
     /// executes the swap on the underlying v4 pool in order to see what the
     /// limit price for everyone will be
     #[allow(dead_code)]
-    async fn validate_v4_tx(&self, tx: TypedTransaction) -> Result<SimResult, SimError>;
+    async fn validate_v4_tx(&self, tx: Transaction) -> Result<SimResult, SimError>;
     /// executes the pre and post hook for the transactions to get the slots
     /// they touched and the cumulative gas that the pre and post hook use.
     /// this also checks to make sure we have enough value to execute on
@@ -84,7 +86,7 @@ pub trait BundleValidator: Send + Sync + Clone + Unpin + 'static {
 impl BundleValidator for ValidationClient {
     //TODO: Fix this, to whitebox simulate the swap directly, because it isn't a
     // full transaction and should not be validated as such
-    async fn validate_v4_tx(&self, tx: TypedTransaction) -> Result<SimResult, SimError> {
+    async fn validate_v4_tx(&self, tx: Transaction) -> Result<SimResult, SimError> {
         let (sender, rx) = channel();
         self.0
             .send(ValidationRequest::Bundle(BundleSimRequest::UniswapV4(tx, sender)))?;

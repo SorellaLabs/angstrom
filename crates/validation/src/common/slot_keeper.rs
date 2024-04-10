@@ -4,6 +4,7 @@ use std::{
     task::{Context, Poll}
 };
 
+use alloy_primitives::keccak256;
 use alloy_sol_types::SolCall;
 use angstrom_types::primitive::ERC20;
 use futures::Future;
@@ -68,8 +69,7 @@ where
                     let mut user_addr_encoded = search_addr.to_vec();
                     user_addr_encoded.extend(U256::from(i).to_be_bytes::<32>().to_vec());
 
-                    let user_balance_slot =
-                        U256::from_be_bytes(ethers::utils::keccak256(user_addr_encoded));
+                    let user_balance_slot = U256::from_be_bytes(*keccak256(user_addr_encoded));
 
                     let mut slot = HashMap::new();
                     slot.insert(user_balance_slot, prob_value);

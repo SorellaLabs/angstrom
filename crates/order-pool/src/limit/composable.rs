@@ -17,7 +17,7 @@ where
     O: PooledComposableOrder<ValidationData = OrderPriorityData>
 {
     pub fn new() -> Self {
-        todo!()
+        Self(HashMap::default())
     }
 
     pub fn add_order(&mut self, order: ValidOrder<O>) -> Result<(), LimitPoolError<O>> {

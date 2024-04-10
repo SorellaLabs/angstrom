@@ -104,42 +104,31 @@ impl TestnetOrderPool {
 
 /// allows for channing operations with a poll time between operations. Is
 /// helpful for it testing async functions.
-pub struct OperationChainer<T: 'static> {
-    pool:          TestnetOrderPool,
-    state:         T,
-    operations: Vec<
-        Box<
-            dyn FnOnce(TestnetOrderPool, T) -> Pin<Box<dyn Future<Output = (TestnetOrderPool, T)>>>
-        >
-    >,
+pub struct OperationChainer<'a, T> {
+    pool:          &'a mut TestnetOrderPool,
+    state: T,
+    operations:
+        Vec<Box<dyn FnMut(&mut TestnetOrderPool) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a>>,
     poll_duration: Duration
 }
 
-impl<T: 'static> OperationChainer<T> {
-    pub fn new(pool: TestnetOrderPool, poll_duration: Duration, state: T) -> Self {
-        Self { poll_duration, pool, operations: vec![], state }
+impl<'a> OperationChainer<'a> {
+    pub fn new(pool: &'a mut TestnetOrderPool, poll_duration: Duration, state: T) -> Self {
+        Self { poll_duration, pool, operations: vec![] }
     }
 
-    pub fn add_operation<F>(mut self, op: F) -> Self
-    where
-        F: FnOnce(TestnetOrderPool, T) -> Pin<Box<dyn Future<Output = (TestnetOrderPool, T)>>>
-            + 'static
-    {
+    pub fn add_operation(
+        &mut self,
+        op: impl FnMut(&mut TestnetOrderPool) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a
+    ) -> &mut Self {
         self.operations.push(Box::new(op));
         self
     }
 
-    pub async fn execute_all_operations(self) {
-        let (mut pool, mut state) = (self.pool, self.state);
-
-        for op in self.operations {
-            pool.poll_for(self.poll_duration.clone()).await;
-
-            // because we insta await. this is safe. so we can tell the rust analyzer to
-            // stop being annoying
-            let (r_pool, r_state) = (op)(pool, state).await;
-            pool = r_pool;
-            state = r_state;
+    pub async fn execute_all_operations(&mut self) {
+        for op in &mut self.operations {
+            self.pool.poll_for(self.poll_duration.clone()).await;
+            (op)(self.pool).await
         }
     }
 }

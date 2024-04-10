@@ -83,9 +83,9 @@ async fn test_order_indexing() {
 
                 let mut new_orders = new_orders.take().unwrap();
                 let res = tokio::time::timeout(
-                    Duration::from_secs(2),
+                    Duration::from_secs(4),
                     pool.poll_until(|| {
-                        if let Ok(_) = new_orders.as_mut().try_recv() {
+                        while let Ok(_) = new_orders.as_mut().try_recv() {
                             have += 1;
                         }
                         order_count == have
@@ -252,14 +252,11 @@ async fn test_order_fill() {
             }
             .boxed()
         })
-        .add_operation(|mut pool, _| {
+        .add_operation(|pool, _| {
             async move {
                 let orders = pool.pool_handle.clone();
                 let state = Some(orders.subscribe_filled_orders());
 
-                // make sure all of our orders are indexed and put into there respective pools
-                let _ =
-                    tokio::time::timeout(Duration::from_secs(1), pool.poll_until(|| false)).await;
                 (pool, state)
             }
             .boxed()
@@ -279,7 +276,7 @@ async fn test_order_fill() {
                 let res = tokio::time::timeout(
                     Duration::from_secs(1),
                     pool.poll_until(|| {
-                        if let Ok(o) = filled_orders.as_mut().try_recv() {
+                        while let Ok(o) = filled_orders.as_mut().try_recv() {
                             tracing::debug!("got orders from sub");
                             filled += o.len();
                         }

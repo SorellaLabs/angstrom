@@ -40,9 +40,8 @@ pub trait PipelineOperation: Unpin + Send + 'static {
 
 pub type PipelineFut<OP> = Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>;
 
-pub struct FnPtr<OP, CX> {
-    ptr: usize,
-    _p:  PhantomData<(OP, CX)>
+pub struct FnPtr<OP: PipelineOperation, CX> {
+    ptr: fn(OP, &mut CX) -> PipelineFut<OP>
 }
 
 impl<OP, CX> FnPtr<OP, CX>
@@ -51,13 +50,11 @@ where
     CX: Unpin
 {
     pub fn new(f: fn(OP, &mut CX) -> PipelineFut<OP>) -> Self {
-        Self { ptr: f as usize, _p: PhantomData }
+        Self { ptr: f }
     }
 
-    pub fn get_fn(&self) -> &fn(OP, &mut CX) -> PipelineFut<OP> {
-        let fnptr = self.ptr as *const ();
-        let ptr: fn(OP, &mut CX) -> PipelineFut<OP> = unsafe { std::mem::transmute(fnptr) };
-        unsafe { std::mem::transmute(&ptr) }
+    pub fn get_fn(&self) -> fn(OP, &mut CX) -> PipelineFut<OP> {
+        self.ptr
     }
 }
 
@@ -66,7 +63,7 @@ where
     OP: PipelineOperation,
     CX: Unpin
 {
-    operations: HashMap<u8, FnPtr<OP, CX>>,
+    operations: HashMap<u8, fn(OP, &mut CX) -> PipelineFut<OP>>,
     _p:         PhantomData<CX>
 }
 
@@ -89,7 +86,7 @@ where
         Self { operations: HashMap::new(), _p: PhantomData }
     }
 
-    pub fn add_step(mut self, id: u8, item: FnPtr<OP, CX>) -> Self {
+    pub fn add_step(mut self, id: u8, item: fn(OP, &mut CX) -> PipelineFut<OP>) -> Self {
         self.operations.insert(id, item);
         self
     }
@@ -110,7 +107,7 @@ where
     CX: Unpin
 {
     threadpool: T,
-    operations: HashMap<u8, FnPtr<OP, CX>>,
+    operations: HashMap<u8, fn(OP, &mut CX) -> PipelineFut<OP>>,
 
     needing_queue: VecDeque<OP>,
     tasks:         FuturesUnordered<PipelineFut<OP>>
@@ -128,7 +125,7 @@ where
 
     fn spawn_task(&mut self, op: OP, pipeline_cx: &mut CX) {
         let id = op.get_next_operation();
-        let c_fn = self.operations.get(&id).unwrap().get_fn();
+        let c_fn = self.operations.get(&id).unwrap();
         self.tasks
             .push(self.threadpool.spawn(c_fn(op, pipeline_cx)))
     }

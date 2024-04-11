@@ -3,7 +3,6 @@ pub mod executor;
 pub mod lru_db;
 pub mod pool_map;
 pub mod revm;
-pub mod slot_keeper;
 pub mod state;
 
 use reth_provider::StateProviderFactory;

@@ -19,6 +19,7 @@ use self::{
 use super::OrderValidationRequest;
 use crate::common::{executor::ThreadPool, lru_db::RevmLRU};
 
+pub mod config;
 pub mod orders;
 pub mod upkeepers;
 

@@ -33,21 +33,30 @@ use crate::{
 
 #[allow(dead_code)]
 pub struct OrderValidator<'a, DB> {
-    sim:    SimValidation<DB>,
-    state:  StateValidation<DB>,
-    orders: UserOrders,
-
-    _p:       PhantomData<&'a u8>,
-    pipeline: PipelineWithIntermediary<Handle, ValidationOperation, ProcessingCtx<DB>>
+    sim:      SimValidation<DB>,
+    state:    StateValidation<DB>,
+    orders:   UserOrders,
+    pipeline: PipelineWithIntermediary<Handle, ValidationOperation, ProcessingCtx<'a, DB>>,
+    _p:       PhantomData<&'a u8>
 }
 
-pub struct ProcessingCtx<DB> {
+pub struct ProcessingCtx<'a, DB> {
     user_orders: *mut UserOrders,
     pub sim:     SimValidation<DB>,
-    pub state:   StateValidation<DB>
+    pub state:   StateValidation<DB>,
+    _p:          PhantomData<&'a u8>
 }
-impl<DB> ProcessingCtx<DB> {
-    pub fn user_orders(&mut self) -> &mut UserOrders {
+
+impl<'a, DB> ProcessingCtx<'a, DB> {
+    pub fn new(
+        user_orders: *mut UserOrders,
+        sim: SimValidation<DB>,
+        state: StateValidation<DB>
+    ) -> Self {
+        Self { sim, user_orders, state, _p: PhantomData::default() }
+    }
+
+    pub fn user_orders(&mut self) -> &'a mut UserOrders {
         unsafe { &mut (*self.user_orders) }
     }
 }
@@ -64,11 +73,11 @@ where
         let new_sim = sim.clone();
 
         let pipeline = PipelineBuilder::new()
-            .add_step(0, FnPtr::new(ValidationOperation::pre_regular_verification))
-            .add_step(1, FnPtr::new(ValidationOperation::post_regular_verification))
-            .add_step(2, FnPtr::new(ValidationOperation::pre_hook_sim))
-            .add_step(3, FnPtr::new(ValidationOperation::post_pre_hook_sim))
-            .add_step(4, FnPtr::new(ValidationOperation::post_hook_sim))
+            .add_step(0, ValidationOperation::pre_regular_verification)
+            .add_step(1, ValidationOperation::post_regular_verification)
+            .add_step(2, ValidationOperation::pre_hook_sim)
+            .add_step(3, ValidationOperation::post_pre_hook_sim)
+            .add_step(4, ValidationOperation::post_hook_sim)
             .build(tokio::runtime::Handle::current());
 
         Self { state, sim, pipeline, orders: UserOrders::new(), _p: PhantomData }
@@ -108,8 +117,7 @@ where
     ) -> std::task::Poll<Self::Output> {
         let state = self.state.clone();
         let sim = self.sim.clone();
-        let mut ctx =
-            ProcessingCtx { user_orders: &mut self.orders as *mut UserOrders, state, sim };
+        let mut ctx = ProcessingCtx::new(&mut self.orders as *mut UserOrders, sim, state);
 
         while let Poll::Ready(Some(_)) = self.pipeline.poll(cx, &mut ctx) {}
 
@@ -117,6 +125,8 @@ where
     }
 }
 
+/// represents different steps in the validation process that we want to run on
+/// its own task
 pub enum ValidationOperation {
     PreRegularVerification(OrderValidationRequest),
     PostRegularVerification(OrderValidationRequest, UserAccountDetails),

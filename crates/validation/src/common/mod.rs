@@ -1,7 +1,5 @@
-pub mod error;
 pub mod executor;
 pub mod lru_db;
-pub mod pool_map;
 pub mod revm;
 pub mod state;
 

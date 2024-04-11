@@ -71,11 +71,12 @@ where
     /// handles incoming transactions from clients
     fn handle_incoming_event(&mut self, tx_type: BundleSimRequest) {
         let state = self.state.clone();
+        let config = self.config.clone();
 
         match tx_type {
             BundleSimRequest::Hook(data, overrides, sender) => {
                 let fut = async move {
-                    let res = state.simulate_external_state(data, overrides);
+                    let res = state.simulate_external_state(data, overrides, config);
 
                     match res {
                         Ok((sim_res, slots)) => {

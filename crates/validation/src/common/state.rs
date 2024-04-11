@@ -51,7 +51,7 @@ where
         &self,
         txes: ExternalStateSim,
         caller_info: CallerInfo,
-        token_config: &ValidationConfig
+        token_config: ValidationConfig
     ) -> Result<(SimResult, AddressSlots), SimError> {
         let mut prehook_env = TxEnv::default();
         let (prehook_addr, pre_hook_calldata) = txes.pre_hook();

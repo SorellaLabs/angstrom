@@ -38,7 +38,7 @@ use reth::{
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_node_ethereum::EthereumNode;
-use validation::{init_validation, validator::ValidationRequest};
+use validation::init_validation;
 
 use self::network_builder::AngstromNetworkBuilder;
 
@@ -126,9 +126,6 @@ pub struct StromHandles {
     eth_tx: Sender<EthCommand>,
     eth_rx: Receiver<EthCommand>,
 
-    validation_tx: UnboundedSender<ValidationRequest>,
-    validation_rx: UnboundedReceiver<ValidationRequest>,
-
     pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
     pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
 
@@ -153,14 +150,11 @@ pub fn initialize_strom_handles() -> StromHandles {
     let (eth_tx, eth_rx) = channel(100);
     let (consensus_tx, consensus_rx) = channel(100);
     let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
-    let (validation_tx, validation_rx) = unbounded_channel();
     let (orderpool_tx, orderpool_rx) = unbounded_channel();
 
     StromHandles {
         eth_tx,
         eth_rx,
-        validation_tx,
-        validation_rx,
         pool_tx,
         pool_rx,
         orderpool_tx,
@@ -194,7 +188,11 @@ pub fn initialize_strom_components<Node: FullNodeComponents>(
         .with_consensus_manager(consensus_tx)
         .build_handle(executor.clone(), node.provider.clone());
 
-    let validator = init_validation(node.provider.clone(), eth_handle.subscribe_network_stream());
+    let validator = init_validation(
+        node.provider.clone(),
+        config.validation_cache_size,
+        eth_handle.subscribe_network_stream()
+    );
 
     let pool_handle = PoolManagerBuilder::new(
         validator.clone(),
@@ -204,7 +202,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents>(
     )
     .build_with_channels(executor.clone(), handles.orderpool_tx, handles.orderpool_rx);
 
-    let consensus_handle = ConsensusManager::new(
+    let _consensus_handle = ConsensusManager::new(
         executor.clone(),
         network_handle.clone(),
         pool_handle.clone(),
@@ -222,5 +220,8 @@ pub struct AngstromConfig {
     pub mev_guard: bool,
 
     #[clap(long)]
-    pub secret_key_location: PathBuf
+    pub secret_key_location:   PathBuf,
+    // default is 100mb
+    #[clap(long, default_value = "1000000")]
+    pub validation_cache_size: usize
 }

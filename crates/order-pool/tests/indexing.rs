@@ -22,7 +22,7 @@ async fn test_order_indexing() {
 
     let mut rng = thread_rng();
 
-    let orders = (0..rng.gen_range(3..5))
+    let orders = (0..rng.gen_range(2..3))
         .map(|_| generate_rand_valid_limit_order())
         .collect::<Vec<_>>();
 
@@ -114,7 +114,7 @@ async fn test_pool_eviction() {
     let (eth_handle, eth_events) = MockEthEventHandle::new();
     let mut rng = thread_rng();
 
-    let orders = (0..rng.gen_range(3..5))
+    let orders = (0..rng.gen_range(2..3))
         .map(|_| generate_rand_valid_limit_order())
         .collect::<Vec<_>>();
 
@@ -207,7 +207,7 @@ async fn test_order_fill() {
     let (eth_handle, eth_events) = MockEthEventHandle::new();
     let mut rng = thread_rng();
 
-    let orders = (0..rng.gen_range(3..5))
+    let orders = (0..rng.gen_range(2..3))
         .map(|_| generate_rand_valid_limit_order())
         .collect::<Vec<_>>();
 

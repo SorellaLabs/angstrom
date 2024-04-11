@@ -165,7 +165,7 @@ impl<'a, DB> ProcessingCtx<'a, DB> {
         state: StateValidation<DB>,
         current_block_number: Arc<AtomicU64>
     ) -> Self {
-        Self { sim, user_orders, state, _p: PhantomData::default(), current_block_number }
+        Self { sim, user_orders, state, _p: PhantomData, current_block_number }
     }
 
     pub fn user_orders(&mut self) -> &'a mut UserOrders {

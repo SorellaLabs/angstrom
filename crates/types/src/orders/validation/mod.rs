@@ -9,7 +9,6 @@ pub use limit::*;
 use reth_primitives::TxHash;
 pub use searcher::*;
 
-use super::OrderOrigin;
 use crate::{orders::PoolOrder, primitive::PoolId};
 
 #[derive(Debug, AsRef, Deref, Clone)]

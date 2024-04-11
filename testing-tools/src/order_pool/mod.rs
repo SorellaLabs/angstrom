@@ -46,12 +46,13 @@ impl TestnetOrderPool {
         network_handle: StromNetworkHandle,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
+        block_number: u64
     ) -> Self {
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(validator, config, 0);
+        let inner = OrderPoolInner::new(validator, config, block_number);
 
         Self {
             pool_manager: PoolManager::new(

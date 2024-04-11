@@ -27,6 +27,7 @@ async fn test_order_indexing() {
 
     let mut pool_config = PoolConfig::default();
     pool_config.ids = vec![0, 1, 2, 3, 4, 5];
+    let block_number = 10;
 
     let orderpool = TestnetOrderPool::new_full_mock(
         validator.clone(),
@@ -34,7 +35,8 @@ async fn test_order_indexing() {
         network_handle,
         eth_events,
         order_rx,
-        network_rx
+        network_rx,
+        block_number
     );
 
     let chains = OperationChainer::new(orderpool, Duration::from_secs(1), None);
@@ -52,7 +54,7 @@ async fn test_order_indexing() {
         };
 
         let validation_outcome =
-            OrderValidationOutcome::Valid { order: validated, propagate: false };
+            OrderValidationOutcome::Valid { order: validated, propagate: false, block_number };
 
         validator.add_limit_order(signer, validation_outcome);
     }
@@ -115,6 +117,7 @@ async fn test_pool_eviction() {
         .map(|_| generate_rand_valid_limit_order())
         .collect::<Vec<_>>();
 
+    let block_number = 10;
     let mut pool_config = PoolConfig::default();
     pool_config.ids = vec![0, 1, 2, 3, 4, 5];
 
@@ -124,7 +127,8 @@ async fn test_pool_eviction() {
         network_handle,
         eth_events,
         order_rx,
-        network_rx
+        network_rx,
+        block_number
     );
 
     for order in &orders {
@@ -140,7 +144,7 @@ async fn test_pool_eviction() {
         };
 
         let validation_outcome =
-            OrderValidationOutcome::Valid { order: validated, propagate: false };
+            OrderValidationOutcome::Valid { order: validated, propagate: false, block_number };
 
         validator.add_limit_order(signer, validation_outcome);
     }
@@ -209,13 +213,15 @@ async fn test_order_fill() {
     let mut pool_config = PoolConfig::default();
     pool_config.ids = vec![0, 1, 2, 3, 4, 5];
 
+    let block_number = 10;
     let orderpool = TestnetOrderPool::new_full_mock(
         validator.clone(),
         pool_config,
         network_handle,
         eth_events,
         order_rx,
-        network_rx
+        network_rx,
+        block_number
     );
 
     for order in &orders {
@@ -231,7 +237,7 @@ async fn test_order_fill() {
         };
 
         let validation_outcome =
-            OrderValidationOutcome::Valid { order: validated, propagate: false };
+            OrderValidationOutcome::Valid { order: validated, propagate: false, block_number };
 
         validator.add_limit_order(signer, validation_outcome);
     }

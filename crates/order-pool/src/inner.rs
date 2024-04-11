@@ -446,16 +446,16 @@ where
         match order {
             OrderValidationOutcome::Valid { order, propagate, block_number } => {
                 // check against current block to see if there is possible state reminance.
-                if block_number + 1 == self.block_number {
-                    if self.last_touched_addresses.remove(&order.from()) {
-                        tracing::debug!(
-                            ?order,
-                            "order was validated on prev block but had a state change occur. \
-                             revalidating"
-                        );
-                        revalidate(self, order.order);
-                        return OrderOrPeers::None
-                    }
+                if block_number + 1 == self.block_number
+                    && self.last_touched_addresses.remove(&order.from())
+                {
+                    tracing::debug!(
+                        ?order,
+                        "order was validated on prev block but had a state change occur. \
+                         revalidating"
+                    );
+                    revalidate(self, order.order);
+                    return OrderOrPeers::None
                 }
                 let res = propagate.then_some(order.order.clone());
                 self.update_order_tracking(order.clone());

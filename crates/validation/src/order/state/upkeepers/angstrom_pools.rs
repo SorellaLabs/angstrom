@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use alloy_primitives::{Address, FixedBytes};
+use angstrom_types::primitive::PoolId;
 
 #[allow(dead_code)]
-pub struct AngstromPools(HashMap<FixedBytes<40>, (bool, usize)>);
+pub struct AngstromPools(HashMap<FixedBytes<40>, (bool, PoolId)>);
 
 impl AngstromPools {
     #[allow(dead_code)]
@@ -31,6 +32,7 @@ impl AngstromPools {
     }
 
     #[allow(dead_code)]
+    #[inline(always)]
     fn get_key(&self, currency_in: Address, currency_out: Address) -> FixedBytes<40> {
         FixedBytes::concat_const(currency_in.0, currency_out.0)
     }

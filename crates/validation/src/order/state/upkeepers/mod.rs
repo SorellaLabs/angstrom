@@ -46,9 +46,9 @@ impl Upkeepers {
         order: O,
         db: Arc<RevmLRU<DB>>
     ) -> (UserAccountDetails, O) {
-        let is_valid_nonce = self
-            .nonces
-            .is_valid_nonce(order.from(), order.nonce(), db.clone());
+        let is_valid_nonce =
+            self.nonces
+                .is_valid_nonce(order.from(), order.nonce().to(), db.clone());
 
         let (is_valid_pool, is_bid, pool_id) = self
             .pools
@@ -85,9 +85,9 @@ impl Upkeepers {
         db: Arc<RevmLRU<DB>>,
         overrides: &HashMap<Address, HashMap<U256, U256>>
     ) -> (UserAccountDetails, O) {
-        let is_valid_nonce = self
-            .nonces
-            .is_valid_nonce(order.from(), order.nonce(), db.clone());
+        let is_valid_nonce =
+            self.nonces
+                .is_valid_nonce(order.from(), order.nonce().to(), db.clone());
 
         let (is_valid_pool, is_bid, pool_id) = self
             .pools

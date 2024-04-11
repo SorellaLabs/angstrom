@@ -64,11 +64,11 @@ where
         let new_sim = sim.clone();
 
         let pipeline = PipelineBuilder::new()
-            .add_step(0, FnPtr::new(pre_regular_verification))
-            .add_step(1, FnPtr::new(post_regular_verification))
-            .add_step(2, FnPtr::new(pre_hook_sim))
-            .add_step(3, FnPtr::new(post_pre_hook_sim))
-            .add_step(4, FnPtr::new(post_hook_sim))
+            .add_step(0, FnPtr::new(ValidationOperation::pre_regular_verification))
+            .add_step(1, FnPtr::new(ValidationOperation::post_regular_verification))
+            .add_step(2, FnPtr::new(ValidationOperation::pre_hook_sim))
+            .add_step(3, FnPtr::new(ValidationOperation::post_pre_hook_sim))
+            .add_step(4, FnPtr::new(ValidationOperation::post_hook_sim))
             .build(tokio::runtime::Handle::current());
 
         Self { state, sim, pipeline, orders: UserOrders::new(), _p: PhantomData }
@@ -139,140 +139,135 @@ impl PipelineOperation for ValidationOperation {
     }
 }
 
-fn pre_regular_verification<DB>(
-    item: ValidationOperation,
-    cx: &mut ProcessingCtx<DB>
-) -> PipelineFut<ValidationOperation>
-where
-    DB: StateProviderFactory + Unpin + Clone + 'static
-{
-    Box::pin(std::future::ready({
-        if let ValidationOperation::PreRegularVerification(verification) = item {
-            let (res, details) = cx.state.validate_regular_order(verification);
-
-            PipelineAction::Next(ValidationOperation::PostRegularVerification(res, details))
-        } else {
-            PipelineAction::Err
-        }
-    }))
-}
-
-fn post_regular_verification<DB>(
-    item: ValidationOperation,
-    cx: &mut ProcessingCtx<DB>
-) -> PipelineFut<ValidationOperation>
-where
-    DB: StateProviderFactory + Unpin + Clone + 'static
-{
-    if let ValidationOperation::PostRegularVerification(req, deltas) = item {
-        match req {
-            OrderValidationRequest::ValidateLimit(a, b, c) => {
-                let res = cx.user_orders().new_limit_order(c, deltas);
-                let _ = a.send(res);
-            }
-            OrderValidationRequest::ValidateSearcher(a, b, c) => {
-                let res = cx.user_orders().new_searcher_order(c, deltas);
-                let _ = a.send(res);
-            }
-            _ => unreachable!()
-        }
-    }
-
-    Box::pin(std::future::ready(PipelineAction::Return(())))
-}
-
-fn pre_hook_sim<DB>(
-    item: ValidationOperation,
-    cx: &mut ProcessingCtx<DB>
-) -> PipelineFut<ValidationOperation>
-where
-    DB: StateProviderFactory + Unpin + Clone + 'static
-{
-    Box::pin(std::future::ready({
-        if let ValidationOperation::PreHookSim(sim) = item {
-            let (req, overrides) = cx.sim.validate_pre_hook(sim);
-            let (req, details) = cx.state.validate_state_prehook(req, &overrides);
-            PipelineAction::Next(ValidationOperation::PostPreHook(req, details, overrides))
-        } else {
-            PipelineAction::Err
-        }
-    }))
-}
-
-fn post_pre_hook_sim<DB>(
-    item: ValidationOperation,
-    cx: &mut ProcessingCtx<DB>
-) -> PipelineFut<ValidationOperation>
-where
-    DB: StateProviderFactory + Unpin + Clone + 'static
-{
-    if let ValidationOperation::PostPreHook(req, acc_details, state) = item {
-        let (order, overrides) = match req {
-            OrderValidationRequest::ValidateComposableLimit(tx, origin, order) => {
-                let (order, overrides) = cx
-                    .user_orders()
-                    .new_composable_limit_order(order, acc_details);
-                if let OrderValidationOutcome::Valid { order, propagate } = order {
-                    (
-                        OrderValidationRequest::ValidateComposableLimit(tx, origin, order.order),
-                        overrides
-                    )
-                } else {
-                    return Box::pin(std::future::ready(PipelineAction::Err))
-                }
-            }
-            OrderValidationRequest::ValidateComposableSearcher(tx, origin, order) => {
-                let (order, overrides) = cx
-                    .user_orders()
-                    .new_composable_searcher_order(order, acc_details);
-
-                if let OrderValidationOutcome::Valid { order, propagate } = order {
-                    (
-                        OrderValidationRequest::ValidateComposableSearcher(tx, origin, order.order),
-                        overrides
-                    )
-                } else {
-                    return Box::pin(std::future::ready(PipelineAction::Err))
-                }
-            }
-            _ => unreachable!()
-        };
-
+impl ValidationOperation {
+    fn pre_regular_verification<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
+    where
+        DB: StateProviderFactory + Unpin + Clone + 'static
+    {
         Box::pin(std::future::ready({
-            let (res, state) = cx.sim.validate_post_hook(order, overrides);
-            let (res, user_deltas) = cx.state.validate_state_posthook(res, &state);
-            PipelineAction::Next(ValidationOperation::PostHookSim(res, user_deltas))
-        }))
-    } else {
-        Box::pin(std::future::ready(PipelineAction::Err))
-    }
-}
+            if let ValidationOperation::PreRegularVerification(verification) = self {
+                let (res, details) = cx.state.validate_regular_order(verification);
 
-fn post_hook_sim<DB>(
-    item: ValidationOperation,
-    cx: &mut ProcessingCtx<DB>
-) -> PipelineFut<ValidationOperation>
-where
-    DB: StateProviderFactory + Unpin + Clone + 'static
-{
-    if let ValidationOperation::PostHookSim(req, user_deltas) = item {
-        match req {
-            OrderValidationRequest::ValidateComposableLimit(tx, origin, order) => {
-                let (res, _) = cx
-                    .user_orders()
-                    .new_composable_limit_order(order, user_deltas);
-                let _ = tx.send(res);
+                PipelineAction::Next(ValidationOperation::PostRegularVerification(res, details))
+            } else {
+                PipelineAction::Err
             }
-            OrderValidationRequest::ValidateComposableSearcher(tx, origin, order) => {
-                let (res, _) = cx
-                    .user_orders()
-                    .new_composable_searcher_order(order, user_deltas);
-                let _ = tx.send(res);
+        }))
+    }
+
+    fn post_regular_verification<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
+    where
+        DB: StateProviderFactory + Unpin + Clone + 'static
+    {
+        if let ValidationOperation::PostRegularVerification(req, deltas) = self {
+            match req {
+                OrderValidationRequest::ValidateLimit(a, b, c) => {
+                    let res = cx.user_orders().new_limit_order(c, deltas);
+                    let _ = a.send(res);
+                }
+                OrderValidationRequest::ValidateSearcher(a, b, c) => {
+                    let res = cx.user_orders().new_searcher_order(c, deltas);
+                    let _ = a.send(res);
+                }
+                _ => unreachable!()
             }
-            _ => unreachable!()
-        };
+        }
+
         Box::pin(std::future::ready(PipelineAction::Return(())))
-    } else {
-        Box::pin(std::future::ready(PipelineAction::Err))
+    }
+
+    fn pre_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
+    where
+        DB: StateProviderFactory + Unpin + Clone + 'static
+    {
+        Box::pin(std::future::ready({
+            if let ValidationOperation::PreHookSim(sim) = self {
+                let (req, overrides) = cx.sim.validate_pre_hook(sim);
+                let (req, details) = cx.state.validate_state_prehook(req, &overrides);
+                PipelineAction::Next(ValidationOperation::PostPreHook(req, details, overrides))
+            } else {
+                PipelineAction::Err
+            }
+        }))
+    }
+
+    fn post_pre_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
+    where
+        DB: StateProviderFactory + Unpin + Clone + 'static
+    {
+        if let ValidationOperation::PostPreHook(req, acc_details, state) = self {
+            let (order, overrides) = match req {
+                OrderValidationRequest::ValidateComposableLimit(tx, origin, order) => {
+                    let (order, overrides) = cx
+                        .user_orders()
+                        .new_composable_limit_order(order, acc_details);
+                    if let OrderValidationOutcome::Valid { order, propagate } = order {
+                        (
+                            OrderValidationRequest::ValidateComposableLimit(
+                                tx,
+                                origin,
+                                order.order
+                            ),
+                            overrides
+                        )
+                    } else {
+                        return Box::pin(std::future::ready(PipelineAction::Err))
+                    }
+                }
+                OrderValidationRequest::ValidateComposableSearcher(tx, origin, order) => {
+                    let (order, overrides) = cx
+                        .user_orders()
+                        .new_composable_searcher_order(order, acc_details);
+
+                    if let OrderValidationOutcome::Valid { order, propagate } = order {
+                        (
+                            OrderValidationRequest::ValidateComposableSearcher(
+                                tx,
+                                origin,
+                                order.order
+                            ),
+                            overrides
+                        )
+                    } else {
+                        return Box::pin(std::future::ready(PipelineAction::Err))
+                    }
+                }
+                _ => unreachable!()
+            };
+
+            Box::pin(std::future::ready({
+                let (res, state) = cx.sim.validate_post_hook(order, overrides);
+                let (res, user_deltas) = cx.state.validate_state_posthook(res, &state);
+                PipelineAction::Next(ValidationOperation::PostHookSim(res, user_deltas))
+            }))
+        } else {
+            Box::pin(std::future::ready(PipelineAction::Err))
+        }
+    }
+
+    fn post_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
+    where
+        DB: StateProviderFactory + Unpin + Clone + 'static
+    {
+        if let ValidationOperation::PostHookSim(req, user_deltas) = self {
+            match req {
+                OrderValidationRequest::ValidateComposableLimit(tx, origin, order) => {
+                    let (res, _) = cx
+                        .user_orders()
+                        .new_composable_limit_order(order, user_deltas);
+                    let _ = tx.send(res);
+                }
+                OrderValidationRequest::ValidateComposableSearcher(tx, origin, order) => {
+                    let (res, _) = cx
+                        .user_orders()
+                        .new_composable_searcher_order(order, user_deltas);
+                    let _ = tx.send(res);
+                }
+                _ => unreachable!()
+            };
+            Box::pin(std::future::ready(PipelineAction::Return(())))
+        } else {
+            Box::pin(std::future::ready(PipelineAction::Err))
+        }
     }
 }

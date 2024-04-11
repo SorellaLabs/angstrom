@@ -25,6 +25,6 @@ impl AngstromTokens {
         &mut self,
         db: Arc<RevmLRU<DB>>
     ) -> HashSet<Address> {
-        todo!()
+        Default::default()
     }
 }

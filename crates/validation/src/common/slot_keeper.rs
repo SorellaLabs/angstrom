@@ -16,6 +16,12 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 use crate::common::lru_db::RevmLRU;
 
+const STROM_CONTRACT: Address = Address::new([0; 20]);
+
+// TODO: this assumes that the given erc20 token isn't super optimized.
+// this will also break if the language used is yul or doesn't follow the
+// solitity standard when it comes to the storge layout
+// https://docs.soliditylang.org/en/v0.8.14/internals/layout_in_storage.html#mappings-and-dynamic-arrays
 pub struct SlotKeeper<DB> {
     addresses: Vec<Address>,
     slots:     HashMap<Address, U256>,
@@ -29,8 +35,7 @@ where
     DB: StateProviderFactory + Send + Sync + Clone + 'static
 {
     pub fn new(db: RevmLRU<DB>, addresses: Vec<Address>, handle: Handle) -> Self {
-        let slots = SlotKeeper::get_slots(addresses.clone(), db.clone());
-
+        let slots = Self::get_slots(addresses.clone(), db.clone());
         Self { addresses, db, slots, handle, fut: None }
     }
 
@@ -90,10 +95,7 @@ where
                     };
 
                     // bad but needed to convert directly. ideally we can remove this
-                    let result = U256::from_be_bytes(unsafe {
-                        *(output.to_vec().as_slice() as *const _ as *mut [u8; 32])
-                    });
-
+                    let result = U256::try_from_be_slice(&output).unwrap();
                     if U256::MAX == result {
                         return ((*token_addr), U256::from(i))
                     }
@@ -120,3 +122,6 @@ impl<DB: Send + Sync + Unpin + 'static> Future for SlotKeeper<DB> {
         Poll::Pending
     }
 }
+
+#[cfg(test)]
+pub mod test {}

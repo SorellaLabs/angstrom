@@ -39,7 +39,8 @@ impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> 
         eth_handle: MockEthEventHandle
     ) -> Self {
         let (tx, rx) = unbounded_channel();
-        let config_path = Path::new(TOKEN_CONFIG_FILE);
+        println!("{}", std::env::current_dir().unwrap().to_str().unwrap());
+        let config_path = Path::new("");
         let config = load_validation_config(config_path).unwrap();
         let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));
         let revm_lru = Arc::new(RevmLRU::new(10000000, Arc::new(db), current_block.clone()));

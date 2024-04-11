@@ -21,8 +21,8 @@ use crate::{
 };
 
 pub struct RevmLRU<DB> {
-    state_overrides:    HashMap<Address, HashMap<U256, U256>>,
-    bytecode_overrides: HashMap<Address, Bytecode>,
+    state_overrides:    RwLock<HashMap<Address, HashMap<U256, U256>>>,
+    bytecode_overrides: RwLock<HashMap<Address, Bytecode>>,
     accounts:           Arc<RwLock<LruMap<Address, DbAccount, ByMemoryUsage>>>,
     contracts:          Arc<RwLock<LruMap<B256, Bytecode, ByMemoryUsage>>>,
     db:                 Arc<DB>,
@@ -32,8 +32,8 @@ pub struct RevmLRU<DB> {
 impl<DB: Clone> Clone for RevmLRU<DB> {
     fn clone(&self) -> Self {
         Self {
-            state_overrides:    HashMap::default(),
-            bytecode_overrides: HashMap::default(),
+            state_overrides:    HashMap::default().into(),
+            bytecode_overrides: HashMap::default().into(),
             accounts:           self.accounts.clone(),
             contracts:          self.contracts.clone(),
             db:                 self.db.clone(),
@@ -79,8 +79,8 @@ where
             accounts,
             contracts,
             db,
-            state_overrides: HashMap::default(),
-            bytecode_overrides: HashMap::default()
+            state_overrides: HashMap::default().into(),
+            bytecode_overrides: HashMap::default().into()
         }
     }
 
@@ -89,12 +89,12 @@ where
             .store(block_number, std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn set_state_overrides(&mut self, overrides: HashMap<Address, HashMap<U256, U256>>) {
-        self.state_overrides = overrides
+    pub fn set_state_overrides(&self, overrides: HashMap<Address, HashMap<U256, U256>>) {
+        *self.state_overrides.write() = overrides;
     }
 
-    pub fn set_bytecode_overrides(&mut self, overrides: HashMap<Address, Bytecode>) {
-        self.bytecode_overrides = overrides
+    pub fn set_bytecode_overrides(&self, overrides: HashMap<Address, Bytecode>) {
+        *self.bytecode_overrides.write() = overrides;
     }
 
     fn basic_ref_no_cache(&self, address: &Address) -> Result<Option<AccountInfo>, RethError> {
@@ -164,7 +164,7 @@ where
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
         // check for overrides
-        if let Some(storage) = self.state_overrides.get(&address) {
+        if let Some(storage) = self.state_overrides.read().get(&address) {
             if let Some(value) = storage.get(&index) {
                 return Ok(*value)
             }

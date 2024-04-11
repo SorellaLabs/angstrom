@@ -11,6 +11,7 @@ use testing_tools::{
     order_pool::{OperationChainer, TestnetOrderPool},
     type_generator::orders::generate_rand_valid_limit_order
 };
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_order_indexing() {
     reth_tracing::init_test_tracing();

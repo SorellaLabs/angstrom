@@ -27,6 +27,10 @@ futures.workspace = true
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 
+reth-node-ethereum.workspace = true
+reth-revm.workspace = true
+reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
+reth-beacon-consensus= { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-net-common = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
 reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", rev = "6a104cc" }
@@ -52,6 +56,7 @@ tokio-stream.workspace = true
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
+reth-db.workspace = true
 
 
 enr = { workspace = true, features = ["serde", "rust-secp256k1"] }

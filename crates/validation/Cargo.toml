@@ -50,7 +50,6 @@ secp256k1 = { version = "0.27.0", default-features = false, features = [
   "recovery",
 ] }
 
-serial_test = "2.0.0"
 byteorder = "1.4.3"
 
 # error

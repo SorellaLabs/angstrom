@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use alloy_primitives::{Address, FixedBytes};
 use angstrom_types::primitive::PoolId;
 
+pub type PoolIdWithDirection = (bool, PoolId);
 #[allow(dead_code)]
-pub struct AngstromPools(HashMap<FixedBytes<40>, (bool, PoolId)>);
+pub struct AngstromPools(HashMap<FixedBytes<40>, PoolIdWithDirection>);
 
 impl AngstromPools {
     #[allow(dead_code)]
@@ -25,7 +26,11 @@ impl AngstromPools {
     }
 
     #[allow(dead_code)]
-    pub fn order_info(&self, currency_in: Address, currency_out: Address) -> Option<(bool, usize)> {
+    pub fn order_info(
+        &self,
+        currency_in: Address,
+        currency_out: Address
+    ) -> Option<PoolIdWithDirection> {
         self.0
             .get(&self.get_key(currency_in, currency_out))
             .copied()

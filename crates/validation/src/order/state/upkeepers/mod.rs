@@ -1,5 +1,4 @@
 pub mod angstrom_pools;
-pub mod angstrom_tokens;
 pub mod approvals;
 pub mod balances;
 pub mod nonces;
@@ -14,10 +13,11 @@ use reth_revm::EvmBuilder;
 use revm::{db::WrapDatabaseRef, interpreter::opcode, Database, Inspector};
 
 use self::{
-    angstrom_pools::AngstromPools, angstrom_tokens::AngstromTokens, approvals::Approvals,
-    balances::Balances, nonces::Nonces
+    angstrom_pools::AngstromPools, approvals::Approvals, balances::Balances, nonces::Nonces
 };
 use crate::common::lru_db::RevmLRU;
+
+pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 
 pub struct UserAccountDetails {
     pub token_bals:      (Address, U256),
@@ -29,7 +29,6 @@ pub struct UserAccountDetails {
 }
 
 pub struct Upkeepers {
-    new_pairs: AngstromTokens,
     approvals: Approvals,
     balances:  Balances,
     pools:     AngstromPools,

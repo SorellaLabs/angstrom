@@ -17,6 +17,8 @@ use tokio::sync::mpsc::unbounded_channel;
 
 use crate::validator::ValidationClient;
 
+const TOKEN_CONFIG_FILE: &str = "./crates/validation/token_config.toml";
+
 pub fn init_validation<DB: StateProviderFactory + Unpin + 'static>(
     db: DB,
     block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>

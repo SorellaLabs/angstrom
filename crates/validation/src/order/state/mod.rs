@@ -90,7 +90,7 @@ where
                         .verify_composable_order(o, db, prehook_state_deltas);
                 (OrderValidationRequest::ValidateComposableSearcher(tx, origin, order), details)
             }
-            _ => todo!()
+            _ => unreachable!()
         }
     }
 
@@ -117,7 +117,7 @@ where
                         .verify_composable_order(o, db, prehook_state_deltas);
                 (OrderValidationRequest::ValidateComposableSearcher(tx, origin, order), details)
             }
-            _ => todo!()
+            _ => unreachable!()
         }
     }
 }

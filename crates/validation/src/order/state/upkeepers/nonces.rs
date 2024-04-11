@@ -5,11 +5,8 @@ use reth_primitives::keccak256;
 use reth_provider::StateProviderFactory;
 use revm::DatabaseRef;
 
+use super::ANGSTROM_CONTRACT;
 use crate::order::state::RevmLRU;
-
-// TODO: move to actual angstrom address
-const ANGSTROM_ADDRESS: Address =
-    Address(alloy_primitives::FixedBytes(hex!("680A025Da7b1be2c204D7745e809919bCE074026")));
 
 /// The nonce location for quick db lookup
 const ANGSTROM_NONCE_SLOT_CONST: [u8; 4] = hex!("daa050e9");
@@ -30,9 +27,9 @@ impl Nonces {
         arry[24..31].copy_from_slice(&nonce[0..7]);
         let slot = keccak256(arry);
 
-        let word = db.storage_ref(ANGSTROM_ADDRESS, slot.into()).unwrap();
-        let mut flag = U256::from(1) << (nonce[7] & 0xff);
+        let word = db.storage_ref(ANGSTROM_CONTRACT, slot.into()).unwrap();
+        let mut flag = U256::from(1) << nonce[7];
 
-        word ^ flag == flag
+        (word ^ flag) & flag == flag
     }
 }

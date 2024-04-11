@@ -43,9 +43,10 @@ where
         rx: UnboundedReceiver<ValidationRequest>,
         new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
         db: Arc<RevmLRU<DB>>,
-        config: ValidationConfig
+        config: ValidationConfig,
+        block_number: u64
     ) -> Self {
-        let order_validator = OrderValidator::new(db.clone(), config);
+        let order_validator = OrderValidator::new(db.clone(), config, block_number);
         Self { new_block_stream, db, bundle_validator: BundleValidator {}, order_validator, rx }
     }
 

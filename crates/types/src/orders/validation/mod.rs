@@ -85,9 +85,11 @@ pub enum OrderValidationOutcome<O: PoolOrder> {
     /// the pool.
     Valid {
         /// The validated order
-        order:     ValidatedOrder<O>,
+        order:        ValidatedOrder<O>,
         /// Whether to propagate the order to the network.
-        propagate: bool
+        propagate:    bool,
+        /// the block number this was validated on
+        block_number: u64
     },
     /// The transaction is considered invalid indefinitely: It violates
     /// constraints that prevent this transaction from ever becoming valid.

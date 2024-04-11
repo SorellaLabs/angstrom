@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     marker::PhantomData,
     pin::Pin,
-    task::{Context, Poll}
+    task::{Context, Poll, Waker}
 };
 
 use futures::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
@@ -78,7 +78,8 @@ where
             threadpool,
             needing_queue: VecDeque::new(),
             operations: self.operations,
-            tasks: FuturesUnordered::new()
+            tasks: FuturesUnordered::new(),
+            waker: None
         }
     }
 }
@@ -90,6 +91,7 @@ where
 {
     threadpool: T,
     operations: HashMap<u8, fn(OP, &mut CX) -> PipelineFut<OP>>,
+    waker:      Option<Waker>,
 
     needing_queue: VecDeque<OP>,
     tasks:         FuturesUnordered<PipelineFut<OP>>
@@ -103,6 +105,10 @@ where
 {
     pub fn add(&mut self, item: OP) {
         self.needing_queue.push_back(item);
+
+        if let Some(waker) = self.waker.as_ref() {
+            waker.wake_by_ref();
+        }
     }
 
     fn spawn_task(&mut self, op: OP, pipeline_cx: &mut CX) {
@@ -113,6 +119,11 @@ where
     }
 
     pub fn poll(&mut self, cx: &mut Context<'_>, pipeline_cx: &mut CX) -> Poll<Option<OP::End>> {
+        // ensure we have a waker
+        if self.waker.is_none() {
+            self.waker = Some(cx.waker().clone());
+        }
+
         while let Some(item) = self.needing_queue.pop_front() {
             self.spawn_task(item, pipeline_cx)
         }

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicU64, Arc}
+};
 
 use alloy_primitives::Address;
 use parking_lot::RwLock;
@@ -22,7 +25,8 @@ pub struct RevmLRU<DB> {
     bytecode_overrides: HashMap<Address, Bytecode>,
     accounts:           Arc<RwLock<LruMap<Address, DbAccount, ByMemoryUsage>>>,
     contracts:          Arc<RwLock<LruMap<B256, Bytecode, ByMemoryUsage>>>,
-    db:                 Arc<DB>
+    db:                 Arc<DB>,
+    current_block:      Arc<AtomicU64>
 }
 
 impl<DB: Clone> Clone for RevmLRU<DB> {
@@ -32,7 +36,8 @@ impl<DB: Clone> Clone for RevmLRU<DB> {
             bytecode_overrides: HashMap::default(),
             accounts:           self.accounts.clone(),
             contracts:          self.contracts.clone(),
-            db:                 self.db.clone()
+            db:                 self.db.clone(),
+            current_block:      self.current_block.clone()
         }
     }
 }
@@ -66,16 +71,22 @@ impl<DB> RevmLRU<DB>
 where
     DB: StateProviderFactory
 {
-    pub fn new(max_bytes: usize, db: Arc<DB>) -> Self {
+    pub fn new(max_bytes: usize, db: Arc<DB>, current_block: Arc<AtomicU64>) -> Self {
         let accounts = Arc::new(RwLock::new(LruMap::new(ByMemoryUsage::new(max_bytes))));
         let contracts = Arc::new(RwLock::new(LruMap::new(ByMemoryUsage::new(max_bytes))));
         Self {
+            current_block,
             accounts,
             contracts,
             db,
             state_overrides: HashMap::default(),
             bytecode_overrides: HashMap::default()
         }
+    }
+
+    pub fn update_block_number(&self, block_number: u64) {
+        self.current_block
+            .store(block_number, std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn set_state_overrides(&mut self, overrides: HashMap<Address, HashMap<U256, U256>>) {

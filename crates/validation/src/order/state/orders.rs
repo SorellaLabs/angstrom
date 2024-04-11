@@ -38,21 +38,25 @@ impl UserOrders {
     pub fn new_searcher_order<O: PooledSearcherOrder<ValidationData = SearcherPriorityData>>(
         &mut self,
         order: O,
-        deltas: UserAccountDetails
+        deltas: UserAccountDetails,
+        block_number: u64
     ) -> OrderValidationOutcome<O> {
-        self.basic_order_validation(order, deltas, false, |order| SearcherPriorityData {
-            donated: order.donated(),
-            volume:  order.volume(),
-            gas:     order.gas()
+        self.basic_order_validation(order, deltas, false, block_number, |order| {
+            SearcherPriorityData {
+                donated: order.donated(),
+                volume:  order.volume(),
+                gas:     order.gas()
+            }
         })
     }
 
     pub fn new_limit_order<O: PooledLimitOrder<ValidationData = OrderPriorityData>>(
         &mut self,
         order: O,
-        deltas: UserAccountDetails
+        deltas: UserAccountDetails,
+        block_number: u64
     ) -> OrderValidationOutcome<O> {
-        self.basic_order_validation(order, deltas, true, |order| OrderPriorityData {
+        self.basic_order_validation(order, deltas, true, block_number, |order| OrderPriorityData {
             price:  order.limit_price(),
             volume: order.limit_price() * order.amount_out_min(),
             gas:    order.gas()
@@ -62,7 +66,8 @@ impl UserOrders {
     pub fn new_composable_limit_order<O: PooledLimitOrder<ValidationData = OrderPriorityData>>(
         &mut self,
         order: O,
-        deltas: UserAccountDetails
+        deltas: UserAccountDetails,
+        block_number: u64
     ) -> (OrderValidationOutcome<O>, HashMap<Address, HashMap<U256, U256>>) {
         todo!()
     }
@@ -72,7 +77,8 @@ impl UserOrders {
     >(
         &mut self,
         order: O,
-        deltas: UserAccountDetails
+        deltas: UserAccountDetails,
+        block_number: u64
     ) -> (OrderValidationOutcome<O>, HashMap<Address, HashMap<U256, U256>>) {
         todo!()
     }
@@ -95,6 +101,7 @@ impl UserOrders {
         order: O,
         deltas: UserAccountDetails,
         limit: bool,
+        block_number: u64,
         build_priority: F
     ) -> OrderValidationOutcome<O> {
         // always invalid
@@ -196,7 +203,7 @@ impl UserOrders {
             }
         };
 
-        OrderValidationOutcome::Valid { order: res, propagate: true }
+        OrderValidationOutcome::Valid { order: res, propagate: true, block_number }
     }
 
     /// Helper function for checking for duplicates when adding orders

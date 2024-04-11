@@ -44,13 +44,7 @@ pub fn init_validation<DB: StateProviderFactory + Unpin + Clone + 'static>(
             .build()
             .unwrap();
 
-        rt.block_on(Validator::new(
-            rx,
-            block_stream,
-            revm_lru,
-            config,
-            current_block.load(std::sync::atomic::Ordering::SeqCst)
-        ))
+        rt.block_on(Validator::new(rx, block_stream, revm_lru, config, current_block.clone()))
     });
 
     ValidationClient(tx)
@@ -75,13 +69,7 @@ pub fn init_validation_tests<DB: StateProviderFactory + Unpin + Clone + 'static>
             .build()
             .unwrap();
 
-        rt.block_on(Validator::new(
-            rx,
-            block_stream,
-            task_db,
-            config,
-            current_block.load(std::sync::atomic::Ordering::SeqCst)
-        ))
+        rt.block_on(Validator::new(rx, block_stream, task_db, config, current_block.clone()))
     });
 
     (ValidationClient(tx), revm_lru)

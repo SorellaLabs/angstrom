@@ -14,8 +14,10 @@ impl MockEthEventHandle {
         (Self { tx }, UnboundedReceiverStream::new(rx))
     }
 
-    pub fn trigger_new_block(&self) {
-        self.tx.send(EthEvent::NewBlock).expect("failed to send");
+    pub fn trigger_new_block(&self, block: u64) {
+        self.tx
+            .send(EthEvent::NewBlock(block))
+            .expect("failed to send");
     }
 
     pub fn filled_orders(&self, block: u64, hashes: Vec<B256>) {

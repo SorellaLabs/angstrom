@@ -333,7 +333,7 @@ where
     ) -> PoolHandle<L, CL, S, CS> {
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(self.validator, self.config);
+        let inner = OrderPoolInner::new(self.validator, self.config, 0);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -356,7 +356,7 @@ where
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(self.validator, self.config);
+        let inner = OrderPoolInner::new(self.validator, self.config, 0);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -512,7 +512,7 @@ where
             EthEvent::FinalizedBlock(block) => {
                 self.pool.finalized_block(block);
             }
-            EthEvent::NewBlock => self.pool.new_block()
+            EthEvent::NewBlock(block) => self.pool.new_block(block)
         }
     }
 

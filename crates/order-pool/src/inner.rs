@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     pin::Pin,
     task::{Context, Poll},
     time::{Duration, SystemTime, UNIX_EPOCH}
@@ -47,20 +47,24 @@ where
     CS: PooledComposableOrder + PooledSearcherOrder,
     V: OrderValidator
 {
-    limit_pool:        LimitOrderPool<L, CL>,
-    searcher_pool:     SearcherPool<S, CS>,
-    finalization_pool: FinalizationPool<L, CL, S, CS>,
-    _config:           PoolConfig,
+    limit_pool:             LimitOrderPool<L, CL>,
+    searcher_pool:          SearcherPool<S, CS>,
+    finalization_pool:      FinalizationPool<L, CL, S, CS>,
+    _config:                PoolConfig,
     /// Address to order id, used for eoa invalidation
-    address_to_orders: HashMap<Address, Vec<OrderId>>,
+    address_to_orders:      HashMap<Address, Vec<OrderId>>,
+    /// touched addresses transition
+    last_touched_addresses: HashSet<Address>,
+    /// current block_number
+    block_number:           u64,
     /// Order hash to order id, used for order inclusion lookups
-    hash_to_order_id:  HashMap<B256, OrderId>,
+    hash_to_order_id:       HashMap<B256, OrderId>,
     /// Orders that are being validated
-    pending_orders:    HashMap<B256, Vec<PeerId>>,
+    pending_orders:         HashMap<B256, Vec<PeerId>>,
     /// Order Validator
-    validator:         Validator<L, CL, S, CS, V>,
+    validator:              Validator<L, CL, S, CS, V>,
     /// handles sending out subscriptions
-    subscriptions:     OrderPoolSubscriptions<L, CL, S, CS>
+    subscriptions:          OrderPoolSubscriptions<L, CL, S, CS>
 }
 
 impl<L, CL, S, CS, V> OrderPoolInner<L, CL, S, CS, V>
@@ -77,17 +81,19 @@ where
         ComposableSearcherOrder = CS
     >
 {
-    pub fn new(validator: V, config: PoolConfig) -> Self {
+    pub fn new(validator: V, config: PoolConfig, block_number: u64) -> Self {
         Self {
-            limit_pool:        LimitOrderPool::new(&config.ids, None),
-            searcher_pool:     SearcherPool::new(&config.ids, None),
+            block_number,
+            limit_pool: LimitOrderPool::new(&config.ids, None),
+            searcher_pool: SearcherPool::new(&config.ids, None),
             finalization_pool: FinalizationPool::new(),
-            _config:           config,
+            _config: config,
             address_to_orders: HashMap::new(),
-            hash_to_order_id:  HashMap::new(),
-            pending_orders:    HashMap::new(),
-            validator:         Validator::new(validator),
-            subscriptions:     OrderPoolSubscriptions::new()
+            hash_to_order_id: HashMap::new(),
+            pending_orders: HashMap::new(),
+            last_touched_addresses: HashSet::new(),
+            validator: Validator::new(validator),
+            subscriptions: OrderPoolSubscriptions::new()
         }
     }
 
@@ -195,7 +201,8 @@ where
     }
 
     /// used to remove orders that expire before the next ethereum block
-    pub fn new_block(&mut self) {
+    pub fn new_block(&mut self, block_number: u64) {
+        self.block_number = block_number;
         if let Ok(time) = SystemTime::now().duration_since(UNIX_EPOCH) {
             let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs());
             // grab all exired hashes
@@ -245,8 +252,14 @@ where
     }
 
     pub fn eoa_state_change(&mut self, eoas: Vec<Address>) {
+        let mut rem = HashSet::new();
         eoas.into_iter()
-            .filter_map(|eoa| self.address_to_orders.remove(&eoa))
+            .filter_map(|eoa| {
+                self.address_to_orders.remove(&eoa).or_else(|| {
+                    rem.insert(eoa);
+                    None
+                })
+            })
             .for_each(|order_ids| {
                 order_ids.into_iter().for_each(|id| match id.location {
                     OrderLocation::Composable => {
@@ -277,6 +290,9 @@ where
                     }
                 })
             });
+
+        // for late updates that might need to be re validated.
+        self.last_touched_addresses = rem;
     }
 
     pub fn finalized_block(&mut self, block: u64) {
@@ -351,39 +367,56 @@ where
         &mut self,
         res: ValidationResults<L, CL, S, CS>
     ) -> Option<PoolInnerEvent<L, CL, S, CS>> {
-        res.get_block_number();
         match res {
             ValidationResults::Limit(order) => {
-                PoolInnerEvent::from_limit(self.handle_validation_results(order, |this, order| {
-                    this.subscriptions
-                        .new_order(Order::Limit(order.order.clone()));
+                PoolInnerEvent::from_limit(self.handle_validation_results(
+                    order,
+                    |this, order| {
+                        this.subscriptions
+                            .new_order(Order::Limit(order.order.clone()));
 
-                    if let Err(e) = this.limit_pool.add_limit_order(order) {
-                        error!(error=%e, "failed to add order to limit pool");
-                    }
-                }))
+                        if let Err(e) = this.limit_pool.add_limit_order(order) {
+                            error!(error=%e, "failed to add order to limit pool");
+                        }
+                    },
+                    |this, order| this.validator.validate_order(OrderOrigin::External, order)
+                ))
             }
 
-            ValidationResults::Searcher(order) => PoolInnerEvent::from_searcher(
-                self.handle_validation_results(order, |this, order| {
-                    this.subscriptions
-                        .new_order(Order::Searcher(order.order.clone()));
+            ValidationResults::Searcher(order) => {
+                PoolInnerEvent::from_searcher(self.handle_validation_results(
+                    order,
+                    |this, order| {
+                        this.subscriptions
+                            .new_order(Order::Searcher(order.order.clone()));
 
-                    if let Err(e) = this.searcher_pool.add_searcher_order(order) {
-                        error!(error=%e, "failed to add order to searcher pool");
+                        if let Err(e) = this.searcher_pool.add_searcher_order(order) {
+                            error!(error=%e, "failed to add order to searcher pool");
+                        }
+                    },
+                    |this, order| {
+                        this.validator
+                            .validate_searcher_order(OrderOrigin::External, order)
                     }
-                })
-            ),
-            ValidationResults::ComposableLimit(order) => PoolInnerEvent::from_composable_limit(
-                self.handle_validation_results(order, |this, order| {
-                    this.subscriptions
-                        .new_order(Order::ComposableLimit(order.order.clone()));
+                ))
+            }
+            ValidationResults::ComposableLimit(order) => {
+                PoolInnerEvent::from_composable_limit(self.handle_validation_results(
+                    order,
+                    |this, order| {
+                        this.subscriptions
+                            .new_order(Order::ComposableLimit(order.order.clone()));
 
-                    if let Err(e) = this.limit_pool.add_composable_order(order) {
-                        error!(error=%e, "failed to add order to limit pool");
+                        if let Err(e) = this.limit_pool.add_composable_order(order) {
+                            error!(error=%e, "failed to add order to limit pool");
+                        }
+                    },
+                    |this, order| {
+                        this.validator
+                            .validate_composable_order(OrderOrigin::External, order)
                     }
-                })
-            ),
+                ))
+            }
             ValidationResults::ComposableSearcher(order) => {
                 PoolInnerEvent::from_composable_searcher(self.handle_validation_results(
                     order,
@@ -394,6 +427,10 @@ where
                         if let Err(e) = this.searcher_pool.add_composable_searcher_order(order) {
                             error!(error=%e,"failed to add order to searcher pool");
                         }
+                    },
+                    |this, order| {
+                        this.validator
+                            .validate_composable_searcher_order(OrderOrigin::External, order)
                     }
                 ))
             }
@@ -403,10 +440,23 @@ where
     fn handle_validation_results<O: PoolOrder>(
         &mut self,
         order: OrderValidationOutcome<O>,
-        insert: impl FnOnce(&mut Self, ValidOrder<O>)
+        insert: impl FnOnce(&mut Self, ValidOrder<O>),
+        revalidate: impl FnOnce(&mut Self, O)
     ) -> OrderOrPeers<O> {
         match order {
             OrderValidationOutcome::Valid { order, propagate, block_number } => {
+                // check against current block to see if there is possible state reminance.
+                if block_number + 1 == self.block_number {
+                    if self.last_touched_addresses.remove(&order.from()) {
+                        tracing::debug!(
+                            ?order,
+                            "order was validated on prev block but had a state change occur. \
+                             revalidating"
+                        );
+                        revalidate(self, order.order);
+                        return OrderOrPeers::None
+                    }
+                }
                 let res = propagate.then_some(order.order.clone());
                 self.update_order_tracking(order.clone());
                 insert(self, order);

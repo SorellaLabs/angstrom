@@ -51,7 +51,7 @@ impl TestnetOrderPool {
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(validator, config);
+        let inner = OrderPoolInner::new(validator, config, 0);
 
         Self {
             pool_manager: PoolManager::new(

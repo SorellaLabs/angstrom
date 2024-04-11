@@ -1,4 +1,8 @@
-use std::{pin::Pin, sync::Arc, task::Poll};
+use std::{
+    pin::Pin,
+    sync::{atomic::AtomicU64, Arc},
+    task::Poll
+};
 
 use angstrom_eth::manager::EthEvent;
 use futures::{Stream, StreamExt};
@@ -23,8 +27,6 @@ pub enum ValidationRequest {
 #[derive(Debug, Clone)]
 pub struct ValidationClient(pub(crate) UnboundedSender<ValidationRequest>);
 
-/// HeadModule that deals with all validation
-#[allow(dead_code)]
 pub struct Validator<'a, DB> {
     rx:               UnboundedReceiver<ValidationRequest>,
     /// used to update state
@@ -44,7 +46,7 @@ where
         new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
         db: Arc<RevmLRU<DB>>,
         config: ValidationConfig,
-        block_number: u64
+        block_number: Arc<AtomicU64>
     ) -> Self {
         let order_validator = OrderValidator::new(db.clone(), config, block_number);
         Self { new_block_stream, db, bundle_validator: BundleValidator {}, order_validator, rx }

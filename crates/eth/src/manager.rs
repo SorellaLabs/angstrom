@@ -142,7 +142,7 @@ where
 #[derive(Debug, Clone)]
 pub enum EthEvent {
     //TODO: add shit here
-    NewBlock,
+    NewBlock(u64),
     FilledOrders(Vec<B256>, u64),
     EOAStateChanges(Vec<Address>),
     ReorgedOrders(Vec<B256>),

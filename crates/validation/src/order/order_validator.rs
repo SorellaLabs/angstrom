@@ -33,16 +33,15 @@ use crate::{
     validator::ValidationRequest
 };
 
-pub struct OrderValidator<'a, DB> {
+pub struct OrderValidator<DB> {
     sim:          SimValidation<DB>,
     state:        StateValidation<DB>,
     orders:       UserOrders,
-    pipeline:     PipelineWithIntermediary<Handle, ValidationOperation, ProcessingCtx<'a, DB>>,
-    block_number: Arc<AtomicU64>,
-    _p:           PhantomData<&'a u8>
+    pipeline:     PipelineWithIntermediary<Handle, ValidationOperation, ProcessingCtx<DB>>,
+    block_number: Arc<AtomicU64>
 }
 
-impl<'this, DB> OrderValidator<'this, DB>
+impl<DB> OrderValidator<DB>
 where
     DB: StateProviderFactory + Unpin + Clone + 'static
 {
@@ -65,7 +64,7 @@ where
             .add_step(4, ValidationOperation::post_hook_sim)
             .build(tokio::runtime::Handle::current());
 
-        Self { state, sim, pipeline, orders: UserOrders::new(), _p: PhantomData, block_number }
+        Self { state, sim, pipeline, orders: UserOrders::new(), block_number }
     }
 
     pub fn update_block_number(&mut self, number: u64) {
@@ -96,7 +95,7 @@ where
     }
 }
 
-impl<DB> Future for OrderValidator<'_, DB>
+impl<DB> Future for OrderValidator<DB>
 where
     DB: StateProviderFactory + Clone + Unpin + 'static
 {
@@ -150,25 +149,24 @@ impl PipelineOperation for ValidationOperation {
     }
 }
 
-pub struct ProcessingCtx<'a, DB> {
-    user_orders: *mut UserOrders,
-    pub sim: SimValidation<DB>,
-    pub state: StateValidation<DB>,
-    pub current_block_number: Arc<AtomicU64>,
-    _p: PhantomData<&'a u8>
+pub struct ProcessingCtx<DB> {
+    user_orders:              *mut UserOrders,
+    pub sim:                  SimValidation<DB>,
+    pub state:                StateValidation<DB>,
+    pub current_block_number: Arc<AtomicU64>
 }
 
-impl<'a, DB> ProcessingCtx<'a, DB> {
+impl<DB> ProcessingCtx<DB> {
     pub fn new(
         user_orders: *mut UserOrders,
         sim: SimValidation<DB>,
         state: StateValidation<DB>,
         current_block_number: Arc<AtomicU64>
     ) -> Self {
-        Self { sim, user_orders, state, _p: PhantomData, current_block_number }
+        Self { sim, user_orders, state, current_block_number }
     }
 
-    pub fn user_orders(&mut self) -> &'a mut UserOrders {
+    pub fn user_orders<'a>(&'a mut self) -> &'a mut UserOrders {
         unsafe { &mut (*self.user_orders) }
     }
 }

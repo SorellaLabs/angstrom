@@ -25,19 +25,19 @@ pub enum ValidationRequest {
 }
 
 #[derive(Debug, Clone)]
-pub struct ValidationClient(pub(crate) UnboundedSender<ValidationRequest>);
+pub struct ValidationClient(pub UnboundedSender<ValidationRequest>);
 
-pub struct Validator<'a, DB> {
+pub struct Validator<DB> {
     rx:               UnboundedReceiver<ValidationRequest>,
     /// used to update state
     new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
     db:               Arc<RevmLRU<DB>>,
 
-    order_validator:  OrderValidator<'a, DB>,
+    order_validator:  OrderValidator<DB>,
     bundle_validator: BundleValidator
 }
 
-impl<DB> Validator<'_, DB>
+impl<DB> Validator<DB>
 where
     DB: StateProviderFactory + Clone + Unpin + 'static
 {
@@ -62,7 +62,7 @@ where
     }
 }
 
-impl<DB> Future for Validator<'_, DB>
+impl<DB> Future for Validator<DB>
 where
     DB: StateProviderFactory + Clone + Unpin + 'static
 {

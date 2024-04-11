@@ -5,12 +5,12 @@ use std::{
 
 use alloy_primitives::Address;
 use parking_lot::RwLock;
-use reth_interfaces::RethError;
+use reth_interfaces::{provider::ProviderError, RethError};
 use reth_primitives::{
     revm_primitives::{AccountInfo, Bytecode, B256, U256},
     KECCAK_EMPTY
 };
-use reth_provider::{AccountReader, StateProvider, StateProviderFactory};
+use reth_provider::{AccountReader, StateProvider, StateProviderBox, StateProviderFactory};
 use reth_revm::{Database, DatabaseRef};
 use revm::db::DbAccount;
 use schnellru::{ByMemoryUsage, LruMap};
@@ -99,8 +99,7 @@ where
 
     fn basic_ref_no_cache(&self, address: &Address) -> Result<Option<AccountInfo>, RethError> {
         Ok(self
-            .db
-            .latest()?
+            .get_current_provider()?
             .basic_account(*address)?
             .map(|account| AccountInfo {
                 balance:   account.balance,
@@ -111,11 +110,18 @@ where
     }
 
     fn storage_ref_no_cache(&self, address: &Address, index: U256) -> Result<U256, RethError> {
-        self.db
-            .latest()?
+        self.get_current_provider()?
             .storage(*address, index.into())
             .map(|inner| inner.unwrap_or_default())
             .map_err(RethError::from)
+    }
+
+    fn get_current_provider(&self) -> Result<StateProviderBox, ProviderError> {
+        self.db.state_by_block_id(
+            self.current_block
+                .load(std::sync::atomic::Ordering::SeqCst)
+                .into()
+        )
     }
 }
 
@@ -179,9 +185,9 @@ where
                     .storage
                     .get(&index)
                     .map(|e| Ok(Some(*e)))
-                    .unwrap_or_else(|| self.db.latest()?.storage(address, index.into()))
+                    .unwrap_or_else(|| self.get_current_provider()?.storage(address, index.into()))
             })
-            .unwrap_or_else(|| self.db.latest()?.storage(address, index.into()))?
+            .unwrap_or_else(|| self.get_current_provider()?.storage(address, index.into()))?
             .unwrap_or_default())
     }
 

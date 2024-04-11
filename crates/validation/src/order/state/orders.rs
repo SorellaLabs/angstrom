@@ -80,7 +80,7 @@ impl UserOrders {
     /// called when a user has a state change on their address. When this
     /// happens we re-evaluate all of there pending orders so we do a
     /// hard-reset here.
-    pub fn fresh_state(&mut self, state: HashMap<Address, PendingState>) {
+    pub fn fkresh_state(&mut self, state: HashMap<Address, PendingState>) {
         state.into_iter().for_each(|(k, v)| {
             self.0.insert(k, (v, vec![]));
         });

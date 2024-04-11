@@ -18,7 +18,8 @@ use crate::{
         errors::{SimError, SimResult},
         BundleOrTransactionResult
     },
-    common::lru_db::RevmLRU
+    common::lru_db::RevmLRU,
+    order::state::config::ValidationConfig
 };
 
 pub trait RevmBackend {
@@ -49,8 +50,8 @@ where
     pub fn simulate_external_state(
         &self,
         txes: ExternalStateSim,
-        _caller_info: CallerInfo,
-        overrides: HashMap<Address, U256>
+        caller_info: CallerInfo,
+        token_config: &ValidationConfig
     ) -> Result<(SimResult, AddressSlots), SimError> {
         let mut prehook_env = TxEnv::default();
         let (prehook_addr, pre_hook_calldata) = txes.pre_hook();
@@ -67,16 +68,23 @@ where
         let (posthook_addr, posthook_calldata) = txes.post_hook();
         post_env.data = posthook_calldata;
         post_env.transact_to = TransactTo::Call(posthook_addr);
+        let token_out_override = token_config
+            .balances
+            .iter()
+            .find(|t| t.token == txes.amount_out_token)
+            .unwrap();
 
-        let out_token_override = overrides.get(&txes.amount_out_token).unwrap();
+        let slot = token_out_override
+            .generate_slot(caller_info.address)
+            .unwrap();
 
         let db = self.db.clone();
-        let current_bal = db.storage_ref(posthook_addr, *out_token_override).unwrap();
+        let current_bal = db.storage_ref(posthook_addr, slot).unwrap();
 
         let mut overrides: HashMap<Address, HashMap<U256, U256>> = HashMap::default();
 
         let mut slot_map = HashMap::default();
-        slot_map.insert(*out_token_override, current_bal + U256::from(txes.amount_out_lim));
+        slot_map.insert(slot, current_bal + U256::from(txes.amount_out_lim));
         overrides.insert(posthook_addr, slot_map);
 
         let (res, post_slots) = self.simulate_single_tx(post_env, overrides)?;

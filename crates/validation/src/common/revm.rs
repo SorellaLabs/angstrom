@@ -15,9 +15,9 @@ use crate::{
     common::{
         executor::{TaskKind, ThreadPool},
         lru_db::RevmLRU,
-        slot_keeper::SlotKeeper,
         state::{AddressSlots, RevmState}
-    }
+    },
+    order::state::config::ValidationConfig
 };
 
 ///TODO: replace once settled
@@ -31,8 +31,8 @@ pub struct Revm<DB> {
     threadpool:     ThreadPool,
     state:          Arc<RevmState<DB>>,
     slot_changes:   AddressSlots,
-    slot_keeper:    SlotKeeper<DB>,
-    futures:        FuturesUnordered<JoinHandle<Option<AddressSlots>>>
+    futures:        FuturesUnordered<JoinHandle<Option<AddressSlots>>>,
+    config:         ValidationConfig
 }
 
 impl<DB> Revm<DB>
@@ -41,11 +41,12 @@ where
 {
     pub fn new(
         transaction_rx: UnboundedReceiver<BundleSimRequest>,
-        db: RevmLRU<DB>
+        db: RevmLRU<DB>,
+        config: ValidationConfig
     ) -> Result<Self, SimError> {
         let threadpool = ThreadPool::new()?;
         Ok(Self {
-            slot_keeper: SlotKeeper::new(db.clone(), vec![], threadpool.runtime.handle().clone()),
+            config,
             transaction_rx,
             threadpool,
             state: Arc::new(RevmState::new(db)),
@@ -73,9 +74,8 @@ where
 
         match tx_type {
             BundleSimRequest::Hook(data, overrides, sender) => {
-                let slots = self.slot_keeper.get_current_slots().clone();
                 let fut = async move {
-                    let res = state.simulate_external_state(data, overrides, slots);
+                    let res = state.simulate_external_state(data, overrides);
 
                     match res {
                         Ok((sim_res, slots)) => {
@@ -143,12 +143,6 @@ where
             }
         };
     }
-
-    // this will be wired into new block
-    #[allow(unused)]
-    fn handle_new_pools(&mut self, pools: Vec<Address>) {
-        self.slot_keeper.new_addresses(pools);
-    }
 }
 
 impl<DB> Future for Revm<DB>
@@ -178,6 +172,6 @@ where
             .apply(|slot| self.update_slots(slot))
         {}
 
-        self.slot_keeper.poll_unpin(cx)
+        Poll::Pending
     }
 }

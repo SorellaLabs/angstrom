@@ -7,3 +7,9 @@ slot_index = 4
 token = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 hash_method = "sol"
 slot_index = 3
+
+# assumes token 0 is always bid
+[[Pools]]
+token0 = ""
+token1 = ""
+pool_id = 0

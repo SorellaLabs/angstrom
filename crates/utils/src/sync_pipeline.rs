@@ -40,24 +40,6 @@ pub trait PipelineOperation: Unpin + Send + 'static {
 
 pub type PipelineFut<OP> = Pin<Box<dyn Future<Output = PipelineAction<OP>> + Send + Unpin>>;
 
-pub struct FnPtr<OP: PipelineOperation, CX> {
-    ptr: fn(OP, &mut CX) -> PipelineFut<OP>
-}
-
-impl<OP, CX> FnPtr<OP, CX>
-where
-    OP: PipelineOperation,
-    CX: Unpin
-{
-    pub fn new(f: fn(OP, &mut CX) -> PipelineFut<OP>) -> Self {
-        Self { ptr: f }
-    }
-
-    pub fn get_fn(&self) -> fn(OP, &mut CX) -> PipelineFut<OP> {
-        self.ptr
-    }
-}
-
 pub struct PipelineBuilder<OP, CX>
 where
     OP: PipelineOperation,

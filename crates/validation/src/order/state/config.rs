@@ -2,6 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use alloy_primitives::Address;
 use alloy_sol_types::SolValue;
+use angstrom_types::primitive::PoolId;
 use reth_primitives::{keccak256, U256};
 use reth_provider::StateProviderFactory;
 use revm::DatabaseRef;
@@ -10,9 +11,10 @@ use serde::Deserialize;
 use crate::common::lru_db::RevmLRU;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct TokenSlotConfig {
+pub struct ValidationConfig {
     pub approvals: Vec<TokenApprovalSlot>,
-    pub balances:  Vec<TokenBalanceSlot>
+    pub balances:  Vec<TokenBalanceSlot>,
+    pub pools:     Vec<PoolConfig>
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -33,10 +35,17 @@ impl HashMethod {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct PoolConfig {
+    pub token0:  Address,
+    pub token1:  Address,
+    pub pool_id: PoolId
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct TokenBalanceSlot {
-    token:       Address,
-    hash_method: HashMethod,
-    slot_index:  U256
+    pub token:       Address,
+    pub hash_method: HashMethod,
+    pub slot_index:  U256
 }
 
 impl TokenBalanceSlot {
@@ -63,9 +72,9 @@ impl TokenBalanceSlot {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TokenApprovalSlot {
-    token:       Address,
-    hash_method: HashMethod,
-    slot_index:  U256
+    pub token:       Address,
+    pub hash_method: HashMethod,
+    pub slot_index:  U256
 }
 
 impl TokenApprovalSlot {
@@ -98,9 +107,11 @@ impl TokenApprovalSlot {
     }
 }
 
-pub fn load_token_slot_config(config_path: &Path) -> eyre::Result<TokenSlotConfig> {
+pub fn load_validation_config(config_path: &Path) -> eyre::Result<ValidationConfig> {
     let file = std::fs::read_to_string(config_path)?;
     let approvals: Vec<TokenApprovalSlot> = toml::from_str(&file)?;
     let balances: Vec<TokenBalanceSlot> = toml::from_str(&file)?;
-    Ok(TokenSlotConfig { approvals, balances })
+    let pools: Vec<PoolConfig> = toml::from_str(&file)?;
+
+    Ok(ValidationConfig { approvals, balances, pools })
 }

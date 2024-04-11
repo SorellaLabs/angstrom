@@ -17,7 +17,10 @@ use self::{
     upkeepers::{Upkeepers, UserAccountDetails}
 };
 use super::OrderValidationRequest;
-use crate::common::{executor::ThreadPool, lru_db::RevmLRU};
+use crate::{
+    common::{executor::ThreadPool, lru_db::RevmLRU},
+    order::state::config::ValidationConfig
+};
 
 pub mod config;
 pub mod orders;
@@ -43,8 +46,8 @@ impl<DB> StateValidation<DB>
 where
     DB: StateProviderFactory + Unpin + 'static
 {
-    pub fn new(_db: Arc<RevmLRU<DB>>) -> Self {
-        todo!()
+    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig) -> Self {
+        Self { db, upkeepers: Arc::new(RwLock::new(Upkeepers::new(config))) }
     }
 
     pub fn validate_regular_order(

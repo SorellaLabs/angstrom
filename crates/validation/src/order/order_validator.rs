@@ -12,8 +12,7 @@ use angstrom_types::orders::{
     OrderValidationOutcome, PoolOrder, ValidatedOrder, ValidationResults
 };
 use angstrom_utils::sync_pipeline::{
-    FnPtr, PipelineAction, PipelineBuilder, PipelineFut, PipelineOperation,
-    PipelineWithIntermediary
+    PipelineAction, PipelineBuilder, PipelineFut, PipelineOperation, PipelineWithIntermediary
 };
 use futures::{stream::FuturesUnordered, Future, StreamExt};
 use futures_util::{future, FutureExt, Stream};
@@ -22,7 +21,10 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 use super::{
     sim::SimValidation,
-    state::{orders::UserOrders, upkeepers::UserAccountDetails, StateValidation},
+    state::{
+        config::ValidationConfig, orders::UserOrders, upkeepers::UserAccountDetails,
+        StateValidation
+    },
     OrderValidationRequest
 };
 use crate::{
@@ -40,33 +42,12 @@ pub struct OrderValidator<'a, DB> {
     _p:       PhantomData<&'a u8>
 }
 
-pub struct ProcessingCtx<'a, DB> {
-    user_orders: *mut UserOrders,
-    pub sim:     SimValidation<DB>,
-    pub state:   StateValidation<DB>,
-    _p:          PhantomData<&'a u8>
-}
-
-impl<'a, DB> ProcessingCtx<'a, DB> {
-    pub fn new(
-        user_orders: *mut UserOrders,
-        sim: SimValidation<DB>,
-        state: StateValidation<DB>
-    ) -> Self {
-        Self { sim, user_orders, state, _p: PhantomData::default() }
-    }
-
-    pub fn user_orders(&mut self) -> &'a mut UserOrders {
-        unsafe { &mut (*self.user_orders) }
-    }
-}
-
 impl<'this, DB> OrderValidator<'this, DB>
 where
     DB: StateProviderFactory + Unpin + Clone + 'static
 {
-    pub fn new(db: Arc<RevmLRU<DB>>) -> Self {
-        let state = StateValidation::new(db.clone());
+    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig) -> Self {
+        let state = StateValidation::new(db.clone(), config);
         let sim = SimValidation::new(db);
 
         let new_state = state.clone();
@@ -146,6 +127,27 @@ impl PipelineOperation for ValidationOperation {
             Self::PostPreHook(..) => 3,
             Self::PostHookSim(..) => 4
         }
+    }
+}
+
+pub struct ProcessingCtx<'a, DB> {
+    user_orders: *mut UserOrders,
+    pub sim:     SimValidation<DB>,
+    pub state:   StateValidation<DB>,
+    _p:          PhantomData<&'a u8>
+}
+
+impl<'a, DB> ProcessingCtx<'a, DB> {
+    pub fn new(
+        user_orders: *mut UserOrders,
+        sim: SimValidation<DB>,
+        state: StateValidation<DB>
+    ) -> Self {
+        Self { sim, user_orders, state, _p: PhantomData::default() }
+    }
+
+    pub fn user_orders(&mut self) -> &'a mut UserOrders {
+        unsafe { &mut (*self.user_orders) }
     }
 }
 

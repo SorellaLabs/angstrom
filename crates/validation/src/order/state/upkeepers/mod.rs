@@ -3,9 +3,9 @@ pub mod approvals;
 pub mod balances;
 pub mod nonces;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
-use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
+use alloy_primitives::{keccak256, Address, Bytes, FixedBytes, B256, U256};
 use angstrom_types::orders::PoolOrder;
 use reth_primitives::revm_primitives::{Env, TransactTo, TxEnv};
 use reth_provider::StateProviderFactory;
@@ -15,6 +15,7 @@ use revm::{db::WrapDatabaseRef, interpreter::opcode, Database, Inspector};
 use self::{
     angstrom_pools::AngstromPools, approvals::Approvals, balances::Balances, nonces::Nonces
 };
+use super::config::ValidationConfig;
 use crate::common::lru_db::RevmLRU;
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
@@ -36,8 +37,43 @@ pub struct Upkeepers {
 }
 
 impl Upkeepers {
-    pub fn new<DB>(db: DB) -> Self {
-        todo!()
+    pub fn new(config: ValidationConfig) -> Self {
+        Self {
+            approvals: Approvals::new(
+                config
+                    .approvals
+                    .into_iter()
+                    .map(|app| (app.token, app))
+                    .collect()
+            ),
+            pools:     AngstromPools::new(
+                config
+                    .pools
+                    .into_iter()
+                    .flat_map(|app| {
+                        let direction = app.token0.cmp(&app.token1) == Ordering::Less;
+                        [
+                            (
+                                FixedBytes::concat_const(*app.token0, *app.token1),
+                                (direction, app.pool_id)
+                            ),
+                            (
+                                FixedBytes::concat_const(*app.token1, *app.token0),
+                                (!direction, app.pool_id)
+                            )
+                        ]
+                    })
+                    .collect()
+            ),
+            balances:  Balances::new(
+                config
+                    .balances
+                    .into_iter()
+                    .map(|bal| (bal.token, bal))
+                    .collect()
+            ),
+            nonces:    Nonces
+        }
     }
 
     pub fn verify_order<O: PoolOrder, DB: Send + StateProviderFactory>(
@@ -126,66 +162,64 @@ impl Upkeepers {
             order
         )
     }
-
-    // update
-    pub fn on_new_block(&mut self) {
-        todo!()
-    }
 }
 
-pub fn find_storage_slot<DB>(
-    call_data: Bytes,
-    wanted_address: Address,
-    db: RevmLRU<DB>
-) -> anyhow::Result<U256>
-where
-    DB: StateProviderFactory + Send + Sync + Clone + 'static
-{
-    let prob_address = Address::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0]);
-
-    let mut tx_env = TxEnv::default();
-    tx_env.transact_to = TransactTo::Call(wanted_address);
-    tx_env.data = call_data.clone();
-    tx_env.caller = prob_address;
-
-    let mut evm = EvmBuilder::default()
-        .with_db(db.clone())
-        .with_tx_env(tx_env.clone())
-        .build();
-
-    let res = U256::from_be_slice(&evm.transact().unwrap().result.output().unwrap().0);
-
-    let one = U256::from(1);
-    let prob_value = if res == U256::MAX { res - one } else { res + one };
-
-    for i in 0..100 {
-        let mut user_addr_encoded = prob_address.to_vec();
-        user_addr_encoded.extend(U256::from(i).to_be_bytes::<32>().to_vec());
-
-        let user_slot = U256::from_be_bytes(*keccak256(user_addr_encoded));
-        let mut slot = HashMap::new();
-        slot.insert(user_slot, prob_value);
-        let mut overrides = HashMap::new();
-        overrides.insert(wanted_address, slot);
-        let mut db = db.clone();
-        db.set_state_overrides(overrides);
-
-        let mut tx_env = TxEnv::default();
-        tx_env.transact_to = TransactTo::Call(wanted_address);
-        tx_env.data = call_data.clone();
-        tx_env.caller = prob_address;
-
-        let mut evm = EvmBuilder::default()
-            .with_db(db)
-            .with_tx_env(tx_env.clone())
-            .build();
-
-        let res = U256::from_be_slice(&evm.transact().unwrap().result.output().unwrap().0);
-
-        if res == prob_value {
-            return Ok(U256::from(i))
-        }
-    }
-
-    anyhow::bail!("should never be reached");
-}
+// pub fn find_storage_slot<DB>(
+//     call_data: Bytes,
+//     wanted_address: Address,
+//     db: RevmLRU<DB>
+// ) -> anyhow::Result<U256>
+// where
+//     DB: StateProviderFactory + Send + Sync + Clone + 'static
+// {
+//     let prob_address = Address::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 0, 0, 0,
+// 0, 0, 64, 0, 0, 0, 0]);
+//
+//     let mut tx_env = TxEnv::default();
+//     tx_env.transact_to = TransactTo::Call(wanted_address);
+//     tx_env.data = call_data.clone();
+//     tx_env.caller = prob_address;
+//
+//     let mut evm = EvmBuilder::default()
+//         .with_db(db.clone())
+//         .with_tx_env(tx_env.clone())
+//         .build();
+//
+//     let res =
+// U256::from_be_slice(&evm.transact().unwrap().result.output().unwrap().0);
+//
+//     let one = U256::from(1);
+//     let prob_value = if res == U256::MAX { res - one } else { res + one };
+//
+//     for i in 0..100 {
+//         let mut user_addr_encoded = prob_address.to_vec();
+//         user_addr_encoded.extend(U256::from(i).to_be_bytes::<32>().to_vec());
+//
+//         let user_slot = U256::from_be_bytes(*keccak256(user_addr_encoded));
+//         let mut slot = HashMap::new();
+//         slot.insert(user_slot, prob_value);
+//         let mut overrides = HashMap::new();
+//         overrides.insert(wanted_address, slot);
+//         let mut db = db.clone();
+//         db.set_state_overrides(overrides);
+//
+//         let mut tx_env = TxEnv::default();
+//         tx_env.transact_to = TransactTo::Call(wanted_address);
+//         tx_env.data = call_data.clone();
+//         tx_env.caller = prob_address;
+//
+//         let mut evm = EvmBuilder::default()
+//             .with_db(db)
+//             .with_tx_env(tx_env.clone())
+//             .build();
+//
+//         let res =
+// U256::from_be_slice(&evm.transact().unwrap().result.output().unwrap().0);
+//
+//         if res == prob_value {
+//             return Ok(U256::from(i))
+//         }
+//     }
+//
+//     anyhow::bail!("should never be reached");
+// }

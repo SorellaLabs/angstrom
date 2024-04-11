@@ -10,7 +10,9 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::{
     bundle::{bundle_validator::BundleValidator, BundleSimRequest},
     common::lru_db::RevmLRU,
-    order::{order_validator::OrderValidator, OrderValidationRequest}
+    order::{
+        order_validator::OrderValidator, state::config::ValidationConfig, OrderValidationRequest
+    }
 };
 
 pub enum ValidationRequest {
@@ -37,15 +39,21 @@ impl<DB> Validator<'_, DB>
 where
     DB: StateProviderFactory + Clone + Unpin + 'static
 {
-    fn new_block(&mut self, state: BundleState) {
-        // TODO: update the db + deal with reseting the validation;
+    pub fn new(
+        rx: UnboundedReceiver<ValidationRequest>,
+        new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
+        db: Arc<RevmLRU<DB>>,
+        config: ValidationConfig
+    ) -> Self {
+        let order_validator = OrderValidator::new(db.clone(), config);
+        Self { new_block_stream, db, bundle_validator: BundleValidator {}, order_validator, rx }
     }
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
             ValidationRequest::Order(order) => self.order_validator.validate_order(order),
             ValidationRequest::Bundle(bundle) => {
-                todo!()
+                todo!("bundle validation is currently not complete")
             }
         }
     }

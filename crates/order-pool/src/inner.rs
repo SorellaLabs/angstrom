@@ -351,6 +351,7 @@ where
         &mut self,
         res: ValidationResults<L, CL, S, CS>
     ) -> Option<PoolInnerEvent<L, CL, S, CS>> {
+        res.get_block_number();
         match res {
             ValidationResults::Limit(order) => {
                 PoolInnerEvent::from_limit(self.handle_validation_results(order, |this, order| {
@@ -405,7 +406,7 @@ where
         insert: impl FnOnce(&mut Self, ValidOrder<O>)
     ) -> OrderOrPeers<O> {
         match order {
-            OrderValidationOutcome::Valid { order, propagate } => {
+            OrderValidationOutcome::Valid { order, propagate, block_number } => {
                 let res = propagate.then_some(order.order.clone());
                 self.update_order_tracking(order.clone());
                 insert(self, order);

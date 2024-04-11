@@ -78,6 +78,40 @@ where
     ComposableSearcher(OrderValidationOutcome<CS>)
 }
 
+impl<L, CL, S, CS> ValidationResults<L, CL, S, CS>
+where
+    L: PoolOrder,
+    CL: PoolOrder,
+    S: PoolOrder,
+    CS: PoolOrder
+{
+    pub fn get_block_number(&self) -> Option<u64> {
+        match self {
+            Self::Limit(l) => {
+                if let OrderValidationOutcome::Valid { block_number, .. } = l {
+                    return Some(*block_number)
+                }
+            }
+            Self::Searcher(l) => {
+                if let OrderValidationOutcome::Valid { block_number, .. } = l {
+                    return Some(*block_number)
+                }
+            }
+            Self::ComposableLimit(l) => {
+                if let OrderValidationOutcome::Valid { block_number, .. } = l {
+                    return Some(*block_number)
+                }
+            }
+            Self::ComposableSearcher(l) => {
+                if let OrderValidationOutcome::Valid { block_number, .. } = l {
+                    return Some(*block_number)
+                }
+            }
+        }
+        None
+    }
+}
+
 /// A valid order in the pool.
 #[derive(Debug)]
 pub enum OrderValidationOutcome<O: PoolOrder> {

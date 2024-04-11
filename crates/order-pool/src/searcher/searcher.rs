@@ -23,7 +23,6 @@ where
         VanillaSearcherPool { sub_pools }
     }
 
-    #[allow(dead_code)]
     pub fn add_order(
         &mut self,
         order: ValidOrder<O>
@@ -47,7 +46,6 @@ where
             .ok_or(SearcherPoolError::OrderNotFound(order_id.hash))
     }
 
-    #[allow(dead_code)]
     pub fn get_winning_orders(&self) -> Vec<ValidOrder<O>> {
         self.sub_pools
             .values()

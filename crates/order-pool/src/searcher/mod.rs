@@ -39,7 +39,6 @@ where
         }
     }
 
-    #[allow(dead_code)]
     pub fn add_searcher_order(&mut self, order: ValidOrder<S>) -> Result<(), SearcherPoolError<S>> {
         let size = order.size();
         if !self._size.has_space(size) {
@@ -50,7 +49,6 @@ where
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn add_composable_searcher_order(
         &mut self,
         order: ValidOrder<CS>

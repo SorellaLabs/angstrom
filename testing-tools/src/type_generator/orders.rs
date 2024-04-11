@@ -60,7 +60,7 @@ fn generate_order(rng: &mut ThreadRng) -> Order {
         + 30;
 
     Order {
-        nonce:        rng.gen(),
+        nonce:        U256::from(rng.gen_range(0..u64::MAX)),
         orderType:    angstrom_types::primitive::OrderType::Limit,
         currencyIn:   rng.gen(),
         preHook:      Bytes::new(),

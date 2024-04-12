@@ -1,25 +1,25 @@
-[[Approvals]]
+[[approvals]]
 token = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 hash_method = "sol"
 slot_index = 4
 
-[[Approvals]]
+[[approvals]]
 token = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 hash_method = "sol"
 slot_index = 4
 
-[[Balances]]
+[[balances]]
 token = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 hash_method = "sol"
 slot_index = 3
 
-[[Balances]]
+[[balances]]
 token = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 hash_method = "sol"
 slot_index = 3
 
 # assumes token 0 is always bid
-[[Pools]]
+[[pools]]
 token0 = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 token1 = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 pool_id = 0

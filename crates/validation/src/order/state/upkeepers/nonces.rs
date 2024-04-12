@@ -28,6 +28,7 @@ impl Nonces {
         let slot = keccak256(arry);
 
         let word = db.storage_ref(ANGSTROM_CONTRACT, slot.into()).unwrap();
+        tracing::debug!(?world);
         let mut flag = U256::from(1) << nonce[7];
 
         (word ^ flag) & flag == flag

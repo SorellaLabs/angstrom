@@ -9,7 +9,7 @@ pub struct AngstromPools(HashMap<FixedBytes<40>, PoolIdWithDirection>);
 
 impl AngstromPools {
     pub fn new(setup: HashMap<FixedBytes<40>, PoolIdWithDirection>) -> Self {
-        AngstromPools(HashMap::new())
+        AngstromPools(setup)
     }
 
     pub fn order_info(

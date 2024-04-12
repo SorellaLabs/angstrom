@@ -147,12 +147,11 @@ impl PoolOrder for EcRecoveredLimitOrder {
 
 impl PooledLimitOrder for EcRecoveredLimitOrder {
     fn gas(&self) -> u128 {
-        todo!()
+        69420
     }
 
     fn pool_and_direction(&self) -> (PoolId, bool) {
-        //(self.signed_order.order.pool, self.signed_order.order.direction)
-        todo!()
+        (69, true)
     }
 }
 

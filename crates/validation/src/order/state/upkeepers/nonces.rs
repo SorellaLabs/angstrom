@@ -31,6 +31,8 @@ impl Nonces {
         tracing::debug!(?word);
         let mut flag = U256::from(1) << nonce[7];
 
-        (word ^ flag) & flag == flag
+        let out = (word ^ flag) & flag == flag;
+        tracing::debug!(?word, %out);
+        out
     }
 }

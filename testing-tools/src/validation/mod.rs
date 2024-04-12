@@ -41,6 +41,7 @@ impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> 
         let (tx, rx) = unbounded_channel();
         let config_path = Path::new("./state_config.toml");
         let config = load_validation_config(config_path).unwrap();
+        tracing::debug!(?config);
         let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));
         let revm_lru = Arc::new(RevmLRU::new(10000000, Arc::new(db), current_block.clone()));
 

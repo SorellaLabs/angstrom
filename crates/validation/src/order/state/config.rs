@@ -109,9 +109,5 @@ impl TokenApprovalSlot {
 
 pub fn load_validation_config(config_path: &Path) -> eyre::Result<ValidationConfig> {
     let file = std::fs::read_to_string(config_path)?;
-    let approvals: Vec<TokenApprovalSlot> = toml::from_str(&file)?;
-    let balances: Vec<TokenBalanceSlot> = toml::from_str(&file)?;
-    let pools: Vec<PoolConfig> = toml::from_str(&file)?;
-
-    Ok(ValidationConfig { approvals, balances, pools })
+    Ok(toml::from_str(&file)?)
 }

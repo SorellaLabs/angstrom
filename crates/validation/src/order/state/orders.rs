@@ -58,7 +58,7 @@ impl UserOrders {
     ) -> OrderValidationOutcome<O> {
         self.basic_order_validation(order, deltas, true, block_number, |order| OrderPriorityData {
             price:  order.limit_price(),
-            volume: order.limit_price() * order.amount_out_min(),
+            volume: order.limit_price().saturating_mul(order.amount_out_min()),
             gas:    order.gas()
         })
     }

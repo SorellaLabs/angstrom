@@ -80,7 +80,6 @@ async fn test_validation_pass() {
 
     match out {
         Either::Left((i, _)) => {
-            tracing::info!(?i);
             assert!(i.is_valid(), "order wasn't valid");
         }
         Either::Right(..) => {

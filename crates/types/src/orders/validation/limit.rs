@@ -93,15 +93,15 @@ impl PoolOrder for EcRecoveredLimitOrder {
     }
 
     fn is_bid(&self) -> bool {
-        todo!()
+        self.order.currencyIn < self.order.currencyOut
     }
 
     fn token_in(&self) -> Address {
-        todo!()
+        self.order.currencyIn
     }
 
     fn token_out(&self) -> Address {
-        todo!()
+        self.order.currencyOut
     }
 
     fn hash(&self) -> TxHash {
@@ -141,7 +141,7 @@ impl PoolOrder for EcRecoveredLimitOrder {
     }
 
     fn chain_id(&self) -> Option<u64> {
-        unreachable!()
+        None
     }
 }
 

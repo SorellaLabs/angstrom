@@ -15,8 +15,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use validation::{
     common::lru_db::RevmLRU,
     order::state::config::{load_validation_config, ValidationConfig},
-    validator::{ValidationClient, Validator},
-    TOKEN_CONFIG_FILE
+    validator::{ValidationClient, Validator}
 };
 
 use crate::mocks::eth_events::MockEthEventHandle;

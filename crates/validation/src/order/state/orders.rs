@@ -104,6 +104,7 @@ impl UserOrders {
         block_number: u64,
         build_priority: F
     ) -> OrderValidationOutcome<O> {
+        tracing::debug!(?deltas);
         // always invalid
         if !deltas.is_valid_nonce
             || !deltas.is_valid_pool

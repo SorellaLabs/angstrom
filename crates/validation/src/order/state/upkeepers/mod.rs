@@ -20,6 +20,7 @@ use crate::common::lru_db::RevmLRU;
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 
+#[derive(Debug)]
 pub struct UserAccountDetails {
     pub token_bals:      (Address, U256),
     pub token_approvals: (Address, U256),

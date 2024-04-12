@@ -45,7 +45,7 @@ pub struct PoolConfig {
 pub struct TokenBalanceSlot {
     pub token:       Address,
     pub hash_method: HashMethod,
-    pub slot_index:  U256
+    pub slot_index:  u8
 }
 
 impl TokenBalanceSlot {
@@ -56,7 +56,7 @@ impl TokenBalanceSlot {
 
         let mut buf = [0u8; 64];
         buf[12..32].copy_from_slice(&**of);
-        buf[32..64].copy_from_slice(&self.slot_index.to_be_bytes::<32>());
+        buf[63] = self.slot_index;
 
         Ok(U256::from_be_bytes(*keccak256(buf)))
     }
@@ -74,7 +74,7 @@ impl TokenBalanceSlot {
 pub struct TokenApprovalSlot {
     pub token:       Address,
     pub hash_method: HashMethod,
-    pub slot_index:  U256
+    pub slot_index:  u8
 }
 
 impl TokenApprovalSlot {
@@ -84,7 +84,7 @@ impl TokenApprovalSlot {
         }
         let mut inner_buf = [0u8; 64];
         inner_buf[12..32].copy_from_slice(&**contract);
-        inner_buf[32..64].copy_from_slice(&self.slot_index.to_be_bytes::<32>());
+        inner_buf[63] = self.slot_index;
         let inner_hash = keccak256(inner_buf);
         let mut next = [0u8; 64];
         next[12..32].copy_from_slice(&**user);

@@ -1,3 +1,5 @@
+#![cfg(feature = "reth-db-dep-tests")]
+
 use std::{collections::HashMap, path::Path, pin::pin, time::Duration};
 
 use alloy_primitives::{hex, Address, U256};

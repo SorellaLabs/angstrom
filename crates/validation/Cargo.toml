@@ -96,3 +96,7 @@ futures.workspace = true
 # misc
 serial_test.workspace = true
 tempfile.workspace = true
+
+# features
+[features]
+reth-db-dep-tests = []

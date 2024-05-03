@@ -2,6 +2,7 @@ name: 'Build'
 on: push
 env:
   CARGO_TERM_COLOR: always
+  RUST_LOG: debug
 
 jobs:
   build-release:

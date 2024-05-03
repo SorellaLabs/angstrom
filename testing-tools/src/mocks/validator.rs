@@ -9,7 +9,7 @@ use angstrom_types::{
     }
 };
 use parking_lot::Mutex;
-use validation::order::OrderValidator;
+use validation::order::OrderValidatorHandle;
 
 // all keys are the signer of the order
 #[derive(Debug, Clone, Default)]
@@ -70,7 +70,7 @@ impl MockValidator {
 
 //TODO: validate can be shortened using a macro
 
-impl OrderValidator for MockValidator {
+impl OrderValidatorHandle for MockValidator {
     type ComposableLimitOrder = EcRecoveredComposableLimitOrder;
     type ComposableSearcherOrder = EcRecoveredComposableSearcherOrder;
     type LimitOrder = EcRecoveredLimitOrder;

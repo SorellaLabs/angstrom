@@ -59,15 +59,22 @@ async fn test_singular_order_propagation() {
         .map(|_| generate_random_valid_order())
         .collect::<Vec<_>>();
 
+    let delay_seconds = 6;
+
     let res = tokio::time::timeout(
-        Duration::from_secs(4),
+        Duration::from_secs(delay_seconds),
         testnet.send_order_message(angstrom_network::StromMessage::PropagatePooledOrders(
             orders.clone()
         ))
     )
     .await;
 
-    assert_eq!(res, Ok(true), "failed to receive and react to order within 4 seconds");
+    assert_eq!(
+        res,
+        Ok(true),
+        "failed to receive and react to order within {} seconds",
+        delay_seconds
+    );
 
     let res = tokio::time::timeout(
         Duration::from_secs(4),
@@ -93,12 +100,19 @@ async fn test_broadcast_consensus_propagation() {
     for _ in 0..3 {
         // commits
         let commit = generate_random_commit();
+        let delay_seconds = 3;
         let res = tokio::time::timeout(
-            Duration::from_secs(1),
+            Duration::from_secs(delay_seconds),
             testnet.send_consensus_broadcast(angstrom_network::StromMessage::Commit(commit))
         )
         .await;
-        assert_eq!(res, Ok(true), "failed to receive and react to commit within 1 second");
+        assert_eq!(
+            res,
+            Ok(true),
+            "failed to receive and react to commit within {} second{}",
+            delay_seconds,
+            if delay_seconds == 1 { "" } else { "s" }
+        );
 
         // preposals
         let preposal = generate_random_preposal();

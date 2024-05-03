@@ -29,7 +29,7 @@ use tokio::sync::{
     oneshot
 };
 use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
-use validation::order::OrderValidator;
+use validation::order::OrderValidatorHandle;
 
 use crate::{
     LruCache, NetworkOrderEvent, ReputationChangeKind, StromMessage, StromNetworkEvent,
@@ -274,7 +274,7 @@ where
     CL: PooledComposableOrder + PooledLimitOrder,
     S: PooledSearcherOrder,
     CS: PooledComposableOrder + PooledSearcherOrder,
-    V: OrderValidator
+    V: OrderValidatorHandle
 {
     validator:            V,
     network_handle:       StromNetworkHandle,
@@ -296,7 +296,7 @@ where
             ValidationData = SearcherPriorityData,
             Order = SignedComposableSearcherOrder
         >,
-    V: OrderValidator<
+    V: OrderValidatorHandle<
             LimitOrder = L,
             SearcherOrder = S,
             ComposableLimitOrder = CL,
@@ -382,7 +382,7 @@ where
     CL: PooledComposableOrder + PooledLimitOrder,
     S: PooledSearcherOrder,
     CS: PooledComposableOrder + PooledSearcherOrder,
-    V: OrderValidator
+    V: OrderValidatorHandle
 {
     /// The order pool. Streams up new transactions to be broadcasted
     pool:                 OrderPoolInner<L, CL, S, CS, V>,
@@ -416,7 +416,7 @@ where
             ValidationData = SearcherPriorityData,
             Order = SignedComposableSearcherOrder
         >,
-    V: OrderValidator<
+    V: OrderValidatorHandle<
         LimitOrder = L,
         SearcherOrder = S,
         ComposableLimitOrder = CL,
@@ -643,7 +643,7 @@ where
             ValidationData = SearcherPriorityData,
             Order = SignedComposableSearcherOrder
         >,
-    V: OrderValidator<
+    V: OrderValidatorHandle<
             LimitOrder = L,
             SearcherOrder = S,
             ComposableLimitOrder = CL,

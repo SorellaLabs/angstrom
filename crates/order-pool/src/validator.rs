@@ -5,7 +5,7 @@ use std::{
 
 use angstrom_types::orders::{OrderOrigin, PoolOrder, ValidationResults};
 use futures_util::{stream::FuturesUnordered, Future, FutureExt, Stream, StreamExt};
-use validation::order::OrderValidator;
+use validation::order::OrderValidatorHandle;
 
 type ValidationFuture<L, CL, S, CS> =
     Pin<Box<dyn Future<Output = ValidationResults<L, CL, S, CS>> + Send + Sync>>;
@@ -16,7 +16,7 @@ where
     CL: PoolOrder,
     S: PoolOrder,
     CS: PoolOrder,
-    V: OrderValidator
+    V: OrderValidatorHandle
 {
     validator: V,
     pending:   FuturesUnordered<ValidationFuture<L, CL, S, CS>>
@@ -28,7 +28,7 @@ where
     CL: PoolOrder,
     S: PoolOrder,
     CS: PoolOrder,
-    V: OrderValidator<
+    V: OrderValidatorHandle<
         LimitOrder = L,
         SearcherOrder = S,
         ComposableLimitOrder = CL,
@@ -82,7 +82,7 @@ where
     CL: PoolOrder,
     S: PoolOrder,
     CS: PoolOrder,
-    V: OrderValidator
+    V: OrderValidatorHandle
 {
     type Item = ValidationResults<L, CL, S, CS>;
 

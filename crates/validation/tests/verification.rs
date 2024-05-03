@@ -8,7 +8,7 @@ use testing_tools::{
     load_reth_db, mocks::eth_events::MockEthEventHandle,
     type_generator::orders::generate_rand_valid_limit_order, validation::TestOrderValidator
 };
-use validation::order::{state::upkeepers::ANGSTROM_CONTRACT, OrderValidator};
+use validation::order::{state::upkeepers::ANGSTROM_CONTRACT, OrderValidatorHandle};
 
 const WETH_ADDRESS: Address = Address::new(hex!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"));
 const USDT_ADDRESS: Address = Address::new(hex!("dAC17F958D2ee523a2206206994597C13D831ec7"));

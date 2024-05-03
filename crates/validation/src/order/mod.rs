@@ -47,7 +47,7 @@ pub enum OrderValidationRequest {
 }
 
 /// Provides support for validating transaction at any given state of the chain
-pub trait OrderValidator: Send + Sync + Clone + Debug + Unpin + 'static {
+pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
     /// The order type of the limit order pool
     type LimitOrder: PoolOrder;
 
@@ -140,7 +140,7 @@ pub trait OrderValidator: Send + Sync + Clone + Debug + Unpin + 'static {
     }
 }
 
-impl OrderValidator for ValidationClient {
+impl OrderValidatorHandle for ValidationClient {
     /// The transaction type of the composable limit order pool
     type ComposableLimitOrder = EcRecoveredComposableLimitOrder;
     /// The transaction type of the composable searcher pool

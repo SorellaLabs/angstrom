@@ -22,7 +22,7 @@ use futures_util::{Stream, StreamExt};
 use reth_primitives::{Address, PeerId, U256};
 use tokio::sync::mpsc;
 use tracing::{error, trace, warn};
-use validation::order::OrderValidator;
+use validation::order::OrderValidatorHandle;
 
 use crate::{
     common::{Order, ValidOrder},
@@ -45,7 +45,7 @@ where
     CL: PooledComposableOrder + PooledLimitOrder,
     S: PooledSearcherOrder,
     CS: PooledComposableOrder + PooledSearcherOrder,
-    V: OrderValidator
+    V: OrderValidatorHandle
 {
     limit_pool:             LimitOrderPool<L, CL>,
     searcher_pool:          SearcherPool<S, CS>,
@@ -74,7 +74,7 @@ where
 
     S: PooledSearcherOrder<ValidationData = SearcherPriorityData>,
     CS: PooledComposableOrder + PooledSearcherOrder<ValidationData = SearcherPriorityData>,
-    V: OrderValidator<
+    V: OrderValidatorHandle<
         LimitOrder = L,
         SearcherOrder = S,
         ComposableLimitOrder = CL,
@@ -500,7 +500,7 @@ where
 
     S: PooledSearcherOrder<ValidationData = SearcherPriorityData>,
     CS: PooledComposableOrder + PooledSearcherOrder<ValidationData = SearcherPriorityData>,
-    V: OrderValidator<
+    V: OrderValidatorHandle<
         LimitOrder = L,
         SearcherOrder = S,
         ComposableLimitOrder = CL,

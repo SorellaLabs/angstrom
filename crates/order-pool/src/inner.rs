@@ -31,7 +31,7 @@ use crate::{
     limit::LimitOrderPool,
     searcher::SearcherPool,
     subscriptions::OrderPoolSubscriptions,
-    validator::Validator,
+    validator::PoolOrderValidator,
     OrderSet
 };
 
@@ -62,7 +62,7 @@ where
     /// Orders that are being validated
     pending_orders:         HashMap<B256, Vec<PeerId>>,
     /// Order Validator
-    validator:              Validator<L, CL, S, CS, V>,
+    validator:              PoolOrderValidator<L, CL, S, CS, V>,
     /// handles sending out subscriptions
     subscriptions:          OrderPoolSubscriptions<L, CL, S, CS>
 }
@@ -92,7 +92,7 @@ where
             hash_to_order_id: HashMap::new(),
             pending_orders: HashMap::new(),
             last_touched_addresses: HashSet::new(),
-            validator: Validator::new(validator),
+            validator: PoolOrderValidator::new(validator),
             subscriptions: OrderPoolSubscriptions::new()
         }
     }

@@ -10,7 +10,7 @@ use validation::order::OrderValidatorHandle;
 type ValidationFuture<L, CL, S, CS> =
     Pin<Box<dyn Future<Output = ValidationResults<L, CL, S, CS>> + Send + Sync>>;
 
-pub struct Validator<L, CL, S, CS, V>
+pub struct PoolOrderValidator<L, CL, S, CS, V>
 where
     L: PoolOrder,
     CL: PoolOrder,
@@ -22,7 +22,7 @@ where
     pending:   FuturesUnordered<ValidationFuture<L, CL, S, CS>>
 }
 
-impl<L, CL, S, CS, V> Validator<L, CL, S, CS, V>
+impl<L, CL, S, CS, V> PoolOrderValidator<L, CL, S, CS, V>
 where
     L: PoolOrder,
     CL: PoolOrder,
@@ -76,7 +76,7 @@ where
     }
 }
 
-impl<L, CL, S, CS, V> Stream for Validator<L, CL, S, CS, V>
+impl<L, CL, S, CS, V> Stream for PoolOrderValidator<L, CL, S, CS, V>
 where
     L: PoolOrder,
     CL: PoolOrder,

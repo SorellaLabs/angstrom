@@ -53,6 +53,7 @@ angstrom-eth = { path = "./crates/eth/" }
 angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 testing-tools = { path = "./testing-tools/" }
+angstrom = { path = "./bin/angstrom/" }
 
 
 ## async

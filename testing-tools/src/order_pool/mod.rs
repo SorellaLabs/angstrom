@@ -1,5 +1,6 @@
 use std::{pin::Pin, task::Poll, time::Duration};
 
+use angstrom::cli::DefaultPoolHandle;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{
     pool_manager::{PoolHandle, PoolManager},
@@ -25,12 +26,6 @@ type DefaultMockPoolManager = PoolManager<
     MockValidator
 >;
 
-type DefaultPoolHandle = PoolHandle<
-    EcRecoveredLimitOrder,
-    EcRecoveredComposableLimitOrder,
-    EcRecoveredSearcherOrder,
-    EcRecoveredComposableSearcherOrder
->;
 /// The Testnet orderpool allows us to test the orderpool functionality in a
 /// standalone and an iterop mode. what this means is we can use this for
 /// specific unit tests aswell as longer full range tests

@@ -107,7 +107,7 @@ pub fn init_network_builder(config: &AngstromConfig) -> eyre::Result<StromNetwor
     Ok(StromNetworkBuilder::new(verification))
 }
 
-type DefaultPoolHandle = PoolHandle<
+pub type DefaultPoolHandle = PoolHandle<
     EcRecoveredLimitOrder,
     EcRecoveredComposableLimitOrder,
     EcRecoveredSearcherOrder,

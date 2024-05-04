@@ -14,6 +14,7 @@ angstrom-types.workspace = true
 angstrom-utils.workspace = true
 angstrom-network.workspace = true
 angstrom-eth.workspace = true
+angstrom.workspace = true
 order-pool.workspace = true
 validation.workspace = true
 

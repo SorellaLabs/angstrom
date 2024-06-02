@@ -5,7 +5,6 @@ use angstrom_types::orders::{OrderValidationOutcome, PoolOrder};
 use futures::{Stream, StreamExt};
 use futures_util::stream::FuturesUnordered;
 use parking_lot::RwLock;
-use reth_provider::StateProviderFactory;
 use revm::db::{AccountStatus, BundleState};
 use tokio::{
     sync::oneshot::Sender,
@@ -18,7 +17,10 @@ use self::{
 };
 use super::OrderValidationRequest;
 use crate::{
-    common::{executor::ThreadPool, lru_db::RevmLRU},
+    common::{
+        executor::ThreadPool,
+        lru_db::{BlockStateProviderFactory, RevmLRU}
+    },
     order::state::config::ValidationConfig
 };
 
@@ -44,7 +46,7 @@ pub struct StateValidation<DB> {
 
 impl<DB> StateValidation<DB>
 where
-    DB: StateProviderFactory + Unpin + 'static
+    DB: BlockStateProviderFactory + Unpin + 'static
 {
     pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig) -> Self {
         Self { db, upkeepers: Arc::new(RwLock::new(Upkeepers::new(config))) }

@@ -2,11 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy_primitives::{Address, U256};
 use futures_util::stream::FuturesUnordered;
-use reth_provider::StateProviderFactory;
 use tokio::task::JoinHandle;
 
 use super::OrderValidationRequest;
-use crate::common::lru_db::RevmLRU;
+use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 /// sims the pre and post hook assuming
 #[derive(Clone)]
@@ -16,7 +15,7 @@ pub struct SimValidation<DB> {
 
 impl<DB> SimValidation<DB>
 where
-    DB: StateProviderFactory + Unpin + Clone + 'static
+    DB: BlockStateProviderFactory + Unpin + Clone + 'static
 {
     pub fn new(db: Arc<RevmLRU<DB>>) -> Self {
         Self { db }

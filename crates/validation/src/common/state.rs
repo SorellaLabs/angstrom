@@ -18,7 +18,7 @@ use crate::{
         errors::{SimError, SimResult},
         BundleOrTransactionResult
     },
-    common::lru_db::RevmLRU,
+    common::lru_db::{RevmLRU, BlockStateProviderFactory},
     order::state::config::ValidationConfig
 };
 
@@ -36,7 +36,7 @@ pub struct RevmState<DB> {
 
 impl<DB> RevmState<DB>
 where
-    DB: StateProviderFactory + Send + Sync + Clone + 'static
+    DB: BlockStateProviderFactory + Send + Sync + Clone + 'static
 {
     pub fn new(db: RevmLRU<DB>) -> Self {
         Self { db }

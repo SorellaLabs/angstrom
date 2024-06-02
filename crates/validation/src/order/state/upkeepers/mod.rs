@@ -8,7 +8,6 @@ use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 use alloy_primitives::{keccak256, Address, Bytes, FixedBytes, B256, U256};
 use angstrom_types::orders::PoolOrder;
 use reth_primitives::revm_primitives::{Env, TransactTo, TxEnv};
-use reth_provider::StateProviderFactory;
 use reth_revm::EvmBuilder;
 use revm::{db::WrapDatabaseRef, interpreter::opcode, Database, Inspector};
 
@@ -16,7 +15,7 @@ use self::{
     angstrom_pools::AngstromPools, approvals::Approvals, balances::Balances, nonces::Nonces
 };
 use super::config::ValidationConfig;
-use crate::common::lru_db::RevmLRU;
+use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 
@@ -77,7 +76,7 @@ impl Upkeepers {
         }
     }
 
-    pub fn verify_order<O: PoolOrder, DB: Send + StateProviderFactory>(
+    pub fn verify_order<O: PoolOrder, DB: Send + BlockStateProviderFactory>(
         &self,
         order: O,
         db: Arc<RevmLRU<DB>>
@@ -115,7 +114,7 @@ impl Upkeepers {
         )
     }
 
-    pub fn verify_composable_order<O: PoolOrder, DB: Send + StateProviderFactory>(
+    pub fn verify_composable_order<O: PoolOrder, DB: Send + BlockStateProviderFactory>(
         &self,
         order: O,
         db: Arc<RevmLRU<DB>>,
@@ -171,7 +170,7 @@ impl Upkeepers {
 //     db: RevmLRU<DB>
 // ) -> anyhow::Result<U256>
 // where
-//     DB: StateProviderFactory + Send + Sync + Clone + 'static
+//     DB: BlockStateProviderFactory + Send + Sync + Clone + 'static
 // {
 //     let prob_address = Address::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 0, 0, 0,
 // 0, 0, 64, 0, 0, 0, 0]);

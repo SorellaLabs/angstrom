@@ -3,10 +3,13 @@ use std::{collections::HashMap, sync::Arc};
 use alloy_primitives::{keccak256, Address, FixedBytes, B256, U256};
 use alloy_sol_macro::sol;
 use parking_lot::RwLock;
-use reth_provider::{StateProvider, StateProviderFactory};
+use reth_provider::StateProvider;
 use revm::DatabaseRef;
 
-use crate::{common::lru_db::RevmLRU, order::state::config::TokenBalanceSlot};
+use crate::{
+    common::lru_db::{BlockStateProviderFactory, RevmLRU},
+    order::state::config::TokenBalanceSlot
+};
 
 #[derive(Clone)]
 pub struct Balances(HashMap<Address, TokenBalanceSlot>);
@@ -16,7 +19,7 @@ impl Balances {
         Self(slots)
     }
 
-    pub fn fetch_balance_for_token_overrides<DB: StateProviderFactory>(
+    pub fn fetch_balance_for_token_overrides<DB: BlockStateProviderFactory>(
         &self,
         user: Address,
         token: Address,
@@ -34,7 +37,7 @@ impl Balances {
         })
     }
 
-    pub fn fetch_balance_for_token<DB: StateProviderFactory>(
+    pub fn fetch_balance_for_token<DB: BlockStateProviderFactory>(
         &self,
         user: Address,
         token: Address,

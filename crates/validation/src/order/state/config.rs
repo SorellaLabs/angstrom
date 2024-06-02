@@ -4,11 +4,10 @@ use alloy_primitives::Address;
 use alloy_sol_types::SolValue;
 use angstrom_types::primitive::PoolId;
 use reth_primitives::{keccak256, U256};
-use reth_provider::StateProviderFactory;
 use revm::DatabaseRef;
 use serde::Deserialize;
 
-use crate::common::lru_db::RevmLRU;
+use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ValidationConfig {
@@ -61,11 +60,7 @@ impl TokenBalanceSlot {
         Ok(U256::from_be_bytes(*keccak256(buf)))
     }
 
-    pub fn load_balance<DB: StateProviderFactory>(
-        &self,
-        of: Address,
-        db: Arc<RevmLRU<DB>>
-    ) -> eyre::Result<U256> {
+    pub fn load_balance<DB: BlockStateProviderFactory>(&self, of: Address, db: Arc<RevmLRU<DB>>) -> eyre::Result<U256> {
         Ok(db.storage_ref(self.token, self.generate_slot(of)?)?)
     }
 }
@@ -93,7 +88,7 @@ impl TokenApprovalSlot {
         Ok(U256::from_be_bytes(*keccak256(next)))
     }
 
-    pub fn load_approval_amount<DB: StateProviderFactory>(
+    pub fn load_approval_amount<DB: BlockStateProviderFactory>(
         &self,
         user: Address,
         contract: Address,

@@ -4,7 +4,6 @@ use alloy_primitives::Bytes;
 use angstrom_utils::PollExt;
 use futures_util::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
 use reth_primitives::revm_primitives::{Address, Bytecode};
-use reth_provider::StateProviderFactory;
 use tokio::{runtime::Handle, sync::mpsc::UnboundedReceiver, task::JoinHandle};
 
 use crate::{
@@ -14,7 +13,7 @@ use crate::{
     },
     common::{
         executor::{TaskKind, ThreadPool},
-        lru_db::RevmLRU,
+        lru_db::{BlockStateProviderFactory, RevmLRU},
         state::{AddressSlots, RevmState}
     },
     order::state::config::ValidationConfig
@@ -37,7 +36,7 @@ pub struct Revm<DB> {
 
 impl<DB> Revm<DB>
 where
-    DB: StateProviderFactory + Send + Sync + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Send + Sync + Clone + Unpin + 'static
 {
     pub fn new(
         transaction_rx: UnboundedReceiver<BundleSimRequest>,
@@ -148,7 +147,7 @@ where
 
 impl<DB> Future for Revm<DB>
 where
-    DB: StateProviderFactory + Send + Sync + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Send + Sync + Clone + Unpin + 'static
 {
     type Output = ();
 

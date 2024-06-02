@@ -7,13 +7,12 @@ use std::{
 use angstrom_eth::manager::EthEvent;
 use futures::{Stream, StreamExt};
 use futures_util::{Future, FutureExt};
-use reth_provider::StateProviderFactory;
 use reth_revm::db::BundleState;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     bundle::{bundle_validator::BundleValidator, BundleSimRequest},
-    common::lru_db::RevmLRU,
+    common::lru_db::{BlockStateProviderFactory, RevmLRU},
     order::{
         order_validator::OrderValidator, state::config::ValidationConfig, OrderValidationRequest
     }
@@ -39,7 +38,7 @@ pub struct Validator<DB> {
 
 impl<DB> Validator<DB>
 where
-    DB: StateProviderFactory + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Clone + Unpin + 'static
 {
     pub fn new(
         rx: UnboundedReceiver<ValidationRequest>,
@@ -64,7 +63,7 @@ where
 
 impl<DB> Future for Validator<DB>
 where
-    DB: StateProviderFactory + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Clone + Unpin + 'static
 {
     type Output = ();
 

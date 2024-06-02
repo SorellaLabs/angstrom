@@ -5,12 +5,17 @@ use std::{
 
 use alloy_primitives::Address;
 use parking_lot::RwLock;
-use reth_interfaces::{provider::ProviderError, RethError};
+use reth_interfaces::{
+    provider::{ProviderError, ProviderResult},
+    RethError, RethResult
+};
 use reth_primitives::{
     revm_primitives::{AccountInfo, Bytecode, B256, U256},
-    KECCAK_EMPTY
+    BlockNumber, KECCAK_EMPTY
 };
-use reth_provider::{AccountReader, StateProvider, StateProviderBox, StateProviderFactory};
+use reth_provider::{
+    AccountReader, BlockNumReader, StateProvider, StateProviderBox, StateProviderFactory
+};
 use reth_revm::{Database, DatabaseRef};
 use revm::db::DbAccount;
 use schnellru::{ByMemoryUsage, LruMap};
@@ -19,6 +24,22 @@ use crate::{
     bundle::errors::SimError,
     common::state::{AddressSlots, RevmBackend}
 };
+
+pub trait BlockStateProviderFactory: Send + Sync {
+    fn state_by_block(&self, block: u64) -> ProviderResult<StateProviderBox>;
+
+    fn best_block_number(&self) -> ProviderResult<BlockNumber>;
+}
+
+impl<T: StateProviderFactory> BlockStateProviderFactory for T {
+    fn state_by_block(&self, block: u64) -> ProviderResult<StateProviderBox> {
+        self.state_by_block_id(block.into())
+    }
+
+    fn best_block_number(&self) -> ProviderResult<BlockNumber> {
+        BlockNumReader::best_block_number(self)
+    }
+}
 
 pub struct RevmLRU<DB> {
     state_overrides:    RwLock<HashMap<Address, HashMap<U256, U256>>>,
@@ -44,7 +65,7 @@ impl<DB: Clone> Clone for RevmLRU<DB> {
 
 impl<DB> RevmBackend for RevmLRU<DB>
 where
-    DB: StateProviderFactory
+    DB: BlockStateProviderFactory
 {
     fn update_evm_state(&self, slot_changes: &AddressSlots) -> eyre::Result<(), SimError> {
         let mut accounts = self.accounts.write();
@@ -69,7 +90,7 @@ where
 
 impl<DB> RevmLRU<DB>
 where
-    DB: StateProviderFactory
+    DB: BlockStateProviderFactory
 {
     pub fn new(max_bytes: usize, db: Arc<DB>, current_block: Arc<AtomicU64>) -> Self {
         let accounts = Arc::new(RwLock::new(LruMap::new(ByMemoryUsage::new(max_bytes))));
@@ -117,17 +138,14 @@ where
     }
 
     fn get_current_provider(&self) -> Result<StateProviderBox, ProviderError> {
-        self.db.state_by_block_id(
-            self.current_block
-                .load(std::sync::atomic::Ordering::SeqCst)
-                .into()
-        )
+        self.db
+            .state_by_block(self.current_block.load(std::sync::atomic::Ordering::SeqCst))
     }
 }
 
 impl<DB> Database for RevmLRU<DB>
 where
-    DB: StateProviderFactory
+    DB: BlockStateProviderFactory
 {
     type Error = RethError;
 
@@ -150,7 +168,7 @@ where
 
 impl<DB> DatabaseRef for RevmLRU<DB>
 where
-    DB: StateProviderFactory
+    DB: BlockStateProviderFactory
 {
     type Error = RethError;
 

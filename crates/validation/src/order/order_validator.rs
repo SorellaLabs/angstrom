@@ -16,7 +16,6 @@ use angstrom_utils::sync_pipeline::{
 };
 use futures::{stream::FuturesUnordered, Future, StreamExt};
 use futures_util::{future, FutureExt, Stream};
-use reth_provider::StateProviderFactory;
 use tokio::{runtime::Handle, task::JoinHandle};
 
 use super::{
@@ -28,7 +27,10 @@ use super::{
     OrderValidationRequest
 };
 use crate::{
-    common::{executor::ThreadPool, lru_db::RevmLRU},
+    common::{
+        executor::ThreadPool,
+        lru_db::{BlockStateProviderFactory, RevmLRU}
+    },
     order::sim,
     validator::ValidationRequest
 };
@@ -43,7 +45,7 @@ pub struct OrderValidator<DB> {
 
 impl<DB> OrderValidator<DB>
 where
-    DB: StateProviderFactory + Unpin + Clone + 'static
+    DB: BlockStateProviderFactory + Unpin + Clone + 'static
 {
     pub fn new(
         db: Arc<RevmLRU<DB>>,
@@ -97,7 +99,7 @@ where
 
 impl<DB> Future for OrderValidator<DB>
 where
-    DB: StateProviderFactory + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Clone + Unpin + 'static
 {
     type Output = ();
 
@@ -174,7 +176,7 @@ impl<DB> ProcessingCtx<DB> {
 impl ValidationOperation {
     fn pre_regular_verification<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
     where
-        DB: StateProviderFactory + Unpin + Clone + 'static
+        DB: BlockStateProviderFactory + Unpin + Clone + 'static
     {
         let cur_block = cx.current_block_number.clone();
         Box::pin(std::future::ready({
@@ -203,7 +205,7 @@ impl ValidationOperation {
 
     fn post_regular_verification<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
     where
-        DB: StateProviderFactory + Unpin + Clone + 'static
+        DB: BlockStateProviderFactory + Unpin + Clone + 'static
     {
         if let ValidationOperation::PostRegularVerification(req, deltas, block_number) = self {
             match req {
@@ -224,7 +226,7 @@ impl ValidationOperation {
 
     fn pre_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
     where
-        DB: StateProviderFactory + Unpin + Clone + 'static
+        DB: BlockStateProviderFactory + Unpin + Clone + 'static
     {
         let cur_block = cx.current_block_number.clone();
         Box::pin(std::future::ready({
@@ -252,7 +254,7 @@ impl ValidationOperation {
 
     fn post_pre_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
     where
-        DB: StateProviderFactory + Unpin + Clone + 'static
+        DB: BlockStateProviderFactory + Unpin + Clone + 'static
     {
         if let ValidationOperation::PostPreHook(req, acc_details, state, block_number) = self {
             let (order, overrides, block_number) = match req {
@@ -328,7 +330,7 @@ impl ValidationOperation {
 
     fn post_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
     where
-        DB: StateProviderFactory + Unpin + Clone + 'static
+        DB: BlockStateProviderFactory + Unpin + Clone + 'static
     {
         if let ValidationOperation::PostHookSim(req, user_deltas, block_number) = self {
             match req {

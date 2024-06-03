@@ -11,7 +11,7 @@ use reth_interfaces::{
 };
 use reth_primitives::{
     revm_primitives::{AccountInfo, Bytecode, B256, U256},
-    BlockNumber, KECCAK_EMPTY
+    Account, BlockNumber, StorageKey, StorageValue, KECCAK_EMPTY
 };
 use reth_provider::{
     AccountReader, BlockNumReader, StateProvider, StateProviderBox, StateProviderFactory
@@ -25,13 +25,41 @@ use crate::{
     common::state::{AddressSlots, RevmBackend}
 };
 
+pub trait BlockStateProvider {
+    fn get_basic_account(&self, address: Address) -> ProviderResult<Option<Account>>;
+
+    fn get_storage(
+        &self,
+        address: Address,
+        key: StorageKey
+    ) -> ProviderResult<Option<StorageValue>>;
+}
+
 pub trait BlockStateProviderFactory: Send + Sync {
-    fn state_by_block(&self, block: u64) -> ProviderResult<StateProviderBox>;
+    type Provider: BlockStateProvider;
+
+    fn state_by_block(&self, block: u64) -> ProviderResult<Self::Provider>;
 
     fn best_block_number(&self) -> ProviderResult<BlockNumber>;
 }
 
+impl BlockStateProvider for StateProviderBox {
+    fn get_basic_account(&self, address: Address) -> ProviderResult<Option<Account>> {
+        AccountReader::basic_account(self, address)
+    }
+
+    fn get_storage(
+        &self,
+        address: Address,
+        key: StorageKey
+    ) -> ProviderResult<Option<StorageValue>> {
+        StateProvider::storage(&self, address, key)
+    }
+}
+
 impl<T: StateProviderFactory> BlockStateProviderFactory for T {
+    type Provider = StateProviderBox;
+
     fn state_by_block(&self, block: u64) -> ProviderResult<StateProviderBox> {
         self.state_by_block_id(block.into())
     }
@@ -88,9 +116,10 @@ where
     }
 }
 
-impl<DB> RevmLRU<DB>
+impl<P, DB> RevmLRU<DB>
 where
-    DB: BlockStateProviderFactory
+    P: BlockStateProvider,
+    DB: BlockStateProviderFactory<Provider = P>
 {
     pub fn new(max_bytes: usize, db: Arc<DB>, current_block: Arc<AtomicU64>) -> Self {
         let accounts = Arc::new(RwLock::new(LruMap::new(ByMemoryUsage::new(max_bytes))));
@@ -118,10 +147,10 @@ where
         *self.bytecode_overrides.write() = overrides;
     }
 
-    fn basic_ref_no_cache(&self, address: &Address) -> Result<Option<AccountInfo>, RethError> {
+    fn basic_ref_no_cache(&self, address: &Address) -> RethResult<Option<AccountInfo>> {
         Ok(self
             .get_current_provider()?
-            .basic_account(*address)?
+            .get_basic_account(*address)?
             .map(|account| AccountInfo {
                 balance:   account.balance,
                 nonce:     account.nonce,
@@ -130,14 +159,14 @@ where
             }))
     }
 
-    fn storage_ref_no_cache(&self, address: &Address, index: U256) -> Result<U256, RethError> {
+    fn storage_ref_no_cache(&self, address: &Address, index: U256) -> RethResult<U256> {
         self.get_current_provider()?
-            .storage(*address, index.into())
+            .get_storage(*address, index.into())
             .map(|inner| inner.unwrap_or_default())
             .map_err(RethError::from)
     }
 
-    fn get_current_provider(&self) -> Result<StateProviderBox, ProviderError> {
+    fn get_current_provider(&self) -> ProviderResult<P> {
         self.db
             .state_by_block(self.current_block.load(std::sync::atomic::Ordering::SeqCst))
     }
@@ -203,9 +232,15 @@ where
                     .storage
                     .get(&index)
                     .map(|e| Ok(Some(*e)))
-                    .unwrap_or_else(|| self.get_current_provider()?.storage(address, index.into()))
+                    .unwrap_or_else(|| {
+                        self.get_current_provider()?
+                            .get_storage(address, index.into())
+                    })
             })
-            .unwrap_or_else(|| self.get_current_provider()?.storage(address, index.into()))?
+            .unwrap_or_else(|| {
+                self.get_current_provider()?
+                    .get_storage(address, index.into())
+            })?
             .unwrap_or_default())
     }
 

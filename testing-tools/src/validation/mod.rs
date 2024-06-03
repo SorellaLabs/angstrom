@@ -14,7 +14,10 @@ use reth_provider::StateProviderFactory;
 use tokio::sync::mpsc::unbounded_channel;
 use validation::{
     common::lru_db::RevmLRU,
-    order::state::config::{load_validation_config, ValidationConfig},
+    order::state::{
+        config::{load_validation_config, ValidationConfig},
+        upkeepers::nonces::Nonces
+    },
     validator::{ValidationClient, Validator}
 };
 
@@ -67,12 +70,7 @@ impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> 
     }
 
     pub fn generate_nonce_slot(&self, user: Address, nonce: u64) -> U256 {
-        let nonce = nonce.to_be_bytes();
-        let mut arry = [0u8; 31];
-        arry[0..20].copy_from_slice(&**user);
-        arry[20..24].copy_from_slice(&ANGSTROM_NONCE_SLOT_CONST);
-        arry[24..31].copy_from_slice(&nonce[0..7]);
-        keccak256(arry).into()
+        Nonces.get_nonce_word_slot(user, nonce).into()
     }
 }
 

@@ -123,17 +123,17 @@ type DefaultOrderCommand = OrderCommand<
 
 // due to how the init process works with reth. we need to init like this
 pub struct StromHandles {
-    eth_tx: Sender<EthCommand>,
-    eth_rx: Receiver<EthCommand>,
+    pub eth_tx: Sender<EthCommand>,
+    pub eth_rx: Receiver<EthCommand>,
 
-    pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
-    pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
+    pub pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
+    pub pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
 
-    orderpool_tx: UnboundedSender<DefaultOrderCommand>,
-    orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
+    pub orderpool_tx: UnboundedSender<DefaultOrderCommand>,
+    pub orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
 
-    consensus_tx: Sender<ConsensusCommand>,
-    consensus_rx: Receiver<ConsensusCommand>
+    pub consensus_tx: Sender<ConsensusCommand>,
+    pub consensus_rx: Receiver<ConsensusCommand>
 }
 
 impl StromHandles {

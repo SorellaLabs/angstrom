@@ -15,7 +15,7 @@ use std::{
 };
 
 use angstrom_eth::manager::EthEvent;
-use common::lru_db::{RevmLRU, BlockStateProviderFactory};
+use common::lru_db::{BlockStateProviderFactory, RevmLRU};
 use futures::Stream;
 use order::state::config::load_validation_config;
 use reth_provider::StateProviderFactory;
@@ -24,7 +24,7 @@ use validator::Validator;
 
 use crate::validator::ValidationClient;
 
-pub const TOKEN_CONFIG_FILE: &str = "../crates/validation/state_config.toml";
+pub const TOKEN_CONFIG_FILE: &str = "./crates/validation/state_config.toml";
 
 pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
     db: DB,

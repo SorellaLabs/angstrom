@@ -1,7 +1,5 @@
 //! Example of using proc macro to generate working client and server.
 
-use alloy_primitives::Bytes;
-use alloy_rlp::encode as rlp_encode;
 use angstrom::cli::initialize_strom_handles;
 use angstrom_eth::handle::{Eth, EthHandle};
 use angstrom_network::{network::StromNetworkHandle, pool_manager::PoolManagerBuilder};
@@ -10,16 +8,11 @@ use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_tasks::TokioTaskExecutor;
-use testing_tools::{
-    mocks::eth_events::MockEthEventHandle, order_pool::TestnetOrderPool,
-    type_generator::orders::generate_rand_valid_limit_order
-};
 use tokio::sync::mpsc::unbounded_channel;
 use validation::init_validation;
 
 use crate::rpc_state_provider::RpcStateProviderFactory;
 
-mod order_pool;
 mod rpc_state_provider;
 
 #[derive(Parser)]
@@ -52,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let validator =
         init_validation(rpc_wrapper, CACHE_VALIDATION_SIZE, eth_handle.subscribe_network_stream());
 
-    let (network_tx, network_rx) = unbounded_channel();
+    let (network_tx, _network_rx) = unbounded_channel();
     let network_handle = StromNetworkHandle::new(
         Default::default(),
         UnboundedMeteredSender::new(network_tx, "mock network")
@@ -60,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let executor: TokioTaskExecutor = Default::default();
 
-    let pool_handle = PoolManagerBuilder::new(
+    let _pool_handle = PoolManagerBuilder::new(
         validator.clone(),
         network_handle.clone(),
         eth_handle.subscribe_network(),

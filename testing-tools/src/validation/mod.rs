@@ -7,7 +7,7 @@ use std::{
     time::Duration
 };
 
-use alloy_primitives::{hex, keccak256, Address, U256};
+use alloy_primitives::{Address, U256};
 use angstrom_eth::manager::EthEvent;
 use futures::{FutureExt, Stream};
 use reth_provider::StateProviderFactory;
@@ -22,8 +22,6 @@ use validation::{
 };
 
 use crate::mocks::eth_events::MockEthEventHandle;
-
-const ANGSTROM_NONCE_SLOT_CONST: [u8; 4] = hex!("daa050e9");
 
 pub struct TestOrderValidator<DB: StateProviderFactory + Clone + Unpin + 'static> {
     /// allows us to set values to ensure

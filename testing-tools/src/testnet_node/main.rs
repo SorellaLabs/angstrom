@@ -35,8 +35,13 @@ const CACHE_VALIDATION_SIZE: usize = 100_000_000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli_args = Cli::parse();
+    let env_filter = tracing_subscriber::EnvFilter::from_default_env();
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)?;
 
+    let cli_args = Cli::parse();
     let rpc_wrapper = RpcStateProviderFactory::new(&cli_args.local_rpc_url)?;
     let handles = initialize_strom_handles();
     let pool = handles.get_pool_handle();

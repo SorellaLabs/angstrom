@@ -667,6 +667,7 @@ where
 
         // drain commands
         while let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
+            tracing::debug!(?cmd, "that was a command");
             this.on_command(cmd);
         }
 

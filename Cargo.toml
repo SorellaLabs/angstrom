@@ -115,6 +115,7 @@ bytes = "1.4"
 bitflags = "2.3"
 tracing = "0.1.0"
 tracing-appender = "0.2"
+tracing-subscriber = "0.3.18"
 thiserror = "1.0"
 serde_json = "1.0.94"
 serde = { version = "1.0", default-features = false }
@@ -134,7 +135,7 @@ quote = "1.0"
 
 ## tokio
 tokio-stream = "0.1.11"
-tokio = { version = "1.21", features = ["full"], default-features = false }
+tokio = { version = "1.21", features = ["full", "tracing"], default-features = false }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 
 

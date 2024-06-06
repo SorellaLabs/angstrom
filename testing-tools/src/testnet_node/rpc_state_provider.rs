@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use alloy_primitives::keccak256;
 use alloy_provider::{Provider, ProviderBuilder, ReqwestProvider};
 use alloy_transport::TransportResult;
@@ -9,7 +7,7 @@ use reth_primitives::{Account, Address, BlockNumber, StorageKey, StorageValue};
 use tokio;
 use validation::common::lru_db::{BlockStateProvider, BlockStateProviderFactory};
 
-fn async_to_sync<O, F: Future<Output = O>>(f: F) -> O {
+fn async_to_sync<F: Future>(f: F) -> F::Output {
     let handle = tokio::runtime::Handle::try_current().expect("No tokion runtime found");
     tokio::task::block_in_place(|| handle.block_on(f))
 }
@@ -17,19 +15,19 @@ fn async_to_sync<O, F: Future<Output = O>>(f: F) -> O {
 #[derive(Clone, Debug)]
 pub struct RpcStateProvider {
     block:    u64,
-    provider: Arc<ReqwestProvider>
+    provider: ReqwestProvider
 }
 
 impl RpcStateProvider {
     async fn get_account(&self, address: Address) -> TransportResult<Account> {
         let block_id = self.block.into();
-        let nonce = self
-            .provider
-            .get_transaction_count(address, Some(block_id))
-            .await?;
-        let balance = self.provider.get_balance(address, Some(block_id)).await?;
-        // TODO: Ensure correct handling of EOA empty accounts.
-        let bytecode = self.provider.get_code_at(address, block_id).await?;
+
+        let (nonce, balance, bytecode) = futures::try_join!(
+            self.provider.get_transaction_count(address, Some(block_id)),
+            self.provider.get_balance(address, Some(block_id)),
+            // TODO: Ensure correct handling of EOA empty accounts.
+            self.provider.get_code_at(address, block_id)
+        )?;
 
         let hash = keccak256(bytecode);
 
@@ -68,14 +66,14 @@ impl BlockStateProvider for RpcStateProvider {
 
 #[derive(Clone, Debug)]
 pub struct RpcStateProviderFactory {
-    provider: Arc<ReqwestProvider>
+    provider: ReqwestProvider
 }
 
 impl RpcStateProviderFactory {
     pub fn new(raw_rpc_url: &str) -> eyre::Result<Self> {
         let rpc_url = raw_rpc_url.parse()?;
         let provider = ProviderBuilder::new().on_http(rpc_url)?;
-        Ok(Self { provider: Arc::new(provider) })
+        Ok(Self { provider })
     }
 }
 

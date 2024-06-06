@@ -27,7 +27,7 @@ struct Cli {
 const CACHE_VALIDATION_SIZE: usize = 100_000_000;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> eyre::Result<()> {
     let env_filter = tracing_subscriber::EnvFilter::from_default_env();
     let subscriber = tracing_subscriber::fmt()
         .with_env_filter(env_filter)

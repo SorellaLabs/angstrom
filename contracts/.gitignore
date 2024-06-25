@@ -1,0 +1,8 @@
+/out
+/cache
+/broadcast
+/target
+/lcov.info
+/*.txt
+.DS_Store
+.env

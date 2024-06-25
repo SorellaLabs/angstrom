@@ -11,6 +11,7 @@ members = [
   "crates/eth/",
   "crates/submission",
   "testing-tools",
+  "crates/sol-bindings",
 ]
 
 
@@ -54,6 +55,7 @@ angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 testing-tools = { path = "./testing-tools/" }
 angstrom = { path = "./bin/angstrom/" }
+sol-bindings = { path = "./crates/sol-bindings/" }
 
 # BLS library
 blsful = "2.5.7"

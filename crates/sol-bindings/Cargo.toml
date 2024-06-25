@@ -1,0 +1,20 @@
+[package]
+name = "sol-bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+alloy-sol-macro.workspace = true
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+alloy-contract = { git = "https://github.com/alloy-rs/alloy", rev = "6aab216" }
+serde = { workspace = true, optional = true, default-features = false, features = ["derive"] }
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "alloy-primitives/serde"]

@@ -1,14 +1,15 @@
+use alloy_primitives::{Address, Bytes, U256};
+
 use crate::sol::{
     InvalidSolEnumVariant, SolAssetForm, SolFlashOrder, SolOrderMode, SolStandingOrder,
-    SolTopOfBlockOrder,
+    SolTopOfBlockOrder
 };
-use alloy_primitives::{Address, Bytes, U256};
 
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct HookData {
-    pub hook: Address,
-    pub payload: Bytes,
+    pub hook:    Address,
+    pub payload: Bytes
 }
 
 #[derive(Default, Debug, Clone)]
@@ -17,7 +18,7 @@ pub enum OrderMode {
     ExactIn,
     ExactOut,
     #[default]
-    Partial,
+    Partial
 }
 
 impl From<OrderMode> for SolOrderMode {
@@ -25,7 +26,7 @@ impl From<OrderMode> for SolOrderMode {
         match value {
             OrderMode::ExactIn => Self::ExactIn,
             OrderMode::ExactOut => Self::ExactOut,
-            OrderMode::Partial => Self::Partial,
+            OrderMode::Partial => Self::Partial
         }
     }
 }
@@ -38,17 +39,17 @@ impl TryFrom<SolOrderMode> for OrderMode {
             SolOrderMode::ExactIn => Ok(Self::ExactIn),
             SolOrderMode::ExactOut => Ok(Self::ExactOut),
             SolOrderMode::Partial => Ok(Self::Partial),
-            SolOrderMode::__Invalid => Err(InvalidSolEnumVariant),
+            SolOrderMode::__Invalid => Err(InvalidSolEnumVariant)
         }
     }
 }
 
-impl Into<&'static str> for OrderMode {
-    fn into(self) -> &'static str {
-        match self {
-            Self::ExactIn => "ExactIn",
-            Self::ExactOut => "ExactOut",
-            Self::Partial => "Partial",
+impl From<OrderMode> for &str {
+    fn from(val: OrderMode) -> &'static str {
+        match val {
+            OrderMode::ExactIn => "ExactIn",
+            OrderMode::ExactOut => "ExactOut",
+            OrderMode::Partial => "Partial"
         }
     }
 }
@@ -59,7 +60,7 @@ pub enum AssetForm {
     #[default]
     Liquid,
     UniV4Claim,
-    AngstromClaim,
+    AngstromClaim
 }
 
 impl From<AssetForm> for SolAssetForm {
@@ -67,7 +68,7 @@ impl From<AssetForm> for SolAssetForm {
         match value {
             AssetForm::Liquid => Self::Liquid,
             AssetForm::UniV4Claim => Self::UniV4Claim,
-            AssetForm::AngstromClaim => Self::AngstromClaim,
+            AssetForm::AngstromClaim => Self::AngstromClaim
         }
     }
 }
@@ -80,7 +81,7 @@ impl TryFrom<SolAssetForm> for AssetForm {
             SolAssetForm::Liquid => Ok(Self::Liquid),
             SolAssetForm::UniV4Claim => Ok(Self::UniV4Claim),
             SolAssetForm::AngstromClaim => Ok(Self::AngstromClaim),
-            SolAssetForm::__Invalid => Err(InvalidSolEnumVariant),
+            SolAssetForm::__Invalid => Err(InvalidSolEnumVariant)
         }
     }
 }
@@ -99,33 +100,33 @@ pub fn hook_data_to_bytes(hook_data: Option<&HookData>) -> Bytes {
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct StandingOrder {
-    pub mode: OrderMode,
+    pub mode:                 OrderMode,
     pub max_amount_in_or_out: U256,
-    pub min_price: U256,
-    pub asset_in: Address,
-    pub asset_in_form: AssetForm,
-    pub asset_out: Address,
-    pub asset_out_form: AssetForm,
-    pub recipient: Address,
-    pub hook_data: Option<HookData>,
-    pub nonce: u64,
-    pub deadline: U256,
+    pub min_price:            U256,
+    pub asset_in:             Address,
+    pub asset_in_form:        AssetForm,
+    pub asset_out:            Address,
+    pub asset_out_form:       AssetForm,
+    pub recipient:            Address,
+    pub hook_data:            Option<HookData>,
+    pub nonce:                u64,
+    pub deadline:             U256
 }
 
 impl From<StandingOrder> for SolStandingOrder {
     fn from(value: StandingOrder) -> Self {
         Self {
-            mode: Into::<&str>::into(value.mode.clone()).to_owned(),
+            mode:                 Into::<&str>::into(value.mode.clone()).to_owned(),
             max_amount_in_or_out: value.max_amount_in_or_out,
-            min_price: value.min_price,
-            asset_in: value.asset_in,
-            asset_in_form: value.asset_in_form.into(),
-            asset_out: value.asset_out,
-            asset_out_form: value.asset_out_form.into(),
-            recipient: value.recipient,
-            hook_data: hook_data_to_bytes(value.hook_data.as_ref()),
-            nonce: value.nonce,
-            deadline: value.deadline,
+            min_price:            value.min_price,
+            asset_in:             value.asset_in,
+            asset_in_form:        value.asset_in_form.into(),
+            asset_out:            value.asset_out,
+            asset_out_form:       value.asset_out_form.into(),
+            recipient:            value.recipient,
+            hook_data:            hook_data_to_bytes(value.hook_data.as_ref()),
+            nonce:                value.nonce,
+            deadline:             value.deadline
         }
     }
 }
@@ -133,31 +134,31 @@ impl From<StandingOrder> for SolStandingOrder {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FlashOrder {
-    pub mode: OrderMode,
+    pub mode:                 OrderMode,
     pub max_amount_in_or_out: U256,
-    pub min_price: U256,
-    pub asset_in: Address,
-    pub asset_in_form: AssetForm,
-    pub asset_out: Address,
-    pub asset_out_form: AssetForm,
-    pub recipient: Address,
-    pub hook_data: Option<HookData>,
-    pub valid_for_block: u64,
+    pub min_price:            U256,
+    pub asset_in:             Address,
+    pub asset_in_form:        AssetForm,
+    pub asset_out:            Address,
+    pub asset_out_form:       AssetForm,
+    pub recipient:            Address,
+    pub hook_data:            Option<HookData>,
+    pub valid_for_block:      u64
 }
 
 impl From<FlashOrder> for SolFlashOrder {
     fn from(value: FlashOrder) -> Self {
         Self {
-            mode: Into::<&str>::into(value.mode.clone()).to_owned(),
+            mode:                 Into::<&str>::into(value.mode.clone()).to_owned(),
             max_amount_in_or_out: value.max_amount_in_or_out,
-            min_price: value.min_price,
-            asset_in: value.asset_in,
-            asset_in_form: value.asset_in_form.into(),
-            asset_out: value.asset_out,
-            asset_out_form: value.asset_out_form.into(),
-            recipient: value.recipient,
-            hook_data: hook_data_to_bytes(value.hook_data.as_ref()),
-            valid_for_block: value.valid_for_block,
+            min_price:            value.min_price,
+            asset_in:             value.asset_in,
+            asset_in_form:        value.asset_in_form.into(),
+            asset_out:            value.asset_out,
+            asset_out_form:       value.asset_out_form.into(),
+            recipient:            value.recipient,
+            hook_data:            hook_data_to_bytes(value.hook_data.as_ref()),
+            valid_for_block:      value.valid_for_block
         }
     }
 }
@@ -165,29 +166,29 @@ impl From<FlashOrder> for SolFlashOrder {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct TopOfBlockOrder {
-    pub amount_in: U256,
-    pub amount_out: U256,
-    pub asset_in: Address,
-    pub asset_in_form: AssetForm,
-    pub asset_out: Address,
-    pub asset_out_form: AssetForm,
-    pub recipient: Address,
-    pub hook_data: Option<HookData>,
-    pub valid_for_block: u64,
+    pub amount_in:       U256,
+    pub amount_out:      U256,
+    pub asset_in:        Address,
+    pub asset_in_form:   AssetForm,
+    pub asset_out:       Address,
+    pub asset_out_form:  AssetForm,
+    pub recipient:       Address,
+    pub hook_data:       Option<HookData>,
+    pub valid_for_block: u64
 }
 
 impl From<TopOfBlockOrder> for SolTopOfBlockOrder {
     fn from(value: TopOfBlockOrder) -> Self {
         Self {
-            amount_in: value.amount_in,
-            amount_out: value.amount_out,
-            asset_in: value.asset_in,
-            asset_in_form: value.asset_in_form.into(),
-            asset_out: value.asset_out,
-            asset_out_form: value.asset_out_form.into(),
-            recipient: value.recipient,
-            hook_data: hook_data_to_bytes(value.hook_data.as_ref()),
-            valid_for_block: value.valid_for_block,
+            amount_in:       value.amount_in,
+            amount_out:      value.amount_out,
+            asset_in:        value.asset_in,
+            asset_in_form:   value.asset_in_form.into(),
+            asset_out:       value.asset_out,
+            asset_out_form:  value.asset_out_form.into(),
+            recipient:       value.recipient,
+            hook_data:       hook_data_to_bytes(value.hook_data.as_ref()),
+            valid_for_block: value.valid_for_block
         }
     }
 }

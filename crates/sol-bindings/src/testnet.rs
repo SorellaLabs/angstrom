@@ -2,6 +2,7 @@ use alloy_sol_macro::sol;
 
 sol! {
     #[sol(rpc)]
+    #[allow(clippy::too_many_arguments)]
     contract MockERC20 {
         function name() public view returns (string memory);
         function symbol() public view returns (string memory);

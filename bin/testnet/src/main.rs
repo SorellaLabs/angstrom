@@ -6,10 +6,9 @@ use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_tasks::TokioTaskExecutor;
+use testnet::utils::RpcStateProviderFactory;
 use tokio::sync::mpsc::unbounded_channel;
 use validation::init_validation;
-
-use crate::utils::RpcStateProviderFactory;
 
 #[derive(Parser)]
 #[clap(about = "Angstrom Testnet Node")]

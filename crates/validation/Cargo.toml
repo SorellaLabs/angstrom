@@ -28,7 +28,7 @@ derive_more = "0.99.17"
 revm.workspace = true
 
 # reth
-reth-primitives.workspace = true
+reth-primitives = { workspace = true, features = ["std", "optimism"] }
 reth-provider.workspace = true
 reth-revm.workspace = true
 reth-db = { workspace = true, features = ["mdbx"] }

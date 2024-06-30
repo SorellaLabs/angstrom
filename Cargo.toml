@@ -77,21 +77,19 @@ revm = { version = "10.0.0", features = [
   "blst",
 ], default-features = false }
 revm-primitives = { version = "5.0.0", features = [
-  "std",
+  "serde",
 ], default-features = false }
 revm-inspectors = "0.1"
 
 # reth
 reth = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
-# reth-interfaces = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
 reth-provider = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
 reth-rlp = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", features = [
   "alloc",
 ] }
-
-
+reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
 reth-node-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
 reth-codecs = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
 reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" }
@@ -116,14 +114,14 @@ reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1
 # alloy
 alloy-chains = "0.1.15"
 alloy-primitives = "0.7.2"
-alloy-sol-macro= "0.7.2"
+alloy-sol-macro = "0.7.2"
 alloy-dyn-abi = "0.7.2"
 alloy-sol-types = "0.7.2"
 alloy-rlp = "0.3.4"
 alloy-rlp-derive = "0.3.4"
 alloy-trie = "0.4"
 alloy-rpc-types = { version = "0.1", default-features = false, features = [
-    "eth",
+  "eth",
 ] }
 alloy-rpc-types-anvil = { version = "0.1", default-features = false }
 alloy-rpc-types-beacon = { version = "0.1", default-features = false }
@@ -136,7 +134,7 @@ alloy-rpc-types-trace = { version = "0.1", default-features = false }
 alloy-genesis = { version = "0.1", default-features = false }
 alloy-node-bindings = { version = "0.1", default-features = false }
 alloy-provider = { version = "0.1", default-features = false, features = [
-    "reqwest",
+  "reqwest",
 ] }
 alloy-eips = { version = "0.1", default-features = false }
 alloy-signer = { version = "0.1", default-features = false }
@@ -145,7 +143,7 @@ alloy-network = { version = "0.1", default-features = false }
 alloy-consensus = { version = "0.1", default-features = false }
 alloy-transport = { version = "0.1" }
 alloy-transport-http = { version = "0.1", features = [
-    "reqwest-rustls-tls",
+  "reqwest-rustls-tls",
 ], default-features = false }
 alloy-transport-ws = { version = "0.1", default-features = false }
 alloy-transport-ipc = { version = "0.1", default-features = false }
@@ -192,9 +190,8 @@ jsonrpsee = { version = "0.22.3" }
 jsonrpsee-core = { version = "0.22.3" }
 jsonrpsee-types = { version = "0.22.3" }
 
-
 ## crypto
-secp256k1 = { version = "0.27.0", default-features = false, features = [
+secp256k1 = { version = "0.29.0", default-features = false, features = [
   "global-context",
   "rand-std",
   "recovery",

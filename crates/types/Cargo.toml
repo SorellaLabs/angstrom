@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 base64 = "0.22.1"
 bitmaps.workspace = true
+reth-network-peers.workspace = true
 blsful.workspace = true
 bytes = "1.4"
 tracing.workspace = true

@@ -5,7 +5,8 @@ use std::{
 
 use alloy_primitives::{Address, FixedBytes, U256};
 use alloy_rlp::{Decodable, Encodable, Error};
-use reth_primitives::{pk2id, PeerId, Signature as ESignature};
+use reth_network_peers::{pk2id, PeerId};
+use reth_primitives::Signature as ESignature;
 use secp256k1::{
     ecdsa::{RecoverableSignature, RecoveryId},
     Message, SECP256K1

@@ -1,9 +1,13 @@
+use std::{thread::JoinHandle, time::Duration};
+
 use angstrom::cli::initialize_strom_handles;
 use angstrom_eth::handle::{Eth, EthHandle};
 use angstrom_network::{network::StromNetworkHandle, pool_manager::PoolManagerBuilder};
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
+use futures::stream::FuturesUnordered;
 use jsonrpsee::server::ServerBuilder;
+use reth::core::cli;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_tasks::TokioTaskExecutor;
 use testnet::utils::RpcStateProviderFactory;
@@ -13,10 +17,21 @@ use validation::init_validation;
 #[derive(Parser)]
 #[clap(about = "Angstrom Testnet Node")]
 struct Cli {
+    /// port for the rpc for submitting transactions.
     #[clap(short, long, default_value_t = 4200)]
-    port:          u16,
+    port:                    u16,
+    /// url that anvil is set to. only really useful for overriding on url
+    /// conflict
     #[clap(short, long, default_value = "http://localhost:8545")]
-    local_rpc_url: String
+    anvil_rpc_url:           String,
+    /// the speed in which anvil will mine blocks.
+    #[clap(short, long, default_value = "12")]
+    testnet_block_time_secs: u64,
+    /// the amount of testnet nodes that will be spawned and connected to.
+    /// NOTE: only 1 rpc will be connected currently for submissions.
+    /// this will change in the future but is good enough for testing currently
+    #[clap(short, long, default_value = "3")]
+    nodes_in_network:        u64
 }
 
 const CACHE_VALIDATION_SIZE: usize = 100_000_000;
@@ -28,9 +43,34 @@ async fn main() -> eyre::Result<()> {
         .with_env_filter(env_filter)
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
-
     let cli_args = Cli::parse();
-    let rpc_wrapper = RpcStateProviderFactory::new(&cli_args.local_rpc_url)?;
+
+    let (eth_api, anvil_handle) = testnet::utils::anvil_manager::spawn_anvil_on_url(
+        url,
+        Duration::from_secs(cli_args.testnet_block_time_secs)
+    )
+    .await?;
+
+    let ipc_handle = anvil_handle
+        .ipc_provider()
+        .expect("couldn't connect to ipc handle for anvil");
+
+    let rpc_wrapper = RpcStateProviderFactory::new(ipc_handle)?;
+
+    for _ in (0..cli_args.nodes_in_network) {
+        spawn_testnet_node(ipc_handle.clone(), None).await;
+    }
+
+    // spawn the node with rpc
+    spawn_testnet_node(ipc_handle.clone(), Some(cli_args.port)).await;
+
+    Ok(())
+}
+
+pub async fn spawn_testnet_node(
+    rpc: RpcStateProviderFactory,
+    port: Option<u64>
+) -> eyre::Result<()> {
     let handles = initialize_strom_handles();
     let pool = handles.get_pool_handle();
 
@@ -56,15 +96,17 @@ async fn main() -> eyre::Result<()> {
     )
     .build_with_channels(executor, handles.orderpool_tx, handles.orderpool_rx);
 
-    let server = ServerBuilder::default()
-        .build(format!("127.0.0.1:{}", cli_args.port))
-        .await?;
+    if let Some(port) = port {
+        let server = ServerBuilder::default()
+            .build(format!("127.0.0.1:{}", port))
+            .await?;
 
-    let addr = server.local_addr().unwrap();
-    println!("rpc server started on: {}", addr);
+        let addr = server.local_addr().unwrap();
+        println!("rpc server started on: {}", addr);
 
-    let server_handle = server.start(order_api.into_rpc());
-    let _ = server_handle.stopped().await;
+        let server_handle = server.start(order_api.into_rpc());
+        let _ = server_handle.stopped().await;
+    }
 
     Ok(())
 }

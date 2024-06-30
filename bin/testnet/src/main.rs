@@ -1,16 +1,14 @@
-use std::{thread::JoinHandle, time::Duration};
+use std::time::Duration;
 
-use angstrom::cli::initialize_strom_handles;
+use angstrom::cli::{initialize_strom_handles, StromHandles};
 use angstrom_eth::handle::{Eth, EthHandle};
 use angstrom_network::{network::StromNetworkHandle, pool_manager::PoolManagerBuilder};
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
-use futures::stream::FuturesUnordered;
 use jsonrpsee::server::ServerBuilder;
-use reth::core::cli;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_tasks::TokioTaskExecutor;
-use testnet::utils::RpcStateProviderFactory;
+use testnet::utils::{ported_reth_testnet_network::StromPeer, RpcStateProviderFactory};
 use tokio::sync::mpsc::unbounded_channel;
 use validation::init_validation;
 
@@ -69,9 +67,10 @@ async fn main() -> eyre::Result<()> {
 
 pub async fn spawn_testnet_node(
     rpc_wrapper: RpcStateProviderFactory,
+    network: StromPeer<RpcStateProviderFactory>,
+    handles: StromHandles,
     port: Option<u16>
 ) -> eyre::Result<()> {
-    let handles = initialize_strom_handles();
     let pool = handles.get_pool_handle();
 
     let order_api = OrderApi { pool: pool.clone() };

@@ -14,12 +14,10 @@ use reth_network_api::Peers;
 use reth_primitives::{Address, Chain};
 use reth_provider::{test_utils::NoopProvider, BlockReader, HeaderProvider};
 use reth_rpc_types::{pk_to_id, PeerId};
-use secp256k1::{PublicKey, Secp256k1};
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::PollSender;
 use tracing::{span, Level};
-
-use crate::network::SecretKey;
 
 pub struct StromPeer<C = NoopProvider> {
     /// the default ethereum network peer

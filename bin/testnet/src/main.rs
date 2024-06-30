@@ -45,8 +45,8 @@ async fn main() -> eyre::Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
     let cli_args = Cli::parse();
 
-    let (eth_api, anvil_handle) = testnet::utils::anvil_manager::spawn_anvil_on_url(
-        url,
+    let (_eth_api, anvil_handle) = testnet::utils::anvil_manager::spawn_anvil_on_url(
+        cli_args.anvil_rpc_url,
         Duration::from_secs(cli_args.testnet_block_time_secs)
     )
     .await?;
@@ -57,19 +57,19 @@ async fn main() -> eyre::Result<()> {
 
     let rpc_wrapper = RpcStateProviderFactory::new(ipc_handle)?;
 
-    for _ in (0..cli_args.nodes_in_network) {
-        spawn_testnet_node(ipc_handle.clone(), None).await;
+    for _ in 0..cli_args.nodes_in_network {
+        spawn_testnet_node(rpc_wrapper.clone(), None).await?;
     }
 
     // spawn the node with rpc
-    spawn_testnet_node(ipc_handle.clone(), Some(cli_args.port)).await;
+    spawn_testnet_node(rpc_wrapper.clone(), Some(cli_args.port)).await?;
 
     Ok(())
 }
 
 pub async fn spawn_testnet_node(
-    rpc: RpcStateProviderFactory,
-    port: Option<u64>
+    rpc_wrapper: RpcStateProviderFactory,
+    port: Option<u16>
 ) -> eyre::Result<()> {
     let handles = initialize_strom_handles();
     let pool = handles.get_pool_handle();

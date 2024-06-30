@@ -81,6 +81,3 @@ parking_lot.workspace = true
 clap = { version = "4.5.4", features = ["derive"] }
 eyre = "0.6.12"
 
-[[bin]]
-name = "cooked-testnet-node"
-path = "src/testnet_node/main.rs"

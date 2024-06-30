@@ -1,5 +1,3 @@
-//! Example of using proc macro to generate working client and server.
-
 use angstrom::cli::initialize_strom_handles;
 use angstrom_eth::handle::{Eth, EthHandle};
 use angstrom_network::{network::StromNetworkHandle, pool_manager::PoolManagerBuilder};
@@ -11,9 +9,7 @@ use reth_tasks::TokioTaskExecutor;
 use tokio::sync::mpsc::unbounded_channel;
 use validation::init_validation;
 
-use crate::rpc_state_provider::RpcStateProviderFactory;
-
-mod rpc_state_provider;
+use crate::utils::RpcStateProviderFactory;
 
 #[derive(Parser)]
 #[clap(about = "Angstrom Testnet Node")]

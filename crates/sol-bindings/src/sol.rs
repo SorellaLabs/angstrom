@@ -181,7 +181,7 @@ pub use private::{
     FlashOrder as SolFlashOrder, GenericOrder as SolGenericOrder, OrderMode as SolOrderMode,
     OrderType as SolOrderType, Price as SolPrice, StandingOrder as SolStandingOrder,
     Swap as SolSwap, TopOfBlockOrder as SolTopOfBlockOrder,
-    TopOfBlockOrderEnvelope as SolTopOfBlockOrderEnvelope,
+    TopOfBlockOrderEnvelope as SolTopOfBlockOrderEnvelope
 };
 
 #[derive(Default, Debug, Clone)]
@@ -197,17 +197,15 @@ impl std::fmt::Display for InvalidSolEnumVariant {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use alloy_primitives::{Address, U256};
     use alloy_sol_types::{SolCall, SolStruct, SolType};
+
+    use super::*;
 
     #[test]
     fn test_get_eip712_names() {
         println!("TopOfBlockOrder::NAME: {}", SolTopOfBlockOrder::NAME);
-        println!(
-            "TopOfBlockOrder::encode_type: {}",
-            SolTopOfBlockOrder::eip712_encode_type()
-        );
+        println!("TopOfBlockOrder::encode_type: {}", SolTopOfBlockOrder::eip712_encode_type());
         println!("ToB::SOL_NAME: {}", SolTopOfBlockOrder::SOL_NAME)
     }
 
@@ -216,7 +214,7 @@ mod test {
         let x = AngstromContract::pullLiquidCall::new((
             Address::parse_checksummed("0xC5EfE216CC029dB7F3C4eC68B82FBC56bbD561b8", None).unwrap(),
             Address::parse_checksummed("0x6DC10D390e3D0517F4A2ebb88939b12d0a9a17F3", None).unwrap(),
-            U256::from(238),
+            U256::from(238)
         ))
         .abi_encode();
 

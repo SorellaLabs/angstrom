@@ -60,7 +60,11 @@ impl TokenBalanceSlot {
         Ok(U256::from_be_bytes(*keccak256(buf)))
     }
 
-    pub fn load_balance<DB: BlockStateProviderFactory>(&self, of: Address, db: Arc<RevmLRU<DB>>) -> eyre::Result<U256> {
+    pub fn load_balance<DB: BlockStateProviderFactory>(
+        &self,
+        of: Address,
+        db: Arc<RevmLRU<DB>>
+    ) -> eyre::Result<U256> {
         Ok(db.storage_ref(self.token, self.generate_slot(of)?)?)
     }
 }

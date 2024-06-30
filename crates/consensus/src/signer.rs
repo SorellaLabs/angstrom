@@ -1,16 +1,19 @@
 use alloy_primitives::B512;
 use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
-    primitive::{Angstrom::{Bundle, LowerBound}, BLSValidatorID}
+    primitive::{
+        Angstrom::{Bundle, LowerBound},
+        BLSValidatorID
+    }
 };
-use blsful::{SecretKey, Bls12381G1Impl};
+use blsful::{Bls12381G1Impl, SecretKey};
 
 /// The Signer deals with verifying external signatures as well as
 /// signing our payloads.  Pub fields for now.
 #[derive(Default)]
 pub struct Signer {
     pub validator_id: BLSValidatorID,
-    pub key: SecretKey<Bls12381G1Impl>,
+    pub key:          SecretKey<Bls12381G1Impl>
 }
 
 impl Signer {
@@ -21,7 +24,14 @@ impl Signer {
         vanilla_bundle: Bundle,
         lower_bound: LowerBound
     ) -> eyre::Result<Proposal> {
-        Ok(Proposal::generate_proposal(ethereum_block, vanilla_bundle, lower_bound, vec![], self.validator_id, &self.key))
+        Ok(Proposal::generate_proposal(
+            ethereum_block,
+            vanilla_bundle,
+            lower_bound,
+            vec![],
+            self.validator_id,
+            &self.key
+        ))
     }
 
     #[allow(dead_code)]

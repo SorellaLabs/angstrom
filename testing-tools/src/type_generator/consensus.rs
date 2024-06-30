@@ -3,9 +3,9 @@ use angstrom_types::{
     consensus::{Commit, OrderBuffer, PoolOrders, PreProposal, Proposal},
     primitive::{BLSValidatorID, Bundle, LowerBound, Lvr}
 };
+use blsful::SecretKey;
 use rand::{rngs::ThreadRng, thread_rng, Rng};
 use secp256k1::SecretKey as Secp256SecretKey;
-use blsful::SecretKey;
 
 use crate::type_generator::orders::generate_rand_valid_limit_order;
 
@@ -61,7 +61,14 @@ pub fn generate_random_proposal(validator_id: BLSValidatorID) -> Proposal {
     let lower_bound = generate_lower_bound(&mut rng);
     let vanilla_bundle = generate_vanilla_bundle(&mut rng);
 
-    Proposal::generate_proposal(rng.gen(), vanilla_bundle, lower_bound, order_buf, validator_id, &sk)
+    Proposal::generate_proposal(
+        rng.gen(),
+        vanilla_bundle,
+        lower_bound,
+        order_buf,
+        validator_id,
+        &sk
+    )
 }
 
 fn generate_vanilla_bundle(_rng: &mut ThreadRng) -> Bundle {

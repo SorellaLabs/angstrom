@@ -1,7 +1,10 @@
-use crate::sol::{SolGenericOrder, SolOrderType, SolTopOfBlockOrderEnvelope};
-use crate::user_types::{FlashOrder, HookData, StandingOrder, TopOfBlockOrder};
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::SolStruct;
+
+use crate::{
+    sol::{SolGenericOrder, SolOrderType, SolTopOfBlockOrderEnvelope},
+    user_types::{FlashOrder, HookData, StandingOrder, TopOfBlockOrder}
+};
 
 pub trait IntoEnvelope {
     type E: SolStruct;
@@ -11,7 +14,7 @@ pub trait IntoEnvelope {
         sorted_asset_list: &[Address],
         from: Address,
         signature: Bytes,
-        amount_filled: U256,
+        amount_filled: U256
     ) -> Option<Self::E>;
 }
 
@@ -27,12 +30,9 @@ impl IntoEnvelope for FlashOrder {
         sorted_asset_list: &[Address],
         from: Address,
         signature: Bytes,
-        amount_filled: U256,
+        amount_filled: U256
     ) -> Option<Self::E> {
-        let HookData {
-            hook,
-            payload: hook_payload,
-        } = self.hook_data.unwrap_or_default();
+        let HookData { hook, payload: hook_payload } = self.hook_data.unwrap_or_default();
         Some(SolGenericOrder {
             otype: SolOrderType::Flash,
             mode: self.mode.into(),
@@ -49,7 +49,7 @@ impl IntoEnvelope for FlashOrder {
             hookPayload: hook_payload,
             amountFilled: amount_filled,
             from,
-            signature,
+            signature
         })
     }
 }
@@ -62,12 +62,9 @@ impl IntoEnvelope for StandingOrder {
         sorted_asset_list: &[Address],
         from: Address,
         signature: Bytes,
-        amount_filled: U256,
+        amount_filled: U256
     ) -> Option<Self::E> {
-        let HookData {
-            hook,
-            payload: hook_payload,
-        } = self.hook_data.unwrap_or_default();
+        let HookData { hook, payload: hook_payload } = self.hook_data.unwrap_or_default();
         Some(SolGenericOrder {
             otype: SolOrderType::Flash,
             mode: self.mode.into(),
@@ -84,7 +81,7 @@ impl IntoEnvelope for StandingOrder {
             hookPayload: hook_payload,
             amountFilled: amount_filled,
             from,
-            signature,
+            signature
         })
     }
 }
@@ -97,12 +94,9 @@ impl IntoEnvelope for TopOfBlockOrder {
         sorted_asset_list: &[Address],
         from: Address,
         signature: Bytes,
-        _amount_filled: U256,
+        _amount_filled: U256
     ) -> Option<Self::E> {
-        let HookData {
-            hook,
-            payload: hook_payload,
-        } = self.hook_data.unwrap_or_default();
+        let HookData { hook, payload: hook_payload } = self.hook_data.unwrap_or_default();
         Some(SolTopOfBlockOrderEnvelope {
             amountIn: self.amount_in,
             amountOut: self.amount_out,
@@ -114,7 +108,7 @@ impl IntoEnvelope for TopOfBlockOrder {
             hook,
             hookPayload: hook_payload,
             from,
-            signature,
+            signature
         })
     }
 }

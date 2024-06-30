@@ -28,11 +28,11 @@ derive_more = "0.99.17"
 revm.workspace = true
 
 # reth
-reth-primitives = { workspace = true, features = ["std", "optimism"] }
+reth-primitives = { workspace = true, features = ["std"] }
+
 reth-provider.workspace = true
 reth-revm.workspace = true
 reth-db = { workspace = true, features = ["mdbx"] }
-# reth-interfaces.workspace = true
 
 # async/futures
 tokio.workspace = true
@@ -76,7 +76,6 @@ angstrom-network.workspace = true
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", features = [
   "test-utils",
 ] }
-# reth-interfaces = { workspace = true, features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["test-utils"] }
 
 # we need to enable the test-utils feature in our own crate to use utils in

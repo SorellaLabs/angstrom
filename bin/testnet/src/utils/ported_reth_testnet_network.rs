@@ -1,5 +1,6 @@
 use std::{collections::HashSet, net::SocketAddr, sync::Arc, task::Poll};
 
+use angstrom::cli::StromHandles;
 use angstrom_network::{
     manager::StromConsensusEvent, state::StromState, NetworkOrderEvent, StatusState,
     StromNetworkEvent, StromNetworkHandle, StromNetworkManager, StromProtocolHandler,
@@ -18,47 +19,6 @@ use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::PollSender;
 use tracing::{span, Level};
-
-pub async fn connect_all_peers(self_peers: &mut [(PeerId, StromPeer)]) {
-    let peer_set = self_peers.iter().collect::<Vec<_>>();
-    for (pk, peer) in &*self_peers {
-        for (other, _) in &peer_set {
-            if *pk == *other {
-                continue
-            }
-            peer.add_validator(*other);
-        }
-    }
-    // add all peers to each other
-    let peers = self_peers.iter().collect::<Vec<_>>();
-    for (idx, (_, handle)) in peers.iter().enumerate().take(peers.len() - 1) {
-        for peer in peers.iter().skip(idx + 1) {
-            let (id, neighbour) = peer;
-            handle.connect_to_peer(*id, neighbour.socket_addr());
-        }
-    }
-
-    // wait on each peer to add all other peers
-    let needed_peers = self_peers.len() - 1;
-    let mut peers = self_peers.iter_mut().map(|(_, p)| p).collect::<Vec<_>>();
-
-    std::future::poll_fn(|cx| {
-        let mut all_connected = true;
-        for peer in &mut peers {
-            if peer.poll_unpin(cx).is_ready() {
-                tracing::error!("peer failed");
-            }
-            all_connected &= peer.get_peer_count() == needed_peers
-        }
-
-        if all_connected {
-            return Poll::Ready(())
-        }
-
-        Poll::Pending
-    })
-    .await
-}
 
 pub struct StromPeer<C = NoopProvider> {
     /// the default ethereum network peer
@@ -128,11 +88,11 @@ where
 
     pub async fn new_fully_configed(
         c: C,
-        sk: SecretKey,
-        validators: Arc<RwLock<HashSet<Address>>>,
         to_pool_manager: Option<UnboundedMeteredSender<NetworkOrderEvent>>,
         to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>
     ) -> Self {
+        let mut rng = thread_rng();
+        let sk = SecretKey::new(&mut rng);
         let peer = PeerConfig::with_secret_key(c.clone(), sk);
 
         let secp = Secp256k1::default();
@@ -151,6 +111,9 @@ where
             has_received: false,
             secret_key:   sk
         };
+
+        let validators: HashSet<Address> = HashSet::default();
+        let validators = Arc::new(RwLock::new(validators));
 
         let protocol = StromProtocolHandler::new(
             MeteredPollSender::new(PollSender::new(session_manager_tx), "session manager"),
@@ -243,4 +206,45 @@ where
 
         Poll::Pending
     }
+}
+
+pub async fn connect_all_peers(self_peers: &mut [(PeerId, StromPeer, StromHandles)]) {
+    let peer_set = self_peers.iter().collect::<Vec<_>>();
+    for (pk, peer, _) in &*self_peers {
+        for (other, ..) in &peer_set {
+            if *pk == *other {
+                continue
+            }
+            peer.add_validator(*other);
+        }
+    }
+    // add all peers to each other
+    let peers = self_peers.iter().collect::<Vec<_>>();
+    for (idx, (_, handle, _)) in peers.iter().enumerate().take(peers.len() - 1) {
+        for peer in peers.iter().skip(idx + 1) {
+            let (id, neighbour, _) = peer;
+            handle.connect_to_peer(*id, neighbour.socket_addr());
+        }
+    }
+
+    // wait on each peer to add all other peers
+    let needed_peers = self_peers.len() - 1;
+    let mut peers = self_peers.iter_mut().map(|(_, p, _)| p).collect::<Vec<_>>();
+
+    std::future::poll_fn(|cx| {
+        let mut all_connected = true;
+        for peer in &mut peers {
+            if peer.poll_unpin(cx).is_ready() {
+                tracing::error!("peer failed");
+            }
+            all_connected &= peer.get_peer_count() == needed_peers
+        }
+
+        if all_connected {
+            return Poll::Ready(())
+        }
+
+        Poll::Pending
+    })
+    .await
 }

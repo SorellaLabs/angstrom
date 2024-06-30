@@ -1,6 +1,7 @@
 //! CLI definition and entrypoint to executable
 use std::path::PathBuf;
 
+use angstrom_network::manager::StromConsensusEvent;
 use reth_node_builder::{FullNode, NodeHandle};
 use secp256k1::{PublicKey, Secp256k1};
 use tokio::sync::mpsc::{
@@ -132,8 +133,10 @@ pub struct StromHandles {
     pub orderpool_tx: UnboundedSender<DefaultOrderCommand>,
     pub orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
 
-    pub consensus_tx: Sender<ConsensusCommand>,
-    pub consensus_rx: Receiver<ConsensusCommand>
+    pub consensus_tx:    Sender<ConsensusCommand>,
+    pub consensus_rx:    Receiver<ConsensusCommand>,
+    pub consensus_tx_op: UnboundedMeteredSender<StromConsensusEvent>,
+    pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>
 }
 
 impl StromHandles {
@@ -151,6 +154,8 @@ pub fn initialize_strom_handles() -> StromHandles {
     let (consensus_tx, consensus_rx) = channel(100);
     let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
     let (orderpool_tx, orderpool_rx) = unbounded_channel();
+    let (consensus_tx_op, consensus_rx_op) =
+        reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
 
     StromHandles {
         eth_tx,
@@ -160,7 +165,9 @@ pub fn initialize_strom_handles() -> StromHandles {
         orderpool_tx,
         orderpool_rx,
         consensus_tx,
-        consensus_rx
+        consensus_rx,
+        consensus_tx_op,
+        consensus_rx_op
     }
 }
 
@@ -171,9 +178,6 @@ pub fn initialize_strom_components<Node: FullNodeComponents>(
     node: FullNode<Node>,
     executor: &TaskExecutor
 ) {
-    let (consensus_tx, consensus_rx) =
-        reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
-
     let eth_handle = EthDataCleanser::spawn(
         node.provider.subscribe_to_canonical_state(),
         node.provider.clone(),
@@ -185,7 +189,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents>(
 
     let network_handle = network_builder
         .with_pool_manager(handles.pool_tx)
-        .with_consensus_manager(consensus_tx)
+        .with_consensus_manager(handles.consensus_tx_op)
         .build_handle(executor.clone(), node.provider.clone());
 
     let validator = init_validation(
@@ -209,7 +213,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents>(
         ManagerNetworkDeps::new(
             network_handle.clone(),
             node.provider.subscribe_to_canonical_state(),
-            consensus_rx,
+            handles.consensus_rx_op,
             handles.consensus_tx,
             handles.consensus_rx
         ),

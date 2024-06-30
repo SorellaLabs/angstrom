@@ -7,8 +7,12 @@ use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
+use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
-use testnet::utils::{ported_reth_testnet_network::StromPeer, RpcStateProviderFactory};
+use testnet::utils::{
+    ported_reth_testnet_network::{connect_all_peers, StromPeer},
+    RpcStateProviderFactory
+};
 use tokio::sync::mpsc::unbounded_channel;
 use validation::init_validation;
 
@@ -55,12 +59,29 @@ async fn main() -> eyre::Result<()> {
 
     let rpc_wrapper = RpcStateProviderFactory::new(ipc_handle)?;
 
+    let mut network_with_handles = vec![];
+
+    for _ in 0..=cli_args.nodes_in_network {
+        let handles = initialize_strom_handles();
+        let peer = StromPeer::new_fully_configed(
+            NoopProvider::default(),
+            Some(handles.pool_tx.clone()),
+            Some(handles.consensus_tx_op.clone())
+        )
+        .await;
+        let pk = peer.get_node_public_key();
+        network_with_handles.push((pk, peer, handles));
+    }
+    connect_all_peers(&mut network_with_handles).await;
+
     for _ in 0..cli_args.nodes_in_network {
-        spawn_testnet_node(rpc_wrapper.clone(), None).await?;
+        let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
+        spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None).await?;
     }
 
+    let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
     // spawn the node with rpc
-    spawn_testnet_node(rpc_wrapper.clone(), Some(cli_args.port)).await?;
+    spawn_testnet_node(rpc_wrapper.clone(), peer, handles, Some(cli_args.port)).await?;
 
     Ok(())
 }
@@ -79,11 +100,7 @@ pub async fn spawn_testnet_node(
     let validator =
         init_validation(rpc_wrapper, CACHE_VALIDATION_SIZE, eth_handle.subscribe_network_stream());
 
-    let (network_tx, _network_rx) = unbounded_channel();
-    let network_handle = StromNetworkHandle::new(
-        Default::default(),
-        UnboundedMeteredSender::new(network_tx, "mock network")
-    );
+    let network_handle = network.handle.clone();
 
     let executor: TokioTaskExecutor = Default::default();
 

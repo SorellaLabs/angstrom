@@ -22,7 +22,6 @@ reth-network.workspace = true
 reth-node-builder.workspace = true
 reth-provider.workspace = true
 
-
 angstrom-rpc.workspace = true
 angstrom-types.workspace = true
 angstrom-eth.workspace = true

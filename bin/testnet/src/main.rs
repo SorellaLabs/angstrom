@@ -1,19 +1,15 @@
-use std::time::Duration;
-
 use angstrom::cli::{initialize_strom_handles, StromHandles};
 use angstrom_eth::handle::{Eth, EthHandle};
-use angstrom_network::{network::StromNetworkHandle, pool_manager::PoolManagerBuilder};
+use angstrom_network::pool_manager::PoolManagerBuilder;
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
-use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
 use testnet::utils::{
     ported_reth_testnet_network::{connect_all_peers, StromPeer},
     RpcStateProviderFactory
 };
-use tokio::sync::mpsc::unbounded_channel;
 use validation::init_validation;
 
 #[derive(Parser)]
@@ -22,10 +18,6 @@ struct Cli {
     /// port for the rpc for submitting transactions.
     #[clap(short, long, default_value_t = 4200)]
     port:                    u16,
-    /// url that anvil is set to. only really useful for overriding on url
-    /// conflict
-    #[clap(short, long, default_value = "http://localhost:8545")]
-    anvil_rpc_url:           String,
     /// the speed in which anvil will mine blocks.
     #[clap(short, long, default_value = "12")]
     testnet_block_time_secs: u64,
@@ -47,17 +39,8 @@ async fn main() -> eyre::Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
     let cli_args = Cli::parse();
 
-    let (_eth_api, anvil_handle) = testnet::utils::anvil_manager::spawn_anvil_on_url(
-        cli_args.anvil_rpc_url,
-        Duration::from_secs(cli_args.testnet_block_time_secs)
-    )
-    .await?;
-
-    let ipc_handle = anvil_handle
-        .ipc_provider()
-        .expect("couldn't connect to ipc handle for anvil");
-
-    let rpc_wrapper = RpcStateProviderFactory::new(ipc_handle)?;
+    let rpc = testnet::utils::anvil_manager::spawn_anvil(cli_args.testnet_block_time_secs).await?;
+    let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
 
     let mut network_with_handles = vec![];
 
@@ -88,7 +71,7 @@ async fn main() -> eyre::Result<()> {
 
 pub async fn spawn_testnet_node(
     rpc_wrapper: RpcStateProviderFactory,
-    network: StromPeer<RpcStateProviderFactory>,
+    network: StromPeer<NoopProvider>,
     handles: StromHandles,
     port: Option<u16>
 ) -> eyre::Result<()> {

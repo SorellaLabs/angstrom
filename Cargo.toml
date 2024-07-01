@@ -111,6 +111,20 @@ reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.0.
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
 
 # alloy
+alloy = { version = "0.1", features = [
+  "full",
+  "node-bindings",
+  "rpc-types-debug",
+  "rpc-types-trace",
+  "json-rpc",
+  "rpc-client",
+  "signer-aws",
+  "signer-keystore",
+  "signer-ledger",
+  "signer-mnemonic",
+  "signer-trezor",
+  "signer-yubihsm",
+] }
 alloy-chains = "0.1.15"
 alloy-primitives = "0.7.2"
 alloy-sol-macro = "0.7.2"

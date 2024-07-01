@@ -18,7 +18,6 @@ use reth_blockchain_tree::{
 };
 use reth_chainspec::MAINNET;
 use reth_db::{mdbx::DatabaseArguments, models::client_version::ClientVersion, DatabaseEnv};
-use reth_node_ethereum::EthEvmConfig;
 use reth_provider::{
     providers::{BlockchainProvider, StaticFileProvider},
     ChainSpecProvider, ProviderFactory

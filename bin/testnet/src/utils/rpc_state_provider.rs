@@ -1,12 +1,12 @@
 use std::future::IntoFuture;
 
 use alloy_primitives::keccak256;
-use alloy_provider::Provider;
+use alloy_provider::{Provider, RootProvider};
+use alloy_pubsub::PubSubFrontend;
 use alloy_transport::TransportResult;
-use foundry_common::provider::RetryProvider;
 use futures::Future;
-use reth_interfaces::provider::{ProviderError, ProviderResult};
 use reth_primitives::{Account, Address, BlockNumber, StorageKey, StorageValue};
+use reth_provider::{ProviderError, ProviderResult};
 use validation::common::lru_db::{BlockStateProvider, BlockStateProviderFactory};
 
 fn async_to_sync<F: Future>(f: F) -> F::Output {
@@ -17,7 +17,7 @@ fn async_to_sync<F: Future>(f: F) -> F::Output {
 #[derive(Clone, Debug)]
 pub struct RpcStateProvider {
     block:    u64,
-    provider: RetryProvider
+    provider: RootProvider<PubSubFrontend>
 }
 
 impl RpcStateProvider {
@@ -67,11 +67,11 @@ impl BlockStateProvider for RpcStateProvider {
 
 #[derive(Clone, Debug)]
 pub struct RpcStateProviderFactory {
-    provider: RetryProvider
+    provider: RootProvider<PubSubFrontend>
 }
 
 impl RpcStateProviderFactory {
-    pub fn new(provider: RetryProvider) -> eyre::Result<Self> {
+    pub fn new(provider: RootProvider<PubSubFrontend>) -> eyre::Result<Self> {
         Ok(Self { provider })
     }
 }

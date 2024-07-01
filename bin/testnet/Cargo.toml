@@ -20,6 +20,7 @@ reth-node-builder.workspace = true
 # anvil = { git = "https://github.com/foundry-rs/foundry" }
 # foundry-common = { git = "https://github.com/foundry-rs/foundry" }
 alloy-chains.workspace = true
+alloy.workspace = true
 
 blsful.workspace = true
 consensus.workspace = true
@@ -33,6 +34,7 @@ order-pool.workspace = true
 validation.workspace = true
 
 reth-network-api.workspace = true
+reth-network-peers.workspace = true
 reth-codecs.workspace = true
 reth-tasks.workspace = true
 reth-rpc-types.workspace = true
@@ -53,9 +55,10 @@ reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.0.
 reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
 reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
 
-# Revision `6aab216` selected so it matches with reth's
 alloy-provider = "0.1.3"
 alloy-transport = "0.1.3"
+alloy-transport-ws = "0.1.3"
+alloy-pubsub.workspace = true 
 
 # reth
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0", features = [

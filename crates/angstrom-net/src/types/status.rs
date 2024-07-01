@@ -6,11 +6,9 @@ use std::{
 use alloy_chains::{Chain, NamedChain};
 use alloy_rlp::{RlpDecodable, RlpEncodable};
 use angstrom_types::primitive::Signature;
-use reth_chainspec::spec::ChainSpec;
+use reth_chainspec::ChainSpec;
 use reth_codecs::derive_arbitrary;
-use reth_primitives::{
-    alloy_primitives::FixedBytes, keccak256, Address, BufMut, BytesMut, Head, NamedChain
-};
+use reth_primitives::{alloy_primitives::FixedBytes, keccak256, Address, BufMut, BytesMut, Head};
 use reth_rpc_types::PeerId;
 use secp256k1::{
     ecdsa::{RecoverableSignature, RecoveryId},

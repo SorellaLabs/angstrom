@@ -19,6 +19,7 @@ reth.workspace = true
 reth-node-builder.workspace = true
 # anvil = { git = "https://github.com/foundry-rs/foundry" }
 # foundry-common = { git = "https://github.com/foundry-rs/foundry" }
+alloy-chains.workspace = true
 
 blsful.workspace = true
 consensus.workspace = true
@@ -45,19 +46,19 @@ alloy-sol-types.workspace = true
 
 reth-node-ethereum.workspace = true
 reth-revm.workspace = true
-reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0" }
-reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0" }
+reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
+reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
 # reth-net-common = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0" }
-reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0" }
-reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0" }
-reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0" }
 
 # Revision `6aab216` selected so it matches with reth's
 alloy-provider = "0.1.3"
 alloy-transport = "0.1.3"
 
 # reth
-reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0", features = [
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0", features = [
   "test-utils",
 ] }
 # reth-interfaces = { workspace = true, features = ["test-utils"] }

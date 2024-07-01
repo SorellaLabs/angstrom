@@ -7,7 +7,7 @@ use angstrom_types::{
     orders::PooledOrder
 };
 use reth_eth_wire::{capability::Capability, protocol::Protocol};
-use reth_interfaces::p2p::error::RequestError;
+use reth_network_p2p::error::RequestError;
 use reth_primitives::bytes::{Buf, BufMut};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

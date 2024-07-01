@@ -15,6 +15,7 @@ pub async fn spawn_anvil(
         .chain_id(1)
         .try_spawn()?;
     let endpoint = anvil.endpoint_url();
+    tracing::info!(?endpoint);
     let rpc = builder().on_http(endpoint);
 
     tracing::info!("connected to anvil");

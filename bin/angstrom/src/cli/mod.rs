@@ -8,7 +8,7 @@ use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
 };
 mod network_builder;
-
+use alloy_chains::Chain;
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::EthDataCleanser
@@ -30,14 +30,15 @@ use clap::Parser;
 use consensus::{ConsensusCommand, ConsensusHandle, ConsensusManager, ManagerNetworkDeps, Signer};
 use reth::{
     args::get_secret_key,
-    builder::{components::FullNodeComponents, Node},
+    builder::{FullNodeComponents, Node},
+
+    // builder::{components::FullNodeComponents, Node},
     cli::Cli,
-    primitives::Chain,
     providers::CanonStateSubscriptions,
-    rpc::types::pk_to_id,
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
+use reth_network_peers::pk2id;
 use reth_node_ethereum::EthereumNode;
 use validation::init_validation;
 
@@ -59,10 +60,10 @@ pub fn run() -> eyre::Result<()> {
         let consensus = channels.get_consensus_handle();
 
         let NodeHandle { node, node_exit_future } = builder
-            .with_types(EthereumNode::default())
+            .with_types::<EthereumNode>()
             .with_components(
                 EthereumNode::default()
-                    .components()
+                    .components_builder()
                     .network(AngstromNetworkBuilder::new(protocol_handle))
             )
             .extend_rpc_modules(move |rpc_components| {
@@ -98,7 +99,7 @@ pub fn init_network_builder(config: &AngstromConfig) -> eyre::Result<StromNetwor
     let state = StatusState {
         version:   0,
         chain:     Chain::mainnet(),
-        peer:      pk_to_id(&public_key),
+        peer:      pk2id(&public_key),
         timestamp: 0
     };
 

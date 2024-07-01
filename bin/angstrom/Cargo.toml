@@ -19,9 +19,12 @@ normal = [
 [dependencies]
 reth.workspace = true
 reth-network.workspace = true
+reth-network-peers.workspace = true
 reth-node-builder.workspace = true
 reth-provider.workspace = true
+reth-rpc-types.workspace = true
 
+alloy-chains.workspace = true
 angstrom-rpc.workspace = true
 angstrom-types.workspace = true
 angstrom-eth.workspace = true

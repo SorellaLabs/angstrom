@@ -185,9 +185,10 @@ tokio-util = { version = "0.7.4", features = ["codec"] }
 
 
 ## json
-jsonrpsee = { version = "0.22.3" }
-jsonrpsee-core = { version = "0.22.3" }
-jsonrpsee-types = { version = "0.22.3" }
+jsonrpsee = "0.23"
+jsonrpsee-core = "0.23"
+jsonrpsee-types = "0.23"
+jsonrpsee-http-client = "0.23"
 
 ## crypto
 secp256k1 = { version = "0.29.0", default-features = false, features = [

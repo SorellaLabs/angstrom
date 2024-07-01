@@ -49,7 +49,7 @@ async fn main() -> eyre::Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
     let cli_args = Cli::parse();
 
-    let rpc = testnet::utils::anvil_manager::spawn_anvil(cli_args.testnet_block_time_secs, self.fork_url).await?;
+    let rpc = testnet::utils::anvil_manager::spawn_anvil(cli_args.testnet_block_time_secs, cli_args.fork_url).await?;
     let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
 
 

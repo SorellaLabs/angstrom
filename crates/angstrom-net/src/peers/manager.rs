@@ -1,8 +1,9 @@
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 use reth_eth_wire::DisconnectReason;
-use reth_net_common::ban_list::BanList;
-use reth_primitives::{NodeRecord, PeerId};
+use reth_net_banlist::BanList;
+use reth_network_peers::NodeRecord;
+use reth_rpc_types::PeerId;
 use tokio::{
     sync::{mpsc, mpsc::UnboundedSender, oneshot},
     time::{Duration, Instant, Interval}

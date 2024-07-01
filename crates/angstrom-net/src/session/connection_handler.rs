@@ -11,7 +11,8 @@ use reth_network::{
     protocol::{ConnectionHandler, OnNotSupported},
     Direction
 };
-use reth_primitives::{keccak256, Address, PeerId};
+use reth_primitives::{keccak256, Address};
+use reth_rpc_types::PeerId;
 use secp256k1::{PublicKey, SecretKey};
 use tokio::{
     sync::mpsc,

@@ -4,7 +4,7 @@ use std::{
 };
 
 use futures::{Stream, StreamExt};
-use reth_primitives::PeerId;
+use reth_network_peers::PeerId;
 
 use crate::{
     peers::PeersManager,

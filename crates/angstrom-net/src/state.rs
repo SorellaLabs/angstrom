@@ -3,7 +3,8 @@ use std::{collections::HashSet, sync::Arc, task::Context};
 use alloy_sol_macro::sol;
 use parking_lot::RwLock;
 use reth_network::DisconnectReason;
-use reth_primitives::{Address, PeerId};
+use reth_network_peers::PeerId;
+use reth_primitives::Address;
 
 use crate::PeersManager;
 

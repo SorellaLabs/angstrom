@@ -21,7 +21,8 @@ use order_pool::{
     PoolInnerEvent
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
-use reth_primitives::{PeerId, TxHash, B256};
+use reth_network_peers::PeerId;
+use reth_primitives::{TxHash, B256};
 use reth_tasks::TaskSpawner;
 use tokio::sync::{
     mpsc,

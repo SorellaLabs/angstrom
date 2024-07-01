@@ -19,7 +19,8 @@ use angstrom_types::{
     }
 };
 use futures_util::{Stream, StreamExt};
-use reth_primitives::{Address, PeerId, U256};
+use reth_network_peers::PeerId;
+use reth_primitives::{Address, U256};
 use tokio::sync::mpsc;
 use tracing::{error, trace, warn};
 use validation::order::OrderValidatorHandle;

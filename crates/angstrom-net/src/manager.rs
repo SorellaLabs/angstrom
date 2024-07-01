@@ -9,7 +9,7 @@ use angstrom_types::consensus::{Commit, PreProposal, Proposal};
 use futures::{task::Poll, StreamExt};
 use reth_eth_wire::DisconnectReason;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
-use reth_primitives::PeerId;
+use reth_rpc_types::PeerId;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::error;

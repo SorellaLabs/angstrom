@@ -13,7 +13,7 @@ pub async fn spawn_anvil(
         .fork_block_number(20214717)
         .fork(fork_url)
         .chain_id(1)
-        .port(4469)
+        .port(4469u16)
         .try_spawn()?;
     let endpoint = anvil.endpoint_url();
     tracing::info!(?endpoint);

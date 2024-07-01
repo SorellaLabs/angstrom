@@ -4,10 +4,18 @@ use alloy::{
 };
 use alloy_provider::{builder, RootProvider};
 
-pub async fn spawn_anvil(block_time: u64, fork_url: String) -> eyre::Result<RootProvider<Http<Client>>> {
-    let anvil = Anvil::new().block_time(block_time).fork_block_number(20214717).fork(fork_url).try_spawn()?;
+pub async fn spawn_anvil(
+    block_time: u64,
+    fork_url: String
+) -> eyre::Result<RootProvider<Http<Client>>> {
+    let anvil = Anvil::new()
+        .block_time(block_time)
+        .fork_block_number(20214717)
+        .fork(fork_url)
+        .try_spawn()?;
     let endpoint = anvil.endpoint_url();
     let rpc = builder().on_http(endpoint);
+
     tracing::info!("connected to anvil");
 
     Ok(rpc)

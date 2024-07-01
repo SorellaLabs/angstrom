@@ -21,10 +21,9 @@ use reth_db::{mdbx::DatabaseArguments, models::client_version::ClientVersion, Da
 use reth_node_ethereum::EthEvmConfig;
 use reth_provider::{
     providers::{BlockchainProvider, StaticFileProvider},
-    ProviderFactory
+    ChainSpecProvider, ProviderFactory
 };
 use reth_prune_types::PruneModes;
-use reth_revm::EvmProcessorFactory;
 
 pub type Provider = BlockchainProvider<Arc<DatabaseEnv>>;
 
@@ -43,11 +42,11 @@ pub fn load_reth_db(db_path: &Path) -> Provider {
 
     let provider_factory =
         ProviderFactory::new(db.clone(), Arc::clone(&chain), static_file_provider);
-
+    let executor = reth_node_ethereum::EthExecutorProvider::ethereum(provider_factory.chain_spec());
     let tree_externals = TreeExternals::new(
         provider_factory.clone(),
         Arc::new(EthBeaconConsensus::new(Arc::clone(&chain))),
-        EvmProcessorFactory::new(chain.clone(), EthEvmConfig::default())
+        executor
     );
 
     let tree_config = BlockchainTreeConfig::default();

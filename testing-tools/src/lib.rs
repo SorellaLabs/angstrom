@@ -12,20 +12,21 @@ pub mod validation;
 
 use std::{path::Path, sync::Arc};
 
-use reth_beacon_consensus::BeaconConsensus;
+use reth_beacon_consensus::EthBeaconConsensus;
 use reth_blockchain_tree::{
     BlockchainTree, BlockchainTreeConfig, ShareableBlockchainTree, TreeExternals
 };
+use reth_chainspec::MAINNET;
 use reth_db::{mdbx::DatabaseArguments, models::client_version::ClientVersion, DatabaseEnv};
 use reth_node_ethereum::EthEvmConfig;
-use reth_primitives::{PruneModes, MAINNET};
-use reth_provider::{providers::BlockchainProvider, ProviderFactory};
+use reth_provider::{
+    providers::{BlockchainProvider, StaticFileProvider},
+    ProviderFactory
+};
+use reth_prune_types::PruneModes;
 use reth_revm::EvmProcessorFactory;
 
-pub type Provider = BlockchainProvider<
-    Arc<DatabaseEnv>,
-    ShareableBlockchainTree<Arc<DatabaseEnv>, EvmProcessorFactory<EthEvmConfig>>
->;
+pub type Provider = BlockchainProvider<Arc<DatabaseEnv>>;
 
 pub fn load_reth_db(db_path: &Path) -> Provider {
     let db = Arc::new(
@@ -37,12 +38,15 @@ pub fn load_reth_db(db_path: &Path) -> Provider {
     static_files.push("static_files");
 
     let chain = MAINNET.clone();
-    let provider_factory = ProviderFactory::new(db.clone(), Arc::clone(&chain), static_files)
-        .expect("failed to start provider factory");
+    let static_file_provider =
+        StaticFileProvider::read_only(static_files).expect("static file provider failed");
+
+    let provider_factory =
+        ProviderFactory::new(db.clone(), Arc::clone(&chain), static_file_provider);
 
     let tree_externals = TreeExternals::new(
         provider_factory.clone(),
-        Arc::new(BeaconConsensus::new(Arc::clone(&chain))),
+        Arc::new(EthBeaconConsensus::new(Arc::clone(&chain))),
         EvmProcessorFactory::new(chain.clone(), EthEvmConfig::default())
     );
 
@@ -52,5 +56,5 @@ pub fn load_reth_db(db_path: &Path) -> Provider {
         BlockchainTree::new(tree_externals, tree_config, Some(PruneModes::none())).unwrap()
     );
 
-    BlockchainProvider::new(provider_factory.clone(), blockchain_tree).unwrap()
+    BlockchainProvider::new(provider_factory.clone(), Arc::new(blockchain_tree)).unwrap()
 }

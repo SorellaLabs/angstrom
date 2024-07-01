@@ -6,6 +6,7 @@ mod strom_peer;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkEvent};
 use futures::{stream::StreamExt, FutureExt};
 use reth_metrics::common::mpsc::metered_unbounded_channel;
+use reth_network_api::PeerId;
 use reth_primitives::*;
 use reth_provider::test_utils::NoopProvider;
 use secp256k1::SecretKey;

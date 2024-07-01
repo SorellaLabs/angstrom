@@ -1,5 +1,6 @@
 use std::{collections::HashSet, net::SocketAddr, sync::Arc, task::Poll};
 
+use alloy_chains::Chain;
 use angstrom_network::{
     manager::StromConsensusEvent, state::StromState, NetworkOrderEvent, StatusState,
     StromNetworkEvent, StromNetworkHandle, StromNetworkManager, StromProtocolHandler,
@@ -10,10 +11,10 @@ use parking_lot::RwLock;
 use rand::thread_rng;
 use reth_metrics::common::mpsc::{MeteredPollSender, UnboundedMeteredSender};
 use reth_network::test_utils::{Peer, PeerConfig};
-use reth_network_api::Peers;
-use reth_primitives::{Address, Chain};
+use reth_network_api::{PeerId, Peers};
+use reth_network_peers::pk2id;
+use reth_primitives::Address;
 use reth_provider::{test_utils::NoopProvider, BlockReader, HeaderProvider};
-use reth_rpc_types::{pk_to_id, PeerId};
 use secp256k1::{PublicKey, Secp256k1};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::PollSender;
@@ -45,7 +46,7 @@ where
         let state = StatusState {
             version:   0,
             chain:     Chain::mainnet(),
-            peer:      pk_to_id(&pub_key),
+            peer:      pk2id(&pub_key),
             timestamp: 0
         };
 
@@ -102,7 +103,7 @@ where
         let state = StatusState {
             version:   0,
             chain:     Chain::mainnet(),
-            peer:      pk_to_id(&pub_key),
+            peer:      pk2id(&pub_key),
             timestamp: 0
         };
         let (session_manager_tx, session_manager_rx) = tokio::sync::mpsc::channel(100);
@@ -134,7 +135,7 @@ where
 
     pub fn get_node_public_key(&self) -> PeerId {
         let pub_key = PublicKey::from_secret_key(&Secp256k1::default(), &self.secret_key);
-        pk_to_id(&pub_key)
+        pk2id(&pub_key)
     }
 
     pub fn disconnect_peer(&self, id: PeerId) {

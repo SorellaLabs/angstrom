@@ -210,7 +210,7 @@ where
         let tx = evm.tx().clone();
         let _ = match tx.transact_to {
             TransactTo::Call(a) => a,
-            TransactTo::Create(_) => return Err(SimError::CallInsteadOfCreateError(tx.clone()))
+            TransactTo::Create => return Err(SimError::CallInsteadOfCreateError(tx.clone()))
         };
 
         let result = evm

@@ -95,7 +95,7 @@ where
                 let fut = async move {
                     let mut map = HashMap::new();
 
-                    let bytecode = Bytecode { bytecode: V4_BYTE_CODE, ..Default::default() };
+                    let bytecode = Bytecode::LegacyRaw(V4_BYTE_CODE);
 
                     map.insert(ANGSTROM_ADDRESS, bytecode);
                     let _ = match state.simulate_v4_tx(tx, map) {

@@ -1,5 +1,6 @@
 use alloy_sol_types::Error;
 use angstrom_types::rpc::SignedLimitOrder;
+use reth_errors::RethError;
 use reth_primitives::{
     revm_primitives::{Account, Address, HashMap, TxEnv},
     Signature
@@ -31,7 +32,7 @@ impl SimResult {
 #[derive(Debug, Error)]
 pub enum SimError {
     #[error("Unable to read Revm-Reth StateProvider Database")]
-    RevmDatabaseError(#[from] reth_interfaces::RethError),
+    RevmDatabaseError(#[from] RethError),
     #[error("Unable to Create Runtime For ThreadPool")]
     RuntimeCreationError(#[from] std::io::Error),
     #[error("Unable to Start libmdbx transaction")]

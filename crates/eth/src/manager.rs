@@ -107,7 +107,8 @@ where
 
     /// fetches all eoa addresses touched
     fn get_eoa(chain: Arc<Chain>) -> Vec<Address> {
-        chain.state().state().state().keys().copied().collect()
+        // chain.state().state().state().keys().copied().collect()
+        vec![]
     }
 }
 

@@ -33,6 +33,7 @@ reth-primitives = { workspace = true, features = ["std"] }
 reth-provider.workspace = true
 reth-revm.workspace = true
 reth-db = { workspace = true, features = ["mdbx"] }
+reth-errors.workspace = true
 
 # async/futures
 tokio.workspace = true
@@ -73,7 +74,7 @@ tracing.workspace = true
 testing-tools.workspace = true
 angstrom-network.workspace = true
 # reth
-reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", features = [
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0", features = [
   "test-utils",
 ] }
 reth-primitives = { workspace = true, features = ["test-utils"] }

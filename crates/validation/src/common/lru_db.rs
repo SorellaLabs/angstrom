@@ -5,16 +5,14 @@ use std::{
 
 use alloy_primitives::Address;
 use parking_lot::RwLock;
-use reth_interfaces::{
-    provider::{ProviderError, ProviderResult},
-    RethError, RethResult
-};
+use reth_errors::{RethError, RethResult};
 use reth_primitives::{
     revm_primitives::{AccountInfo, Bytecode, B256, U256},
     Account, BlockNumber, StorageKey, StorageValue, KECCAK_EMPTY
 };
 use reth_provider::{
-    AccountReader, BlockNumReader, StateProvider, StateProviderBox, StateProviderFactory
+    AccountReader, BlockNumReader, ProviderError, ProviderResult, StateProvider, StateProviderBox,
+    StateProviderFactory
 };
 use reth_revm::{Database, DatabaseRef};
 use revm::db::DbAccount;

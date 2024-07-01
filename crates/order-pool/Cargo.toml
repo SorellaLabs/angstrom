@@ -69,7 +69,7 @@ proptest = { workspace = true, optional = true }
 testing-tools.workspace = true
 angstrom-network.workspace = true
 # reth
-reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", features = [
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0", features = [
   "test-utils",
 ] }
 # reth-interfaces = { workspace = true, features = ["test-utils"] }

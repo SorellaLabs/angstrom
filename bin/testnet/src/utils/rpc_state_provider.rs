@@ -85,8 +85,7 @@ impl BlockStateProviderFactory for RpcStateProviderFactory {
     }
 
     fn best_block_number(&self) -> ProviderResult<BlockNumber> {
-        Ok(async_to_sync(self.provider.get_block_number())
+        async_to_sync(self.provider.get_block_number())
             .map_err(|_| ProviderError::BestBlockNotFound)
-            .unwrap_or_default())
     }
 }

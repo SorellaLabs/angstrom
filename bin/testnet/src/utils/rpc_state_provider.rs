@@ -1,6 +1,5 @@
 use std::future::IntoFuture;
 
-use alloy::transports::http::{Client, Http};
 use alloy_primitives::keccak256;
 use alloy_provider::{Provider, RootProvider};
 use alloy_pubsub::PubSubFrontend;

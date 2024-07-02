@@ -149,7 +149,7 @@ pub struct FlashOrder {
 impl From<FlashOrder> for SolFlashOrder {
     fn from(value: FlashOrder) -> Self {
         Self {
-            mode:                 Into::<&str>::into(value.mode.clone()).to_owned(),
+            mode:                 Into::<&str>::into(value.mode).to_owned(),
             max_amount_in_or_out: value.max_amount_in_or_out,
             min_price:            value.min_price,
             asset_in:             value.asset_in,

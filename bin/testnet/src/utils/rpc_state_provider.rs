@@ -68,7 +68,7 @@ impl BlockStateProvider for RpcStateProvider {
 
 #[derive(Clone, Debug)]
 pub struct RpcStateProviderFactory {
-    provider: RootProvider<PubSubFrontend>
+    pub provider: RootProvider<PubSubFrontend>
 }
 
 impl RpcStateProviderFactory {

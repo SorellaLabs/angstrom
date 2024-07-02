@@ -1,8 +1,7 @@
-use std::{thread::sleep, time::Duration};
-
+use alloy_primitives::Address;
 use alloy_provider::Provider;
 use angstrom::cli::{initialize_strom_handles, StromHandles};
-use angstrom_eth::handle::{Eth, EthHandle};
+use angstrom_eth::handle::Eth;
 use angstrom_network::pool_manager::PoolManagerBuilder;
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
@@ -11,7 +10,7 @@ use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
 use testnet::utils::{
     ported_reth_testnet_network::{connect_all_peers, StromPeer},
-    RpcStateProviderFactory
+    AnvilEthDataCleanser, RpcStateProviderFactory
 };
 use validation::init_validation;
 
@@ -57,11 +56,9 @@ async fn main() -> eyre::Result<()> {
     )
     .await?;
 
-    let sub = rpc.subscribe_blocks().await?;
-
     let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
-
     let mut network_with_handles = vec![];
+    let addr = Address::ZERO;
 
     for _ in 0..=cli_args.nodes_in_network {
         let handles = initialize_strom_handles();
@@ -78,12 +75,12 @@ async fn main() -> eyre::Result<()> {
 
     for _ in 0..cli_args.nodes_in_network {
         let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
-        spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None).await?;
+        spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None, addr).await?;
     }
 
     let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
     // spawn the node with rpc
-    spawn_testnet_node(rpc_wrapper.clone(), peer, handles, Some(cli_args.port)).await?;
+    spawn_testnet_node(rpc_wrapper.clone(), peer, handles, Some(cli_args.port), addr).await?;
 
     Ok(())
 }
@@ -92,19 +89,32 @@ pub async fn spawn_testnet_node(
     rpc_wrapper: RpcStateProviderFactory,
     network: StromPeer<NoopProvider>,
     handles: StromHandles,
-    port: Option<u16>
+    port: Option<u16>,
+    contract_address: Address
 ) -> eyre::Result<()> {
     let pool = handles.get_pool_handle();
+    let executor: TokioTaskExecutor = Default::default();
 
     let order_api = OrderApi { pool: pool.clone() };
-    let eth_handle = EthHandle::new(handles.eth_tx);
+    let eth_handle = AnvilEthDataCleanser::spawn(
+        executor.clone(),
+        contract_address,
+        handles.eth_tx,
+        handles.eth_rx,
+        rpc_wrapper.provider.clone(),
+        rpc_wrapper
+            .provider
+            .clone()
+            .subscribe_blocks()
+            .await?
+            .into_stream()
+    )
+    .await?;
 
     let validator =
         init_validation(rpc_wrapper, CACHE_VALIDATION_SIZE, eth_handle.subscribe_network_stream());
 
     let network_handle = network.handle.clone();
-
-    let executor: TokioTaskExecutor = Default::default();
 
     let _pool_handle = PoolManagerBuilder::new(
         validator.clone(),

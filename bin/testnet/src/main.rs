@@ -57,9 +57,6 @@ async fn main() -> eyre::Result<()> {
     .await?;
     let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
 
-    tracing::info!("allowing for first block to be mined");
-    sleep(Duration::from_secs(13));
-
     let mut network_with_handles = vec![];
 
     for _ in 0..=cli_args.nodes_in_network {

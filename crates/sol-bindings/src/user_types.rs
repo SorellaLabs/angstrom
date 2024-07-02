@@ -54,7 +54,7 @@ impl From<OrderMode> for &str {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum AssetForm {
     #[default]

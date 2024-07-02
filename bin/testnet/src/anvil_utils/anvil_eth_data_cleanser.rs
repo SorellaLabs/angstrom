@@ -30,7 +30,8 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
         tx: Sender<EthCommand>,
         rx: Receiver<EthCommand>,
         block_subscription: S,
-        block_finalization_lookback: u64
+        block_finalization_lookback: u64,
+        id: u64
     ) -> eyre::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
         let this = Self {

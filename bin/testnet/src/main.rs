@@ -8,9 +8,10 @@ use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
-use testnet::utils::{
+use testnet::{
+    anvil_utils::{spawn_anvil, AnvilEthDataCleanser},
     ported_reth_testnet_network::{connect_all_peers, StromPeer},
-    AnvilEthDataCleanser, RpcStateProviderFactory
+    rpc_state_provider::RpcStateProviderFactory
 };
 use validation::init_validation;
 
@@ -50,11 +51,8 @@ async fn main() -> eyre::Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
     let cli_args = Cli::parse();
 
-    let (_anvil_handle, rpc) = testnet::utils::anvil_manager::spawn_anvil(
-        cli_args.testnet_block_time_secs,
-        cli_args.fork_url
-    )
-    .await?;
+    let (_anvil_handle, rpc) =
+        spawn_anvil(cli_args.testnet_block_time_secs, cli_args.fork_url).await?;
 
     let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
     let mut network_with_handles = vec![];
@@ -73,7 +71,7 @@ async fn main() -> eyre::Result<()> {
     }
     connect_all_peers(&mut network_with_handles).await;
 
-    for _ in 0..cli_args.nodes_in_network {
+    for i in 0..cli_args.nodes_in_network {
         let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
         spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None, addr).await?;
     }

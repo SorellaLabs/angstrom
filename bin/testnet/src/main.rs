@@ -1,5 +1,6 @@
 use std::{thread::sleep, time::Duration};
 
+use alloy_provider::Provider;
 use angstrom::cli::{initialize_strom_handles, StromHandles};
 use angstrom_eth::handle::{Eth, EthHandle};
 use angstrom_network::pool_manager::PoolManagerBuilder;
@@ -55,6 +56,9 @@ async fn main() -> eyre::Result<()> {
         cli_args.fork_url
     )
     .await?;
+
+    let sub = rpc.subscribe_blocks().await?;
+
     let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
 
     let mut network_with_handles = vec![];

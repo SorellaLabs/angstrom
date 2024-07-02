@@ -102,7 +102,7 @@ pub async fn spawn_testnet_node(
     contract_address: Address,
     id: u64
 ) -> eyre::Result<()> {
-    let span = span!(Level::TRACE, "testnet node", id = id);
+    let span = span!(Level::ERROR, "testnet node", id = id);
     let pool = handles.get_pool_handle();
     let executor: TokioTaskExecutor = Default::default();
 

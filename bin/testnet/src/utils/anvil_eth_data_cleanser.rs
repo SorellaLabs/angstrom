@@ -1,5 +1,6 @@
 use std::task::{Context, Poll};
 
+use alloy_primitives::{hex, Address};
 use alloy_provider::{Provider, RootProvider};
 use alloy_pubsub::{PubSubFrontend, Subscription};
 use alloy_rpc_types_eth::Block;
@@ -7,32 +8,39 @@ use angstrom_eth::{
     handle::{EthCommand, EthHandle},
     manager::EthEvent
 };
-use futures::{Future, FutureExt};
+use futures::{Future, FutureExt, Stream, StreamExt};
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
 
-pub struct AnvilEthDataCleanser {
+pub struct AnvilEthDataCleanser<S: Stream<Item = Block>> {
+    angstrom_contract:  Address,
     /// our command receiver
     commander:          ReceiverStream<EthCommand>,
     /// people listening to events
     event_listeners:    Vec<UnboundedSender<EthEvent>>,
     provider:           RootProvider<PubSubFrontend>,
-    block_subscription: Subscription<Block>
+    block_subscription: S
 }
 
-impl AnvilEthDataCleanser {
+impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
     pub async fn spawn<TP: TaskSpawner>(
         tp: TP,
+        angstrom_contract: Address,
         tx: Sender<EthCommand>,
         rx: Receiver<EthCommand>,
-        provider: RootProvider<PubSubFrontend>
+        provider: RootProvider<PubSubFrontend>,
+        block_subscription: S
     ) -> eyre::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
-        let block_subscription = provider.subscribe_blocks().await?;
-        let this =
-            Self { commander: stream, event_listeners: Vec::new(), provider, block_subscription };
-        tp.spawn_critical("eth handle", this.boxed());
+        let this = Self {
+            commander: stream,
+            event_listeners: Vec::new(),
+            provider,
+            block_subscription,
+            angstrom_contract
+        };
+        tp.spawn_critical("eth handle", Box::pin(this));
 
         let handle = EthHandle::new(tx);
 
@@ -57,15 +65,29 @@ impl AnvilEthDataCleanser {
             .expect("block from anvil with no number");
 
         self.send_events(EthEvent::NewBlock(bn));
-
-        // let filled_orders =
+        // find angstrom tx
+        let Some(_angstrom_tx) = block
+            .transactions
+            .txns()
+            .find(|tx| tx.to == Some(self.angstrom_contract))
+        else {
+            tracing::info!("No angstrom tx found");
+            return
+        };
     }
 }
 
-impl Future for AnvilEthDataCleanser {
+impl<S: Stream<Item = Block> + Unpin + Send + 'static> Future for AnvilEthDataCleanser<S> {
     type Output = ();
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        while let Poll::Ready(Some(block)) = self.block_subscription.poll_next_unpin(cx) {
+            self.on_new_block(block);
+        }
+        while let Poll::Ready(Some(cmd)) = self.commander.poll_next_unpin(cx) {
+            self.on_command(cmd);
+        }
+
         Poll::Pending
     }
 }

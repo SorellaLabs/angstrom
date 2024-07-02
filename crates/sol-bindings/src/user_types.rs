@@ -12,7 +12,7 @@ pub struct HookData {
     pub payload: Bytes
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum OrderMode {
     ExactIn,
@@ -116,7 +116,7 @@ pub struct StandingOrder {
 impl From<StandingOrder> for SolStandingOrder {
     fn from(value: StandingOrder) -> Self {
         Self {
-            mode:                 Into::<&str>::into(value.mode.clone()).to_owned(),
+            mode:                 Into::<&str>::into(value.mode).to_owned(),
             max_amount_in_or_out: value.max_amount_in_or_out,
             min_price:            value.min_price,
             asset_in:             value.asset_in,

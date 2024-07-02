@@ -17,10 +17,9 @@ normal = [
 [dependencies]
 reth.workspace = true
 reth-node-builder.workspace = true
-# anvil = { git = "https://github.com/foundry-rs/foundry" }
-# foundry-common = { git = "https://github.com/foundry-rs/foundry" }
 alloy-chains.workspace = true
 alloy.workspace = true
+sol-bindings.workspace = true
 
 blsful.workspace = true
 consensus.workspace = true

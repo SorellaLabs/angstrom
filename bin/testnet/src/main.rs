@@ -101,13 +101,13 @@ pub async fn spawn_testnet_node(
         contract_address,
         handles.eth_tx,
         handles.eth_rx,
-        rpc_wrapper.provider.clone(),
         rpc_wrapper
             .provider
             .clone()
             .subscribe_blocks()
             .await?
-            .into_stream()
+            .into_stream(),
+        7
     )
     .await?;
 

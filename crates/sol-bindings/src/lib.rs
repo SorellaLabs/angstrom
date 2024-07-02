@@ -1,3 +1,4 @@
+pub mod contract_bundle_ext;
 pub mod envelopes;
 pub mod sol;
 pub mod testnet;

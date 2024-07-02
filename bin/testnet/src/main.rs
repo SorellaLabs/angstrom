@@ -13,6 +13,7 @@ use testnet::{
     ported_reth_testnet_network::{connect_all_peers, StromPeer},
     rpc_state_provider::RpcStateProviderFactory
 };
+use tracing::{span, Instrument, Level};
 use validation::init_validation;
 
 #[derive(Parser)]
@@ -58,27 +59,37 @@ async fn main() -> eyre::Result<()> {
     let mut network_with_handles = vec![];
     let addr = Address::ZERO;
 
-    for _ in 0..=cli_args.nodes_in_network {
+    for id in 0..=cli_args.nodes_in_network {
+        let span = span!(Level::TRACE, "testnet node", id = id);
         let handles = initialize_strom_handles();
         let peer = StromPeer::new_fully_configed(
             NoopProvider::default(),
             Some(handles.pool_tx.clone()),
             Some(handles.consensus_tx_op.clone())
         )
+        .instrument(span)
         .await;
         let pk = peer.get_node_public_key();
         network_with_handles.push((pk, peer, handles));
     }
     connect_all_peers(&mut network_with_handles).await;
 
-    for i in 0..cli_args.nodes_in_network {
+    for id in 0..cli_args.nodes_in_network {
         let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
-        spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None, addr).await?;
+        spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None, addr, id).await?;
     }
 
     let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
     // spawn the node with rpc
-    spawn_testnet_node(rpc_wrapper.clone(), peer, handles, Some(cli_args.port), addr).await?;
+    spawn_testnet_node(
+        rpc_wrapper.clone(),
+        peer,
+        handles,
+        Some(cli_args.port),
+        addr,
+        cli_args.nodes_in_network
+    )
+    .await?;
 
     Ok(())
 }
@@ -88,8 +99,10 @@ pub async fn spawn_testnet_node(
     network: StromPeer<NoopProvider>,
     handles: StromHandles,
     port: Option<u16>,
-    contract_address: Address
+    contract_address: Address,
+    id: u64
 ) -> eyre::Result<()> {
+    let span = span!(Level::TRACE, "testnet node", id = id);
     let pool = handles.get_pool_handle();
     let executor: TokioTaskExecutor = Default::default();
 
@@ -105,7 +118,8 @@ pub async fn spawn_testnet_node(
             .subscribe_blocks()
             .await?
             .into_stream(),
-        7
+        7,
+        span
     )
     .await?;
 

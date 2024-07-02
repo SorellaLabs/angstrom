@@ -12,6 +12,7 @@ use reth_tasks::TaskSpawner;
 use sol_bindings::sol::ContractBundle;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::{Instrument, Span};
 
 pub struct AnvilEthDataCleanser<S: Stream<Item = Block>> {
     angstrom_contract:           Address,
@@ -31,7 +32,7 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
         rx: Receiver<EthCommand>,
         block_subscription: S,
         block_finalization_lookback: u64,
-        id: u64
+        span: Span
     ) -> eyre::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
         let this = Self {
@@ -41,7 +42,7 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
             angstrom_contract,
             block_finalization_lookback
         };
-        tp.spawn_critical("eth handle", Box::pin(this));
+        tp.spawn_critical("eth handle", Box::pin(this.instrument(span)));
 
         let handle = EthHandle::new(tx);
 

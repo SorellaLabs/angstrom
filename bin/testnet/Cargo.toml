@@ -59,6 +59,7 @@ alloy-provider = "0.1.3"
 alloy-transport = "0.1.3"
 alloy-transport-ws = "0.1.3"
 alloy-pubsub.workspace = true 
+alloy-node-bindings.workspace = true
 
 # reth
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0", features = [

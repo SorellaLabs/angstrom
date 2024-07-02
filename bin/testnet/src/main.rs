@@ -1,7 +1,7 @@
+use std::{thread::sleep, time::Duration};
+
 use angstrom::cli::{initialize_strom_handles, StromHandles};
 use angstrom_eth::handle::{Eth, EthHandle};
-use std::time::Duration;
-use std::thread::sleep;
 use angstrom_network::pool_manager::PoolManagerBuilder;
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
@@ -33,9 +33,10 @@ struct Cli {
     /// this will change in the future but is good enough for testing currently
     #[clap(short, long, default_value = "3")]
     nodes_in_network:        u64,
-    /// used to tell anvil where to fork from. default is the reth node on the reth1 server.
+    /// used to tell anvil where to fork from. default is the reth node on the
+    /// reth1 server.
     #[clap(short, long, default_value = "localhost:8489")]
-    fork_url: String
+    fork_url:                String
 }
 
 const CACHE_VALIDATION_SIZE: usize = 100_000_000;
@@ -49,9 +50,12 @@ async fn main() -> eyre::Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
     let cli_args = Cli::parse();
 
-    let rpc = testnet::utils::anvil_manager::spawn_anvil(cli_args.testnet_block_time_secs, cli_args.fork_url).await?;
+    let (anvil_handle, rpc) = testnet::utils::anvil_manager::spawn_anvil(
+        cli_args.testnet_block_time_secs,
+        cli_args.fork_url
+    )
+    .await?;
     let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
-
 
     tracing::info!("allowing for first block to be mined");
     sleep(Duration::from_secs(13));

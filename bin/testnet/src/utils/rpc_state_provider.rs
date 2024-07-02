@@ -3,6 +3,7 @@ use std::future::IntoFuture;
 use alloy::transports::http::{Client, Http};
 use alloy_primitives::keccak256;
 use alloy_provider::{Provider, RootProvider};
+use alloy_pubsub::PubSubFrontend;
 use alloy_transport::TransportResult;
 use futures::Future;
 use reth_primitives::{Account, Address, BlockNumber, StorageKey, StorageValue};
@@ -17,7 +18,7 @@ fn async_to_sync<F: Future>(f: F) -> F::Output {
 #[derive(Clone, Debug)]
 pub struct RpcStateProvider {
     block:    u64,
-    provider: RootProvider<Http<Client>>
+    provider: RootProvider<PubSubFrontend>
 }
 
 impl RpcStateProvider {
@@ -67,11 +68,11 @@ impl BlockStateProvider for RpcStateProvider {
 
 #[derive(Clone, Debug)]
 pub struct RpcStateProviderFactory {
-    provider: RootProvider<Http<Client>>
+    provider: RootProvider<PubSubFrontend>
 }
 
 impl RpcStateProviderFactory {
-    pub fn new(provider: RootProvider<Http<Client>>) -> eyre::Result<Self> {
+    pub fn new(provider: RootProvider<PubSubFrontend>) -> eyre::Result<Self> {
         Ok(Self { provider })
     }
 }

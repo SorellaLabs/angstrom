@@ -77,9 +77,11 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
             tracing::info!("No angstrom tx found");
             return
         };
+        let input = angstrom_tx.input();
 
+        tracing::info!(?input)
         // decode call input to grab orders
-        let Ok(bundle) = ContractBundle::abi_decode(&angstrom_tx.input(), false) else {
+        let Ok(bundle) = ContractBundle::abi_decode(&input, true) else {
             tracing::error!("failed to decode bundle");
             return
         };

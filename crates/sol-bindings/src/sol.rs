@@ -2,7 +2,7 @@ mod private {
     use alloy_sol_macro::sol;
 
     sol! {
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         enum OrderMode {
             ExactIn,
             ExactOut,
@@ -10,14 +10,14 @@ mod private {
             Partial
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         enum OrderType {
             Flash,
             #[default]
             Standing
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         enum AssetForm {
             #[default]
             Liquid,
@@ -26,7 +26,7 @@ mod private {
         }
 
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct StandingOrder {
             string mode;
             uint256 max_amount_in_or_out;
@@ -41,7 +41,7 @@ mod private {
             uint256 deadline;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct FlashOrder {
             string mode;
             uint256 max_amount_in_or_out;
@@ -55,7 +55,7 @@ mod private {
             uint64 valid_for_block;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct TopOfBlockOrder {
             uint256 amount_in;
             uint256 amount_out;
@@ -68,10 +68,10 @@ mod private {
             uint64 valid_for_block;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         type AssetIndex is uint16;
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct GenericOrder {
             OrderType otype;
             OrderMode mode;
@@ -91,7 +91,7 @@ mod private {
             bytes signature;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct TopOfBlockOrderEnvelope {
             uint256 amountIn;
             uint256 amountOut;
@@ -106,14 +106,14 @@ mod private {
             bytes signature;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct Price {
             AssetIndex outIndex;
             AssetIndex inIndex;
             uint256 price;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct Swap {
             AssetIndex asset0Index;
             AssetIndex asset1Index;
@@ -121,7 +121,7 @@ mod private {
             uint256 amountIn;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct Donate {
             AssetIndex asset0Index;
             AssetIndex asset1Index;

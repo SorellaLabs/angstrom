@@ -140,7 +140,7 @@ pub async fn spawn_testnet_node(
         .subscribe_blocks()
         .await?
         .into_stream()
-        .map(|block| {
+        .map(move |block| {
             let cloned_block = block.clone();
             let rpc = rpc_w.clone();
             async move {

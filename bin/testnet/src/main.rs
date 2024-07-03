@@ -10,6 +10,7 @@ use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
 use testnet::{
     anvil_utils::{spawn_anvil, AnvilEthDataCleanser},
+    contract_setup::deploy_contract_and_create_pool,
     ported_reth_testnet_network::{connect_all_peers, StromPeer},
     rpc_state_provider::RpcStateProviderFactory
 };
@@ -54,6 +55,8 @@ async fn main() -> eyre::Result<()> {
 
     let (_anvil_handle, rpc) =
         spawn_anvil(cli_args.testnet_block_time_secs, cli_args.fork_url).await?;
+    tracing::info!("deploying contracts to anvil");
+    let _addresses = deploy_contract_and_create_pool(rpc.clone()).await?;
 
     let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
     let mut network_with_handles = vec![];

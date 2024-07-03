@@ -9,6 +9,8 @@ use reth_primitives::{Account, Address, BlockNumber, StorageKey, StorageValue};
 use reth_provider::{ProviderError, ProviderResult};
 use validation::common::lru_db::{BlockStateProvider, BlockStateProviderFactory};
 
+use crate::anvil_utils::AnvilWalletRpc;
+
 fn async_to_sync<F: Future>(f: F) -> F::Output {
     let handle = tokio::runtime::Handle::try_current().expect("No tokion runtime found");
     tokio::task::block_in_place(|| handle.block_on(f))
@@ -17,7 +19,7 @@ fn async_to_sync<F: Future>(f: F) -> F::Output {
 #[derive(Clone, Debug)]
 pub struct RpcStateProvider {
     block:    u64,
-    provider: RootProvider<PubSubFrontend>
+    provider: AnvilWalletRpc
 }
 
 impl RpcStateProvider {
@@ -67,11 +69,11 @@ impl BlockStateProvider for RpcStateProvider {
 
 #[derive(Clone, Debug)]
 pub struct RpcStateProviderFactory {
-    pub provider: RootProvider<PubSubFrontend>
+    pub provider: AnvilWalletRpc
 }
 
 impl RpcStateProviderFactory {
-    pub fn new(provider: RootProvider<PubSubFrontend>) -> eyre::Result<Self> {
+    pub fn new(provider: AnvilWalletRpc) -> eyre::Result<Self> {
         Ok(Self { provider })
     }
 }

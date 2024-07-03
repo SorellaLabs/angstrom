@@ -23,12 +23,9 @@ pub type AnvilWalletRpc = FillProvider<
 
 pub async fn spawn_anvil(
     block_time: u64,
-    fork_url: String
 ) -> eyre::Result<(AnvilInstance, AnvilWalletRpc)> {
     let anvil = Anvil::new()
         .block_time(block_time)
-        .fork_block_number(20214717)
-        .fork(fork_url)
         .chain_id(1)
         .arg("--ipc")
         .arg("--code-size-limit")

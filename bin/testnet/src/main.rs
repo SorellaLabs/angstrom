@@ -40,11 +40,7 @@ struct Cli {
     /// NOTE: only 1 rpc will be connected currently for submissions.
     /// this will change in the future but is good enough for testing currently
     #[clap(short, long, default_value = "3")]
-    nodes_in_network:        u64,
-    /// used to tell anvil where to fork from. default is the reth node on the
-    /// reth1 server.
-    #[clap(short, long, default_value = "localhost:8489")]
-    fork_url:                String
+    nodes_in_network:        u64
 }
 
 const CACHE_VALIDATION_SIZE: usize = 100_000_000;

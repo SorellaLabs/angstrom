@@ -76,6 +76,7 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
         let Some(angstrom_tx) = block
             .transactions
             .txns()
+            .inspect(|tx|tracing::info!(?tx))
             .find(|tx| tx.to == Some(self.angstrom_contract))
         else {
             tracing::info!("No angstrom tx found");

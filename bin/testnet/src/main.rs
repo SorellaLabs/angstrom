@@ -91,13 +91,15 @@ async fn main() -> eyre::Result<()> {
     // spawn the node with rpc
     tokio::spawn(async move {
         spawn_testnet_node(
-        rpc_wrapper.clone(),
-        peer,
-        handles,
-        Some(cli_args.port),
-        angstrom_addr,
-        cli_args.nodes_in_network
-    ).await.unwrap();
+            rpc_wrapper.clone(),
+            peer,
+            handles,
+            Some(cli_args.port),
+            angstrom_addr,
+            cli_args.nodes_in_network
+        )
+        .await
+        .unwrap();
     });
 
     let testnet = TestnetHub::new(addresses.contract, rpc.clone());

@@ -79,8 +79,8 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         };
         let input = angstrom_tx.input();
 
-        // decode call input to grab orders
-        let Ok(bundle) = ContractBundle::abi_decode(&input, false) else {
+        // decode call input to grab orders. Drop function sig
+        let Ok(bundle) = ContractBundle::abi_decode(&input[4..], false) else {
             tracing::error!("failed to decode bundle");
             return
         };

@@ -55,7 +55,7 @@ async fn main() -> eyre::Result<()> {
     let cli_args = Cli::parse();
 
     let (_anvil_handle, rpc) =
-        spawn_anvil(cli_args.testnet_block_time_secs, cli_args.fork_url).await?;
+        spawn_anvil(cli_args.testnet_block_time_secs).await?;
 
     tracing::info!("deploying contracts to anvil");
     let addresses = deploy_contract_and_create_pool(rpc.clone()).await?;

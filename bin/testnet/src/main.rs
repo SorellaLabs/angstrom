@@ -89,15 +89,16 @@ async fn main() -> eyre::Result<()> {
 
     let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
     // spawn the node with rpc
-    spawn_testnet_node(
+    tokio::spawn(async move {
+        spawn_testnet_node(
         rpc_wrapper.clone(),
         peer,
         handles,
         Some(cli_args.port),
         angstrom_addr,
         cli_args.nodes_in_network
-    )
-    .await?;
+    ).await.unwrap();
+    });
 
     let testnet = TestnetHub::new(addresses.contract, rpc.clone());
 
@@ -115,7 +116,6 @@ async fn main() -> eyre::Result<()> {
 
         tracing::info!(?tx_hash, "tx hash with angstrom contract sent");
     }
-
 }
 
 pub async fn spawn_testnet_node(

@@ -91,7 +91,7 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         };
 
         let hashes = bundle.get_filled_hashes();
-        tracing::info!(?bundle, "found angstrom tx with orders filled {:#?}", hashes);
+        tracing::info!("found angstrom tx with orders filled {:#?}", hashes);
         self.send_events(EthEvent::FilledOrders(hashes, bn));
         // NOTE: eoa state changes we normally get from the cannonical chain
         // update. however because of the sheer load it would take to

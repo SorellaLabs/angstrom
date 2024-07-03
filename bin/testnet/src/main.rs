@@ -54,8 +54,7 @@ async fn main() -> eyre::Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
     let cli_args = Cli::parse();
 
-    let (_anvil_handle, rpc) =
-        spawn_anvil(cli_args.testnet_block_time_secs).await?;
+    let (_anvil_handle, rpc) = spawn_anvil(cli_args.testnet_block_time_secs).await?;
 
     tracing::info!("deploying contracts to anvil");
     let addresses = deploy_contract_and_create_pool(rpc.clone()).await?;

@@ -21,9 +21,7 @@ pub type AnvilWalletRpc = FillProvider<
     Ethereum
 >;
 
-pub async fn spawn_anvil(
-    block_time: u64,
-) -> eyre::Result<(AnvilInstance, AnvilWalletRpc)> {
+pub async fn spawn_anvil(block_time: u64) -> eyre::Result<(AnvilInstance, AnvilWalletRpc)> {
     let anvil = Anvil::new()
         .block_time(block_time)
         .chain_id(1)

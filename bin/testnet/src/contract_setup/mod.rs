@@ -74,10 +74,7 @@ pub async fn anvil_mine_delay<F0: Future + Unpin>(
     delay: Duration
 ) -> F0::Output {
     let mut pinned = pin!(f0);
-    match timeout(delay, &mut pinned).await {
-        Ok(v) => return v,
-        Err(_) => {}
-    }
+    if let Ok(v) = timeout(delay, &mut pinned).await { return v }
     provider
         .anvil_mine(Some(U256::from(1)), None)
         .await

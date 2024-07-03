@@ -31,6 +31,9 @@ pub async fn spawn_anvil(
         .fork(fork_url)
         .chain_id(1)
         .arg("--ipc")
+        .arg("--code-size-limit")
+        .arg("0x60000")
+        .arg("--disable-block-gas-limit")
         .try_spawn()?;
 
     let endpoint = "/tmp/anvil.ipc";

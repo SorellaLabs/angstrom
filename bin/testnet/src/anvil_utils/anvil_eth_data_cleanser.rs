@@ -2,7 +2,7 @@ use std::task::{Context, Poll};
 
 use alloy::network::TransactionResponse;
 use alloy_primitives::Address;
-use alloy_sol_types::SolType;
+use alloy_sol_types::{SolCall, SolType};
 use angstrom_eth::{
     handle::{EthCommand, EthHandle},
     manager::EthEvent
@@ -10,7 +10,7 @@ use angstrom_eth::{
 use futures::{Future, Stream, StreamExt};
 use reth_rpc_types::Transaction;
 use reth_tasks::TaskSpawner;
-use sol_bindings::sol::ContractBundle;
+use sol_bindings::{sol::ContractBundle, testnet::TestnetHub};
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{Instrument, Span};
@@ -79,8 +79,13 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         };
         let input = angstrom_tx.input();
 
+        let Ok(bytes) = TestnetHub::executeCall::abi_decode(&input, false) else {
+            tracing::warn!("found angstrom contract call thats not a bundle");
+            return
+        };
+
         // decode call input to grab orders. Drop function sig
-        let Ok(bundle) = ContractBundle::abi_decode(&input[4..], false) else {
+        let Ok(bundle) = ContractBundle::abi_decode(&bytes.data, false) else {
             tracing::error!("failed to decode bundle");
             return
         };

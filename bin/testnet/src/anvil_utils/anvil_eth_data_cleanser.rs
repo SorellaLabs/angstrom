@@ -1,20 +1,21 @@
 use std::task::{Context, Poll};
 
+use alloy::network::TransactionResponse;
 use alloy_primitives::Address;
-use alloy_rpc_types_eth::Block;
 use alloy_sol_types::SolType;
 use angstrom_eth::{
     handle::{EthCommand, EthHandle},
     manager::EthEvent
 };
 use futures::{Future, Stream, StreamExt};
+use reth_rpc_types::Transaction;
 use reth_tasks::TaskSpawner;
 use sol_bindings::sol::ContractBundle;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{Instrument, Span};
 
-pub struct AnvilEthDataCleanser<S: Stream<Item = Block>> {
+pub struct AnvilEthDataCleanser<S: Stream<Item = (u64, Vec<Transaction>)>> {
     angstrom_contract:           Address,
     /// our command receiver
     commander:                   ReceiverStream<EthCommand>,
@@ -24,7 +25,7 @@ pub struct AnvilEthDataCleanser<S: Stream<Item = Block>> {
     block_finalization_lookback: u64
 }
 
-impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
+impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
     pub async fn spawn<TP: TaskSpawner>(
         tp: TP,
         angstrom_contract: Address,
@@ -60,24 +61,17 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
         }
     }
 
-    fn on_new_block(&mut self, block: Block) {
-        let bn = block
-            .header
-            .number
-            .expect("block from anvil with no number");
+    fn on_new_block(&mut self, block: (u64, Vec<Transaction>)) {
+        let (bn, txes) = block;
 
         self.send_events(EthEvent::NewBlock(bn));
         // no underflows today
         if bn > self.block_finalization_lookback {
             self.send_events(EthEvent::FinalizedBlock(bn - self.block_finalization_lookback));
         }
-        tracing::info!(?block);
 
         // find angstrom tx
-        let Some(angstrom_tx) = block
-            .transactions
-            .txns()
-            .inspect(|tx|tracing::info!(?tx))
+        let Some(angstrom_tx) = txes.into_iter()
             .find(|tx| tx.to == Some(self.angstrom_contract))
         else {
             tracing::info!("No angstrom tx found");
@@ -85,7 +79,7 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
         };
 
         // decode call input to grab orders
-        let Ok(bundle) = ContractBundle::abi_decode(&angstrom_tx.input, false) else {
+        let Ok(bundle) = ContractBundle::abi_decode(&angstrom_tx.input(), false) else {
             tracing::error!("failed to decode bundle");
             return
         };
@@ -98,7 +92,9 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
     }
 }
 
-impl<S: Stream<Item = Block> + Unpin + Send + 'static> Future for AnvilEthDataCleanser<S> {
+impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> Future
+    for AnvilEthDataCleanser<S>
+{
     type Output = ();
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

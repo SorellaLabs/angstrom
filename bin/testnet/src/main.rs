@@ -8,6 +8,7 @@ use angstrom_eth::handle::Eth;
 use angstrom_network::pool_manager::PoolManagerBuilder;
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
+use futures::StreamExt;
 use jsonrpsee::server::ServerBuilder;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
@@ -132,18 +133,38 @@ pub async fn spawn_testnet_node(
     let pool = handles.get_pool_handle();
     let executor: TokioTaskExecutor = Default::default();
 
+    let rpc_w = rpc_wrapper.clone();
+    let balls = rpc_wrapper
+        .provider
+        .clone()
+        .subscribe_blocks()
+        .await?
+        .into_stream()
+        .map(|block| {
+            let cloned_block = block.clone();
+            let rpc = rpc_w.clone();
+            async move {
+                let number = cloned_block.header.number.unwrap();
+                let mut res = vec![];
+                for hash in cloned_block.transactions.hashes() {
+                    let Ok(Some(tx)) = rpc
+                        .provider
+                        .get_transaction_by_hash(*hash)
+                        .await else { continue };
+                    res.push(tx);
+                }
+                (number, res)
+            }
+        })
+        .buffer_unordered(10);
+
     let order_api = OrderApi { pool: pool.clone() };
     let eth_handle = AnvilEthDataCleanser::spawn(
         executor.clone(),
         contract_address,
         handles.eth_tx,
         handles.eth_rx,
-        rpc_wrapper
-            .provider
-            .clone()
-            .subscribe_blocks()
-            .await?
-            .into_stream(),
+        balls,
         7,
         span
     )

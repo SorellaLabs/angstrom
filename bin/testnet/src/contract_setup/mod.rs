@@ -1,14 +1,4 @@
-use alloy::signers::local::PrivateKeySigner;
 use alloy_primitives::{Address, U256};
-use alloy_provider::{ext::AnvilApi, Provider, RootProvider};
-use alloy_pubsub::PubSubFrontend;
-use alloy_sol_types::SolCall;
-// use secp256k1::{SECP256K1,SecretKey};
-use contract_bytecodes::POOL_MANAGER;
-use enr::k256::SecretKey;
-use futures::future::{join, try_join};
-// use enr::secp256k1::SecretKey;
-// use enr::k256::SecretKey;
 use sol_bindings::testnet::{MockERC20, PoolManagerDeployer, TestnetHub};
 
 use crate::anvil_utils::AnvilWalletRpc;
@@ -26,7 +16,7 @@ pub async fn deploy_contract_and_create_pool(
     provider: AnvilWalletRpc
 ) -> eyre::Result<AngstromTestnetAddresses> {
     let out = PoolManagerDeployer::deploy(provider.clone(), U256::MAX).await?;
-    let v4_address = out.address().clone();
+    let v4_address = *out.address();
     let testhub = TestnetHub::deploy(provider.clone(), Address::ZERO, v4_address).await?;
     let angstrom_address = *testhub.address();
 

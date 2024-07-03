@@ -1,6 +1,7 @@
+//! NOTE: moved this other to sol bindings so we can use alloy for deploying
+
 use alloy::hex;
 use alloy_primitives::Bytes;
-//NOTE: moved this other to sol bindings so we can use alloy for deploying
 
 /// NOTE: this is the init bytecode. of the Testnet hub contract
 pub const TEST_ANGSTROM_BYTECODE: Bytes = Bytes::from_static(&hex!(

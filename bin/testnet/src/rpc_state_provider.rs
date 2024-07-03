@@ -1,8 +1,7 @@
 use std::future::IntoFuture;
 
 use alloy_primitives::keccak256;
-use alloy_provider::{Provider, RootProvider};
-use alloy_pubsub::PubSubFrontend;
+use alloy_provider::Provider;
 use alloy_transport::TransportResult;
 use futures::Future;
 use reth_primitives::{Account, Address, BlockNumber, StorageKey, StorageValue};

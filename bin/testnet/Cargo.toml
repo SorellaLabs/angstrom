@@ -18,7 +18,7 @@ normal = [
 reth.workspace = true
 reth-node-builder.workspace = true
 alloy-chains.workspace = true
-sol-bindings.workspace = true
+sol-bindings = { workspace = true, features = ["testnet"] }
 
 blsful.workspace = true
 consensus.workspace = true

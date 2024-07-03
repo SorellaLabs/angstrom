@@ -12,9 +12,14 @@ exclude.workspace = true
 alloy-sol-macro.workspace = true
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
-alloy-contract ="0.1.3"
-serde = { workspace = true, optional = true, default-features = false, features = ["derive"] }
+alloy-contract = "0.1.3"
+serde = { workspace = true, optional = true, default-features = false, features = [
+  "derive",
+] }
+
+rand = { version = "0.8.5", optional = true }
 
 [features]
 default = ["serde"]
+testnet = ["dep:rand"]
 serde = ["dep:serde", "alloy-primitives/serde"]

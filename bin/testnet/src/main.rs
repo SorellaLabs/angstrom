@@ -1,5 +1,6 @@
 use alloy_primitives::Address;
 use alloy_provider::Provider;
+use alloy_sol_types::SolValue;
 use angstrom::cli::{initialize_strom_handles, StromHandles};
 use angstrom_eth::handle::Eth;
 use angstrom_network::pool_manager::PoolManagerBuilder;
@@ -8,6 +9,7 @@ use clap::Parser;
 use jsonrpsee::server::ServerBuilder;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
+use sol_bindings::{sol::ContractBundle, testnet::TestnetHub};
 use testnet::{
     anvil_utils::{spawn_anvil, AnvilEthDataCleanser},
     contract_setup::deploy_contract_and_create_pool,
@@ -55,12 +57,13 @@ async fn main() -> eyre::Result<()> {
 
     let (_anvil_handle, rpc) =
         spawn_anvil(cli_args.testnet_block_time_secs, cli_args.fork_url).await?;
-    tracing::info!("deploying contracts to anvil");
-    let _addresses = deploy_contract_and_create_pool(rpc.clone()).await?;
 
-    let rpc_wrapper = RpcStateProviderFactory::new(rpc)?;
+    tracing::info!("deploying contracts to anvil");
+    let addresses = deploy_contract_and_create_pool(rpc.clone()).await?;
+
+    let rpc_wrapper = RpcStateProviderFactory::new(rpc.clone())?;
     let mut network_with_handles = vec![];
-    let addr = Address::ZERO;
+    let angstrom_addr = addresses.contract;
 
     for id in 0..=cli_args.nodes_in_network {
         let span = span!(Level::TRACE, "testnet node", id = id);
@@ -79,7 +82,7 @@ async fn main() -> eyre::Result<()> {
 
     for id in 0..cli_args.nodes_in_network {
         let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
-        spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None, addr, id).await?;
+        spawn_testnet_node(rpc_wrapper.clone(), peer, handles, None, angstrom_addr, id).await?;
     }
 
     let (_, peer, handles) = network_with_handles.pop().expect("unreachable");
@@ -89,10 +92,26 @@ async fn main() -> eyre::Result<()> {
         peer,
         handles,
         Some(cli_args.port),
-        addr,
+        angstrom_addr,
         cli_args.nodes_in_network
     )
     .await?;
+
+    let testnet = TestnetHub::new(addresses.contract, rpc.clone());
+
+    loop {
+        tokio::time::sleep(Duration::from_secs(11)).await?;
+        let orders = ContractBundle::generate_random_bundles(10);
+        let hashes = orders.get_filled_hashes();
+        tracing::info!("submitting a angstrom bundle with hashes: {#:?}", hashes);
+        let tx_hash = testnet
+            .execute(orders.abi_encode())
+            .send()
+            .await?
+            .watch()
+            .await?;
+        tracing::info!(?tx_hash, "tx hash with angstrom contract sent");
+    }
 
     Ok(())
 }

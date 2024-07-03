@@ -71,6 +71,7 @@ impl<S: Stream<Item = Block> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
         if bn > self.block_finalization_lookback {
             self.send_events(EthEvent::FinalizedBlock(bn - self.block_finalization_lookback));
         }
+        tracing::info!(?block);
 
         // find angstrom tx
         let Some(angstrom_tx) = block

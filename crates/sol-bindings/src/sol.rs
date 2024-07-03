@@ -131,7 +131,7 @@ mod private {
             uint256[] amounts0;
         }
 
-        #[derive(Debug, Default)]
+        #[derive(Debug, Default, PartialEq, Eq)]
         struct ContractBundle {
             address[] assets;
             Price[] initial_prices;

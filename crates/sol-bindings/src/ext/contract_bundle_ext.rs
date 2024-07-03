@@ -45,3 +45,20 @@ impl ContractBundle {
         }
     }
 }
+
+#[cfg(test)]
+pub mod test {
+
+    #[test]
+    #[cfg(feature = "testnet")]
+    pub fn test_contract_bundle_encode_decode() {
+        use alloy_sol_types::SolValue;
+
+        use crate::sol::ContractBundle;
+
+        let rand = ContractBundle::generate_random_bundles(10);
+        let encoded = rand.abi_encode();
+        let decoded = ContractBundle::abi_decode(&encoded, false).unwrap();
+        assert_eq!(rand, decoded);
+    }
+}

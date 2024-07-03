@@ -32,7 +32,7 @@ pub async fn spawn_anvil(
         .chain_id(1)
         .arg("--ipc")
         .arg("--code-size-limit")
-        .arg("0x60000")
+        .arg("393216")
         .arg("--disable-block-gas-limit")
         .try_spawn()?;
 

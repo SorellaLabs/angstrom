@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use alloy_primitives::Address;
 use alloy_provider::Provider;
 use alloy_sol_types::SolValue;
@@ -100,20 +102,20 @@ async fn main() -> eyre::Result<()> {
     let testnet = TestnetHub::new(addresses.contract, rpc.clone());
 
     loop {
-        tokio::time::sleep(Duration::from_secs(11)).await?;
+        tokio::time::sleep(Duration::from_secs(11)).await;
         let orders = ContractBundle::generate_random_bundles(10);
         let hashes = orders.get_filled_hashes();
-        tracing::info!("submitting a angstrom bundle with hashes: {#:?}", hashes);
+        tracing::info!("submitting a angstrom bundle with hashes: {:#?}", hashes);
         let tx_hash = testnet
-            .execute(orders.abi_encode())
+            .execute(orders.abi_encode().into())
             .send()
             .await?
             .watch()
             .await?;
+
         tracing::info!(?tx_hash, "tx hash with angstrom contract sent");
     }
 
-    Ok(())
 }
 
 pub async fn spawn_testnet_node(

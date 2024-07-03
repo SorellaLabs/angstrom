@@ -147,10 +147,9 @@ pub async fn spawn_testnet_node(
                 let number = cloned_block.header.number.unwrap();
                 let mut res = vec![];
                 for hash in cloned_block.transactions.hashes() {
-                    let Ok(Some(tx)) = rpc
-                        .provider
-                        .get_transaction_by_hash(*hash)
-                        .await else { continue };
+                    let Ok(Some(tx)) = rpc.provider.get_transaction_by_hash(*hash).await else {
+                        continue
+                    };
                     res.push(tx);
                 }
                 (number, res)

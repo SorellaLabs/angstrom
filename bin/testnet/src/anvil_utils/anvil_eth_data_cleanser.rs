@@ -71,7 +71,8 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         }
 
         // find angstrom tx
-        let Some(angstrom_tx) = txes.into_iter()
+        let Some(angstrom_tx) = txes
+            .into_iter()
             .find(|tx| tx.to == Some(self.angstrom_contract))
         else {
             tracing::info!("No angstrom tx found");
@@ -79,7 +80,7 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         };
         let input = angstrom_tx.input();
 
-        let Ok(bytes) = TestnetHub::executeCall::abi_decode(&input, false) else {
+        let Ok(bytes) = TestnetHub::executeCall::abi_decode(input, false) else {
             tracing::warn!("found angstrom contract call thats not a bundle");
             return
         };
@@ -93,9 +94,6 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         let hashes = bundle.get_filled_hashes();
         tracing::info!("found angstrom tx with orders filled {:#?}", hashes);
         self.send_events(EthEvent::FilledOrders(hashes, bn));
-        // NOTE: eoa state changes we normally get from the cannonical chain
-        // update. however because of the sheer load it would take to
-        // generate this manually. we will skip this for now
     }
 }
 

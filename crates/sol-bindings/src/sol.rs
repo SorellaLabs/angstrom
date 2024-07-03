@@ -148,20 +148,39 @@ mod private {
             error InsufficientBalance();
             error InsufficientPermission();
 
-            mapping(address owner => mapping(uint256 id => uint256 amount)) public balanceOf;
-            mapping(address owner => mapping(address spender => mapping(uint256 id => uint256 amount))) public allowance;
-            mapping(address owner => mapping(address spender => bool)) public isOperator;
+            mapping(address owner =>
+                mapping(uint256 id => uint256 amount)) public balanceOf;
+            mapping(address owner =>
+                mapping(address spender =>
+                    mapping(uint256 id => uint256 amount))) public allowance;
+            mapping(address owner =>
+                mapping(address spender => bool)) public isOperator;
 
             function transfer(address receiver, uint256 id, uint256 amount) public returns (bool);
-            function transferFrom(address sender, address receiver, uint256 id, uint256 amount) public returns (bool);
+            function transferFrom(
+                address sender,
+                address receiver,
+                uint256 id,
+                uint256 amount
+            ) public returns (bool);
             function approve(address spender, uint256 id, uint256 amount) public returns (bool);
             function setOperator(address spender, bool approved) public returns (bool);
             function supportsInterface(bytes4 interfaceId) public pure returns (bool supported);
 
             function execute(bytes calldata data) external;
 
-            function userToUserLiquidTransfer(address from, address to, address asset, uint256 amount) public;
-            function userToUserV4ClaimTransfer(address from, address to, address asset, uint256 amount) public;
+            function userToUserLiquidTransfer(
+                address from,
+                address to,
+                address asset,
+                uint256 amount
+            ) public;
+            function userToUserV4ClaimTransfer(
+                address from,
+                address to,
+                address asset,
+                uint256 amount
+            ) public;
             function pullLiquid(address from, address asset, uint256 amount) public;
             function pushLiquid(address to, address asset, uint256 amount) public;
             function pullToV4(address from, address asset, uint256 amount) public;

@@ -7,7 +7,7 @@ use alloy_node_bindings::AnvilInstance;
 use alloy_provider::{
     builder,
     fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
-    Identity, IpcConnect, Provider, RootProvider
+    Identity, IpcConnect, RootProvider
 };
 use alloy_pubsub::PubSubFrontend;
 

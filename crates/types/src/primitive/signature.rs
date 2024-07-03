@@ -34,7 +34,7 @@ impl Signature {
             RecoveryId::from_i32(bytes_sig[64] as i32)?
         )?;
 
-        let public = SECP256K1.recover_ecdsa(&Message::from_slice(&message[..32])?, &sig)?;
+        let public = SECP256K1.recover_ecdsa(&Message::from_digest_slice(&message[..32])?, &sig)?;
         Ok(pk2id(&public))
     }
 }

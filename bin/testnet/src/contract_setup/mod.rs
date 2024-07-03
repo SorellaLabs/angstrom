@@ -30,8 +30,8 @@ pub async fn deploy_contract_and_create_pool(
     let testhub = TestnetHub::deploy(provider.clone(), Address::ZERO, v4_address).await?;
     let angstrom_address = *testhub.address();
 
-    let (token0, token1) =
-        try_join(MockERC20::deploy(provider.clone()), MockERC20::deploy(provider.clone())).await?;
+    let token0 = MockERC20::deploy(provider.clone()).await?;
+    let token1 = MockERC20::deploy(provider.clone()).await?;
     let token0 = *token0.address();
     let token1 = *token1.address();
 

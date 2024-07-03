@@ -25,14 +25,14 @@ impl ContractBundle {
         let assets = vec![Address::new(rng.gen::<[u8; 20]>())];
 
         let mut tob = SolTopOfBlockOrderEnvelope::default();
-        let rand_am_in: U256 = rng.gen();
-        let rand_am_out: U256 = rng.gen();
+        let rand_am_in: U256 = U256::from_be_bytes(rng.gen::<[u8; 32]>());
+        let rand_am_out: U256 = U256::from_be_bytes(rng.gen::<[u8; 32]>());
         tob.amountIn = rand_am_in;
         tob.amountOut = rand_am_out;
         let mut generic_orders = vec![];
         for _ in 0..order_count {
             let mut default = SolGenericOrder::default();
-            let specified: U256 = rng.gen();
+            let specified: U256 = U256::from_be_bytes(rng.gen::<[u8; 32]>());
             default.amountSpecified = specified;
             generic_orders.push(default);
         }

@@ -30,6 +30,7 @@ use crate::{
     config::PoolConfig,
     finalization_pool::FinalizationPool,
     limit::LimitOrderPool,
+    order_storage::OrderStorage,
     searcher::SearcherPool,
     subscriptions::OrderPoolSubscriptions,
     validator::PoolOrderValidator,
@@ -40,17 +41,8 @@ use crate::{
 /// the same check wil be ran but with more accuracy
 const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
 
-pub struct OrderPoolInner<L, CL, S, CS, V>
-where
-    L: PooledLimitOrder,
-    CL: PooledComposableOrder + PooledLimitOrder,
-    S: PooledSearcherOrder,
-    CS: PooledComposableOrder + PooledSearcherOrder,
-    V: OrderValidatorHandle
-{
-    limit_pool:             LimitOrderPool<L, CL>,
-    searcher_pool:          SearcherPool<S, CS>,
-    finalization_pool:      FinalizationPool<L, CL, S, CS>,
+pub struct OrderPoolInner {
+    order_storage:          OrderStorage,
     _config:                PoolConfig,
     /// Address to order id, used for eoa invalidation
     address_to_orders:      HashMap<Address, Vec<OrderId>>,
@@ -85,9 +77,6 @@ where
     pub fn new(validator: V, config: PoolConfig, block_number: u64) -> Self {
         Self {
             block_number,
-            limit_pool: LimitOrderPool::new(&config.ids, None),
-            searcher_pool: SearcherPool::new(&config.ids, None),
-            finalization_pool: FinalizationPool::new(),
             _config: config,
             address_to_orders: HashMap::new(),
             hash_to_order_id: HashMap::new(),

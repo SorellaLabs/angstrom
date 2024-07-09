@@ -5,7 +5,9 @@ use angstrom_types::{
     primitive::PoolId
 };
 use sol_bindings::{
-    grouped_orders::{GroupedVanillaOrders, OrderWithId}, sol::SolTopOfBlockOrder, user_types::TopOfBlockOrder
+    grouped_orders::{GroupedVanillaOrders, OrderWithId},
+    sol::SolTopOfBlockOrder,
+    user_types::TopOfBlockOrder
 };
 
 use super::{pending::PendingPool, LimitPoolError};

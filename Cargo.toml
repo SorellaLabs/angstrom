@@ -59,6 +59,7 @@ testing-tools = { path = "./testing-tools/" }
 angstrom = { path = "./bin/angstrom/" }
 sol-bindings = { path = "./crates/sol-bindings/" }
 matching-engine = { path = "./crates/matching-engine/" }
+eyre = "0.3.7"
 
 # BLS library
 blsful = "2.5.7"

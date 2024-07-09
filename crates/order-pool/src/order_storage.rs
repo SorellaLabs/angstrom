@@ -1,9 +1,18 @@
-use std::sync::Mutex;
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicU64, Arc, Mutex}
+};
+
+use reth_primitives::B256;
 
 use crate::{finalization_pool::FinalizationPool, limit::LimitOrderPool, searcher::SearcherPool};
 
+/// The Storage of all verified orders.
+#[derive(Clone)]
 pub struct OrderStorage {
-    limit_orders:                Mutex<LimitOrderPool>,
-    searcher_orders:             Mutex<SearcherPool>,
-    pending_finalization_orders: Mutex<FinalizationPool>
+    pub limit_orders:                Arc<Mutex<LimitOrderPool>>,
+    pub searcher_orders:             Arc<Mutex<SearcherPool>>,
+    pub pending_finalization_orders: Arc<Mutex<FinalizationPool>>,
+    pub order_hash_to_id:            Arc<Mutex<HashMap<B256, u64>>>,
+    pub order_id_nonce:              Arc<AtomicU64>
 }

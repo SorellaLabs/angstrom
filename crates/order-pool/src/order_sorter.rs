@@ -97,291 +97,298 @@ impl<V: OrderValidatorHandle> OrderSorter<V> {
 
     /// used to remove orders that expire before the next ethereum block
     pub fn new_block(&mut self, block_number: u64) {
-        self.block_number = block_number;
-        if let Ok(time) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs());
-            // grab all exired hashes
-            let hashes = self
-                .hash_to_order_id
-                .iter()
-                .filter(|(_, v)| v.deadline <= expiry_deadline)
-                .map(|(k, _)| *k)
-                .collect::<Vec<_>>();
-
-            let expired_orders = hashes
-                .into_iter()
-                // remove hash from id
-                .map(|hash| self.hash_to_order_id.remove(&hash).unwrap())
-                .inspect(|order_id| {
-                    self.address_to_orders
-                        .values_mut()
-                        // remove from address to orders
-                        .for_each(|v| v.retain(|o| o != order_id));
-                })
-                // remove from all underlying pools
-                .filter_map(|id| match id.location {
-                    OrderLocation::LimitParked | OrderLocation::LimitPending => self
-                        .limit_pool
-                        .remove_limit_order(&id)
-                        .map(|o| Order::add_limit(o.order)),
-                    OrderLocation::VanillaSearcher => self
-                        .searcher_pool
-                        .remove_searcher_order(&id)
-                        .ok()
-                        .map(|o| Order::add_searcher(o.order)),
-                    OrderLocation::Composable => self
-                        .limit_pool
-                        .remove_composable_limit_order(&id)
-                        .map(|o| Order::add_composable_limit(o.order)),
-                    OrderLocation::ComposableSearcher => self
-                        .searcher_pool
-                        .remove_composable_searcher_order(&id)
-                        .ok()
-                        .map(|o| Order::add_composable_searcher(o.order))
-                })
-                .collect::<Vec<_>>();
-        }
+        // self.block_number = block_number;
+        // if let Ok(time) = SystemTime::now().duration_since(UNIX_EPOCH) {
+        //     let expiry_deadline = U256::from((time +
+        // ETH_BLOCK_TIME).as_secs());     // grab all exired hashes
+        //     let hashes = self
+        //         .hash_to_order_id
+        //         .iter()
+        //         .filter(|(_, v)| v.deadline <= expiry_deadline)
+        //         .map(|(k, _)| *k)
+        //         .collect::<Vec<_>>();
+        //
+        //     let expired_orders = hashes
+        //         .into_iter()
+        //         // remove hash from id
+        //         .map(|hash| self.hash_to_order_id.remove(&hash).unwrap())
+        //         .inspect(|order_id| {
+        //             self.address_to_orders
+        //                 .values_mut()
+        //                 // remove from address to orders
+        //                 .for_each(|v| v.retain(|o| o != order_id));
+        //         })
+        //         // remove from all underlying pools
+        //         .filter_map(|id| match id.location {
+        //             OrderLocation::LimitParked | OrderLocation::LimitPending
+        // => self                 .limit_pool
+        //                 .remove_limit_order(&id)
+        //                 .map(|o| Order::add_limit(o.order)),
+        //             OrderLocation::VanillaSearcher => self
+        //                 .searcher_pool
+        //                 .remove_searcher_order(&id)
+        //                 .ok()
+        //                 .map(|o| Order::add_searcher(o.order)),
+        //             OrderLocation::Composable => self
+        //                 .limit_pool
+        //                 .remove_composable_limit_order(&id)
+        //                 .map(|o| Order::add_composable_limit(o.order)),
+        //             OrderLocation::ComposableSearcher => self
+        //                 .searcher_pool
+        //                 .remove_composable_searcher_order(&id)
+        //                 .ok()
+        //                 .map(|o| Order::add_composable_searcher(o.order))
+        //         })
+        //         .collect::<Vec<_>>();
+        // }
     }
 
     pub fn eoa_state_change(&mut self, eoas: Vec<Address>) {
-        let mut rem = HashSet::new();
-        eoas.into_iter()
-            .filter_map(|eoa| {
-                self.address_to_orders.remove(&eoa).or_else(|| {
-                    rem.insert(eoa);
-                    None
-                })
-            })
-            .for_each(|order_ids| {
-                order_ids.into_iter().for_each(|id| match id.location {
-                    OrderLocation::Composable => {
-                        if let Some(order) = self.limit_pool.remove_composable_limit_order(&id) {
-                            self.validator
-                                .validate_composable_order(OrderOrigin::Local, order.order);
-                        }
-                    }
-                    OrderLocation::LimitParked | OrderLocation::LimitPending => {
-                        if let Some(order) = self.limit_pool.remove_limit_order(&id) {
-                            self.validator
-                                .validate_order(OrderOrigin::Local, order.order);
-                        }
-                    }
-
-                    OrderLocation::VanillaSearcher => {
-                        if let Ok(order) = self.searcher_pool.remove_searcher_order(&id) {
-                            self.validator
-                                .validate_searcher_order(OrderOrigin::Local, order.order);
-                        }
-                    }
-                    OrderLocation::ComposableSearcher => {
-                        if let Ok(order) = self.searcher_pool.remove_composable_searcher_order(&id)
-                        {
-                            self.validator
-                                .validate_composable_searcher_order(OrderOrigin::Local, order.order)
-                        }
-                    }
-                })
-            });
-
-        // for late updates that might need to be re validated.
-        self.last_touched_addresses = rem;
+        // let mut rem = HashSet::new();
+        // eoas.into_iter()
+        //     .filter_map(|eoa| {
+        //         self.address_to_orders.remove(&eoa).or_else(|| {
+        //             rem.insert(eoa);
+        //             None
+        //         })
+        //     })
+        //     .for_each(|order_ids| {
+        //         order_ids.into_iter().for_each(|id| match id.location {
+        //             OrderLocation::Composable => {
+        //                 if let Some(order) =
+        // self.limit_pool.remove_composable_limit_order(&id) {
+        //                     self.validator
+        //
+        // .validate_composable_order(OrderOrigin::Local, order.order);
+        //                 }
+        //             }
+        //             OrderLocation::LimitParked | OrderLocation::LimitPending
+        // => {                 if let Some(order) =
+        // self.limit_pool.remove_limit_order(&id) {
+        // self.validator
+        // .validate_order(OrderOrigin::Local, order.order);
+        // }             }
+        //
+        //             OrderLocation::VanillaSearcher => {
+        //                 if let Ok(order) =
+        // self.searcher_pool.remove_searcher_order(&id) {
+        // self.validator
+        // .validate_searcher_order(OrderOrigin::Local, order.order);
+        //                 }
+        //             }
+        //             OrderLocation::ComposableSearcher => {
+        //                 if let Ok(order) =
+        // self.searcher_pool.remove_composable_searcher_order(&id)
+        //                 {
+        //                     self.validator
+        //
+        // .validate_composable_searcher_order(OrderOrigin::Local, order.order)
+        //                 }
+        //             }
+        //         })
+        //     });
+        //
+        // // for late updates that might need to be re validated.
+        // self.last_touched_addresses = rem;
     }
 
     pub fn finalized_block(&mut self, block: u64) {
-        self.subscriptions
-            .finalized_orders(self.finalization_pool.finalized(block))
+        // self.subscriptions
+        //     .finalized_orders(self.finalization_pool.finalized(block))
     }
 
     pub fn reorg(&mut self, orders: Vec<B256>) {
-        self.finalization_pool
-            .reorg(orders)
-            .for_each(|order| match order {
-                Order::ComposableSearcher(cs) => self
-                    .validator
-                    .validate_composable_searcher_order(OrderOrigin::Local, cs),
-                Order::ComposableLimit(cl) => self
-                    .validator
-                    .validate_composable_order(OrderOrigin::Local, cl),
-                Order::Limit(l) => self.validator.validate_order(OrderOrigin::Local, l),
-                Order::Searcher(s) => self
-                    .validator
-                    .validate_searcher_order(OrderOrigin::Local, s)
-            });
+        // self.finalization_pool
+        //     .reorg(orders)
+        //     .for_each(|order| match order {
+        //         Order::ComposableSearcher(cs) => self
+        //             .validator
+        //             .validate_composable_searcher_order(OrderOrigin::Local,
+        // cs),         Order::ComposableLimit(cl) => self
+        //             .validator
+        //             .validate_composable_order(OrderOrigin::Local, cl),
+        //         Order::Limit(l) =>
+        // self.validator.validate_order(OrderOrigin::Local, l),
+        //         Order::Searcher(s) => self
+        //             .validator
+        //             .validate_searcher_order(OrderOrigin::Local, s)
+        //     });
     }
 
     /// Removes all filled orders from the pools
     pub fn filled_orders(&mut self, block: u64, orders: &[B256]) {
-        let filled = orders
-            .iter()
-            .filter_map(|order_hash| {
-                let order_id = self.hash_to_order_id.remove(order_hash)?;
-                let loc = order_id.location;
-                match loc {
-                    OrderLocation::Composable => self
-                        .limit_pool
-                        .remove_composable_limit_order(&order_id)
-                        .map(|o| o.order)
-                        .map(Order::add_composable_limit),
-                    OrderLocation::LimitParked | OrderLocation::LimitPending => self
-                        .limit_pool
-                        .remove_limit_order(&order_id)
-                        .map(|o| o.order)
-                        .map(Order::add_limit),
-                    OrderLocation::VanillaSearcher => self
-                        .searcher_pool
-                        .remove_searcher_order(&order_id)
-                        .map_err(|e| {
-                            error!("{e:?}");
-                            e
-                        })
-                        .ok()
-                        .map(|o| o.order)
-                        .map(Order::add_searcher),
-                    OrderLocation::ComposableSearcher => self
-                        .searcher_pool
-                        .remove_composable_searcher_order(&order_id)
-                        .map_err(|e| {
-                            error!("{e:?}");
-                            e
-                        })
-                        .ok()
-                        .map(|o| o.order)
-                        .map(Order::add_composable_searcher)
-                }
-            })
-            .collect::<Vec<_>>();
-
-        self.finalization_pool.new_orders(block, filled);
+        // let filled = orders
+        //     .iter()
+        //     .filter_map(|order_hash| {
+        //         let order_id = self.hash_to_order_id.remove(order_hash)?;
+        //         let loc = order_id.location;
+        //         match loc {
+        //             OrderLocation::Composable => self
+        //                 .limit_pool
+        //                 .remove_composable_limit_order(&order_id)
+        //                 .map(|o| o.order)
+        //                 .map(Order::add_composable_limit),
+        //             OrderLocation::LimitParked | OrderLocation::LimitPending
+        // => self                 .limit_pool
+        //                 .remove_limit_order(&order_id)
+        //                 .map(|o| o.order)
+        //                 .map(Order::add_limit),
+        //             OrderLocation::VanillaSearcher => self
+        //                 .searcher_pool
+        //                 .remove_searcher_order(&order_id)
+        //                 .map_err(|e| {
+        //                     error!("{e:?}");
+        //                     e
+        //                 })
+        //                 .ok()
+        //                 .map(|o| o.order)
+        //                 .map(Order::add_searcher),
+        //             OrderLocation::ComposableSearcher => self
+        //                 .searcher_pool
+        //                 .remove_composable_searcher_order(&order_id)
+        //                 .map_err(|e| {
+        //                     error!("{e:?}");
+        //                     e
+        //                 })
+        //                 .ok()
+        //                 .map(|o| o.order)
+        //                 .map(Order::add_composable_searcher)
+        //         }
+        //     })
+        //     .collect::<Vec<_>>();
+        //
+        // self.finalization_pool.new_orders(block, filled);
     }
 
-    fn handle_validated_order(
-        &mut self,
-        res: ValidationResults<L, CL, S, CS>
-    ) -> Option<PoolInnerEvent<L, CL, S, CS>> {
-        match res {
-            ValidationResults::Limit(order) => {
-                PoolInnerEvent::from_limit(self.handle_validation_results(
-                    order,
-                    |this, order| {
-                        this.subscriptions
-                            .new_order(Order::Limit(order.order.clone()));
-
-                        if let Err(e) = this.limit_pool.add_limit_order(order) {
-                            error!(error=%e, "failed to add order to limit pool");
-                        }
-                    },
-                    |this, order| this.validator.validate_order(OrderOrigin::External, order)
-                ))
-            }
-
-            ValidationResults::Searcher(order) => {
-                PoolInnerEvent::from_searcher(self.handle_validation_results(
-                    order,
-                    |this, order| {
-                        this.subscriptions
-                            .new_order(Order::Searcher(order.order.clone()));
-
-                        if let Err(e) = this.searcher_pool.add_searcher_order(order) {
-                            error!(error=%e, "failed to add order to searcher pool");
-                        }
-                    },
-                    |this, order| {
-                        this.validator
-                            .validate_searcher_order(OrderOrigin::External, order)
-                    }
-                ))
-            }
-            ValidationResults::ComposableLimit(order) => {
-                PoolInnerEvent::from_composable_limit(self.handle_validation_results(
-                    order,
-                    |this, order| {
-                        this.subscriptions
-                            .new_order(Order::ComposableLimit(order.order.clone()));
-
-                        if let Err(e) = this.limit_pool.add_composable_order(order) {
-                            error!(error=%e, "failed to add order to limit pool");
-                        }
-                    },
-                    |this, order| {
-                        this.validator
-                            .validate_composable_order(OrderOrigin::External, order)
-                    }
-                ))
-            }
-            ValidationResults::ComposableSearcher(order) => {
-                PoolInnerEvent::from_composable_searcher(self.handle_validation_results(
-                    order,
-                    |this, order| {
-                        this.subscriptions
-                            .new_order(Order::ComposableSearcher(order.order.clone()));
-
-                        if let Err(e) = this.searcher_pool.add_composable_searcher_order(order) {
-                            error!(error=%e,"failed to add order to searcher pool");
-                        }
-                    },
-                    |this, order| {
-                        this.validator
-                            .validate_composable_searcher_order(OrderOrigin::External, order)
-                    }
-                ))
-            }
-        }
+    fn handle_validated_order(&mut self, res: ()) -> Option<()> {
+        // match res {
+        //     ValidationResults::Limit(order) => {
+        //         PoolInnerEvent::from_limit(self.handle_validation_results(
+        //             order,
+        //             |this, order| {
+        //                 this.subscriptions
+        //                     .new_order(Order::Limit(order.order.clone()));
+        //
+        //                 if let Err(e) = this.limit_pool.add_limit_order(order) {
+        //                     error!(error=%e, "failed to add order to limit pool");
+        //                 }
+        //             },
+        //             |this, order|
+        // this.validator.validate_order(OrderOrigin::External, order)
+        //         ))
+        //     }
+        //
+        //     ValidationResults::Searcher(order) => {
+        //         PoolInnerEvent::from_searcher(self.handle_validation_results(
+        //             order,
+        //             |this, order| {
+        //                 this.subscriptions
+        //                     .new_order(Order::Searcher(order.order.clone()));
+        //
+        //                 if let Err(e) = this.searcher_pool.add_searcher_order(order)
+        // {                     error!(error=%e, "failed to add order to
+        // searcher pool");                 }
+        //             },
+        //             |this, order| {
+        //                 this.validator
+        //                     .validate_searcher_order(OrderOrigin::External, order)
+        //             }
+        //         ))
+        //     }
+        //     ValidationResults::ComposableLimit(order) => {
+        //         PoolInnerEvent::from_composable_limit(self.handle_validation_results(
+        //             order,
+        //             |this, order| {
+        //                 this.subscriptions
+        //                     .new_order(Order::ComposableLimit(order.order.clone()));
+        //
+        //                 if let Err(e) = this.limit_pool.add_composable_order(order) {
+        //                     error!(error=%e, "failed to add order to limit pool");
+        //                 }
+        //             },
+        //             |this, order| {
+        //                 this.validator
+        //                     .validate_composable_order(OrderOrigin::External, order)
+        //             }
+        //         ))
+        //     }
+        //     ValidationResults::ComposableSearcher(order) => {
+        //         PoolInnerEvent::from_composable_searcher(self.
+        // handle_validation_results(             order,
+        //             |this, order| {
+        //                 this.subscriptions
+        //
+        // .new_order(Order::ComposableSearcher(order.order.clone()));
+        //
+        //                 if let Err(e) =
+        // this.searcher_pool.add_composable_searcher_order(order) {
+        // error!(error=%e,"failed to add order to searcher pool");
+        // }             },
+        //             |this, order| {
+        //                 this.validator
+        //
+        // .validate_composable_searcher_order(OrderOrigin::External, order)
+        //             }
+        //         ))
+        //     }
+        // }
+        None
     }
 
-    fn handle_validation_results<O: PoolOrder>(
-        &mut self,
-        order: OrderValidationOutcome<O>,
-        insert: impl FnOnce(&mut Self, ValidOrder<O>),
-        revalidate: impl FnOnce(&mut Self, O)
-    ) -> OrderOrPeers<O> {
-        match order {
-            OrderValidationOutcome::Valid { order, propagate, block_number } => {
-                // check against current block to see if there is possible state reminance.
-                if block_number + 1 == self.block_number
-                    && self.last_touched_addresses.remove(&order.from())
-                {
-                    tracing::debug!(
-                        ?order,
-                        "order was validated on prev block but had a state change occur. \
-                         revalidating"
-                    );
-                    revalidate(self, order.order);
-                    return OrderOrPeers::None
-                }
-                let res = propagate.then_some(order.order.clone());
-                self.update_order_tracking(order.clone());
-                insert(self, order);
-
-                OrderOrPeers::Order(res)
-            }
-            OrderValidationOutcome::Invalid(order, e) => {
-                warn!(?order, %e, "invalid order");
-                let peers = self
-                    .pending_orders
-                    .remove(&order.hash())
-                    .unwrap_or_default();
-
-                OrderOrPeers::Peers(peers)
-            }
-            OrderValidationOutcome::Error(hash, e) => {
-                error!(?hash, %e, "error validating order");
-
-                OrderOrPeers::None
-            }
-        }
-    }
-
-    fn update_order_tracking<O: PoolOrder>(&mut self, order: ValidOrder<O>) {
-        let hash = order.hash();
-        let user = order.from();
-        let id: OrderId = order.into();
-
-        self.pending_orders.remove(&hash);
-        self.hash_to_order_id.insert(hash, id);
-        // nonce overlap is checked during validation so its ok we
-        // don't check for duplicates
-        self.address_to_orders.entry(user).or_default().push(id);
-    }
+    // fn handle_validation_results<O: PoolOrder>(
+    //     &mut self,
+    //     order: OrderValidationOutcome<O>,
+    //     insert: impl FnOnce(&mut Self, ValidOrder<O>),
+    //     revalidate: impl FnOnce(&mut Self, O)
+    // ) -> OrderOrPeers<O> {
+    //     match order {
+    //         OrderValidationOutcome::Valid { order, propagate, block_number } => {
+    //             // check against current block to see if there is possible state
+    // reminance.             if block_number + 1 == self.block_number
+    //                 && self.last_touched_addresses.remove(&order.from())
+    //             {
+    //                 tracing::debug!(
+    //                     ?order,
+    //                     "order was validated on prev block but had a state change
+    // occur. \                      revalidating"
+    //                 );
+    //                 revalidate(self, order.order);
+    //                 return OrderOrPeers::None
+    //             }
+    //             let res = propagate.then_some(order.order.clone());
+    //             self.update_order_tracking(order.clone());
+    //             insert(self, order);
+    //
+    //             OrderOrPeers::Order(res)
+    //         }
+    //         OrderValidationOutcome::Invalid(order, e) => {
+    //             warn!(?order, %e, "invalid order");
+    //             let peers = self
+    //                 .pending_orders
+    //                 .remove(&order.hash())
+    //                 .unwrap_or_default();
+    //
+    //             OrderOrPeers::Peers(peers)
+    //         }
+    //         OrderValidationOutcome::Error(hash, e) => {
+    //             error!(?hash, %e, "error validating order");
+    //
+    //             OrderOrPeers::None
+    //         }
+    //     }
+    // }
+    //
+    // fn update_order_tracking<O: PoolOrder>(&mut self, order: ValidOrder<O>) {
+    //     let hash = order.hash();
+    //     let user = order.from();
+    //     let id: OrderId = order.into();
+    //
+    //     self.pending_orders.remove(&hash);
+    //     self.hash_to_order_id.insert(hash, id);
+    //     // nonce overlap is checked during validation so its ok we
+    //     // don't check for duplicates
+    //     self.address_to_orders.entry(user).or_default().push(id);
+    // }
 }
 
 impl<V> Stream for OrderSorter<V>
@@ -394,7 +401,7 @@ where
         let mut validated = Vec::new();
         while let Poll::Ready(Some(next)) = self.validator.poll_next_unpin(cx) {
             if let Some(prop) = self.handle_validated_order(next) {
-                validated.push(prop);
+                // validated.push(prop);
             }
         }
 

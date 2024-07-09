@@ -1,10 +1,13 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, HashMap}
+};
 
 use alloy_primitives::B256;
 use angstrom_types::orders::{
-    OrderLocation, PooledSearcherOrder, SearcherPriorityData, ValidatedOrder
+    OrderLocation, OrderPriorityData, PooledSearcherOrder, SearcherPriorityData, ValidatedOrder
 };
-use sol_bindings::user_types::TopOfBlockOrder;
+use sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder};
 
 use super::{SearcherPoolError, SEARCHER_POOL_MAX_SIZE};
 use crate::common::{SizeTracker, ValidOrder};

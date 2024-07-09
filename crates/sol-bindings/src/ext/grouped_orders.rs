@@ -1,5 +1,6 @@
 use crate::user_types::{FlashOrder, StandingOrder, TopOfBlockOrder};
 
+#[derive(Debug)]
 pub enum AllOrders {
     Partial(StandingOrder),
     KillOrFill(FlashOrder),

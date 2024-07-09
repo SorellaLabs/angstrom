@@ -5,9 +5,10 @@ use angstrom_types::{
     orders::{OrderId, PooledComposableOrder, PooledSearcherOrder, SearcherPriorityData},
     primitive::PoolId
 };
-use composable::ComposableSearcherPool;
 use pending::PendingPool;
-use sol_bindings::{sol::SolTopOfBlockOrder, user_types::TopOfBlockOrder};
+use sol_bindings::{
+    grouped_orders::OrderWithId, sol::SolTopOfBlockOrder, user_types::TopOfBlockOrder
+};
 
 use crate::common::{SizeTracker, ValidOrder};
 
@@ -41,7 +42,8 @@ impl SearcherPool {
     }
 
     pub fn remove_searcher_order(&mut self, id: &u128) -> Option<TopOfBlockOrder> {
-        self.searcher_orders.remove(id)
+        // self.searcher_orders.remove(id)
+        None
     }
 }
 

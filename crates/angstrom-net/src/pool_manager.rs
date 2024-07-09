@@ -17,13 +17,13 @@ use angstrom_types::{
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
 use order_pool::{
-    AllOrders, Order, OrderPoolHandle, OrderPoolInner, OrderSet, OrderSorter, OrdersToPropagate,
-    PoolConfig, PoolInnerEvent
+    Order, OrderPoolHandle, OrderSorter, OrdersToPropagate, PoolConfig, PoolInnerEvent
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_network_peers::PeerId;
 use reth_primitives::{TxHash, B256};
 use reth_tasks::TaskSpawner;
+use sol_bindings::grouped_orders::AllOrders;
 use tokio::sync::{
     mpsc,
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
@@ -55,15 +55,6 @@ pub enum OrderCommand {
 impl PoolHandle {
     fn send(&self, cmd: OrderCommand) {
         let _ = self.manager_tx.send(cmd);
-    }
-
-    async fn send_request<T>(
-        &self,
-        rx: oneshot::Receiver<T>,
-        cmd: OrderCommand<L, CL, S, CS>
-    ) -> T {
-        self.send(cmd);
-        rx.await.unwrap()
     }
 }
 
@@ -220,16 +211,16 @@ where
     fn on_eth_event(&mut self, eth: EthEvent) {
         match eth {
             EthEvent::FilledOrders(orders, block) => {
-                self.pool.filled_orders(block, &orders);
+                self.order_sorter.filled_orders(block, &orders);
             }
-            EthEvent::ReorgedOrders(orders) => self.pool.reorg(orders),
+            EthEvent::ReorgedOrders(orders) => self.order_sorter.reorg(orders),
             EthEvent::EOAStateChanges(state_changes) => {
-                self.pool.eoa_state_change(state_changes);
+                self.order_sorter.eoa_state_change(state_changes);
             }
             EthEvent::FinalizedBlock(block) => {
-                self.pool.finalized_block(block);
+                self.order_sorter.finalized_block(block);
             }
-            EthEvent::NewBlock(block) => self.pool.new_block(block)
+            EthEvent::NewBlock(block) => self.order_sorter.new_block(block)
         }
     }
 
@@ -241,58 +232,64 @@ where
                         .get_mut(&peer_id)
                         .map(|peer| peer.orders.insert(order.hash()));
 
-                    match order {
-                        PooledOrder::Limit(order) => {
-                            if let Ok(order) = <L as OrderConversion>::try_from_order(order) {
-                                self.pool
-                                    .new_limit_order(peer_id, OrderOrigin::External, order);
-                            } else {
-                                self.network.peer_reputation_change(
-                                    peer_id,
-                                    ReputationChangeKind::BadOrder
-                                );
-                            }
-                        }
-                        PooledOrder::Searcher(order) => {
-                            if let Ok(order) = <S as OrderConversion>::try_from_order(order) {
-                                self.pool
-                                    .new_searcher_order(peer_id, OrderOrigin::External, order);
-                            } else {
-                                self.network.peer_reputation_change(
-                                    peer_id,
-                                    ReputationChangeKind::BadOrder
-                                );
-                            }
-                        }
-                        PooledOrder::ComposableLimit(order) => {
-                            if let Ok(order) = <CL as OrderConversion>::try_from_order(order) {
-                                self.pool.new_composable_limit(
-                                    peer_id,
-                                    OrderOrigin::External,
-                                    order
-                                );
-                            } else {
-                                self.network.peer_reputation_change(
-                                    peer_id,
-                                    ReputationChangeKind::BadComposableOrder
-                                );
-                            }
-                        }
-                        PooledOrder::ComposableSearcher(order) => {
-                            if let Ok(order) = <CS as OrderConversion>::try_from_order(order) {
-                                self.pool.new_composable_searcher_order(
-                                    peer_id,
-                                    OrderOrigin::External,
-                                    order
-                                );
-                            } else {
-                                self.network.peer_reputation_change(
-                                    peer_id,
-                                    ReputationChangeKind::BadComposableOrder
-                                );
-                            }
-                        }
-                    }
+                    // match order {
+                    //     PooledOrder::Limit(order) => {
+                    //         if let Ok(order) = <L as
+                    // OrderConversion>::try_from_order(order) {
+                    //             self.pool
+                    //                 .new_limit_order(peer_id,
+                    // OrderOrigin::External, order);
+                    //         } else {
+                    //             self.network.peer_reputation_change(
+                    //                 peer_id,
+                    //                 ReputationChangeKind::BadOrder
+                    //             );
+                    //         }
+                    //     }
+                    //     PooledOrder::Searcher(order) => {
+                    //         if let Ok(order) = <S as
+                    // OrderConversion>::try_from_order(order) {
+                    //             self.pool
+                    //                 .new_searcher_order(peer_id,
+                    // OrderOrigin::External, order);
+                    //         } else {
+                    //             self.network.peer_reputation_change(
+                    //                 peer_id,
+                    //                 ReputationChangeKind::BadOrder
+                    //             );
+                    //         }
+                    //     }
+                    //     PooledOrder::ComposableLimit(order) => {
+                    //         if let Ok(order) = <CL as
+                    // OrderConversion>::try_from_order(order) {
+                    //             self.pool.new_composable_limit(
+                    //                 peer_id,
+                    //                 OrderOrigin::External,
+                    //                 order
+                    //             );
+                    //         } else {
+                    //             self.network.peer_reputation_change(
+                    //                 peer_id,
+                    //                 ReputationChangeKind::BadComposableOrder
+                    //             );
+                    //         }
+                    //     }
+                    //     PooledOrder::ComposableSearcher(order) => {
+                    //         if let Ok(order) = <CS as
+                    // OrderConversion>::try_from_order(order) {
+                    //             self.pool.new_composable_searcher_order(
+                    //                 peer_id,
+                    //                 OrderOrigin::External,
+                    //                 order
+                    //             );
+                    //         } else {
+                    //             self.network.peer_reputation_change(
+                    //                 peer_id,
+                    //                 ReputationChangeKind::BadComposableOrder
+                    //             );
+                    //         }
+                    //     }
+                    // }
                 });
             }
         }
@@ -327,25 +324,25 @@ where
         }
     }
 
-    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent<L, CL, S, CS>>) {
-        let orders = orders
-            .into_iter()
-            .filter_map(|order| match order {
-                PoolInnerEvent::Propagation(p) => Some(p.into_pooled()),
-                PoolInnerEvent::BadOrderMessages(o) => {
-                    o.into_iter().for_each(|peer| {
-                        self.network.peer_reputation_change(
-                            peer,
-                            crate::ReputationChangeKind::InvalidOrder
-                        );
-                    });
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        self.network
-            .broadcast_tx(StromMessage::PropagatePooledOrders(orders))
+    fn on_pool_events(&mut self, orders: Vec<()>) {
+        // let orders = orders
+        //     .into_iter()
+        //     .filter_map(|order| match order {
+        //         PoolInnerEvent::Propagation(p) => Some(p.into_pooled()),
+        //         PoolInnerEvent::BadOrderMessages(o) => {
+        //             o.into_iter().for_each(|peer| {
+        //                 self.network.peer_reputation_change(
+        //                     peer,
+        //                     crate::ReputationChangeKind::InvalidOrder
+        //                 );
+        //             });
+        //             None
+        //         }
+        //     })
+        //     .collect::<Vec<_>>();
+        //
+        // self.network
+        //     .broadcast_tx(StromMessage::PropagatePooledOrders(orders))
     }
 }
 
@@ -380,7 +377,7 @@ where
         }
 
         // poll underlying pool. This is the validation process that's being polled
-        while let Poll::Ready(Some(orders)) = this.pool.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(orders)) = this.order_sorter.poll_next_unpin(cx) {
             this.on_pool_events(orders);
         }
 

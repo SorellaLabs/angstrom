@@ -6,7 +6,7 @@ use angstrom_types::{
 };
 
 use super::{parked::ParkedPool, pending::PendingPool, LimitPoolError, OrderLocation};
-use crate::{common::ValidOrder, BidsAndAsks};
+use crate::common::ValidOrder;
 
 pub struct LimitPool {
     pending_orders: HashMap<PoolId, PendingPool>,

@@ -11,7 +11,7 @@ use sol_bindings::{
 };
 
 use super::{pending::PendingPool, LimitPoolError};
-use crate::{common::ValidOrder, BidsAndAsks};
+use crate::common::ValidOrder;
 
 pub struct ComposableLimitPool(HashMap<PoolId, PendingPool>);
 

@@ -5,7 +5,9 @@ use std::{
 
 use reth_primitives::B256;
 
-use crate::{finalization_pool::FinalizationPool, limit::LimitOrderPool, searcher::SearcherPool};
+use crate::{
+    finalization_pool::FinalizationPool, limit::LimitOrderPool, searcher::SearcherPool, PoolConfig
+};
 
 /// The Storage of all verified orders.
 #[derive(Clone)]

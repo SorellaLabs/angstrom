@@ -7,7 +7,7 @@ use sol_bindings::grouped_orders::AllOrders;
 use crate::common::Order;
 
 pub struct FinalizationPool {
-    hashes_to_orders: HashMap<B256, AllOrders>,
+    hashes_to_orders: HashMap<u128, AllOrders>,
     block_to_hashes:  HashMap<u64, Vec<u128>>
 }
 
@@ -17,17 +17,17 @@ impl FinalizationPool {
     }
 
     pub fn new_orders(&mut self, block: u64, orders: Vec<AllOrders>) {
-        let hashes = orders
-            .into_iter()
-            .map(|order| {
-                let hash = order.hash();
-                self.hashes_to_orders.insert(hash, order);
-
-                hash
-            })
-            .collect::<Vec<_>>();
-
-        assert!(self.block_to_hashes.insert(block, hashes).is_none());
+        // let hashes = orders
+        //     .into_iter()
+        //     .map(|order| {
+        //         let hash = order.hash();
+        //         self.hashes_to_orders.insert(hash, order);
+        //
+        //         hash
+        //     })
+        //     .collect::<Vec<_>>();
+        //
+        // assert!(self.block_to_hashes.insert(block, hashes).is_none());
     }
 
     pub fn reorg(&mut self, orders: Vec<u128>) -> impl Iterator<Item = AllOrders> + '_ {

@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
     time::{Duration, SystemTime, UNIX_EPOCH}
@@ -21,6 +22,7 @@ use angstrom_types::{
 use futures_util::{Stream, StreamExt};
 use reth_network_peers::PeerId;
 use reth_primitives::{Address, U256};
+use sol_bindings::grouped_orders::AllOrders;
 use tokio::sync::mpsc;
 use tracing::{error, trace, warn};
 use validation::order::OrderValidatorHandle;
@@ -30,17 +32,19 @@ use crate::{
     config::PoolConfig,
     order_storage::OrderStorage,
     subscriptions::OrderPoolSubscriptions,
-    validator::PoolOrderValidator,
-    OrderSet
+    validator::PoolOrderValidator
 };
 
 /// This is used to remove validated orders. During validation
 /// the same check wil be ran but with more accuracy
 const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
 
-pub struct OrderPoolInner<V: OrderValidatorHandle> {
-    order_storage:          OrderStorage,
+/// The order pool sorter takes in unsorted transactions. then based on the
+/// validation outcome will put them into the proper order storage location.
+pub struct OrderSorter<V: OrderValidatorHandle> {
     _config:                PoolConfig,
+    /// order storage
+    order_storage:          OrderStorage,
     /// Address to order id, used for eoa invalidation
     address_to_orders:      HashMap<Address, Vec<OrderId>>,
     /// touched addresses transition
@@ -55,7 +59,15 @@ pub struct OrderPoolInner<V: OrderValidatorHandle> {
     validator:              PoolOrderValidator<V>
 }
 
-impl<V: OrderValidatorHandle> OrderPoolInner<V> {
+impl<V: OrderValidatorHandle> Deref for OrderSorter<V> {
+    type Target = OrderStorage;
+
+    fn deref(&self) -> &Self::Target {
+        &self.order_storage
+    }
+}
+
+impl<V: OrderValidatorHandle> OrderSorter<V> {
     pub fn new(validator: V, config: PoolConfig, block_number: u64) -> Self {
         Self {
             order_storage: OrderStorage::new(&config),
@@ -69,66 +81,8 @@ impl<V: OrderValidatorHandle> OrderPoolInner<V> {
         }
     }
 
-    pub fn new_limit_order(&mut self, peer_id: PeerId, origin: OrderOrigin, order: L) {
-        if !self.is_duplicate(&order) {
-            self.pending_orders.insert(order.hash(), vec![peer_id]);
-            self.validator.validate_order(origin, order);
-        } else {
-            // track other peers in-case of invalid messages. This allows us to slash all
-            // invalid messages sent
-            self.pending_orders
-                .get_mut(&order.hash())
-                .unwrap()
-                .push(peer_id);
-        }
-    }
-
-    pub fn new_composable_limit(&mut self, peer_id: PeerId, origin: OrderOrigin, order: CL) {
-        if !self.is_duplicate(&order) {
-            self.pending_orders.insert(order.hash(), vec![peer_id]);
-            self.validator.validate_composable_order(origin, order);
-        } else {
-            // track other peers in-case of invalid messages. This allows us to slash all
-            // invalid messages sent
-            self.pending_orders
-                .get_mut(&order.hash())
-                .unwrap()
-                .push(peer_id);
-        }
-    }
-
-    pub fn new_searcher_order(&mut self, peer_id: PeerId, origin: OrderOrigin, order: S) {
-        if !self.is_duplicate(&order) {
-            self.pending_orders.insert(order.hash(), vec![peer_id]);
-            self.validator.validate_searcher_order(origin, order)
-        } else {
-            // track other peers in-case of invalid messages. This allows us to slash all
-            // invalid messages sent
-            self.pending_orders
-                .get_mut(&order.hash())
-                .unwrap()
-                .push(peer_id);
-        }
-    }
-
-    pub fn new_composable_searcher_order(
-        &mut self,
-        peer_id: PeerId,
-        origin: OrderOrigin,
-        order: CS
-    ) {
-        if !self.is_duplicate(&order) {
-            self.pending_orders.insert(order.hash(), vec![peer_id]);
-            self.validator
-                .validate_composable_searcher_order(origin, order)
-        } else {
-            // track other peers in-case of invalid messages. This allows us to slash all
-            // invalid messages sent
-            self.pending_orders
-                .get_mut(&order.hash())
-                .unwrap()
-                .push(peer_id);
-        }
+    pub fn new_order(&mut self, peer_id: PeerId, origin: OrderOrigin, order: AllOrders) {
+        todo!()
     }
 
     fn is_duplicate<O: PoolOrder>(&self, order: &O) -> bool {
@@ -430,11 +384,11 @@ impl<V: OrderValidatorHandle> OrderPoolInner<V> {
     }
 }
 
-impl<V> Stream for OrderPoolInner<V>
+impl<V> Stream for OrderSorter<V>
 where
     V: OrderValidatorHandle
 {
-    type Item = Vec<PoolInnerEvent<L, CL, S, CS>>;
+    type Item = Vec<()>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut validated = Vec::new();

@@ -2,8 +2,8 @@ mod common;
 mod config;
 mod finalization_pool;
 mod limit;
+mod order_sorter;
 pub mod order_storage;
-mod upkeeper;
 
 mod searcher;
 mod subscriptions;
@@ -13,8 +13,8 @@ use angstrom_types::orders::{OrderOrigin, PoolOrder};
 pub use angstrom_utils::*;
 pub use common::Order;
 pub use config::PoolConfig;
+pub use order_sorter::*;
 use sol_bindings::grouped_orders::AllOrders;
-pub use upkeeper::*;
 
 /// The OrderPool Trait is how other processes can interact with the orderpool
 /// asyncly. This allows for requesting data and providing data from different

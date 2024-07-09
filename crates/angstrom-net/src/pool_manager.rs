@@ -17,8 +17,8 @@ use angstrom_types::{
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
 use order_pool::{
-    AllOrders, Order, OrderPoolHandle, OrderPoolInner, OrderSet, OrdersToPropagate, PoolConfig,
-    PoolInnerEvent
+    AllOrders, Order, OrderPoolHandle, OrderPoolInner, OrderSet, OrderSorter, OrdersToPropagate,
+    PoolConfig, PoolInnerEvent
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_network_peers::PeerId;
@@ -118,7 +118,7 @@ where
     ) -> PoolHandle {
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(self.validator, self.config, 0);
+        let inner = OrderSorter::new(self.validator, self.config, 0);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -127,7 +127,7 @@ where
                 strom_network_events: self.strom_network_events,
                 order_events:         self.order_events,
                 peers:                HashMap::default(),
-                pool:                 inner,
+                order_sorter:         inner,
                 network:              self.network_handle,
                 _command_tx:          tx,
                 command_rx:           rx
@@ -141,7 +141,7 @@ where
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(self.validator, self.config, 0);
+        let inner = OrderSorter::new(self.validator, self.config, 0);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -150,7 +150,7 @@ where
                 strom_network_events: self.strom_network_events,
                 order_events:         self.order_events,
                 peers:                HashMap::default(),
-                pool:                 inner,
+                order_sorter:         inner,
                 network:              self.network_handle,
                 _command_tx:          tx,
                 command_rx:           rx
@@ -165,8 +165,8 @@ pub struct PoolManager<V>
 where
     V: OrderValidatorHandle
 {
-    /// The order pool. Streams up new transactions to be broadcasted
-    pool:                 OrderPoolInner<V>,
+    /// access to validation and sorted storage of orders.
+    order_sorter:         OrderSorter<V>,
     /// Network access.
     network:              StromNetworkHandle,
     /// Subscriptions to all the strom-network related events.
@@ -191,7 +191,7 @@ where
     V: OrderValidatorHandle
 {
     pub fn new(
-        pool: OrderPoolInner<V>,
+        order_sorter: OrderSorter<V>,
         network: StromNetworkHandle,
         strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
@@ -202,7 +202,7 @@ where
         Self {
             strom_network_events,
             network,
-            pool,
+            order_sorter,
             peers: HashMap::new(),
             order_events,
             command_rx,

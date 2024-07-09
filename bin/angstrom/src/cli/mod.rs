@@ -22,10 +22,6 @@ use angstrom_rpc::{
     api::{ConsensusApiServer, OrderApiServer, QuotingApiServer},
     ConsensusApi, OrderApi, QuotesApi
 };
-use angstrom_types::rpc::{
-    EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
-    EcRecoveredSearcherOrder
-};
 use clap::Parser;
 use consensus::{ConsensusCommand, ConsensusHandle, ConsensusManager, ManagerNetworkDeps, Signer};
 use reth::{
@@ -109,19 +105,8 @@ pub fn init_network_builder(config: &AngstromConfig) -> eyre::Result<StromNetwor
     Ok(StromNetworkBuilder::new(verification))
 }
 
-pub type DefaultPoolHandle = PoolHandle<
-    EcRecoveredLimitOrder,
-    EcRecoveredComposableLimitOrder,
-    EcRecoveredSearcherOrder,
-    EcRecoveredComposableSearcherOrder
->;
-
-type DefaultOrderCommand = OrderCommand<
-    EcRecoveredLimitOrder,
-    EcRecoveredComposableLimitOrder,
-    EcRecoveredSearcherOrder,
-    EcRecoveredComposableSearcherOrder
->;
+pub type DefaultPoolHandle = PoolHandle;
+type DefaultOrderCommand = OrderCommand;
 
 // due to how the init process works with reth. we need to init like this
 pub struct StromHandles {

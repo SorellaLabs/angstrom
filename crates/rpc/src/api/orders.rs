@@ -17,9 +17,6 @@ pub trait OrderApi {
     #[method(name = "submit_composable_limit_order")]
     async fn submit_composable_limit_order(&self, order: Bytes) -> RpcResult<bool>;
 
-    #[method(name = "submit_composable_searcher_order")]
-    async fn submit_composable_searcher_order(&self, order: Bytes) -> RpcResult<bool>;
-
     #[subscription(
         name = "orders_subscription", 
         unsubscribe = "unsubscribe_orders",

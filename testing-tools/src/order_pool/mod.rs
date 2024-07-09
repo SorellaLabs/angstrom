@@ -6,25 +6,15 @@ use angstrom_network::{
     pool_manager::{PoolHandle, PoolManager},
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle
 };
-use angstrom_types::rpc::{
-    EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
-    EcRecoveredSearcherOrder
-};
 use futures::{future::poll_fn, Future, FutureExt};
-use order_pool::{OrderPoolInner, PoolConfig};
+use order_pool::{OrderSorter, PoolConfig};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::mocks::validator::MockValidator;
 
-type DefaultMockPoolManager = PoolManager<
-    EcRecoveredLimitOrder,
-    EcRecoveredComposableLimitOrder,
-    EcRecoveredSearcherOrder,
-    EcRecoveredComposableSearcherOrder,
-    MockValidator
->;
+type DefaultMockPoolManager = PoolManager<MockValidator>;
 
 type OrderPoolOperation<T> =
     dyn FnOnce(TestnetOrderPool, T) -> Pin<Box<dyn Future<Output = (TestnetOrderPool, T)>>>;
@@ -49,7 +39,7 @@ impl TestnetOrderPool {
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderPoolInner::new(validator, config, block_number);
+        let inner = OrderSorter::new(validator, config, block_number);
 
         Self {
             pool_manager: PoolManager::new(

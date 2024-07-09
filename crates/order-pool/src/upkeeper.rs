@@ -28,10 +28,7 @@ use validation::order::OrderValidatorHandle;
 use crate::{
     common::{Order, ValidOrder},
     config::PoolConfig,
-    finalization_pool::FinalizationPool,
-    limit::LimitOrderPool,
     order_storage::OrderStorage,
-    searcher::SearcherPool,
     subscriptions::OrderPoolSubscriptions,
     validator::PoolOrderValidator,
     OrderSet
@@ -41,7 +38,7 @@ use crate::{
 /// the same check wil be ran but with more accuracy
 const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
 
-pub struct OrderPoolInner {
+pub struct OrderPoolInner<V: OrderValidatorHandle> {
     order_storage:          OrderStorage,
     _config:                PoolConfig,
     /// Address to order id, used for eoa invalidation
@@ -55,35 +52,20 @@ pub struct OrderPoolInner {
     /// Orders that are being validated
     pending_orders:         HashMap<B256, Vec<PeerId>>,
     /// Order Validator
-    validator:              PoolOrderValidator<L, CL, S, CS, V>,
-    /// handles sending out subscriptions
-    subscriptions:          OrderPoolSubscriptions<L, CL, S, CS>
+    validator:              PoolOrderValidator<V>
 }
 
-impl<L, CL, S, CS, V> OrderPoolInner<L, CL, S, CS, V>
-where
-    L: PooledLimitOrder<ValidationData = OrderPriorityData>,
-    CL: PooledComposableOrder + PooledLimitOrder<ValidationData = OrderPriorityData>,
-
-    S: PooledSearcherOrder<ValidationData = SearcherPriorityData>,
-    CS: PooledComposableOrder + PooledSearcherOrder<ValidationData = SearcherPriorityData>,
-    V: OrderValidatorHandle<
-        LimitOrder = L,
-        SearcherOrder = S,
-        ComposableLimitOrder = CL,
-        ComposableSearcherOrder = CS
-    >
-{
+impl<V: OrderValidatorHandle> OrderPoolInner<V> {
     pub fn new(validator: V, config: PoolConfig, block_number: u64) -> Self {
         Self {
+            order_storage: OrderStorage::new(&config),
             block_number,
             _config: config,
             address_to_orders: HashMap::new(),
             hash_to_order_id: HashMap::new(),
             pending_orders: HashMap::new(),
             last_touched_addresses: HashSet::new(),
-            validator: PoolOrderValidator::new(validator),
-            subscriptions: OrderPoolSubscriptions::new()
+            validator: PoolOrderValidator::new(validator)
         }
     }
 
@@ -159,37 +141,6 @@ where
         false
     }
 
-    pub fn subscribe_new_orders(&mut self, tx: mpsc::Sender<Order<L, CL, S, CS>>) {
-        self.subscriptions.subscribe_new_orders(tx);
-    }
-
-    pub fn subscribe_finalized_orders(&mut self, tx: mpsc::Sender<Vec<Order<L, CL, S, CS>>>) {
-        self.subscriptions.subscribe_finalized_orders(tx);
-    }
-
-    pub fn subscribe_filled_orders(&mut self, tx: mpsc::Sender<Vec<Order<L, CL, S, CS>>>) {
-        tracing::debug!("new sub for filled orders");
-        self.subscriptions.subscribe_filled_orders(tx);
-    }
-
-    pub fn subscribe_expired_orders(&mut self, tx: mpsc::Sender<Vec<Order<L, CL, S, CS>>>) {
-        self.subscriptions.subscribe_expired_orders(tx);
-    }
-
-    pub fn fetch_vanilla_orders(&self) -> OrderSet<L, S> {
-        let limit = self.limit_pool.fetch_all_vanilla_orders();
-        let searcher = self.searcher_pool.get_winning_orders_vanilla();
-
-        OrderSet { limit, searcher }
-    }
-
-    pub fn fetch_composable_orders(&self) -> OrderSet<CL, CS> {
-        let limit = self.limit_pool.fetch_all_composable_orders();
-        let searcher = self.searcher_pool.get_winning_orders_composable();
-
-        OrderSet { limit, searcher }
-    }
-
     /// used to remove orders that expire before the next ethereum block
     pub fn new_block(&mut self, block_number: u64) {
         self.block_number = block_number;
@@ -235,8 +186,6 @@ where
                         .map(|o| Order::add_composable_searcher(o.order))
                 })
                 .collect::<Vec<_>>();
-
-            self.subscriptions.expired_orders(expired_orders);
         }
     }
 
@@ -348,7 +297,6 @@ where
             })
             .collect::<Vec<_>>();
 
-        self.subscriptions.filled_orders(filled.clone());
         self.finalization_pool.new_orders(block, filled);
     }
 
@@ -482,19 +430,9 @@ where
     }
 }
 
-impl<L, CL, S, CS, V> Stream for OrderPoolInner<L, CL, S, CS, V>
+impl<V> Stream for OrderPoolInner<V>
 where
-    L: PooledLimitOrder<ValidationData = OrderPriorityData>,
-    CL: PooledComposableOrder + PooledLimitOrder<ValidationData = OrderPriorityData>,
-
-    S: PooledSearcherOrder<ValidationData = SearcherPriorityData>,
-    CS: PooledComposableOrder + PooledSearcherOrder<ValidationData = SearcherPriorityData>,
-    V: OrderValidatorHandle<
-        LimitOrder = L,
-        SearcherOrder = S,
-        ComposableLimitOrder = CL,
-        ComposableSearcherOrder = CS
-    >
+    V: OrderValidatorHandle
 {
     type Item = Vec<PoolInnerEvent<L, CL, S, CS>>;
 

@@ -16,3 +16,9 @@ pub struct OrderStorage {
     pub order_hash_to_id:            Arc<Mutex<HashMap<B256, u64>>>,
     pub order_id_nonce:              Arc<AtomicU64>
 }
+
+impl OrderStorage {
+    pub fn new(config: &PoolConfig) -> Self {
+        todo!()
+    }
+}

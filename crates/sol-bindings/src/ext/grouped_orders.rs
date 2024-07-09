@@ -10,7 +10,7 @@ pub enum AllOrders {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderWithId<Order> {
     pub order: Order,
-    pub id:    u128
+    pub id:    u64
 }
 
 pub enum GroupedVanillaOrders {

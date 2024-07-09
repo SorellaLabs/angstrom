@@ -9,18 +9,18 @@ use angstrom_types::orders::{
 };
 use sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder};
 
-use super::{SearcherPoolError, SEARCHER_POOL_MAX_SIZE};
+use super::SEARCHER_POOL_MAX_SIZE;
 use crate::common::{SizeTracker, ValidOrder};
 
 pub struct PendingPool {
     /// all order hashes
-    orders: HashMap<u128, TopOfBlockOrder>,
+    orders: HashMap<u64, TopOfBlockOrder>,
     /// bids are sorted descending by price, TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    bids:   BTreeMap<Reverse<OrderPriorityData>, u128>,
+    bids:   BTreeMap<Reverse<OrderPriorityData>, u64>,
     /// asks are sorted ascending by price,  TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    asks:   BTreeMap<OrderPriorityData, u128>
+    asks:   BTreeMap<OrderPriorityData, u64>
 }
 
 impl PendingPool {

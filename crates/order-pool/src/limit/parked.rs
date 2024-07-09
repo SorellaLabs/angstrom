@@ -6,7 +6,7 @@ use sol_bindings::grouped_orders::{GroupedVanillaOrders, OrderWithId};
 
 use crate::common::ValidOrder;
 
-pub struct ParkedPool(HashMap<u128, GroupedVanillaOrders>);
+pub struct ParkedPool(HashMap<u64, GroupedVanillaOrders>);
 
 impl ParkedPool {
     #[allow(dead_code)]
@@ -14,7 +14,7 @@ impl ParkedPool {
         Self(HashMap::new())
     }
 
-    pub fn remove_order(&mut self, order_id: &u128) -> Option<GroupedVanillaOrders> {
+    pub fn remove_order(&mut self, order_id: &u64) -> Option<GroupedVanillaOrders> {
         self.0.remove(order_id)
     }
 

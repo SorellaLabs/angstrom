@@ -46,16 +46,3 @@ impl SearcherPool {
         None
     }
 }
-
-#[derive(Debug, thiserror::Error)]
-pub enum SearcherPoolError<O: Debug> {
-    #[error(
-        "Pool has reached max size, and order doesn't satisify replacment requirements, Order: \
-         {0:#?}"
-    )]
-    MaxSize(O),
-    #[error("No pool was found for address: {0}")]
-    NoPool(PoolId),
-    #[error("Order Not Found")]
-    OrderNotFound(B256)
-}

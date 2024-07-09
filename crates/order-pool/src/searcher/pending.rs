@@ -3,14 +3,8 @@ use std::{
     collections::{BTreeMap, HashMap}
 };
 
-use alloy_primitives::B256;
-use angstrom_types::orders::{
-    OrderLocation, OrderPriorityData, PooledSearcherOrder, SearcherPriorityData, ValidatedOrder
-};
+use angstrom_types::orders::OrderPriorityData;
 use sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder};
-
-use super::SEARCHER_POOL_MAX_SIZE;
-use crate::common::{SizeTracker, ValidOrder};
 
 pub struct PendingPool {
     /// all order hashes

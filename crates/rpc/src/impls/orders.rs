@@ -1,5 +1,4 @@
 use alloy_primitives::Bytes;
-use angstrom_types::orders::OrderOrigin;
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink};
 use order_pool::OrderPoolHandle;
 

@@ -1,18 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
+    ops::Deref,
     pin::Pin,
     task::{Context, Poll},
-    time::{Duration, SystemTime, UNIX_EPOCH}
+    time::Duration
 };
 
 use alloy_primitives::B256;
 use angstrom_types::{
-    orders::{
-        OrderConversion, OrderId, OrderLocation, OrderOrigin, OrderPriorityData,
-        OrderValidationOutcome, PoolOrder, PooledComposableOrder, PooledLimitOrder, PooledOrder,
-        PooledSearcherOrder, SearcherPriorityData, ValidationResults
-    },
+    orders::{OrderConversion, OrderId, OrderOrigin, PoolOrder, PooledOrder},
     primitive::PoolId,
     rpc::{
         SignedComposableLimitOrder, SignedComposableSearcherOrder, SignedLimitOrder,
@@ -21,19 +17,12 @@ use angstrom_types::{
 };
 use futures_util::{Stream, StreamExt};
 use reth_network_peers::PeerId;
-use reth_primitives::{Address, U256};
+use reth_primitives::Address;
 use sol_bindings::grouped_orders::AllOrders;
-use tokio::sync::mpsc;
-use tracing::{error, trace, warn};
+use tracing::{error, trace};
 use validation::order::OrderValidatorHandle;
 
-use crate::{
-    common::{Order, ValidOrder},
-    config::PoolConfig,
-    order_storage::OrderStorage,
-    subscriptions::OrderPoolSubscriptions,
-    validator::PoolOrderValidator
-};
+use crate::{config::PoolConfig, order_storage::OrderStorage, validator::PoolOrderValidator};
 
 /// This is used to remove validated orders. During validation
 /// the same check wil be ran but with more accuracy
@@ -398,7 +387,7 @@ where
     type Item = Vec<()>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut validated = Vec::new();
+        let validated = Vec::new();
         while let Poll::Ready(Some(next)) = self.validator.poll_next_unpin(cx) {
             if let Some(prop) = self.handle_validated_order(next) {
                 // validated.push(prop);

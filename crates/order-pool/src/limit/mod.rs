@@ -1,16 +1,13 @@
 use std::fmt::Debug;
 
-use angstrom_types::{
-    orders::{OrderId, OrderLocation, OrderPriorityData, PooledComposableOrder, PooledLimitOrder},
-    primitive::PoolId
-};
+use angstrom_types::primitive::PoolId;
 use sol_bindings::{
     grouped_orders::{GroupedVanillaOrders, OrderWithId},
     user_types::TopOfBlockOrder
 };
 
 use self::{composable::ComposableLimitPool, standard::LimitPool};
-use crate::common::{SizeTracker, ValidOrder};
+use crate::common::SizeTracker;
 mod composable;
 mod parked;
 mod pending;

@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 
-use angstrom_types::{
-    orders::{OrderId, OrderPriorityData, PoolOrder, PooledLimitOrder},
-    primitive::PoolId
-};
+use angstrom_types::primitive::PoolId;
 
-use super::{parked::ParkedPool, pending::PendingPool, LimitPoolError, OrderLocation};
-use crate::common::ValidOrder;
+use super::{parked::ParkedPool, pending::PendingPool};
 
 pub struct LimitPool {
     pending_orders: HashMap<PoolId, PendingPool>,

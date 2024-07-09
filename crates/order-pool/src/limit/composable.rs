@@ -1,17 +1,12 @@
 use std::collections::HashMap;
 
-use angstrom_types::{
-    orders::{OrderId, OrderPriorityData, PooledComposableOrder, PooledLimitOrder},
-    primitive::PoolId
-};
+use angstrom_types::{orders::OrderId, primitive::PoolId};
 use sol_bindings::{
     grouped_orders::{GroupedVanillaOrders, OrderWithId},
-    sol::SolTopOfBlockOrder,
     user_types::TopOfBlockOrder
 };
 
-use super::{pending::PendingPool, LimitPoolError};
-use crate::common::ValidOrder;
+use super::pending::PendingPool;
 
 pub struct ComposableLimitPool(HashMap<PoolId, PendingPool>);
 

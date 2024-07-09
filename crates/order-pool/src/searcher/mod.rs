@@ -1,16 +1,10 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::collections::HashMap;
 
-use alloy_primitives::B256;
-use angstrom_types::{
-    orders::{OrderId, PooledComposableOrder, PooledSearcherOrder, SearcherPriorityData},
-    primitive::PoolId
-};
+use angstrom_types::primitive::PoolId;
 use pending::PendingPool;
-use sol_bindings::{
-    grouped_orders::OrderWithId, sol::SolTopOfBlockOrder, user_types::TopOfBlockOrder
-};
+use sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder};
 
-use crate::common::{SizeTracker, ValidOrder};
+use crate::common::SizeTracker;
 
 mod pending;
 

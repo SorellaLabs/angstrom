@@ -7,6 +7,12 @@ pub struct FinalizationPool {
     block_to_ids: HashMap<u64, Vec<u64>>
 }
 
+impl Default for FinalizationPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FinalizationPool {
     pub fn new() -> Self {
         Self { block_to_ids: HashMap::default(), id_to_orders: HashMap::default() }

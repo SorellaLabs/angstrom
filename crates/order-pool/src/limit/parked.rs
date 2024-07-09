@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 
-use alloy_primitives::B256;
-use angstrom_types::orders::{OrderId, PoolOrder};
 use sol_bindings::grouped_orders::{GroupedVanillaOrders, OrderWithId};
-
-use crate::common::ValidOrder;
 
 pub struct ParkedPool(HashMap<u64, GroupedVanillaOrders>);
 

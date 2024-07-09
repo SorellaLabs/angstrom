@@ -3,8 +3,8 @@ use std::{
     task::{Context, Poll}
 };
 
-use angstrom_types::orders::{OrderOrigin, PoolOrder, ValidationResults};
-use futures_util::{stream::FuturesUnordered, Future, FutureExt, Stream, StreamExt};
+use angstrom_types::orders::OrderOrigin;
+use futures_util::{stream::FuturesUnordered, Future, Stream, StreamExt};
 use validation::order::OrderValidatorHandle;
 
 type ValidationFuture = Pin<Box<dyn Future<Output = ()> + Send + Sync>>;

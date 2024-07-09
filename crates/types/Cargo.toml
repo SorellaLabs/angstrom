@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 base64 = "0.22.1"
+sol-bindings.workspace = true
 bitmaps.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
 blsful.workspace = true

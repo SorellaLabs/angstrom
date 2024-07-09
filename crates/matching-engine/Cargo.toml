@@ -12,7 +12,9 @@ exclude.workspace = true
 divan = "0.1.14"
 
 [dependencies]
+angstrom-types.workspace = true
 angstrom-utils.workspace = true
+sol-bindings.workspace =true
 alloy-primitives.workspace = true
 uniswap_v3_math.workspace = true
 malachite = "0.4.0"
@@ -35,3 +37,4 @@ incremental = false
 opt-level = 3
 panic = 'abort'
 overflow-checks = false
+

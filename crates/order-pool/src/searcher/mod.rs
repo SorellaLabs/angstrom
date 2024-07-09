@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 use alloy_primitives::B256;
 use angstrom_types::{
@@ -6,83 +6,42 @@ use angstrom_types::{
     primitive::PoolId
 };
 use composable::ComposableSearcherPool;
+use pending::PendingPool;
+use sol_bindings::{sol::SolTopOfBlockOrder, user_types::TopOfBlockOrder};
 
-use self::vanilla::VanillaSearcherPool;
 use crate::common::{SizeTracker, ValidOrder};
 
-mod composable;
 mod pending;
-mod vanilla;
 
 pub const SEARCHER_POOL_MAX_SIZE: usize = 15;
 
-pub struct SearcherPool<S: PooledSearcherOrder, CS: PooledComposableOrder + PooledSearcherOrder> {
+pub struct SearcherPool {
     /// Holds all non composable searcher order pools
-    searcher_orders: VanillaSearcherPool<S>,
-    /// Holds all composable searcher order pools
-    composable_searcher_orders: ComposableSearcherPool<CS>,
+    searcher_orders: HashMap<PoolId, PendingPool>,
     /// The size of the current transactions.
-    _size: SizeTracker
+    _size:           SizeTracker
 }
 
-impl<S, CS> SearcherPool<S, CS>
-where
-    S: PooledSearcherOrder<ValidationData = SearcherPriorityData>,
-    CS: PooledComposableOrder
-        + PooledSearcherOrder<ValidationData = SearcherPriorityData>
-        + PooledComposableOrder
-{
+impl SearcherPool {
     pub fn new(ids: &[PoolId], max_size: Option<usize>) -> Self {
         Self {
-            searcher_orders: VanillaSearcherPool::new(ids),
-            composable_searcher_orders: ComposableSearcherPool::new(ids),
-            _size: SizeTracker { max: max_size, current: 0 }
+            searcher_orders: HashMap::default(),
+            _size:           SizeTracker { max: max_size, current: 0 }
         }
     }
 
-    pub fn add_searcher_order(&mut self, order: ValidOrder<S>) -> Result<(), SearcherPoolError<S>> {
-        let size = order.size();
-        if !self._size.has_space(size) {
-            return Err(SearcherPoolError::MaxSize(order.order))
-        }
-
-        self.searcher_orders.add_order(order)?;
+    pub fn add_searcher_order(&mut self, order: OrderWithId<TopOfBlockOrder>) -> eyre::Result<()> {
+        // let size = order.size();
+        // if !self._size.has_space(size) {
+        //     return Err(SearcherPoolError::MaxSize(order.order))
+        // }
+        //
+        // self.searcher_orders.add_order(order)?;
         Ok(())
     }
 
-    pub fn add_composable_searcher_order(
-        &mut self,
-        order: ValidOrder<CS>
-    ) -> Result<(), SearcherPoolError<CS>> {
-        let size = order.size();
-        if !self._size.has_space(size) {
-            return Err(SearcherPoolError::MaxSize(order.order))
-        }
-
-        self.composable_searcher_orders.add_order(order)?;
-        Ok(())
-    }
-
-    pub fn remove_searcher_order(
-        &mut self,
-        id: &OrderId
-    ) -> Result<ValidOrder<S>, SearcherPoolError<S>> {
-        self.searcher_orders.remove_order(id)
-    }
-
-    pub fn remove_composable_searcher_order(
-        &mut self,
-        id: &OrderId
-    ) -> Result<ValidOrder<CS>, SearcherPoolError<CS>> {
-        self.composable_searcher_orders.remove_order(id)
-    }
-
-    pub fn get_winning_orders_vanilla(&self) -> Vec<ValidOrder<S>> {
-        self.searcher_orders.get_winning_orders()
-    }
-
-    pub fn get_winning_orders_composable(&self) -> Vec<ValidOrder<CS>> {
-        self.composable_searcher_orders.get_winning_orders()
+    pub fn remove_searcher_order(&mut self, id: &u128) -> Option<TopOfBlockOrder> {
+        self.searcher_orders.remove(id)
     }
 }
 

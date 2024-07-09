@@ -3,6 +3,7 @@ mod config;
 mod finalization_pool;
 mod inner;
 mod limit;
+pub mod order_storage;
 mod searcher;
 mod subscriptions;
 mod validator;

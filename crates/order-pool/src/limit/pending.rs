@@ -1,79 +1,51 @@
 use std::{cmp::Reverse, collections::BTreeMap};
 
-use angstrom_types::orders::{OrderPriorityData, PoolOrder};
-use reth_primitives::B256;
+use angstrom_types::orders::OrderPriorityData;
 use revm::primitives::HashMap;
+use sol_bindings::{ext::grouped_orders::GroupedVanillaOrders, grouped_orders::OrderWithId};
 
-use crate::common::ValidOrder;
-
-pub struct PendingPool<O: PoolOrder> {
+pub struct PendingPool {
     /// all order hashes
-    orders: HashMap<B256, ValidOrder<O>>,
+    orders: HashMap<u128, GroupedVanillaOrders>,
     /// bids are sorted descending by price, TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    bids:   BTreeMap<Reverse<OrderPriorityData>, B256>,
+    bids:   BTreeMap<Reverse<OrderPriorityData>, u128>,
     /// asks are sorted ascending by price,  TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    asks:   BTreeMap<OrderPriorityData, B256>
+    asks:   BTreeMap<OrderPriorityData, u128>
 }
 
-impl<O: PoolOrder> PendingPool<O>
-where
-    O: PoolOrder<ValidationData = OrderPriorityData>
-{
+impl PendingPool {
     #[allow(unused)]
     pub fn new() -> Self {
         Self { orders: HashMap::new(), bids: BTreeMap::new(), asks: BTreeMap::new() }
     }
 
-    pub fn add_order(&mut self, order: ValidOrder<O>) {
-        let hash = order.hash();
-        let priority = order.priority_data();
-
-        if order.is_bid() {
-            self.bids.insert(Reverse(priority), hash);
-        } else {
-            self.asks.insert(priority, hash);
-        }
-
-        self.orders.insert(hash, order.clone());
+    pub fn add_order(&mut self, order: OrderWithId<GroupedVanillaOrders>) {
+        // let hash = order.hash();
+        // let priority = order.priority_data();
+        //
+        // if order.is_bid() {
+        //     self.bids.insert(Reverse(priority), hash);
+        // } else {
+        //     self.asks.insert(priority, hash);
+        // }
+        //
+        // self.orders.insert(hash, order.clone());
     }
 
-    pub fn remove_order(&mut self, hash: B256) -> Option<ValidOrder<O>> {
-        let order = self.orders.remove(&hash)?;
-        let priority = order.priority_data();
-
-        if order.is_bid() {
-            self.bids.remove(&Reverse(priority))?;
-        } else {
-            self.asks.remove(&priority)?;
-        }
-
-        Some(order)
-    }
-
-    pub fn fetch_all_bids(&self) -> Vec<ValidOrder<O>> {
-        self.bids
-            .values()
-            .map(|v| {
-                self.orders
-                    .get(v)
-                    .expect("Had key but no value, this is a error")
-                    .clone()
-            })
-            .collect()
-    }
-
-    pub fn fetch_all_asks(&self) -> Vec<ValidOrder<O>> {
-        self.asks
-            .values()
-            .map(|v| {
-                self.orders
-                    .get(v)
-                    .expect("Had key but no value, this is a error")
-                    .clone()
-            })
-            .collect()
+    pub fn remove_order(&mut self, hash: u128) -> Option<GroupedVanillaOrders> {
+        // let order = self.orders.remove(&hash)?;
+        // let priority = order.priority_data();
+        //
+        // if order.is_bid() {
+        //     self.bids.remove(&Reverse(priority))?;
+        // } else {
+        //     self.asks.remove(&priority)?;
+        // }
+        //
+        // Some(order)
+        None
     }
 }
 

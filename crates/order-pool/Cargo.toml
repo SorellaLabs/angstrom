@@ -22,6 +22,8 @@ angstrom-types.workspace = true
 validation.workspace = true
 angstrom-eth.workspace = true
 angstrom-utils.workspace = true
+sol-bindings.workspace = true
+eyre.workspace = true
 
 
 # reth
@@ -69,7 +71,7 @@ proptest = { workspace = true, optional = true }
 testing-tools.workspace = true
 angstrom-network.workspace = true
 # reth
-reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0" ,tag =  "v1.0.0", features = [
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.0.0", tag = "v1.0.0", features = [
   "test-utils",
 ] }
 # reth-interfaces = { workspace = true, features = ["test-utils"] }
@@ -87,7 +89,7 @@ reth-transaction-pool = { workspace = true, features = ["test-utils"] }
 
 rand.workspace = true
 secp256k1.workspace = true
-futures.workspace=true
+futures.workspace = true
 
 # misc
 serial_test.workspace = true

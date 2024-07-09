@@ -58,6 +58,7 @@ angstrom-network = { path = "./crates/angstrom-net/" }
 testing-tools = { path = "./testing-tools/" }
 angstrom = { path = "./bin/angstrom/" }
 sol-bindings = { path = "./crates/sol-bindings/" }
+matching-engine = { path = "./crates/matching-engine/" }
 
 # BLS library
 blsful = "2.5.7"
@@ -185,7 +186,7 @@ strum = "0.26.2"
 rayon = "1.7"
 itertools = "0.12.1"
 parking_lot = "0.12"
-metrics = "0.21.1"                                    # Needed for `metrics-macro` to resolve the crate using `::metrics` notation
+metrics = "0.21.1"                                                           # Needed for `metrics-macro` to resolve the crate using `::metrics` notation
 anyhow = "1.0.75"
 url = "2.4.1"
 auto_impl = "1.1.0"

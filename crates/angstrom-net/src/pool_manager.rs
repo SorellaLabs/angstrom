@@ -17,7 +17,7 @@ use angstrom_types::{
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
-use order_pool::{OrderIndexer, OrderPoolHandle, OrdersToPropagate, PoolConfig, PoolInnerEvent};
+use order_pool::{OrderIndexer, OrderPoolHandle, PoolConfig, PoolInnerEvent};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_network_peers::PeerId;
 use reth_primitives::{TxHash, B256};
@@ -229,7 +229,6 @@ where
                     self.peers
                         .get_mut(&peer_id)
                         .map(|peer| peer.orders.insert(order.hash()));
-
                     // match order {
                     //     PooledOrder::Limit(order) => {
                     //         if let Ok(order) = <L as
@@ -322,23 +321,24 @@ where
         }
     }
 
-    fn on_pool_events(&mut self, orders: Vec<()>) {
-        // let orders = orders
-        //     .into_iter()
-        //     .filter_map(|order| match order {
-        //         PoolInnerEvent::Propagation(p) => Some(p.into_pooled()),
-        //         PoolInnerEvent::BadOrderMessages(o) => {
-        //             o.into_iter().for_each(|peer| {
-        //                 self.network.peer_reputation_change(
-        //                     peer,
-        //                     crate::ReputationChangeKind::InvalidOrder
-        //                 );
-        //             });
-        //             None
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
-        //
+    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>) {
+        let broadcast_orders = orders
+            .into_iter()
+            .filter_map(|order| match order {
+                PoolInnerEvent::Propagation(p) => Some(p),
+                PoolInnerEvent::BadOrderMessages(o) => {
+                    o.into_iter().for_each(|peer| {
+                        self.network.peer_reputation_change(
+                            peer,
+                            crate::ReputationChangeKind::InvalidOrder
+                        );
+                    });
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // need to update network types for this
         // self.network
         //     .broadcast_tx(StromMessage::PropagatePooledOrders(orders))
     }

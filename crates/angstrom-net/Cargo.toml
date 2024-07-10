@@ -45,7 +45,6 @@ anyhow.workspace = true
 
 
 angstrom-eth.workspace = true
-sol-bindings.workspace = true
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
 order-pool.workspace = true

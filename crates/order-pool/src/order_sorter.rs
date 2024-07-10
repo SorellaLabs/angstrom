@@ -13,12 +13,12 @@ use angstrom_types::{
     rpc::{
         SignedComposableLimitOrder, SignedComposableSearcherOrder, SignedLimitOrder,
         SignedSearcherOrder
-    }
+    },
+    sol_bindings::grouped_orders::AllOrders
 };
 use futures_util::{Stream, StreamExt};
 use reth_network_peers::PeerId;
 use reth_primitives::Address;
-use sol_bindings::grouped_orders::AllOrders;
 use tracing::{error, trace};
 use validation::order::OrderValidatorHandle;
 

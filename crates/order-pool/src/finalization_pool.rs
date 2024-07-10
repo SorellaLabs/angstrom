@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use sol_bindings::grouped_orders::AllOrders;
+use angstrom_types::sol_bindings::grouped_orders::AllOrders;
 
 pub struct FinalizationPool {
     id_to_orders: HashMap<u64, AllOrders>,

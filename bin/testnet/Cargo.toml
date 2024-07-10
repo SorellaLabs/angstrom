@@ -18,11 +18,10 @@ normal = [
 reth.workspace = true
 reth-node-builder.workspace = true
 alloy-chains.workspace = true
-sol-bindings = { workspace = true, features = ["testnet"] }
 
 blsful.workspace = true
 consensus.workspace = true
-angstrom-types.workspace = true
+angstrom-types = { workspace = true, features = ["testnet"] }
 angstrom-utils.workspace = true
 angstrom-network.workspace = true
 angstrom-eth.workspace = true

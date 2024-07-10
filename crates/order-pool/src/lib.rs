@@ -9,12 +9,14 @@ mod searcher;
 mod subscriptions;
 mod validator;
 
-use angstrom_types::orders::{OrderOrigin, PoolOrder};
+use angstrom_types::{
+    orders::{OrderOrigin, PoolOrder},
+    sol_bindings::grouped_orders::AllOrders
+};
 pub use angstrom_utils::*;
 pub use common::Order;
 pub use config::PoolConfig;
 pub use order_sorter::*;
-use sol_bindings::grouped_orders::AllOrders;
 
 /// The OrderPool Trait is how other processes can interact with the orderpool
 /// asyncly. This allows for requesting data and providing data from different

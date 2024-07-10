@@ -13,7 +13,8 @@ use angstrom_types::{
         OrderConversion, OrderOrigin, OrderPriorityData, PoolOrder, PooledComposableOrder,
         PooledLimitOrder, PooledOrder, PooledSearcherOrder, SearcherPriorityData
     },
-    rpc::*
+    rpc::*,
+    sol_bindings::grouped_orders::AllOrders
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
 use order_pool::{
@@ -23,7 +24,6 @@ use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_network_peers::PeerId;
 use reth_primitives::{TxHash, B256};
 use reth_tasks::TaskSpawner;
-use sol_bindings::grouped_orders::AllOrders;
 use tokio::sync::{
     mpsc,
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},

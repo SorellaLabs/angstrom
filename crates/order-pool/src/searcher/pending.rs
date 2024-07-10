@@ -3,8 +3,10 @@ use std::{
     collections::{BTreeMap, HashMap}
 };
 
-use angstrom_types::orders::OrderPriorityData;
-use sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder};
+use angstrom_types::{
+    orders::OrderPriorityData,
+    sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder}
+};
 
 pub struct PendingPool {
     /// all order hashes

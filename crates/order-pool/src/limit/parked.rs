@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use sol_bindings::grouped_orders::{GroupedVanillaOrders, OrderWithId};
+use angstrom_types::sol_bindings::grouped_orders::{GroupedVanillaOrders, OrderWithId};
 
 pub struct ParkedPool(HashMap<u64, GroupedVanillaOrders>);
 

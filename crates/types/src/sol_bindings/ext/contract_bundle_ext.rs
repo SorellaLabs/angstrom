@@ -3,9 +3,9 @@ use alloy_sol_types::SolStruct;
 #[cfg(feature = "testnet")]
 use rand::{rngs::ThreadRng, Rng};
 
-use crate::sol::ContractBundle;
+use crate::sol_bindings::sol::ContractBundle;
 #[cfg(feature = "testnet")]
-use crate::sol::{SolGenericOrder, SolTopOfBlockOrderEnvelope};
+use crate::sol_bindings::sol::{SolGenericOrder, SolTopOfBlockOrderEnvelope};
 
 impl ContractBundle {
     pub fn get_filled_hashes(&self) -> Vec<B256> {

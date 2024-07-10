@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use angstrom_types::{orders::OrderId, primitive::PoolId};
-use sol_bindings::{
-    grouped_orders::{GroupedVanillaOrders, OrderWithId},
-    user_types::TopOfBlockOrder
+use angstrom_types::{
+    orders::OrderId,
+    primitive::PoolId,
+    sol_bindings::{
+        grouped_orders::{GroupedVanillaOrders, OrderWithId},
+        user_types::TopOfBlockOrder
+    }
 };
 
 use super::pending::PendingPool;

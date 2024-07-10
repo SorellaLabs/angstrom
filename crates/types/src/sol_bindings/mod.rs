@@ -4,5 +4,4 @@ pub mod sol;
 pub mod testnet;
 pub mod user_types;
 pub use ext::*;
-
-pub use crate::sol::AngstromContract;
+pub use sol::AngstromContract;

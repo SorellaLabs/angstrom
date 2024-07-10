@@ -1,6 +1,6 @@
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::sol::{
+use crate::sol_bindings::sol::{
     InvalidSolEnumVariant, SolAssetForm, SolFlashOrder, SolOrderMode, SolStandingOrder,
     SolTopOfBlockOrder
 };

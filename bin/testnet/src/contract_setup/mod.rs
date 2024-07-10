@@ -2,8 +2,8 @@ use std::{pin::pin, time::Duration};
 
 use alloy_primitives::{Address, U256};
 use alloy_provider::ext::AnvilApi;
+use angstrom_types::sol_bindings::testnet::{MockERC20, PoolManagerDeployer, TestnetHub};
 use futures::Future;
-use sol_bindings::testnet::{MockERC20, PoolManagerDeployer, TestnetHub};
 use tokio::time::timeout;
 
 use crate::anvil_utils::AnvilWalletRpc;

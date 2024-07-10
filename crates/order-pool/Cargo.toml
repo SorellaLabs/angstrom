@@ -22,7 +22,6 @@ angstrom-types.workspace = true
 validation.workspace = true
 angstrom-eth.workspace = true
 angstrom-utils.workspace = true
-sol-bindings.workspace = true
 eyre.workspace = true
 
 

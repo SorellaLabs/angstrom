@@ -1,9 +1,11 @@
 use std::fmt::Debug;
 
-use angstrom_types::primitive::PoolId;
-use sol_bindings::{
-    grouped_orders::{GroupedVanillaOrders, OrderWithId},
-    user_types::TopOfBlockOrder
+use angstrom_types::{
+    primitive::PoolId,
+    sol_bindings::{
+        grouped_orders::{GroupedVanillaOrders, OrderWithId},
+        user_types::TopOfBlockOrder
+    }
 };
 
 use self::{composable::ComposableLimitPool, standard::LimitPool};

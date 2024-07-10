@@ -13,7 +13,6 @@ members = [
   "crates/submission",
   "testing-tools",
   "crates/matching-engine",
-  "crates/sol-bindings",
 ]
 
 
@@ -57,7 +56,6 @@ angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 testing-tools = { path = "./testing-tools/" }
 angstrom = { path = "./bin/angstrom/" }
-sol-bindings = { path = "./crates/sol-bindings/" }
 matching-engine = { path = "./crates/matching-engine/" }
 eyre = "0.3.7"
 

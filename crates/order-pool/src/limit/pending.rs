@@ -1,8 +1,10 @@
 use std::{cmp::Reverse, collections::BTreeMap};
 
-use angstrom_types::orders::OrderPriorityData;
+use angstrom_types::{
+    orders::OrderPriorityData,
+    sol_bindings::{ext::grouped_orders::GroupedVanillaOrders, grouped_orders::OrderWithId}
+};
 use revm::primitives::HashMap;
-use sol_bindings::{ext::grouped_orders::GroupedVanillaOrders, grouped_orders::OrderWithId};
 
 pub struct PendingPool {
     /// all order hashes
@@ -22,6 +24,8 @@ impl PendingPool {
     }
 
     pub fn add_order(&mut self, order: OrderWithId<GroupedVanillaOrders>) {
+        // if order.
+
         // let hash = order.hash();
         // let priority = order.priority_data();
         //

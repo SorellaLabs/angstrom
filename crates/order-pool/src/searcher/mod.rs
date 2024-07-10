@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use angstrom_types::primitive::PoolId;
+use angstrom_types::{
+    primitive::PoolId,
+    sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder}
+};
 use pending::PendingPool;
-use sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder};
 
 use crate::common::SizeTracker;
 

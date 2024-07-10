@@ -7,12 +7,12 @@ use angstrom::cli::{initialize_strom_handles, StromHandles};
 use angstrom_eth::handle::Eth;
 use angstrom_network::pool_manager::PoolManagerBuilder;
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
+use angstrom_types::sol_bindings::{sol::ContractBundle, testnet::TestnetHub};
 use clap::Parser;
 use futures::StreamExt;
 use jsonrpsee::server::ServerBuilder;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TokioTaskExecutor;
-use sol_bindings::{sol::ContractBundle, testnet::TestnetHub};
 use testnet::{
     anvil_utils::{spawn_anvil, AnvilEthDataCleanser},
     contract_setup::deploy_contract_and_create_pool,

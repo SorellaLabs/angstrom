@@ -1,7 +1,7 @@
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_sol_types::SolStruct;
 
-use crate::{
+use super::{
     sol::{SolGenericOrder, SolOrderType, SolTopOfBlockOrderEnvelope},
     user_types::{FlashOrder, HookData, StandingOrder, TopOfBlockOrder}
 };

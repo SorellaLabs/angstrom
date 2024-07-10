@@ -52,17 +52,8 @@ impl<O: PoolOrder> From<ValidatedOrder<O>> for OrderId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OrderLocation {
-    Composable,
-    LimitParked,
-    LimitPending,
-    VanillaSearcher,
-    ComposableSearcher
-}
-
-impl OrderLocation {
-    pub fn is_limit_pending(&self) -> bool {
-        matches!(self, OrderLocation::LimitPending)
-    }
+    Limit,
+    Searcher
 }
 
 pub enum ValidationResults<L, CL, S, CS>

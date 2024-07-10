@@ -6,9 +6,13 @@ use std::{
     }
 };
 
-use angstrom_types::sol_bindings::{
-    grouped_orders::{GroupedUserOrder, OrderWithStorageData},
-    sol::TopOfBlockOrder
+use alloy_primitives::FixedBytes;
+use angstrom_types::{
+    orders::OrderId,
+    sol_bindings::{
+        grouped_orders::{AllOrders, GroupedUserOrder, OrderWithStorageData},
+        sol::TopOfBlockOrder
+    }
 };
 use reth_primitives::B256;
 
@@ -24,9 +28,7 @@ use crate::{
 pub struct OrderStorage {
     pub limit_orders:                Arc<Mutex<LimitOrderPool>>,
     pub searcher_orders:             Arc<Mutex<SearcherPool>>,
-    pub pending_finalization_orders: Arc<Mutex<FinalizationPool>>,
-    pub order_hash_to_id:            Arc<Mutex<HashMap<B256, u64>>>,
-    pub order_id_nonce:              Arc<AtomicU64>
+    pub pending_finalization_orders: Arc<Mutex<FinalizationPool>>
 }
 
 impl OrderStorage {
@@ -40,27 +42,16 @@ impl OrderStorage {
             Some(config.s_pending_limit.max_size)
         )));
         let pending_finalization_orders = Arc::new(Mutex::new(FinalizationPool::new()));
-        let order_hash_to_id = Arc::new(Mutex::new(HashMap::new()));
-        let order_id_nonce = Arc::new(AtomicU64::new(0));
 
-        Self {
-            limit_orders,
-            searcher_orders,
-            pending_finalization_orders,
-            order_hash_to_id,
-            order_id_nonce
-        }
+        Self { limit_orders, searcher_orders, pending_finalization_orders }
     }
 
     pub fn add_new_limit_order(
         &self,
         mut order: OrderWithStorageData<GroupedUserOrder>
-    ) -> Result<u64, LimitPoolError> {
-        let id = self.order_id_nonce.fetch_add(1, Ordering::SeqCst);
+    ) -> Result<(), LimitPoolError> {
         let hash = order.order_hash();
 
-        // set id
-        order.id = id;
         if order.is_vanilla() {
             let mapped_order = order.try_map_inner(|this| {
                 let GroupedUserOrder::Vanilla(order) = this else {
@@ -87,33 +78,34 @@ impl OrderStorage {
                 .add_composable_order(mapped_order)?;
         }
 
-        self.order_hash_to_id
-            .lock()
-            .expect("poisoned lock")
-            .insert(hash, id);
-
-        Ok(id)
+        Ok(())
     }
 
     pub fn add_new_searcher_order(
         &self,
         mut order: OrderWithStorageData<TopOfBlockOrder>
-    ) -> Result<u64, SearcherPoolError> {
-        let id = self.order_id_nonce.fetch_add(1, Ordering::SeqCst);
-        let hash = order.order.order_hash();
-
-        // set id
-        order.id = id;
+    ) -> Result<(), SearcherPoolError> {
         self.searcher_orders
             .lock()
             .expect("lock poisoned")
             .add_searcher_order(order)?;
 
-        self.order_hash_to_id
-            .lock()
-            .expect("poisoned lock")
-            .insert(hash, id);
+        Ok(())
+    }
 
-        Ok(id)
+    pub fn add_filled_orders(&self, orders: Vec<AllOrders>) {}
+
+    pub fn finalized_block(&self, block_number: u64) {}
+
+    pub fn reorg(&self, order_hashes: Vec<FixedBytes<32>>) -> Vec<AllOrders> {
+        vec![]
+    }
+
+    pub fn remove_searcher_order(&self, id: &OrderId) -> Option<TopOfBlockOrder> {
+        None
+    }
+
+    pub fn remove_limit_order(&self, id: &OrderId) -> Option<GroupedUserOrder> {
+        None
     }
 }

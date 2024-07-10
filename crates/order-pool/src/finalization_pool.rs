@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
+use alloy_primitives::FixedBytes;
 use angstrom_types::sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData};
 
 pub struct FinalizationPool {
-    id_to_orders: HashMap<u64, AllOrders>,
-    block_to_ids: HashMap<u64, Vec<u64>>
+    id_to_orders: HashMap<FixedBytes<32>, AllOrders>,
+    block_to_ids: HashMap<u64, Vec<FixedBytes<32>>>
 }
 
 impl Default for FinalizationPool {

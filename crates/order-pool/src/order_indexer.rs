@@ -7,6 +7,7 @@ use std::{
 };
 
 use alloy_primitives::B256;
+use alloy_rlp::bytes::buf::Limit;
 use angstrom_types::{
     orders::{OrderConversion, OrderId, OrderOrigin, PoolOrder, PooledOrder},
     primitive::PoolId,
@@ -41,7 +42,7 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     /// Order hash to order id, used for order inclusion lookups
     hash_to_order_id:       HashMap<B256, OrderId>,
     /// Orders that are being validated
-    pending_orders:         HashMap<B256, Vec<PeerId>>,
+    pending_order_indexing: HashMap<B256, Vec<PeerId>>,
     /// Order Validator
     validator:              PoolOrderValidator<V>
 }
@@ -62,18 +63,24 @@ impl<V: OrderValidatorHandle> OrderIndexer<V> {
             _config: config,
             address_to_orders: HashMap::new(),
             hash_to_order_id: HashMap::new(),
-            pending_orders: HashMap::new(),
+            pending_order_indexing: HashMap::new(),
             last_touched_addresses: HashSet::new(),
             validator: PoolOrderValidator::new(validator)
         }
     }
 
     pub fn new_order(&mut self, peer_id: PeerId, origin: OrderOrigin, order: AllOrders) {
-        todo!()
+        let hash = order.order_hash();
+        self.pending_order_indexing
+            .entry(hash)
+            .or_default()
+            .push(peer_id);
+
+        self.validator.validate_order(origin, order);
     }
 
-    fn is_duplicate<O: PoolOrder>(&self, order: &O) -> bool {
-        let hash = order.hash();
+    fn is_duplicate(&self, order: &AllOrders) -> bool {
+        let hash = order.order_hash();
         if self.hash_to_order_id.contains_key(&hash) || self.pending_orders.contains_key(&hash) {
             trace!(?hash, "got duplicate order");
             return true
@@ -84,122 +91,80 @@ impl<V: OrderValidatorHandle> OrderIndexer<V> {
 
     /// used to remove orders that expire before the next ethereum block
     pub fn new_block(&mut self, block_number: u64) {
-        // self.block_number = block_number;
-        // if let Ok(time) = SystemTime::now().duration_since(UNIX_EPOCH) {
-        //     let expiry_deadline = U256::from((time +
-        // ETH_BLOCK_TIME).as_secs());     // grab all exired hashes
-        //     let hashes = self
-        //         .hash_to_order_id
-        //         .iter()
-        //         .filter(|(_, v)| v.deadline <= expiry_deadline)
-        //         .map(|(k, _)| *k)
-        //         .collect::<Vec<_>>();
-        //
-        //     let expired_orders = hashes
-        //         .into_iter()
-        //         // remove hash from id
-        //         .map(|hash| self.hash_to_order_id.remove(&hash).unwrap())
-        //         .inspect(|order_id| {
-        //             self.address_to_orders
-        //                 .values_mut()
-        //                 // remove from address to orders
-        //                 .for_each(|v| v.retain(|o| o != order_id));
-        //         })
-        //         // remove from all underlying pools
-        //         .filter_map(|id| match id.location {
-        //             OrderLocation::LimitParked | OrderLocation::LimitPending
-        // => self                 .limit_pool
-        //                 .remove_limit_order(&id)
-        //                 .map(|o| Order::add_limit(o.order)),
-        //             OrderLocation::VanillaSearcher => self
-        //                 .searcher_pool
-        //                 .remove_searcher_order(&id)
-        //                 .ok()
-        //                 .map(|o| Order::add_searcher(o.order)),
-        //             OrderLocation::Composable => self
-        //                 .limit_pool
-        //                 .remove_composable_limit_order(&id)
-        //                 .map(|o| Order::add_composable_limit(o.order)),
-        //             OrderLocation::ComposableSearcher => self
-        //                 .searcher_pool
-        //                 .remove_composable_searcher_order(&id)
-        //                 .ok()
-        //                 .map(|o| Order::add_composable_searcher(o.order))
-        //         })
-        //         .collect::<Vec<_>>();
-        // }
+        self.block_number = block_number;
+        if let Ok(time) = SystemTime::now().duration_since(UNIX_EPOCH) {
+            let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs()); // grab all exired hashes
+            let hashes = self
+                .hash_to_order_id
+                .iter()
+                .filter(|(_, v)| v.deadline <= expiry_deadline)
+                .map(|(k, _)| *k)
+                .collect::<Vec<_>>();
+
+            // TODO: notify rpc of dead orders
+            let _expired_orders = hashes
+                .into_iter()
+                // remove hash from id
+                .map(|hash| self.hash_to_order_id.remove(&hash).unwrap())
+                .inspect(|order_id| {
+                    self.address_to_orders
+                        .values_mut()
+                        // remove from address to orders
+                        .for_each(|v| v.retain(|o| o != order_id));
+                })
+                // remove from all underlying pools
+                .filter_map(|id| match id.location {
+                    angstrom_types::orders::OrderLocation::Searcher => self
+                        .order_storage
+                        .remove_searcher_order(&id)
+                        .map(Into::into),
+                    angstrom_types::orders::OrderLocation::Limit => {
+                        self.order_storage.remove_limit_order(&id).map(Into::into)
+                    }
+                })
+                .collect::<Vec<AllOrders>>();
+        }
     }
 
     pub fn eoa_state_change(&mut self, eoas: Vec<Address>) {
-        // let mut rem = HashSet::new();
-        // eoas.into_iter()
-        //     .filter_map(|eoa| {
-        //         self.address_to_orders.remove(&eoa).or_else(|| {
-        //             rem.insert(eoa);
-        //             None
-        //         })
-        //     })
-        //     .for_each(|order_ids| {
-        //         order_ids.into_iter().for_each(|id| match id.location {
-        //             OrderLocation::Composable => {
-        //                 if let Some(order) =
-        // self.limit_pool.remove_composable_limit_order(&id) {
-        //                     self.validator
-        //
-        // .validate_composable_order(OrderOrigin::Local, order.order);
-        //                 }
-        //             }
-        //             OrderLocation::LimitParked | OrderLocation::LimitPending
-        // => {                 if let Some(order) =
-        // self.limit_pool.remove_limit_order(&id) {
-        // self.validator
-        // .validate_order(OrderOrigin::Local, order.order);
-        // }             }
-        //
-        //             OrderLocation::VanillaSearcher => {
-        //                 if let Ok(order) =
-        // self.searcher_pool.remove_searcher_order(&id) {
-        // self.validator
-        // .validate_searcher_order(OrderOrigin::Local, order.order);
-        //                 }
-        //             }
-        //             OrderLocation::ComposableSearcher => {
-        //                 if let Ok(order) =
-        // self.searcher_pool.remove_composable_searcher_order(&id)
-        //                 {
-        //                     self.validator
-        //
-        // .validate_composable_searcher_order(OrderOrigin::Local, order.order)
-        //                 }
-        //             }
-        //         })
-        //     });
-        //
-        // // for late updates that might need to be re validated.
-        // self.last_touched_addresses = rem;
+        let mut rem = HashSet::new();
+        eoas.into_iter()
+            .filter_map(|eoa| {
+                self.address_to_orders.remove(&eoa).or_else(|| {
+                    rem.insert(eoa);
+                    None
+                })
+            })
+            .for_each(|order_ids| {
+                order_ids.into_iter().for_each(|id| {
+                    let Some(order) = (match id.location {
+                        angstrom_types::orders::OrderLocation::Limit => {
+                            self.order_storage.remove_limit_order(&id).map(Into::into)
+                        }
+                        angstrom_types::orders::OrderLocation::Searcher => self
+                            .order_storage
+                            .remove_searcher_order(&id)
+                            .map(Into::into)
+                    }) else {
+                        return
+                    };
+
+                    self.validator.validate_order(OrderOrigin::Local, order);
+                })
+            });
+
+        // for late updates that might need to be re validated.
+        self.last_touched_addresses = rem;
     }
 
     pub fn finalized_block(&mut self, block: u64) {
-        // self.subscriptions
-        //     .finalized_orders(self.finalization_pool.finalized(block))
+        self.order_storage.finalized_block(block);
     }
 
     pub fn reorg(&mut self, orders: Vec<B256>) {
-        // self.finalization_pool
-        //     .reorg(orders)
-        //     .for_each(|order| match order {
-        //         Order::ComposableSearcher(cs) => self
-        //             .validator
-        //             .validate_composable_searcher_order(OrderOrigin::Local,
-        // cs),         Order::ComposableLimit(cl) => self
-        //             .validator
-        //             .validate_composable_order(OrderOrigin::Local, cl),
-        //         Order::Limit(l) =>
-        // self.validator.validate_order(OrderOrigin::Local, l),
-        //         Order::Searcher(s) => self
-        //             .validator
-        //             .validate_searcher_order(OrderOrigin::Local, s)
-        //     });
+        self.order_storage
+            .reorg(orders)
+            .for_each(|order| self.validator.validate_order(OrderOrigin::Local, order));
     }
 
     /// Removes all filled orders from the pools

@@ -5,7 +5,7 @@ use alloy_sol_types::SolStruct;
 use reth_primitives::B256;
 
 use crate::{
-    orders::OrderPriorityData,
+    orders::{OrderId, OrderPriorityData},
     primitive::PoolId,
     sol_bindings::sol::{FlashOrder, StandingOrder, TopOfBlockOrder}
 };
@@ -17,12 +17,20 @@ pub enum AllOrders {
     TOB(TopOfBlockOrder)
 }
 
+impl AllOrders {
+    pub fn order_hash(&self) -> FixedBytes<32> {
+        match self {
+            Self::Partial(p) => p.eip712_hash_struct(),
+            Self::KillOrFill(f) => f.eip712_hash_struct(),
+            Self::TOB(t) => t.eip712_hash_struct()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrderWithStorageData<Order> {
     /// raw order
     pub order:              Order,
-    /// internal order id
-    pub id:                 u64,
     /// the raw data needed for indexing the data
     pub priority_data:      OrderPriorityData,
     /// the pool this order belongs to
@@ -32,7 +40,9 @@ pub struct OrderWithStorageData<Order> {
     /// what side of the book does this order lay on
     pub is_bid:             bool,
     /// is valid order
-    pub is_valid:           bool
+    pub is_valid:           bool,
+    /// holds expiry data
+    pub order_id:           OrderId
 }
 
 impl<Order> Deref for OrderWithStorageData<Order> {
@@ -61,7 +71,8 @@ impl<Order> OrderWithStorageData<Order> {
             is_bid:             self.is_bid,
             priority_data:      self.priority_data,
             is_currently_valid: self.is_currently_valid,
-            is_valid:           self.is_valid
+            is_valid:           self.is_valid,
+            order_id:           self.order_id
         })
     }
 }

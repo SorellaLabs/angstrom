@@ -5,7 +5,7 @@ use std::{
 
 use angstrom_types::{
     orders::OrderPriorityData,
-    sol_bindings::{grouped_orders::OrderWithStorageData, user_types::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, sol::TopOfBlockOrder}
 };
 
 pub struct PendingPool {

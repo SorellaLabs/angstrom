@@ -14,7 +14,7 @@ use angstrom_types::{
         SignedComposableLimitOrder, SignedComposableSearcherOrder, SignedLimitOrder,
         SignedSearcherOrder
     },
-    sol_bindings::grouped_orders::AllOrders
+    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 use futures_util::{Stream, StreamExt};
 use reth_network_peers::PeerId;
@@ -28,9 +28,7 @@ use crate::{config::PoolConfig, order_storage::OrderStorage, validator::PoolOrde
 /// the same check wil be ran but with more accuracy
 const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
 
-/// The order pool sorter takes in unsorted transactions. then based on the
-/// validation outcome will put them into the proper order storage location.
-pub struct OrderSorter<V: OrderValidatorHandle> {
+pub struct OrderIndexer<V: OrderValidatorHandle> {
     _config:                PoolConfig,
     /// order storage
     order_storage:          OrderStorage,
@@ -48,7 +46,7 @@ pub struct OrderSorter<V: OrderValidatorHandle> {
     validator:              PoolOrderValidator<V>
 }
 
-impl<V: OrderValidatorHandle> Deref for OrderSorter<V> {
+impl<V: OrderValidatorHandle> Deref for OrderIndexer<V> {
     type Target = OrderStorage;
 
     fn deref(&self) -> &Self::Target {
@@ -56,7 +54,7 @@ impl<V: OrderValidatorHandle> Deref for OrderSorter<V> {
     }
 }
 
-impl<V: OrderValidatorHandle> OrderSorter<V> {
+impl<V: OrderValidatorHandle> OrderIndexer<V> {
     pub fn new(validator: V, config: PoolConfig, block_number: u64) -> Self {
         Self {
             order_storage: OrderStorage::new(&config),
@@ -249,7 +247,7 @@ impl<V: OrderValidatorHandle> OrderSorter<V> {
         // self.finalization_pool.new_orders(block, filled);
     }
 
-    fn handle_validated_order(&mut self, res: ()) -> Option<()> {
+    fn handle_validated_order(&mut self, res: OrderWithStorageData<AllOrders>) -> Option<()> {
         // match res {
         //     ValidationResults::Limit(order) => {
         //         PoolInnerEvent::from_limit(self.handle_validation_results(
@@ -380,7 +378,7 @@ impl<V: OrderValidatorHandle> OrderSorter<V> {
     // }
 }
 
-impl<V> Stream for OrderSorter<V>
+impl<V> Stream for OrderIndexer<V>
 where
     V: OrderValidatorHandle
 {

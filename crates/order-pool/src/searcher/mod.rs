@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use angstrom_types::{
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithStorageData, user_types::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, sol::TopOfBlockOrder}
 };
 use pending::PendingPool;
 
@@ -48,5 +48,7 @@ pub enum SearcherPoolError {
     #[error("Pool has reached max size, and order doesn't satisify replacment requirements")]
     MaxSize,
     #[error("No pool was found for address: {0} ")]
-    NoPool(PoolId)
+    NoPool(PoolId),
+    #[error(transparent)]
+    Unknown(#[from] eyre::Error)
 }

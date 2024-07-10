@@ -39,6 +39,7 @@ mod private {
             bytes hook_data;
             uint64 nonce;
             uint256 deadline;
+            bytes signature;
         }
 
         #[derive(Debug, Default, PartialEq, Eq)]
@@ -53,19 +54,23 @@ mod private {
             address recipient;
             bytes hook_data;
             uint64 valid_for_block;
+            bytes signature;
         }
+
 
         #[derive(Debug, Default, PartialEq, Eq)]
         struct TopOfBlockOrder {
-            uint256 amount_in;
-            uint256 amount_out;
-            address asset_in;
-            AssetForm asset_in_form;
-            address asset_out;
-            AssetForm asset_out_form;
+            uint256 amountIn;
+            uint256 amountOut;
+            AssetIndex assetInIndex;
+            AssetForm assetInForm;
+            AssetIndex assetOutIndex;
+            AssetForm assetOutForm;
             address recipient;
-            bytes hook_data;
-            uint64 valid_for_block;
+            address hook;
+            bytes hookPayload;
+            address from;
+            bytes signature;
         }
 
         #[derive(Debug, Default, PartialEq, Eq)]
@@ -91,20 +96,6 @@ mod private {
             bytes signature;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
-        struct TopOfBlockOrderEnvelope {
-            uint256 amountIn;
-            uint256 amountOut;
-            AssetIndex assetInIndex;
-            AssetForm assetInForm;
-            AssetIndex assetOutIndex;
-            AssetForm assetOutForm;
-            address recipient;
-            address hook;
-            bytes hookPayload;
-            address from;
-            bytes signature;
-        }
 
         #[derive(Debug, Default, PartialEq, Eq)]
         struct Price {
@@ -136,7 +127,7 @@ mod private {
             address[] assets;
             Price[] initial_prices;
             bytes[] pre_transformations;
-            TopOfBlockOrderEnvelope[] top_of_block_orders;
+            TopOfBlockOrder[] top_of_block_orders;
             Swap[] swaps;
             GenericOrder[] orders;
             bytes[] post_transformations;
@@ -196,11 +187,9 @@ mod private {
 }
 
 pub use private::{
-    AngstromContract, AssetForm as SolAssetForm, ContractBundle, Donate as SolDonate,
-    FlashOrder as SolFlashOrder, GenericOrder as SolGenericOrder, OrderMode as SolOrderMode,
-    OrderType as SolOrderType, Price as SolPrice, StandingOrder as SolStandingOrder,
-    Swap as SolSwap, TopOfBlockOrder as SolTopOfBlockOrder,
-    TopOfBlockOrderEnvelope as SolTopOfBlockOrderEnvelope
+    AngstromContract, AssetForm as SolAssetForm, ContractBundle, Donate as SolDonate, FlashOrder,
+    GenericOrder as SolGenericOrder, OrderMode as SolOrderMode, OrderType as SolOrderType,
+    Price as SolPrice, StandingOrder, Swap as SolSwap, TopOfBlockOrder
 };
 
 #[derive(Default, Debug, Clone)]
@@ -223,9 +212,9 @@ mod test {
 
     #[test]
     fn test_get_eip712_names() {
-        println!("TopOfBlockOrder::NAME: {}", SolTopOfBlockOrder::NAME);
-        println!("TopOfBlockOrder::encode_type: {}", SolTopOfBlockOrder::eip712_encode_type());
-        println!("ToB::SOL_NAME: {}", SolTopOfBlockOrder::SOL_NAME)
+        println!("TopOfBlockOrder::NAME: {}", TopOfBlockOrder::NAME);
+        println!("TopOfBlockOrder::encode_type: {}", TopOfBlockOrder::eip712_encode_type());
+        println!("ToB::SOL_NAME: {}", TopOfBlockOrder::SOL_NAME)
     }
 
     #[test]

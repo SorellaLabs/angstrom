@@ -1,7 +1,13 @@
+use std::ops::Deref;
+
+use alloy_primitives::FixedBytes;
+use alloy_sol_types::SolStruct;
+use reth_primitives::B256;
+
 use crate::{
     orders::OrderPriorityData,
     primitive::PoolId,
-    sol_bindings::user_types::{FlashOrder, StandingOrder, TopOfBlockOrder}
+    sol_bindings::sol::{FlashOrder, StandingOrder, TopOfBlockOrder}
 };
 
 #[derive(Debug)]
@@ -24,12 +30,58 @@ pub struct OrderWithStorageData<Order> {
     /// wether the order is waiting for approvals / proper balances
     pub is_currently_valid: bool,
     /// what side of the book does this order lay on
-    pub is_bid:             bool
+    pub is_bid:             bool,
+    /// is valid order
+    pub is_valid:           bool
+}
+
+impl<Order> Deref for OrderWithStorageData<Order> {
+    type Target = Order;
+
+    fn deref(&self) -> &Self::Target {
+        &self.order
+    }
 }
 
 impl<Order> OrderWithStorageData<Order> {
     pub fn size(&self) -> usize {
         std::mem::size_of::<Order>()
+    }
+
+    pub fn try_map_inner<NewOrder>(
+        self,
+        mut f: impl FnMut(Order) -> eyre::Result<NewOrder>
+    ) -> eyre::Result<OrderWithStorageData<NewOrder>> {
+        let new_order = f(self.order)?;
+
+        Ok(OrderWithStorageData {
+            order:              new_order,
+            pool_id:            self.pool_id,
+            id:                 self.id,
+            is_bid:             self.is_bid,
+            priority_data:      self.priority_data,
+            is_currently_valid: self.is_currently_valid,
+            is_valid:           self.is_valid
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum GroupedUserOrder {
+    Vanilla(GroupedVanillaOrder),
+    Composable(GroupedComposableOrder)
+}
+
+impl GroupedUserOrder {
+    pub fn is_vanilla(&self) -> bool {
+        matches!(self, Self::Vanilla(_))
+    }
+
+    pub fn order_hash(&self) -> B256 {
+        match self {
+            GroupedUserOrder::Vanilla(v) => v.hash(),
+            GroupedUserOrder::Composable(c) => c.hash()
+        }
     }
 }
 
@@ -39,8 +91,26 @@ pub enum GroupedVanillaOrder {
     KillOrFill(FlashOrder)
 }
 
+impl GroupedVanillaOrder {
+    pub fn hash(&self) -> FixedBytes<32> {
+        match self {
+            Self::Partial(p) => p.eip712_hash_struct(),
+            Self::KillOrFill(k) => k.eip712_hash_struct()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum GroupedComposableOrder {
     Partial(StandingOrder),
     KillOrFill(FlashOrder)
+}
+
+impl GroupedComposableOrder {
+    pub fn hash(&self) -> B256 {
+        match self {
+            Self::Partial(p) => p.eip712_hash_struct(),
+            Self::KillOrFill(k) => k.eip712_hash_struct()
+        }
+    }
 }

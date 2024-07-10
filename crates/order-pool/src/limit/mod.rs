@@ -62,5 +62,7 @@ pub enum LimitPoolError {
     #[error("Pool has reached max size, and order doesn't satisify replacment requirements")]
     MaxSize,
     #[error("No pool was found for address: {0} ")]
-    NoPool(PoolId)
+    NoPool(PoolId),
+    #[error(transparent)]
+    Unknown(#[from] eyre::Error)
 }

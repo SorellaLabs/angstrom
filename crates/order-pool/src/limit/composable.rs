@@ -28,7 +28,11 @@ impl ComposableLimitPool {
         Ok(())
     }
 
-    pub fn remove_order(&mut self, pool_id: PoolId, tx_id: u64) -> Option<GroupedComposableOrder> {
+    pub fn remove_order(
+        &mut self,
+        pool_id: PoolId,
+        tx_id: u64
+    ) -> Option<OrderWithStorageData<GroupedComposableOrder>> {
         self.0.get_mut(&pool_id)?.remove_order(tx_id)
     }
 }

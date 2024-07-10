@@ -43,7 +43,11 @@ impl LimitPool {
         Ok(())
     }
 
-    pub fn remove_order(&mut self, pool_id: PoolId, order_id: u64) -> Option<GroupedVanillaOrder> {
+    pub fn remove_order(
+        &mut self,
+        pool_id: PoolId,
+        order_id: u64
+    ) -> Option<OrderWithStorageData<GroupedVanillaOrder>> {
         self.pending_orders
             .get_mut(&pool_id)
             .and_then(|pool| pool.remove_order(order_id))

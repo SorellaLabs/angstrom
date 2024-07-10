@@ -54,7 +54,7 @@ pub mod test {
     pub fn test_contract_bundle_encode_decode() {
         use alloy_sol_types::SolValue;
 
-        use crate::sol::ContractBundle;
+        use crate::sol_bindings::sol::ContractBundle;
 
         let rand = ContractBundle::generate_random_bundles(10);
         let encoded = rand.abi_encode();

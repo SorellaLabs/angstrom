@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use angstrom_types::sol_bindings::grouped_orders::AllOrders;
+use angstrom_types::sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData};
 
 pub struct FinalizationPool {
     id_to_orders: HashMap<u64, AllOrders>,
@@ -18,18 +18,18 @@ impl FinalizationPool {
         Self { block_to_ids: HashMap::default(), id_to_orders: HashMap::default() }
     }
 
-    pub fn new_orders(&mut self, block: u64, orders: Vec<AllOrders>) {
-        // let hashes = orders
-        //     .into_iter()
-        //     .map(|order| {
-        //         let hash = order.hash();
-        //         self.hashes_to_orders.insert(hash, order);
-        //
-        //         hash
-        //     })
-        //     .collect::<Vec<_>>();
-        //
-        // assert!(self.block_to_hashes.insert(block, hashes).is_none());
+    pub fn new_orders(&mut self, block: u64, orders: Vec<OrderWithStorageData<AllOrders>>) {
+        let ids = orders
+            .into_iter()
+            .map(|order| {
+                let id = order.id;
+                self.id_to_orders.insert(id, order.order);
+
+                id
+            })
+            .collect::<Vec<_>>();
+
+        assert!(self.block_to_ids.insert(block, ids).is_none());
     }
 
     pub fn reorg(&mut self, orders: Vec<u64>) -> impl Iterator<Item = AllOrders> + '_ {

@@ -16,32 +16,37 @@ pub struct SearcherPool {
     /// Holds all non composable searcher order pools
     searcher_orders: HashMap<PoolId, PendingPool>,
     /// The size of the current transactions.
-    _size:           SizeTracker
+    size:            SizeTracker
 }
 
 impl SearcherPool {
     pub fn new(ids: &[PoolId], max_size: Option<usize>) -> Self {
-        Self {
-            searcher_orders: HashMap::default(),
-            _size:           SizeTracker { max: max_size, current: 0 }
-        }
+        let searcher_orders = ids.iter().map(|id| (*id, PendingPool::new())).collect();
+        Self { searcher_orders, size: SizeTracker { max: max_size, current: 0 } }
     }
 
     pub fn add_searcher_order(
         &mut self,
         order: OrderWithStorageData<TopOfBlockOrder>
-    ) -> eyre::Result<()> {
-        // let size = order.size();
-        // if !self._size.has_space(size) {
-        //     return Err(SearcherPoolError::MaxSize(order.order))
-        // }
-        //
-        // self.searcher_orders.add_order(order)?;
+    ) -> Result<(), SearcherPoolError> {
+        let size = order.size();
+        if !self.size.has_space(size) {
+            return Err(SearcherPoolError::MaxSize)
+        }
+
+        self.searcher_orders
+            .get_mut(&order.pool_id)
+            .ok_or_else(|| SearcherPoolError::NoPool(order.pool_id))?
+            .add_order(order);
+
         Ok(())
     }
+}
 
-    pub fn remove_searcher_order(&mut self, id: &u128) -> Option<TopOfBlockOrder> {
-        // self.searcher_orders.remove(id)
-        None
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum SearcherPoolError {
+    #[error("Pool has reached max size, and order doesn't satisify replacment requirements")]
+    MaxSize,
+    #[error("No pool was found for address: {0} ")]
+    NoPool(PoolId)
 }

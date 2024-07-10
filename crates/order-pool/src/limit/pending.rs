@@ -33,7 +33,7 @@ impl<Order> PendingPool<Order> {
         self.orders.insert(order.id, order);
     }
 
-    pub fn remove_order(&mut self, id: u64) -> Option<Order> {
+    pub fn remove_order(&mut self, id: u64) -> Option<OrderWithStorageData<Order>> {
         let order = self.orders.remove(&id)?;
 
         if order.is_bid {
@@ -43,6 +43,6 @@ impl<Order> PendingPool<Order> {
         }
 
         // probably fine to strip extra data here
-        Some(order.order)
+        Some(order)
     }
 }

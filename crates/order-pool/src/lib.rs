@@ -8,10 +8,7 @@ pub mod order_storage;
 mod searcher;
 mod validator;
 
-use angstrom_types::{
-    orders::{OrderOrigin, PoolOrder},
-    sol_bindings::grouped_orders::AllOrders
-};
+use angstrom_types::{orders::OrderOrigin, sol_bindings::grouped_orders::AllOrders};
 pub use angstrom_utils::*;
 pub use config::PoolConfig;
 pub use order_indexer::*;

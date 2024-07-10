@@ -17,9 +17,7 @@ use angstrom_types::{
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
-use order_pool::{
-    Order, OrderPoolHandle, OrderSorter, OrdersToPropagate, PoolConfig, PoolInnerEvent
-};
+use order_pool::{OrderIndexer, OrderPoolHandle, OrdersToPropagate, PoolConfig, PoolInnerEvent};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_network_peers::PeerId;
 use reth_primitives::{TxHash, B256};
@@ -109,7 +107,7 @@ where
     ) -> PoolHandle {
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderSorter::new(self.validator, self.config, 0);
+        let inner = OrderIndexer::new(self.validator, self.config, 0);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -132,7 +130,7 @@ where
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderSorter::new(self.validator, self.config, 0);
+        let inner = OrderIndexer::new(self.validator, self.config, 0);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -157,7 +155,7 @@ where
     V: OrderValidatorHandle
 {
     /// access to validation and sorted storage of orders.
-    order_sorter:         OrderSorter<V>,
+    order_sorter:         OrderIndexer<V>,
     /// Network access.
     network:              StromNetworkHandle,
     /// Subscriptions to all the strom-network related events.
@@ -182,7 +180,7 @@ where
     V: OrderValidatorHandle
 {
     pub fn new(
-        order_sorter: OrderSorter<V>,
+        order_sorter: OrderIndexer<V>,
         network: StromNetworkHandle,
         strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
         eth_network_events: UnboundedReceiverStream<EthEvent>,

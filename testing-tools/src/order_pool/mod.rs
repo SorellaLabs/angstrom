@@ -7,7 +7,7 @@ use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle
 };
 use futures::{future::poll_fn, Future, FutureExt};
-use order_pool::{OrderSorter, PoolConfig};
+use order_pool::{OrderIndexer, PoolConfig};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -39,7 +39,7 @@ impl TestnetOrderPool {
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let handle = PoolHandle { manager_tx: tx.clone() };
-        let inner = OrderSorter::new(validator, config, block_number);
+        let inner = OrderIndexer::new(validator, config, block_number);
 
         Self {
             pool_manager: PoolManager::new(

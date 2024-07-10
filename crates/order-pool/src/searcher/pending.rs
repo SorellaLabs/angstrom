@@ -5,7 +5,7 @@ use std::{
 
 use angstrom_types::{
     orders::OrderPriorityData,
-    sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, user_types::TopOfBlockOrder}
 };
 
 pub struct PendingPool {
@@ -25,7 +25,7 @@ impl PendingPool {
         Self { orders: HashMap::new(), bids: BTreeMap::new(), asks: BTreeMap::new() }
     }
 
-    pub fn add_order(&mut self, order: OrderWithId<TopOfBlockOrder>) {
+    pub fn add_order(&mut self, order: OrderWithStorageData<TopOfBlockOrder>) {
         // let hash = order.hash();
         // let priority = order.priority_data();
         //

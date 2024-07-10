@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use angstrom_types::{
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithId, user_types::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, user_types::TopOfBlockOrder}
 };
 use pending::PendingPool;
 
@@ -27,7 +27,10 @@ impl SearcherPool {
         }
     }
 
-    pub fn add_searcher_order(&mut self, order: OrderWithId<TopOfBlockOrder>) -> eyre::Result<()> {
+    pub fn add_searcher_order(
+        &mut self,
+        order: OrderWithStorageData<TopOfBlockOrder>
+    ) -> eyre::Result<()> {
         // let size = order.size();
         // if !self._size.has_space(size) {
         //     return Err(SearcherPoolError::MaxSize(order.order))

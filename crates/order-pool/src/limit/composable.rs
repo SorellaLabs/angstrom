@@ -1,17 +1,13 @@
 use std::collections::HashMap;
 
 use angstrom_types::{
-    orders::OrderId,
     primitive::PoolId,
-    sol_bindings::{
-        grouped_orders::{GroupedVanillaOrders, OrderWithId},
-        user_types::TopOfBlockOrder
-    }
+    sol_bindings::grouped_orders::{GroupedComposableOrder, OrderWithStorageData}
 };
 
-use super::pending::PendingPool;
+use super::{pending::PendingPool, LimitPoolError};
 
-pub struct ComposableLimitPool(HashMap<PoolId, PendingPool>);
+pub struct ComposableLimitPool(HashMap<PoolId, PendingPool<GroupedComposableOrder>>);
 
 impl ComposableLimitPool {
     pub fn new(ids: &[PoolId]) -> Self {
@@ -19,18 +15,20 @@ impl ComposableLimitPool {
         Self(inner)
     }
 
-    pub fn add_order(&mut self, order: OrderWithId<GroupedVanillaOrders>) -> eyre::Result<()> {
-        // let id: OrderId = order.clone().into();
-        // self.0
-        //     .get_mut(&id.pool_id)
-        //     .ok_or_else(|| LimitPoolError::NoPool(id.pool_id, order.order.clone()))?
-        //     .add_order(order);
+    pub fn add_order(
+        &mut self,
+        order: OrderWithStorageData<GroupedComposableOrder>
+    ) -> Result<(), LimitPoolError> {
+        let pool_id = order.pool_id;
+        self.0
+            .get_mut(&pool_id)
+            .ok_or_else(|| LimitPoolError::NoPool(pool_id))?
+            .add_order(order);
 
         Ok(())
     }
 
-    pub fn remove_order(&mut self, tx_id: &OrderId) -> Option<TopOfBlockOrder> {
-        // self.0.get_mut(&tx_id.pool_id)?.remove_order(tx_id.hash)
-        None
+    pub fn remove_order(&mut self, pool_id: PoolId, tx_id: u64) -> Option<GroupedComposableOrder> {
+        self.0.get_mut(&pool_id)?.remove_order(tx_id)
     }
 }

@@ -2,9 +2,8 @@ use std::fmt::Debug;
 
 use angstrom_types::{
     primitive::PoolId,
-    sol_bindings::{
-        grouped_orders::{GroupedVanillaOrders, OrderWithId},
-        user_types::TopOfBlockOrder
+    sol_bindings::grouped_orders::{
+        GroupedComposableOrder, GroupedVanillaOrder, OrderWithStorageData
     }
 };
 
@@ -35,39 +34,33 @@ impl LimitOrderPool {
 
     pub fn add_composable_order(
         &mut self,
-        order: OrderWithId<TopOfBlockOrder>
-    ) -> eyre::Result<()> {
-        // let size = order.size();
-        // if !self.size.has_space(size) {
-        //     return Err(LimitPoolError::MaxSize(order.order))
-        // }
-        //
-        // self.composable_orders.add_order(order)?;
+        order: OrderWithStorageData<GroupedComposableOrder>
+    ) -> Result<(), LimitPoolError> {
+        let size = order.size();
+        if !self.size.has_space(size) {
+            return Err(LimitPoolError::MaxSize)
+        }
 
-        Ok(())
+        self.composable_orders.add_order(order)
     }
 
-    pub fn add_limit_order(
+    pub fn add_vanilla_order(
         &mut self,
-        order: OrderWithId<GroupedVanillaOrders>
-    ) -> eyre::Result<()> {
-        // let size = order.size();
-        // if !self.size.has_space(size) {
-        //     return Err(LimitPoolError::MaxSize(order.order))
-        // }
-        // self.limit_orders.add_order(order)?;
+        order: OrderWithStorageData<GroupedVanillaOrder>
+    ) -> Result<(), LimitPoolError> {
+        let size = order.size();
+        if !self.size.has_space(size) {
+            return Err(LimitPoolError::MaxSize)
+        }
 
-        Ok(())
+        self.limit_orders.add_order(order)
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum LimitPoolError<O: Debug> {
-    #[error(
-        "Pool has reached max size, and order doesn't satisify replacment requirements, Order: \
-         {0:#?}"
-    )]
-    MaxSize(O),
-    #[error("No pool was found for address: {0} Order: {1:#?}")]
-    NoPool(PoolId, O)
+pub enum LimitPoolError {
+    #[error("Pool has reached max size, and order doesn't satisify replacment requirements")]
+    MaxSize,
+    #[error("No pool was found for address: {0} ")]
+    NoPool(PoolId)
 }

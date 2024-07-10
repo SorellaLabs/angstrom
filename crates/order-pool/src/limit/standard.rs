@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 
-use angstrom_types::primitive::PoolId;
+use angstrom_types::{
+    primitive::PoolId,
+    sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
+};
 
 use super::{parked::ParkedPool, pending::PendingPool};
+use crate::limit::LimitPoolError;
 
 pub struct LimitPool {
-    pending_orders: HashMap<PoolId, PendingPool>,
+    pending_orders: HashMap<PoolId, PendingPool<GroupedVanillaOrder>>,
     parked_orders:  HashMap<PoolId, ParkedPool>
 }
 
@@ -17,43 +21,36 @@ impl LimitPool {
         Self { parked_orders: parked, pending_orders: pending }
     }
 
-    // pub fn add_order(&mut self, order: ValidOrder<O>) -> Result<(),
-    // LimitPoolError<O>> {     let pool_id = order.pool_id();
-    //     let err = || LimitPoolError::NoPool(pool_id, order.order.clone());
-    //
-    //     if order.location.is_limit_pending() {
-    //         self.pending_orders
-    //             .get_mut(&pool_id)
-    //             .ok_or_else(err)?
-    //             .add_order(order)
-    //     } else {
-    //         self.parked_orders
-    //             .get_mut(&pool_id)
-    //             .ok_or_else(err)?
-    //             .new_order(order)
-    //     }
-    //
-    //     Ok(())
-    // }
-    //
-    // pub fn remove_order(&mut self, order_id: &OrderId) -> Option<ValidOrder<O>> {
-    //     match order_id.location {
-    //         OrderLocation::LimitPending => self
-    //             .pending_orders
-    //             .get_mut(&order_id.pool_id)
-    //             .and_then(|pool: &mut _| pool.remove_order(order_id.hash)),
-    //         OrderLocation::LimitParked => self
-    //             .parked_orders
-    //             .get_mut(&order_id.pool_id)
-    //             .and_then(|pool: &mut _| pool.remove_order(&order_id.hash)),
-    //         _ => unreachable!()
-    //     }
-    // }
-    //
-    // pub fn fetch_bids_asks_per_pool(&self) -> Vec<BidsAndAsks<O>> {
-    //     self.pending_orders
-    //         .values()
-    //         .map(|pool| BidsAndAsks { bids: pool.fetch_all_bids(), asks:
-    // pool.fetch_all_asks() })         .collect()
-    // }
+    pub fn add_order(
+        &mut self,
+        order: OrderWithStorageData<GroupedVanillaOrder>
+    ) -> Result<(), LimitPoolError> {
+        let pool_id = order.pool_id;
+        let err = || LimitPoolError::NoPool(pool_id);
+
+        if order.is_currently_valid {
+            self.pending_orders
+                .get_mut(&pool_id)
+                .ok_or_else(err)?
+                .add_order(order)
+        } else {
+            self.parked_orders
+                .get_mut(&pool_id)
+                .ok_or_else(err)?
+                .new_order(order)
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_order(&mut self, pool_id: PoolId, order_id: u64) -> Option<GroupedVanillaOrder> {
+        self.pending_orders
+            .get_mut(&pool_id)
+            .and_then(|pool| pool.remove_order(order_id))
+            .or_else(|| {
+                self.parked_orders
+                    .get_mut(&pool_id)
+                    .and_then(|pool| pool.remove_order(order_id))
+            })
+    }
 }

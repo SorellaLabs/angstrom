@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use alloy_primitives::FixedBytes;
+use alloy_primitives::{Address, FixedBytes};
 use alloy_sol_types::SolStruct;
 use reth_primitives::B256;
 
@@ -15,6 +15,26 @@ pub enum AllOrders {
     Partial(StandingOrder),
     KillOrFill(FlashOrder),
     TOB(TopOfBlockOrder)
+}
+
+impl From<TopOfBlockOrder> for AllOrders {
+    fn from(value: TopOfBlockOrder) -> Self {
+        Self::TOB(value)
+    }
+}
+impl From<GroupedUserOrder> for AllOrders {
+    fn from(value: GroupedUserOrder) -> Self {
+        match value {
+            GroupedUserOrder::Vanilla(v) => match v {
+                GroupedVanillaOrder::Partial(p) => AllOrders::Partial(p),
+                GroupedVanillaOrder::KillOrFill(kof) => AllOrders::KillOrFill(kof)
+            },
+            GroupedUserOrder::Composable(v) => match v {
+                GroupedComposableOrder::Partial(p) => AllOrders::Partial(p),
+                GroupedComposableOrder::KillOrFill(kof) => AllOrders::KillOrFill(kof)
+            }
+        }
+    }
 }
 
 impl AllOrders {
@@ -41,8 +61,20 @@ pub struct OrderWithStorageData<Order> {
     pub is_bid:             bool,
     /// is valid order
     pub is_valid:           bool,
+    /// the block the order was validated for
+    pub valid_block:        u64,
     /// holds expiry data
     pub order_id:           OrderId
+}
+
+impl OrderWithStorageData<AllOrders> {
+    pub fn from(&self) -> Address {
+        match &self.order {
+            AllOrders::KillOrFill(kof) => kof.recipient,
+            AllOrders::Partial(p) => p.recipient,
+            AllOrders::TOB(tob) => tob.recipient
+        }
+    }
 }
 
 impl<Order> Deref for OrderWithStorageData<Order> {
@@ -67,7 +99,7 @@ impl<Order> OrderWithStorageData<Order> {
         Ok(OrderWithStorageData {
             order:              new_order,
             pool_id:            self.pool_id,
-            id:                 self.id,
+            valid_block:        self.valid_block,
             is_bid:             self.is_bid,
             priority_data:      self.priority_data,
             is_currently_valid: self.is_currently_valid,

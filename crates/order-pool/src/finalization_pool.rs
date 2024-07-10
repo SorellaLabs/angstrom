@@ -23,7 +23,7 @@ impl FinalizationPool {
         let ids = orders
             .into_iter()
             .map(|order| {
-                let id = order.id;
+                let id = order.order_hash();
                 self.id_to_orders.insert(id, order.order);
 
                 id
@@ -33,7 +33,7 @@ impl FinalizationPool {
         assert!(self.block_to_ids.insert(block, ids).is_none());
     }
 
-    pub fn reorg(&mut self, orders: Vec<u64>) -> impl Iterator<Item = AllOrders> + '_ {
+    pub fn reorg(&mut self, orders: Vec<FixedBytes<32>>) -> impl Iterator<Item = AllOrders> + '_ {
         orders
             .into_iter()
             .filter_map(|id| self.id_to_orders.remove(&id))

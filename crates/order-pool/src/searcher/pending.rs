@@ -28,14 +28,18 @@ impl PendingPool {
 
     pub fn add_order(&mut self, order: OrderWithStorageData<TopOfBlockOrder>) {
         if order.is_bid {
-            self.bids.insert(Reverse(order.priority_data), order.id);
+            self.bids
+                .insert(Reverse(order.priority_data), order.order_id.hash);
         } else {
-            self.asks.insert(order.priority_data, order.id);
+            self.asks.insert(order.priority_data, order.order_id.hash);
         }
-        self.orders.insert(order.id, order);
+        self.orders.insert(order.order_id.hash, order);
     }
 
-    pub fn remove_order(&mut self, id: u64) -> Option<OrderWithStorageData<TopOfBlockOrder>> {
+    pub fn remove_order(
+        &mut self,
+        id: FixedBytes<32>
+    ) -> Option<OrderWithStorageData<TopOfBlockOrder>> {
         let order = self.orders.remove(&id)?;
 
         if order.is_bid {

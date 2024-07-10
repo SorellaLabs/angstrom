@@ -195,12 +195,12 @@ impl UserOrders {
             pool_id: deltas.pool_id,
             location: if limit {
                 if has_balances {
-                    OrderLocation::LimitPending
+                    OrderLocation::Limit
                 } else {
-                    OrderLocation::LimitParked
+                    OrderLocation::Limit
                 }
             } else {
-                OrderLocation::VanillaSearcher
+                OrderLocation::Searcher
             }
         };
 

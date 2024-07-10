@@ -1,10 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex
-    }
-};
+use std::sync::{Arc, Mutex};
 
 use alloy_primitives::FixedBytes;
 use angstrom_types::{
@@ -14,7 +8,6 @@ use angstrom_types::{
         sol::TopOfBlockOrder
     }
 };
-use reth_primitives::B256;
 
 use crate::{
     finalization_pool::FinalizationPool,
@@ -48,10 +41,8 @@ impl OrderStorage {
 
     pub fn add_new_limit_order(
         &self,
-        mut order: OrderWithStorageData<GroupedUserOrder>
+        order: OrderWithStorageData<GroupedUserOrder>
     ) -> Result<(), LimitPoolError> {
-        let hash = order.order_hash();
-
         if order.is_vanilla() {
             let mapped_order = order.try_map_inner(|this| {
                 let GroupedUserOrder::Vanilla(order) = this else {
@@ -83,7 +74,7 @@ impl OrderStorage {
 
     pub fn add_new_searcher_order(
         &self,
-        mut order: OrderWithStorageData<TopOfBlockOrder>
+        order: OrderWithStorageData<TopOfBlockOrder>
     ) -> Result<(), SearcherPoolError> {
         self.searcher_orders
             .lock()
@@ -93,7 +84,7 @@ impl OrderStorage {
         Ok(())
     }
 
-    pub fn add_filled_orders(&self, orders: Vec<AllOrders>) {}
+    pub fn add_filled_orders(&self, block_number: u64, orders: Vec<AllOrders>) {}
 
     pub fn finalized_block(&self, block_number: u64) {}
 

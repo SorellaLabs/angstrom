@@ -46,7 +46,7 @@ impl LimitPool {
     pub fn remove_order(
         &mut self,
         pool_id: PoolId,
-        order_id: u64
+        order_id: alloy_primitives::FixedBytes<32>
     ) -> Option<OrderWithStorageData<GroupedVanillaOrder>> {
         self.pending_orders
             .get_mut(&pool_id)

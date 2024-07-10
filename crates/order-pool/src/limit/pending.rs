@@ -3,19 +3,20 @@ use std::{
     collections::{BTreeMap, HashMap}
 };
 
+use alloy_primitives::FixedBytes;
 use angstrom_types::{
     orders::OrderPriorityData, sol_bindings::grouped_orders::OrderWithStorageData
 };
 
 pub struct PendingPool<Order> {
     /// all order hashes
-    orders: HashMap<u64, OrderWithStorageData<Order>>,
+    orders: HashMap<FixedBytes<32>, OrderWithStorageData<Order>>,
     /// bids are sorted descending by price, TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    bids:   BTreeMap<Reverse<OrderPriorityData>, u64>,
+    bids:   BTreeMap<Reverse<OrderPriorityData>, FixedBytes<32>>,
     /// asks are sorted ascending by price,  TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    asks:   BTreeMap<OrderPriorityData, u64>
+    asks:   BTreeMap<OrderPriorityData, FixedBytes<32>>
 }
 
 impl<Order> PendingPool<Order> {
@@ -26,14 +27,15 @@ impl<Order> PendingPool<Order> {
 
     pub fn add_order(&mut self, order: OrderWithStorageData<Order>) {
         if order.is_bid {
-            self.bids.insert(Reverse(order.priority_data), order.id);
+            self.bids
+                .insert(Reverse(order.priority_data), order.order_id.hash);
         } else {
-            self.asks.insert(order.priority_data, order.id);
+            self.asks.insert(order.priority_data, order.order_id.hash);
         }
-        self.orders.insert(order.id, order);
+        self.orders.insert(order.order_id.hash, order);
     }
 
-    pub fn remove_order(&mut self, id: u64) -> Option<OrderWithStorageData<Order>> {
+    pub fn remove_order(&mut self, id: FixedBytes<32>) -> Option<OrderWithStorageData<Order>> {
         let order = self.orders.remove(&id)?;
 
         if order.is_bid {

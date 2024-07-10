@@ -8,12 +8,8 @@ use std::{
 
 use alloy_primitives::{B256, U256};
 use angstrom_types::{
-    orders::{OrderConversion, OrderId, OrderOrigin, PooledOrder},
+    orders::{OrderId, OrderOrigin},
     primitive::PoolId,
-    rpc::{
-        SignedComposableLimitOrder, SignedComposableSearcherOrder, SignedLimitOrder,
-        SignedSearcherOrder
-    },
     sol_bindings::grouped_orders::{
         AllOrders, GroupedComposableOrder, GroupedVanillaOrder, OrderWithStorageData, *
     }
@@ -71,6 +67,10 @@ impl<V: OrderValidatorHandle> OrderIndexer<V> {
     }
 
     pub fn new_order(&mut self, peer_id: PeerId, origin: OrderOrigin, order: AllOrders) {
+        if self.is_duplicate(&order) {
+            return
+        }
+
         let hash = order.order_hash();
         self.pending_order_indexing
             .entry(hash)
@@ -195,11 +195,15 @@ impl<V: OrderValidatorHandle> OrderIndexer<V> {
         self.order_storage.add_filled_orders(block, filled_orders);
     }
 
-    fn handle_validated_order(&mut self, res: OrderWithStorageData<AllOrders>) -> eyre::Result<()> {
+    fn handle_validated_order(
+        &mut self,
+        res: OrderWithStorageData<AllOrders>
+    ) -> eyre::Result<PoolInnerEvent> {
         if res.is_valid
             && res.valid_block == self.block_number
             && !self.last_touched_addresses.remove(&res.from())
         {
+            let to_propagate = res.order.clone();
             // set tracking
             self.update_order_tracking(&res);
 
@@ -246,7 +250,7 @@ impl<V: OrderValidatorHandle> OrderIndexer<V> {
                 }
             }
 
-            return Ok(())
+            return Ok(PoolInnerEvent::Propagation(to_propagate))
         }
 
         // handle invalid case
@@ -254,9 +258,8 @@ impl<V: OrderValidatorHandle> OrderIndexer<V> {
             .pending_order_indexing
             .remove(&res.order_hash())
             .unwrap_or_default();
-        // TODO: broadcast bad peers
 
-        Ok(())
+        Ok(PoolInnerEvent::BadOrderMessages(peers))
     }
 
     fn update_order_tracking(&mut self, order: &OrderWithStorageData<AllOrders>) {
@@ -276,13 +279,14 @@ impl<V> Stream for OrderIndexer<V>
 where
     V: OrderValidatorHandle
 {
-    type Item = Vec<()>;
+    type Item = Vec<PoolInnerEvent>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let validated = Vec::new();
+        let mut validated = Vec::new();
+
         while let Poll::Ready(Some(next)) = self.validator.poll_next_unpin(cx) {
             if let Ok(prop) = self.handle_validated_order(next) {
-                // validated.push(prop);
+                validated.push(prop);
             }
         }
 
@@ -294,81 +298,9 @@ where
     }
 }
 
-pub enum PoolInnerEvent<L, CL, S, CS> {
-    Propagation(OrdersToPropagate<L, CL, S, CS>),
+pub enum PoolInnerEvent {
+    Propagation(AllOrders),
     BadOrderMessages(Vec<PeerId>)
-}
-
-impl<L, CL, S, CS> PoolInnerEvent<L, CL, S, CS> {
-    fn from_limit(order: OrderOrPeers<L>) -> Option<Self> {
-        match order {
-            OrderOrPeers::None => None,
-            OrderOrPeers::Order(o) => {
-                Some(PoolInnerEvent::Propagation(OrdersToPropagate::Limit(o?)))
-            }
-            OrderOrPeers::Peers(p) => Some(PoolInnerEvent::BadOrderMessages(p))
-        }
-    }
-
-    fn from_searcher(order: OrderOrPeers<S>) -> Option<Self> {
-        match order {
-            OrderOrPeers::None => None,
-            OrderOrPeers::Order(o) => {
-                Some(PoolInnerEvent::Propagation(OrdersToPropagate::Searcher(o?)))
-            }
-            OrderOrPeers::Peers(p) => Some(PoolInnerEvent::BadOrderMessages(p))
-        }
-    }
-
-    fn from_composable_limit(order: OrderOrPeers<CL>) -> Option<Self> {
-        match order {
-            OrderOrPeers::None => None,
-            OrderOrPeers::Order(o) => {
-                Some(PoolInnerEvent::Propagation(OrdersToPropagate::ComposableLimit(o?)))
-            }
-            OrderOrPeers::Peers(p) => Some(PoolInnerEvent::BadOrderMessages(p))
-        }
-    }
-
-    fn from_composable_searcher(order: OrderOrPeers<CS>) -> Option<Self> {
-        match order {
-            OrderOrPeers::None => None,
-            OrderOrPeers::Order(o) => {
-                Some(PoolInnerEvent::Propagation(OrdersToPropagate::ComposableSearcher(o?)))
-            }
-            OrderOrPeers::Peers(p) => Some(PoolInnerEvent::BadOrderMessages(p))
-        }
-    }
-}
-
-pub enum OrdersToPropagate<L, CL, S, CS> {
-    Limit(L),
-    ComposableLimit(CL),
-    Searcher(S),
-    ComposableSearcher(CS)
-}
-
-enum OrderOrPeers<O> {
-    Order(Option<O>),
-    Peers(Vec<PeerId>),
-    None
-}
-
-impl<L, CL, S, CS> OrdersToPropagate<L, CL, S, CS>
-where
-    L: OrderConversion<Order = SignedLimitOrder>,
-    CL: OrderConversion<Order = SignedComposableLimitOrder>,
-    S: OrderConversion<Order = SignedSearcherOrder>,
-    CS: OrderConversion<Order = SignedComposableSearcherOrder>
-{
-    pub fn into_pooled(self) -> PooledOrder {
-        match self {
-            Self::Limit(l) => PooledOrder::Limit(l.to_signed()),
-            Self::Searcher(s) => PooledOrder::Searcher(s.to_signed()),
-            Self::ComposableLimit(cl) => PooledOrder::ComposableLimit(cl.to_signed()),
-            Self::ComposableSearcher(cs) => PooledOrder::ComposableSearcher(cs.to_signed())
-        }
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

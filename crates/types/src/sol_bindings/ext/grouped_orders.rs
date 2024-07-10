@@ -10,7 +10,7 @@ use crate::{
     sol_bindings::sol::{FlashOrder, StandingOrder, TopOfBlockOrder}
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AllOrders {
     Partial(StandingOrder),
     KillOrFill(FlashOrder),

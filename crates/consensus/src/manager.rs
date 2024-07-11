@@ -16,7 +16,7 @@ use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
-use validation::bundle::BundleValidator;
+use validation::BundleValidator;
 
 use crate::{
     core::{ConsensusCore, ConsensusMessage},
@@ -127,7 +127,7 @@ where
                     .is_some_and(|x| x.ethereum_block >= proposal.ethereum_block)
                 {
                     // Our incoming proposal is old or bad
-                    return;
+                    return
                 }
                 // Otherwise prepare our commit message and this proposal becomes our new
                 // canonical proposal
@@ -163,7 +163,7 @@ where
                         // Skipping similar messages can substantially cut
                         // down on chatter
                         if self.broadcast_cache.contains(commit.validator_map()) {
-                            return;
+                            return
                         }
                         self.broadcast_cache.insert(*commit.validator_map());
                         // Add our signature to the commit and broadcast

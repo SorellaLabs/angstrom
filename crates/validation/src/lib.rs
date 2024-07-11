@@ -76,3 +76,7 @@ pub fn init_validation_tests<DB: BlockStateProviderFactory + Unpin + Clone + 'st
 
     (ValidationClient(tx), revm_lru)
 }
+
+pub trait BundleValidator: Send + Sync + Clone + Unpin + 'static {}
+
+impl BundleValidator for ValidationClient {}

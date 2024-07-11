@@ -9,12 +9,9 @@ use std::{
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    orders::{
-        OrderConversion, OrderOrigin, OrderPriorityData, PoolOrder, PooledComposableOrder,
-        PooledLimitOrder, PooledOrder, PooledSearcherOrder, SearcherPriorityData
-    },
+    orders::{OrderOrigin, OrderPriorityData, PooledOrder},
     rpc::*,
-    sol_bindings::grouped_orders::AllOrders
+    sol_bindings::grouped_orders::{AllOrders, PoolOrder}
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
 use order_pool::{OrderIndexer, OrderPoolHandle, PoolConfig, PoolInnerEvent};

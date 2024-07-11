@@ -2,11 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use alloy_primitives::Address;
 use angstrom_types::{
-    orders::OrderValidationOutcome,
-    rpc::{
-        EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
-        EcRecoveredSearcherOrder
-    }
+    self,
+    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 use parking_lot::Mutex;
 use validation::order::OrderValidatorHandle;
@@ -14,13 +11,7 @@ use validation::order::OrderValidatorHandle;
 // all keys are the signer of the order
 #[derive(Debug, Clone, Default)]
 pub struct MockValidator {
-    pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationOutcome<EcRecoveredLimitOrder>>>>,
-    pub searcher_orders:
-        Arc<Mutex<HashMap<Address, OrderValidationOutcome<EcRecoveredSearcherOrder>>>>,
-    pub comp_limit:
-        Arc<Mutex<HashMap<Address, OrderValidationOutcome<EcRecoveredComposableLimitOrder>>>>,
-    pub comp_searcher:
-        Arc<Mutex<HashMap<Address, OrderValidationOutcome<EcRecoveredComposableSearcherOrder>>>>
+    pub limit_orders: Arc<Mutex<HashMap<Address, OrderWithStorageData<AllOrders>>>>
 }
 
 macro_rules! inserts {
@@ -35,112 +26,21 @@ macro_rules! inserts {
     };
 }
 impl MockValidator {
-    pub fn add_limit_order(
-        &self,
-        signer: Address,
-        order: OrderValidationOutcome<EcRecoveredLimitOrder>
-    ) {
+    pub fn add_order(&self, signer: Address, order: OrderWithStorageData<AllOrders>) {
         inserts!(self, limit_orders, signer, order)
-    }
-
-    pub fn add_searcher_order(
-        &self,
-        signer: Address,
-        order: OrderValidationOutcome<EcRecoveredSearcherOrder>
-    ) {
-        inserts!(self, searcher_orders, signer, order)
-    }
-
-    pub fn add_comp_limit(
-        &self,
-        signer: Address,
-        order: OrderValidationOutcome<EcRecoveredComposableLimitOrder>
-    ) {
-        inserts!(self, comp_limit, signer, order)
-    }
-
-    pub fn add_comp_searcher(
-        &self,
-        signer: Address,
-        order: OrderValidationOutcome<EcRecoveredComposableSearcherOrder>
-    ) {
-        inserts!(self, comp_searcher, signer, order)
     }
 }
 
 //TODO: validate can be shortened using a macro
 
 impl OrderValidatorHandle for MockValidator {
-    type ComposableLimitOrder = EcRecoveredComposableLimitOrder;
-    type ComposableSearcherOrder = EcRecoveredComposableSearcherOrder;
-    type LimitOrder = EcRecoveredLimitOrder;
-    type SearcherOrder = EcRecoveredSearcherOrder;
+    type Order = AllOrders;
 
     fn validate_order(
         &self,
-        _origin: angstrom_types::orders::OrderOrigin,
-        transaction: Self::LimitOrder
-    ) -> validation::order::ValidationFuture<Self::LimitOrder> {
-        let key = transaction.signer;
-        if let Some(res) = self.limit_orders.lock().remove(&key) {
-            return Box::pin(async move { res })
-        }
-        Box::pin(async move {
-            OrderValidationOutcome::Invalid(
-                transaction,
-                angstrom_types::orders::ValidationError::BadSigner
-            )
-        })
-    }
-
-    fn validate_searcher_order(
-        &self,
-        _origin: angstrom_types::orders::OrderOrigin,
-        transaction: Self::SearcherOrder
-    ) -> validation::order::ValidationFuture<Self::SearcherOrder> {
-        let key = transaction.signer;
-        if let Some(res) = self.searcher_orders.lock().remove(&key) {
-            return Box::pin(async move { res })
-        }
-        Box::pin(async move {
-            OrderValidationOutcome::Invalid(
-                transaction,
-                angstrom_types::orders::ValidationError::BadSigner
-            )
-        })
-    }
-
-    fn validate_composable_order(
-        &self,
-        _origin: angstrom_types::orders::OrderOrigin,
-        transaction: Self::ComposableLimitOrder
-    ) -> validation::order::ValidationFuture<Self::ComposableLimitOrder> {
-        let key = transaction.signer;
-        if let Some(res) = self.comp_limit.lock().remove(&key) {
-            return Box::pin(async move { res })
-        }
-        Box::pin(async move {
-            OrderValidationOutcome::Invalid(
-                transaction,
-                angstrom_types::orders::ValidationError::BadSigner
-            )
-        })
-    }
-
-    fn validate_composable_searcher_order(
-        &self,
-        _origin: angstrom_types::orders::OrderOrigin,
-        transaction: Self::ComposableSearcherOrder
-    ) -> validation::order::ValidationFuture<Self::ComposableSearcherOrder> {
-        let key = transaction.signer;
-        if let Some(res) = self.comp_searcher.lock().remove(&key) {
-            return Box::pin(async move { res })
-        }
-        Box::pin(async move {
-            OrderValidationOutcome::Invalid(
-                transaction,
-                angstrom_types::orders::ValidationError::BadSigner
-            )
-        })
+        origin: angstrom_types::orders::OrderOrigin,
+        transaction: Self::Order
+    ) -> validation::order::ValidationFuture<Self::Order> {
+        todo!()
     }
 }

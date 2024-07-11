@@ -119,9 +119,6 @@ impl OrderStorage {
     }
 
     pub fn remove_limit_order(&self, id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
-        self.limit_orders
-            .lock()
-            .expect("poisoned")
-            .remove_order(&id)
+        self.limit_orders.lock().expect("poisoned").remove_order(id)
     }
 }

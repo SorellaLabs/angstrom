@@ -1,6 +1,6 @@
-use std::ops::Deref;
+use std::{fmt, ops::Deref};
 
-use alloy_primitives::{Address, FixedBytes};
+use alloy_primitives::{Address, FixedBytes, TxHash, U256};
 use alloy_sol_types::SolStruct;
 use reth_primitives::B256;
 
@@ -148,7 +148,7 @@ impl GroupedUserOrder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum GroupedVanillaOrder {
     Partial(StandingOrder),
     KillOrFill(FlashOrder)
@@ -163,7 +163,7 @@ impl GroupedVanillaOrder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum GroupedComposableOrder {
     Partial(StandingOrder),
     KillOrFill(FlashOrder)
@@ -175,5 +175,224 @@ impl GroupedComposableOrder {
             Self::Partial(p) => p.eip712_hash_struct(),
             Self::KillOrFill(k) => k.eip712_hash_struct()
         }
+    }
+}
+
+pub trait PoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
+    /// Hash of the order
+    fn hash(&self) -> TxHash;
+
+    /// The order signer
+    fn from(&self) -> Address;
+
+    /// Transaction nonce
+    fn nonce(&self) -> U256;
+
+    /// Amount of tokens to sell
+    fn amount_in(&self) -> u128;
+
+    /// Token in
+    fn token_in(&self) -> Address;
+
+    /// Min amount of tokens to buy
+    fn amount_out_min(&self) -> u128;
+
+    /// Token out
+    fn token_out(&self) -> Address;
+
+    /// Limit Price
+    fn limit_price(&self) -> u128;
+
+    /// Order deadline
+    fn deadline(&self) -> U256;
+
+    /// Returns a measurement of the heap usage of this type and all its
+    /// internals.
+    fn size(&self) -> usize;
+
+    /// Returns the length of the rlp encoded transaction object
+    fn encoded_length(&self) -> usize;
+
+    /// Returns chain_id
+    fn chain_id(&self) -> Option<u64>;
+
+    /// Returns if the order should be pending or parked
+    fn is_valid(&self) -> bool;
+
+    /// Returns the direction of the pool defined by ordering
+    fn is_bid(&self) -> bool;
+}
+
+impl PoolOrder for TopOfBlockOrder {
+    fn from(&self) -> Address {
+        todo!()
+    }
+
+    fn hash(&self) -> TxHash {
+        todo!()
+    }
+
+    fn size(&self) -> usize {
+        todo!()
+    }
+
+    fn nonce(&self) -> U256 {
+        todo!()
+    }
+
+    fn is_bid(&self) -> bool {
+        todo!()
+    }
+
+    fn token_in(&self) -> Address {
+        todo!()
+    }
+
+    fn deadline(&self) -> U256 {
+        todo!()
+    }
+
+    fn chain_id(&self) -> Option<u64> {
+        todo!()
+    }
+
+    fn is_valid(&self) -> bool {
+        todo!()
+    }
+
+    fn amount_in(&self) -> u128 {
+        todo!()
+    }
+
+    fn token_out(&self) -> Address {
+        todo!()
+    }
+
+    fn limit_price(&self) -> u128 {
+        todo!()
+    }
+
+    fn amount_out_min(&self) -> u128 {
+        todo!()
+    }
+
+    fn encoded_length(&self) -> usize {
+        todo!()
+    }
+}
+
+impl PoolOrder for GroupedVanillaOrder {
+    fn from(&self) -> Address {
+        todo!()
+    }
+
+    fn hash(&self) -> TxHash {
+        todo!()
+    }
+
+    fn size(&self) -> usize {
+        todo!()
+    }
+
+    fn nonce(&self) -> U256 {
+        todo!()
+    }
+
+    fn is_bid(&self) -> bool {
+        todo!()
+    }
+
+    fn token_in(&self) -> Address {
+        todo!()
+    }
+
+    fn deadline(&self) -> U256 {
+        todo!()
+    }
+
+    fn chain_id(&self) -> Option<u64> {
+        todo!()
+    }
+
+    fn is_valid(&self) -> bool {
+        todo!()
+    }
+
+    fn amount_in(&self) -> u128 {
+        todo!()
+    }
+
+    fn token_out(&self) -> Address {
+        todo!()
+    }
+
+    fn limit_price(&self) -> u128 {
+        todo!()
+    }
+
+    fn amount_out_min(&self) -> u128 {
+        todo!()
+    }
+
+    fn encoded_length(&self) -> usize {
+        todo!()
+    }
+}
+
+impl PoolOrder for GroupedComposableOrder {
+    fn from(&self) -> Address {
+        todo!()
+    }
+
+    fn hash(&self) -> TxHash {
+        todo!()
+    }
+
+    fn size(&self) -> usize {
+        todo!()
+    }
+
+    fn nonce(&self) -> U256 {
+        todo!()
+    }
+
+    fn is_bid(&self) -> bool {
+        todo!()
+    }
+
+    fn token_in(&self) -> Address {
+        todo!()
+    }
+
+    fn deadline(&self) -> U256 {
+        todo!()
+    }
+
+    fn chain_id(&self) -> Option<u64> {
+        todo!()
+    }
+
+    fn is_valid(&self) -> bool {
+        todo!()
+    }
+
+    fn amount_in(&self) -> u128 {
+        todo!()
+    }
+
+    fn token_out(&self) -> Address {
+        todo!()
+    }
+
+    fn limit_price(&self) -> u128 {
+        todo!()
+    }
+
+    fn amount_out_min(&self) -> u128 {
+        todo!()
+    }
+
+    fn encoded_length(&self) -> usize {
+        todo!()
     }
 }

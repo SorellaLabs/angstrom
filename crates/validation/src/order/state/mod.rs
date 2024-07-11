@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc, task::Poll};
 
 use alloy_primitives::{Address, B256, U256};
+use angstrom_types::sol_bindings::grouped_orders::AllOrders;
 use futures::{Stream, StreamExt};
 use futures_util::stream::FuturesUnordered;
 use parking_lot::RwLock;
@@ -59,13 +60,13 @@ where
         let keeper = self.upkeepers.clone();
 
         match order {
-            OrderValidation::Limit(tx, origin, o) => {
+            OrderValidation::Limit(tx, o, origin) => {
                 let (details, order) = keeper.read().verify_order(o, db);
-                (OrderValidation::Limit(tx, origin, order), details)
+                (OrderValidation::Limit(tx, order, origin), details)
             }
-            OrderValidation::Searcher(tx, origin, o) => {
+            OrderValidation::Searcher(tx, o, origin) => {
                 let (details, order) = keeper.read().verify_order(o, db);
-                (OrderValidation::Searcher(tx, origin, order), details)
+                (OrderValidation::Searcher(tx, order, origin), details)
             }
             _ => unreachable!()
         }
@@ -80,12 +81,12 @@ where
         let keeper = self.upkeepers.clone();
 
         match order {
-            OrderValidation::LimitComposable(tx, origin, o) => {
+            OrderValidation::LimitComposable(tx, o, origin) => {
                 let (details, order) =
                     keeper
                         .read()
                         .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidation::LimitComposable(tx, origin, order), details)
+                (OrderValidation::LimitComposable(tx, order, origin), details)
             }
             _ => unreachable!()
         }
@@ -100,12 +101,12 @@ where
         let keeper = self.upkeepers.clone();
 
         match order {
-            OrderValidation::LimitComposable(tx, origin, o) => {
+            OrderValidation::LimitComposable(tx, o, origin) => {
                 let (details, order) =
                     keeper
                         .read()
                         .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidation::LimitComposable(tx, origin, order), details)
+                (OrderValidation::LimitComposable(tx, order, origin), details)
             }
             _ => unreachable!()
         }

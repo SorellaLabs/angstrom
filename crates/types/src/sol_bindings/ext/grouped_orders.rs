@@ -22,6 +22,24 @@ impl From<TopOfBlockOrder> for AllOrders {
         Self::TOB(value)
     }
 }
+impl From<GroupedComposableOrder> for AllOrders {
+    fn from(value: GroupedComposableOrder) -> Self {
+        match value {
+            GroupedComposableOrder::Partial(p) => AllOrders::Partial(p),
+            GroupedComposableOrder::KillOrFill(kof) => AllOrders::KillOrFill(kof)
+        }
+    }
+}
+
+impl From<GroupedVanillaOrder> for AllOrders {
+    fn from(value: GroupedVanillaOrder) -> Self {
+        match value {
+            GroupedVanillaOrder::Partial(p) => AllOrders::Partial(p),
+            GroupedVanillaOrder::KillOrFill(kof) => AllOrders::KillOrFill(kof)
+        }
+    }
+}
+
 impl From<GroupedUserOrder> for AllOrders {
     fn from(value: GroupedUserOrder) -> Self {
         match value {

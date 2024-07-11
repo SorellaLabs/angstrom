@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use angstrom_types::{
+    orders::OrderId,
     primitive::PoolId,
     sol_bindings::{grouped_orders::OrderWithStorageData, sol::TopOfBlockOrder}
 };
@@ -40,6 +41,12 @@ impl SearcherPool {
             .add_order(order);
 
         Ok(())
+    }
+
+    pub fn remove_order(&mut self, id: &OrderId) -> Option<OrderWithStorageData<TopOfBlockOrder>> {
+        self.searcher_orders
+            .get_mut(&id.pool_id)
+            .and_then(|pool| pool.remove_order(id.hash))
     }
 }
 

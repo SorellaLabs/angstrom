@@ -84,19 +84,44 @@ impl OrderStorage {
         Ok(())
     }
 
-    pub fn add_filled_orders(&self, block_number: u64, orders: Vec<AllOrders>) {}
+    pub fn add_filled_orders(
+        &self,
+        block_number: u64,
+        orders: Vec<OrderWithStorageData<AllOrders>>
+    ) {
+        self.pending_finalization_orders
+            .lock()
+            .expect("poisoned")
+            .new_orders(block_number, orders);
+    }
 
-    pub fn finalized_block(&self, block_number: u64) {}
+    pub fn finalized_block(&self, block_number: u64) {
+        self.pending_finalization_orders
+            .lock()
+            .expect("poisoned")
+            .finalized(block_number);
+    }
 
     pub fn reorg(&self, order_hashes: Vec<FixedBytes<32>>) -> Vec<AllOrders> {
-        vec![]
+        self.pending_finalization_orders
+            .lock()
+            .expect("poisoned")
+            .reorg(order_hashes)
+            .collect::<Vec<_>>()
     }
 
-    pub fn remove_searcher_order(&self, id: &OrderId) -> Option<TopOfBlockOrder> {
-        None
+    pub fn remove_searcher_order(&self, id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
+        self.searcher_orders
+            .lock()
+            .expect("posioned")
+            .remove_order(id)
+            .map(|value| value.try_map_inner(|v| Ok(AllOrders::TOB(v))).unwrap())
     }
 
-    pub fn remove_limit_order(&self, id: &OrderId) -> Option<GroupedUserOrder> {
-        None
+    pub fn remove_limit_order(&self, id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
+        self.limit_orders
+            .lock()
+            .expect("poisoned")
+            .remove_order(&id)
     }
 }

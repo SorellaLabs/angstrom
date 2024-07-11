@@ -6,7 +6,12 @@ use angstrom_types::{
         EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
         EcRecoveredSearcherOrder
     },
-    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
+    sol_bindings::{
+        grouped_orders::{
+            AllOrders, GroupedComposableOrder, GroupedVanillaOrder, OrderWithStorageData
+        },
+        sol::TopOfBlockOrder
+    }
 };
 use tokio::sync::oneshot::{channel, Sender};
 
@@ -25,7 +30,46 @@ pub type ValidationsFuture<'a, O> =
     Pin<Box<dyn Future<Output = Vec<OrderWithStorageData<O>>> + Send + Sync + 'a>>;
 
 pub enum OrderValidationRequest {
-    ValidateOrder(Sender<OrderWithStorageData<AllOrders>>, OrderOrigin)
+    ValidateOrder(Sender<OrderWithStorageData<AllOrders>>, AllOrders, OrderOrigin)
+}
+
+/// TODO: not a fan of all the conversions. can def simplify
+impl From<OrderValidationRequest> for OrderValidation {
+    fn from(value: OrderValidationRequest) -> Self {
+        match value {
+            OrderValidationRequest::ValidateOrder(tx, order, orign) => match order {
+                AllOrders::Partial(p) => {
+                    if p.hook_data.is_empty() {
+                        OrderValidation::Limit(tx, GroupedVanillaOrder::Partial(p), orign)
+                    } else {
+                        OrderValidation::LimitComposable(
+                            tx,
+                            GroupedComposableOrder::Partial(p),
+                            orign
+                        )
+                    }
+                }
+                AllOrders::KillOrFill(kof) => {
+                    if kof.hook_data.is_empty() {
+                        OrderValidation::Limit(tx, GroupedVanillaOrder::KillOrFill(kof), orign)
+                    } else {
+                        OrderValidation::LimitComposable(
+                            tx,
+                            GroupedComposableOrder::KillOrFill(kof),
+                            orign
+                        )
+                    }
+                }
+                AllOrders::TOB(tob) => OrderValidation::Searcher(tx, tob, orign)
+            }
+        }
+    }
+}
+
+pub enum OrderValidation {
+    Limit(Sender<OrderWithStorageData<AllOrders>>, GroupedVanillaOrder, OrderOrigin),
+    LimitComposable(Sender<OrderWithStorageData<AllOrders>>, GroupedComposableOrder, OrderOrigin),
+    Searcher(Sender<OrderWithStorageData<AllOrders>>, TopOfBlockOrder, OrderOrigin)
 }
 
 /// Provides support for validating transaction at any given state of the chain

@@ -86,6 +86,8 @@ where
     }
 }
 
+/// What a pipeline is a way to chain operations, in which each async operation
+/// runs on its own thread
 pub struct PipelineWithIntermediary<T, OP, CX>
 where
     OP: PipelineOperation,

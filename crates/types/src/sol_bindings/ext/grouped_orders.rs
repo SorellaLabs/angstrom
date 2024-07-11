@@ -17,6 +17,8 @@ pub enum AllOrders {
     TOB(TopOfBlockOrder)
 }
 
+impl AllOrders {}
+
 impl From<TopOfBlockOrder> for AllOrders {
     fn from(value: TopOfBlockOrder) -> Self {
         Self::TOB(value)

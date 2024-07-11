@@ -11,7 +11,6 @@ use reth_revm::db::BundleState;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    bundle::{bundle_validator::BundleValidator, BundleSimRequest},
     common::lru_db::{BlockStateProviderFactory, RevmLRU},
     order::{
         order_validator::OrderValidator, state::config::ValidationConfig, OrderValidationRequest
@@ -32,8 +31,7 @@ pub struct Validator<DB> {
     new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
     db:               Arc<RevmLRU<DB>>,
 
-    order_validator:  OrderValidator<DB>,
-    bundle_validator: BundleValidator
+    order_validator: OrderValidator<DB>
 }
 
 impl<DB> Validator<DB>
@@ -48,7 +46,7 @@ where
         block_number: Arc<AtomicU64>
     ) -> Self {
         let order_validator = OrderValidator::new(db.clone(), config, block_number);
-        Self { new_block_stream, db, bundle_validator: BundleValidator {}, order_validator, rx }
+        Self { new_block_stream, db, order_validator, rx }
     }
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {

@@ -14,7 +14,7 @@ use self::{
     orders::UserOrders,
     upkeepers::{Upkeepers, UserAccountDetails}
 };
-use super::OrderValidationRequest;
+use super::OrderValidation;
 use crate::{
     common::{
         executor::ThreadPool,
@@ -53,19 +53,19 @@ where
 
     pub fn validate_regular_order(
         &self,
-        order: OrderValidationRequest
-    ) -> (OrderValidationRequest, UserAccountDetails) {
+        order: OrderValidation
+    ) -> (OrderValidation, UserAccountDetails) {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();
 
         match order {
-            OrderValidationRequest::ValidateLimit(tx, origin, o) => {
+            OrderValidation::Limit(tx, origin, o) => {
                 let (details, order) = keeper.read().verify_order(o, db);
-                (OrderValidationRequest::ValidateLimit(tx, origin, order), details)
+                (OrderValidation::Limit(tx, origin, order), details)
             }
-            OrderValidationRequest::ValidateSearcher(tx, origin, o) => {
+            OrderValidation::Searcher(tx, origin, o) => {
                 let (details, order) = keeper.read().verify_order(o, db);
-                (OrderValidationRequest::ValidateSearcher(tx, origin, order), details)
+                (OrderValidation::Searcher(tx, origin, order), details)
             }
             _ => unreachable!()
         }
@@ -73,26 +73,19 @@ where
 
     pub fn validate_state_prehook(
         &self,
-        order: OrderValidationRequest,
+        order: OrderValidation,
         prehook_state_deltas: &HookOverrides
-    ) -> (OrderValidationRequest, UserAccountDetails) {
+    ) -> (OrderValidation, UserAccountDetails) {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();
 
         match order {
-            OrderValidationRequest::ValidateComposableLimit(tx, origin, o) => {
+            OrderValidation::LimitComposable(tx, origin, o) => {
                 let (details, order) =
                     keeper
                         .read()
                         .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidationRequest::ValidateComposableLimit(tx, origin, order), details)
-            }
-            OrderValidationRequest::ValidateComposableSearcher(tx, origin, o) => {
-                let (details, order) =
-                    keeper
-                        .read()
-                        .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidationRequest::ValidateComposableSearcher(tx, origin, order), details)
+                (OrderValidation::LimitComposable(tx, origin, order), details)
             }
             _ => unreachable!()
         }
@@ -100,26 +93,19 @@ where
 
     pub fn validate_state_posthook(
         &self,
-        order: OrderValidationRequest,
+        order: OrderValidation,
         prehook_state_deltas: &HookOverrides
-    ) -> (OrderValidationRequest, UserAccountDetails) {
+    ) -> (OrderValidation, UserAccountDetails) {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();
 
         match order {
-            OrderValidationRequest::ValidateComposableLimit(tx, origin, o) => {
+            OrderValidation::LimitComposable(tx, origin, o) => {
                 let (details, order) =
                     keeper
                         .read()
                         .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidationRequest::ValidateComposableLimit(tx, origin, order), details)
-            }
-            OrderValidationRequest::ValidateComposableSearcher(tx, origin, o) => {
-                let (details, order) =
-                    keeper
-                        .read()
-                        .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidationRequest::ValidateComposableSearcher(tx, origin, order), details)
+                (OrderValidation::LimitComposable(tx, origin, order), details)
             }
             _ => unreachable!()
         }

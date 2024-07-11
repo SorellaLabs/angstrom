@@ -1,7 +1,7 @@
 use std::{fmt::Debug, future::Future, pin::Pin};
 
 use angstrom_types::{
-    orders::{OrderOrigin, OrderValidationOutcome, PoolOrder},
+    orders::OrderOrigin,
     rpc::{
         EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
         EcRecoveredSearcherOrder

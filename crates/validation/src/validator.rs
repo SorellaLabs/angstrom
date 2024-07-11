@@ -18,7 +18,6 @@ use crate::{
 };
 
 pub enum ValidationRequest {
-    Bundle(BundleSimRequest),
     Order(OrderValidationRequest)
 }
 

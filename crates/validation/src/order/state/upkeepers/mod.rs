@@ -6,7 +6,9 @@ pub mod nonces;
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use alloy_primitives::{keccak256, Address, Bytes, FixedBytes, B256, U256};
-use angstrom_types::orders::PoolOrder;
+use angstrom_types::sol_bindings::grouped_orders::{
+    AllOrders, GroupedComposableOrder, GroupedVanillaOrder
+};
 use reth_primitives::revm_primitives::{Env, TransactTo, TxEnv};
 use reth_revm::EvmBuilder;
 use revm::{db::WrapDatabaseRef, interpreter::opcode, Database, Inspector};
@@ -76,11 +78,11 @@ impl Upkeepers {
         }
     }
 
-    pub fn verify_order<O: PoolOrder, DB: Send + BlockStateProviderFactory>(
+    pub fn verify_order<DB: Send + BlockStateProviderFactory>(
         &self,
-        order: O,
+        order: AllOrders,
         db: Arc<RevmLRU<DB>>
-    ) -> (UserAccountDetails, O) {
+    ) -> (UserAccountDetails, AllOrders) {
         let is_valid_nonce =
             self.nonces
                 .is_valid_nonce(order.from(), order.nonce().to(), db.clone());
@@ -114,12 +116,12 @@ impl Upkeepers {
         )
     }
 
-    pub fn verify_composable_order<O: PoolOrder, DB: Send + BlockStateProviderFactory>(
+    pub fn verify_composable_order<DB: Send + BlockStateProviderFactory>(
         &self,
-        order: O,
+        order: GroupedComposableOrder,
         db: Arc<RevmLRU<DB>>,
         overrides: &HashMap<Address, HashMap<U256, U256>>
-    ) -> (UserAccountDetails, O) {
+    ) -> (UserAccountDetails, GroupedComposableOrder) {
         let is_valid_nonce =
             self.nonces
                 .is_valid_nonce(order.from(), order.nonce().to(), db.clone());

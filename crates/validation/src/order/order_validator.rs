@@ -58,8 +58,6 @@ where
             .add_step(0, ValidationOperation::pre_regular_verification)
             .add_step(1, ValidationOperation::post_regular_verification)
             .add_step(2, ValidationOperation::pre_hook_sim)
-            .add_step(3, ValidationOperation::post_pre_hook_sim)
-            .add_step(4, ValidationOperation::post_hook_sim)
             .build(tokio::runtime::Handle::current());
 
         Self { state, sim, pipeline, orders: UserOrders::new(), block_number }

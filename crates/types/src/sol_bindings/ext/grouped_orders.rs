@@ -338,6 +338,63 @@ impl PoolOrder for GroupedVanillaOrder {
         todo!()
     }
 }
+impl PoolOrder for AllOrders {
+    fn from(&self) -> Address {
+        todo!()
+    }
+
+    fn hash(&self) -> TxHash {
+        todo!()
+    }
+
+    fn size(&self) -> usize {
+        todo!()
+    }
+
+    fn nonce(&self) -> U256 {
+        todo!()
+    }
+
+    fn is_bid(&self) -> bool {
+        todo!()
+    }
+
+    fn token_in(&self) -> Address {
+        todo!()
+    }
+
+    fn deadline(&self) -> U256 {
+        todo!()
+    }
+
+    fn chain_id(&self) -> Option<u64> {
+        todo!()
+    }
+
+    fn is_valid(&self) -> bool {
+        todo!()
+    }
+
+    fn amount_in(&self) -> u128 {
+        todo!()
+    }
+
+    fn token_out(&self) -> Address {
+        todo!()
+    }
+
+    fn limit_price(&self) -> u128 {
+        todo!()
+    }
+
+    fn amount_out_min(&self) -> u128 {
+        todo!()
+    }
+
+    fn encoded_length(&self) -> usize {
+        todo!()
+    }
+}
 
 impl PoolOrder for GroupedComposableOrder {
     fn from(&self) -> Address {

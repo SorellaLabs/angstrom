@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use alloy_primitives::Address;
 use angstrom_types::{
     self,
-    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
+    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData, PoolOrder}
 };
 use parking_lot::Mutex;
 use validation::order::OrderValidatorHandle;
@@ -38,9 +38,15 @@ impl OrderValidatorHandle for MockValidator {
 
     fn validate_order(
         &self,
-        origin: angstrom_types::orders::OrderOrigin,
+        _origin: angstrom_types::orders::OrderOrigin,
         transaction: Self::Order
     ) -> validation::order::ValidationFuture<Self::Order> {
-        todo!()
+        let address = transaction.from();
+        let res = self
+            .limit_orders
+            .lock()
+            .remove(&address)
+            .expect("not in mock");
+        Box::pin(async move { res })
     }
 }

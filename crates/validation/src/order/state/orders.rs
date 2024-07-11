@@ -52,6 +52,7 @@ impl UserOrders {
         deltas: UserAccountDetails,
         block_number: u64
     ) -> OrderWithStorageData<GroupedVanillaOrder> {
+        todo!()
         // self.basic_order_validation(order, deltas, true, block_number,
         // |order| OrderPriorityData {     price:  order.limit_price(),
         //     volume:

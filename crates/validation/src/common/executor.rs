@@ -1,7 +1,7 @@
 use futures_util::{pin_mut, Future};
 use tokio::{runtime::Runtime, task::JoinHandle};
 
-use crate::bundle::errors::SimError;
+// use crate::bundle::errors::SimError;
 
 /// executes tasks on the runtime
 /// used for a thread pool for the simulator
@@ -10,7 +10,7 @@ pub(crate) struct ThreadPool {
 }
 
 impl ThreadPool {
-    pub fn new() -> Result<Self, SimError> {
+    pub fn new() -> eyre::Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;

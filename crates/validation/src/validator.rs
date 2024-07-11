@@ -50,10 +50,7 @@ where
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
-            ValidationRequest::Order(order) => self.order_validator.validate_order(order),
-            ValidationRequest::Bundle(bundle) => {
-                todo!("bundle validation is currently not complete")
-            }
+            ValidationRequest::Order(order) => self.order_validator.validate_order(order)
         }
     }
 }

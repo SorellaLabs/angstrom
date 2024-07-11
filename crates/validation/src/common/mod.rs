@@ -6,7 +6,7 @@ pub mod state;
 use reth_provider::StateProviderFactory;
 use tokio::sync::mpsc::unbounded_channel;
 
-use crate::{
-    bundle::errors::SimError,
-    common::{lru_db::RevmLRU, revm::Revm}
-};
+// use crate::{
+//     bundle::errors::SimError,
+//     common::{lru_db::RevmLRU, revm::Revm}
+// };

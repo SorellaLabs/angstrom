@@ -20,7 +20,8 @@ use super::{
     state::{
         config::ValidationConfig, orders::UserOrders, upkeepers::UserAccountDetails,
         StateValidation
-    }
+    },
+    OrderValidationRequest
 };
 use crate::{
     common::{
@@ -57,7 +58,7 @@ where
         let pipeline = PipelineBuilder::new()
             .add_step(0, ValidationOperation::pre_regular_verification)
             .add_step(1, ValidationOperation::post_regular_verification)
-            .add_step(2, ValidationOperation::pre_hook_sim)
+            // .add_step(2, ValidationOperation::pre_hook_sim)
             .build(tokio::runtime::Handle::current());
 
         Self { state, sim, pipeline, orders: UserOrders::new(), block_number }
@@ -69,7 +70,7 @@ where
     }
 
     /// only checks state
-    pub fn validate_order(&mut self, order: OrderValidation) {
+    pub fn validate_order(&mut self, order: OrderValidationRequest) {
         let block_number = self.block_number.load(std::sync::atomic::Ordering::SeqCst);
         let order_validation: OrderValidation = order.into();
         match order_validation {
@@ -195,12 +196,14 @@ impl ValidationOperation {
     {
         if let ValidationOperation::PostRegularVerification(req, deltas, block_number) = self {
             match req {
-                OrderValidation::ValidateLimit(a, b, c) => {
+                OrderValidation::Limit(a, c, b) => {
                     let res = cx.user_orders().new_limit_order(c, deltas, block_number);
+                    let res = res.try_map_inner(|i| Ok(i.into())).unwrap();
                     let _ = a.send(res);
                 }
-                OrderValidation::ValidateSearcher(a, b, c) => {
+                OrderValidation::Searcher(a, c, b) => {
                     let res = cx.user_orders().new_searcher_order(c, deltas, block_number);
+                    let res = res.try_map_inner(|i| Ok(i.into())).unwrap();
                     let _ = a.send(res);
                 }
                 _ => unreachable!()
@@ -210,33 +213,35 @@ impl ValidationOperation {
         Box::pin(std::future::ready(PipelineAction::Return(())))
     }
 
-    fn pre_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
-    where
-        DB: BlockStateProviderFactory + Unpin + Clone + 'static
-    {
-        let cur_block = cx.current_block_number.clone();
-        Box::pin(std::future::ready({
-            if let ValidationOperation::PreHookSim(sim, block_number) = self {
-                let (req, overrides) = cx.sim.validate_pre_hook(sim);
-                let (req, details) = cx.state.validate_state_prehook(req, &overrides);
-
-                // if block number change, we reset and retest the state
-                let cur_block = cur_block.load(std::sync::atomic::Ordering::SeqCst);
-                if cur_block != block_number {
-                    PipelineAction::Next(ValidationOperation::PreHookSim(req, cur_block))
-                } else {
-                    PipelineAction::Next(ValidationOperation::PostPreHook(
-                        req,
-                        details,
-                        overrides,
-                        block_number
-                    ))
-                }
-            } else {
-                PipelineAction::Err
-            }
-        }))
-    }
+    // fn pre_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) -> PipelineFut<Self>
+    // where
+    //     DB: BlockStateProviderFactory + Unpin + Clone + 'static
+    // {
+    //     let cur_block = cx.current_block_number.clone();
+    //     Box::pin(std::future::ready({
+    //         if let ValidationOperation::PreHookSim(sim, block_number) = self {
+    //             let (req, overrides) = cx.sim.validate_pre_hook(sim);
+    //             let (req, details) = cx.state.validate_state_prehook(req,
+    // &overrides);
+    //
+    //             // if block number change, we reset and retest the state
+    //             let cur_block =
+    // cur_block.load(std::sync::atomic::Ordering::SeqCst);             if
+    // cur_block != block_number {
+    // PipelineAction::Next(ValidationOperation::PreHookSim(req, cur_block))
+    //             } else {
+    //                 PipelineAction::Next(ValidationOperation::PostPreHook(
+    //                     req,
+    //                     details,
+    //                     overrides,
+    //                     block_number
+    //                 ))
+    //             }
+    //         } else {
+    //             PipelineAction::Err
+    //         }
+    //     }))
+    // }
 
     // fn post_pre_hook_sim<DB>(self, cx: &mut ProcessingCtx<DB>) ->
     // PipelineFut<Self> where

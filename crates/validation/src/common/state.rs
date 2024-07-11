@@ -1,6 +1,7 @@
-// use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
+
 //
-// use alloy_primitives::{Address, Bytes, I256, U256};
+use alloy_primitives::{Address, Bytes, I256, U256};
 // use angstrom_types::{
 //     primitive::{Angstrom::Bundle, *},
 //     rpc::CallerInfo
@@ -22,12 +23,13 @@
 //     order::state::config::ValidationConfig
 // };
 //
-// pub trait RevmBackend {
-//     fn update_evm_state(&self, slot_changes: &AddressSlots) -> eyre::Result<(), SimError>;
-// }
+pub trait RevmBackend {
+    fn update_evm_state(&self, slot_changes: &AddressSlots) -> eyre::Result<()>;
+}
 //
-// pub type AddressSlots = HashMap<Address, HashMap<U256, U256>>;
-// type TxResult = Result<(ExecutionResult, HashMap<Address, HashMap<U256, U256>>), SimError>;
+pub type AddressSlots = HashMap<Address, HashMap<U256, U256>>;
+// type TxResult = Result<(ExecutionResult, HashMap<Address, HashMap<U256,
+// U256>>), SimError>;
 //
 // /// struct used to share the mutable state across threads
 // pub struct RevmState<DB> {
@@ -44,9 +46,9 @@
 //     }
 //
 //     // updates the evm state on a new block
-//     pub fn update_evm_state(this: Arc<Self>, slot_changes: &AddressSlots) -> Result<(), SimError> {
-//         RevmLRU::update_evm_state(&this.db, slot_changes)
-//     }
+//     pub fn update_evm_state(this: Arc<Self>, slot_changes: &AddressSlots) ->
+// Result<(), SimError> {         RevmLRU::update_evm_state(&this.db,
+// slot_changes)     }
 //
 //     pub fn simulate_external_state(
 //         &self,
@@ -59,10 +61,10 @@
 //         prehook_env.data = pre_hook_calldata;
 //         prehook_env.transact_to = TransactTo::Call(prehook_addr);
 //
-//         let (res, mut pre_slots) = self.simulate_single_tx(prehook_env, HashMap::default())?;
-//         let pre_hook_gas = match res {
-//             ExecutionResult::Success { gas_used, .. } => U256::from(gas_used),
-//             _ => return Err(SimError::HookFailed)
+//         let (res, mut pre_slots) = self.simulate_single_tx(prehook_env,
+// HashMap::default())?;         let pre_hook_gas = match res {
+//             ExecutionResult::Success { gas_used, .. } =>
+// U256::from(gas_used),             _ => return Err(SimError::HookFailed)
 //         };
 //
 //         let mut post_env = TxEnv::default();
@@ -82,22 +84,25 @@
 //         let db = self.db.clone();
 //         let current_bal = db.storage_ref(posthook_addr, slot).unwrap();
 //
-//         let mut overrides: HashMap<Address, HashMap<U256, U256>> = HashMap::default();
+//         let mut overrides: HashMap<Address, HashMap<U256, U256>> =
+// HashMap::default();
 //
 //         let mut slot_map = HashMap::default();
 //         slot_map.insert(slot, current_bal + U256::from(txes.amount_out_lim));
 //         overrides.insert(posthook_addr, slot_map);
 //
-//         let (res, post_slots) = self.simulate_single_tx(post_env, overrides)?;
+//         let (res, post_slots) = self.simulate_single_tx(post_env,
+// overrides)?;
 //
 //         let post_hook_gas = match res {
-//             ExecutionResult::Success { gas_used, .. } => U256::from(gas_used),
-//             _ => return Err(SimError::HookFailed)
+//             ExecutionResult::Success { gas_used, .. } =>
+// U256::from(gas_used),             _ => return Err(SimError::HookFailed)
 //         };
 //         pre_slots.extend(post_slots);
 //
 //         Ok((
-//             SimResult::ExecutionResult(BundleOrTransactionResult::HookSimResult {
+//
+// SimResult::ExecutionResult(BundleOrTransactionResult::HookSimResult {
 //                 tx: txes.tx,
 //                 pre_hook_gas,
 //                 post_hook_gas
@@ -130,9 +135,9 @@
 //
 //         let (delta, gas) = match res.result {
 //             ExecutionResult::Success { gas_used, output, .. } => {
-//                 let delta = I256::try_from_be_slice(&output.into_data()).unwrap();
-//                 (delta, U256::from(gas_used))
-//             }
+//                 let delta =
+// I256::try_from_be_slice(&output.into_data()).unwrap();
+// (delta, U256::from(gas_used))             }
 //             _ => return Err(SimError::HookFailed)
 //         };
 //
@@ -161,7 +166,8 @@
 //             .transact()
 //             .map_err(|_| SimError::RevmEVMTransactionError(tx_env.clone()))?;
 //
-//         let result = SimResult::ExecutionResult(BundleOrTransactionResult::Bundle(bundle));
+//         let result =
+// SimResult::ExecutionResult(BundleOrTransactionResult::Bundle(bundle));
 //
 //         Ok(result)
 //     }
@@ -188,7 +194,8 @@
 //             .transact()
 //             .map_err(|_| SimError::RevmEVMTransactionError(tx_env.clone()))?;
 //
-//         let result = SimResult::ExecutionResult(BundleOrTransactionResult::MevBundle(bundle));
+//         let result =
+// SimResult::ExecutionResult(BundleOrTransactionResult::MevBundle(bundle));
 //
 //         Ok(result)
 //     }
@@ -210,8 +217,8 @@
 //         let tx = evm.tx().clone();
 //         let _ = match tx.transact_to {
 //             TransactTo::Call(a) => a,
-//             TransactTo::Create => return Err(SimError::CallInsteadOfCreateError(tx.clone()))
-//         };
+//             TransactTo::Create => return
+// Err(SimError::CallInsteadOfCreateError(tx.clone()))         };
 //
 //         let result = evm
 //             .transact()
@@ -241,10 +248,10 @@
 // mod tests {
 //     use std::str::FromStr;
 //
-//     //use ethers::types::{AccessList, Address, Bytes, NameOrAddress, U256, U64};
-//     use ethers_core::types::{
-//         transaction::{eip2718::TypedTransaction, eip2930::AccessList, eip712::TypedData},
-//         Eip1559TransactionRequest, NameOrAddress, H160
+//     //use ethers::types::{AccessList, Address, Bytes, NameOrAddress, U256,
+// U64};     use ethers_core::types::{
+//         transaction::{eip2718::TypedTransaction, eip2930::AccessList,
+// eip712::TypedData},         Eip1559TransactionRequest, NameOrAddress, H160
 //     };
 //     use hex_literal::hex;
 //     use serde_json::Value;
@@ -277,9 +284,9 @@
 //         assert_eq!(decoded_txs.len(), 2);
 //
 //         let tx1 = TxEnv {
-//             caller:           H160(hex!("0b1e9cd778e3b2aa09beab0887650b8889cdf04b")).into(),
-//             gas_limit:        1605411621,
-//             gas_price:        U256::ZERO,
+//             caller:
+// H160(hex!("0b1e9cd778e3b2aa09beab0887650b8889cdf04b")).into(),
+// gas_limit:        1605411621,             gas_price:        U256::ZERO,
 //             gas_priority_fee: None,
 //             transact_to:      TransactTo::Call(
 //                 H160(hex!("CcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC")).into()
@@ -297,9 +304,9 @@
 //         );
 //
 //         let tx2 = TxEnv {
-//             caller:           H160(hex!("0b1e9cd778e3b2aa09beab0887650b8889cdf04b")).into(),
-//             gas_limit:        1605411621,
-//             gas_price:        U256::ZERO,
+//             caller:
+// H160(hex!("0b1e9cd778e3b2aa09beab0887650b8889cdf04b")).into(),
+// gas_limit:        1605411621,             gas_price:        U256::ZERO,
 //             gas_priority_fee: None,
 //             transact_to:      TransactTo::Call(
 //                 H160(hex!("CcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC")).into()
@@ -384,17 +391,21 @@
 //
 //     fn contract_tx() -> TypedTransaction {
 //         let tx_request = Eip1559TransactionRequest {
-//             from: Some(H160(hex!("4e44b8436bc94c889fe16ecfe1d92036e1b7669b"))),
-//             to: Some(NameOrAddress::Address(H160(hex!("e592427a0aece92de3edee1f18e0157c05861564")))),
-//             gas: Some(U256::from_str("0x927c0").unwrap().into()),
-//             value: Some(U256::from_str("0x38d7ea4c68000").unwrap().into()),
-//             data: Some(ethers_core::types::Bytes(Bytes::from("0x414bf389000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000ebb82c932759b515b2efc1cfbb6bf2f6dbace40400000000000000000000000000000000000000000000000000000000000027100000000000000000000000004e44b8436bc94c889fe16ecfe1d92036e1b7669b0000000000000000000000000000000000000000000000000000000064FF617300000000000000000000000000000000000000000000000000038d7ea4c6800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"))),
-//             nonce: Some(U256::from_str("0x69").unwrap().into()),
+//             from:
+// Some(H160(hex!("4e44b8436bc94c889fe16ecfe1d92036e1b7669b"))),             to:
+// Some(NameOrAddress::Address(H160(hex!("
+// e592427a0aece92de3edee1f18e0157c05861564")))),             gas:
+// Some(U256::from_str("0x927c0").unwrap().into()),             value:
+// Some(U256::from_str("0x38d7ea4c68000").unwrap().into()),             data:
+// Some(ethers_core::types::Bytes(Bytes::from("
+// 0x414bf389000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000ebb82c932759b515b2efc1cfbb6bf2f6dbace40400000000000000000000000000000000000000000000000000000000000027100000000000000000000000004e44b8436bc94c889fe16ecfe1d92036e1b7669b0000000000000000000000000000000000000000000000000000000064FF617300000000000000000000000000000000000000000000000000038d7ea4c6800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+// ))),             nonce: Some(U256::from_str("0x69").unwrap().into()),
 //             access_list: AccessList::default(),
-//             max_priority_fee_per_gas: Some(U256::from_str("0x2fd0013e7").unwrap().into()),
-//             max_fee_per_gas: Some(U256::from_str("0x2fd0013e7").unwrap().into()),
-//             chain_id: Some(ethers_core::types::U64::from_str("0x1").unwrap()),
-//         };
+//             max_priority_fee_per_gas:
+// Some(U256::from_str("0x2fd0013e7").unwrap().into()),
+// max_fee_per_gas: Some(U256::from_str("0x2fd0013e7").unwrap().into()),
+//             chain_id:
+// Some(ethers_core::types::U64::from_str("0x1").unwrap()),         };
 //         tx_request.into()
 //     }
 //
@@ -487,32 +498,34 @@
 //                 "users": [
 //                     {
 //                         "order": {
-//                             "token_out": "0xaaadF7A763BB3706119671043526A52c3869e42F",
-//                             "token_in": "0xabadF7A763BB3706119671043526A52c3869e42F",
-//                             "amount_in": 100,
-//                             "amount_out_min": 50,
+//                             "token_out":
+// "0xaaadF7A763BB3706119671043526A52c3869e42F",
+// "token_in": "0xabadF7A763BB3706119671043526A52c3869e42F",
+// "amount_in": 100,                             "amount_out_min": 50,
 //                             "deadline": "0x5FB0A325",
 //                             "gas_cap": "0x5FB0A325",
 //                             "pre_hook": "0x5FB0A325",
 //                             "post_hook": "0x5FB0A325"
 //                         },
-//                         "signature": "a8cf1db738b96b728ae230dc8df4c4c1c288beedf969fa8a3a54c142b48208c027b974e765557556e96dc80d6d63ddb44cac551c145de5b23df6e667875b4f7d1c",
-//                         "amount_out": "0x5FB0A325",
+//                         "signature":
+// "a8cf1db738b96b728ae230dc8df4c4c1c288beedf969fa8a3a54c142b48208c027b974e765557556e96dc80d6d63ddb44cac551c145de5b23df6e667875b4f7d1c"
+// ,                         "amount_out": "0x5FB0A325",
 //                         "gas_actual": "0x5FB0A325"
 //                     },
 //                     {
 //                         "order": {
-//                             "token_out": "0xaaadF7A763BB3706119671043526A52c3869e42F",
-//                             "token_in": "0xabadF7A763BB3706119671043526A52c3869e42F",
-//                             "amount_in": 10,
-//                             "amount_out_min": 50,
+//                             "token_out":
+// "0xaaadF7A763BB3706119671043526A52c3869e42F",
+// "token_in": "0xabadF7A763BB3706119671043526A52c3869e42F",
+// "amount_in": 10,                             "amount_out_min": 50,
 //                             "deadline": "0x5FB0A325",
 //                             "gas_cap": "0x5FB0A325",
 //                             "pre_hook": "0x5FB0A325",
 //                             "post_hook": "0x5FB0A325"
 //                         },
-//                         "signature": "a8cf1db738b96b728ae230dc8df4c4c1c288beedf969fa8a3a54c142b48208c027b974e765557556e96dc80d6d63ddb44cac551c145de5b23df6e667875b4f7d1c",
-//                         "amount_out": "0x5FB0A325",
+//                         "signature":
+// "a8cf1db738b96b728ae230dc8df4c4c1c288beedf969fa8a3a54c142b48208c027b974e765557556e96dc80d6d63ddb44cac551c145de5b23df6e667875b4f7d1c"
+// ,                         "amount_out": "0x5FB0A325",
 //                         "gas_actual": "0x5FB0A325"
 //                     }
 //                 ],

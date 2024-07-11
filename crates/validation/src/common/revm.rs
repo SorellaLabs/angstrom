@@ -4,7 +4,8 @@
 // use angstrom_utils::PollExt;
 // use futures_util::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
 // use reth_primitives::revm_primitives::{Address, Bytecode};
-// use tokio::{runtime::Handle, sync::mpsc::UnboundedReceiver, task::JoinHandle};
+// use tokio::{runtime::Handle, sync::mpsc::UnboundedReceiver,
+// task::JoinHandle};
 //
 // use crate::{
 //     bundle::{
@@ -75,7 +76,8 @@
 //         match tx_type {
 //             BundleSimRequest::Hook(data, overrides, sender) => {
 //                 let fut = async move {
-//                     let res = state.simulate_external_state(data, overrides, config);
+//                     let res = state.simulate_external_state(data, overrides,
+// config);
 //
 //                     match res {
 //                         Ok((sim_res, slots)) => {
@@ -119,8 +121,8 @@
 //             }
 //             BundleSimRequest::MevBundle(tx, caller_info, sender) => {
 //                 let fut = async move {
-//                     let res = state.simulate_composable_bundle(tx, caller_info);
-//                     let _ = if let Err(e) = res {
+//                     let res = state.simulate_composable_bundle(tx,
+// caller_info);                     let _ = if let Err(e) = res {
 //                         sender.send(SimResult::SimError(e))
 //                     } else {
 //                         sender.send(res.unwrap())
@@ -131,8 +133,8 @@
 //             BundleSimRequest::NewBlock(sender) => {
 //                 let slot_changes = self.slot_changes.clone();
 //                 let fut = async move {
-//                     let res = RevmState::update_evm_state(state, &slot_changes);
-//                     let _ = if let Err(e) = res {
+//                     let res = RevmState::update_evm_state(state,
+// &slot_changes);                     let _ = if let Err(e) = res {
 //                         sender.send(SimResult::SimError(e))
 //                     } else {
 //                         sender.send(SimResult::SuccessfulRevmBlockUpdate)

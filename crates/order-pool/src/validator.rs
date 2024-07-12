@@ -20,13 +20,17 @@ pub struct PoolOrderValidator<V: OrderValidatorHandle> {
 
 impl<V> PoolOrderValidator<V>
 where
-    V: OrderValidatorHandle
+    V: OrderValidatorHandle<Order = AllOrders>
 {
     pub fn new(validator: V) -> Self {
         Self { validator, pending: FuturesUnordered::new() }
     }
 
-    pub fn validate_order(&mut self, origin: OrderOrigin, order: AllOrders) {}
+    pub fn validate_order(&mut self, origin: OrderOrigin, order: AllOrders) {
+        let val = self.validator.clone();
+        self.pending
+            .push(Box::pin(async move { val.validate_order(origin, order).await }))
+    }
 }
 
 impl<V> Stream for PoolOrderValidator<V>

@@ -52,7 +52,7 @@ impl<V: OrderValidatorHandle> Deref for OrderIndexer<V> {
     }
 }
 
-impl<V: OrderValidatorHandle> OrderIndexer<V> {
+impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     pub fn new(validator: V, config: PoolConfig, block_number: u64) -> Self {
         Self {
             order_storage: OrderStorage::new(&config),
@@ -274,7 +274,7 @@ impl<V: OrderValidatorHandle> OrderIndexer<V> {
 
 impl<V> Stream for OrderIndexer<V>
 where
-    V: OrderValidatorHandle
+    V: OrderValidatorHandle<Order = AllOrders>
 {
     type Item = Vec<PoolInnerEvent>;
 

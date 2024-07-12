@@ -205,42 +205,18 @@ pub trait PoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
 
     /// Order deadline
     fn deadline(&self) -> U256;
-
-    /// Returns a measurement of the heap usage of this type and all its
-    /// internals.
-    fn size(&self) -> usize;
-
-    /// Returns the length of the rlp encoded transaction object
-    fn encoded_length(&self) -> usize;
-
-    /// Returns chain_id
-    fn chain_id(&self) -> Option<u64>;
-
-    /// Returns if the order should be pending or parked
-    fn is_valid(&self) -> bool;
-
-    /// Returns the direction of the pool defined by ordering
-    fn is_bid(&self) -> bool;
 }
 
 impl PoolOrder for TopOfBlockOrder {
     fn from(&self) -> Address {
-        todo!()
+        self.from
     }
 
     fn hash(&self) -> TxHash {
-        todo!()
-    }
-
-    fn size(&self) -> usize {
-        todo!()
+        self.eip712_hash_struct()
     }
 
     fn nonce(&self) -> U256 {
-        todo!()
-    }
-
-    fn is_bid(&self) -> bool {
         todo!()
     }
 
@@ -249,14 +225,6 @@ impl PoolOrder for TopOfBlockOrder {
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
-    }
-
-    fn chain_id(&self) -> Option<u64> {
-        todo!()
-    }
-
-    fn is_valid(&self) -> bool {
         todo!()
     }
 
@@ -273,10 +241,6 @@ impl PoolOrder for TopOfBlockOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
-    }
-
-    fn encoded_length(&self) -> usize {
         todo!()
     }
 }
@@ -290,15 +254,7 @@ impl PoolOrder for GroupedVanillaOrder {
         todo!()
     }
 
-    fn size(&self) -> usize {
-        todo!()
-    }
-
     fn nonce(&self) -> U256 {
-        todo!()
-    }
-
-    fn is_bid(&self) -> bool {
         todo!()
     }
 
@@ -307,14 +263,6 @@ impl PoolOrder for GroupedVanillaOrder {
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
-    }
-
-    fn chain_id(&self) -> Option<u64> {
-        todo!()
-    }
-
-    fn is_valid(&self) -> bool {
         todo!()
     }
 
@@ -331,10 +279,6 @@ impl PoolOrder for GroupedVanillaOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
-    }
-
-    fn encoded_length(&self) -> usize {
         todo!()
     }
 }
@@ -347,15 +291,7 @@ impl PoolOrder for AllOrders {
         todo!()
     }
 
-    fn size(&self) -> usize {
-        todo!()
-    }
-
     fn nonce(&self) -> U256 {
-        todo!()
-    }
-
-    fn is_bid(&self) -> bool {
         todo!()
     }
 
@@ -364,14 +300,6 @@ impl PoolOrder for AllOrders {
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
-    }
-
-    fn chain_id(&self) -> Option<u64> {
-        todo!()
-    }
-
-    fn is_valid(&self) -> bool {
         todo!()
     }
 
@@ -388,10 +316,6 @@ impl PoolOrder for AllOrders {
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
-    }
-
-    fn encoded_length(&self) -> usize {
         todo!()
     }
 }
@@ -405,15 +329,7 @@ impl PoolOrder for GroupedComposableOrder {
         todo!()
     }
 
-    fn size(&self) -> usize {
-        todo!()
-    }
-
     fn nonce(&self) -> U256 {
-        todo!()
-    }
-
-    fn is_bid(&self) -> bool {
         todo!()
     }
 
@@ -422,14 +338,6 @@ impl PoolOrder for GroupedComposableOrder {
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
-    }
-
-    fn chain_id(&self) -> Option<u64> {
-        todo!()
-    }
-
-    fn is_valid(&self) -> bool {
         todo!()
     }
 
@@ -446,10 +354,6 @@ impl PoolOrder for GroupedComposableOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
-    }
-
-    fn encoded_length(&self) -> usize {
         todo!()
     }
 }

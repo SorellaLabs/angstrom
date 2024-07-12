@@ -312,7 +312,7 @@ impl PoolOrder for AllOrders {
     }
 
     fn limit_price(&self) -> u128 {
-        todo!()
+        self.amount_out_min() / self.amount_in()
     }
 
     fn amount_out_min(&self) -> u128 {

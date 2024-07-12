@@ -184,12 +184,21 @@ mod private {
             function allUniV4FreeToUniV4Delta(address asset) public;
         }
     }
+
+    use std::ops::Deref;
+    impl Deref for AssetIndex {
+        type Target = u16;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
 }
 
 pub use private::{
-    AngstromContract, AssetForm as SolAssetForm, ContractBundle, Donate as SolDonate, FlashOrder,
-    GenericOrder as SolGenericOrder, OrderMode as SolOrderMode, OrderType as SolOrderType,
-    Price as SolPrice, StandingOrder, Swap as SolSwap, TopOfBlockOrder
+    AngstromContract, AssetForm as SolAssetForm, AssetIndex, ContractBundle, Donate as SolDonate,
+    FlashOrder, GenericOrder as SolGenericOrder, OrderMode as SolOrderMode,
+    OrderType as SolOrderType, Price as SolPrice, StandingOrder, Swap as SolSwap, TopOfBlockOrder
 };
 
 #[derive(Default, Debug, Clone)]

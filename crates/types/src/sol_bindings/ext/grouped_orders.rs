@@ -254,53 +254,74 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn nonce(&self) -> U256 {
-        todo!()
+        U256::default()
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
+        U256::default()
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
+        self.amountIn.to()
     }
 
     fn limit_price(&self) -> u128 {
-        todo!()
+        self.amount_in() / self.amount_out_min()
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
+        self.amountOut.to()
     }
 }
 
 impl RawPoolOrder for GroupedVanillaOrder {
     fn from(&self) -> Address {
-        todo!()
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.recipient,
+            GroupedVanillaOrder::KillOrFill(kof) => kof.recipient
+        }
     }
 
     fn hash(&self) -> TxHash {
-        todo!()
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.eip712_hash_struct(),
+            GroupedVanillaOrder::KillOrFill(kof) => kof.eip712_hash_struct()
+        }
     }
 
     fn nonce(&self) -> U256 {
-        todo!()
+        match self {
+            GroupedVanillaOrder::Partial(p) => U256::from(p.nonce),
+            GroupedVanillaOrder::KillOrFill(_) => U256::ZERO
+        }
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.deadline,
+            GroupedVanillaOrder::KillOrFill(_) => U256::ZERO
+        }
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.max_amount_in_or_out.to(),
+            GroupedVanillaOrder::KillOrFill(kof) => kof.max_amount_in_or_out.to()
+        }
     }
 
     fn limit_price(&self) -> u128 {
-        todo!()
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.min_price.to(),
+            GroupedVanillaOrder::KillOrFill(p) => p.min_price.to()
+        }
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.max_amount_in_or_out.to(),
+            GroupedVanillaOrder::KillOrFill(kof) => kof.max_amount_in_or_out.to()
+        }
     }
 }
 impl FetchAssetIndexes for GroupedVanillaOrder {
@@ -385,30 +406,51 @@ impl FetchAssetIndexes for GroupedComposableOrder {
 
 impl RawPoolOrder for GroupedComposableOrder {
     fn from(&self) -> Address {
-        todo!()
+        match self {
+            GroupedComposableOrder::Partial(p) => p.recipient,
+            GroupedComposableOrder::KillOrFill(kof) => kof.recipient
+        }
     }
 
     fn hash(&self) -> TxHash {
-        todo!()
+        match self {
+            GroupedComposableOrder::Partial(p) => p.eip712_hash_struct(),
+            GroupedComposableOrder::KillOrFill(kof) => kof.eip712_hash_struct()
+        }
     }
 
     fn nonce(&self) -> U256 {
-        todo!()
+        match self {
+            GroupedComposableOrder::Partial(p) => U256::from(p.nonce),
+            GroupedComposableOrder::KillOrFill(_) => U256::ZERO
+        }
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
+        match self {
+            GroupedComposableOrder::Partial(p) => p.deadline,
+            GroupedComposableOrder::KillOrFill(_) => U256::ZERO
+        }
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
+        match self {
+            GroupedComposableOrder::Partial(p) => p.max_amount_in_or_out.to(),
+            GroupedComposableOrder::KillOrFill(kof) => kof.max_amount_in_or_out.to()
+        }
     }
 
     fn limit_price(&self) -> u128 {
-        todo!()
+        match self {
+            GroupedComposableOrder::Partial(p) => p.min_price.to(),
+            GroupedComposableOrder::KillOrFill(p) => p.min_price.to()
+        }
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
+        match self {
+            GroupedComposableOrder::Partial(p) => p.max_amount_in_or_out.to(),
+            GroupedComposableOrder::KillOrFill(kof) => kof.max_amount_in_or_out.to()
+        }
     }
 }

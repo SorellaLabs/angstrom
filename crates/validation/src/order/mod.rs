@@ -109,13 +109,13 @@ impl OrderValidatorHandle for ValidationClient {
     ) -> ValidationFuture<Self::Order> {
         Box::pin(async move {
             let (tx, rx) = channel();
-            // let _ = self
-            //     .0
-            //     .send(ValidationRequest::Order(OrderValidationRequest::ValidateLimit(
-            //         tx,
-            //         origin,
-            //         transaction
-            //     )));
+            let _ = self
+                .0
+                .send(ValidationRequest::Order(OrderValidationRequest::ValidateOrder(
+                    tx,
+                    transaction,
+                    origin
+                )));
 
             rx.await.unwrap()
         })

@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::primitive::PoolId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct OrderId {
     pub address:  Address,
     /// Pool id
@@ -20,7 +20,7 @@ pub struct OrderId {
     pub location: OrderLocation
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct OrderPriorityData {
     pub price:  u128,
     pub volume: u128,
@@ -42,8 +42,9 @@ impl Ord for OrderPriorityData {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OrderLocation {
+    #[default]
     Limit,
     Searcher
 }

@@ -4,7 +4,7 @@ use alloy_primitives::{Address, U256};
 use angstrom_types::{
     orders::{OrderLocation, OrderPriorityData, StateValidationError, ValidationError},
     sol_bindings::{
-        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
+        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData, PoolOrder},
         sol::TopOfBlockOrder
     }
 };
@@ -43,7 +43,7 @@ impl UserOrders {
         deltas: UserAccountDetails,
         block_number: u64
     ) -> OrderWithStorageData<TopOfBlockOrder> {
-        todo!()
+        self.basic_order_validation(order, deltas, false, block_number)
     }
 
     pub fn new_limit_order(
@@ -52,139 +52,133 @@ impl UserOrders {
         deltas: UserAccountDetails,
         block_number: u64
     ) -> OrderWithStorageData<GroupedVanillaOrder> {
-        todo!()
-        // self.basic_order_validation(order, deltas, true, block_number,
-        // |order| OrderPriorityData {     price:  order.limit_price(),
-        //     volume:
-        // order.limit_price().saturating_mul(order.amount_out_min()),
-        //     gas:    order.gas()
-        // })
+        self.basic_order_validation(order, deltas, true, block_number)
     }
 
     /// called when a user has a state change on their address. When this
     /// happens we re-evaluate all of there pending orders so we do a
     /// hard-reset here.
-    pub fn fkresh_state(&mut self, state: HashMap<Address, PendingState>) {
+    pub fn refresh_state(&mut self, state: HashMap<Address, PendingState>) {
         state.into_iter().for_each(|(k, v)| {
             self.0.insert(k, (v, vec![]));
         });
     }
 
-    // fn basic_order_validation<
-    //     O: PoolOrder<ValidationData = Data>,
-    //     Data: Send + Debug + Sync + Clone + Unpin + 'static,
-    //     F: FnOnce(&O) -> Data
-    // >(
-    //     &mut self,
-    //     order: O,
-    //     deltas: UserAccountDetails,
-    //     limit: bool,
-    //     block_number: u64,
-    //     build_priority: F
-    // ) -> OrderValidationOutcome<O> {
-    //     tracing::debug!(?deltas);
-    //     // always invalid
-    //     if !deltas.is_valid_nonce
-    //         || !deltas.is_valid_pool
-    //         || self.has_nonce_overlap(&order.from(), &order.nonce())
-    //     {
-    //         let hash = order.hash();
-    //         let nonce = order.nonce();
-    //         return OrderValidationOutcome::Invalid(
-    //             order,
-    //
-    // ValidationError::StateValidationError(StateValidationError::InvalidNonce(
-    //                 hash, nonce
-    //             ))
-    //         )
-    //     }
-    //
-    //     let user = order.from();
-    //     let (pending_state, ids) = self.0.entry(user).or_default();
-    //     ids.push(order.nonce());
-    //
-    //     // insert approvals if empty
-    //     pending_state
-    //         .token_approvals
-    //         .entry(deltas.token_approvals.0)
-    //         .or_insert(deltas.token_approvals.1);
-    //
-    //     // insert balance if empty
-    //     pending_state
-    //         .token_balances
-    //         .entry(deltas.token_bals.0)
-    //         .or_insert(deltas.token_bals.1);
-    //
-    //     // track which pool this should go into
-    //     let mut has_balances = true;
-    //
-    //     // subtract token in from approval
-    //     if let Some(token) =
-    // pending_state.token_approvals.get_mut(&order.token_in()) {         if
-    // (*token)             .checked_sub(U256::from(order.amount_in()))
-    //             .is_none()
-    //         {
-    //             has_balances = false;
-    //         } else {
-    //             *token -= U256::from(order.amount_in());
-    //         }
-    //     } else {
-    //         has_balances = false;
-    //     }
-    //
-    //     // if approvals passed check balances
-    //     if has_balances {
-    //         if let Some(token) =
-    // pending_state.token_balances.get_mut(&order.token_in()) {             if
-    // (*token)                 .checked_sub(U256::from(order.amount_in()))
-    //                 .is_none()
-    //             {
-    //                 // add balance back to approval
-    //                 // NOTE: default will never be called here
-    //                 *pending_state
-    //                     .token_approvals
-    //                     .entry(order.token_in())
-    //                     .or_default() += U256::from(order.amount_in());
-    //
-    //                 has_balances = false;
-    //             } else {
-    //                 *token -= U256::from(order.amount_in());
-    //             }
-    //         } else {
-    //             // NOTE: default will never be called here
-    //             *pending_state
-    //                 .token_approvals
-    //                 .entry(order.token_in())
-    //                 .or_default() += U256::from(order.amount_in());
-    //
-    //             has_balances = false;
-    //         }
-    //     }
-    //     // NOTE: because we can't guarentee the order of execution with
-    //     // these orders, we cannot add the amount out balance to
-    //     // token balances to allow multi hop with different
-    //     // intents within a single transaction
-    //
-    //     let data = build_priority(&order);
-    //
-    //     let res = ValidatedOrder {
-    //         order,
-    //         data,
-    //         is_bid: deltas.is_bid,
-    //         pool_id: deltas.pool_id,
-    //         location: if limit {
-    //             if has_balances {
-    //                 OrderLocation::Limit
-    //             } else {
-    //                 OrderLocation::Limit
-    //             }
-    //         } else {
-    //             OrderLocation::Searcher
-    //         }
-    //     };
-    //
-    //     OrderValidationOutcome::Valid { order: res, propagate: true, block_number
-    // } }
+    fn basic_order_validation<O: PoolOrder>(
+        &mut self,
+        order: O,
+        deltas: UserAccountDetails,
+        limit: bool,
+        block_number: u64
+    ) -> OrderWithStorageData<O> {
+        tracing::debug!(?deltas);
+        // always invalid
+        if !deltas.is_valid_nonce
+            || !deltas.is_valid_pool
+            || self.has_nonce_overlap(&order.from(), &order.nonce())
+        {
+            // default data
+            return OrderWithStorageData {
+                is_valid: false,
+                order,
+                is_bid: false,
+                pool_id: 0,
+                order_id: Default::default(),
+                valid_block: 0,
+                priority_data: Default::default(),
+                is_currently_valid: false
+            }
+        }
+
+        let user = order.from();
+        let (pending_state, ids) = self.0.entry(user).or_default();
+        ids.push(order.nonce());
+
+        // insert approvals if empty
+        pending_state
+            .token_approvals
+            .entry(deltas.token_approvals.0)
+            .or_insert(deltas.token_approvals.1);
+
+        // insert balance if empty
+        pending_state
+            .token_balances
+            .entry(deltas.token_bals.0)
+            .or_insert(deltas.token_bals.1);
+
+        // track which pool this should go into
+        let mut has_balances = true;
+
+        // subtract token in from approval
+        if let Some(token) = pending_state.token_approvals.get_mut(&order.token_in()) {
+            if (*token)
+                .checked_sub(U256::from(order.amount_in()))
+                .is_none()
+            {
+                has_balances = false;
+            } else {
+                *token -= U256::from(order.amount_in());
+            }
+        } else {
+            has_balances = false;
+        }
+
+        // if approvals passed check balances
+        if has_balances {
+            if let Some(token) = pending_state.token_balances.get_mut(&order.token_in()) {
+                if (*token)
+                    .checked_sub(U256::from(order.amount_in()))
+                    .is_none()
+                {
+                    // add balance back to approval
+                    // NOTE: default will never be called here
+                    *pending_state
+                        .token_approvals
+                        .entry(order.token_in())
+                        .or_default() += U256::from(order.amount_in());
+
+                    has_balances = false;
+                } else {
+                    *token -= U256::from(order.amount_in());
+                }
+            } else {
+                // NOTE: default will never be called here
+                *pending_state
+                    .token_approvals
+                    .entry(order.token_in())
+                    .or_default() += U256::from(order.amount_in());
+
+                has_balances = false;
+            }
+        }
+        // NOTE: because we can't guarentee the order of execution with
+        // these orders, we cannot add the amount out balance to
+        // token balances to allow multi hop with different
+        // intents within a single transaction
+
+        let priority = OrderPriorityData {
+            price:  order.limit_price(),
+            volume: order.limit_price().saturating_mul(order.amount_out_min()),
+            gas:    0
+        };
+        OrderWithStorageData {
+            is_currently_valid: has_balances,
+            priority_data: priority,
+            valid_block: block_number,
+            order_id: angstrom_types::orders::OrderId {
+                address:  order.from(),
+                pool_id:  deltas.pool_id,
+                hash:     order.hash(),
+                nonce:    order.nonce(),
+                deadline: order.deadline(),
+                location: if limit { OrderLocation::Limit } else { OrderLocation::Searcher }
+            },
+            pool_id: deltas.pool_id,
+            order,
+            is_bid: deltas.is_bid,
+            is_valid: true
+        }
+    }
 
     /// Helper function for checking for duplicates when adding orders
     fn has_nonce_overlap(&self, address: &Address, id: &U256) -> bool {

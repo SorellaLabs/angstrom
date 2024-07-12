@@ -1,23 +1,21 @@
 use std::collections::HashMap;
 
 use alloy_primitives::{Address, FixedBytes};
-use angstrom_types::{primitive::PoolId, sol_bindings::sol::AssetIndex};
+use angstrom_types::primitive::PoolId;
 
 pub type PoolIdWithDirection = (bool, PoolId);
 
-/// asset indexes is the concatenation of the two assets
-pub type AssetIndexes = u32;
-pub struct AngstromPools(HashMap<AssetIndexes, PoolIdWithDirection>);
+pub struct AngstromPools(HashMap<FixedBytes<40>, PoolIdWithDirection>);
 
 impl AngstromPools {
-    pub fn new(setup: HashMap<AssetIndexes, PoolIdWithDirection>) -> Self {
+    pub fn new(setup: HashMap<FixedBytes<40>, PoolIdWithDirection>) -> Self {
         AngstromPools(setup)
     }
 
     pub fn order_info(
         &self,
-        currency_in: AssetIndex,
-        currency_out: AssetIndex
+        currency_in: Address,
+        currency_out: Address
     ) -> Option<PoolIdWithDirection> {
         tracing::debug!(shit=?self.0);
         self.0
@@ -26,11 +24,7 @@ impl AngstromPools {
     }
 
     #[inline(always)]
-    fn get_key(&self, currency_in: AssetIndex, currency_out: AssetIndex) -> AssetIndexes {
-        let mut bytes = [0u8; 4];
-        bytes[0..2].copy_from_slice(&currency_in.to_be_bytes());
-        bytes[2..4].copy_from_slice(&currency_out.to_be_bytes());
-
-        u32::from_be_bytes(bytes)
+    fn get_key(&self, currency_in: Address, currency_out: Address) -> FixedBytes<40> {
+        FixedBytes::concat_const(currency_in.0, currency_out.0)
     }
 }

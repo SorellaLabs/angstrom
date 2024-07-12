@@ -168,21 +168,23 @@ impl ValidationOperation {
         let cur_block = cx.current_block_number.clone();
         Box::pin(std::future::ready({
             if let ValidationOperation::PreRegularVerification(verification, block_number) = self {
-                let (res, details) = cx.state.validate_regular_order(verification);
-
-                // check if the block_number has changed durning validation. If it has, then we
-                // return to the first step in order to ensure proper state has been loaded
-                let cur_block = cur_block.load(std::sync::atomic::Ordering::SeqCst);
-                if cur_block != block_number {
-                    PipelineAction::Next(ValidationOperation::PreRegularVerification(
-                        res, cur_block
-                    ))
+                if let Some((res, details)) = cx.state.validate_regular_order(verification) {
+                    // check if the block_number has changed durning validation. If it has, then we
+                    // return to the first step in order to ensure proper state has been loaded
+                    let cur_block = cur_block.load(std::sync::atomic::Ordering::SeqCst);
+                    if cur_block != block_number {
+                        PipelineAction::Next(ValidationOperation::PreRegularVerification(
+                            res, cur_block
+                        ))
+                    } else {
+                        PipelineAction::Next(ValidationOperation::PostRegularVerification(
+                            res,
+                            details,
+                            block_number
+                        ))
+                    }
                 } else {
-                    PipelineAction::Next(ValidationOperation::PostRegularVerification(
-                        res,
-                        details,
-                        block_number
-                    ))
+                    PipelineAction::Err
                 }
             } else {
                 PipelineAction::Err
@@ -197,12 +199,18 @@ impl ValidationOperation {
         if let ValidationOperation::PostRegularVerification(req, deltas, block_number) = self {
             match req {
                 OrderValidation::Limit(a, c, b) => {
-                    let res = cx.user_orders().new_limit_order(c, deltas, block_number);
+                    let wrapper = cx.state.wrap_order(c).expect("shouldn't be possible");
+                    let res = cx
+                        .user_orders()
+                        .new_limit_order(wrapper, deltas, block_number);
                     let res = res.try_map_inner(|i| Ok(i.into())).unwrap();
                     let _ = a.send(res);
                 }
                 OrderValidation::Searcher(a, c, b) => {
-                    let res = cx.user_orders().new_searcher_order(c, deltas, block_number);
+                    let wrapper = cx.state.wrap_order(c).expect("shouldn't be possible");
+                    let res = cx
+                        .user_orders()
+                        .new_searcher_order(wrapper, deltas, block_number);
                     let res = res.try_map_inner(|i| Ok(i.into())).unwrap();
                     let _ = a.send(res);
                 }

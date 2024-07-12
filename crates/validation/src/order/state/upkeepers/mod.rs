@@ -1,12 +1,14 @@
 pub mod angstrom_pools;
 pub mod approvals;
 pub mod balances;
+pub mod index_to_address;
 pub mod nonces;
 
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use alloy_primitives::{keccak256, Address, Bytes, FixedBytes, B256, U256};
-use angstrom_types::sol_bindings::grouped_orders::PoolOrder;
+use angstrom_types::sol_bindings::grouped_orders::{PoolOrder, RawPoolOrder};
+use index_to_address::AssetIndexToAddress;
 use reth_primitives::revm_primitives::{Env, TransactTo, TxEnv};
 use reth_revm::EvmBuilder;
 use revm::{db::WrapDatabaseRef, interpreter::opcode, Database, Inspector};
@@ -30,23 +32,24 @@ pub struct UserAccountDetails {
 }
 
 pub struct Upkeepers {
-    approvals: Approvals,
-    balances:  Balances,
-    pools:     AngstromPools,
-    nonces:    Nonces
+    approvals:            Approvals,
+    balances:             Balances,
+    pools:                AngstromPools,
+    nonces:               Nonces,
+    pub asset_to_address: AssetIndexToAddress
 }
 
 impl Upkeepers {
     pub fn new(config: ValidationConfig) -> Self {
         Self {
-            approvals: Approvals::new(
+            approvals:        Approvals::new(
                 config
                     .approvals
                     .into_iter()
                     .map(|app| (app.token, app))
                     .collect()
             ),
-            pools:     AngstromPools::new(
+            pools:            AngstromPools::new(
                 config
                     .pools
                     .into_iter()
@@ -65,22 +68,24 @@ impl Upkeepers {
                     })
                     .collect()
             ),
-            balances:  Balances::new(
+            balances:         Balances::new(
                 config
                     .balances
                     .into_iter()
                     .map(|bal| (bal.token, bal))
                     .collect()
             ),
-            nonces:    Nonces
+            nonces:           Nonces,
+            asset_to_address: AssetIndexToAddress::default()
         }
     }
 
-    pub fn verify_order<O: PoolOrder, DB: Send + BlockStateProviderFactory>(
+    pub fn verify_order<O: RawPoolOrder, DB: Send + BlockStateProviderFactory>(
         &self,
         order: O,
         db: Arc<RevmLRU<DB>>
-    ) -> (UserAccountDetails, O) {
+    ) -> Option<(UserAccountDetails, O)> {
+        let order = self.asset_to_address.wrap(order)?;
         let is_valid_nonce =
             self.nonces
                 .is_valid_nonce(order.from(), order.nonce().to(), db.clone());
@@ -101,7 +106,7 @@ impl Upkeepers {
             .fetch_balance_for_token(order.from(), order.token_in(), db.clone())
             .unwrap_or_default();
 
-        (
+        Some((
             UserAccountDetails {
                 pool_id,
                 is_bid,
@@ -110,16 +115,18 @@ impl Upkeepers {
                 is_valid_pool,
                 token_approvals: (order.token_in(), approvals)
             },
-            order
-        )
+            order.order
+        ))
     }
 
-    pub fn verify_composable_order<O: PoolOrder, DB: Send + BlockStateProviderFactory>(
+    pub fn verify_composable_order<O: RawPoolOrder, DB: Send + BlockStateProviderFactory>(
         &self,
         order: O,
         db: Arc<RevmLRU<DB>>,
         overrides: &HashMap<Address, HashMap<U256, U256>>
-    ) -> (UserAccountDetails, O) {
+    ) -> Option<(UserAccountDetails, O)> {
+        let order = self.asset_to_address.wrap(order)?;
+
         let is_valid_nonce =
             self.nonces
                 .is_valid_nonce(order.from(), order.nonce().to(), db.clone());
@@ -150,7 +157,7 @@ impl Upkeepers {
             )
             .unwrap_or_default();
 
-        (
+        Some((
             UserAccountDetails {
                 pool_id,
                 is_bid,
@@ -159,8 +166,8 @@ impl Upkeepers {
                 is_valid_pool,
                 token_approvals: (order.token_in(), approvals)
             },
-            order
-        )
+            order.order
+        ))
     }
 }
 

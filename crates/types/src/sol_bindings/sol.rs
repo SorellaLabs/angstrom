@@ -31,9 +31,9 @@ mod private {
             string mode;
             uint256 max_amount_in_or_out;
             uint256 min_price;
-            address asset_in;
+            AssetIndex asset_in;
             AssetForm asset_in_form;
-            address asset_out;
+            AssetIndex asset_out;
             AssetForm asset_out_form;
             address recipient;
             bytes hook_data;
@@ -47,9 +47,9 @@ mod private {
             string mode;
             uint256 max_amount_in_or_out;
             uint256 min_price;
-            address asset_in;
+            AssetIndex asset_in;
             AssetForm asset_in_form;
-            address asset_out;
+            AssetIndex asset_out;
             AssetForm asset_out_form;
             address recipient;
             bytes hook_data;
@@ -73,7 +73,7 @@ mod private {
             bytes signature;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq, Hash)]
         type AssetIndex is uint16;
 
         #[derive(Debug, Default, PartialEq, Eq)]

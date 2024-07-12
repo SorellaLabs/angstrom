@@ -10,6 +10,7 @@ use angstrom_types::{
 };
 
 use super::upkeepers::UserAccountDetails;
+use crate::order::state::upkeepers::index_to_address::AssetIndexToAddressWrapper;
 
 type Amount = U256;
 type OrderNonce = U256;
@@ -39,20 +40,24 @@ impl UserOrders {
 
     pub fn new_searcher_order(
         &mut self,
-        order: TopOfBlockOrder,
+        order: AssetIndexToAddressWrapper<TopOfBlockOrder>,
         deltas: UserAccountDetails,
         block_number: u64
     ) -> OrderWithStorageData<TopOfBlockOrder> {
         self.basic_order_validation(order, deltas, false, block_number)
+            .try_map_inner(|inner| Ok(inner.order))
+            .unwrap()
     }
 
     pub fn new_limit_order(
         &mut self,
-        order: GroupedVanillaOrder,
+        order: AssetIndexToAddressWrapper<GroupedVanillaOrder>,
         deltas: UserAccountDetails,
         block_number: u64
     ) -> OrderWithStorageData<GroupedVanillaOrder> {
         self.basic_order_validation(order, deltas, true, block_number)
+            .try_map_inner(|inner| Ok(inner.order))
+            .unwrap()
     }
 
     /// called when a user has a state change on their address. When this

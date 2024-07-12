@@ -4,6 +4,7 @@ use alloy_primitives::{Address, FixedBytes, TxHash, U256};
 use alloy_sol_types::SolStruct;
 use reth_primitives::B256;
 
+use super::FetchAssetIndexes;
 use crate::{
     orders::{OrderId, OrderPriorityData},
     primitive::PoolId,
@@ -207,7 +208,43 @@ pub trait PoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
     fn deadline(&self) -> U256;
 }
 
-impl PoolOrder for TopOfBlockOrder {
+/// The capability of all default orders.
+pub trait RawPoolOrder:
+    FetchAssetIndexes + fmt::Debug + Send + Sync + Clone + Unpin + 'static
+{
+    /// Hash of the order
+    fn hash(&self) -> TxHash;
+
+    /// The order signer
+    fn from(&self) -> Address;
+
+    /// Transaction nonce
+    fn nonce(&self) -> U256;
+
+    /// Amount of tokens to sell
+    fn amount_in(&self) -> u128;
+
+    /// Min amount of tokens to buy
+    fn amount_out_min(&self) -> u128;
+
+    /// Limit Price
+    fn limit_price(&self) -> u128;
+
+    /// Order deadline
+    fn deadline(&self) -> U256;
+}
+
+impl FetchAssetIndexes for TopOfBlockOrder {
+    fn get_token_in(&self) -> u16 {
+        self.assetInIndex
+    }
+
+    fn get_token_out(&self) -> u16 {
+        self.assetOutIndex
+    }
+}
+
+impl RawPoolOrder for TopOfBlockOrder {
     fn from(&self) -> Address {
         self.from
     }
@@ -220,19 +257,11 @@ impl PoolOrder for TopOfBlockOrder {
         todo!()
     }
 
-    fn token_in(&self) -> Address {
-        todo!()
-    }
-
     fn deadline(&self) -> U256 {
         todo!()
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
-    }
-
-    fn token_out(&self) -> Address {
         todo!()
     }
 
@@ -245,7 +274,7 @@ impl PoolOrder for TopOfBlockOrder {
     }
 }
 
-impl PoolOrder for GroupedVanillaOrder {
+impl RawPoolOrder for GroupedVanillaOrder {
     fn from(&self) -> Address {
         todo!()
     }
@@ -258,19 +287,11 @@ impl PoolOrder for GroupedVanillaOrder {
         todo!()
     }
 
-    fn token_in(&self) -> Address {
-        todo!()
-    }
-
     fn deadline(&self) -> U256 {
         todo!()
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
-    }
-
-    fn token_out(&self) -> Address {
         todo!()
     }
 
@@ -282,7 +303,41 @@ impl PoolOrder for GroupedVanillaOrder {
         todo!()
     }
 }
-impl PoolOrder for AllOrders {
+impl FetchAssetIndexes for GroupedVanillaOrder {
+    fn get_token_in(&self) -> u16 {
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.asset_in,
+            GroupedVanillaOrder::KillOrFill(kof) => kof.asset_in
+        }
+    }
+
+    fn get_token_out(&self) -> u16 {
+        match self {
+            GroupedVanillaOrder::Partial(p) => p.asset_out,
+            GroupedVanillaOrder::KillOrFill(kof) => kof.asset_out
+        }
+    }
+}
+
+impl FetchAssetIndexes for AllOrders {
+    fn get_token_in(&self) -> u16 {
+        match self {
+            AllOrders::Partial(p) => p.asset_in,
+            AllOrders::KillOrFill(kof) => kof.asset_in,
+            AllOrders::TOB(tob) => tob.assetInIndex
+        }
+    }
+
+    fn get_token_out(&self) -> u16 {
+        match self {
+            AllOrders::Partial(p) => p.asset_out,
+            AllOrders::KillOrFill(kof) => kof.asset_out,
+            AllOrders::TOB(tob) => tob.assetOutIndex
+        }
+    }
+}
+
+impl RawPoolOrder for AllOrders {
     fn from(&self) -> Address {
         todo!()
     }
@@ -295,19 +350,11 @@ impl PoolOrder for AllOrders {
         todo!()
     }
 
-    fn token_in(&self) -> Address {
-        todo!()
-    }
-
     fn deadline(&self) -> U256 {
         todo!()
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
-    }
-
-    fn token_out(&self) -> Address {
         todo!()
     }
 
@@ -320,7 +367,23 @@ impl PoolOrder for AllOrders {
     }
 }
 
-impl PoolOrder for GroupedComposableOrder {
+impl FetchAssetIndexes for GroupedComposableOrder {
+    fn get_token_in(&self) -> u16 {
+        match self {
+            GroupedComposableOrder::Partial(p) => p.asset_in,
+            GroupedComposableOrder::KillOrFill(kof) => kof.asset_in
+        }
+    }
+
+    fn get_token_out(&self) -> u16 {
+        match self {
+            GroupedComposableOrder::Partial(p) => p.asset_out,
+            GroupedComposableOrder::KillOrFill(kof) => kof.asset_out
+        }
+    }
+}
+
+impl RawPoolOrder for GroupedComposableOrder {
     fn from(&self) -> Address {
         todo!()
     }
@@ -333,19 +396,11 @@ impl PoolOrder for GroupedComposableOrder {
         todo!()
     }
 
-    fn token_in(&self) -> Address {
-        todo!()
-    }
-
     fn deadline(&self) -> U256 {
         todo!()
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
-    }
-
-    fn token_out(&self) -> Address {
         todo!()
     }
 

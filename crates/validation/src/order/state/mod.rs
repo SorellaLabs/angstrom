@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, task::Poll};
 
 use alloy_primitives::{Address, B256, U256};
-use angstrom_types::sol_bindings::grouped_orders::AllOrders;
+use angstrom_types::sol_bindings::grouped_orders::{AllOrders, RawPoolOrder};
 use futures::{Stream, StreamExt};
 use futures_util::stream::FuturesUnordered;
 use parking_lot::RwLock;
@@ -10,6 +10,7 @@ use tokio::{
     sync::oneshot::Sender,
     task::{yield_now, JoinHandle}
 };
+use upkeepers::index_to_address::AssetIndexToAddressWrapper;
 
 use self::{
     orders::UserOrders,
@@ -52,21 +53,25 @@ where
         Self { db, upkeepers: Arc::new(RwLock::new(Upkeepers::new(config))) }
     }
 
+    pub fn wrap_order<O: RawPoolOrder>(&self, order: O) -> Option<AssetIndexToAddressWrapper<O>> {
+        self.upkeepers.read().asset_to_address.wrap(order)
+    }
+
     pub fn validate_regular_order(
         &self,
         order: OrderValidation
-    ) -> (OrderValidation, UserAccountDetails) {
+    ) -> Option<(OrderValidation, UserAccountDetails)> {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();
 
         match order {
             OrderValidation::Limit(tx, o, origin) => {
-                let (details, order) = keeper.read().verify_order(o, db);
-                (OrderValidation::Limit(tx, order, origin), details)
+                let (details, order) = keeper.read().verify_order(o, db)?;
+                Some((OrderValidation::Limit(tx, order, origin), details))
             }
             OrderValidation::Searcher(tx, o, origin) => {
-                let (details, order) = keeper.read().verify_order(o, db);
-                (OrderValidation::Searcher(tx, order, origin), details)
+                let (details, order) = keeper.read().verify_order(o, db)?;
+                Some((OrderValidation::Searcher(tx, order, origin), details))
             }
             _ => unreachable!()
         }
@@ -76,7 +81,7 @@ where
         &self,
         order: OrderValidation,
         prehook_state_deltas: &HookOverrides
-    ) -> (OrderValidation, UserAccountDetails) {
+    ) -> Option<(OrderValidation, UserAccountDetails)> {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();
 
@@ -85,8 +90,8 @@ where
                 let (details, order) =
                     keeper
                         .read()
-                        .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidation::LimitComposable(tx, order, origin), details)
+                        .verify_composable_order(o, db, prehook_state_deltas)?;
+                Some((OrderValidation::LimitComposable(tx, order, origin), details))
             }
             _ => unreachable!()
         }
@@ -96,7 +101,7 @@ where
         &self,
         order: OrderValidation,
         prehook_state_deltas: &HookOverrides
-    ) -> (OrderValidation, UserAccountDetails) {
+    ) -> Option<(OrderValidation, UserAccountDetails)> {
         let db = self.db.clone();
         let keeper = self.upkeepers.clone();
 
@@ -105,8 +110,8 @@ where
                 let (details, order) =
                     keeper
                         .read()
-                        .verify_composable_order(o, db, prehook_state_deltas);
-                (OrderValidation::LimitComposable(tx, order, origin), details)
+                        .verify_composable_order(o, db, prehook_state_deltas)?;
+                Some((OrderValidation::LimitComposable(tx, order, origin), details))
             }
             _ => unreachable!()
         }

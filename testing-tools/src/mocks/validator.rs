@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use alloy_primitives::Address;
 use angstrom_types::{
     self,
-    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData, PoolOrder}
+    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData, RawPoolOrder}
 };
 use parking_lot::Mutex;
 use validation::order::OrderValidatorHandle;

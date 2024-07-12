@@ -360,31 +360,59 @@ impl FetchAssetIndexes for AllOrders {
 
 impl RawPoolOrder for AllOrders {
     fn from(&self) -> Address {
-        todo!()
+        match self {
+            AllOrders::Partial(p) => p.recipient,
+            AllOrders::KillOrFill(kof) => kof.recipient,
+            AllOrders::TOB(tob) => tob.from
+        }
     }
 
     fn hash(&self) -> TxHash {
-        todo!()
+        match self {
+            AllOrders::Partial(p) => p.eip712_hash_struct(),
+            AllOrders::KillOrFill(kof) => kof.eip712_hash_struct(),
+            AllOrders::TOB(tob) => tob.eip712_hash_struct()
+        }
     }
 
     fn nonce(&self) -> U256 {
-        todo!()
+        match self {
+            AllOrders::Partial(p) => U256::from(p.nonce),
+            AllOrders::KillOrFill(_) => U256::ZERO,
+            AllOrders::TOB(_) => U256::ZERO
+        }
     }
 
     fn deadline(&self) -> U256 {
-        todo!()
+        match self {
+            AllOrders::Partial(p) => p.deadline,
+            AllOrders::KillOrFill(_) => U256::ZERO,
+            AllOrders::TOB(_) => U256::ZERO
+        }
     }
 
     fn amount_in(&self) -> u128 {
-        todo!()
+        match self {
+            AllOrders::Partial(p) => p.max_amount_in_or_out.to(),
+            AllOrders::KillOrFill(kof) => kof.max_amount_in_or_out.to(),
+            AllOrders::TOB(tob) => tob.amountIn.to()
+        }
     }
 
     fn limit_price(&self) -> u128 {
-        self.amount_out_min() / self.amount_in()
+        match self {
+            AllOrders::Partial(p) => p.min_price.to(),
+            AllOrders::KillOrFill(kof) => kof.min_price.to(),
+            AllOrders::TOB(_) => self.amount_in() / self.amount_out_min()
+        }
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!()
+        match self {
+            AllOrders::Partial(p) => p.max_amount_in_or_out.to(),
+            AllOrders::KillOrFill(kof) => kof.max_amount_in_or_out.to(),
+            AllOrders::TOB(tob) => { tob.amountOut }.to()
+        }
     }
 }
 

@@ -8,6 +8,10 @@ use std::{
 
 use alloy_rlp::Encodable;
 use angstrom_utils::{GenericExt, PollFlatten};
+use bincode::{
+    config::{standard, NoLimit},
+    decode_from_slice, encode_into_slice, Encode
+};
 use futures::{
     task::{Context, Poll},
     Stream, StreamExt
@@ -166,12 +170,11 @@ impl StromSession {
                     |msg| match msg {
                         SessionCommand::Disconnect { .. } => self.emit_disconnect(cx),
                         SessionCommand::Message(msg) => {
-                            let msg = StromProtocolMessage {
-                                message_type: msg.message_id(),
-                                message:      msg
-                            };
-                            let mut bytes = BytesMut::with_capacity(msg.length());
-                            msg.encode(&mut bytes);
+                            let msg = StromProtocolMessage { message: msg };
+                            let mut buf = Vec::new();
+                            encode_into_slice(msg, &mut buf, standard()).unwrap();
+
+                            let mut bytes = BytesMut::from_iter(buf);
                             Poll::Ready(Some(bytes))
                         }
                     }
@@ -185,7 +188,9 @@ impl StromSession {
         // processes incoming messages until there are none left or the stream closes
         while let Poll::Ready(msg) = self.conn.poll_next_unpin(cx).map(|data| {
             data.map(|bytes| {
-                let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
+                let msg: Result<StromProtocolMessage, _> =
+                    decode_from_slice(&bytes, standard()).map(|inner| inner.0);
+
                 let msg = msg
                     .map(|m| StromSessionMessage::ValidMessage {
                         peer_id: self.remote_peer_id,
@@ -213,9 +218,12 @@ impl StromSession {
             // mark our status as sent.
             self.verification_sidecar.has_sent = true;
 
-            let msg = StromProtocolMessage { message_type: msg.message_id(), message: msg };
-            let mut bytes = BytesMut::with_capacity(msg.length());
-            msg.encode(&mut bytes);
+            let msg = StromProtocolMessage { message: msg };
+
+            let mut buf = Vec::new();
+            encode_into_slice(msg, &mut buf, standard()).unwrap();
+            let bytes = BytesMut::from_iter(buf);
+
             return Poll::Ready(Some(bytes))
         }
 
@@ -227,7 +235,10 @@ impl StromSession {
                 self.verification_sidecar.has_received = true;
 
                 msg.map(|bytes| {
-                    let msg = StromProtocolMessage::decode_message(&mut bytes.deref());
+                    let slice = bytes.as_ref();
+                    let msg: Result<StromProtocolMessage, _> =
+                        decode_from_slice(slice, standard()).map(|inner| inner.0);
+
                     msg.map_or(false, |msg| {
                         // first message has to be status
                         if let StromMessage::Status(status) = msg.message {

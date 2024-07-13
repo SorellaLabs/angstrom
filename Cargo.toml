@@ -172,6 +172,7 @@ hex-literal = "0.4.1"
 
 ## misc
 bytes = "1.4"
+bincode = "2.0.0-rc.3"
 bitflags = "2.3"
 tracing = "0.1.0"
 tracing-appender = "0.2"

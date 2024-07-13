@@ -42,7 +42,7 @@ alloy-rlp.workspace = true
 alloy-rlp-derive.workspace = true
 
 anyhow.workspace = true
-
+bincode = { workspace = true, features = ["derive", "serde"] }
 
 angstrom-eth.workspace = true
 angstrom-types.workspace = true
@@ -66,7 +66,7 @@ tokio-util = { workspace = true, features = ["codec"] }
 
 
 # io
-serde = { workspace = true, optional = true }
+serde = { workspace = true }
 humantime-serde = { version = "1.1", optional = true }
 serde_json = { workspace = true, optional = true }
 
@@ -124,7 +124,6 @@ tempfile.workspace = true
 [features]
 default = ["serde"]
 serde = [
-  "dep:serde",
   "dep:humantime-serde",
   "secp256k1/serde",
   "enr?/serde",

@@ -1,5 +1,4 @@
 use alloy_rlp::Encodable;
-use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use bytes::BytesMut;
 use reth_primitives::keccak256;
 use secp256k1::SecretKey;
@@ -10,7 +9,7 @@ use crate::{
     rpc::SignedLimitOrder
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, RlpDecodable, RlpEncodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct PoolOrders {
     pub pool:         PoolKey,
     pub searcher_bid: SignedLimitOrder,
@@ -18,7 +17,7 @@ pub struct PoolOrders {
     pub sorted_asks:  Vec<SignedLimitOrder>
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct PreProposal {
     pub ethereum_height: u64,
     pub pre_bundle:      Vec<PoolOrders>,
@@ -35,7 +34,9 @@ impl PreProposal {
     ) -> Self {
         let mut buf = BytesMut::new();
         ethereum_height.encode(&mut buf);
-        pre_bundle.encode(&mut buf);
+        let res = serde_json::to_vec(&pre_bundle).unwrap();
+        buf.extend(res);
+
         let buf = buf.freeze();
         let hash = keccak256(buf);
         let sig = reth_primitives::sign_message(sk.secret_bytes().into(), hash).unwrap();

@@ -1,17 +1,11 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use alloy_sol_types::SolStruct;
 use angstrom_types::{
     orders::{OrderId, OrderPriorityData},
-    primitive::{Order, ANGSTROM_DOMAIN},
     sol_bindings::{
-        grouped_orders::{AllOrders, GroupedVanillaOrder, OrderWithStorageData},
+        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         sol::FlashOrder
     }
 };
-use rand::{rngs::ThreadRng, thread_rng, Rng};
-use reth_primitives::{Bytes, U256};
-use secp256k1::SecretKey;
+use rand::{rngs::ThreadRng, Rng};
 
 // pub fn generate_random_valid_order() -> AllOrders {
 //     let mut rng = thread_rng();

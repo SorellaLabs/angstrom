@@ -1,22 +1,16 @@
 mod origin;
-use std::{collections::HashMap, fmt};
 
 use bincode::{Decode, Encode};
 pub mod orderpool;
 
-use alloy_rlp::{RlpDecodable, RlpEncodable};
 pub use orderpool::*;
 pub use origin::*;
+
 // mod pooled;
 // pub use pooled::*;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     primitive::PoolId,
-    sol_bindings::{
-        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
-        sol::TopOfBlockOrder
-    }
+    sol_bindings::{grouped_orders::OrderWithStorageData, sol::TopOfBlockOrder}
 };
 
 #[derive(Debug)]

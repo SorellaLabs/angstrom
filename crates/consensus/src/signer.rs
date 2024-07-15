@@ -1,10 +1,7 @@
 use alloy_primitives::{FixedBytes, B512};
 use angstrom_types::{
-    consensus::{Commit, PreProposal, Proposal},
-    primitive::{
-        Angstrom::{Bundle, LowerBound},
-        BLSValidatorID
-    }
+    consensus::{Commit, Proposal},
+    primitive::BLSValidatorID
 };
 use blsful::{Bls12381G1Impl, SecretKey as BlsSecretKey};
 use secp256k1::SecretKey;

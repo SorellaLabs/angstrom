@@ -8,13 +8,10 @@ pub mod order_storage;
 mod searcher;
 mod validator;
 
-use std::collections::HashMap;
-
 use angstrom_types::{
     orders::{OrderOrigin, OrderSet},
-    primitive::PoolId,
     sol_bindings::{
-        grouped_orders::{AllOrders, GroupedVanillaOrder, OrderWithStorageData},
+        grouped_orders::{AllOrders, GroupedVanillaOrder},
         sol::TopOfBlockOrder
     }
 };

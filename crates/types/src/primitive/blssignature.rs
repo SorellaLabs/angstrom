@@ -1,8 +1,6 @@
 use std::ops::{BitAnd, BitOr};
 
-use alloy_rlp::{length_of_length, Decodable, Encodable};
 use anyhow::Error;
-use bincode::{Decode, Encode};
 use bitmaps::Bitmap;
 use blsful::{
     inner_types::Field, Bls12381G1Impl, MultiPublicKey, MultiSignature, PublicKey, SecretKey,
@@ -245,7 +243,6 @@ impl<'de> Deserialize<'de> for BLSSignature {
 #[cfg(test)]
 mod tests {
     use blsful::{SecretKey, SignatureSchemes};
-    use bytes::BytesMut;
 
     use super::*;
 

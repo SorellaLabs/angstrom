@@ -1,5 +1,5 @@
 use alloy_primitives::Bytes;
-use jsonrpsee::{core::RpcResult, PendingSubscriptionSink};
+use jsonrpsee::core::RpcResult;
 use order_pool::OrderPoolHandle;
 
 use crate::api::OrderApiServer;

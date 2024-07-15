@@ -5,6 +5,7 @@ use std::{
 
 use alloy_primitives::{Address, FixedBytes, U256};
 use alloy_rlp::{Decodable, Encodable, Error};
+use bincode::{Decode, Encode};
 use reth_network_peers::{pk2id, PeerId};
 use reth_primitives::Signature as ESignature;
 use secp256k1::{
@@ -14,10 +15,10 @@ use secp256k1::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, Serialize, Deserialize)]
 #[repr(transparent)]
 #[derive(Default)]
-pub struct Signature(pub ESignature);
+pub struct Signature(#[bincode(with_serde)] pub ESignature);
 
 impl Signature {
     pub fn recover_signer_full_public_key(

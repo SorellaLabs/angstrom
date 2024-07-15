@@ -22,6 +22,7 @@ order-pool.workspace = true
 
 reth-primitives.workspace = true
 
+bincode = { workspace = true, features = ["derive", "serde"] }
 # misc
 jsonrpsee = { workspace = true, features = ["server", "macros"] }
 serde_json.workspace = true
@@ -41,4 +42,3 @@ tracing.workspace = true
 tower-http = { version = "0.5.2", features = ["full"] }
 tower = { version = "0.4.13", features = ["full"] }
 hyper = "1.2.0"
-

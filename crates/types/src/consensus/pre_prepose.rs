@@ -1,10 +1,7 @@
-use alloy_rlp::Encodable;
-use bincode::{Decode, Encode};
-use bytes::BytesMut;
+use bincode::{config::standard, encode_into_slice, Decode, Encode};
 use reth_network_peers::PeerId;
 use reth_primitives::keccak256;
 use secp256k1::SecretKey;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     orders::OrderSet,
@@ -22,9 +19,10 @@ use crate::{
 //     pub orders:       Vec<OrderWithStorageData<GroupedVanillaOrder>>
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PreProposal {
     pub ethereum_height: u64,
+    #[bincode(with_serde)]
     pub source:          PeerId,
     pub limit:           Vec<OrderWithStorageData<GroupedVanillaOrder>>,
     pub searcher:        Vec<OrderWithStorageData<TopOfBlockOrder>>,
@@ -41,11 +39,12 @@ impl PreProposal {
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         sk: &SecretKey
     ) -> Self {
-        let mut buf = BytesMut::new();
-        ethereum_height.encode(&mut buf);
-        limit.encode(&mut buf);
-        searcher.encode(&mut buf);
-        let buf = buf.freeze();
+        let mut buf = Vec::new();
+        let std = standard();
+        encode_into_slice(ethereum_height, &mut buf, std).unwrap();
+        encode_into_slice(&limit, &mut buf, std).unwrap();
+        encode_into_slice(&searcher, &mut buf, std).unwrap();
+
         let hash = keccak256(buf);
         let sig = reth_primitives::sign_message(sk.secret_bytes().into(), hash).unwrap();
 
@@ -75,11 +74,12 @@ impl PreProposal {
         // m.as_slice().into()).unwrap_or_default();         PoolOrders { pool:
         // *p, searcher_bid, orders }     })
         //     .collect();
-        let mut buf = BytesMut::new();
-        ethereum_height.encode(&mut buf);
-        limit.encode(&mut buf);
-        searcher.encode(&mut buf);
-        let buf = buf.freeze();
+        let mut buf = Vec::new();
+        let std = standard();
+        encode_into_slice(ethereum_height, &mut buf, std).unwrap();
+        encode_into_slice(&limit, &mut buf, std).unwrap();
+        encode_into_slice(&searcher, &mut buf, std).unwrap();
+
         let hash = keccak256(buf);
         let sig = reth_primitives::sign_message(sk.secret_bytes().into(), hash).unwrap();
         Self { ethereum_height, source, limit, searcher, signature: Signature(sig) }

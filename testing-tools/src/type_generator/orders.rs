@@ -2,11 +2,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use alloy_sol_types::SolStruct;
 use angstrom_types::{
-    orders::{OrderId, OrderPriorityData, PooledOrder},
+    orders::{OrderId, OrderPriorityData},
     primitive::{Order, ANGSTROM_DOMAIN},
-    rpc::{SignedLimitOrder, SignedSearcherOrder},
     sol_bindings::{
-        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
+        grouped_orders::{AllOrders, GroupedVanillaOrder, OrderWithStorageData},
         sol::FlashOrder
     }
 };
@@ -14,62 +13,62 @@ use rand::{rngs::ThreadRng, thread_rng, Rng};
 use reth_primitives::{Bytes, U256};
 use secp256k1::SecretKey;
 
-pub fn generate_random_valid_order() -> AllOrders {
-    let mut rng = thread_rng();
-    let sk = SecretKey::new(&mut rng);
-    let mut baseline_order = generate_order(&mut rng);
-
-    let sign_hash = baseline_order.eip712_signing_hash(&ANGSTROM_DOMAIN);
-
-    let signature =
-        reth_primitives::sign_message(alloy_primitives::FixedBytes(sk.secret_bytes()), sign_hash)
-            .unwrap();
-
-    let our_sig = angstrom_types::primitive::Signature(signature);
-    baseline_order.signature = Bytes::from_iter(our_sig.to_bytes());
-    AllOrders::Partial(baseline_order)
-}
-
-pub fn generate_rand_valid_limit_order() -> AllOrders {
-    let mut rng = thread_rng();
-    let sk = SecretKey::new(&mut rng);
-    let mut baseline_order = generate_order(&mut rng);
-
-    let sign_hash = baseline_order.eip712_signing_hash(&ANGSTROM_DOMAIN);
-
-    let signature =
-        reth_primitives::sign_message(alloy_primitives::FixedBytes(sk.secret_bytes()), sign_hash)
-            .unwrap();
-
-    let our_sig = angstrom_types::primitive::Signature(signature);
-    baseline_order.signature = Bytes::from_iter(our_sig.to_bytes());
-
-    AllOrders::Partial(baseline_order)
-}
-
-pub fn generate_rand_valid_searcher_order() -> SignedSearcherOrder {
-    let l = generate_rand_valid_limit_order();
-    SignedSearcherOrder { hash: l.hash, order: l.order, signature: l.signature }
-}
-
-fn generate_order(rng: &mut ThreadRng) -> Order {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        + 30;
-    Order {
-        nonce:        U256::from(rng.gen_range(0..u64::MAX)),
-        orderType:    angstrom_types::primitive::OrderType::Limit,
-        currencyIn:   rng.gen(),
-        preHook:      Bytes::new(),
-        postHook:     Bytes::new(),
-        amountIn:     rng.gen(),
-        deadline:     U256::from(timestamp),
-        currencyOut:  rng.gen(),
-        amountOutMin: rng.gen()
-    }
-}
+// pub fn generate_random_valid_order() -> AllOrders {
+//     let mut rng = thread_rng();
+//     let sk = SecretKey::new(&mut rng);
+//     let mut baseline_order = generate_order(&mut rng);
+//
+//     let sign_hash = baseline_order.eip712_signing_hash(&ANGSTROM_DOMAIN);
+//
+//     let signature =
+//         reth_primitives::sign_message(alloy_primitives::FixedBytes(sk.
+// secret_bytes()), sign_hash)             .unwrap();
+//
+//     let our_sig = angstrom_types::primitive::Signature(signature);
+//     baseline_order.signature = Bytes::from_iter(our_sig.to_bytes());
+//     AllOrders::Partial(baseline_order)
+// }
+//
+// pub fn generate_rand_valid_limit_order() -> AllOrders {
+//     let mut rng = thread_rng();
+//     let sk = SecretKey::new(&mut rng);
+//     let mut baseline_order = generate_order(&mut rng);
+//
+//     let sign_hash = baseline_order.eip712_signing_hash(&ANGSTROM_DOMAIN);
+//
+//     let signature =
+//         reth_primitives::sign_message(alloy_primitives::FixedBytes(sk.
+// secret_bytes()), sign_hash)             .unwrap();
+//
+//     let our_sig = angstrom_types::primitive::Signature(signature);
+//     baseline_order.signature = Bytes::from_iter(our_sig.to_bytes());
+//
+//     AllOrders::Partial(baseline_order)
+// }
+//
+// pub fn generate_rand_valid_searcher_order() -> SignedSearcherOrder {
+//     let l = generate_rand_valid_limit_order();
+//     SignedSearcherOrder { hash: l.hash, order: l.order, signature:
+// l.signature } }
+//
+// fn generate_order(rng: &mut ThreadRng) -> Order {
+//     let timestamp = SystemTime::now()
+//         .duration_since(UNIX_EPOCH)
+//         .unwrap()
+//         .as_secs()
+//         + 30;
+//     Order {
+//         nonce:        U256::from(rng.gen_range(0..u64::MAX)),
+//         orderType:    angstrom_types::primitive::OrderType::Limit,
+//         currencyIn:   rng.gen(),
+//         preHook:      Bytes::new(),
+//         postHook:     Bytes::new(),
+//         amountIn:     rng.gen(),
+//         deadline:     U256::from(timestamp),
+//         currencyOut:  rng.gen(),
+//         amountOutMin: rng.gen()
+//     }
+// }
 
 fn generate_kof_order(rng: &mut ThreadRng) -> OrderWithStorageData<GroupedVanillaOrder> {
     let order =

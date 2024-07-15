@@ -68,7 +68,7 @@ impl AllOrders {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
-pub struct OrderWithStorageData<Order: Encode + Decode> {
+pub struct OrderWithStorageData<Order> {
     /// raw order
     pub order:              Order,
     /// the raw data needed for indexing the data

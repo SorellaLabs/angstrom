@@ -28,7 +28,7 @@ mod private {
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq,  Hash, Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq,  Hash, Encode, Decode,Serialize, Deserialize)]
         struct StandingOrder {
             string mode;
             #[bincode(with_serde)]
@@ -52,7 +52,7 @@ mod private {
             bytes signature;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode,Serialize, Deserialize)]
         struct FlashOrder {
             string mode;
             #[bincode(with_serde)]
@@ -75,7 +75,7 @@ mod private {
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode,Serialize, Deserialize)]
         struct TopOfBlockOrder {
             #[bincode(with_serde)]
             uint256 amountIn;
@@ -99,10 +99,10 @@ mod private {
             bytes signature;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq, Hash, Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq, Hash, Encode, Decode,Serialize, Deserialize)]
         type AssetIndex is uint16;
 
-        #[derive(Debug, Default, PartialEq, Eq,Hash, Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash, Encode, Decode,Serialize, Deserialize)]
         struct GenericOrder {
             #[bincode(with_serde)]
             OrderType otype;
@@ -136,7 +136,7 @@ mod private {
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode,Serialize, Deserialize)]
         struct Price {
             AssetIndex outIndex;
             AssetIndex inIndex;
@@ -144,7 +144,7 @@ mod private {
             uint256 price;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode,Serialize, Deserialize)]
         struct Swap {
             AssetIndex asset0Index;
             AssetIndex asset1Index;
@@ -153,7 +153,7 @@ mod private {
             uint256 amountIn;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode,Serialize, Deserialize)]
         struct Donate {
             AssetIndex asset0Index;
             AssetIndex asset1Index;

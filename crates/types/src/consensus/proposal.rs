@@ -1,9 +1,7 @@
-use alloy_rlp::Encodable;
-use bincode::{Decode, Encode};
+use bincode::{config::standard, encode_into_slice, Decode, Encode};
 use blsful::{Bls12381G1Impl, PublicKey, SecretKey, SignatureSchemes};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use reth_network_peers::PeerId;
-use serde::{Deserialize, Serialize};
 
 use super::PreProposal;
 use crate::{
@@ -11,7 +9,7 @@ use crate::{
     primitive::{BLSSignature, BLSValidatorID}
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Proposal {
     // Might not be necessary as this is encoded in all the proposals anyways
     pub ethereum_height: u64,
@@ -21,6 +19,7 @@ pub struct Proposal {
     pub solutions:       Vec<PoolSolution>,
     /// This signature is over (etheruem_block | hash(vanilla_bundle) |
     /// hash(order_buffer) | hash(lower_bound))
+    #[bincode(with_serde)]
     pub signature:       BLSSignature
 }
 
@@ -33,13 +32,12 @@ impl Proposal {
         validator_id: BLSValidatorID,
         sk: &SecretKey<Bls12381G1Impl>
     ) -> Self {
-        // TODO: move to different to-byte conversion
-        let mut buf = BytesMut::new();
-        ethereum_height.encode(&mut buf);
-        source.encode(&mut buf);
-        preproposals.encode(&mut buf);
-        solutions.encode(&mut buf);
-        let buf = buf.freeze();
+        let mut buf = Vec::new();
+        let std = standard();
+        encode_into_slice(ethereum_height, &mut buf, std).unwrap();
+        buf.extend(*source);
+        encode_into_slice(&preproposals, &mut buf, std).unwrap();
+        encode_into_slice(&solutions, &mut buf, std).unwrap();
 
         // This can only return an error and thusly a default (empty) signature if our
         // signing key is zero.  Highly unlikely but we should probably make
@@ -69,11 +67,13 @@ impl Proposal {
     }
 
     fn payload(&self) -> Bytes {
-        let mut buf = BytesMut::new();
-        self.ethereum_height.encode(&mut buf);
-        self.source.encode(&mut buf);
-        self.preproposals.encode(&mut buf);
-        self.solutions.encode(&mut buf);
-        buf.freeze()
+        let mut buf = Vec::new();
+        let std = standard();
+        encode_into_slice(self.ethereum_height, &mut buf, std).unwrap();
+        buf.extend(*self.source);
+        encode_into_slice(&self.preproposals, &mut buf, std).unwrap();
+        encode_into_slice(&self.solutions, &mut buf, std).unwrap();
+
+        Bytes::from_iter(buf)
     }
 }

@@ -22,10 +22,7 @@ use angstrom_network::{
     NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
     VerificationSidecar
 };
-use angstrom_rpc::{
-    api::{ConsensusApiServer, OrderApiServer, QuotingApiServer},
-    ConsensusApi, OrderApi, QuotesApi
-};
+use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use clap::Parser;
 use consensus::{
     ConsensusCommand, ConsensusHandle, ConsensusManager, GlobalConsensusState, ManagerNetworkDeps,
@@ -60,7 +57,7 @@ pub fn run() -> eyre::Result<()> {
 
         // for rpc
         let pool = channels.get_pool_handle();
-        let consensus = channels.get_consensus_handle();
+        // let consensus = channels.get_consensus_handle();
 
         let NodeHandle { node, node_exit_future } = builder
             .with_types::<EthereumNode>()
@@ -71,18 +68,18 @@ pub fn run() -> eyre::Result<()> {
             )
             .extend_rpc_modules(move |rpc_components| {
                 let order_api = OrderApi { pool: pool.clone() };
-                let quotes_api = QuotesApi { pool: pool.clone() };
-                let consensus_api = ConsensusApi { consensus: consensus.clone() };
+                // let quotes_api = QuotesApi { pool: pool.clone() };
+                // let consensus_api = ConsensusApi { consensus: consensus.clone() };
 
                 rpc_components
                     .modules
                     .merge_configured(order_api.into_rpc())?;
-                rpc_components
-                    .modules
-                    .merge_configured(quotes_api.into_rpc())?;
-                rpc_components
-                    .modules
-                    .merge_configured(consensus_api.into_rpc())?;
+                // rpc_components
+                //     .modules
+                //     .merge_configured(quotes_api.into_rpc())?;
+                // rpc_components
+                //     .modules
+                //     .merge_configured(consensus_api.into_rpc())?;
 
                 Ok(())
             })

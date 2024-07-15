@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
-use angstrom_types::{consensus::*, primitive::Angstrom::PoolKey, rpc::SignedLimitOrder};
+use angstrom_types::{
+    consensus::*, primitive::Angstrom::PoolKey, sol_bindings::grouped_orders::AllOrders
+};
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use super::quoting::{Depth25, Depth5, BBO};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Hash, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub enum ConsensusSubscriptionKind {
@@ -20,7 +23,7 @@ pub enum ConsensusSubscriptionKind {
     Commits
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Encode, Decode, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub enum ConsensusSubscriptionResult {
@@ -48,7 +51,7 @@ pub enum OrderSubscriptionKind {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub enum OrderSubscriptionResult {
-    Order(Arc<SignedLimitOrder>)
+    Order(Arc<AllOrders>)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]

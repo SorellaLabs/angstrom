@@ -2,6 +2,7 @@ use std::ops::{BitAnd, BitOr};
 
 use alloy_rlp::{length_of_length, Decodable, Encodable};
 use anyhow::Error;
+use bincode::{Decode, Encode};
 use bitmaps::Bitmap;
 use blsful::{
     inner_types::Field, Bls12381G1Impl, MultiPublicKey, MultiSignature, PublicKey, SecretKey,
@@ -47,7 +48,7 @@ impl BLSSignature {
     ) -> bool {
         // Cannot sign anything with a zero key
         if sk.0.is_zero().into() {
-            return false;
+            return false
         }
         let new_signature = sk.sign(SignatureSchemes::ProofOfPossession, data).unwrap();
         self.add_signature(validator_id, new_signature)
@@ -98,7 +99,7 @@ impl BLSSignature {
         // Make sure that we aren't doubling up on public keys
         let check = self.validators_included.bitand(other.validators_included);
         if check.first_index().is_some() {
-            return false;
+            return false
         }
 
         // Merge the two signatures
@@ -124,7 +125,7 @@ impl BLSSignature {
     ) -> bool {
         // If our validator is already included, just return false
         if self.validators_included.get(validator_id.into()) {
-            return false;
+            return false
         }
         // Otherwise note that we're included and aggregate the new signature
         let Ok(new_sig) = MultiSignature::from_signatures([self.as_signature(), new_signature])
@@ -160,7 +161,7 @@ impl BLSSignature {
         // Parse the remaining bytes into the signature data
         let parsed_g1 = blsful::inner_types::G1Projective::from_compressed(&sig_bytes);
         if parsed_g1.is_none().into() {
-            return Err(Error::msg("Unable to parse signature curve data"));
+            return Err(Error::msg("Unable to parse signature curve data"))
         }
         let aggregate_signature: MultiSignature<Bls12381G1Impl> =
             MultiSignature::ProofOfPossession(parsed_g1.unwrap());
@@ -202,7 +203,7 @@ impl<'de> Visitor<'de> for BLSSignatureVisitor {
             }
         }
         if bytes.len() != 64 {
-            return Err(serde::de::Error::invalid_length(bytes.len(), &"precisely 64 bytes"));
+            return Err(serde::de::Error::invalid_length(bytes.len(), &"precisely 64 bytes"))
         }
         let b: [u8; 64] = bytes.try_into().unwrap(); // We just made sure this always works
         BLSSignature::from_bytes(&b)
@@ -219,27 +220,27 @@ impl<'de> Deserialize<'de> for BLSSignature {
     }
 }
 
-impl Encodable for BLSSignature {
-    fn encode(&self, out: &mut dyn bytes::BufMut) {
-        self.to_bytes().encode(out);
-    }
-
-    fn length(&self) -> usize {
-        // 64 bytes plus the length of the header
-        64 + length_of_length(64)
-    }
-}
-
-impl Decodable for BLSSignature {
-    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        //let v = alloy_rlp::Header::decode_bytes(buf, false)?.to_vec();
-        // Pull both of our elements back out of the buf
-        let bytes = <[u8; 64]>::decode(buf)?;
-        let decoded = BLSSignature::from_bytes(&bytes)
-            .map_err(|_| alloy_rlp::Error::Custom("BLSSignature from_bytes error"))?;
-        Ok(decoded)
-    }
-}
+// impl Encodable for BLSSignature {
+//     fn encode(&self, out: &mut dyn bytes::BufMut) {
+//         self.to_bytes().encode(out);
+//     }
+//
+//     fn length(&self) -> usize {
+//         // 64 bytes plus the length of the header
+//         64 + length_of_length(64)
+//     }
+// }
+//
+// impl Decodable for BLSSignature {
+//     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+//         //let v = alloy_rlp::Header::decode_bytes(buf, false)?.to_vec();
+//         // Pull both of our elements back out of the buf
+//         let bytes = <[u8; 64]>::decode(buf)?;
+//         let decoded = BLSSignature::from_bytes(&bytes)
+//             .map_err(|_| alloy_rlp::Error::Custom("BLSSignature from_bytes
+// error"))?;         Ok(decoded)
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -313,25 +314,25 @@ mod tests {
         )
     }
 
-    #[test]
-    fn will_do_rlp_encoding() {
-        // Build and validate our sig
-        let mut sig = BLSSignature::default();
-        let my_key = SecretKey::new();
-        let my_signature = my_key
-            .sign(SignatureSchemes::ProofOfPossession, FIXED_DATA.as_bytes())
-            .unwrap();
-        sig.add_signature(0, my_signature);
-        assert!(sig.validate(&[my_key.public_key()], FIXED_DATA.as_bytes()));
-        // Encode and decode into a new sig
-        let mut buf = BytesMut::with_capacity(64);
-        sig.encode(&mut buf);
-        let final_bytes = buf.freeze();
-        let bytevec: Vec<u8> = final_bytes.iter().cloned().collect();
-        let newsig = BLSSignature::decode(&mut bytevec.as_slice()).unwrap();
-        // Validate the reconstituted sig
-        assert!(newsig.validate(&[my_key.public_key()], FIXED_DATA.as_bytes()));
-    }
+    // #[test]
+    // fn will_do_rlp_encoding() {
+    //     // Build and validate our sig
+    //     let mut sig = BLSSignature::default();
+    //     let my_key = SecretKey::new();
+    //     let my_signature = my_key
+    //         .sign(SignatureSchemes::ProofOfPossession, FIXED_DATA.as_bytes())
+    //         .unwrap();
+    //     sig.add_signature(0, my_signature);
+    //     assert!(sig.validate(&[my_key.public_key()], FIXED_DATA.as_bytes()));
+    //     // Encode and decode into a new sig
+    //     let mut buf = BytesMut::with_capacity(64);
+    //     sig.encode(&mut buf);
+    //     let final_bytes = buf.freeze();
+    //     let bytevec: Vec<u8> = final_bytes.iter().cloned().collect();
+    //     let newsig = BLSSignature::decode(&mut bytevec.as_slice()).unwrap();
+    //     // Validate the reconstituted sig
+    //     assert!(newsig.validate(&[my_key.public_key()], FIXED_DATA.as_bytes()));
+    // }
 
     #[test]
     fn will_perform_simple_aggregation() {

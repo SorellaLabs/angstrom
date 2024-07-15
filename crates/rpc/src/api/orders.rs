@@ -1,7 +1,7 @@
 use alloy_primitives::Bytes;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
-use crate::types::subscriptions::OrderSubscriptionKind;
+// use crate::types::subscriptions::OrderSubscriptionKind;
 
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "angstrom_order"))]
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "angstrom_order"))]
@@ -17,13 +17,13 @@ pub trait OrderApi {
     #[method(name = "submit_composable_limit_order")]
     async fn submit_composable_limit_order(&self, order: Bytes) -> RpcResult<bool>;
 
-    #[subscription(
-        name = "orders_subscription", 
-        unsubscribe = "unsubscribe_orders",
-        item = crate::types::subscriptions::OrderSubscriptionResult
-    )]
-    async fn subscribe_orders(
-        &self,
-        kind: OrderSubscriptionKind
-    ) -> jsonrpsee::core::SubscriptionResult;
+    // #[subscription(
+    //     name = "orders_subscription",
+    //     unsubscribe = "unsubscribe_orders",
+    //     item = crate::types::subscriptions::OrderSubscriptionResult
+    // )]
+    // async fn subscribe_orders(
+    //     &self,
+    //     kind: OrderSubscriptionKind
+    // ) -> jsonrpsee::core::SubscriptionResult;
 }

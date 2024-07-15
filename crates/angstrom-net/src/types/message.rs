@@ -4,7 +4,6 @@ use std::{borrow::BorrowMut, fmt::Debug, sync::Arc};
 use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
-    orders::PooledOrder,
     sol_bindings::grouped_orders::AllOrders
 };
 use bincode::{config::standard, decode_from_slice, encode_into_slice, Decode, Encode};
@@ -117,12 +116,12 @@ pub enum StromMessage {
     /// TODO: do we need a status ack?
 
     /// Consensus
-    PrePropose(#[bincode(with_serde)] PreProposal),
-    Propose(#[bincode(with_serde)] Proposal),
-    Commit(#[bincode(with_serde)] Box<Commit>),
+    PrePropose(PreProposal),
+    Propose(Proposal),
+    Commit(Box<Commit>),
 
     /// Propagation messages that broadcast new orders to all peers
-    PropagatePooledOrders(#[bincode(with_serde)] Vec<AllOrders>)
+    PropagatePooledOrders(Vec<AllOrders>)
 }
 impl StromMessage {
     /// Returns the message's ID.
@@ -148,11 +147,11 @@ impl StromMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum StromBroadcastMessage {
     // Consensus Broadcast
-    PrePropose(#[bincode(with_serde)] Arc<PreProposal>),
-    Propose(#[bincode(with_serde)] Arc<Proposal>),
-    Commit(#[bincode(with_serde)] Arc<Commit>),
+    PrePropose(Arc<PreProposal>),
+    Propose(Arc<Proposal>),
+    Commit(Arc<Commit>),
     // Order Broadcast
-    PropagatePooledOrders(#[bincode(with_serde)] Arc<Vec<AllOrders>>)
+    PropagatePooledOrders(Arc<Vec<AllOrders>>)
 }
 
 impl StromBroadcastMessage {

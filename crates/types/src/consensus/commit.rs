@@ -1,5 +1,5 @@
 use alloy_primitives::{FixedBytes, Keccak256, B256};
-use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
+use bincode::{Decode, Encode};
 use bitmaps::Bitmap;
 use blsful::{Bls12381G1Impl, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -7,21 +7,28 @@ use serde::{Deserialize, Serialize};
 use super::Proposal;
 use crate::primitive::{BLSSignature, BLSValidatorID};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
 pub struct Commit {
     pub block_height: u64,
 
+    #[bincode(with_serde)]
     pub vanilla_bundle_hash: B256,
+    #[bincode(with_serde)]
     pub lower_bound_hash:    B256,
+    #[bincode(with_serde)]
     pub order_buffer_hash:   B256,
     /// This signature is (block_height | vanilla_bundle_hash |
     /// lower_bound_hash | order_buffer_hash)
+    #[bincode(with_serde)]
     pub message_sig:         BLSSignature,
     /// is default if none. We have to due this due to the rlp requirements
+    #[bincode(with_serde)]
     pub vanilla_bundle_sig:  BLSSignature,
     /// is default if none. We have to due this due to the rlp requirements
+    #[bincode(with_serde)]
     pub lower_bound_sig:     BLSSignature,
     /// is default if none. We have to due this due to the rlp requirements
+    #[bincode(with_serde)]
     pub order_buffer_sig:    BLSSignature
 }
 

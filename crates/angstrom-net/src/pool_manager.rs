@@ -10,10 +10,10 @@ use std::{
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    orders::{OrderOrigin, OrderPriorityData, OrderSet, PooledOrder},
+    orders::{OrderOrigin, OrderPriorityData, OrderSet},
     rpc::*,
     sol_bindings::{
-        grouped_orders::{AllOrders, GroupedVanillaOrder, OrderWithStorageData},
+        grouped_orders::{AllOrders, GroupedVanillaOrder, OrderWithStorageData, RawPoolOrder},
         sol::TopOfBlockOrder
     }
 };
@@ -436,7 +436,7 @@ pub enum NetworkTransactionEvent {
     /// Received list of transactions from the given peer.
     ///
     /// This represents transactions that were broadcasted to use from the peer.
-    IncomingOrders { peer_id: PeerId, msg: Vec<PooledOrder> }
+    IncomingOrders { peer_id: PeerId, msg: Vec<AllOrders> }
 }
 
 /// Tracks a single peer

@@ -3,7 +3,7 @@ use std::{
     sync::{atomic::AtomicUsize, Arc}
 };
 
-use angstrom_types::{orders::PooledOrder, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types::sol_bindings::grouped_orders::AllOrders;
 use order_pool::OrderPoolHandle;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;

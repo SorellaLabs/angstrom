@@ -2,10 +2,6 @@ use std::{fmt::Debug, future::Future, pin::Pin};
 
 use angstrom_types::{
     orders::OrderOrigin,
-    rpc::{
-        EcRecoveredComposableLimitOrder, EcRecoveredComposableSearcherOrder, EcRecoveredLimitOrder,
-        EcRecoveredSearcherOrder
-    },
     sol_bindings::{
         grouped_orders::{
             AllOrders, GroupedComposableOrder, GroupedVanillaOrder, OrderWithStorageData

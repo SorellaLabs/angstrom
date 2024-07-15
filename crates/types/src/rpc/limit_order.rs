@@ -4,6 +4,7 @@ use alloy_primitives::{Address, TxHash, U256};
 use alloy_rlp::Decodable;
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
 use alloy_sol_types::SolStruct;
+use bincode::{Decode, Encode};
 use derive_more::{AsRef, Deref};
 use secp256k1::Error as SigError;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::primitive::{ComposableOrder, Order, Signature, ANGSTROM_DOMAIN};
 
 /// Submitted order pre-processing
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SignedLimitOrder {
     /// Order hash
     pub hash:      TxHash,
@@ -39,7 +40,7 @@ impl TryInto<EcRecoveredLimitOrder> for SignedLimitOrder {
 }
 
 /// Signed transaction with recovered signer.
-#[derive(Debug, Clone, PartialEq, Hash, Eq, AsRef, Deref, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, AsRef, Deref)]
 pub struct EcRecoveredLimitOrder {
     /// Signer of the transaction
     pub signer:       Address,

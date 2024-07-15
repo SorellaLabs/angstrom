@@ -3,6 +3,7 @@ use std::{fmt, ops::Deref};
 use alloy_primitives::{Address, FixedBytes, TxHash, U256};
 use alloy_sol_types::SolStruct;
 use reth_primitives::B256;
+use serde::{Deserialize, Serialize};
 
 use super::FetchAssetIndexes;
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
     sol_bindings::sol::{FlashOrder, StandingOrder, TopOfBlockOrder}
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AllOrders {
     Partial(StandingOrder),
     KillOrFill(FlashOrder),

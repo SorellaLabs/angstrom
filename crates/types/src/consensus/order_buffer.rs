@@ -1,7 +1,7 @@
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use crate::{rpc::SignedLimitOrder, sol_bindings::grouped_orders::AllOrders};
+use crate::sol_bindings::grouped_orders::AllOrders;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
 pub struct OrderBuffer {

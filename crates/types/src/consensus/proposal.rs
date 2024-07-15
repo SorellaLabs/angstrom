@@ -1,5 +1,5 @@
 use alloy_rlp::Encodable;
-use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
+use bincode::{Decode, Encode};
 use blsful::{Bls12381G1Impl, PublicKey, SecretKey, SignatureSchemes};
 use bytes::{Bytes, BytesMut};
 use reth_network_peers::PeerId;
@@ -11,12 +11,11 @@ use crate::{
     primitive::{BLSSignature, BLSValidatorID}
 };
 
-#[derive(
-    Debug, Clone, Serialize, Default, Deserialize, PartialEq, Eq, RlpEncodable, RlpDecodable,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
 pub struct Proposal {
     // Might not be necessary as this is encoded in all the proposals anyways
     pub ethereum_height: u64,
+    #[bincode(with_serde)]
     pub source:          PeerId,
     pub preproposals:    Vec<PreProposal>,
     pub solutions:       Vec<PoolSolution>,

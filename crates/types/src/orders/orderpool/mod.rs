@@ -1,42 +1,32 @@
 use std::fmt::Debug;
 
 use alloy_primitives::{Address, B256, U256};
-use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::primitive::{Order, PoolId};
+use crate::primitive::PoolId;
 
-#[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    RlpEncodable,
-    RlpDecodable,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode)]
 pub struct OrderId {
+    #[bincode(with_serde)]
     pub address:  Address,
     /// Pool id
     pub pool_id:  PoolId,
     /// Hash of the order. Needed to check for inclusion
+    #[bincode(with_serde)]
     pub hash:     B256,
     /// Nonce of the order
+    #[bincode(with_serde)]
     pub nonce:    U256,
     /// when the order expires
+    #[bincode(with_serde)]
     pub deadline: U256,
     /// Order Location
     pub location: OrderLocation
 }
 
-#[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpDecodable,
-)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct OrderPriorityData {
     pub price:  u128,
     pub volume: u128,
@@ -58,35 +48,11 @@ impl Ord for OrderPriorityData {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default, Encode, Decode)]
 pub enum OrderLocation {
     #[default]
     Limit,
     Searcher
-}
-
-impl Encodable for OrderLocation {
-    fn encode(&self, out: &mut dyn bytes::BufMut) {
-        match self {
-            Self::Limit => 0_u8.encode(out),
-            Self::Searcher => 1_u8.encode(out)
-        }
-    }
-
-    fn length(&self) -> usize {
-        u8::length(&1_u8)
-    }
-}
-
-impl Decodable for OrderLocation {
-    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        let v = u8::decode(buf)?;
-        match v {
-            0 => Ok(Self::Limit),
-            1 => Ok(Self::Searcher),
-            _ => Err(alloy_rlp::Error::Custom("Unknown value decoding OrderLocation"))
-        }
-    }
 }
 
 #[derive(Debug, Clone, Error)]

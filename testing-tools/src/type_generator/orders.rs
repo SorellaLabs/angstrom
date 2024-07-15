@@ -14,12 +14,11 @@ use rand::{rngs::ThreadRng, thread_rng, Rng};
 use reth_primitives::{Bytes, U256};
 use secp256k1::SecretKey;
 
-pub fn generate_random_valid_order() -> PooledOrder {
+pub fn generate_random_valid_order() -> AllOrders {
     let mut rng = thread_rng();
     let sk = SecretKey::new(&mut rng);
-    let baseline_order = generate_order(&mut rng);
+    let mut baseline_order = generate_order(&mut rng);
 
-    let order_hash = baseline_order.eip712_hash_struct();
     let sign_hash = baseline_order.eip712_signing_hash(&ANGSTROM_DOMAIN);
 
     let signature =
@@ -27,20 +26,15 @@ pub fn generate_random_valid_order() -> PooledOrder {
             .unwrap();
 
     let our_sig = angstrom_types::primitive::Signature(signature);
-
-    PooledOrder::Limit(angstrom_types::rpc::SignedLimitOrder {
-        hash:      order_hash,
-        order:     baseline_order,
-        signature: our_sig
-    })
+    baseline_order.signature = Bytes::from_iter(our_sig.to_bytes());
+    AllOrders::Partial(baseline_order)
 }
 
-pub fn generate_rand_valid_limit_order() -> SignedLimitOrder {
+pub fn generate_rand_valid_limit_order() -> AllOrders {
     let mut rng = thread_rng();
     let sk = SecretKey::new(&mut rng);
-    let baseline_order = generate_order(&mut rng);
+    let mut baseline_order = generate_order(&mut rng);
 
-    let order_hash = baseline_order.eip712_hash_struct();
     let sign_hash = baseline_order.eip712_signing_hash(&ANGSTROM_DOMAIN);
 
     let signature =
@@ -48,12 +42,9 @@ pub fn generate_rand_valid_limit_order() -> SignedLimitOrder {
             .unwrap();
 
     let our_sig = angstrom_types::primitive::Signature(signature);
+    baseline_order.signature = Bytes::from_iter(our_sig.to_bytes());
 
-    angstrom_types::rpc::SignedLimitOrder {
-        hash:      order_hash,
-        order:     baseline_order,
-        signature: our_sig
-    }
+    AllOrders::Partial(baseline_order)
 }
 
 pub fn generate_rand_valid_searcher_order() -> SignedSearcherOrder {

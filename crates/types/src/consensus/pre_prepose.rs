@@ -1,5 +1,5 @@
 use alloy_rlp::Encodable;
-use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
+use bincode::{Decode, Encode};
 use bytes::BytesMut;
 use reth_network_peers::PeerId;
 use reth_primitives::keccak256;
@@ -22,7 +22,7 @@ use crate::{
 //     pub orders:       Vec<OrderWithStorageData<GroupedVanillaOrder>>
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct PreProposal {
     pub ethereum_height: u64,
     pub source:          PeerId,

@@ -1,10 +1,9 @@
 use std::{fmt, hash::Hash, ops::Deref};
 
 use alloy_primitives::{Address, FixedBytes, TxHash, U256};
-use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use alloy_sol_types::SolStruct;
+use bincode::{Decode, Encode};
 use reth_primitives::B256;
-use serde::{Deserialize, Serialize};
 
 use super::FetchAssetIndexes;
 use crate::{
@@ -13,14 +12,12 @@ use crate::{
     sol_bindings::sol::{FlashOrder, StandingOrder, TopOfBlockOrder}
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum AllOrders {
     Partial(StandingOrder),
     KillOrFill(FlashOrder),
     TOB(TopOfBlockOrder)
 }
-
-impl AllOrders {}
 
 impl From<TopOfBlockOrder> for AllOrders {
     fn from(value: TopOfBlockOrder) -> Self {
@@ -70,10 +67,8 @@ impl AllOrders {
     }
 }
 
-#[derive(
-    Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpDecodable,
-)]
-pub struct OrderWithStorageData<Order> {
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+pub struct OrderWithStorageData<Order: Encode + Decode> {
     /// raw order
     pub order:              Order,
     /// the raw data needed for indexing the data
@@ -159,7 +154,7 @@ impl GroupedUserOrder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum GroupedVanillaOrder {
     Partial(StandingOrder),
     KillOrFill(FlashOrder)
@@ -201,40 +196,40 @@ impl GroupedVanillaOrder {
     }
 }
 
-impl Encodable for GroupedVanillaOrder {
-    fn encode(&self, out: &mut dyn bytes::BufMut) {
-        match self {
-            Self::Partial(o) => {
-                0_u8.encode(out);
-                o.encode(out);
-            }
-            Self::KillOrFill(o) => {
-                1_u8.encode(out);
-                o.encode(out);
-            }
-        }
-    }
+// impl Encodable for GroupedVanillaOrder {
+//     fn encode(&self, out: &mut dyn bytes::BufMut) {
+//         match self {
+//             Self::Partial(o) => {
+//                 0_u8.encode(out);
+//                 o.encode(out);
+//             }
+//             Self::KillOrFill(o) => {
+//                 1_u8.encode(out);
+//                 o.encode(out);
+//             }
+//         }
+//     }
+//
+//     fn length(&self) -> usize {
+//         match self {
+//             Self::Partial(o) => u8::length(&0_u8) + o.length(),
+//             Self::KillOrFill(o) => u8::length(&1_u8) + o.length()
+//         }
+//     }
+// }
+//
+// impl Decodable for GroupedVanillaOrder {
+//     fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+//         let v = u8::decode(buf)?;
+//         match v {
+//             0 => Ok(Self::Partial(StandingOrder::decode(buf)?)),
+//             1 => Ok(Self::KillOrFill(FlashOrder::decode(buf)?)),
+//             _ => Err(alloy_rlp::Error::Custom("Unknown value when decoding
+// GroupedVanillaOrder"))         }
+//     }
+// }
 
-    fn length(&self) -> usize {
-        match self {
-            Self::Partial(o) => u8::length(&0_u8) + o.length(),
-            Self::KillOrFill(o) => u8::length(&1_u8) + o.length()
-        }
-    }
-}
-
-impl Decodable for GroupedVanillaOrder {
-    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-        let v = u8::decode(buf)?;
-        match v {
-            0 => Ok(Self::Partial(StandingOrder::decode(buf)?)),
-            1 => Ok(Self::KillOrFill(FlashOrder::decode(buf)?)),
-            _ => Err(alloy_rlp::Error::Custom("Unknown value when decoding GroupedVanillaOrder"))
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub enum GroupedComposableOrder {
     Partial(StandingOrder),
     KillOrFill(FlashOrder)

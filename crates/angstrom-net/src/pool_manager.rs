@@ -12,7 +12,10 @@ use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     orders::{OrderOrigin, OrderPriorityData, OrderSet, PooledOrder},
     rpc::*,
-    sol_bindings::{grouped_orders::{AllOrders, GroupedVanillaOrder, OrderWithStorageData}, sol::TopOfBlockOrder}
+    sol_bindings::{
+        grouped_orders::{AllOrders, GroupedVanillaOrder, OrderWithStorageData},
+        sol::TopOfBlockOrder
+    }
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
 use order_pool::{OrderIndexer, OrderPoolHandle, PoolConfig, PoolInnerEvent};
@@ -47,10 +50,8 @@ pub enum OrderCommand {
     // new orders
     NewOrder(OrderOrigin, AllOrders),
     // fetch orders
-    FetchAllVanillaOrders(
-        oneshot::Sender<OrderSet<GroupedVanillaOrder, TopOfBlockOrder>>
-    ) /* FetchAllComposableOrders(oneshot::Sender<OrderSet<CL, CS>>, Option<usize>),
-       * FetchAllOrders(oneshot::Sender<AllOrders<L, S, CL, CS>>, Option<usize>) */
+    FetchAllVanillaOrders(oneshot::Sender<OrderSet<GroupedVanillaOrder, TopOfBlockOrder>>) /* FetchAllComposableOrders(oneshot::Sender<OrderSet<CL, CS>>, Option<usize>),
+                                                                                            * FetchAllOrders(oneshot::Sender<AllOrders<L, S, CL, CS>>, Option<usize>) */
 }
 
 impl PoolHandle {
@@ -69,9 +70,7 @@ impl OrderPoolHandle for PoolHandle {
         self.send(OrderCommand::NewOrder(origin, order))
     }
 
-    fn get_all_vanilla_orders(
-        &self
-    ) -> BoxFuture<OrderSet<GroupedVanillaOrder, TopOfBlockOrder>> {
+    fn get_all_vanilla_orders(&self) -> BoxFuture<OrderSet<GroupedVanillaOrder, TopOfBlockOrder>> {
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
             self.send_request(rx, OrderCommand::FetchAllVanillaOrders(tx))

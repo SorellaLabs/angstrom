@@ -1,10 +1,10 @@
 mod private {
-    use alloy_rlp::{RlpDecodable, RlpEncodable};
     use alloy_sol_macro::sol;
+    use bincode::{Decode, Encode};
     use serde::{Deserialize, Serialize};
 
     sol! {
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Serialize, Deserialize)]
         enum OrderMode {
             ExactIn,
             ExactOut,
@@ -12,14 +12,14 @@ mod private {
             Partial
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Serialize, Deserialize)]
         enum OrderType {
             Flash,
             #[default]
             Standing
         }
 
-        #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Serialize, Deserialize )]
         enum AssetForm {
             #[default]
             Liquid,
@@ -28,103 +28,145 @@ mod private {
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+        #[derive(Debug, Default, PartialEq, Eq,  Hash, Encode, Decode)]
         struct StandingOrder {
             string mode;
+            #[bincode(with_serde)]
             uint256 max_amount_in_or_out;
+            #[bincode(with_serde)]
             uint256 min_price;
             AssetIndex asset_in;
+            #[bincode(with_serde)]
             AssetForm asset_in_form;
             AssetIndex asset_out;
+            #[bincode(with_serde)]
             AssetForm asset_out_form;
+            #[bincode(with_serde)]
             address recipient;
+            #[bincode(with_serde)]
             bytes hook_data;
             uint64 nonce;
+            #[bincode(with_serde)]
             uint256 deadline;
+            #[bincode(with_serde)]
             bytes signature;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
         struct FlashOrder {
             string mode;
+            #[bincode(with_serde)]
             uint256 max_amount_in_or_out;
+            #[bincode(with_serde)]
             uint256 min_price;
             AssetIndex asset_in;
+            #[bincode(with_serde)]
             AssetForm asset_in_form;
             AssetIndex asset_out;
+            #[bincode(with_serde)]
             AssetForm asset_out_form;
+            #[bincode(with_serde)]
             address recipient;
+            #[bincode(with_serde)]
             bytes hook_data;
             uint64 valid_for_block;
+            #[bincode(with_serde)]
             bytes signature;
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, RlpEncodable, RlpDecodable)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
         struct TopOfBlockOrder {
+            #[bincode(with_serde)]
             uint256 amountIn;
+            #[bincode(with_serde)]
             uint256 amountOut;
             AssetIndex assetInIndex;
+            #[bincode(with_serde)]
             AssetForm assetInForm;
             AssetIndex assetOutIndex;
+            #[bincode(with_serde)]
             AssetForm assetOutForm;
+            #[bincode(with_serde)]
             address recipient;
+            #[bincode(with_serde)]
             address hook;
+            #[bincode(with_serde)]
             bytes hookPayload;
+            #[bincode(with_serde)]
             address from;
+            #[bincode(with_serde)]
             bytes signature;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq, Hash)]
+        #[derive(Debug, Default, PartialEq, Eq, Hash, Encode, Decode)]
         type AssetIndex is uint16;
 
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash, Encode, Decode)]
         struct GenericOrder {
+            #[bincode(with_serde)]
             OrderType otype;
+            #[bincode(with_serde)]
             OrderMode mode;
+            #[bincode(with_serde)]
             uint256 amountSpecified;
+            #[bincode(with_serde)]
             uint256 minPrice;
             AssetIndex assetInIndex;
+            #[bincode(with_serde)]
             AssetForm assetInForm;
             AssetIndex assetOutIndex;
+            #[bincode(with_serde)]
             AssetForm assetOutForm;
             uint64 nonce;
+            #[bincode(with_serde)]
             uint256 deadline;
+            #[bincode(with_serde)]
             address recipient;
+            #[bincode(with_serde)]
             address hook;
+            #[bincode(with_serde)]
             bytes hookPayload;
+            #[bincode(with_serde)]
             uint256 amountFilled;
+            #[bincode(with_serde)]
             address from;
+            #[bincode(with_serde)]
             bytes signature;
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
         struct Price {
             AssetIndex outIndex;
             AssetIndex inIndex;
+            #[bincode(with_serde)]
             uint256 price;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
         struct Swap {
             AssetIndex asset0Index;
             AssetIndex asset1Index;
             bool zeroForOne;
+            #[bincode(with_serde)]
             uint256 amountIn;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash,Encode, Decode)]
         struct Donate {
             AssetIndex asset0Index;
             AssetIndex asset1Index;
             int24 startTick;
+            #[bincode(with_serde)]
             uint256 totalTicks;
+            #[bincode(with_serde)]
             uint128 startLiquidity;
+            #[bincode(with_serde)]
             uint256[] amounts0;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash, Serialize, Deserialize)]
         struct ContractBundle {
             address[] assets;
             Price[] initial_prices;

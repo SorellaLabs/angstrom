@@ -5,7 +5,10 @@ use std::{
     task::Context
 };
 
-use angstrom_types::consensus::{Commit, PreProposal, Proposal};
+use angstrom_types::{
+    consensus::{Commit, PreProposal, Proposal},
+    sol_bindings::grouped_orders::RawPoolOrder
+};
 use futures::{task::Poll, StreamExt};
 use reth_eth_wire::DisconnectReason;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;

@@ -1,7 +1,7 @@
 use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkHandleMsg
 };
-use angstrom_types::orders::PooledOrder;
+use angstrom_types::{orders::PooledOrder, sol_bindings::grouped_orders::AllOrders};
 use reth_metrics::common::mpsc::{
     metered_unbounded_channel, UnboundedMeteredReceiver, UnboundedMeteredSender
 };
@@ -51,7 +51,7 @@ impl MockNetworkHandle {
             .expect("failed to add peer");
     }
 
-    pub fn send_orders_from_peers(&self, peer_id: PeerId, orders: Vec<PooledOrder>) {
+    pub fn send_orders_from_peers(&self, peer_id: PeerId, orders: Vec<AllOrders>) {
         self.order_sender
             .send(NetworkOrderEvent::IncomingOrders { peer_id, orders })
             .expect("failed to send orders");

@@ -3,7 +3,7 @@ use std::{
     sync::{atomic::AtomicUsize, Arc}
 };
 
-use angstrom_types::orders::PooledOrder;
+use angstrom_types::{orders::PooledOrder, sol_bindings::grouped_orders::AllOrders};
 use order_pool::OrderPoolHandle;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;
@@ -93,7 +93,7 @@ struct StromNetworkInner {
 /// All events related to orders emitted by the network.
 #[derive(Debug)]
 pub enum NetworkOrderEvent {
-    IncomingOrders { peer_id: PeerId, orders: Vec<PooledOrder> }
+    IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> }
 }
 
 #[derive(Debug)]

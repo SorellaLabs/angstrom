@@ -3,7 +3,7 @@ mod private {
     use serde::{Deserialize, Serialize};
 
     sol! {
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         enum OrderMode {
             ExactIn,
             ExactOut,
@@ -11,14 +11,14 @@ mod private {
             Partial
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         enum OrderType {
             Flash,
             #[default]
             Standing
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         enum AssetForm {
             #[default]
             Liquid,
@@ -27,7 +27,7 @@ mod private {
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, Hash)]
         struct StandingOrder {
             string mode;
             uint256 max_amount_in_or_out;
@@ -43,7 +43,7 @@ mod private {
             bytes signature;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         struct FlashOrder {
             string mode;
             uint256 max_amount_in_or_out;
@@ -59,7 +59,7 @@ mod private {
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         struct TopOfBlockOrder {
             uint256 amountIn;
             uint256 amountOut;
@@ -77,7 +77,7 @@ mod private {
         #[derive(Debug, Default, PartialEq, Eq, Hash,Serialize, Deserialize)]
         type AssetIndex is uint16;
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         struct GenericOrder {
             OrderType otype;
             OrderMode mode;
@@ -98,14 +98,14 @@ mod private {
         }
 
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         struct Price {
             AssetIndex outIndex;
             AssetIndex inIndex;
             uint256 price;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         struct Swap {
             AssetIndex asset0Index;
             AssetIndex asset1Index;
@@ -113,7 +113,7 @@ mod private {
             uint256 amountIn;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         struct Donate {
             AssetIndex asset0Index;
             AssetIndex asset1Index;
@@ -123,7 +123,7 @@ mod private {
             uint256[] amounts0;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize)]
+        #[derive(Debug, Default, PartialEq, Eq,Serialize, Deserialize,Hash)]
         struct ContractBundle {
             address[] assets;
             Price[] initial_prices;

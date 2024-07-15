@@ -5,16 +5,17 @@ use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    orders::PooledOrder,
     primitive::{Angstrom::PoolKey, Signature},
-    rpc::SignedLimitOrder
+    sol_bindings::grouped_orders::AllOrders
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct PoolOrders {
     pub pool:         PoolKey,
-    pub searcher_bid: SignedLimitOrder,
-    pub sorted_bids:  Vec<SignedLimitOrder>,
-    pub sorted_asks:  Vec<SignedLimitOrder>
+    pub searcher_bid: AllOrders,
+    pub sorted_bids:  Vec<AllOrders>,
+    pub sorted_asks:  Vec<AllOrders>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

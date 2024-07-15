@@ -1,5 +1,6 @@
 use alloy_rlp::Encodable;
 use alloy_rlp_derive::{RlpDecodable, RlpEncodable};
+use bincode::{Decode, Encode};
 use blsful::{Bls12381G1Impl, PublicKey, SecretKey, SignatureSchemes};
 use bytes::{Bytes, BytesMut};
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ use crate::{
     }
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, RlpEncodable, RlpDecodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
 pub struct Proposal {
     pub ethereum_block:   u64,
     pub vanilla_bundle:   Bundle,

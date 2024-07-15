@@ -1,7 +1,7 @@
 use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkHandleMsg
 };
-use angstrom_types::{orders::PooledOrder, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types::sol_bindings::grouped_orders::AllOrders;
 use reth_metrics::common::mpsc::{
     metered_unbounded_channel, UnboundedMeteredReceiver, UnboundedMeteredSender
 };

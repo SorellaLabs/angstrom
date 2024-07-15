@@ -6,13 +6,12 @@ use std::{
     sync::Arc,
     task::{Context, Poll}
 };
-use angstrom_types::sol_bindings::grouped_orders::RawPoolOrder;
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     orders::{OrderOrigin, OrderPriorityData, PooledOrder},
     rpc::*,
-    sol_bindings::grouped_orders::{AllOrders, PoolOrder}
+    sol_bindings::grouped_orders::{AllOrders, PoolOrder, RawPoolOrder}
 };
 use futures::{future::BoxFuture, stream::FuturesUnordered, Future, StreamExt};
 use order_pool::{OrderIndexer, OrderPoolHandle, PoolConfig, PoolInnerEvent};

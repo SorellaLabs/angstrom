@@ -2,6 +2,7 @@ use std::{fmt, ops::Deref};
 
 use alloy_primitives::{Address, FixedBytes, TxHash, U256};
 use alloy_sol_types::SolStruct;
+use bincode::{Decode, Encode};
 use reth_primitives::B256;
 use serde::{Deserialize, Serialize};
 
@@ -12,11 +13,11 @@ use crate::{
     sol_bindings::sol::{FlashOrder, StandingOrder, TopOfBlockOrder}
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash, Encode, Decode)]
 pub enum AllOrders {
-    Partial(StandingOrder),
-    KillOrFill(FlashOrder),
-    TOB(TopOfBlockOrder)
+    Partial(#[bincode(with_serde)] StandingOrder),
+    KillOrFill(#[bincode(with_serde)] FlashOrder),
+    TOB(#[bincode(with_serde)] TopOfBlockOrder)
 }
 
 impl AllOrders {}

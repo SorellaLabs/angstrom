@@ -1,4 +1,4 @@
-use std::{future::IntoFuture, pin::pin, time::Duration};
+use std::{pin::pin, time::Duration};
 
 use alloy_primitives::{Address, I256, U256};
 use alloy_provider::ext::AnvilApi;
@@ -45,7 +45,7 @@ pub async fn deploy_tokens_for_pairs(
         res.push(AngstromTokens {
             token0,
             token1,
-            init_sqrt_price: U256::from_be_bytes([0, 0, rng.gen(), rng.gen()])
+            init_sqrt_price: U256::from_limbs_slice(&[0, 0, rng.gen(), rng.gen()])
         })
     }
 

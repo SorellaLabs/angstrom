@@ -93,11 +93,14 @@ pub async fn generate_pairs_with_liq(
             ._0;
 
         let rng = thread_rng();
+
         // add a normal distro of liquidity around the initial sqrt price
+        // arbitrary values for std. might want to alter later
         let distro = rand_distr::Normal::new(
             ((pair.init_sqrt_price).try_into() as Result<u128, _>)? as f64,
-            ((pair.init_sqrt_price / U256::from(10)).try_into() as Result<u128, _>)? as f64
+            ((pair.init_sqrt_price / U256::from(1000)).try_into() as Result<u128, _>)? as f64
         )?;
+
         for (tick_offset, liquidity) in distro.sample_iter(rng).take(100).enumerate() {
             // -50 + 50 ticks around the current tick
             let tick_offset = (tick_offset as i32 - 50) * tick_spacing;
@@ -123,8 +126,8 @@ pub async fn generate_pairs_with_liq(
             )
             .await?;
         }
-        // let distro
     }
+
     Ok(())
 }
 

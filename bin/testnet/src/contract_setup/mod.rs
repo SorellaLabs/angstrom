@@ -43,7 +43,7 @@ pub async fn deploy_contract_and_create_pool(
         ?v4_address,
         "deployed v4 and angstrom test contract on anvil"
     );
-    let pairs = deploy_tokens_for_pairs(provider, pair_count).await?;
+    let pairs = deploy_tokens_for_pairs(provider, angstrom_address, pair_count).await?;
 
     Ok(AngstromTestnetAddresses { contract: angstrom_address, pairs })
 }

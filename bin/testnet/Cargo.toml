@@ -99,6 +99,7 @@ reth-db.workspace = true
 
 enr = { workspace = true, features = ["serde", "rust-secp256k1"] }
 rand.workspace = true
+rand_distr = "0.4.3"
 secp256k1.workspace = true
 
 # misc

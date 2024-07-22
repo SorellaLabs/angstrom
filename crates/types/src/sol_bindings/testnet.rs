@@ -42,6 +42,10 @@ sol! {
 
         function isInitialized(address asset0, address asset1) public view returns (bool);
 
+        function fetch_current_tick(address asset0, address asset1) public view returns(int24);
+
+        function tick_spacing(address asset0, address asset1) public view returns(int24);
+
         function modifyLiquidity(
             address asset0,
             address asset1,

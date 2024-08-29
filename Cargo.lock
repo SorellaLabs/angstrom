@@ -5429,6 +5429,7 @@ dependencies = [
  "futures-util",
  "malachite",
  "malachite-q",
+ "num-bigfloat",
  "rand 0.8.5",
  "rand_distr",
  "reth-primitives",
@@ -10299,6 +10300,7 @@ dependencies = [
 name = "testing-tools"
 version = "0.1.0"
 dependencies = [
+ "alloy 0.2.1",
  "alloy-chains",
  "alloy-primitives",
  "alloy-provider 0.2.1",
@@ -10347,10 +10349,13 @@ dependencies = [
  "reth-tracing",
  "reth-transaction-pool",
  "secp256k1 0.29.0",
+ "serde",
  "serial_test",
  "tempfile",
+ "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-tungstenite",
  "tokio-util",
  "tracing",
  "tracing-subscriber",

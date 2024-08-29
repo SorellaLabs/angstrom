@@ -38,6 +38,7 @@ arraydeque = "0.5"
 # Using clap for our bookgen command-line tool
 clap = "4.5.4"
 amms = { git = "https://github.com/darkforestry/amms-rs.git", version="0.6.2"}
+num-bigfloat = "1.7"
 
 [[bench]]
 name = "volume_solver"

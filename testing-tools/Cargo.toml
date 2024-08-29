@@ -30,6 +30,7 @@ futures.workspace = true
 jsonrpsee.workspace = true
 alloy-rlp.workspace = true
 
+alloy.workspace = true
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 
@@ -65,6 +66,7 @@ reth-metrics.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+thiserror.workspace = true
 
 tokio.workspace = true
 tokio-stream.workspace = true
@@ -72,6 +74,7 @@ reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
 reth-db.workspace = true
+uniswap_v3_math.workspace = true
 
 
 enr = { workspace = true, features = ["serde", "rust-secp256k1"] }
@@ -86,4 +89,5 @@ tempfile.workspace = true
 parking_lot.workspace = true
 clap = { version = "4.5.4", features = ["derive"] }
 eyre = "0.6.12"
-uniswap_v3_math.workspace = true
+tokio-tungstenite = "0.23.1"
+serde = { workspace = true, features = ["derive"]}

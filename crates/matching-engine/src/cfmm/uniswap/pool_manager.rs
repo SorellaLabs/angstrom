@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle
 };
 
-use super::pool::SwapSimulationError;
+use super::pool::{PoolError, SwapSimulationError};
 use crate::cfmm::uniswap::{pool::EnhancedUniswapV3Pool, pool_providers::PoolManagerProvider};
 
 pub type StateChangeCache = ArrayDeque<StateChange, 150>;
@@ -242,7 +242,7 @@ where
         block_number: BlockNumber
     ) -> Result<(), PoolManagerError> {
         for log in logs {
-            pool.sync_from_log(log)?;
+            pool.sync_from_log(log).map_err(PoolManagerError::PoolError)?;
         }
 
         let pool_clone = pool.clone();
@@ -277,8 +277,6 @@ pub enum PoolManagerError {
     PopFrontError,
     #[error("State change cache capacity error")]
     CapacityError,
-    #[error(transparent)]
-    EventLogError(#[from] EventLogError),
     #[error("Invalid event signature")]
     InvalidEventSignature,
     #[error("Provider error")]
@@ -286,17 +284,11 @@ pub enum PoolManagerError {
     #[error("Swap simulation failed")]
     SwapSimulationFailed,
     #[error(transparent)]
-    SwapSimulationError(#[from] SwapSimulationError),
+    PoolError(#[from] PoolError),
     #[error("Block number not found")]
     BlockNumberNotFound,
     #[error(transparent)]
     TransportError(#[from] alloy::transports::TransportError),
-    #[error(transparent)]
-    EthABIError(#[from] alloy::sol_types::Error),
-    #[error(transparent)]
-    AMMError(#[from] amms::errors::AMMError),
-    #[error(transparent)]
-    ArithmeticError(#[from] amms::errors::ArithmeticError),
     #[error(transparent)]
     BlockSendError(#[from] tokio::sync::mpsc::error::SendError<Block>),
     #[error(transparent)]

@@ -11228,6 +11228,7 @@ dependencies = [
  "async-trait",
  "auto_impl",
  "byteorder",
+ "dashmap 6.0.1",
  "derive_more",
  "eyre",
  "futures",

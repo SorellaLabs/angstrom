@@ -69,6 +69,7 @@ alloy-sol-types.workspace = true
 alloy-sol-macro.workspace = true
 toml = "0.8.12"
 tracing.workspace = true
+dashmap = "6.0.1"
 
 [dev-dependencies]
 testing-tools.workspace = true

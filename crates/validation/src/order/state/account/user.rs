@@ -150,6 +150,12 @@ impl UserAccounts {
         entry.token_approval.insert(token, approvals);
     }
 
+    // inserts the user action and returns all pending user action hashes that this,
+    // invalidates. i.e higher nonce but no balance / approval available.
+    pub fn insert_pending_user_action(&self, action: PendingUserAction) -> Vec<B256> {
+        vec![]
+    }
+
     /// for the given user and token_in, and nonce, will return none
     /// if there is no baseline information for the given user
     /// account.

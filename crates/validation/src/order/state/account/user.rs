@@ -4,11 +4,17 @@ use std::{
 };
 
 use alloy_primitives::Address;
+use angstrom_types::sol_bindings::grouped_orders::{PoolOrder, RawPoolOrder};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use reth_primitives::{B256, U256};
 
-use crate::{order::state::db_state_utils::FetchUtils, BlockStateProviderFactory, RevmLRU};
+use crate::{
+    order::state::{
+        db_state_utils::FetchUtils, pools::UserOrderPoolInfo, AssetIndexToAddressWrapper
+    },
+    BlockStateProviderFactory, RevmLRU
+};
 
 pub type UserAddress = Address;
 pub type TokenAddress = Address;
@@ -26,6 +32,28 @@ pub struct LiveState {
     pub balance:  Amount
 }
 
+impl LiveState {
+    pub fn can_support_order<O: RawPoolOrder>(
+        &self,
+        order: &AssetIndexToAddressWrapper<O>,
+        pool_info: &UserOrderPoolInfo
+    ) -> Option<PendingUserAction> {
+        assert_eq!(order.token_in(), self.token, "incorrect lives state for order");
+        let amount_in = U256::from(order.amount_in());
+        if self.approval < amount_in || self.balance < amount_in {
+            return None
+        }
+        Some(PendingUserAction {
+            order_hash:     order.hash(),
+            nonce:          order.nonce(),
+            token_address:  pool_info.token,
+            token_delta:    amount_in,
+            token_approval: amount_in,
+            pool_info:      pool_info.clone()
+        })
+    }
+}
+
 /// deltas to be applied to the base user action
 pub struct PendingUserAction {
     /// hash of order
@@ -39,10 +67,7 @@ pub struct PendingUserAction {
     pub token_delta:    Amount,
     pub token_approval: Amount,
 
-    pub is_valid_nonce: bool,
-    pub is_valid_pool:  bool,
-    pub is_bid:         bool,
-    pub pool_id:        usize
+    pub pool_info: UserOrderPoolInfo
 }
 
 pub struct UserAccounts {

@@ -6,8 +6,9 @@ use index_to_address::{AssetIndexToAddress, AssetIndexToAddressWrapper};
 pub mod angstrom_pools;
 pub mod index_to_address;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UserOrderPoolInfo {
+    // token in for pool
     pub token:   Address,
     pub is_bid:  bool,
     pub pool_id: usize

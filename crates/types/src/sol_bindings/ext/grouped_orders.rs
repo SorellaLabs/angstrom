@@ -74,6 +74,9 @@ pub struct OrderWithStorageData<Order> {
     pub order:              Order,
     /// the raw data needed for indexing the data
     pub priority_data:      OrderPriorityData,
+    /// orders that this order invalidates
+    #[bincode(with_serde)]
+    pub invalidates:        Vec<B256>,
     /// the pool this order belongs to
     pub pool_id:            PoolId,
     /// wether the order is waiting for approvals / proper balances
@@ -125,6 +128,7 @@ impl<Order> OrderWithStorageData<Order> {
 
         Ok(OrderWithStorageData {
             order:              new_order,
+            invalidates:        self.invalidates,
             pool_id:            self.pool_id,
             valid_block:        self.valid_block,
             is_bid:             self.is_bid,

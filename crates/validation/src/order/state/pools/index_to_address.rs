@@ -4,12 +4,18 @@ use std::{
 };
 
 use alloy_primitives::{Address, TxHash, U256};
-use angstrom_types::sol_bindings::{
-    grouped_orders::{PoolOrder, RawPoolOrder},
-    sol::AssetIndex,
-    FetchAssetIndexes
+use angstrom_types::{
+    orders::OrderLocation,
+    sol_bindings::{
+        grouped_orders::{OrderWithStorageData, PoolOrder, RawPoolOrder},
+        sol::AssetIndex,
+        FetchAssetIndexes
+    }
 };
 use dashmap::DashMap;
+use reth_primitives::B256;
+
+use super::UserOrderPoolInfo;
 
 #[derive(Debug, Default)]
 pub struct AssetIndexToAddress(DashMap<u16, Address>);
@@ -19,6 +25,41 @@ pub struct AssetIndexToAddressWrapper<Order: RawPoolOrder> {
     pub token_in:  Address,
     pub token_out: Address,
     pub order:     Order
+}
+
+impl<Order: RawPoolOrder> AssetIndexToAddressWrapper<Order> {
+    pub fn into_order_storage_with_data(
+        self,
+        block: u64,
+        is_cur_valid: bool,
+        is_valid: bool,
+        is_limit: bool,
+        pool_info: UserOrderPoolInfo,
+        invalidates: Vec<B256>
+    ) -> OrderWithStorageData<Order> {
+        OrderWithStorageData {
+            priority_data: angstrom_types::orders::OrderPriorityData {
+                price:  self.limit_price(),
+                volume: self.amount_in(),
+                gas:    0
+            },
+            pool_id: pool_info.pool_id,
+            is_currently_valid: is_cur_valid,
+            is_bid: pool_info.is_bid,
+            is_valid,
+            valid_block: block,
+            order_id: angstrom_types::orders::OrderId {
+                address:  self.from(),
+                pool_id:  pool_info.pool_id,
+                hash:     self.hash(),
+                nonce:    self.nonce(),
+                deadline: self.deadline(),
+                location: if is_limit { OrderLocation::Limit } else { OrderLocation::Searcher }
+            },
+            invalidates,
+            order: self.order
+        }
+    }
 }
 
 impl<Order: RawPoolOrder> PoolOrder for AssetIndexToAddressWrapper<Order> {

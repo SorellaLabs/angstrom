@@ -81,8 +81,9 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
         if let Some(pending_user_action) = live_state.can_support_order(&order, &pool_info) {
             // we can satisfy this order. lets check the higher level nonces to see if we
             // invalidate anything
-
-            let a = 1;
+            let invalid_orders = self
+                .user_accounts
+                .insert_pending_user_action(order.from(), pending_user_action);
         } else {
         }
 

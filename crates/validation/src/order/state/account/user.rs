@@ -6,6 +6,7 @@ use std::{
 use alloy_primitives::Address;
 use angstrom_types::sol_bindings::grouped_orders::{PoolOrder, RawPoolOrder};
 use dashmap::DashMap;
+use futures::pending;
 use parking_lot::RwLock;
 use reth_primitives::{B256, U256};
 
@@ -150,10 +151,54 @@ impl UserAccounts {
         entry.token_approval.insert(token, approvals);
     }
 
-    // inserts the user action and returns all pending user action hashes that this,
-    // invalidates. i.e higher nonce but no balance / approval available.
-    pub fn insert_pending_user_action(&self, action: PendingUserAction) -> Vec<B256> {
+    /// inserts the user action and returns all pending user action hashes that
+    /// this, invalidates. i.e higher nonce but no balance / approval
+    /// available.
+    pub fn insert_pending_user_action(
+        &self,
+        user: UserAddress,
+        action: PendingUserAction
+    ) -> Vec<B256> {
+        let mut entry = self.pending_actions.entry(user).or_default();
+        let mut value = entry.value_mut();
+
+        value.push(action);
+        value.sort_unstable_by_key(|k| k.nonce);
+
+        // iterate from
         vec![]
+    }
+
+    fn fetch_all_invalidated_orders(&self, user: UserAddress, token: TokenAddress) -> Vec<B256> {
+        let baseline = self.last_known_state.get(&user).unwrap();
+        let mut baseline_approval = baseline.token_approval.get(&token).unwrap().clone();
+        let mut baseline_balance = baseline.token_balance.get(&token).unwrap().clone();
+        let mut has_overflowed = false;
+
+        let mut bad = vec![];
+        for pending_state in self
+            .pending_actions
+            .get(&user)
+            .unwrap()
+            .iter()
+            .filter(|state| state.token_address == token)
+        {
+            let (baseline, overflowed) =
+                baseline_approval.overflowing_sub(pending_state.token_approval);
+            has_overflowed |= overflowed;
+            baseline_approval = baseline;
+
+            let (baseline, overflowed) =
+                baseline_balance.overflowing_sub(pending_state.token_delta);
+            has_overflowed |= overflowed;
+            baseline_balance = baseline;
+
+            // mark for removal
+            if has_overflowed {
+                bad.push(pending_state.order_hash);
+            }
+        }
+        bad
     }
 
     /// for the given user and token_in, and nonce, will return none

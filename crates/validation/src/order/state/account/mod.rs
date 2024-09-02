@@ -37,7 +37,7 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
         order: AssetIndexToAddressWrapper<O>,
         pool_info: UserOrderPoolInfo,
         block: u64
-    ) -> Result<(), UserAccountVerificationError> {
+    ) -> Result<(), UserAccountVerificationError<O>> {
         Ok(())
     }
 
@@ -46,13 +46,15 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
         order: AssetIndexToAddressWrapper<O>,
         pool_info: UserOrderPoolInfo,
         block: u64
-    ) -> Result<OrderWithStorageData<O>, UserAccountVerificationError> {
+    ) -> Result<OrderWithStorageData<O>, UserAccountVerificationError<O>> {
         let current_block = self.user_accounts.current_block();
         // ensure baseline data for block is up to date
         if block != current_block {
             return Err(UserAccountVerificationError::BlockMissMatch {
                 requested: block,
-                current:   current_block
+                current: current_block,
+                order,
+                pool_info
             })
         }
 
@@ -66,7 +68,7 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
         let nonce = order.nonce();
         // validate we don't have a nonce conflict.
         if self.user_accounts.has_nonce_conflict(user, nonce) {
-            return Err(UserAccountVerificationError::DuplicateNonce)
+            return Err(UserAccountVerificationError::DuplicateNonce(order_hash))
         }
 
         let live_state = self.user_accounts.get_live_state_for_order(
@@ -92,11 +94,16 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
 }
 
 #[derive(Debug, Error)]
-pub enum UserAccountVerificationError {
+pub enum UserAccountVerificationError<O: RawPoolOrder> {
     #[error("tried to verify for block {} where current is {}", requested, current)]
-    BlockMissMatch { requested: u64, current: u64 },
+    BlockMissMatch {
+        requested: u64,
+        current:   u64,
+        order:     AssetIndexToAddressWrapper<O>,
+        pool_info: UserOrderPoolInfo
+    },
     #[error("order hash has been cancelled {0:?}")]
     OrderIsCancelled(B256),
-    #[error("Nonce exists for a current order")]
-    DuplicateNonce
+    #[error("Nonce exists for a current order hash: {0:?}")]
+    DuplicateNonce(B256)
 }

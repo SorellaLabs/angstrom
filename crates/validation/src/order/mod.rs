@@ -1,7 +1,7 @@
 use std::{fmt::Debug, future::Future, pin::Pin};
 
 use angstrom_types::{
-    orders::OrderOrigin,
+    orders::{OrderId, OrderOrigin},
     sol_bindings::{
         grouped_orders::{
             AllOrders, GroupedComposableOrder, GroupedVanillaOrder, OrderWithStorageData
@@ -9,6 +9,7 @@ use angstrom_types::{
         sol::TopOfBlockOrder
     }
 };
+use reth_primitives::B256;
 use tokio::sync::oneshot::{channel, Sender};
 
 use crate::validator::ValidationRequest;
@@ -62,10 +63,16 @@ impl From<OrderValidationRequest> for OrderValidation {
     }
 }
 
+pub enum OrderValidationResults {
+    Valid(OrderWithStorageData<AllOrders>),
+    // the raw hash to be removed
+    Invalid(B256)
+}
+
 pub enum OrderValidation {
-    Limit(Sender<OrderWithStorageData<AllOrders>>, GroupedVanillaOrder, OrderOrigin),
-    LimitComposable(Sender<OrderWithStorageData<AllOrders>>, GroupedComposableOrder, OrderOrigin),
-    Searcher(Sender<OrderWithStorageData<AllOrders>>, TopOfBlockOrder, OrderOrigin)
+    Limit(Sender<OrderValidationResults>, GroupedVanillaOrder, OrderOrigin),
+    LimitComposable(Sender<OrderValidationResults>, GroupedComposableOrder, OrderOrigin),
+    Searcher(Sender<OrderValidationResults>, TopOfBlockOrder, OrderOrigin)
 }
 
 /// Provides support for validating transaction at any given state of the chain

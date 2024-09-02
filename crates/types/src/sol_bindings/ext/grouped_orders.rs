@@ -74,7 +74,8 @@ pub struct OrderWithStorageData<Order> {
     pub order:              Order,
     /// the raw data needed for indexing the data
     pub priority_data:      OrderPriorityData,
-    /// orders that this order invalidates
+    /// orders that this order invalidates. this occurs due to live nonce
+    /// ordering
     #[bincode(with_serde)]
     pub invalidates:        Vec<B256>,
     /// the pool this order belongs to

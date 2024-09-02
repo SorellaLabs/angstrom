@@ -31,7 +31,7 @@ pub struct UserAccountDetails {
     pub pool_id:         usize
 }
 
-pub struct Upkeepers {
+pub struct FetchUtils {
     approvals:            Approvals,
     balances:             Balances,
     pools:                AngstromPools,
@@ -39,7 +39,7 @@ pub struct Upkeepers {
     pub asset_to_address: AssetIndexToAddress
 }
 
-impl Upkeepers {
+impl FetchUtils {
     pub fn new(config: ValidationConfig) -> Self {
         Self {
             approvals:        Approvals::new(

@@ -9,8 +9,8 @@ use angstrom_types::{
     }
 };
 
-use super::upkeepers::UserAccountDetails;
-use crate::order::state::upkeepers::index_to_address::AssetIndexToAddressWrapper;
+use super::fetch_utils::UserAccountDetails;
+use crate::order::state::fetch_utils::index_to_address::AssetIndexToAddressWrapper;
 
 type Amount = U256;
 type OrderNonce = U256;

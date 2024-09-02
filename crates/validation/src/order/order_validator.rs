@@ -18,7 +18,7 @@ use tokio::{runtime::Handle, task::JoinHandle};
 use super::{
     sim::SimValidation,
     state::{
-        config::ValidationConfig, orders::UserOrders, upkeepers::UserAccountDetails,
+        config::ValidationConfig, orders::UserOrders, fetch_utils::UserAccountDetails,
         StateValidation
     },
     OrderValidationRequest

@@ -10,11 +10,11 @@ use tokio::{
     sync::oneshot::Sender,
     task::{yield_now, JoinHandle}
 };
-use upkeepers::index_to_address::AssetIndexToAddressWrapper;
+use fetch_utils::index_to_address::AssetIndexToAddressWrapper;
 
 use self::{
     orders::UserOrders,
-    upkeepers::{Upkeepers, UserAccountDetails}
+    fetch_utils::{Upkeepers, UserAccountDetails}
 };
 use super::OrderValidation;
 use crate::{
@@ -25,9 +25,10 @@ use crate::{
     order::state::config::ValidationConfig
 };
 
+pub mod account;
 pub mod config;
+pub mod fetch_utils;
 pub mod orders;
-pub mod upkeepers;
 
 type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 

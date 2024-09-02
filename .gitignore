@@ -16,3 +16,6 @@ target/
 /target
 
 *.env
+
+# compiler ice errors
+rustc-ice-*.txt

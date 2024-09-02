@@ -72,12 +72,43 @@ impl UserAccounts {
         res
     }
 
+    pub fn has_nonce_conflict(&self, user: UserAddress, nonce: U256) -> bool {
+        self.pending_actions
+            .get(&user)
+            .map(|v| {
+                v.value()
+                    .iter()
+                    .find(|pending_order| pending_order.nonce == nonce)
+                    .is_some()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn get_live_state_for_order<DB: Send + BlockStateProviderFactory>(
+        &self,
+        user: UserAddress,
+        token: TokenAddress,
+        nonce: U256,
+        utils: &FetchUtils,
+        db: &RevmLRU<DB>
+    ) -> LiveState {
+        self.try_fetch_live_pending_state(user, token, nonce)
+            .unwrap_or_else(|| {
+                self.load_state_for(user, token, utils, db);
+                self.try_fetch_live_pending_state(user, token, nonce)
+                    .expect(
+                        "after loading state for a address, the state wasn't found. this should \
+                         be impossible"
+                    )
+            })
+    }
+
     fn load_state_for<DB: Send + BlockStateProviderFactory>(
-        &mut self,
+        &self,
         user: UserAddress,
         token: TokenAddress,
         utils: &FetchUtils,
-        db: Arc<RevmLRU<DB>>
+        db: &RevmLRU<DB>
     ) {
         let approvals = utils
             .approvals

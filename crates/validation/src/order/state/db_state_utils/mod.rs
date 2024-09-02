@@ -36,41 +36,21 @@ pub struct FetchUtils {
 impl FetchUtils {
     pub fn new(config: ValidationConfig) -> Self {
         Self {
-            approvals:        Approvals::new(
+            approvals: Approvals::new(
                 config
                     .approvals
                     .into_iter()
                     .map(|app| (app.token, app))
                     .collect()
             ),
-            pools:            AngstromPools::new(
-                config
-                    .pools
-                    .into_iter()
-                    .flat_map(|app| {
-                        let direction = app.token0.cmp(&app.token1) == Ordering::Less;
-                        [
-                            (
-                                FixedBytes::concat_const(*app.token0, *app.token1),
-                                (direction, app.pool_id)
-                            ),
-                            (
-                                FixedBytes::concat_const(*app.token1, *app.token0),
-                                (!direction, app.pool_id)
-                            )
-                        ]
-                    })
-                    .collect()
-            ),
-            balances:         Balances::new(
+            balances:  Balances::new(
                 config
                     .balances
                     .into_iter()
                     .map(|bal| (bal.token, bal))
                     .collect()
             ),
-            nonces:           Nonces,
-            asset_to_address: AssetIndexToAddress::default()
+            nonces:    Nonces
         }
     }
 }

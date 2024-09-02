@@ -40,7 +40,7 @@ impl Approvals {
         &self,
         user: Address,
         token: Address,
-        db: Arc<RevmLRU<DB>>
+        db: &RevmLRU<DB>
     ) -> Option<U256> {
         self.0
             .get(&token)

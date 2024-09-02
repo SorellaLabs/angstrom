@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use alloy_primitives::{Address, FixedBytes};
 use angstrom_types::primitive::PoolId;
+use dashmap::DashMap;
 
 pub type PoolIdWithDirection = (bool, PoolId);
 
-pub struct AngstromPools(HashMap<FixedBytes<40>, PoolIdWithDirection>);
+pub struct AngstromPools(DashMap<FixedBytes<40>, PoolIdWithDirection>);
 
 impl AngstromPools {
-    pub fn new(setup: HashMap<FixedBytes<40>, PoolIdWithDirection>) -> Self {
+    pub fn new(setup: DashMap<FixedBytes<40>, PoolIdWithDirection>) -> Self {
         AngstromPools(setup)
     }
 
@@ -20,7 +21,7 @@ impl AngstromPools {
         tracing::debug!(shit=?self.0);
         self.0
             .get(&self.get_key(currency_in, currency_out))
-            .copied()
+            .map(|inner| *inner)
     }
 
     #[inline(always)]

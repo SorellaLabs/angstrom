@@ -62,7 +62,7 @@ impl TokenBalanceSlot {
     pub fn load_balance<DB: BlockStateProviderFactory>(
         &self,
         of: Address,
-        db: Arc<RevmLRU<DB>>
+        db: &RevmLRU<DB>
     ) -> eyre::Result<U256> {
         Ok(db.storage_ref(self.token, self.generate_slot(of)?)?)
     }
@@ -95,7 +95,7 @@ impl TokenApprovalSlot {
         &self,
         user: Address,
         contract: Address,
-        db: Arc<RevmLRU<DB>>
+        db: &RevmLRU<DB>
     ) -> eyre::Result<U256> {
         if !self.hash_method.is_solidity() {
             return Err(eyre::eyre!("current type of contract hashing is not supported"))

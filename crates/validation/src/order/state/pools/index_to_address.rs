@@ -9,9 +9,10 @@ use angstrom_types::sol_bindings::{
     sol::AssetIndex,
     FetchAssetIndexes
 };
+use dashmap::DashMap;
 
 #[derive(Debug, Default)]
-pub struct AssetIndexToAddress(HashMap<u16, Address>);
+pub struct AssetIndexToAddress(DashMap<u16, Address>);
 
 #[derive(Debug, Clone)]
 pub struct AssetIndexToAddressWrapper<Order: RawPoolOrder> {
@@ -72,16 +73,16 @@ impl<Order: RawPoolOrder> DerefMut for AssetIndexToAddressWrapper<Order> {
 }
 
 impl AssetIndexToAddress {
-    pub fn get_address(&self, asset_index: &u16) -> Option<&Address> {
-        self.0.get(asset_index)
+    pub fn get_address(&self, asset_index: &u16) -> Option<Address> {
+        self.0.get(asset_index).map(|f| *f)
     }
 
     pub fn wrap<Order: RawPoolOrder>(
         &self,
         order: Order
     ) -> Option<AssetIndexToAddressWrapper<Order>> {
-        let token_in = *self.get_address(&order.get_token_in())?;
-        let token_out = *self.get_address(&order.get_token_out())?;
+        let token_in = self.get_address(&order.get_token_in())?;
+        let token_out = self.get_address(&order.get_token_out())?;
 
         Some(AssetIndexToAddressWrapper { token_in, token_out, order })
     }

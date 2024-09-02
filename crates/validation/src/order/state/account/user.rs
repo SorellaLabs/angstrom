@@ -33,7 +33,9 @@ pub struct PendingUserActions {
 }
 
 pub struct UserAccounts {
+    /// all of a user addresses pending orders.
     pending_actions:  HashMap<UserAddress, Vec<PendingUserActions>>,
+    /// the last updated state of a given user.
     last_known_state: HashMap<UserAddress, BaselineState>
 }
 

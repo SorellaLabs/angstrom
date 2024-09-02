@@ -1,7 +1,9 @@
 use std::{collections::HashMap, sync::Arc, task::Poll};
 
+use account::UserAccountTracker;
 use alloy_primitives::{Address, B256, U256};
 use angstrom_types::sol_bindings::grouped_orders::{AllOrders, RawPoolOrder};
+use fetch_utils::index_to_address::AssetIndexToAddressWrapper;
 use futures::{Stream, StreamExt};
 use futures_util::stream::FuturesUnordered;
 use parking_lot::RwLock;
@@ -10,11 +12,10 @@ use tokio::{
     sync::oneshot::Sender,
     task::{yield_now, JoinHandle}
 };
-use fetch_utils::index_to_address::AssetIndexToAddressWrapper;
 
 use self::{
-    orders::UserOrders,
-    fetch_utils::{Upkeepers, UserAccountDetails}
+    fetch_utils::{Upkeepers, UserAccountDetails},
+    orders::UserOrders
 };
 use super::OrderValidation;
 use crate::{
@@ -41,9 +42,8 @@ type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct StateValidation<DB> {
-    db:        Arc<RevmLRU<DB>>,
-    /// upkeeps all state specific checks.
-    upkeepers: Arc<RwLock<Upkeepers>>
+    db:                   Arc<RevmLRU<DB>>,
+    user_account_tracker: Arc<RwLock<UserAccountTracker>>
 }
 
 impl<DB> StateValidation<DB>
@@ -55,7 +55,7 @@ where
     }
 
     pub fn wrap_order<O: RawPoolOrder>(&self, order: O) -> Option<AssetIndexToAddressWrapper<O>> {
-        self.upkeepers.read().asset_to_address.wrap(order)
+        self..read().asset_to_address.wrap(order)
     }
 
     pub fn validate_regular_order(

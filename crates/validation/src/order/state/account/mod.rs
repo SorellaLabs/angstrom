@@ -9,9 +9,8 @@ pub mod user;
 
 /// For all active users, stores critical information needed in order to
 /// properly verify there actions
-pub struct UserAccountTracker<DB> {
-    reth_db:       Arc<DB>,
-    /// keeps track of all user accounts 
+pub struct UserAccountTracker {
+    /// keeps track of all user accounts
     user_accounts: UserAccounts,
     /// utils for fetching the required data to verify
     /// a order.

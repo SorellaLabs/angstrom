@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, task::Poll};
+use std::{collections::HashMap, intrinsics::unreachable, sync::Arc, task::Poll};
 
 use account::UserAccountProcessor;
 use alloy_primitives::{Address, B256, U256};
@@ -14,7 +14,7 @@ use tokio::{
 };
 
 use self::db_state_utils::UserAccountDetails;
-use super::OrderValidation;
+use super::{OrderValidation, OrderValidationResults};
 use crate::{
     common::{
         executor::ThreadPool,
@@ -41,9 +41,9 @@ type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 pub struct StateValidation<DB> {
     db:                   Arc<RevmLRU<DB>>,
     /// tracks everything user related.
-    user_account_tracker: Arc<RwLock<UserAccountProcessor<DB>>>,
+    user_account_tracker: Arc<UserAccountProcessor<DB>>,
     /// tracks all info about the current angstrom pool state.
-    pool_tacker:          Arc<RwLock<AngstromPoolsTracker>>
+    pool_tacker:          Arc<AngstromPoolsTracker>
 }
 
 impl<DB> StateValidation<DB>
@@ -55,25 +55,37 @@ where
     }
 
     pub fn wrap_order<O: RawPoolOrder>(&self, order: O) -> Option<AssetIndexToAddressWrapper<O>> {
-        self.pool_tacker.read().asset_index_to_address.wrap(order)
+        self.pool_tacker.asset_index_to_address.wrap(order)
     }
 
-    pub fn validate_state_of_regular_order(&self, order: OrderValidation) {}
-
-    pub fn validate_regular_order(
+    fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(
         &self,
-        order: OrderValidation
-    ) -> Option<(OrderValidation, UserAccountDetails)> {
-        let db = self.db.clone();
+        order: O,
+        block: u64
+    ) -> OrderValidationResults {
+        let order_hash = order.hash();
+        let Some((pool_info, wrapped_order)) = self.pool_tacker.fetch_pool_info_for_order(order)
+        else {
+            return OrderValidationResults::Invalid(order_hash)
+        };
 
+        self.user_account_tracker
+            .verify_order(wrapped_order, pool_info, block)
+            .map(|o| {
+                OrderValidationResults::Valid(o.try_map_inner(|inner| Ok(inner.into())).unwrap())
+            })
+            .unwrap_or_else(|_| OrderValidationResults::Invalid(order_hash))
+    }
+
+    pub fn validate_state_of_regular_order(&self, order: OrderValidation, block: u64) {
         match order {
-            OrderValidation::Limit(tx, o, origin) => {
-                let (details, order) = keeper.read().verify_order(o, db)?;
-                Some((OrderValidation::Limit(tx, order, origin), details))
+            OrderValidation::Limit(tx, order, origin) => {
+                let results = self.handle_regular_order(order, block);
+                let _ = tx.send(results);
             }
-            OrderValidation::Searcher(tx, o, origin) => {
-                let (details, order) = keeper.read().verify_order(o, db)?;
-                Some((OrderValidation::Searcher(tx, order, origin), details))
+            OrderValidation::Searcher(tx, order, origin) => {
+                let results = self.handle_regular_order(order, block);
+                let _ = tx.send(results);
             }
             _ => unreachable!()
         }

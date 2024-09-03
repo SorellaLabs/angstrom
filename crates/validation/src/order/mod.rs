@@ -27,7 +27,7 @@ pub type ValidationsFuture<'a, O> =
     Pin<Box<dyn Future<Output = Vec<OrderWithStorageData<O>>> + Send + Sync + 'a>>;
 
 pub enum OrderValidationRequest {
-    ValidateOrder(Sender<OrderWithStorageData<AllOrders>>, AllOrders, OrderOrigin)
+    ValidateOrder(Sender<OrderValidationResults>, AllOrders, OrderOrigin)
 }
 
 /// TODO: not a fan of all the conversions. can def simplify

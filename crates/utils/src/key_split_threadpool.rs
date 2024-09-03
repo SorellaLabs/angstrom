@@ -1,115 +1,90 @@
 use std::{
-    collections::{HashMap,hash_map::Entry, VecDeque},
+    collections::HashMap,
     future::Future,
     hash::Hash,
     pin::Pin,
-    sync::{atomic::AtomicBool, Arc},
-    task::{Context, Poll}
+    sync::Arc,
+    task::{Poll, Waker}
 };
 
 use futures::{stream::FuturesUnordered, Stream, StreamExt};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::Semaphore;
 
-use crate::sync_pipeline::ThreadPool;
+use crate::{sync_pipeline::ThreadPool, PollExt};
 
-pub struct AtomicQueue<F: Future> {
-    pub queue:      VecDeque<F>,
-    pub processing: Arc<AtomicBool>
-}
+type PendingFut<F> = Pin<Box<dyn Future<Output = <F as Future>::Output> + Send>>;
 
 pub struct KeySplitThreadpool<K: PartialEq + Eq + Hash + Clone, F: Future, TP: ThreadPool> {
     tp:              TP,
-    pending_results: FuturesUnordered<Pin<Box<dyn Future<Output = F::Output> + Send + Unpin>>>,
-    pending:         HashMap<K, AtomicQueue<F>>,
-    tx:              UnboundedSender<K>,
-    rx:              UnboundedReceiver<K>
+    pending_results: FuturesUnordered<PendingFut<F>>,
+    permit_size:     usize,
+    pending:         HashMap<K, Arc<Semaphore>>,
+    waker:           Option<Waker>
 }
 
 impl<K: PartialEq + Eq + Hash + Clone, F: Future, TP: ThreadPool> KeySplitThreadpool<K, F, TP>
 where
-    K: Send + Unpin +'static,
+    K: Send + Unpin + 'static,
     F: Send + 'static + Unpin,
+    TP: Clone + Send + 'static + Unpin,
     <F as Future>::Output: Send + 'static + Unpin
 {
-    pub fn new(theadpool: TP) -> Self {
-        let (tx, rx) = unbounded_channel();
+    pub fn new(theadpool: TP, permit_size: usize) -> Self {
         Self {
             tp: theadpool,
-            tx,
-            rx,
+            permit_size,
             pending: HashMap::default(),
-            pending_results: FuturesUnordered::default()
+            pending_results: FuturesUnordered::default(),
+            waker: None
         }
     }
 
-    fn process_finished_keys(&mut self, cx: &mut Context<'_>) {
-        while let Poll::Ready(Some(next)) = self.rx.poll_recv(cx) {
-            self.process_next_task_key(next);
-        }
+    pub fn add_new_task(&mut self, key: K, fut: F) {
+        // grab semaphore
+        let permit = self
+            .pending
+            .entry(key)
+            .or_insert_with(|| Arc::new(Semaphore::new(self.permit_size)));
+        let permit_cloned = permit.clone();
+        let tp_cloned = self.tp.clone();
+
+        let fut = Box::pin(async move {
+            let permit = permit_cloned.acquire().await.expect("never");
+            let res = tp_cloned.spawn(fut).await;
+            drop(permit);
+
+            res
+        }) as PendingFut<F>;
+
+        self.pending_results.push(fut);
+        // if a waker is scheduled. insure we pool
+        self.waker.as_ref().inspect(|i| i.wake_by_ref());
     }
 
-    fn process_next_task_key(&mut self, key:K ){
-        if let Entry::Occupied(mut o) = self.pending.entry(key.clone()) {
-            let e = o.get_mut();
-            let Some(fut) = e.queue.pop_front() else {
-                o.remove();
-                return
-            };
-
-            let cloned_key = key.clone();
-            let cloned_tx = self.tx.clone();
-            let cloned_atomic = e.processing.clone();
-
-            self.pending_results.push(self.tp.spawn(Box::pin(async move {
-                cloned_atomic.store(true, std::sync::atomic::Ordering::SeqCst);
-                let result = fut.await;
-                cloned_tx.send(cloned_key);
-                cloned_atomic.store(false, std::sync::atomic::Ordering::SeqCst);
-
-                result
-            }))); }
-
-        }     
-
-    /// goes though all task queues where no processing is occurring
-    fn queue_tasks_not_processing(&mut self) {
-        self.pending.retain(|key, queue| {
-            // if we are processing some already for the given key, we will wait till its
-            // done before the next key
-            if queue.processing.load(std::sync::atomic::Ordering::SeqCst) {
-                return true
-            }
-
-            let Some(fut) = queue.queue.pop_front() else { return false };
-            let cloned_key = key.clone();
-            let cloned_tx = self.tx.clone();
-            let cloned_atomic = queue.processing.clone();
-
-            self.pending_results.push(self.tp.spawn(Box::pin(async move {
-                cloned_atomic.store(true, std::sync::atomic::Ordering::SeqCst);
-                let result = fut.await;
-                cloned_tx.send(cloned_key);
-                cloned_atomic.store(false, std::sync::atomic::Ordering::SeqCst);
-
-                result
-            })));
-
-            !queue.queue.is_empty()
-        });
+    /// registers waker if its doesn't exist
+    pub fn try_register_waker(&mut self, f: impl FnOnce() -> Waker) {
+        if self.waker.is_none() {
+            self.waker = Some(f());
+        }
     }
 }
 
 impl<K: PartialEq + Eq + Hash + Clone, F: Future, TP: ThreadPool> Stream
     for KeySplitThreadpool<K, F, TP>
+where
+    K: Send + Unpin + 'static,
+    F: Send + 'static + Unpin,
+    TP: Clone,
+    <F as Future>::Output: Send + 'static + Unpin
 {
     type Item = F::Output;
 
     fn poll_next(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>
     ) -> Poll<Option<Self::Item>> {
-
-        self.pending_results.poll_next_unpin(cx)
-        Poll::Pending
+        self.pending_results
+            .poll_next_unpin(cx)
+            .filter(|inner| inner.is_some())
     }
 }

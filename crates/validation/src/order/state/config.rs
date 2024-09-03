@@ -10,9 +10,10 @@ use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ValidationConfig {
-    pub approvals: Vec<TokenApprovalSlot>,
-    pub balances:  Vec<TokenBalanceSlot>,
-    pub pools:     Vec<PoolConfig>
+    pub approvals:               Vec<TokenApprovalSlot>,
+    pub balances:                Vec<TokenBalanceSlot>,
+    pub pools:                   Vec<PoolConfig>,
+    pub max_validation_per_user: usize
 }
 
 #[derive(Debug, Clone, Deserialize)]

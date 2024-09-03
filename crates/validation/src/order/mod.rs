@@ -1,10 +1,12 @@
 use std::{fmt::Debug, future::Future, pin::Pin};
 
+use alloy_primitives::Address;
 use angstrom_types::{
     orders::{OrderId, OrderOrigin},
     sol_bindings::{
         grouped_orders::{
-            AllOrders, GroupedComposableOrder, GroupedVanillaOrder, OrderWithStorageData
+            AllOrders, GroupedComposableOrder, GroupedVanillaOrder, OrderWithStorageData,
+            RawPoolOrder
         },
         sol::TopOfBlockOrder
     }
@@ -73,6 +75,15 @@ pub enum OrderValidation {
     Limit(Sender<OrderValidationResults>, GroupedVanillaOrder, OrderOrigin),
     LimitComposable(Sender<OrderValidationResults>, GroupedComposableOrder, OrderOrigin),
     Searcher(Sender<OrderValidationResults>, TopOfBlockOrder, OrderOrigin)
+}
+impl OrderValidation {
+    pub fn user(&self) -> Address {
+        match &self {
+            Self::Searcher(_, u, _) => u.from(),
+            Self::LimitComposable(_, u, _) => u.from(),
+            Self::Limit(_, u, _) => u.from()
+        }
+    }
 }
 
 /// Provides support for validating transaction at any given state of the chain

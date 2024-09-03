@@ -8,7 +8,10 @@ use angstrom_eth::manager::EthEvent;
 use futures::{Stream, StreamExt};
 use futures_util::{Future, FutureExt};
 use reth_revm::db::BundleState;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::{
+    runtime::Handle,
+    sync::mpsc::{UnboundedReceiver, UnboundedSender}
+};
 
 use crate::{
     common::lru_db::{BlockStateProviderFactory, RevmLRU},
@@ -42,9 +45,10 @@ where
         new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
         db: Arc<RevmLRU<DB>>,
         config: ValidationConfig,
-        block_number: Arc<AtomicU64>
+        block_number: Arc<AtomicU64>,
+        handle: Handle
     ) -> Self {
-        let order_validator = OrderValidator::new(db.clone(), config, block_number);
+        let order_validator = OrderValidator::new(db.clone(), config, block_number, handle);
         Self { new_block_stream, db, order_validator, rx }
     }
 

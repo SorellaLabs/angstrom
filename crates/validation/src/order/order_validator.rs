@@ -8,8 +8,11 @@ use std::{
 };
 
 use alloy_primitives::{Address, U256};
-use angstrom_utils::sync_pipeline::{
-    PipelineAction, PipelineBuilder, PipelineFut, PipelineOperation, PipelineWithIntermediary
+use angstrom_utils::{
+    key_split_threadpool::KeySplitThreadpool,
+    sync_pipeline::{
+        PipelineAction, PipelineBuilder, PipelineFut, PipelineOperation, PipelineWithIntermediary
+    }
 };
 use futures::{stream::FuturesUnordered, Future, StreamExt};
 use futures_util::{future, FutureExt, Stream};
@@ -17,7 +20,7 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 use super::{
     sim::SimValidation,
-    state::{config::ValidationConfig, StateValidation},
+    state::{account::user::UserAddress, config::ValidationConfig, StateValidation},
     OrderValidationRequest
 };
 use crate::{
@@ -32,6 +35,7 @@ use crate::{
 pub struct OrderValidator<DB> {
     sim:          SimValidation<DB>,
     state:        StateValidation<DB>,
+    threadpool:   KeySplitThreadpool<UserAddress, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>,
     block_number: Arc<AtomicU64>
 }
 
@@ -42,21 +46,17 @@ where
     pub fn new(
         db: Arc<RevmLRU<DB>>,
         config: ValidationConfig,
-        block_number: Arc<AtomicU64>
+        block_number: Arc<AtomicU64>,
+        handle: Handle
     ) -> Self {
+        let threadpool = KeySplitThreadpool::new(handle, config.max_validation_per_user);
         let state = StateValidation::new(db.clone(), config);
         let sim = SimValidation::new(db);
 
         let new_state = state.clone();
         let new_sim = sim.clone();
 
-        // let pipeline = PipelineBuilder::new()
-        //     .add_step(0, ValidationOperation::pre_regular_verification)
-        //     .add_step(1, ValidationOperation::post_regular_verification)
-        //     // .add_step(2, ValidationOperation::pre_hook_sim)
-        //     .build(tokio::runtime::Handle::current());
-
-        Self { state, sim, block_number }
+        Self { state, sim, block_number, threadpool }
     }
 
     pub fn update_block_number(&mut self, number: u64) {
@@ -68,20 +68,15 @@ where
     pub fn validate_order(&mut self, order: OrderValidationRequest) {
         let block_number = self.block_number.load(std::sync::atomic::Ordering::SeqCst);
         let order_validation: OrderValidation = order.into();
-        // match order_validation {
-        //     order @ OrderValidation::Limit(..) => {
-        //         self.pipeline
-        //             .add(ValidationOperation::PreRegularVerification(order,
-        // block_number));     }
-        //     order @ OrderValidation::Searcher(..) => self
-        //         .pipeline
-        //         .add(ValidationOperation::PreRegularVerification(order,
-        // block_number)),
-        //
-        //     order @ OrderValidation::LimitComposable(..) => self
-        //         .pipeline
-        //         .add(ValidationOperation::PreHookSim(order, block_number))
-        // }
+        let user = order_validation.user();
+        let cloned_state = self.state.clone();
+
+        self.threadpool.add_new_task(
+            user,
+            Box::pin(async move {
+                cloned_state.validate_state_of_regular_order(order_validation, block_number)
+            })
+        );
     }
 }
 
@@ -95,16 +90,9 @@ where
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>
     ) -> std::task::Poll<Self::Output> {
-        let state = self.state.clone();
-        let sim = self.sim.clone();
-        let mut ctx = ProcessingCtx::new(
-            &mut self.orders as *mut UserOrders,
-            sim,
-            state,
-            self.block_number.clone()
-        );
+        self.threadpool.try_register_waker(|| cx.waker().clone());
 
-        while let Poll::Ready(Some(_)) = self.pipeline.poll(cx, &mut ctx) {}
+        while let Poll::Ready(Some(_)) = self.threadpool.poll_next_unpin(cx) {}
 
         Poll::Pending
     }

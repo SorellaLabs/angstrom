@@ -43,9 +43,10 @@ pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
             .worker_threads(4)
             .build()
             .unwrap();
+        let handle = rt.handle().clone();
 
         rt.block_on(async {
-            Validator::new(rx, block_stream, revm_lru, config, current_block.clone()).await
+            Validator::new(rx, block_stream, revm_lru, config, current_block.clone(), handle).await
         })
     });
 

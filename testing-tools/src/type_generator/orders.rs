@@ -129,6 +129,7 @@ impl DistributionParameters {
     }
 }
 
+#[rustfmt::skip]
 pub fn generate_order_distribution(
     is_bid: bool,
     order_count: usize,

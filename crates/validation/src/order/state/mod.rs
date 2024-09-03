@@ -61,7 +61,8 @@ where
     fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(
         &self,
         order: O,
-        block: u64
+        block: u64,
+        is_limit: bool
     ) -> OrderValidationResults {
         let order_hash = order.hash();
         let Some((pool_info, wrapped_order)) = self.pool_tacker.fetch_pool_info_for_order(order)
@@ -70,7 +71,7 @@ where
         };
 
         self.user_account_tracker
-            .verify_order(wrapped_order, pool_info, block)
+            .verify_order(wrapped_order, pool_info, block, is_limit)
             .map(|o| {
                 OrderValidationResults::Valid(o.try_map_inner(|inner| Ok(inner.into())).unwrap())
             })
@@ -80,11 +81,11 @@ where
     pub fn validate_state_of_regular_order(&self, order: OrderValidation, block: u64) {
         match order {
             OrderValidation::Limit(tx, order, origin) => {
-                let results = self.handle_regular_order(order, block);
+                let results = self.handle_regular_order(order, block, true);
                 let _ = tx.send(results);
             }
             OrderValidation::Searcher(tx, order, origin) => {
-                let results = self.handle_regular_order(order, block);
+                let results = self.handle_regular_order(order, block, false);
                 let _ = tx.send(results);
             }
             _ => unreachable!()

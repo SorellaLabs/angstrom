@@ -71,8 +71,16 @@ pub fn init_validation_tests<DB: BlockStateProviderFactory + Unpin + Clone + 'st
             .worker_threads(4)
             .build()
             .unwrap();
+        let handle = rt.handle().clone();
 
-        rt.block_on(Validator::new(rx, block_stream, task_db, config, current_block.clone()))
+        rt.block_on(Validator::new(
+            rx,
+            block_stream,
+            task_db,
+            config,
+            current_block.clone(),
+            handle
+        ))
     });
 
     (ValidationClient(tx), revm_lru)

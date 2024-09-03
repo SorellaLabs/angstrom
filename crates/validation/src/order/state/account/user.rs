@@ -44,6 +44,7 @@ impl LiveState {
         if self.approval < amount_in || self.balance < amount_in {
             return None
         }
+
         Some(PendingUserAction {
             order_hash:     order.hash(),
             nonce:          order.nonce(),
@@ -89,6 +90,7 @@ impl UserAccounts {
     pub fn cancel_order(&mut self, user: &UserAddress, order_hash: B256) -> bool {
         let Some(mut inner_orders) = self.pending_actions.get_mut(user) else { return false };
         let mut res = false;
+
         inner_orders.retain(|o| {
             let matches = o.order_hash != order_hash;
             res |= !matches;
@@ -159,14 +161,15 @@ impl UserAccounts {
         user: UserAddress,
         action: PendingUserAction
     ) -> Vec<B256> {
+        let token = action.token_address;
         let mut entry = self.pending_actions.entry(user).or_default();
         let mut value = entry.value_mut();
 
         value.push(action);
         value.sort_unstable_by_key(|k| k.nonce);
 
-        // iterate from
-        vec![]
+        // iterate through all vales collected the orders that
+        self.fetch_all_invalidated_orders(user, token)
     }
 
     fn fetch_all_invalidated_orders(&self, user: UserAddress, token: TokenAddress) -> Vec<B256> {

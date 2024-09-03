@@ -58,6 +58,8 @@ where
         self.pool_tacker.read().asset_index_to_address.wrap(order)
     }
 
+    pub fn validate_state_of_regular_order(&self, order: OrderValidation) {}
+
     pub fn validate_regular_order(
         &self,
         order: OrderValidation

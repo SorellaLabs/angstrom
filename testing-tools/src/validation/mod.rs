@@ -53,7 +53,9 @@ impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> 
 
         let task_db = revm_lru.clone();
 
-        let val = Validator::new(rx, eth_stream, task_db, config.clone(), current_block.clone());
+        let handle = tokio::runtime::Handle::current();
+        let val =
+            Validator::new(rx, eth_stream, task_db, config.clone(), current_block.clone(), handle);
         let client = ValidationClient(tx);
 
         Self { revm_lru, client, underlying: val, config, eth_handle }

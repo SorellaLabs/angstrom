@@ -21,7 +21,7 @@ where
         Self { db }
     }
 
-    pub fn validate_pre_hook(
+    pub fn validate_hook(
         &self,
         order: OrderValidationRequest
     ) -> (OrderValidationRequest, HashMap<Address, HashMap<U256, U256>>) {

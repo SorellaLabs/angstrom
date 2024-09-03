@@ -1,4 +1,4 @@
-use std::{collections::HashMap, intrinsics::unreachable, sync::Arc, task::Poll};
+use std::{collections::HashMap, sync::Arc, task::Poll};
 
 use account::UserAccountProcessor;
 use alloy_primitives::{Address, B256, U256};

@@ -49,6 +49,22 @@ impl OrderStorage {
         Self { limit_orders, searcher_orders, pending_finalization_orders }
     }
 
+    /// moves all orders to the parked location if there not already.
+    pub fn park_orders(&self, order_info: Vec<&OrderId>) {
+        // take lock here so we don't drop between iterations.
+        let mut limit_lock = self.limit_orders.lock().unwrap();
+        order_info
+            .into_iter()
+            .for_each(|order| match order.location {
+                angstrom_types::orders::OrderLocation::Limit => {
+                    limit_lock.park_order(order);
+                }
+                angstrom_types::orders::OrderLocation::Searcher => {
+                    tracing::debug!("tried to park searcher order. this is not supported");
+                }
+            });
+    }
+
     pub fn add_new_limit_order(
         &self,
         order: OrderWithStorageData<GroupedUserOrder>

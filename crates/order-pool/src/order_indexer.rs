@@ -22,7 +22,7 @@ use futures_util::{Stream, StreamExt};
 use reth_network_peers::PeerId;
 use reth_primitives::Address;
 use tracing::{error, trace};
-use validation::order::OrderValidatorHandle;
+use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
 use crate::{order_storage::OrderStorage, validator::PoolOrderValidator};
 
@@ -194,17 +194,42 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.order_storage.add_filled_orders(block, filled_orders);
     }
 
+    /// Given the nonce ordering rule. Sometimes new transactions can park old
+    /// transactions.
+    fn park_transactions(&mut self, txes: &[B256]) {
+        let order_info = txes
+            .into_iter()
+            .filter_map(|tx_hash| self.hash_to_order_id.get(tx_hash))
+            .collect::<Vec<_>>();
+
+        self.order_storage.park_orders(order_info);
+    }
+
     fn handle_validated_order(
         &mut self,
-        res: OrderWithStorageData<AllOrders>
+        res: OrderValidationResults
     ) -> eyre::Result<PoolInnerEvent> {
-        if res.is_valid
-            && res.valid_block == self.block_number
-            && !self.last_touched_addresses.remove(&res.from())
+        let res = match res {
+            OrderValidationResults::Valid(valid) => valid,
+            OrderValidationResults::Invalid(bad_hash) => {
+                let peers = self
+                    .pending_order_indexing
+                    .remove(&bad_hash)
+                    .unwrap_or_default();
+
+                return Ok(PoolInnerEvent::BadOrderMessages(peers))
+            }
+        };
+
+        if res.valid_block == self.block_number && !self.last_touched_addresses.remove(&res.from())
         {
+            // move orders that this invalidates to pending pools.
+            // let invalidated_txes = res.invalidates;
+
             let to_propagate = res.order.clone();
             // set tracking
             self.update_order_tracking(&res);
+            self.park_transactions(&res.invalidates);
 
             // insert
             match res.order_id.location {
@@ -252,13 +277,14 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             return Ok(PoolInnerEvent::Propagation(to_propagate))
         }
 
-        // handle invalid case
+        // bad order
+        let hash = res.order_hash();
         let peers = self
             .pending_order_indexing
-            .remove(&res.order_hash())
+            .remove(&hash)
             .unwrap_or_default();
 
-        Ok(PoolInnerEvent::BadOrderMessages(peers))
+        return Ok(PoolInnerEvent::BadOrderMessages(peers))
     }
 
     fn update_order_tracking(&mut self, order: &OrderWithStorageData<AllOrders>) {

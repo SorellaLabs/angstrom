@@ -73,9 +73,9 @@ impl LimitOrderPool {
         self.limit_orders.get_all_orders()
     }
 
-    // pub fn fetch_all_composable_orders(&self) -> Vec<BidsAndAsks<C>> {
-    //     self.composable_orders.fetch_bids_asks_per_pool()
-    // }
+    pub fn park_order(&mut self, id: &OrderId) {
+        self.limit_orders.park_order(id);
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -3,15 +3,11 @@ use std::{
     task::{Context, Poll}
 };
 
-use angstrom_types::{
-    orders::OrderOrigin,
-    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
-};
+use angstrom_types::{orders::OrderOrigin, sol_bindings::grouped_orders::AllOrders};
 use futures_util::{stream::FuturesUnordered, Future, Stream, StreamExt};
-use validation::order::OrderValidatorHandle;
+use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-type ValidationFuture =
-    Pin<Box<dyn Future<Output = OrderWithStorageData<AllOrders>> + Send + Sync>>;
+type ValidationFuture = Pin<Box<dyn Future<Output = OrderValidationResults> + Send + Sync>>;
 
 pub struct PoolOrderValidator<V: OrderValidatorHandle> {
     validator: V,
@@ -37,7 +33,7 @@ impl<V> Stream for PoolOrderValidator<V>
 where
     V: OrderValidatorHandle
 {
-    type Item = OrderWithStorageData<AllOrders>;
+    type Item = OrderValidationResults;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.pending.poll_next_unpin(cx)

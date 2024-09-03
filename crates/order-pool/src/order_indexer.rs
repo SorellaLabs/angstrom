@@ -198,7 +198,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     /// transactions.
     fn park_transactions(&mut self, txes: &[B256]) {
         let order_info = txes
-            .into_iter()
+            .iter()
             .filter_map(|tx_hash| self.hash_to_order_id.get(tx_hash))
             .collect::<Vec<_>>();
 
@@ -284,7 +284,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             .remove(&hash)
             .unwrap_or_default();
 
-        return Ok(PoolInnerEvent::BadOrderMessages(peers))
+        Ok(PoolInnerEvent::BadOrderMessages(peers))
     }
 
     fn update_order_tracking(&mut self, order: &OrderWithStorageData<AllOrders>) {

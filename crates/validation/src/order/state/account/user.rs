@@ -106,8 +106,7 @@ impl UserAccounts {
             .map(|v| {
                 v.value()
                     .iter()
-                    .find(|pending_order| pending_order.nonce == nonce)
-                    .is_some()
+                    .any(|pending_order| pending_order.nonce == nonce)
             })
             .unwrap_or_default()
     }
@@ -174,8 +173,8 @@ impl UserAccounts {
 
     fn fetch_all_invalidated_orders(&self, user: UserAddress, token: TokenAddress) -> Vec<B256> {
         let baseline = self.last_known_state.get(&user).unwrap();
-        let mut baseline_approval = baseline.token_approval.get(&token).unwrap().clone();
-        let mut baseline_balance = baseline.token_balance.get(&token).unwrap().clone();
+        let mut baseline_approval = *baseline.token_approval.get(&token).unwrap();
+        let mut baseline_balance = *baseline.token_balance.get(&token).unwrap();
         let mut has_overflowed = false;
 
         let mut bad = vec![];
@@ -214,8 +213,8 @@ impl UserAccounts {
         nonce: U256
     ) -> Option<LiveState> {
         let baseline = self.last_known_state.get(&user)?;
-        let mut baseline_approval = baseline.token_approval.get(&token)?.clone();
-        let mut baseline_balance = baseline.token_balance.get(&token)?.clone();
+        let mut baseline_approval = *baseline.token_approval.get(&token)?;
+        let mut baseline_balance = *baseline.token_balance.get(&token)?;
 
         // the values returned here are the negative delta compaired to baseline.
         let (pending_approvals, pending_balance) = self

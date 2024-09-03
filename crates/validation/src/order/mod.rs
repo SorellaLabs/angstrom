@@ -20,11 +20,11 @@ pub mod state;
 
 use crate::validator::ValidationClient;
 
-pub type ValidationFuture<'a, O> =
-    Pin<Box<dyn Future<Output = OrderWithStorageData<O>> + Send + Sync + 'a>>;
+pub type ValidationFuture<'a> =
+    Pin<Box<dyn Future<Output = OrderValidationResults> + Send + Sync + 'a>>;
 
-pub type ValidationsFuture<'a, O> =
-    Pin<Box<dyn Future<Output = Vec<OrderWithStorageData<O>>> + Send + Sync + 'a>>;
+pub type ValidationsFuture<'a> =
+    Pin<Box<dyn Future<Output = Vec<OrderValidationResults>> + Send + Sync + 'a>>;
 
 pub enum OrderValidationRequest {
     ValidateOrder(Sender<OrderValidationResults>, AllOrders, OrderOrigin)
@@ -80,20 +80,13 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
     /// The order type of the limit order pool
     type Order: Send + Sync;
 
-    fn validate_order(
-        &self,
-        origin: OrderOrigin,
-        transaction: Self::Order
-    ) -> ValidationFuture<Self::Order>;
+    fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order) -> ValidationFuture;
 
     /// Validates a batch of orders.
     ///
     /// Must return all outcomes for the given orders in the same order.
 
-    fn validate_orders(
-        &self,
-        transactions: Vec<(OrderOrigin, Self::Order)>
-    ) -> ValidationsFuture<Self::Order> {
+    fn validate_orders(&self, transactions: Vec<(OrderOrigin, Self::Order)>) -> ValidationsFuture {
         Box::pin(futures_util::future::join_all(
             transactions
                 .into_iter()
@@ -105,11 +98,7 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
 impl OrderValidatorHandle for ValidationClient {
     type Order = AllOrders;
 
-    fn validate_order(
-        &self,
-        origin: OrderOrigin,
-        transaction: Self::Order
-    ) -> ValidationFuture<Self::Order> {
+    fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order) -> ValidationFuture {
         Box::pin(async move {
             let (tx, rx) = channel();
             let _ = self

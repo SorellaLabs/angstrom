@@ -36,6 +36,7 @@ pub fn order_distribution(
                 ..FlashOrder::default()
             });
             OrderWithStorageData {
+                invalidates: vec![],
                 order,
                 priority_data: OrderPriorityData {
                     price:  p as u128,

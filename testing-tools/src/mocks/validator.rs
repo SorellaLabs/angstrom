@@ -3,15 +3,15 @@ use std::{collections::HashMap, sync::Arc};
 use alloy_primitives::Address;
 use angstrom_types::{
     self,
-    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData, RawPoolOrder}
+    sol_bindings::grouped_orders::{AllOrders, RawPoolOrder}
 };
 use parking_lot::Mutex;
-use validation::order::OrderValidatorHandle;
+use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
 // all keys are the signer of the order
 #[derive(Debug, Clone, Default)]
 pub struct MockValidator {
-    pub limit_orders: Arc<Mutex<HashMap<Address, OrderWithStorageData<AllOrders>>>>
+    pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationResults>>>
 }
 
 macro_rules! inserts {
@@ -26,7 +26,7 @@ macro_rules! inserts {
     };
 }
 impl MockValidator {
-    pub fn add_order(&self, signer: Address, order: OrderWithStorageData<AllOrders>) {
+    pub fn add_order(&self, signer: Address, order: OrderValidationResults) {
         inserts!(self, limit_orders, signer, order)
     }
 }
@@ -40,7 +40,7 @@ impl OrderValidatorHandle for MockValidator {
         &self,
         _origin: angstrom_types::orders::OrderOrigin,
         transaction: Self::Order
-    ) -> validation::order::ValidationFuture<Self::Order> {
+    ) -> validation::order::ValidationFuture {
         let address = transaction.from();
         let res = self
             .limit_orders

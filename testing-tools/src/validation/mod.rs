@@ -16,7 +16,7 @@ use validation::{
     common::lru_db::RevmLRU,
     order::state::{
         config::{load_validation_config, ValidationConfig},
-        upkeepers::nonces::Nonces
+        db_state_utils::nonces::Nonces
     },
     validator::{ValidationClient, Validator}
 };

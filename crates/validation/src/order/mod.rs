@@ -65,6 +65,7 @@ impl From<OrderValidationRequest> for OrderValidation {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum OrderValidationResults {
     Valid(OrderWithStorageData<AllOrders>),
     // the raw hash to be removed

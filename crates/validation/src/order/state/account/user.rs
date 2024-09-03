@@ -140,7 +140,7 @@ impl UserAccounts {
     ) {
         let approvals = utils
             .approvals
-            .fetch_approval_balance_for_token(user, token, db.clone())
+            .fetch_approval_balance_for_token(user, token, db)
             .unwrap_or_default();
         let balances = utils
             .balances

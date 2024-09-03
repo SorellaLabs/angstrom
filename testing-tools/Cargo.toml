@@ -91,3 +91,4 @@ clap = { version = "4.5.4", features = ["derive"] }
 eyre = "0.6.12"
 tokio-tungstenite = "0.23.1"
 serde = { workspace = true, features = ["derive"]}
+serde_json.workspace = true

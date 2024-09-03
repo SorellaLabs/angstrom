@@ -17,11 +17,11 @@ use tokio::signal::unix::{signal, SignalKind};
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     std::env::set_var("RUST_LOG", "matching_engine=debug,info");
+    // std::env::set_var("RUST_LOG", "testing_tools=error,none");
     tracing_subscriber::fmt::init();
     let log_level = tracing::level_filters::LevelFilter::current();
     tracing::info!("Logging initialized at level: {}", log_level);
-
-    let ticks_per_side = 400;
+    let ticks_per_side = 1000;
     let address = address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640");
     let state_change_buffer = 1;
     let ws_endpoint = std::env::var("ETHEREUM_WS_ENDPOINT")?;
@@ -33,7 +33,7 @@ async fn main() -> eyre::Result<()> {
     let ws_provider = Arc::new(ws_provider);
     let pool_provider = ProviderAdapter::new(ws_provider.clone());
     let mut pool = EnhancedUniswapV3Pool::new(address, ticks_per_side);
-    pool.set_sim_swap_sync(true);
+    // pool.set_sim_swap_sync(true);
     pool.initialize(Some(block_number), ws_provider.clone())
         .await?;
     pool.sync_ticks(Some(block_number), ws_provider.clone())

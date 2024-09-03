@@ -1,23 +1,21 @@
-use std::cmp::Ordering;
-use std::sync::Arc;
+use std::{cmp::Ordering, sync::Arc};
 
-use crate::cfmm::uniswap::pool_manager::PoolManagerError;
 use alloy::{
     network::Network,
-    primitives::{Address, I256, U256},
+    primitives::{Address, Bytes, I256, U256},
     providers::Provider,
     sol,
-    sol_types::{SolEvent, SolType},
+    sol_types::{SolCall, SolEvent, SolType},
     transports::Transport
 };
-use amms::amm::{
-    consts::U256_1,
-    uniswap_v3::{IUniswapV3Pool, Info, UniswapV3Pool},
-    AutomatedMarketMaker
+use amms::{
+    amm::{
+        consts::U256_1,
+        uniswap_v3::{IUniswapV3Pool, Info, UniswapV3Pool},
+        AutomatedMarketMaker
+    },
+    errors::AMMError
 };
-use amms::errors::{AMMError, EventLogError};
-use num_bigfloat::BigFloat;
-use rand_distr::num_traits::One;
 use reth_primitives::Log;
 use thiserror::Error;
 use uniswap_v3_math::{
@@ -136,7 +134,7 @@ impl EnhancedUniswapV3Pool {
         let price = match shift.cmp(&0) {
             Ordering::Less => 1.0001_f64.powi(tick) / 10_f64.powi(-shift as i32),
             Ordering::Greater => 1.0001_f64.powi(tick) * 10_f64.powi(shift as i32),
-            Ordering::Equal => 1.0001_f64.powi(tick),
+            Ordering::Equal => 1.0001_f64.powi(tick)
         };
 
         if quoted_asset.is_none() || quoted_asset.unwrap() == self.token_b {
@@ -151,7 +149,7 @@ impl EnhancedUniswapV3Pool {
         match asset {
             Some(asset) if asset == self.token_a => Ok(reserve_a),
             Some(asset) if asset == self.token_b => Ok(reserve_b),
-            _ => Ok(reserve_a),
+            _ => Ok(reserve_a)
         }
     }
 
@@ -165,7 +163,9 @@ impl EnhancedUniswapV3Pool {
         N: Network,
         P: Provider<T, N>
     {
-        self.populate_data(block_number, provider).await.map_err(PoolError::from)
+        self.populate_data(block_number, provider)
+            .await
+            .map_err(PoolError::from)
     }
 
     pub fn is_initialized(&self) -> bool {
@@ -538,6 +538,25 @@ impl EnhancedUniswapV3Pool {
 
         Ok(())
     }
+
+    pub fn swap_calldata(
+        &self,
+        recipient: Address,
+        zero_for_one: bool,
+        amount_specified: I256,
+        sqrt_price_limit_x_96: U256,
+        calldata: Vec<u8>
+    ) -> Result<Bytes, alloy::dyn_abi::Error> {
+        Ok(IUniswapV3Pool::swapCall {
+            recipient,
+            zeroForOne: zero_for_one,
+            amountSpecified: amount_specified,
+            sqrtPriceLimitX96: sqrt_price_limit_x_96,
+            data: calldata.into()
+        }
+        .abi_encode()
+        .into())
+    }
 }
 
 impl std::ops::Deref for EnhancedUniswapV3Pool {
@@ -599,12 +618,13 @@ pub enum PoolError {
     #[error(transparent)]
     AMMError(#[from] amms::errors::AMMError),
     #[error(transparent)]
-    ArithmeticError(#[from] amms::errors::ArithmeticError),
+    ArithmeticError(#[from] amms::errors::ArithmeticError)
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use std::{str::FromStr, sync::Arc};
+
     use alloy::{
         hex,
         network::Ethereum,
@@ -616,7 +636,8 @@ mod test {
             layers::{RetryBackoffLayer, RetryBackoffService}
         }
     };
-    use std::{str::FromStr, sync::Arc};
+
+    use super::*;
 
     async fn setup_provider() -> Arc<RootProvider<RetryBackoffService<Http<Client>>, Ethereum>> {
         let rpc_endpoint =

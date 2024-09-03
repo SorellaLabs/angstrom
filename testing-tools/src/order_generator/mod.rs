@@ -1,14 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::StreamExt;
-use jsonrpsee::core::__reexports::serde_json;
-use matching_engine::cfmm::uniswap::pool_manager::UniswapPoolManager;
-use serde::{Deserialize, Serialize};
-use tokio::{
-    sync::{broadcast, RwLock},
-    time
+use alloy_primitives::{address, I256};
+use futures::stream::StreamExt;
+use matching_engine::cfmm::uniswap::{
+    pool::EnhancedUniswapV3Pool, pool_manager::UniswapPoolManager
 };
+use serde::{Deserialize, Serialize};
+use tokio::sync::{broadcast, RwLock};
 use tokio_tungstenite::connect_async;
+use uniswap_v3_math::tick_math::MAX_SQRT_RATIO;
 
 fn string_to_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
 where
@@ -70,7 +70,7 @@ impl PriceFeed {
         let (update_tx, _) = broadcast::channel(100);
         Self {
             base_url: base_url.unwrap_or_else(|| "wss://stream.binance.com:443/ws".to_string()),
-            symbol: symbol.unwrap_or_else(|| "ethusdt".to_string()),
+            symbol: symbol.unwrap_or_else(|| "ethusdc".to_string()),
             depth: depth.unwrap_or(5),
             interval: interval.unwrap_or_else(|| "100ms".to_string()),
             bids: Arc::new(RwLock::new(Vec::new())),
@@ -88,29 +88,32 @@ impl PriceFeed {
         let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");
         let (mut _write, mut read) = ws_stream.split();
 
-        let mut interval = time::interval(Duration::from_secs(1));
+        let mut last_update_time = tokio::time::Instant::now();
 
         while let Some(message) = read.next().await {
             if let Ok(text) = message.unwrap().to_text() {
                 match serde_json::from_str::<DepthUpdate>(text) {
                     Ok(depth_update) => {
                         tracing::debug!(
-                            "price update bids: {:?} asks: {:?}",
-                            depth_update.bids,
-                            depth_update.asks
+                            "price update best bid: {:?} best ask: {:?}",
+                            depth_update.bids.first(),
+                            depth_update.asks.first()
                         );
                         let mut bids = self.bids.write().await;
                         let mut asks = self.asks.write().await;
                         *bids = depth_update.bids.clone();
                         *asks = depth_update.asks.clone();
+
                         // intentionally throttled for testing
-                        interval.tick().await;
-                        self.update_tx
-                            .send(depth_update)
-                            .map_err(|_| PriceFeedError::UpdateSendError)?;
+                        if last_update_time.elapsed() >= Duration::from_secs(1) {
+                            self.update_tx
+                                .send(depth_update)
+                                .map_err(|_| PriceFeedError::UpdateSendError)?;
+                            last_update_time = tokio::time::Instant::now();
+                        }
                     }
                     Err(e) => {
-                        eprintln!("Failed to parse depth update: {}", e);
+                        tracing::error!("Failed to parse depth update: {} text {}", e, text);
                     }
                 }
             }
@@ -123,13 +126,11 @@ impl PriceFeed {
     }
 
     async fn get_bids(&self) -> Vec<PriceLevel> {
-        let bids = self.bids.read().await;
-        bids.clone()
+        self.bids.read().await.clone()
     }
 
     async fn get_asks(&self) -> Vec<PriceLevel> {
-        let asks = self.asks.read().await;
-        asks.clone()
+        self.asks.read().await.clone()
     }
 }
 
@@ -145,17 +146,15 @@ pub enum PriceFeedError {
 
 pub struct OrderGenerator<P> {
     pool_manager: UniswapPoolManager<P>,
-    binance_feed: PriceFeed,
-    api_key: String,
-    secret_key: String,
+    binance_feed: PriceFeed
 }
 
 impl<P> OrderGenerator<P>
 where
     P: matching_engine::cfmm::uniswap::pool_providers::PoolManagerProvider + Send + Sync + 'static
 {
-    pub async fn new(pool_manager: UniswapPoolManager<P>, binance_feed: PriceFeed, api_key: String, secret_key: String) -> Self {
-        Self { pool_manager, binance_feed, api_key, secret_key }
+    pub async fn new(pool_manager: UniswapPoolManager<P>, binance_feed: PriceFeed) -> Self {
+        Self { pool_manager, binance_feed }
     }
 
     pub async fn start(self) {
@@ -163,7 +162,7 @@ where
             match self.pool_manager.subscribe_state_changes().await {
                 Ok(result) => result,
                 Err(e) => {
-                    eprintln!("Failed to subscribe to state changes: {}", e);
+                    tracing::error!("Failed to subscribe to state changes: {}", e);
                     return;
                 }
             };
@@ -184,11 +183,12 @@ where
     }
 
     async fn check_arbitrage(&self) {
-        let pool_guard = self.pool_manager.pool().await;
+        // do it once at the top
+        let pool = self.pool_manager.pool().await;
+        let uniswap_price = pool.exchange_price(None).unwrap();
+        let uniswap_quantity = pool.exchange_quantity(None).unwrap();
 
-        let uniswap_price = pool_guard.exchange_price(None).unwrap();
-        let uniswap_quantity = pool_guard.exchange_quantity(None).unwrap();
-
+        let uniswap_quantity = uniswap_quantity as f64 / 10_f64.powi(pool.token_b_decimals as i32);
         let bids = self.binance_feed.get_bids().await;
         let asks = self.binance_feed.get_asks().await;
         let best_bid = bids.first();
@@ -204,63 +204,100 @@ where
                 best_ask.price,
                 best_ask.quantity
             );
-        } else {
-            tracing::info!(
-                "Uniswap price: {}, quantity: {} | No Binance best bid/ask available",
-                uniswap_price,
-                uniswap_quantity
-            );
         }
-
+        let to_address = address!("DecafC0ffee15BadDecafC0ffee15BadDecafC0f");
         if let (Some(best_bid), Some(best_ask)) = (best_bid, best_ask) {
             let binance_best_bid_price = best_bid.price;
             let binance_best_ask_price = best_ask.price;
 
-            // Check for arbitrage opportunity
             if binance_best_bid_price > uniswap_price {
-                // Generate order to sell on Binance and buy from the pool
-                let amount = best_bid.quantity.min(uniswap_quantity as f64);
-                self.binance_taker_order("SELL", amount).await;
-                // TODO: place order on the pool
+                let amount = best_bid.quantity;
+                let eth = pool.token_b;
+                let amount = amount * 10_f64.powi(pool.token_b_decimals as i32);
+                let amount_in = I256::from_dec_str(&amount.to_string()).unwrap();
+                let (swap_amount_in, swap_amount_out) =
+                    pool.simulate_swap(eth, amount_in, None).unwrap();
+                let _call_data = pool.swap_calldata(
+                    to_address,
+                    eth == pool.token_a,
+                    amount_in,
+                    MAX_SQRT_RATIO,
+                    vec![]
+                );
+                let uniswap_fill_price =
+                    self.calculate_uniswap_fill_price(&pool, swap_amount_in, swap_amount_out);
+                let binance_amount = amount / 10_f64.powi(pool.token_b_decimals as i32);
+                let uniswap_amount = swap_amount_out.abs().as_u64() as f64
+                    / 10_f64.powi(pool.token_b_decimals as i32);
+                let profit = (binance_best_bid_price * binance_amount)
+                    - (uniswap_fill_price * uniswap_amount);
+                tracing::info!(
+                    "SELL on Binance, BUY on Uniswap | Binance: Price: {:.2} USDC, Amount: {:.2} \
+                     ETH | Uniswap: Price: {:.2} USDC, Amount: {:.2} ETH, Fill Price: {:.2} USDC \
+                     | Profit: {:.2} USDC",
+                    binance_best_bid_price,
+                    binance_amount,
+                    uniswap_price,
+                    uniswap_amount,
+                    uniswap_fill_price,
+                    profit
+                );
             } else if binance_best_ask_price < uniswap_price {
-                // Generate order to buy on Binance and sell to the pool
-                let amount = best_ask.quantity.min(uniswap_quantity as f64);
-                self.binance_taker_order("BUY", amount).await;
-                // TODO: place order on the pool
+                let amount = best_ask.quantity;
+                let eth = pool.token_b;
+                let amount = amount * 10_f64.powi(pool.token_b_decimals as i32);
+                let amount_in = I256::from_dec_str(&amount.to_string()).unwrap();
+                let (swap_amount_in, swap_amount_out) =
+                    pool.simulate_swap(eth, amount_in, None).unwrap();
+
+                let _call_data = pool.swap_calldata(
+                    to_address,
+                    eth == pool.token_b,
+                    amount_in,
+                    MAX_SQRT_RATIO,
+                    vec![]
+                );
+
+                let uniswap_fill_price =
+                    self.calculate_uniswap_fill_price(&pool, swap_amount_in, swap_amount_out);
+                let binance_amount = amount / 10_f64.powi(pool.token_b_decimals as i32);
+                let uniswap_amount = swap_amount_out.abs().as_u64() as f64
+                    / 10_f64.powi(pool.token_b_decimals as i32);
+                let profit = (uniswap_fill_price * uniswap_amount)
+                    - (binance_best_ask_price * binance_amount);
+                tracing::info!(
+                    "BUY on Binance, SELL on Uniswap | Binance: Price: {:.2} USDC, Amount: {:.2} \
+                     ETH | Uniswap: Price: {:.2} USDC, Amount: {:.2} ETH, Fill Price: {:.2} USDC \
+                     | Profit: {:.2} USDC",
+                    binance_best_ask_price,
+                    binance_amount,
+                    uniswap_price,
+                    uniswap_amount,
+                    uniswap_fill_price,
+                    profit
+                );
             }
         }
     }
 
-    pub async fn binance_taker_order(&self, side: &str, quantity: f64) {
-        let timestamp = chrono::Utc::now().timestamp_millis();
-        let recv_window = 5000;
-
-        let mut params = vec![
-            ("symbol", "ETHUSDT"),
-            ("side", side),
-            ("type", "MARKET"),
-            ("quantity", &quantity.to_string()),
-            ("timestamp", &timestamp.to_string()),
-            ("recvWindow", &recv_window.to_string()),
-        ];
-
-        let query_string = serde_urlencoded::to_string(&params).unwrap();
-        let signature = hmac_sha256::HMAC::mac(query_string.as_bytes(), self.secret_key.as_bytes());
-        let signature = hex::encode(signature);
-
-        params.push(("signature", &signature));
-        let url = format!("https://api.binance.com/api/v3/order?{}", serde_urlencoded::to_string(&params).unwrap());
-
-        let client = reqwest::Client::new();
-        let response = client
-            .post(&url)
-            .header("X-MBX-APIKEY", &self.api_key)
-            .send()
-            .await
-            .unwrap();
-
-        tracing::info!("Binance order response: {:?}", response.text().await);
+    fn calculate_uniswap_fill_price(
+        &self,
+        pool: &EnhancedUniswapV3Pool,
+        swap_amount_in: I256,
+        swap_amount_out: I256
+    ) -> f64 {
+        (swap_amount_in.abs().as_u64() as f64 / 10_f64.powi(pool.token_a_decimals as i32))
+            / (swap_amount_out.abs().as_u64() as f64 / 10_f64.powi(pool.token_b_decimals as i32))
     }
-
-    pub fn uniswap_order(&self) {}
 }
+
+// fn sqrt96_to_price(sqrt96_price: U256) -> f64 {
+//     let sqrt_price = sqrt96_price.as_u64() as f64 / 2f64.powi(96);
+//     sqrt_price * sqrt_price
+// }
+//
+// fn price_to_sqrt96(price: f64) -> U256 {
+//     let sqrt_price = price.sqrt();
+//     let sqrt96_price = sqrt_price * 2f64.powi(96);
+//     U256::from(sqrt96_price as u128)
+// }

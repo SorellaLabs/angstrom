@@ -7,7 +7,7 @@ use alloy::{
     primitives::{Address, BlockNumber},
     rpc::types::eth::{Block, Filter}
 };
-use amms::{amm::AutomatedMarketMaker, errors::EventLogError};
+use amms::amm::AutomatedMarketMaker;
 use arraydeque::ArrayDeque;
 use futures::StreamExt;
 use futures_util::stream::BoxStream;
@@ -16,12 +16,12 @@ use thiserror::Error;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
-        RwLock, RwLockReadGuard, RwLockWriteGuard
+        RwLock, RwLockReadGuard
     },
     task::JoinHandle
 };
 
-use super::pool::{PoolError, SwapSimulationError};
+use super::pool::PoolError;
 use crate::cfmm::uniswap::{pool::EnhancedUniswapV3Pool, pool_providers::PoolManagerProvider};
 
 pub type StateChangeCache = ArrayDeque<StateChange, 150>;
@@ -57,10 +57,6 @@ where
 
     pub async fn pool(&self) -> RwLockReadGuard<'_, EnhancedUniswapV3Pool> {
         self.pool.read().await
-    }
-
-    pub async fn pool_mut(&self) -> RwLockWriteGuard<'_, EnhancedUniswapV3Pool> {
-        self.pool.write().await
     }
 
     pub async fn filter(&self) -> Filter {
@@ -242,7 +238,8 @@ where
         block_number: BlockNumber
     ) -> Result<(), PoolManagerError> {
         for log in logs {
-            pool.sync_from_log(log).map_err(PoolManagerError::PoolError)?;
+            pool.sync_from_log(log)
+                .map_err(PoolManagerError::PoolError)?;
         }
 
         let pool_clone = pool.clone();

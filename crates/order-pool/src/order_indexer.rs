@@ -223,12 +223,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
         if res.valid_block == self.block_number && !self.last_touched_addresses.remove(&res.from())
         {
-            // move orders that this invalidates to pending pools.
-            // let invalidated_txes = res.invalidates;
-
             let to_propagate = res.order.clone();
             // set tracking
             self.update_order_tracking(&res);
+            // move orders that this invalidates to pending pools.
             self.park_transactions(&res.invalidates);
 
             // insert

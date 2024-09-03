@@ -50,7 +50,11 @@ where
         handle: Handle
     ) -> Self {
         let threadpool = KeySplitThreadpool::new(handle, config.max_validation_per_user);
-        let state = StateValidation::new(db.clone(), config);
+        let state = StateValidation::new(
+            db.clone(),
+            config,
+            block_number.load(std::sync::atomic::Ordering::SeqCst)
+        );
         let sim = SimValidation::new(db);
 
         let new_state = state.clone();

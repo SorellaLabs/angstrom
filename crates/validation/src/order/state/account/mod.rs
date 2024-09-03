@@ -1,5 +1,8 @@
 //! keeps track of account state for orders
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{atomic::AtomicU64, Arc}
+};
 
 use alloy_primitives::B256;
 use angstrom_types::sol_bindings::grouped_orders::{OrderWithStorageData, PoolOrder, RawPoolOrder};
@@ -10,7 +13,8 @@ use user::UserAccounts;
 
 use super::{
     db_state_utils::FetchUtils,
-    pools::{index_to_address::AssetIndexToAddressWrapper, UserOrderPoolInfo}
+    pools::{index_to_address::AssetIndexToAddressWrapper, UserOrderPoolInfo},
+    ValidationConfig
 };
 use crate::{common::lru_db::BlockStateProviderFactory, RevmLRU};
 
@@ -31,6 +35,12 @@ pub struct UserAccountProcessor<DB> {
 }
 
 impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
+    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig, current_block: u64) -> Self {
+        let user_accounts = UserAccounts::new(current_block);
+        let fetch_utils = FetchUtils::new(config);
+        Self { db, fetch_utils, user_accounts, known_canceled_orders: DashSet::default() }
+    }
+
     /// Fetches the state overrides that are required for the hook simulation.
     pub fn grab_state_for_hook_simulations<O: RawPoolOrder>(
         &self,

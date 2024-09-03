@@ -3,6 +3,8 @@ use angstrom_pools::AngstromPools;
 use angstrom_types::sol_bindings::grouped_orders::{PoolOrder, RawPoolOrder};
 use index_to_address::{AssetIndexToAddress, AssetIndexToAddressWrapper};
 
+use super::config::ValidationConfig;
+
 pub mod angstrom_pools;
 pub mod index_to_address;
 
@@ -20,6 +22,10 @@ pub struct AngstromPoolsTracker {
 }
 
 impl AngstromPoolsTracker {
+    pub fn new(config: ValidationConfig) -> Self {
+        todo!()
+    }
+
     /// None if no pool was found
     pub fn fetch_pool_info_for_order<O: RawPoolOrder>(
         &self,

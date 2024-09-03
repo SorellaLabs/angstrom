@@ -50,7 +50,7 @@ impl<DB> StateValidation<DB>
 where
     DB: BlockStateProviderFactory + Unpin + 'static
 {
-    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig) -> Self {
+    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig, block: u64) -> Self {
         todo!()
     }
 

@@ -73,7 +73,8 @@ pub struct PendingUserAction {
 }
 
 pub struct UserAccounts {
-    current_block:   AtomicU64,
+    /// lets us know what the baseline state is for a user on a given block
+    current_block:   Arc<AtomicU64>,
     /// all of a user addresses pending orders.
     pending_actions: Arc<DashMap<UserAddress, Vec<PendingUserAction>>>,
 
@@ -82,6 +83,14 @@ pub struct UserAccounts {
 }
 
 impl UserAccounts {
+    pub fn new(current_block: u64) -> Self {
+        Self {
+            current_block:    Arc::new(AtomicU64::new(current_block)),
+            pending_actions:  Arc::new(DashMap::default()),
+            last_known_state: Arc::new(DashMap::default())
+        }
+    }
+
     pub fn current_block(&self) -> u64 {
         self.current_block.load(std::sync::atomic::Ordering::SeqCst)
     }

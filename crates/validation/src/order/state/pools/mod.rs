@@ -8,7 +8,7 @@ use super::config::ValidationConfig;
 pub mod angstrom_pools;
 pub mod index_to_address;
 
-pub trait PoolsTracker: Clone + Send {
+pub trait PoolsTracker: Clone + Send + Unpin {
     /// Returns None if no pool is found
     fn fetch_pool_info_for_order<O: RawPoolOrder>(
         &self,

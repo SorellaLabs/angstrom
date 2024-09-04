@@ -16,7 +16,7 @@ use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 
-pub trait StateFetchUtils: Clone + Send {
+pub trait StateFetchUtils: Clone + Send + Unpin {
     fn fetch_approval_balance_for_token_overrides<DB: BlockStateProviderFactory>(
         &self,
         user: Address,

@@ -48,11 +48,20 @@ where
         rx: UnboundedReceiver<ValidationRequest>,
         new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
         db: Arc<RevmLRU<DB>>,
-        config: ValidationConfig,
         block_number: Arc<AtomicU64>,
+        max_validation_per_user: usize,
+        pools: Pools,
+        fetch: Fetch,
         handle: Handle
     ) -> Self {
-        let order_validator = OrderValidator::new(db.clone(), config, block_number, handle);
+        let order_validator = OrderValidator::new(
+            db.clone(),
+            block_number,
+            max_validation_per_user,
+            pools,
+            fetch,
+            handle
+        );
         Self { new_block_stream, db, order_validator, rx }
     }
 

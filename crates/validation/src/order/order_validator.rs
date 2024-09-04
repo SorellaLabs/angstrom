@@ -50,16 +50,18 @@ where
 {
     pub fn new(
         db: Arc<RevmLRU<DB>>,
-        config: ValidationConfig,
         block_number: Arc<AtomicU64>,
+        max_validation_per_user: usize,
+        pools: Pools,
+        fetch: Fetch,
         handle: Handle
     ) -> Self {
-        let threadpool = KeySplitThreadpool::new(handle, config.max_validation_per_user);
+        let threadpool = KeySplitThreadpool::new(handle, max_validation_per_user);
         let state = StateValidation::new(
             db.clone(),
-            config,
             block_number.load(std::sync::atomic::Ordering::SeqCst),
-            todo!()
+            pools,
+            fetch
         );
         let sim = SimValidation::new(db);
 

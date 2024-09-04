@@ -51,7 +51,7 @@ impl<DB, Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<DB, Pools,
 where
     DB: BlockStateProviderFactory + Unpin + 'static
 {
-    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig, block: u64, pools: Pools) -> Self {
+    pub fn new(db: Arc<RevmLRU<DB>>, block: u64, pools: Pools, fetch: Fetch) -> Self {
         todo!()
     }
 

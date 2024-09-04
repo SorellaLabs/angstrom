@@ -91,17 +91,16 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
         );
 
         // ensure that the current live state is enough to satisfy the order
-        let (is_cur_valid, invalid_orders) =
-            if let Some(pending_user_action) = live_state.can_support_order(&order, &pool_info) {
-                // we can satisfy this order. lets check the higher level nonces to see if we
-                // invalidate anything
-                let invalid_orders = self
-                    .user_accounts
-                    .insert_pending_user_action(order.from(), pending_user_action);
-                (true, invalid_orders)
-            } else {
-                (false, vec![])
-            };
+        let (is_cur_valid, invalid_orders) = live_state
+            .can_support_order(&order, &pool_info)
+            .map(|pending_user_action| {
+                (
+                    true,
+                    self.user_accounts
+                        .insert_pending_user_action(order.from(), pending_user_action)
+                )
+            })
+            .unwrap_or_default();
 
         Ok(order.into_order_storage_with_data(
             block,

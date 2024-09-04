@@ -6,13 +6,14 @@ use std::{
 use alloy_primitives::Address;
 use angstrom_types::sol_bindings::grouped_orders::{PoolOrder, RawPoolOrder};
 use dashmap::DashMap;
-use futures::pending;
 use parking_lot::RwLock;
 use reth_primitives::{TxHash, B256, U256};
 
 use crate::{
     order::state::{
-        db_state_utils::FetchUtils, pools::UserOrderPoolInfo, AssetIndexToAddressWrapper
+        db_state_utils::{FetchUtils, StateFetchUtils},
+        pools::UserOrderPoolInfo,
+        AssetIndexToAddressWrapper
     },
     BlockStateProviderFactory, RevmLRU
 };
@@ -135,12 +136,12 @@ impl UserAccounts {
             .unwrap_or_default()
     }
 
-    pub fn get_live_state_for_order<DB: Send + BlockStateProviderFactory>(
+    pub fn get_live_state_for_order<DB: Send + BlockStateProviderFactory, S: StateFetchUtils>(
         &self,
         user: UserAddress,
         token: TokenAddress,
         nonce: U256,
-        utils: &FetchUtils,
+        utils: &S,
         db: &RevmLRU<DB>
     ) -> LiveState {
         self.try_fetch_live_pending_state(user, token, nonce)
@@ -154,19 +155,17 @@ impl UserAccounts {
             })
     }
 
-    fn load_state_for<DB: Send + BlockStateProviderFactory>(
+    fn load_state_for<DB: Send + BlockStateProviderFactory, S: StateFetchUtils>(
         &self,
         user: UserAddress,
         token: TokenAddress,
-        utils: &FetchUtils,
+        utils: &S,
         db: &RevmLRU<DB>
     ) {
         let approvals = utils
-            .approvals
             .fetch_approval_balance_for_token(user, token, db)
             .unwrap_or_default();
         let balances = utils
-            .balances
             .fetch_balance_for_token(user, token, db)
             .unwrap_or_default();
 

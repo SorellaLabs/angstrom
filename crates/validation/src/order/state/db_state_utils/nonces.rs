@@ -10,6 +10,7 @@ use crate::order::state::{BlockStateProviderFactory, RevmLRU};
 /// The nonce location for quick db lookup
 const ANGSTROM_NONCE_SLOT_CONST: [u8; 4] = hex!("daa050e9");
 
+#[derive(Clone)]
 pub struct Nonces;
 
 impl Nonces {

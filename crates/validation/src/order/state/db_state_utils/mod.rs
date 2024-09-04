@@ -16,7 +16,7 @@ use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 
-pub trait StateFetchUtils {
+pub trait StateFetchUtils: Clone + Send {
     fn fetch_approval_balance_for_token_overrides<DB: BlockStateProviderFactory>(
         &self,
         user: Address,
@@ -59,6 +59,7 @@ pub struct UserAccountDetails {
     pub pool_id:         usize
 }
 
+#[derive(Clone)]
 pub struct FetchUtils {
     pub approvals: Approvals,
     pub balances:  Balances,

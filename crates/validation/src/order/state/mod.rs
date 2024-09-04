@@ -3,10 +3,11 @@ use std::{collections::HashMap, sync::Arc, task::Poll};
 use account::UserAccountProcessor;
 use alloy_primitives::{Address, B256, U256};
 use angstrom_types::sol_bindings::grouped_orders::{AllOrders, RawPoolOrder};
+use db_state_utils::StateFetchUtils;
 use futures::{Stream, StreamExt};
 use futures_util::stream::FuturesUnordered;
 use parking_lot::RwLock;
-use pools::AngstromPoolsTracker;
+use pools::{AngstromPoolsTracker, PoolsTracker};
 use revm::db::{AccountStatus, BundleState};
 use tokio::{
     sync::oneshot::Sender,
@@ -38,24 +39,20 @@ type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 /// 4) deals with possible pending state
 #[allow(dead_code)]
 #[derive(Clone)]
-pub struct StateValidation<DB> {
+pub struct StateValidation<DB, Pools, Fetch> {
     db:                   Arc<RevmLRU<DB>>,
     /// tracks everything user related.
-    user_account_tracker: Arc<UserAccountProcessor<DB>>,
+    user_account_tracker: Arc<UserAccountProcessor<DB, Fetch>>,
     /// tracks all info about the current angstrom pool state.
-    pool_tacker:          Arc<AngstromPoolsTracker>
+    pool_tacker:          Arc<Pools>
 }
 
-impl<DB> StateValidation<DB>
+impl<DB, Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<DB, Pools, Fetch>
 where
     DB: BlockStateProviderFactory + Unpin + 'static
 {
-    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig, block: u64) -> Self {
+    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig, block: u64, pools: Pools) -> Self {
         todo!()
-    }
-
-    pub fn wrap_order<O: RawPoolOrder>(&self, order: O) -> Option<AssetIndexToAddressWrapper<O>> {
-        self.pool_tacker.asset_index_to_address.wrap(order)
     }
 
     fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(

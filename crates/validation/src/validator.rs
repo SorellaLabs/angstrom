@@ -16,7 +16,9 @@ use tokio::{
 use crate::{
     common::lru_db::{BlockStateProviderFactory, RevmLRU},
     order::{
-        order_validator::OrderValidator, state::config::ValidationConfig, OrderValidationRequest
+        order_validator::OrderValidator,
+        state::{config::ValidationConfig, db_state_utils::StateFetchUtils, pools::PoolsTracker},
+        OrderValidationRequest
     }
 };
 
@@ -27,18 +29,20 @@ pub enum ValidationRequest {
 #[derive(Debug, Clone)]
 pub struct ValidationClient(pub UnboundedSender<ValidationRequest>);
 
-pub struct Validator<DB> {
+pub struct Validator<DB, Pools, Fetch> {
     rx:               UnboundedReceiver<ValidationRequest>,
     /// used to update state
     new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
     db:               Arc<RevmLRU<DB>>,
 
-    order_validator: OrderValidator<DB>
+    order_validator: OrderValidator<DB, Pools, Fetch>
 }
 
-impl<DB> Validator<DB>
+impl<DB, Pools, Fetch> Validator<DB, Pools, Fetch>
 where
-    DB: BlockStateProviderFactory + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Unpin + Clone + 'static,
+    Pools: PoolsTracker + Sync + 'static,
+    Fetch: StateFetchUtils + Sync + 'static
 {
     pub fn new(
         rx: UnboundedReceiver<ValidationRequest>,
@@ -59,9 +63,11 @@ where
     }
 }
 
-impl<DB> Future for Validator<DB>
+impl<DB, Pools, Fetch> Future for Validator<DB, Pools, Fetch>
 where
-    DB: BlockStateProviderFactory + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Unpin + Clone + 'static,
+    Pools: PoolsTracker + Sync + Unpin + 'static,
+    Fetch: StateFetchUtils + Sync + Unpin + 'static
 {
     type Output = ();
 

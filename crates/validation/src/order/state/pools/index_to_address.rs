@@ -17,7 +17,7 @@ use reth_primitives::B256;
 
 use super::UserOrderPoolInfo;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AssetIndexToAddress(DashMap<u16, Address>);
 
 #[derive(Debug, Clone)]

@@ -12,7 +12,7 @@ use thiserror::Error;
 use user::UserAccounts;
 
 use super::{
-    db_state_utils::FetchUtils,
+    db_state_utils::{FetchUtils, StateFetchUtils},
     pools::{index_to_address::AssetIndexToAddressWrapper, UserOrderPoolInfo},
     ValidationConfig
 };
@@ -22,22 +22,29 @@ pub mod user;
 
 /// processes a user account and tells us based on there current live orders
 /// wether or not this order is valid.
-pub struct UserAccountProcessor<DB> {
+pub struct UserAccountProcessor<DB, S> {
     /// database for fetching verification info
     db:                    Arc<RevmLRU<DB>>,
     /// keeps track of all user accounts
     user_accounts:         UserAccounts,
     /// utils for fetching the required data to verify
     /// a order.
-    fetch_utils:           FetchUtils,
+    fetch_utils:           S,
     /// to ensure that we don't re-validate a canceled order
     known_canceled_orders: DashSet<B256>
 }
 
-impl<DB: BlockStateProviderFactory + Unpin + 'static> UserAccountProcessor<DB> {
-    pub fn new(db: Arc<RevmLRU<DB>>, config: ValidationConfig, current_block: u64) -> Self {
+impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
+    UserAccountProcessor<DB, S>
+{
+    pub fn new(
+        db: Arc<RevmLRU<DB>>,
+        config: ValidationConfig,
+        current_block: u64,
+        fetch_utils: S
+    ) -> Self {
         let user_accounts = UserAccounts::new(current_block);
-        let fetch_utils = FetchUtils::new(config);
+        // let fetch_utils = FetchUtils::new(config);
         Self { db, fetch_utils, user_accounts, known_canceled_orders: DashSet::default() }
     }
 

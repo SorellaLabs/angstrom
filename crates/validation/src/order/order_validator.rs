@@ -20,7 +20,10 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 use super::{
     sim::SimValidation,
-    state::{account::user::UserAddress, config::ValidationConfig, StateValidation},
+    state::{
+        account::user::UserAddress, config::ValidationConfig, db_state_utils::StateFetchUtils,
+        pools::PoolsTracker, StateValidation
+    },
     OrderValidationRequest
 };
 use crate::{
@@ -32,16 +35,18 @@ use crate::{
     validator::ValidationRequest
 };
 
-pub struct OrderValidator<DB> {
+pub struct OrderValidator<DB, Pools, Fetch> {
     sim:          SimValidation<DB>,
-    state:        StateValidation<DB>,
+    state:        StateValidation<DB, Pools, Fetch>,
     threadpool:   KeySplitThreadpool<UserAddress, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>,
     block_number: Arc<AtomicU64>
 }
 
-impl<DB> OrderValidator<DB>
+impl<DB, Pools, Fetch> OrderValidator<DB, Pools, Fetch>
 where
-    DB: BlockStateProviderFactory + Unpin + Clone + 'static
+    DB: BlockStateProviderFactory + Unpin + Clone + 'static,
+    Pools: PoolsTracker + Sync + 'static,
+    Fetch: StateFetchUtils + Sync + 'static
 {
     pub fn new(
         db: Arc<RevmLRU<DB>>,
@@ -53,7 +58,8 @@ where
         let state = StateValidation::new(
             db.clone(),
             config,
-            block_number.load(std::sync::atomic::Ordering::SeqCst)
+            block_number.load(std::sync::atomic::Ordering::SeqCst),
+            todo!()
         );
         let sim = SimValidation::new(db);
 
@@ -84,9 +90,11 @@ where
     }
 }
 
-impl<DB> Future for OrderValidator<DB>
+impl<DB, Pools, Fetch> Future for OrderValidator<DB, Pools, Fetch>
 where
-    DB: BlockStateProviderFactory + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + Clone + Unpin + 'static,
+    Pools: PoolsTracker + Sync + Unpin + 'static,
+    Fetch: StateFetchUtils + Sync + Unpin + 'static
 {
     type Output = ();
 

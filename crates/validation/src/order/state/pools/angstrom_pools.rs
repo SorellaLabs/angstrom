@@ -6,6 +6,7 @@ use dashmap::DashMap;
 
 pub type PoolIdWithDirection = (bool, PoolId);
 
+#[derive(Clone)]
 pub struct AngstromPools(DashMap<FixedBytes<40>, PoolIdWithDirection>);
 
 impl AngstromPools {

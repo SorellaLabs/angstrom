@@ -16,6 +16,38 @@ use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 
+pub trait StateFetchUtils {
+    fn fetch_approval_balance_for_token_overrides<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: Arc<RevmLRU<DB>>,
+        overrides: &HashMap<Address, HashMap<U256, U256>>
+    ) -> Option<U256>;
+
+    fn fetch_approval_balance_for_token<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: &RevmLRU<DB>
+    ) -> Option<U256>;
+
+    fn fetch_balance_for_token_overrides<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: Arc<RevmLRU<DB>>,
+        overrides: &HashMap<Address, HashMap<U256, U256>>
+    ) -> Option<U256>;
+
+    fn fetch_balance_for_token<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: &RevmLRU<DB>
+    ) -> Option<U256>;
+}
+
 #[derive(Debug)]
 pub struct UserAccountDetails {
     pub token:           Address,
@@ -31,6 +63,49 @@ pub struct FetchUtils {
     pub approvals: Approvals,
     pub balances:  Balances,
     pub nonces:    Nonces
+}
+
+impl StateFetchUtils for FetchUtils {
+    fn fetch_balance_for_token<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: &RevmLRU<DB>
+    ) -> Option<U256> {
+        self.balances.fetch_balance_for_token(user, token, db)
+    }
+
+    fn fetch_approval_balance_for_token<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: &RevmLRU<DB>
+    ) -> Option<U256> {
+        self.approvals
+            .fetch_approval_balance_for_token(user, token, db)
+    }
+
+    fn fetch_balance_for_token_overrides<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: Arc<RevmLRU<DB>>,
+        overrides: &HashMap<Address, HashMap<U256, U256>>
+    ) -> Option<U256> {
+        self.balances
+            .fetch_balance_for_token_overrides(user, token, db, overrides)
+    }
+
+    fn fetch_approval_balance_for_token_overrides<DB: BlockStateProviderFactory>(
+        &self,
+        user: Address,
+        token: Address,
+        db: Arc<RevmLRU<DB>>,
+        overrides: &HashMap<Address, HashMap<U256, U256>>
+    ) -> Option<U256> {
+        self.approvals
+            .fetch_approval_balance_for_token_overrides(user, token, db, overrides)
+    }
 }
 
 impl FetchUtils {

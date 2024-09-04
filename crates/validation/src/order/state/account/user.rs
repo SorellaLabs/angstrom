@@ -8,7 +8,7 @@ use angstrom_types::sol_bindings::grouped_orders::{PoolOrder, RawPoolOrder};
 use dashmap::DashMap;
 use futures::pending;
 use parking_lot::RwLock;
-use reth_primitives::{B256, U256};
+use reth_primitives::{TxHash, B256, U256};
 
 use crate::{
     order::state::{
@@ -93,6 +93,21 @@ impl UserAccounts {
 
     pub fn current_block(&self) -> u64 {
         self.current_block.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    // removes any possible changed state along with the orders that need to be
+    // revalidated.
+    pub fn invalidate_last_known_state(
+        &self,
+        new_block: u64,
+        state_change_users: Vec<UserAddress>
+    ) {
+        state_change_users.iter().for_each(|user| {
+            self.last_known_state.remove(user);
+        });
+
+        self.current_block
+            .store(new_block, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// returns true if the order cancel has been processed successfully

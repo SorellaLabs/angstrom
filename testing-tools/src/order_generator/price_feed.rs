@@ -1,10 +1,14 @@
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, task::Poll, time::Duration};
 
-use futures::StreamExt;
+use futures::{stream::SplitStream, Stream, StreamExt};
 use jsonrpsee::core::Serialize;
 use serde::Deserialize;
-use tokio::sync::{broadcast, RwLock};
-use tokio_tungstenite::connect_async;
+use tokio::{
+    net::TcpStream,
+    sync::{broadcast, RwLock},
+    time::{interval, Interval}
+};
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
 fn string_to_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
 where
@@ -30,68 +34,52 @@ pub struct DepthUpdate {
     pub asks:            Vec<PriceLevel>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PriceFeed {
-    base_url:  String,
-    symbol:    String,
-    depth:     u32,
-    interval:  String,
-    cache:     Arc<RwLock<DepthUpdate>>,
-    update_tx: broadcast::Sender<DepthUpdate>
-}
-
-impl Default for PriceFeed {
-    fn default() -> Self {
-        let (update_tx, _) = broadcast::channel(100);
-        Self {
-            base_url: "wss://stream.binance.com:443/ws".to_string(),
-            symbol: "ethusdc".to_string(),
-            depth: 5,
-            interval: "100ms".to_string(),
-            cache: Arc::new(RwLock::new(DepthUpdate {
-                last_updated_id: 0,
-                bids:            Vec::new(),
-                asks:            Vec::new()
-            })),
-            update_tx
-        }
-    }
+    cache:   DepthUpdate,
+    tcp:     SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    release: Interval
 }
 
 impl PriceFeed {
-    pub fn new(
+    pub async fn new(
         base_url: Option<String>,
         symbol: Option<String>,
         depth: Option<u32>,
-        interval: Option<String>
+        ex_interval: Option<String>,
+        update_freq: Duration
     ) -> Self {
-        let (update_tx, _) = broadcast::channel(100);
+        let base_url = base_url.unwrap_or_else(|| "wss://stream.binance.com:443/ws".to_string());
+        let symbol = symbol.unwrap_or_else(|| "ethusdc".to_string());
+        let depth = depth.unwrap_or(5);
+        let ex_interval = ex_interval.unwrap_or_else(|| "100ms".to_string());
+        let url = format!("{}/{}@depth{}@{}", base_url, symbol, depth, ex_interval);
+        let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");
+        let (_, read) = ws_stream.split();
         Self {
-            base_url: base_url.unwrap_or_else(|| "wss://stream.binance.com:443/ws".to_string()),
-            symbol: symbol.unwrap_or_else(|| "ethusdc".to_string()),
-            depth: depth.unwrap_or(5),
-            interval: interval.unwrap_or_else(|| "100ms".to_string()),
-            cache: Arc::new(RwLock::new(DepthUpdate {
+            cache:   DepthUpdate {
                 last_updated_id: 0,
                 bids:            Vec::new(),
                 asks:            Vec::new()
-            })),
-            update_tx
+            },
+            tcp:     read,
+            release: interval(update_freq)
         }
     }
+}
 
-    fn get_url(&self) -> String {
-        format!("{}/{}@depth{}@{}", self.base_url, self.symbol, self.depth, self.interval)
-    }
+impl Stream for PriceFeed {
+    type Item = DepthUpdate;
 
-    pub async fn start(&self) -> Result<(), PriceFeedError> {
-        let url = self.get_url();
-        let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");
-        let (mut _write, mut read) = ws_stream.split();
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>
+    ) -> std::task::Poll<Option<Self::Item>> {
+        if self.release.poll_tick(cx).is_ready() {
+            return Poll::Ready(Some(self.cache.clone()))
+        }
 
-        let mut last_update_time = tokio::time::Instant::now();
-
-        while let Some(message) = read.next().await {
+        while let Poll::Ready(Some(message)) = self.tcp.poll_next_unpin(cx) {
             if let Ok(text) = message.unwrap().to_text() {
                 match serde_json::from_str::<DepthUpdate>(text) {
                     Ok(depth_update) => {
@@ -100,16 +88,7 @@ impl PriceFeed {
                             depth_update.bids.first(),
                             depth_update.asks.first()
                         );
-                        let mut cache = self.cache.write().await;
-                        *cache = depth_update.clone();
-
-                        // intentionally throttled for testing
-                        if last_update_time.elapsed() >= Duration::from_secs(1) {
-                            self.update_tx
-                                .send(depth_update)
-                                .map_err(|_| PriceFeedError::UpdateSendError)?;
-                            last_update_time = tokio::time::Instant::now();
-                        }
+                        self.cache = depth_update.clone();
                     }
                     Err(e) => {
                         tracing::error!("Failed to parse depth update: {} text {}", e, text);
@@ -117,16 +96,8 @@ impl PriceFeed {
                 }
             }
         }
-        Ok(())
-    }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<DepthUpdate> {
-        self.update_tx.subscribe()
-    }
-
-    pub async fn price_cache(&self) -> (Vec<PriceLevel>, Vec<PriceLevel>) {
-        let cache = self.cache.read().await;
-        (cache.bids.clone(), cache.asks.clone())
+        Poll::Pending
     }
 }
 

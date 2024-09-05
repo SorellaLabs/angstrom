@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use alloy::{
     network::Ethereum,
@@ -7,6 +7,7 @@ use alloy::{
     pubsub::PubSubFrontend
 };
 use alloy_provider::Provider;
+use futures::StreamExt;
 use matching_engine::cfmm::uniswap::{
     pool::EnhancedUniswapV3Pool, pool_manager::UniswapPoolManager,
     pool_providers::provider_adapter::ProviderAdapter
@@ -40,18 +41,23 @@ async fn main() -> eyre::Result<()> {
     let pool_manager =
         UniswapPoolManager::new(pool, block_number, state_change_buffer, Arc::new(pool_provider));
 
-    let binance_feed = PriceFeed::default();
-    let order_generator =
-        OrderGenerator::new(pool_manager, binance_feed.clone(), ws_provider.clone()).await;
+    let binance_feed = PriceFeed::new(None, None, None, None, Duration::from_millis(100)).await;
+    let mut order_generator = OrderGenerator::new(pool_manager, binance_feed, ws_provider).await;
 
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigint = signal(SignalKind::interrupt())?;
 
-    tokio::select! {
-        _ = sigterm.recv() => {},
-        _ = sigint.recv() => {},
-        _ = binance_feed.start() => {},
-        _ = order_generator.start() => {},
+    loop {
+        tokio::select! {
+            _ = sigterm.recv() => {},
+            _ = sigint.recv() => {},
+            possible_order = order_generator.next() => {
+                if possible_order.is_none() {
+                    break;
+                }
+                tracing::info!(?possible_order, "got possible order from order generator");
+            },
+        }
     }
 
     tracing::info!("Shutting down gracefully");

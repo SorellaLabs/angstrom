@@ -1,27 +1,29 @@
 pub mod price_feed;
-
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, task::Poll};
 
 use alloy::{
     hex,
-    network::{Ethereum, Network, TransactionBuilder}
+    network::{Network, TransactionBuilder}
 };
-use alloy_primitives::{address, Address, Bytes, I256, U128};
+use alloy_primitives::{address, Address, Bytes, I256};
 use alloy_provider::Provider;
 use alloy_transport::Transport;
 use amms::amm::consts::U256_1;
-use angstrom_types::matching::SqrtPriceX96;
+use futures::{Stream, StreamExt};
 use matching_engine::cfmm::uniswap::{
     pool::EnhancedUniswapV3Pool, pool_manager::UniswapPoolManager,
     pool_providers::PoolManagerProvider
 };
 use num_bigfloat::BigFloat;
+use price_feed::DepthUpdate;
 use uniswap_v3_math::tick_math::MAX_SQRT_RATIO;
 
 use crate::order_generator::price_feed::{PriceFeed, PriceLevel};
 
 pub struct OrderGenerator<P, B, T, N> {
     pool_manager: UniswapPoolManager<P>,
+    pool_update:  tokio::sync::mpsc::Receiver<(Address, u64)>,
+    last_update:  Option<DepthUpdate>,
     binance_feed: PriceFeed,
     provider:     Arc<B>,
     _phantom:     PhantomData<(T, N)>
@@ -29,48 +31,38 @@ pub struct OrderGenerator<P, B, T, N> {
 
 impl<P, B, T, N> OrderGenerator<P, B, T, N>
 where
-    P: PoolManagerProvider + Send + Sync + 'static,
-    B: Provider<T, N> + Send + Sync,
-    T: Transport + Clone + Send + Sync,
-    N: Network + Send + Sync
+    P: PoolManagerProvider + Send + Sync + 'static + Unpin,
+    B: Provider<T, N> + Send + Sync + Unpin,
+    T: Transport + Clone + Send + Sync + Unpin,
+    N: Network + Send + Sync + Unpin
 {
     pub async fn new(
         pool_manager: UniswapPoolManager<P>,
         binance_feed: PriceFeed,
         provider: Arc<B>
     ) -> Self {
-        Self { pool_manager, binance_feed, provider, _phantom: PhantomData }
-    }
-
-    pub async fn start(self) {
-        let (mut pool_update_rx, _join_handles) =
-            match self.pool_manager.subscribe_state_changes().await {
-                Ok(result) => result,
-                Err(e) => {
-                    tracing::error!("Failed to subscribe to state changes: {}", e);
-                    return;
-                }
-            };
-
-        let mut price_feed_rx = self.binance_feed.subscribe();
-
-        loop {
-            tokio::select! {
-                Some((_address, _block_number)) = pool_update_rx.recv() => {
-                    self.check_arbitrage().await;
-                }
-                Ok(_) = price_feed_rx.recv() => {
-                    self.check_arbitrage().await;
-                }
+        let (pool_update_rx, _join_handles) = match pool_manager.subscribe_state_changes().await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::error!("Failed to subscribe to state changes: {}", e);
+                panic!();
             }
+        };
+
+        Self {
+            pool_manager,
+            binance_feed,
+            provider,
+            pool_update: pool_update_rx,
+            last_update: None,
+            _phantom: PhantomData
         }
     }
 
-    async fn check_arbitrage(&self) {
-        // do it once at the top
-        let pool = self.pool_manager.pool().await;
+    fn on_depth_update(&mut self, update: DepthUpdate) -> Option<SuggestedOrder> {
+        let pool = self.pool_manager.pool();
 
-        let (mut bids, mut asks) = self.binance_feed.price_cache().await;
+        let (mut bids, mut asks) = (update.bids, update.asks);
         let best_bid = bids.pop();
         let best_ask = asks.pop();
         tracing::debug!(
@@ -84,9 +76,9 @@ where
 
         if let (Some(best_bid), Some(best_ask)) = (best_bid, best_ask) {
             let (ask_profit, ask_binance_amount, ask_uniswap_fill_price, ask_uniswap_amount) =
-                self.try_sell_on_uniswap(&pool, &best_ask).await;
+                self.try_sell_on_uniswap(&pool, &best_ask);
             let (bid_profit, bid_binance_amount, bid_uniswap_fill_price, bid_uniswap_amount) =
-                self.try_buy_on_uniswap(&pool, &best_bid).await;
+                self.try_buy_on_uniswap(&pool, &best_bid);
 
             tracing::debug!(
                 "Ask Profit: {:.2} USDC vs Bid Profit: {:.2} USDC | Uniswap Ask Fill Price: {:.3} \
@@ -142,8 +134,20 @@ where
                     uniswap_amount,
                     profit,
                 );
+
+                return Some(SuggestedOrder {
+                    binance_amount,
+                    uniswap_side: if binance_trade_type == "SELL" { "BUY" } else { "SELL" }
+                        .to_string(),
+                    binance_price,
+                    uniswap_fill_price,
+                    uniswap_amount,
+                    profit
+                })
             }
         }
+
+        None
     }
 
     async fn execute_trade(&self, pool: &EnhancedUniswapV3Pool, zero_for_one: bool, amount: I256) {
@@ -159,7 +163,7 @@ where
     }
 
     // sell ETH
-    async fn try_sell_on_uniswap(
+    fn try_sell_on_uniswap(
         &self,
         pool: &EnhancedUniswapV3Pool,
         best_ask: &PriceLevel
@@ -187,7 +191,7 @@ where
     }
 
     // buy ETH
-    async fn try_buy_on_uniswap(
+    fn try_buy_on_uniswap(
         &self,
         pool: &EnhancedUniswapV3Pool,
         best_bid: &PriceLevel
@@ -241,5 +245,49 @@ where
             .pow(&BigFloat::from_u8(pool.token_b_decimals - pool.token_a_decimals));
 
         (amount_in / amount_out) * decimal_adjustment
+    }
+}
+
+#[derive(Debug)]
+pub struct SuggestedOrder {
+    pub uniswap_side:       String,
+    pub binance_price:      f64,
+    pub uniswap_fill_price: f64,
+    pub binance_amount:     f64,
+    pub uniswap_amount:     I256,
+    pub profit:             f64
+}
+
+
+impl<P, B, T, N> Stream for OrderGenerator<P, B, T, N>
+where
+    P: PoolManagerProvider + Send + Sync + 'static + Unpin,
+    B: Provider<T, N> + Send + Sync + Unpin,
+    T: Transport + Clone + Send + Sync + Unpin,
+    N: Network + Send + Sync + Unpin
+{
+    type Item = SuggestedOrder;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>
+    ) -> std::task::Poll<Option<Self::Item>> {
+        while let Poll::Ready(Some(depth)) = self.binance_feed.poll_next_unpin(cx) {
+            self.last_update = Some(depth.clone());
+            let result = self.on_depth_update(depth);
+            if result.is_some() {
+                return Poll::Ready(result)
+            }
+        }
+
+        while self.pool_update.poll_recv(cx).is_ready() {
+            if let Some(cached_depth) = self.last_update.clone() {
+                let result = self.on_depth_update(cached_depth);
+                if result.is_some() {
+                    return Poll::Ready(result)
+                }
+            }
+        }
+        Poll::Pending
     }
 }

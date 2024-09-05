@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc
+    Arc, RwLock
 };
 
 use alloy::{
@@ -14,10 +14,7 @@ use futures_util::stream::BoxStream;
 use reth_primitives::Log;
 use thiserror::Error;
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        RwLock, RwLockReadGuard
-    },
+    sync::mpsc::{Receiver, Sender},
     task::JoinHandle
 };
 
@@ -55,12 +52,12 @@ where
         }
     }
 
-    pub async fn pool(&self) -> RwLockReadGuard<'_, EnhancedUniswapV3Pool> {
-        self.pool.read().await
+    pub fn pool(&self) -> std::sync::RwLockReadGuard<'_, EnhancedUniswapV3Pool> {
+        self.pool.read().unwrap()
     }
 
     pub async fn filter(&self) -> Filter {
-        let pool = self.pool().await;
+        let pool = self.pool();
         Filter::new()
             .address(pool.address())
             .event_signature(pool.sync_on_event_signatures())
@@ -79,13 +76,13 @@ where
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err(PoolManagerError::SyncAlreadyStarted);
+            return Err(PoolManagerError::SyncAlreadyStarted)
         }
 
         let (pool_updated_tx, pool_updated_rx) =
             tokio::sync::mpsc::channel(self.state_change_buffer);
 
-        let address = self.pool().await.address;
+        let address = self.pool().address;
         let updated_pool_handle = self
             .handle_state_changes(Some(pool_updated_tx), address)
             .await?;
@@ -102,10 +99,10 @@ where
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err(PoolManagerError::SyncAlreadyStarted);
+            return Err(PoolManagerError::SyncAlreadyStarted)
         }
 
-        let address = self.pool().await.address;
+        let address = self.pool().address;
         let updated_pool_handle = self.handle_state_changes(None, address).await?;
 
         Ok(updated_pool_handle)
@@ -118,10 +115,12 @@ where
     ) -> Result<JoinHandle<Result<(), PoolManagerError>>, PoolManagerError> {
         let mut last_synced_block = self.latest_synced_block;
 
-        let pool = Arc::clone(&self.pool);
-        let provider = Arc::clone(&self.provider);
+        let pool = self.pool.clone();
+        let provider = self.provider.clone();
         let filter = self.filter().await;
-        let state_change_cache = Arc::clone(&self.state_change_cache);
+
+        let state_change_cache = self.state_change_cache.clone();
+
         let updated_pool_handle = tokio::spawn(async move {
             let mut block_stream: BoxStream<Option<u64>> = provider.subscribe_blocks();
             while let Some(block_number) = block_stream.next().await {
@@ -135,8 +134,8 @@ where
                         last_synced_block,
                         "reorg detected, unwinding state changes"
                     );
-                    let mut pool_guard = pool.write().await;
-                    let mut state_change_cache = state_change_cache.write().await;
+                    let mut pool_guard = pool.write().unwrap();
+                    let mut state_change_cache = state_change_cache.write().unwrap();
                     Self::unwind_state_changes(
                         &mut pool_guard,
                         &mut state_change_cache,
@@ -158,20 +157,24 @@ where
                     .await?;
 
                 if !logs.is_empty() {
-                    let mut pool_guard = pool.write().await;
-                    let mut state_change_cache = state_change_cache.write().await;
+                    let mut pool_guard = pool.write().unwrap();
+                    let mut state_change_cache = state_change_cache.write().unwrap();
+
                     Self::handle_state_changes_from_logs(
                         &mut pool_guard,
                         &mut state_change_cache,
                         logs,
                         chain_head_block_number
                     )?;
+                    drop(pool_guard);
+                    drop(state_change_cache);
 
                     if let Some(tx) = &pool_updated_tx {
-                        tx.send((address, chain_head_block_number))
-                            .await
+                        while let Err(_e) = tx
+                            .try_send((address, chain_head_block_number))
                             .map_err(|e| tracing::error!("Failed to send pool update: {}", e))
-                            .ok();
+                        {
+                        }
                     }
                 }
 
@@ -203,7 +206,7 @@ where
                         // We know that there is a state change from state_change_cache.get(0) so
                         // when we pop front without returning a value,
                         // there is an issue
-                        return Err(PoolManagerError::PopFrontError);
+                        return Err(PoolManagerError::PopFrontError)
                     }
                 }
                 Some(_) => return Ok(()),
@@ -213,7 +216,7 @@ where
                     // that syncs to block 100, then immediately after there is a chain reorg to 95,
                     // we can not roll back the state changes for an accurate state
                     // space. In this case, we return an error
-                    return Err(PoolManagerError::NoStateChangesInCache);
+                    return Err(PoolManagerError::NoStateChangesInCache)
                 }
             }
         }

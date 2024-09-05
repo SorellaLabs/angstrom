@@ -56,7 +56,7 @@ async fn main() -> eyre::Result<()> {
             _ = sigint.recv() => break,
             state_changes = rx.recv() => {
                 if let Some(changes) = state_changes {
-                   let pool_guard = state_space_manager.pool().await;
+                   let pool_guard = state_space_manager.pool();
                     let changes_block_number = changes.1;
                     let mut fresh_pool = EnhancedUniswapV3Pool::new(address, ticks_per_side);
                     fresh_pool.initialize(Some(changes_block_number), ws_provider.clone()).await?;

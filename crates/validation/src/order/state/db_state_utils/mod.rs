@@ -151,9 +151,10 @@ impl FetchUtils {
 pub mod test_fetching {
     use std::collections::{HashMap, HashSet};
 
+    use alloy_primitives::U256;
     use dashmap::DashMap;
 
-    use super::StateFetchUtils;
+    use super::{StateFetchUtils, *};
 
     #[derive(Debug, Clone)]
     pub struct MockFetch {
@@ -191,7 +192,7 @@ pub mod test_fetching {
         ) -> bool {
             self.used_nonces
                 .get(&user)
-                .map(|v| !v.contains(&nonce))
+                .map(|v| !v.value().contains(&nonce))
                 .unwrap_or_default()
         }
 
@@ -203,8 +204,7 @@ pub mod test_fetching {
         ) -> Option<U256> {
             self.balance_values
                 .get(&user)
-                .and_then(|inner| inner.get(&token))
-                .cloned()
+                .and_then(|inner| inner.value().get(&token).cloned())
         }
 
         fn fetch_approval_balance_for_token<DB: BlockStateProviderFactory>(
@@ -215,8 +215,7 @@ pub mod test_fetching {
         ) -> Option<U256> {
             self.approval_values
                 .get(&user)
-                .and_then(|inner| inner.get(&token))
-                .cloned()
+                .and_then(|inner| inner.value().get(&token).cloned())
         }
 
         fn fetch_balance_for_token_overrides<DB: BlockStateProviderFactory>(

@@ -77,22 +77,26 @@ impl SearcherOrderPoolMetricsWrapper {
     }
 
     pub fn incr_total_orders(&self, count: usize) {
-        self.0.as_ref().map(|this| this.incr_total_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_total_orders(count)
+        }
     }
 
     pub fn decr_total_orders(&self, count: usize) {
-        self.0.as_ref().map(|this| this.decr_total_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_total_orders(count)
+        }
     }
 
     pub fn incr_all_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.incr_all_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_all_orders(pool_id, count)
+        }
     }
 
     pub fn decr_all_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.decr_all_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_all_orders(pool_id, count)
+        }
     }
 }

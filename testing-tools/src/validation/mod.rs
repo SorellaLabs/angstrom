@@ -16,7 +16,8 @@ use validation::{
     common::lru_db::RevmLRU,
     order::state::{
         config::{load_validation_config, ValidationConfig},
-        db_state_utils::nonces::Nonces
+        db_state_utils::{nonces::Nonces, FetchUtils},
+        pools::AngstromPoolsTracker
     },
     validator::{ValidationClient, Validator}
 };
@@ -34,7 +35,7 @@ pub struct TestOrderValidator<DB: StateProviderFactory + Clone + Unpin + 'static
     pub revm_lru:   Arc<RevmLRU<DB>>,
     pub config:     ValidationConfig,
     pub client:     ValidationClient,
-    pub underlying: Validator<DB>,
+    pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils>,
     pub eth_handle: MockEthEventHandle
 }
 
@@ -52,10 +53,20 @@ impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> 
         let revm_lru = Arc::new(RevmLRU::new(10000000, Arc::new(db), current_block.clone()));
 
         let task_db = revm_lru.clone();
+        let fetch = FetchUtils::new(config.clone());
+        let pools = AngstromPoolsTracker::new(config.clone());
 
         let handle = tokio::runtime::Handle::current();
-        let val =
-            Validator::new(rx, eth_stream, task_db, config.clone(), current_block.clone(), handle);
+        let val = Validator::new(
+            rx,
+            eth_stream,
+            task_db,
+            current_block.clone(),
+            config.max_validation_per_user,
+            pools,
+            fetch,
+            handle
+        );
         let client = ValidationClient(tx);
 
         Self { revm_lru, client, underlying: val, config, eth_handle }

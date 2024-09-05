@@ -142,27 +142,27 @@ impl VanillaLimitOrderPoolMetricsWrapper {
     }
 
     pub fn incr_parked_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.incr_parked_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_parked_orders(pool_id, count)
+        }
     }
 
     pub fn decr_parked_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.decr_parked_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_parked_orders(pool_id, count)
+        }
     }
 
     pub fn incr_pending_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.incr_pending_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_pending_orders(pool_id, count)
+        }
     }
 
     pub fn decr_pending_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.decr_pending_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_pending_orders(pool_id, count)
+        }
     }
 }
 
@@ -241,14 +241,14 @@ impl ComposableLimitOrderPoolMetricsWrapper {
     }
 
     pub fn incr_all_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.incr_all_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_all_orders(pool_id, count)
+        }
     }
 
     pub fn decr_all_orders(&self, pool_id: usize, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.decr_all_orders(pool_id, count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_all_orders(pool_id, count)
+        }
     }
 }

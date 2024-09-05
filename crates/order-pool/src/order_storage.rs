@@ -180,7 +180,7 @@ impl OrderStorage {
             .lock()
             .expect("poisoned")
             .remove_order(id)
-            .map(|order| {
+            .and_then(|order| {
                 if order.is_vanilla() {
                     self.metrics.decr_vanilla_limit_orders(1);
                 } else if order.is_composable() {
@@ -189,7 +189,6 @@ impl OrderStorage {
 
                 order.try_map_inner(|inner| Ok(inner.into())).ok()
             })
-            .flatten()
     }
 
     pub fn get_all_orders(&self) -> OrderSet<GroupedVanillaOrder, TopOfBlockOrder> {

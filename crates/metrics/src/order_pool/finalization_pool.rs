@@ -49,6 +49,12 @@ impl FinalizationOrderPoolMetrics {
 #[derive(Clone)]
 pub struct FinalizationOrderPoolMetricsWrapper(Option<FinalizationOrderPoolMetrics>);
 
+impl Default for FinalizationOrderPoolMetricsWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FinalizationOrderPoolMetricsWrapper {
     pub fn new() -> Self {
         Self(
@@ -60,18 +66,26 @@ impl FinalizationOrderPoolMetricsWrapper {
     }
 
     pub fn incr_total_orders(&self) {
-        self.0.as_ref().map(|this| this.incr_total_orders());
+        if let Some(this) = self.0.as_ref() {
+            this.incr_total_orders()
+        }
     }
 
     pub fn decr_total_orders(&self) {
-        self.0.as_ref().map(|this| this.decr_total_orders());
+        if let Some(this) = self.0.as_ref() {
+            this.decr_total_orders()
+        }
     }
 
     pub fn incr_blocks_tracked(&self) {
-        self.0.as_ref().map(|this| this.incr_blocks_tracked());
+        if let Some(this) = self.0.as_ref() {
+            this.incr_blocks_tracked()
+        }
     }
 
     pub fn decr_blocks_tracked(&self) {
-        self.0.as_ref().map(|this| this.decr_blocks_tracked());
+        if let Some(this) = self.0.as_ref() {
+            this.decr_blocks_tracked()
+        }
     }
 }

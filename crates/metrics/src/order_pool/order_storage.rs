@@ -103,46 +103,50 @@ impl OrderStorageMetricsWrapper {
     }
 
     pub fn incr_vanilla_limit_orders(&self, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.incr_vanilla_limit_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_vanilla_limit_orders(count)
+        }
     }
 
     pub fn decr_vanilla_limit_orders(&self, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.decr_vanilla_limit_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_vanilla_limit_orders(count)
+        }
     }
 
     pub fn incr_composable_limit_orders(&self, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.incr_composable_limit_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_composable_limit_orders(count)
+        }
     }
 
     pub fn decr_composable_limit_orders(&self, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.decr_composable_limit_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_composable_limit_orders(count)
+        }
     }
 
     pub fn incr_searcher_orders(&self, count: usize) {
-        self.0.as_ref().map(|this| this.incr_searcher_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_searcher_orders(count)
+        }
     }
 
     pub fn decr_searcher_orders(&self, count: usize) {
-        self.0.as_ref().map(|this| this.decr_searcher_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_searcher_orders(count)
+        }
     }
 
     pub fn incr_pending_finalization_orders(&self, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.incr_pending_finalization_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.incr_pending_finalization_orders(count)
+        }
     }
 
     pub fn decr_pending_finalization_orders(&self, count: usize) {
-        self.0
-            .as_ref()
-            .map(|this| this.decr_pending_finalization_orders(count));
+        if let Some(this) = self.0.as_ref() {
+            this.decr_pending_finalization_orders(count)
+        }
     }
 }

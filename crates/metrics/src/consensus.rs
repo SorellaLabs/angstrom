@@ -100,6 +100,12 @@ impl ConsensusMetrics {
 #[derive(Clone)]
 pub struct ConsensusMetricsWrapper(Option<ConsensusMetrics>);
 
+impl Default for ConsensusMetricsWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConsensusMetricsWrapper {
     pub fn new() -> Self {
         Self(
@@ -111,32 +117,32 @@ impl ConsensusMetricsWrapper {
     }
 
     pub fn set_consensus_completion_time(&self, block_number: u64, time: u128) {
-        self.0
-            .as_ref()
-            .map(|this| this.set_consensus_completion_time(block_number, time));
+        if let Some(this) = self.0.as_ref() {
+            this.set_consensus_completion_time(block_number, time)
+        }
     }
 
     pub fn set_proposal_verification_time(&self, block_number: u64, time: u128) {
-        self.0
-            .as_ref()
-            .map(|this| this.set_proposal_verification_time(block_number, time));
+        if let Some(this) = self.0.as_ref() {
+            this.set_proposal_verification_time(block_number, time)
+        }
     }
 
     pub fn set_proposal_build_time(&self, block_number: u64, time: u128) {
-        self.0
-            .as_ref()
-            .map(|this| this.set_proposal_build_time(block_number, time));
+        if let Some(this) = self.0.as_ref() {
+            this.set_proposal_build_time(block_number, time)
+        }
     }
 
     pub fn set_block_height(&mut self, block_number: u64) {
-        self.0
-            .as_mut()
-            .map(|this| this.set_block_height(block_number));
+        if let Some(this) = self.0.as_mut() {
+            this.set_block_height(block_number)
+        }
     }
 
     pub fn set_commit_time(&mut self, block_number: u64) {
-        self.0
-            .as_mut()
-            .map(|this| this.set_commit_time(block_number));
+        if let Some(this) = self.0.as_mut() {
+            this.set_commit_time(block_number)
+        }
     }
 }

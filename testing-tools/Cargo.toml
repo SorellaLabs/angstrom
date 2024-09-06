@@ -28,6 +28,7 @@ reth-rpc-types.workspace = true
 reth-eth-wire.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
+alloy.workspace = true
 alloy-rlp.workspace = true
 
 alloy-primitives.workspace = true

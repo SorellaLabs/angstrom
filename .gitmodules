@@ -4,9 +4,15 @@
 [submodule "contracts/lib/solady"]
 	path = contracts/lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "contracts/lib/super-sol"]
+	path = contracts/lib/super-sol
+	url = https://github.com/sorellalabs/super-sol
 [submodule "contracts/lib/transient-goodies"]
 	path = contracts/lib/transient-goodies
 	url = https://github.com/philogy/transient-goodies
 [submodule "contracts/lib/v4-core"]
 	path = contracts/lib/v4-core
-	url = https://github.com/Uniswap/v4-core
+	url = https://github.com/uniswap/v4-core
+[submodule "contracts/lib/solmate"]
+	path = contracts/lib/solmate
+	url = https://github.com/transmissions11/solmate

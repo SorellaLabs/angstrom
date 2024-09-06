@@ -9,6 +9,8 @@ bitmaps.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
 blsful.workspace = true
 bytes = "1.4"
+pade.workspace = true
+pade-macro.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
 itertools.workspace = true
@@ -22,6 +24,7 @@ open-fastrlp = "0.1.4"
 hex-literal = "0.4.1"
 anyhow.workspace = true
 modular-bitfield = "0.11.2"
+alloy.workspace = true
 alloy-sol-macro = { workspace = true, features = ["json"] }
 alloy-sol-types.workspace = true
 alloy-primitives = { workspace = true, features = ["rlp", "serde"] }

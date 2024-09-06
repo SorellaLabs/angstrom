@@ -1,0 +1,20 @@
+[package]
+name = "pade-macro"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0.76"
+quote = "1.0.37"
+proc-macro2 = "1.0.86"
+
+[dev-dependencies]
+pade.workspace = true

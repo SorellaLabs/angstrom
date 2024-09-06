@@ -1,4 +1,6 @@
 pub mod consensus;
+pub mod contract_bindings;
+pub mod contract_payloads;
 pub mod matching;
 pub mod orders;
 pub mod primitive;

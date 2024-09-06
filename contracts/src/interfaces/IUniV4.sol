@@ -5,8 +5,6 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {Slot0} from "v4-core/src/types/Slot0.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {ConversionLib} from "../libraries/ConversionLib.sol";
-import {AssetIndex} from "../libraries/PriceGraph.sol";
-import {Globals} from "../libraries/Globals.sol";
 
 library IUniV4 {
     using IUniV4 for IPoolManager;
@@ -26,30 +24,6 @@ library IUniV4 {
     uint256 internal constant _POOL_STATE_TICKS_OFFSET = 4;
     uint256 internal constant _POOL_STATE_BITMAP_OFFSET = 5;
     uint256 internal constant _POOL_STATE_POSITIONS_OFFSET = 6;
-
-    /// @dev Uniswap's `MIN_SQRT_RATIO + 1` to pass the limit check.
-    uint160 internal constant MIN_SQRT_RATIO = 4295128740;
-    /// @dev Uniswap's `MAX_SQRT_RATIO - 1` to pass the limit check.
-    uint160 internal constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970341;
-
-    struct Swap {
-        AssetIndex asset0Index;
-        AssetIndex asset1Index;
-        bool zeroForOne;
-        uint256 amountIn;
-    }
-
-    function swap(IPoolManager self, Swap memory params, Globals memory g) internal {
-        self.swap(
-            ConversionLib.toPoolKey(address(this), g.get(params.asset0Index), g.get(params.asset1Index)),
-            IPoolManager.SwapParams({
-                zeroForOne: params.zeroForOne,
-                amountSpecified: ConversionLib.neg(params.amountIn),
-                sqrtPriceLimitX96: params.zeroForOne ? MIN_SQRT_RATIO : MAX_SQRT_RATIO
-            }),
-            ""
-        );
-    }
 
     function computePoolStateSlot(IPoolManager, PoolId id) internal pure returns (bytes32 slot) {
         assembly ("memory-safe") {

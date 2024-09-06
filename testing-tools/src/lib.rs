@@ -10,6 +10,9 @@ pub mod type_generator;
 /// nuanced needs
 pub mod validation;
 
+/// Tools for contract deployment and testing
+pub mod contracts;
+
 use std::{path::Path, sync::Arc};
 
 use reth_beacon_consensus::EthBeaconConsensus;

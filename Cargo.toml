@@ -12,7 +12,9 @@ members = [
   "crates/eth/",
   "crates/submission",
   "testing-tools",
-  "crates/matching-engine", 
+  "crates/matching-engine",
+  "crates/pade",
+  "crates/pade-macro",
   "crates/metrics"
 ]
 
@@ -49,6 +51,8 @@ incremental = false
 [workspace.dependencies]
 consensus = { path = "./crates/consensus/" }
 angstrom-types = { path = "./crates/types/" }
+pade = { path = "./crates/pade" }
+pade-macro = { path = "./crates/pade-macro" }
 angstrom-utils = { path = "./crates/utils/" }
 validation = { path = "./crates/validation/" }
 order-pool = { path = "./crates/order-pool/" }
@@ -59,6 +63,7 @@ angstrom-metrics = { path = "./crates/metrics/" }
 testing-tools = { path = "./testing-tools/" }
 angstrom = { path = "./bin/angstrom/" }
 matching-engine = { path = "./crates/matching-engine/" }
+contract-bindings = { path = "./crates/contract-bindings/" }
 eyre = "0.6.12"
 
 # BLS library
@@ -126,6 +131,8 @@ alloy = { version = "0.2", features = [
   "signer-mnemonic",
   "signer-trezor",
   "signer-yubihsm",
+  "sol-types",
+  "contract"
 ] }
 alloy-chains = "0.1.15"
 alloy-primitives = "0.7.2"

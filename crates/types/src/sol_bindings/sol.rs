@@ -1,6 +1,7 @@
 mod private {
     use alloy_sol_macro::sol;
     use bincode::{Decode, Encode};
+    use pade_macro::PadeEncode;
     use serde::{Deserialize, Serialize};
 
     sol! {
@@ -166,6 +167,36 @@ mod private {
             uint256[] amounts0;
         }
 
+        #[derive(PadeEncode)]
+        struct RewardsUpdate {
+            int24 startTick;
+            uint128 startLiquidity;
+            uint128[] quantities;
+        }
+
+        #[derive(PadeEncode)]
+        struct PoolRewardsUpdate {
+            uint16 asset0;
+            uint16 asset1;
+            RewardsUpdate update;
+        }
+
+        #[derive(PadeEncode)]
+        struct MockContractMessage {
+            address[] addressList;
+            PoolRewardsUpdate update;
+        }
+
+        #[sol(rpc)]
+        contract MockRewardsManager {
+            constructor(address univ4);
+            #[derive(Debug)]
+            function reward(bytes calldata data) public returns (string memory);
+            // function consts();
+            // function getGrowthInsideTick(PoolId id, int24 tick);
+            // function getGrowthInsideRange();
+        }
+
         #[derive(Debug, Default, PartialEq, Eq,Hash, Serialize, Deserialize)]
         struct ContractBundle {
             address[] assets;
@@ -242,8 +273,10 @@ mod private {
 use alloy_rlp::{Decodable, Encodable};
 pub use private::{
     AngstromContract, AssetForm as SolAssetForm, AssetIndex, ContractBundle, Donate as SolDonate,
-    FlashOrder, GenericOrder as SolGenericOrder, OrderMode as SolOrderMode,
-    OrderType as SolOrderType, Price as SolPrice, StandingOrder, Swap as SolSwap, TopOfBlockOrder
+    FlashOrder, GenericOrder as SolGenericOrder, MockContractMessage as SolMockContractMessage,
+    MockRewardsManager as SolMockRewardsManager, OrderMode as SolOrderMode,
+    OrderType as SolOrderType, PoolRewardsUpdate as SolPoolRewardsUpdate, Price as SolPrice,
+    RewardsUpdate as SolRewardsUpdate, StandingOrder, Swap as SolSwap, TopOfBlockOrder
 };
 
 // RLP encoding implementations needed

@@ -1,6 +1,7 @@
 [profile.default]
-solc           = "0.8.24"
+solc           = "0.8.26"
 bytecode_hash  = "none"
+viaIR = false
 optimizer_runs = 1_000_000
 verbosity      = 3
 fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
@@ -14,13 +15,9 @@ ignored_error_codes = [
 
 remappings = [
   "solady/src/=lib/solady/src/",
-  "v4-core/src/=lib/v4-core/src/"
+  "v4-core/src/=lib/v4-core/src/",
+  "solmate/=lib/solmate/"
 ]
 
-[profile.diff-fuzz]
-match_path = "test/diff-fuzz/*"
-ffi        = true
-chain-id   = 1
-
-[profile.ci]
-fuzz-runs = 10_000
+[profile.dev-deopt]
+optimizer = false

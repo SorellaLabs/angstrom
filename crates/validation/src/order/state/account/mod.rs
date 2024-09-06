@@ -65,6 +65,23 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
         block: u64,
         is_limit: bool
     ) -> Result<OrderWithStorageData<O>, UserAccountVerificationError<O>> {
+        let nonce = order.nonce();
+        let user = order.from();
+        let order_hash = order.hash();
+
+        // very nonce hasn't been used historically
+        if !self
+            .fetch_utils
+            .is_valid_nonce(user, nonce.to(), self.db.clone())
+        {
+            return Err(UserAccountVerificationError::DuplicateNonce(order_hash))
+        }
+
+        // very we don't have a pending nonce conflict
+        if self.user_accounts.has_nonce_conflict(user, nonce) {
+            return Err(UserAccountVerificationError::DuplicateNonce(order_hash))
+        }
+
         let current_block = self.user_accounts.current_block();
         // ensure baseline data for block is up to date
         if block != current_block {
@@ -77,16 +94,8 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
         }
 
         // see if order has been cancelled before
-        let order_hash = order.hash();
         if self.known_canceled_orders.contains(&order_hash) {
             return Err(UserAccountVerificationError::OrderIsCancelled(order_hash))
-        }
-
-        let user = order.from();
-        let nonce = order.nonce();
-        // validate we don't have a nonce conflict.
-        if self.user_accounts.has_nonce_conflict(user, nonce) {
-            return Err(UserAccountVerificationError::DuplicateNonce(order_hash))
         }
 
         let live_state = self.user_accounts.get_live_state_for_order(
@@ -133,4 +142,28 @@ pub enum UserAccountVerificationError<O: RawPoolOrder> {
     OrderIsCancelled(B256),
     #[error("Nonce exists for a current order hash: {0:?}")]
     DuplicateNonce(B256)
+}
+
+#[cfg(test)]
+pub mod tests {
+    use dashmap::DashSet;
+    use reth_provider::test_utils::{ NoopProvider};
+
+    use super::{UserAccountProcessor, UserAccounts};
+    use crate::{common::lru_db::RevmLRU, order::state::db_state_utils::test_fetching::MockFetch};
+
+    fn setup_test_account_processor(block: u64) -> UserAccountProcessor<NoopProvider, MockFetch> {
+        UserAccountProcessor {
+            db:                    Arc::new(RevmLRU::new(100, NoopProvider, 420)),
+            user_accounts:         UserAccounts::new(block),
+            fetch_utils:           MockFetch::default(),
+            known_canceled_orders: DashSet::default()
+        }
+    }
+
+    #[test]
+    fn test_nonce_rejection() {
+        let block = 420;
+        let mut processor = setup_test_account_processor(block);
+    }
 }

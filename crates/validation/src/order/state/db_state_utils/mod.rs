@@ -156,7 +156,7 @@ pub mod test_fetching {
 
     use super::{StateFetchUtils, *};
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Default)]
     pub struct MockFetch {
         balance_values:  DashMap<Address, HashMap<Address, U256>>,
         approval_values: DashMap<Address, HashMap<Address, U256>>,

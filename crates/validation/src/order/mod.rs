@@ -12,6 +12,7 @@ use angstrom_types::{
     }
 };
 use reth_primitives::B256;
+use state::account::user::UserAddress;
 use tokio::sync::oneshot::{channel, Sender};
 
 use crate::validator::ValidationRequest;
@@ -65,11 +66,16 @@ impl From<OrderValidationRequest> for OrderValidation {
     }
 }
 
+pub enum ValidationMessage {
+    ValidationResults(OrderValidationResults)
+}
+
 #[derive(Debug, Clone)]
 pub enum OrderValidationResults {
     Valid(OrderWithStorageData<AllOrders>),
     // the raw hash to be removed
-    Invalid(B256)
+    Invalid(B256),
+    TransitionedToBlock
 }
 
 pub enum OrderValidation {
@@ -97,7 +103,6 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
     /// Validates a batch of orders.
     ///
     /// Must return all outcomes for the given orders in the same order.
-
     fn validate_orders(&self, transactions: Vec<(OrderOrigin, Self::Order)>) -> ValidationsFuture {
         Box::pin(futures_util::future::join_all(
             transactions
@@ -105,10 +110,27 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
                 .map(|(origin, tx)| self.validate_order(origin, tx))
         ))
     }
+
+    /// orders that are either expired or have been filled.
+    fn new_block(
+        &self,
+        block_number: u64,
+        completed_orders: Vec<B256>,
+        addresses: Vec<Address>
+    ) -> ValidationFuture;
 }
 
 impl OrderValidatorHandle for ValidationClient {
     type Order = AllOrders;
+
+    fn new_block(
+        &self,
+        block_number: u64,
+        orders: Vec<B256>,
+        addresses: Vec<Address>
+    ) -> ValidationFuture {
+        todo!()
+    }
 
     fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order) -> ValidationFuture {
         Box::pin(async move {

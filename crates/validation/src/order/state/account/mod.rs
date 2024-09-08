@@ -147,7 +147,7 @@ pub enum UserAccountVerificationError<O: RawPoolOrder> {
 #[cfg(test)]
 pub mod tests {
     use dashmap::DashSet;
-    use reth_provider::test_utils::{ NoopProvider};
+    use reth_provider::test_utils::NoopProvider;
 
     use super::{UserAccountProcessor, UserAccounts};
     use crate::{common::lru_db::RevmLRU, order::state::db_state_utils::test_fetching::MockFetch};

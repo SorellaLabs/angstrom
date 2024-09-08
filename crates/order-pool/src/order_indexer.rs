@@ -24,7 +24,7 @@ use reth_primitives::Address;
 use tracing::{error, trace};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-use crate::{order_storage::OrderStorage, validator::PoolOrderValidator};
+use crate::{order_storage::OrderStorage, validator::OrderValidator};
 
 /// This is used to remove validated orders. During validation
 /// the same check wil be ran but with more accuracy
@@ -44,7 +44,7 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     /// Orders that are being validated
     pending_order_indexing: HashMap<B256, Vec<PeerId>>,
     /// Order Validator
-    validator:              PoolOrderValidator<V>
+    validator:              OrderValidator<V>
 }
 
 impl<V: OrderValidatorHandle> Deref for OrderIndexer<V> {
@@ -64,7 +64,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             hash_to_order_id: HashMap::new(),
             pending_order_indexing: HashMap::new(),
             last_touched_addresses: HashSet::new(),
-            validator: PoolOrderValidator::new(validator)
+            validator: OrderValidator::new(validator)
         }
     }
 

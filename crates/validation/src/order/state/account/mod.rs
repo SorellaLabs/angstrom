@@ -4,7 +4,7 @@ use std::{
     sync::{atomic::AtomicU64, Arc}
 };
 
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256};
 use angstrom_types::sol_bindings::grouped_orders::{OrderWithStorageData, PoolOrder, RawPoolOrder};
 use dashmap::DashSet;
 use parking_lot::RwLock;
@@ -37,14 +37,8 @@ pub struct UserAccountProcessor<DB, S> {
 impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
     UserAccountProcessor<DB, S>
 {
-    pub fn new(
-        db: Arc<RevmLRU<DB>>,
-        config: ValidationConfig,
-        current_block: u64,
-        fetch_utils: S
-    ) -> Self {
+    pub fn new(db: Arc<RevmLRU<DB>>, current_block: u64, fetch_utils: S) -> Self {
         let user_accounts = UserAccounts::new(current_block);
-        // let fetch_utils = FetchUtils::new(config);
         Self { db, fetch_utils, user_accounts, known_canceled_orders: DashSet::default() }
     }
 
@@ -56,6 +50,14 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
         block: u64
     ) -> Result<(), UserAccountVerificationError<O>> {
         Ok(())
+    }
+
+    pub fn prepare_for_new_block(&self, users: Vec<Address>, orders: Vec<B256>) {
+        orders.iter().for_each(|order| {
+            self.known_canceled_orders.remove(order);
+        });
+
+        self.user_accounts.new_block(users, orders);
     }
 
     pub fn verify_order<O: RawPoolOrder>(
@@ -80,17 +82,6 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
         // very we don't have a pending nonce conflict
         if self.user_accounts.has_nonce_conflict(user, nonce) {
             return Err(UserAccountVerificationError::DuplicateNonce(order_hash))
-        }
-
-        let current_block = self.user_accounts.current_block();
-        // ensure baseline data for block is up to date
-        if block != current_block {
-            return Err(UserAccountVerificationError::BlockMissMatch {
-                requested: block,
-                current: current_block,
-                order,
-                pool_info
-            })
         }
 
         // see if order has been cancelled before

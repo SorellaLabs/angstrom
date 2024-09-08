@@ -4,6 +4,7 @@ use std::{
     task::Poll
 };
 
+use alloy_primitives::{Address, B256};
 use angstrom_eth::manager::EthEvent;
 use futures::{Stream, StreamExt};
 use futures_util::{Future, FutureExt};
@@ -23,18 +24,16 @@ use crate::{
 };
 
 pub enum ValidationRequest {
-    Order(OrderValidationRequest)
+    Order(OrderValidationRequest),
+    NewBlock { block_number: u64, orders: Vec<B256>, addresses: Vec<Address> }
 }
 
 #[derive(Debug, Clone)]
 pub struct ValidationClient(pub UnboundedSender<ValidationRequest>);
 
 pub struct Validator<DB, Pools, Fetch> {
-    rx:               UnboundedReceiver<ValidationRequest>,
-    /// used to update state
-    new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
-    db:               Arc<RevmLRU<DB>>,
-
+    rx:              UnboundedReceiver<ValidationRequest>,
+    db:              Arc<RevmLRU<DB>>,
     order_validator: OrderValidator<DB, Pools, Fetch>
 }
 
@@ -46,7 +45,6 @@ where
 {
     pub fn new(
         rx: UnboundedReceiver<ValidationRequest>,
-        new_block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
         db: Arc<RevmLRU<DB>>,
         block_number: Arc<AtomicU64>,
         max_validation_per_user: usize,
@@ -62,12 +60,13 @@ where
             fetch,
             handle
         );
-        Self { new_block_stream, db, order_validator, rx }
+        Self { db, order_validator, rx }
     }
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
-            ValidationRequest::Order(order) => self.order_validator.validate_order(order)
+            ValidationRequest::Order(order) => self.order_validator.validate_order(order),
+            ValidationRequest::NewBlock { block_number, orders, addresses } => todo!()
         }
     }
 }

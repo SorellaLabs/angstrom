@@ -52,7 +52,21 @@ where
     DB: BlockStateProviderFactory + Unpin + 'static
 {
     pub fn new(db: Arc<RevmLRU<DB>>, block: u64, pools: Pools, fetch: Fetch) -> Self {
-        todo!()
+        Self {
+            db:                   db.clone(),
+            pool_tacker:          Arc::new(pools),
+            user_account_tracker: Arc::new(UserAccountProcessor::new(db, block, fetch))
+        }
+    }
+
+    pub fn new_block(
+        &self,
+        number: u64,
+        completed_orders: Vec<B256>,
+        address_changes: Vec<Address>
+    ) {
+        self.user_account_tracker
+            .prepare_for_new_block(address_changes, completed_orders)
     }
 
     fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(

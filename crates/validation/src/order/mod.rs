@@ -129,7 +129,14 @@ impl OrderValidatorHandle for ValidationClient {
         orders: Vec<B256>,
         addresses: Vec<Address>
     ) -> ValidationFuture {
-        todo!()
+        Box::pin(async move {
+            let (tx, rx) = channel();
+            let _ = self
+                .0
+                .send(ValidationRequest::NewBlock { block_number, orders, addresses });
+
+            rx.await.unwrap()
+        })
     }
 
     fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order) -> ValidationFuture {

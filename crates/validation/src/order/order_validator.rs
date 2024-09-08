@@ -7,7 +7,7 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, B256, U256};
 use angstrom_utils::{
     key_split_threadpool::KeySplitThreadpool,
     sync_pipeline::{
@@ -71,9 +71,16 @@ where
         Self { state, sim, block_number, threadpool }
     }
 
-    pub fn update_block_number(&mut self, number: u64) {
+    pub fn on_new_block(
+        &mut self,
+        number: u64,
+        completed_orders: Vec<B256>,
+        address_changes: Vec<Address>
+    ) {
         self.block_number
             .store(number, std::sync::atomic::Ordering::SeqCst);
+        self.state
+            .new_block(number, completed_orders, address_changes);
     }
 
     /// only checks state

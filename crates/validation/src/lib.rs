@@ -32,8 +32,7 @@ pub const TOKEN_CONFIG_FILE: &str = "./crates/validation/state_config.toml";
 
 pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
     db: DB,
-    cache_max_bytes: usize,
-    block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>
+    cache_max_bytes: usize
 ) -> ValidationClient {
     let (tx, rx) = unbounded_channel();
     let config_path = Path::new(TOKEN_CONFIG_FILE);
@@ -56,7 +55,6 @@ pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
         rt.block_on(async {
             Validator::new(
                 rx,
-                block_stream,
                 revm_lru,
                 current_block.clone(),
                 config.max_validation_per_user,
@@ -78,7 +76,6 @@ pub fn init_validation_tests<
 >(
     db: DB,
     cache_max_bytes: usize,
-    block_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send>>,
     state: State,
     pool: Pool
 ) -> (ValidationClient, Arc<RevmLRU<DB>>) {
@@ -97,16 +94,7 @@ pub fn init_validation_tests<
             .unwrap();
         let handle = rt.handle().clone();
 
-        rt.block_on(Validator::new(
-            rx,
-            block_stream,
-            task_db,
-            current_block.clone(),
-            10,
-            pool,
-            state,
-            handle
-        ))
+        rt.block_on(Validator::new(rx, task_db, current_block.clone(), 10, pool, state, handle))
     });
 
     (ValidationClient(tx), revm_lru)

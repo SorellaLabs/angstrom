@@ -56,6 +56,44 @@ impl<T: PadeEncode, const N: usize> PadeEncode for [T; N] {
     }
 }
 
+// Option<T: PadeEncode> encodes as an enum
+impl<T: PadeEncode> PadeEncode for Option<T> {
+    fn pade_encode(&self) -> Vec<u8> {
+        match self {
+            Some(v) => {
+                std::iter::once(1_u8).chain(v.pade_encode().into_iter()).collect()
+            },
+            None => vec![0_u8]
+        }
+    }
+
+    fn pade_encode_with_width(&self, width: usize) -> Vec<u8> {
+        match self {
+            Some(v) => {
+                std::iter::once(1_u8).chain(v.pade_encode_with_width(width).into_iter()).collect()
+            },
+            None => vec![0_u8]
+        }
+    }
+    
+    #[inline]
+    fn pade_variant_map_bits(&self) -> usize { 1 }
+}
+
+// Booleans encode as enums
+impl PadeEncode for bool {
+    fn pade_encode(&self) -> Vec<u8> {
+        match self {
+            true => vec![1_u8],
+            false => vec![0_u8]
+        }
+    }
+
+    #[inline]
+    fn pade_variant_map_bits(&self) -> usize {
+        1
+    }
+}
 // Decided on a generic List<3> implementation - no variant bits because we
 // don't want to hoist them in a struct
 impl<T: PadeEncode> PadeEncode for Vec<T> {

@@ -193,7 +193,7 @@ pub mod test_fetching {
             self.used_nonces
                 .get(&user)
                 .map(|v| !v.value().contains(&nonce))
-                .unwrap_or_default()
+                .unwrap_or(true)
         }
 
         fn fetch_balance_for_token<DB: BlockStateProviderFactory>(

@@ -84,7 +84,9 @@ impl Encodable for StromProtocolMessage {
     fn encode(&self, out: &mut dyn BufMut) {
         Encodable::encode(&self.message_id, out);
         let mut buf = Vec::with_capacity(1024 * 14); // 14 kb
-        let bytes = encode_into_slice(self.message.clone(), &mut buf, standard()).unwrap();
+
+        let mut config = standard().with_no_limit().with_big_endian();
+        let bytes = encode_into_slice(self.message.clone(), &mut buf, config).unwrap();
         Encodable::encode(&buf, out);
     }
 }

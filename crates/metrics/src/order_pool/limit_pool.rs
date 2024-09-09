@@ -235,7 +235,8 @@ impl ComposableLimitOrderPoolMetricsWrapper {
         Self(
             METRICS_ENABLED
                 .get()
-                .unwrap()
+                .copied()
+                .unwrap_or_default()
                 .then(ComposableLimitOrderPoolMetrics::default)
         )
     }

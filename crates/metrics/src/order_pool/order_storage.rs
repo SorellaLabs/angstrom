@@ -97,7 +97,8 @@ impl OrderStorageMetricsWrapper {
         Self(
             METRICS_ENABLED
                 .get()
-                .unwrap()
+                .copied()
+                .unwrap_or_default()
                 .then(OrderStorageMetrics::default)
         )
     }

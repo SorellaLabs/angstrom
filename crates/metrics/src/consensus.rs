@@ -111,7 +111,8 @@ impl ConsensusMetricsWrapper {
         Self(
             METRICS_ENABLED
                 .get()
-                .unwrap()
+                .copied()
+                .unwrap_or_default()
                 .then(ConsensusMetrics::default)
         )
     }

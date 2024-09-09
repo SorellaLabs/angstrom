@@ -71,7 +71,8 @@ impl SearcherOrderPoolMetricsWrapper {
         Self(
             METRICS_ENABLED
                 .get()
-                .unwrap()
+                .copied()
+                .unwrap_or_default()
                 .then(SearcherOrderPoolMetrics::default)
         )
     }

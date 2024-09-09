@@ -458,7 +458,6 @@ mod tests {
 
     #[tokio::test]
     async fn can_be_spawned() {
-        let _ = METRICS_ENABLED.set(false);
         let globalstate = Arc::new(Mutex::new(GlobalConsensusState::default()));
         let netdeps = mock_net_deps();
         let order_storage = Arc::new(OrderStorage::default());
@@ -470,7 +469,6 @@ mod tests {
 
     #[tokio::test]
     async fn builds_preproposal() {
-        let _ = METRICS_ENABLED.set(false);
         let globalstate = Arc::new(Mutex::new(GlobalConsensusState::default()));
         let netdeps = mock_net_deps();
         let poolconfig = PoolConfig { ids: vec![10], ..Default::default() };
@@ -508,7 +506,6 @@ mod tests {
 
     #[tokio::test]
     async fn verifies_proposal() {
-        let _ = METRICS_ENABLED.set(false);
         let globalstate = Arc::new(Mutex::new(GlobalConsensusState::default()));
         let netdeps = mock_net_deps();
         let poolconfig = PoolConfig { ids: vec![10], ..Default::default() };

@@ -110,7 +110,8 @@ pub mod pool_tracker_mock {
                 .get(&order.get_token_out())?
                 .value();
 
-            let (is_bid, pool_id) = self.pools.get(&(token_in, token_out))?.value();
+            let value = self.pools.get(&(token_in, token_out))?;
+            let (is_bid, pool_id) = value.value();
             let wrapped = AssetIndexToAddressWrapper { token_out, token_in, order };
             let info = UserOrderPoolInfo { pool_id: *pool_id, is_bid: *is_bid, token: token_in };
 

@@ -74,7 +74,8 @@ pub struct StatusState {
 
     /// The chain id, as introduced in
     /// [EIP155](https://eips.ethereum.org/EIPS/eip-155#list-of-chain-ids).
-    pub chain:     Chain,
+    /// PROBLEM BINCODE
+    pub chain:     u64,
     /// The peer that a node is trying to establish a connection with
     pub peer:      PeerId,
     /// The current timestamp. Used to make sure that the status message will
@@ -93,7 +94,7 @@ impl StatusState {
     }
 
     /// creates message for signing.
-    /// keccak256(version || chain || peer || timestamp)
+    /// keccak256(version || peer || timestamp)
     pub fn to_message(&self) -> FixedBytes<32> {
         let mut buf = BytesMut::with_capacity(113);
         buf.put_u8(self.version);

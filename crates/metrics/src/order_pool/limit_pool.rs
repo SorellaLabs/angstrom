@@ -136,7 +136,8 @@ impl VanillaLimitOrderPoolMetricsWrapper {
         Self(
             METRICS_ENABLED
                 .get()
-                .unwrap()
+                .copied()
+                .unwrap_or_default()
                 .then(VanillaLimitOrderPoolMetrics::default)
         )
     }

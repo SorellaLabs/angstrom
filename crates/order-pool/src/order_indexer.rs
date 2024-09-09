@@ -132,7 +132,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     }
 
     fn eoa_state_change(&mut self, eoas: &[Address]) {
-        eoas.into_iter()
+        eoas.iter()
             .filter_map(|eoa| self.address_to_orders.remove(eoa))
             .for_each(|order_ids| {
                 order_ids.into_iter().for_each(|id| {

@@ -98,7 +98,7 @@ impl StatusState {
     pub fn to_message(&self) -> FixedBytes<32> {
         let mut buf = BytesMut::with_capacity(113);
         buf.put_u8(self.version);
-        buf.put_u64(u64::from(self.chain));
+        buf.put_u64(self.chain);
         buf.put(self.peer.0.as_ref());
         buf.put_u128(self.timestamp);
 

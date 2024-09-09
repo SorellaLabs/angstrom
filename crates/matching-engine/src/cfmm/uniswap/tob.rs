@@ -225,7 +225,7 @@ mod test {
     };
     use angstrom_types::{
         contract_bindings::{
-            mockrewardsmanager::MockRewardsManager::{MockRewardsManagerInstance, PoolId},
+            mockrewardsmanager::MockRewardsManager::MockRewardsManagerInstance,
             poolmanager::PoolManager
         },
         contract_payloads::tob::{Asset, MockContractMessage, PoolRewardsUpdate, RewardsUpdate},

@@ -136,7 +136,7 @@ where
         future: &mut ValidationFuture,
         cx: &mut Context<'_>
     ) -> Option<Self> {
-        if let Poll::Ready(_) = future.poll_unpin(cx) {
+        if future.poll_unpin(cx).is_ready() {
             // lfg we have finished validating.
             let validator_clone = validator.clone();
             let mut this = Self::RegularProcessing {
@@ -174,7 +174,7 @@ where
                 let next = remaining_futures.poll_next_unpin(cx);
                 match next {
                     res @ Poll::Ready(Some(_)) => {
-                        return res.map(|inner| inner.map(|v| OrderValidatorRes::ValidatedOrder(v)))
+                        return res.map(|inner| inner.map(OrderValidatorRes::ValidatedOrder))
                     }
                     Poll::Pending => return Poll::Pending,
                     _ => {}
@@ -198,7 +198,7 @@ where
                     addresses: revalidation_addresses
                 }))
             }
-            OrderValidator::WaitingForStorageCleanup { .. } => return Poll::Pending,
+            OrderValidator::WaitingForStorageCleanup { .. } => Poll::Pending,
             OrderValidator::InformState { validator, waiting_for_new_block, future } => {
                 let Some(new_state) =
                     Self::handle_inform(validator, waiting_for_new_block, future, cx)
@@ -207,11 +207,11 @@ where
                 };
                 *this = new_state;
                 cx.waker().wake_by_ref();
-                return Poll::Pending
+                Poll::Pending
             }
             OrderValidator::RegularProcessing { remaining_futures, .. } => remaining_futures
                 .poll_next_unpin(cx)
-                .map(|inner| inner.map(|v| OrderValidatorRes::ValidatedOrder(v)))
+                .map(|inner| inner.map(OrderValidatorRes::ValidatedOrder))
         }
     }
 }

@@ -430,7 +430,6 @@ mod tests {
     };
 
     use alloy_primitives::FixedBytes;
-    use angstrom_metrics::METRICS_ENABLED;
     use angstrom_types::{consensus::Proposal, sol_bindings::grouped_orders::GroupedUserOrder};
     use order_pool::{order_storage::OrderStorage, PoolConfig};
     use reth_metrics::common::mpsc::UnboundedMeteredReceiver;

@@ -187,8 +187,8 @@ impl UserAccounts {
         drop(entry);
 
         // iterate through all vales collected the orders that
-        let fetch = self.fetch_all_invalidated_orders(user, token);
-        fetch
+
+        self.fetch_all_invalidated_orders(user, token)
     }
 
     fn fetch_all_invalidated_orders(&self, user: UserAddress, token: TokenAddress) -> Vec<B256> {

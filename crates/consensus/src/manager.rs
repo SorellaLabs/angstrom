@@ -194,7 +194,7 @@ impl ConsensusManager {
                 res
             });
             // We've passed basic validation so we can return true here
-            return true;
+            return true
         }
         false
     }
@@ -228,7 +228,7 @@ impl ConsensusManager {
                 // Match the solutions
                 if proposal.solutions != solutions {
                     warn!("Proposal for {} failed validation with non-matching signatures", height);
-                    return;
+                    return
                 }
                 // Prepare our commit messge
                 let commit = self.signer.sign_commit(proposal);
@@ -430,6 +430,7 @@ mod tests {
     };
 
     use alloy_primitives::FixedBytes;
+    use angstrom_metrics::METRICS_ENABLED;
     use angstrom_types::{consensus::Proposal, sol_bindings::grouped_orders::GroupedUserOrder};
     use order_pool::{order_storage::OrderStorage, PoolConfig};
     use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
@@ -457,6 +458,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_be_spawned() {
+        let _ = METRICS_ENABLED.set(false);
         let globalstate = Arc::new(Mutex::new(GlobalConsensusState::default()));
         let netdeps = mock_net_deps();
         let order_storage = Arc::new(OrderStorage::default());
@@ -468,6 +470,7 @@ mod tests {
 
     #[tokio::test]
     async fn builds_preproposal() {
+        let _ = METRICS_ENABLED.set(false);
         let globalstate = Arc::new(Mutex::new(GlobalConsensusState::default()));
         let netdeps = mock_net_deps();
         let poolconfig = PoolConfig { ids: vec![10], ..Default::default() };
@@ -505,6 +508,7 @@ mod tests {
 
     #[tokio::test]
     async fn verifies_proposal() {
+        let _ = METRICS_ENABLED.set(false);
         let globalstate = Arc::new(Mutex::new(GlobalConsensusState::default()));
         let netdeps = mock_net_deps();
         let poolconfig = PoolConfig { ids: vec![10], ..Default::default() };

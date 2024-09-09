@@ -75,11 +75,11 @@ where
     }
 
     fn handle_reorg(&mut self, old: Arc<Chain>, new: Arc<Chain>) {
-        let mut eoas = Self::get_eoa(old.clone());
-        eoas.extend(Self::get_eoa(new.clone()));
-        // state changes
-        let state_changes = EthEvent::EOAStateChanges(eoas);
-        self.send_events(state_changes);
+        // let mut eoas = Self::get_eoa(old.clone());
+        // eoas.extend(Self::get_eoa(new.clone()));
+        // // state changes
+        // let state_changes = EthEvent::EOAStateChanges(eoas);
+        // self.send_events(state_changes);
 
         // get all reorged orders
         let old_filled: HashSet<_> = Self::fetch_filled_orders(old.clone()).collect();
@@ -90,13 +90,14 @@ where
     }
 
     fn handle_commit(&mut self, new: Arc<Chain>) {
-        let filled_orders = Self::fetch_filled_orders(new.clone()).collect::<Vec<_>>();
-        let tip = new.tip().number;
-        let filled_orders = EthEvent::FilledOrders(filled_orders, tip);
-        self.send_events(filled_orders);
-
-        let eoas = Self::get_eoa(new.clone());
-        self.send_events(EthEvent::EOAStateChanges(eoas));
+        // let filled_orders =
+        // Self::fetch_filled_orders(new.clone()).collect::<Vec<_>>();
+        // let tip = new.tip().number;
+        // let filled_orders = EthEvent::FilledOrders(filled_orders, tip);
+        // self.send_events(filled_orders);
+        //
+        // let eoas = Self::get_eoa(new.clone());
+        // self.send_events(EthEvent::EOAStateChanges(eoas));
     }
 
     /// TODO: check contract for state change. if there is change. fetch the
@@ -144,8 +145,11 @@ where
 pub enum EthEvent {
     //TODO: add shit here
     NewBlock(u64),
-    FilledOrders(Vec<B256>, u64),
-    EOAStateChanges(Vec<Address>),
+    NewBlockTransitions {
+        block_number:      u64,
+        filled_orders:     Vec<B256>,
+        address_changeset: Vec<Address>
+    },
     ReorgedOrders(Vec<B256>),
     FinalizedBlock(u64)
 }

@@ -29,6 +29,11 @@ pub enum OrderValidator<V: OrderValidatorHandle> {
         revalidation_addresses: Vec<Address>,
         remaining_futures:      FuturesUnordered<ValidationFuture>
     },
+    /// waits for storage to go through and purge all invalided orders.
+    WaitingForStorageCleanup {
+        validator:             V,
+        waiting_for_new_block: VecDeque<(OrderOrigin, AllOrders)>
+    },
     /// The inform state is telling the validation client to
     /// progress a block and the cache segments it should remove + pending order
     /// state that no longer exists. Once this is done, we can be assured that
@@ -78,12 +83,39 @@ where
         };
     }
 
+    pub fn notify_validation_on_changes(
+        &mut self,
+        block_number: u64,
+        orders: Vec<B256>,
+        changed_addresses: Vec<Address>
+    ) {
+        assert!(matches!(self, Self::WaitingForStorageCleanup { .. }));
+        let Self::WaitingForStorageCleanup { validator, waiting_for_new_block } = self else {
+            unreachable!()
+        };
+        let validator_clone = validator.clone();
+        let fut = Box::pin(async move {
+            validator_clone
+                .new_block(block_number, orders, changed_addresses)
+                .await
+        });
+
+        *self = Self::InformState {
+            validator:             validator.clone(),
+            waiting_for_new_block: std::mem::take(waiting_for_new_block),
+            future:                fut
+        };
+    }
+
     pub fn validate_order(&mut self, origin: OrderOrigin, order: AllOrders) {
         match self {
             Self::RegularProcessing { remaining_futures, validator } => {
                 let val = validator.clone();
                 remaining_futures
                     .push(Box::pin(async move { val.validate_order(origin, order).await }))
+            }
+            Self::WaitingForStorageCleanup { waiting_for_new_block, .. } => {
+                waiting_for_new_block.push_back((origin, order));
             }
             Self::ClearingForNewBlock { waiting_for_new_block, .. } => {
                 waiting_for_new_block.push_back((origin, order));
@@ -151,29 +183,22 @@ where
                     "clearing for new block done. triggering clearing and starting to validate \
                      state for current block"
                 );
-                let v = validator.clone();
-                let emit_completed = completed_orders.clone();
-                let emit_address = revalidation_addresses.clone();
                 let completed_orders = std::mem::take(completed_orders);
                 let revalidation_addresses = std::mem::take(revalidation_addresses);
-                let bn = *block_number;
+                let block = *block_number;
 
-                let fut = Box::pin(async move {
-                    v.new_block(bn, completed_orders, revalidation_addresses)
-                        .await
-                });
-
-                *this = Self::InformState {
+                *this = Self::WaitingForStorageCleanup {
                     validator:             validator.clone(),
-                    waiting_for_new_block: std::mem::take(waiting_for_new_block),
-                    future:                fut
+                    waiting_for_new_block: std::mem::take(waiting_for_new_block)
                 };
 
                 Poll::Ready(Some(OrderValidatorRes::EnsureClearForTransition {
-                    orders:    emit_completed,
-                    addresses: emit_address
+                    block,
+                    orders: completed_orders,
+                    addresses: revalidation_addresses
                 }))
             }
+            OrderValidator::WaitingForStorageCleanup { .. } => return Poll::Pending,
             OrderValidator::InformState { validator, waiting_for_new_block, future } => {
                 let Some(new_state) =
                     Self::handle_inform(validator, waiting_for_new_block, future, cx)
@@ -197,63 +222,5 @@ pub enum OrderValidatorRes {
     /// Once all orders for the previous block have been validated. we go
     /// through all the addresses and orders and cleanup. once this is done
     /// we can go back to general flow.
-    EnsureClearForTransition { orders: Vec<B256>, addresses: Vec<Address> }
+    EnsureClearForTransition { block: u64, orders: Vec<B256>, addresses: Vec<Address> }
 }
-
-// pub struct PoolOrderValidator<V: OrderValidatorHandle> {
-//     validator:       V,
-//     /// when a new block is detected, we need to wait for all current
-//     /// validation, processes to complete before we can transition to
-//     /// validating new blocks.
-//     waiting_clear:   bool,
-//     new_block_queue: VecDeque<(OrderOrigin, AllOrders)>,
-//     pending:         FuturesUnordered<ValidationFuture>
-// }
-//
-// impl<V> PoolOrderValidator<V>
-// where
-//     V: OrderValidatorHandle<Order = AllOrders>
-// {
-//     pub fn new(validator: V) -> Self {
-//         Self {
-//             validator,
-//             pending: FuturesUnordered::new(),
-//             new_block_queue: VecDeque::default(),
-//             waiting_clear: false
-//         }
-//     }
-//
-//     pub fn validation_has_cleared(&self) -> bool {
-//         !self.waiting_clear
-//     }
-//
-//     pub fn validate_order(&mut self, origin: OrderOrigin, order: AllOrders) {
-//         if self.waiting_clear {
-//             self.new_block_queue.push_back((origin, order));
-//             return
-//         }
-//
-//         let val = self.validator.clone();
-//         self.pending
-//             .push(Box::pin(async move { val.validate_order(origin,
-// order).await }))     }
-// }
-//
-// impl<V> Stream for PoolOrderValidator<V>
-// where
-//     V: OrderValidatorHandle
-// {
-//     type Item = OrderValidationResults;
-//
-//     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) ->
-// Poll<Option<Self::Item>> {         let result =
-// self.pending.poll_next_unpin(cx);
-//
-//         // mark as ready to process
-//         if self.pending.is_empty() && self.waiting_clear {
-//             self.waiting_clear = false;
-//         }
-//
-//         result
-//     }
-// }

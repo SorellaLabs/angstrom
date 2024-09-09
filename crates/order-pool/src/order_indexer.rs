@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ops::Deref,
     pin::Pin,
     sync::Arc,
@@ -24,7 +24,10 @@ use reth_primitives::Address;
 use tracing::{error, trace};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-use crate::{order_storage::OrderStorage, validator::OrderValidator};
+use crate::{
+    order_storage::OrderStorage,
+    validator::{OrderValidator, OrderValidatorRes}
+};
 
 /// This is used to remove validated orders. During validation
 /// the same check wil be ran but with more accuracy
@@ -35,8 +38,6 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     order_storage:          Arc<OrderStorage>,
     /// Address to order id, used for eoa invalidation
     address_to_orders:      HashMap<Address, Vec<OrderId>>,
-    /// touched addresses transition
-    last_touched_addresses: HashSet<Address>,
     /// current block_number
     block_number:           u64,
     /// Order hash to order id, used for order inclusion lookups
@@ -63,7 +64,6 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             address_to_orders: HashMap::new(),
             hash_to_order_id: HashMap::new(),
             pending_order_indexing: HashMap::new(),
-            last_touched_addresses: HashSet::new(),
             validator: OrderValidator::new(validator)
         }
     }
@@ -95,50 +95,45 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     }
 
     /// used to remove orders that expire before the next ethereum block
-    pub fn new_block(&mut self, block_number: u64) {
+    fn remove_expired_orders(&mut self, block_number: u64) -> Vec<B256> {
         self.block_number = block_number;
-        if let Ok(time) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs()); // grab all exired hashes
-            let hashes = self
-                .hash_to_order_id
-                .iter()
-                .filter(|(_, v)| v.deadline <= expiry_deadline)
-                .map(|(k, _)| *k)
-                .collect::<Vec<_>>();
+        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs()); // grab all expired hashes
+        let hashes = self
+            .hash_to_order_id
+            .iter()
+            .filter(|(_, v)| v.deadline <= expiry_deadline)
+            .map(|(k, _)| *k)
+            .collect::<Vec<_>>();
 
-            // TODO: notify rpc of dead orders
-            let _expired_orders = hashes
-                .into_iter()
-                // remove hash from id
-                .map(|hash| self.hash_to_order_id.remove(&hash).unwrap())
-                .inspect(|order_id| {
-                    self.address_to_orders
-                        .values_mut()
-                        // remove from address to orders
-                        .for_each(|v| v.retain(|o| o != order_id));
-                })
-                // remove from all underlying pools
-                .filter_map(|id| match id.location {
-                    angstrom_types::orders::OrderLocation::Searcher => {
-                        self.order_storage.remove_searcher_order(&id)
-                    }
-                    angstrom_types::orders::OrderLocation::Limit => {
-                        self.order_storage.remove_limit_order(&id)
-                    }
-                })
-                .collect::<Vec<_>>();
-        }
+        // TODO: notify rpc of dead orders
+        let _expired_orders = hashes
+            .iter()
+            // remove hash from id
+            .map(|hash| self.hash_to_order_id.remove(hash).unwrap())
+            .inspect(|order_id| {
+                self.address_to_orders
+                    .values_mut()
+                    // remove from address to orders
+                    .for_each(|v| v.retain(|o| o != order_id));
+            })
+            // remove from all underlying pools
+            .filter_map(|id| match id.location {
+                angstrom_types::orders::OrderLocation::Searcher => {
+                    self.order_storage.remove_searcher_order(&id)
+                }
+                angstrom_types::orders::OrderLocation::Limit => {
+                    self.order_storage.remove_limit_order(&id)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        hashes
     }
 
-    pub fn eoa_state_change(&mut self, eoas: Vec<Address>) {
-        let mut rem = HashSet::new();
+    fn eoa_state_change(&mut self, eoas: &[Address]) {
         eoas.into_iter()
-            .filter_map(|eoa| {
-                self.address_to_orders.remove(&eoa).or_else(|| {
-                    rem.insert(eoa);
-                    None
-                })
-            })
+            .filter_map(|eoa| self.address_to_orders.remove(eoa))
             .for_each(|order_ids| {
                 order_ids.into_iter().for_each(|id| {
                     let Some(order) = (match id.location {
@@ -156,9 +151,6 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                         .validate_order(OrderOrigin::Local, order.order);
                 })
             });
-
-        // for late updates that might need to be re validated.
-        self.last_touched_addresses = rem;
     }
 
     pub fn finalized_block(&mut self, block: u64) {
@@ -173,7 +165,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     }
 
     /// Removes all filled orders from the pools and moves to regular pool
-    pub fn filled_orders(&mut self, block: u64, orders: &[B256]) {
+    fn filled_orders(&mut self, block: u64, orders: &[B256]) {
         if orders.is_empty() {
             return
         }
@@ -219,10 +211,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
                 return Ok(PoolInnerEvent::BadOrderMessages(peers))
             }
+            OrderValidationResults::TransitionedToBlock => return Ok(PoolInnerEvent::None)
         };
 
-        if res.valid_block == self.block_number && !self.last_touched_addresses.remove(&res.from())
-        {
+        if res.valid_block == self.block_number {
             let to_propagate = res.order.clone();
             // set tracking
             self.update_order_tracking(&res);
@@ -300,6 +292,34 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     pub fn get_all_orders(&self) -> OrderSet<GroupedVanillaOrder, TopOfBlockOrder> {
         self.order_storage.get_all_orders()
     }
+
+    pub fn start_new_block_processing(
+        &mut self,
+        block: u64,
+        completed_orders: Vec<B256>,
+        address_changes: Vec<Address>
+    ) {
+        tracing::info!(%block, "starting transition to new block processing");
+        self.validator
+            .on_new_block(block, completed_orders, address_changes);
+    }
+
+    fn finish_new_block_processing(
+        &mut self,
+        block: u64,
+        mut completed_orders: Vec<B256>,
+        address_changes: Vec<Address>
+    ) {
+        // deal with changed orders
+        self.eoa_state_change(&address_changes);
+        // deal with filled orders
+        self.filled_orders(block, &completed_orders);
+        // add expired orders to completed
+        completed_orders.extend(self.remove_expired_orders(block));
+
+        self.validator
+            .notify_validation_on_changes(block, completed_orders, address_changes);
+    }
 }
 
 impl<V> Stream for OrderIndexer<V>
@@ -312,8 +332,15 @@ where
         let mut validated = Vec::new();
 
         while let Poll::Ready(Some(next)) = self.validator.poll_next_unpin(cx) {
-            if let Ok(prop) = self.handle_validated_order(next) {
-                validated.push(prop);
+            match next {
+                OrderValidatorRes::EnsureClearForTransition { block, orders, addresses } => {
+                    self.finish_new_block_processing(block, orders, addresses);
+                }
+                OrderValidatorRes::ValidatedOrder(next) => {
+                    if let Ok(prop) = self.handle_validated_order(next) {
+                        validated.push(prop);
+                    }
+                }
             }
         }
 
@@ -327,7 +354,8 @@ where
 
 pub enum PoolInnerEvent {
     Propagation(AllOrders),
-    BadOrderMessages(Vec<PeerId>)
+    BadOrderMessages(Vec<PeerId>),
+    None
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -188,6 +188,18 @@ impl<'de> Visitor<'de> for BLSSignatureVisitor {
         formatter.write_str("precisely 64 bytes")
     }
 
+    fn visit_bytes<E>(self, bytes: &[u8]) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error
+    {
+        if bytes.len() != 64 {
+            return Err(serde::de::Error::invalid_length(bytes.len(), &"precisely 64 bytes"))
+        }
+        let b: [u8; 64] = bytes.try_into().unwrap(); // We just made sure this always works
+        BLSSignature::from_bytes(&b)
+            .map_err(|_| serde::de::Error::custom("Unable to parse signature"))
+    }
+
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
     where
         A: serde::de::SeqAccess<'de>

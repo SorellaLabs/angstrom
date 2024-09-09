@@ -6,11 +6,10 @@ use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     sol_bindings::grouped_orders::AllOrders
 };
-use bincode::{config::standard, decode_from_slice, encode_to_vec, Decode, Encode};
+use bincode::{deserialize, serialize};
 use reth_eth_wire::{protocol::Protocol, Capability};
 use reth_network_p2p::error::RequestError;
 use reth_primitives::bytes::{Buf, BufMut};
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::errors::StromStreamError;
@@ -26,8 +25,7 @@ const STROM_CAPABILITY: Capability = Capability::new_static("strom", 1);
 const STROM_PROTOCOL: Protocol = Protocol::new(STROM_CAPABILITY, 5);
 /// Represents message IDs for eth protocol messages.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StromMessageID {
     Status     = 0,
     /// Consensus
@@ -75,8 +73,7 @@ impl StromProtocolMessage {
     pub fn decode_message(buf: &mut &[u8]) -> Result<Self, StromStreamError> {
         let message_id: StromMessageID = Decodable::decode(buf)?;
         let data: Vec<u8> = Decodable::decode(buf)?;
-        let mut config = standard().with_no_limit().with_big_endian();
-        let message: StromMessage = decode_from_slice(&data, config).map(|f| f.0).unwrap();
+        let message: StromMessage = bincode::deserialize(&data).unwrap();
 
         Ok(StromProtocolMessage { message_id, message })
     }
@@ -85,8 +82,7 @@ impl StromProtocolMessage {
 impl Encodable for StromProtocolMessage {
     fn encode(&self, out: &mut dyn BufMut) {
         Encodable::encode(&self.message_id, out);
-        let mut config = standard().with_no_limit().with_big_endian();
-        let buf = encode_to_vec(self.message.clone(), config).unwrap();
+        let buf = bincode::serialize(&self.message).unwrap();
         Encodable::encode(&buf, out);
     }
 }
@@ -111,7 +107,7 @@ impl From<StromBroadcastMessage> for ProtocolBroadcastMessage {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StromMessage {
     /// init
     Status(Status),
@@ -146,7 +142,7 @@ impl StromMessage {
 /// transaction) it has already seen.
 ///
 /// Note: This is only useful for outgoing messages.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StromBroadcastMessage {
     // Consensus Broadcast
     PrePropose(Arc<PreProposal>),

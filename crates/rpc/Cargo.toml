@@ -22,7 +22,7 @@ order-pool.workspace = true
 
 reth-primitives.workspace = true
 
-bincode = { workspace = true, features = ["derive", "serde"] }
+bincode = { workspace = true  }
 # misc
 jsonrpsee = { workspace = true, features = ["server", "macros"] }
 serde_json.workspace = true

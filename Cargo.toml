@@ -15,7 +15,7 @@ members = [
   "crates/matching-engine",
   "crates/pade",
   "crates/pade-macro",
-  "crates/metrics"
+  "crates/metrics",
 ]
 
 
@@ -132,7 +132,7 @@ alloy = { version = "0.2", features = [
   "signer-trezor",
   "signer-yubihsm",
   "sol-types",
-  "contract"
+  "contract",
 ] }
 alloy-chains = "0.1.15"
 alloy-primitives = "0.7.2"
@@ -180,7 +180,7 @@ hex-literal = "0.4.1"
 
 ## misc
 bytes = "1.4"
-bincode = "2.0.0-rc.3"
+bincode = "1.3.3"
 bitflags = "2.3"
 tracing = "0.1.0"
 tracing-appender = "0.2"

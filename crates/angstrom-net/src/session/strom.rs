@@ -8,10 +8,6 @@ use std::{
 
 use alloy_rlp::Encodable;
 use angstrom_utils::{GenericExt, PollFlatten};
-use bincode::{
-    config::{standard, NoLimit},
-    decode_from_slice, encode_into_slice, Encode
-};
 use futures::{
     task::{Context, Poll},
     Stream, StreamExt

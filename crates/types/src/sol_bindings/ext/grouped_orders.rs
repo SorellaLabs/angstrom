@@ -2,8 +2,8 @@ use std::{fmt, hash::Hash, ops::Deref};
 
 use alloy_primitives::{Address, FixedBytes, TxHash, U256};
 use alloy_sol_types::SolStruct;
-use bincode::{Decode, Encode};
 use reth_primitives::B256;
+use serde::{Deserialize, Serialize};
 
 use super::FetchAssetIndexes;
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     sol_bindings::sol::{FlashOrder, StandingOrder, TopOfBlockOrder}
 };
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AllOrders {
     Partial(StandingOrder),
     KillOrFill(FlashOrder),
@@ -68,7 +68,7 @@ impl AllOrders {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderWithStorageData<Order> {
     /// raw order
     pub order:              Order,
@@ -76,7 +76,6 @@ pub struct OrderWithStorageData<Order> {
     pub priority_data:      OrderPriorityData,
     /// orders that this order invalidates. this occurs due to live nonce
     /// ordering
-    #[bincode(with_serde)]
     pub invalidates:        Vec<B256>,
     /// the pool this order belongs to
     pub pool_id:            PoolId,
@@ -164,7 +163,7 @@ impl GroupedUserOrder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GroupedVanillaOrder {
     Partial(StandingOrder),
     KillOrFill(FlashOrder)
@@ -246,7 +245,7 @@ impl GroupedVanillaOrder {
 //     }
 // }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GroupedComposableOrder {
     Partial(StandingOrder),
     KillOrFill(FlashOrder)

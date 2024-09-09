@@ -1,8 +1,8 @@
-use bincode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 
 use super::OrderVolume;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderFillState {
     /// The order has not yet been processed
     #[default]
@@ -10,7 +10,7 @@ pub enum OrderFillState {
     /// The order has been completely filled
     CompleteFill,
     /// The order has been partially filled (and how much)
-    PartialFill(#[bincode(with_serde)] OrderVolume),
+    PartialFill(OrderVolume),
     /// We have dropped this order, it can not or should not be filled.
     Killed
 }

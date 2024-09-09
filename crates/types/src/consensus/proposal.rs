@@ -1,17 +1,16 @@
-use bincode::{config::standard, encode_to_vec, Decode, Encode};
 use bytes::Bytes;
 use reth_network_peers::PeerId;
 use reth_primitives::keccak256;
 use secp256k1::SecretKey;
+use serde::{Deserialize, Serialize};
 
 use super::PreProposal;
 use crate::{orders::PoolSolution, primitive::Signature};
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Proposal {
     // Might not be necessary as this is encoded in all the proposals anyways
     pub ethereum_height: u64,
-    #[bincode(with_serde)]
     pub source:          PeerId,
     /// PreProposals sorted by source
     pub preproposals:    Vec<PreProposal>,
@@ -35,11 +34,10 @@ impl Proposal {
 
         // Build our hash and sign
         let mut buf = Vec::new();
-        let std = standard();
-        buf.extend(encode_to_vec(ethereum_height, std).unwrap());
+        buf.extend(bincode::serialize(&ethereum_height).unwrap());
         buf.extend(*source);
-        buf.extend(encode_to_vec(&preproposals, std).unwrap());
-        buf.extend(encode_to_vec(&solutions, std).unwrap());
+        buf.extend(bincode::serialize(&preproposals).unwrap());
+        buf.extend(bincode::serialize(&solutions).unwrap());
 
         let hash = keccak256(buf);
         let sig = reth_primitives::sign_message(sk.secret_bytes().into(), hash).unwrap();
@@ -54,7 +52,7 @@ impl Proposal {
     pub fn validate(&self) -> bool {
         // All our preproposals have to be valid
         if !self.preproposals.iter().all(|i| i.validate()) {
-            return false;
+            return false
         }
         // Then our own signature has to be valid
         let hash = keccak256(self.payload());
@@ -65,12 +63,11 @@ impl Proposal {
     }
 
     fn payload(&self) -> Bytes {
-        let mut buf = Vec::new();
-        let std = standard();
-        buf.extend(encode_to_vec(self.ethereum_height, std).unwrap());
+        let mut buf = vec![];
+        buf.extend(bincode::serialize(&self.ethereum_height).unwrap());
         buf.extend(*self.source);
-        buf.extend(encode_to_vec(&self.preproposals, std).unwrap());
-        buf.extend(encode_to_vec(&self.solutions, std).unwrap());
+        buf.extend(bincode::serialize(&self.preproposals).unwrap());
+        buf.extend(bincode::serialize(&self.solutions).unwrap());
 
         Bytes::from_iter(buf)
     }

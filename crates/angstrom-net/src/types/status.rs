@@ -6,7 +6,6 @@ use std::{
 use alloy_chains::{Chain, NamedChain};
 use alloy_rlp::{RlpDecodable, RlpEncodable};
 use angstrom_types::primitive::Signature;
-use bincode::{Decode, Encode};
 use reth_chainspec::ChainSpec;
 use reth_codecs::derive_arbitrary;
 use reth_primitives::{alloy_primitives::FixedBytes, keccak256, Address, BufMut, BytesMut, Head};
@@ -24,11 +23,10 @@ use crate::{version::StromVersion, StatusBuilder};
 /// connecting peer is using the same protocol version and is on the same chain.
 /// More crucially, it is used to verify that the connecting peer is a valid
 /// staker with sufficient balance to be a validator.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Status {
     pub state:     StatusState,
     /// the signature over all state fields concatenated
-    #[bincode(with_serde)]
     pub signature: Signature
 }
 
@@ -69,17 +67,15 @@ impl Debug for Status {
     }
 }
 
-#[derive(Default, Copy, Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Default, Copy, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatusState {
     /// The current protocol version.
     pub version: u8,
 
     /// The chain id, as introduced in
     /// [EIP155](https://eips.ethereum.org/EIPS/eip-155#list-of-chain-ids).
-    #[bincode(with_serde)]
     pub chain:     Chain,
     /// The peer that a node is trying to establish a connection with
-    #[bincode(with_serde)]
     pub peer:      PeerId,
     /// The current timestamp. Used to make sure that the status message will
     /// expire

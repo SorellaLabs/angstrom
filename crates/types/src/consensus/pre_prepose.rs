@@ -1,8 +1,9 @@
-use bincode::{config::standard, encode_to_vec, Decode, Encode};
+// use bincode::{config::standard, encode_to_vec, Decode, Encode};
 use bytes::Bytes;
 use reth_network_peers::PeerId;
 use reth_primitives::keccak256;
 use secp256k1::SecretKey;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     orders::OrderSet,
@@ -20,10 +21,9 @@ use crate::{
 //     pub orders:       Vec<OrderWithStorageData<GroupedVanillaOrder>>
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreProposal {
     pub ethereum_height: u64,
-    #[bincode(with_serde)]
     pub source:          PeerId,
     pub limit:           Vec<OrderWithStorageData<GroupedVanillaOrder>>,
     pub searcher:        Vec<OrderWithStorageData<TopOfBlockOrder>>,
@@ -41,10 +41,10 @@ impl PreProposal {
         sk: &SecretKey
     ) -> Self {
         let mut buf = Vec::new();
-        let std = standard();
-        buf.extend(encode_to_vec(ethereum_height, std).unwrap());
-        buf.extend(encode_to_vec(&limit, std).unwrap());
-        buf.extend(encode_to_vec(&searcher, std).unwrap());
+
+        buf.extend(bincode::serialize(&ethereum_height).unwrap());
+        buf.extend(bincode::serialize(&limit).unwrap());
+        buf.extend(bincode::serialize(&searcher).unwrap());
 
         let hash = keccak256(buf);
         let sig = reth_primitives::sign_message(sk.secret_bytes().into(), hash).unwrap();
@@ -72,10 +72,9 @@ impl PreProposal {
 
     fn payload(&self) -> Bytes {
         let mut buf = Vec::new();
-        let std = standard();
-        buf.extend(encode_to_vec(self.ethereum_height, std).unwrap());
-        buf.extend(encode_to_vec(&self.limit, std).unwrap());
-        buf.extend(encode_to_vec(&self.searcher, std).unwrap());
+        buf.extend(bincode::serialize(&self.ethereum_height).unwrap());
+        buf.extend(bincode::serialize(&self.limit).unwrap());
+        buf.extend(bincode::serialize(&self.searcher).unwrap());
         Bytes::from_iter(buf)
     }
 }

@@ -1,5 +1,4 @@
 use alloy_primitives::{FixedBytes, Keccak256, B256};
-use bincode::{config::standard, encode_to_vec, Decode, Encode};
 use bitmaps::Bitmap;
 use blsful::{Bls12381G1Impl, PublicKey, SecretKey};
 use reth_primitives::keccak256;
@@ -8,23 +7,18 @@ use serde::{Deserialize, Serialize};
 use super::Proposal;
 use crate::primitive::{BLSSignature, BLSValidatorID};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Commit {
     pub block_height: u64,
 
-    #[bincode(with_serde)]
     pub preproposal_hash: B256,
-    #[bincode(with_serde)]
     pub solution_hash:    B256,
     /// This signature is (block_height | vanilla_bundle_hash |
     /// lower_bound_hash | order_buffer_hash)
-    #[bincode(with_serde)]
     pub message_sig:      BLSSignature,
     /// is default if none. We have to due this due to the rlp requirements
-    #[bincode(with_serde)]
     pub preproposal_sig:  BLSSignature,
     /// is default if none. We have to due this due to the rlp requirements
-    #[bincode(with_serde)]
     pub solution_sig:     BLSSignature
 }
 
@@ -120,11 +114,10 @@ impl Commit {
     pub fn from_proposal(proposal: &Proposal, sk: &SecretKey<Bls12381G1Impl>) -> Self {
         let block_height = proposal.ethereum_height;
         let mut buf = Vec::new();
-        let std = standard();
-        buf.extend(encode_to_vec(&proposal.preproposals, std).unwrap());
+        buf.extend(bincode::serialize(&proposal.preproposals).unwrap());
         let preproposal_hash = keccak256(buf);
         let mut buf = Vec::new();
-        buf.extend(encode_to_vec(&proposal.solutions, std).unwrap());
+        buf.extend(bincode::serialize(&proposal.solutions).unwrap());
         let solution_hash = keccak256(buf);
 
         Self::generate_commit_all(block_height, preproposal_hash, solution_hash, sk)

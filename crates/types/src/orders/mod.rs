@@ -1,12 +1,12 @@
 mod fillstate;
 mod origin;
 use alloy_primitives::U256;
-use bincode::{Decode, Encode};
 pub mod orderpool;
 
 pub use fillstate::*;
 pub use orderpool::*;
 pub use origin::*;
+use serde::{Deserialize, Serialize};
 
 pub type BookID = u128;
 pub type OrderID = u128;
@@ -27,10 +27,10 @@ pub struct OrderSet<Limit, Searcher> {
     pub searcher: Vec<OrderWithStorageData<Searcher>>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetAmmOrder {
-    Buy(#[bincode(with_serde)] U256),
-    Sell(#[bincode(with_serde)] U256)
+    Buy(U256),
+    Sell(U256)
 }
 
 impl Default for NetAmmOrder {
@@ -57,13 +57,13 @@ impl NetAmmOrder {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderOutcome {
     pub id:      OrderId,
     pub outcome: OrderFillState
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolSolution {
     /// Id of this pool
     pub id:           PoolId,

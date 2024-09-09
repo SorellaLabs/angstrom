@@ -20,7 +20,6 @@ use super::UserOrderPoolInfo;
 #[derive(Clone, Debug, Default)]
 pub struct AssetIndexToAddress(DashMap<u16, Address>);
 
-
 #[derive(Debug, Clone)]
 pub struct AssetIndexToAddressWrapper<Order: RawPoolOrder> {
     pub token_in:  Address,
@@ -115,9 +114,10 @@ impl<Order: RawPoolOrder> DerefMut for AssetIndexToAddressWrapper<Order> {
 }
 
 impl AssetIndexToAddress {
-    pub fn new(map: DashMap<u16, Address>)-> Self {
+    pub fn new(map: DashMap<u16, Address>) -> Self {
         Self(map)
     }
+
     pub fn get_address(&self, asset_index: &u16) -> Option<Address> {
         self.0.get(asset_index).map(|f| *f)
     }

@@ -27,7 +27,8 @@ pub fn generate_limit_order(
     valid_block: Option<u64>,
     asset_in: Option<u16>,
     asset_out: Option<u16>,
-    nonce: Option<u64>
+    nonce: Option<u64>,
+    from: Option<Address>
 ) -> OrderWithStorageData<GroupedVanillaOrder> {
     let pool_id = pool_id.unwrap_or_default();
     let valid_block = valid_block.unwrap_or_default();
@@ -42,7 +43,8 @@ pub fn generate_limit_order(
         price,
         asset_in.unwrap_or_else(|| rng.gen()),
         asset_out.unwrap_or_else(|| rng.gen()),
-        nonce.unwrap_or_else(|| rng.gen())
+        nonce.unwrap_or_else(|| rng.gen()),
+        from.unwrap_or_else(|| rng.gen())
     );
 
     let priority_data = OrderPriorityData { price, volume, gas };
@@ -98,7 +100,8 @@ pub fn build_limit_order(
     price: u128,
     asset_in: u16,
     asset_out: u16,
-    nonce: u64
+    nonce: u64,
+    from: Address
 ) -> GroupedVanillaOrder {
     if kof {
         GroupedVanillaOrder::KillOrFill(FlashOrder {
@@ -107,6 +110,7 @@ pub fn build_limit_order(
             valid_for_block: valid_block,
             asset_in,
             asset_out,
+            recipient: from,
             ..Default::default()
         })
     } else {
@@ -116,6 +120,7 @@ pub fn build_limit_order(
             asset_out,
             asset_in,
             nonce,
+            recipient: from,
             ..Default::default()
         })
     }
@@ -173,7 +178,7 @@ pub fn generate_order_distribution(
         .map(|(p, v)| {
             let price = p.to_u128().unwrap_or_default();
             let volume = v.to_u128().unwrap_or_default();
-            let order = build_limit_order(true, valid_block, volume, price, 0,0, 0);
+            let order = build_limit_order(true, valid_block, volume, price, 0,0, 0,Address::ZERO);
             let order_id = generate_order_id(pool_id, order.hash());
 
             OrderWithStorageData {

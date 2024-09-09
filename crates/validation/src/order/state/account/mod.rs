@@ -308,7 +308,8 @@ pub mod tests {
             None,
             Some(asset0),
             Some(asset1),
-            Some(420)
+            Some(420),
+            Some(user)
         )
         .order;
 
@@ -320,6 +321,7 @@ pub mod tests {
         processor
             .fetch_utils
             .set_used_nonces(user, HashSet::from([420]));
+
         let Err(e) = processor.verify_order(order, pool_info, 420, true) else { panic!("verifying order should of failed")};
 
         assert!(matches!(e, UserAccountVerificationError::DuplicateNonce(..)));

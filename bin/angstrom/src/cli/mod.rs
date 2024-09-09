@@ -105,7 +105,7 @@ pub fn init_network_builder(secret_key: SecretKey) -> eyre::Result<StromNetworkB
 
     let state = StatusState {
         version:   0,
-        chain:     Chain::mainnet(),
+        chain:     Chain::mainnet().id(),
         peer:      pk2id(&public_key),
         timestamp: 0
     };

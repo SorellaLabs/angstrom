@@ -103,6 +103,7 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
         let (is_cur_valid, invalid_orders) = live_state
             .can_support_order(&order, &pool_info)
             .map(|pending_user_action| {
+                println!("can support order map");
                 (
                     true,
                     self.user_accounts

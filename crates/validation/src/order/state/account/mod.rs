@@ -344,12 +344,12 @@ pub mod tests {
         processor.fetch_utils.set_balance_for_user(
             user,
             token0,
-            U256::from(order0.amount_in() + order1.amount_in() - 10)
+            U256::from(order0.amount_in()) + U256::from(order1.amount_in()) - U256::from(10)
         );
         processor.fetch_utils.set_approval_for_user(
             user,
             token0,
-            U256::from(order0.amount_in() + order1.amount_in() - 10)
+            U256::from(order0.amount_in()) + U256::from(order1.amount_in()) - U256::from(10)
         );
 
         let order0_hash = order0.hash();

@@ -144,7 +144,7 @@ pub fn calculate_reward(
 
     if stakes.is_empty() {
         // TODO: Maybe this should just be a big donation to the current tick?
-        return Err(eyre!("No actual purchases could be made with this TOB order"));
+        return Err(eyre!("No actual purchases could be made with this TOB order"))
     }
 
     let mut rem_bribe = bribe;
@@ -178,7 +178,7 @@ pub fn calculate_reward(
             // target price winds up based on what we do have and end this iteration
             let partial_dprice = Ray::calc_price(rem_bribe, q_step);
             filled_price += partial_dprice;
-            break;
+            break
         }
     }
 
@@ -220,7 +220,7 @@ pub fn calculate_reward(
 mod test {
     use alloy::{
         primitives::{address, Bytes, Uint, U256},
-        providers::{ext::AnvilApi, Provider, ProviderBuilder},
+        providers::{Provider, ProviderBuilder},
         rpc::types::Filter
     };
     use angstrom_types::{

@@ -24,7 +24,10 @@ pub fn generate_limit_order(
     kof: bool,
     is_bid: bool,
     pool_id: Option<usize>,
-    valid_block: Option<u64>
+    valid_block: Option<u64>,
+    asset_in: Option<u16>,
+    asset_out: Option<u16>,
+    nonce: Option<u64>
 ) -> OrderWithStorageData<GroupedVanillaOrder> {
     let pool_id = pool_id.unwrap_or_default();
     let valid_block = valid_block.unwrap_or_default();
@@ -32,7 +35,15 @@ pub fn generate_limit_order(
     let price: u128 = rng.gen();
     let volume: u128 = rng.gen();
     let gas: u128 = rng.gen();
-    let order = build_limit_order(kof, valid_block, volume, price);
+    let order = build_limit_order(
+        kof,
+        valid_block,
+        volume,
+        price,
+        asset_in.unwrap_or_else(|| rng.gen()),
+        asset_out.unwrap_or_else(|| rng.gen()),
+        nonce.unwrap_or_else(|| rng.gen())
+    );
 
     let priority_data = OrderPriorityData { price, volume, gas };
     let order_id = generate_order_id(pool_id, order.hash());
@@ -84,19 +95,28 @@ pub fn build_limit_order(
     kof: bool,
     valid_block: u64,
     volume: u128,
-    price: u128
+    price: u128,
+    asset_in: u16,
+    asset_out: u16,
+    nonce: u64
 ) -> GroupedVanillaOrder {
     if kof {
         GroupedVanillaOrder::KillOrFill(FlashOrder {
             max_amount_in_or_out: Uint::from(volume),
             min_price: Ray::from(Uint::from(price)).into(),
             valid_for_block: valid_block,
+            asset_in,
+            asset_out,
+            nonce,
             ..Default::default()
         })
     } else {
         GroupedVanillaOrder::Partial(StandingOrder {
             max_amount_in_or_out: Uint::from(volume),
             min_price: Ray::from(Uint::from(price)).into(),
+            asset_out,
+            asset_in,
+            nonce,
             ..Default::default()
         })
     }
@@ -154,7 +174,7 @@ pub fn generate_order_distribution(
         .map(|(p, v)| {
             let price = p.to_u128().unwrap_or_default();
             let volume = v.to_u128().unwrap_or_default();
-            let order = build_limit_order(true, valid_block, volume, price);
+            let order = build_limit_order(true, valid_block, volume, price, 0,0, 0);
             let order_id = generate_order_id(pool_id, order.hash());
 
             OrderWithStorageData {

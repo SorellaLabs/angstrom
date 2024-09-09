@@ -26,7 +26,7 @@ pub fn generate_limit_order_set(
     block: u64
 ) -> Vec<OrderWithStorageData<GroupedVanillaOrder>> {
     (0..count)
-        .map(|_| generate_limit_order(rng, true, is_bid, None, Some(block)))
+        .map(|_| generate_limit_order(rng, true, is_bid, None, Some(block), None, None))
         .collect()
 }
 

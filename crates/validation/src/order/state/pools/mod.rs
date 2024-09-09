@@ -80,7 +80,7 @@ pub mod pool_tracker_mock {
 
     use super::{angstrom_pools::PoolIdWithDirection, *};
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     pub struct MockPoolTracker {
         asset_index_to_address: DashMap<u16, Address>,
         pools:                  DashMap<(Address, Address), PoolIdWithDirection>
@@ -91,8 +91,9 @@ pub mod pool_tracker_mock {
             self.asset_index_to_address.insert(index, address);
         }
 
-        pub fn add_pool(&self, token0: Address, token1: Address, info: PoolIdWithDirection) {
-            self.pools.insert((token0, token1), info);
+        pub fn add_pool(&self, token0: Address, token1: Address, pool: u16) {
+            self.pools.insert((token0, token1), (true, pool as usize));
+            self.pools.insert((token1, token0), (false, pool as usize));
         }
     }
 

@@ -137,14 +137,27 @@ pub enum UserAccountVerificationError<O: RawPoolOrder> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::{atomic::AtomicU64, Arc};
+    use std::{
+        collections::HashSet,
+        sync::{atomic::AtomicU64, Arc}
+    };
 
+    use angstrom_types::sol_bindings::grouped_orders::GroupedVanillaOrder;
     use dashmap::DashSet;
+    use rand::thread_rng;
+    use reth_primitives::Address;
     use reth_provider::test_utils::NoopProvider;
     use revm::primitives::bitvec::store::BitStore;
+    use testing_tools::type_generator::orders::generate_limit_order;
 
-    use super::{UserAccountProcessor, UserAccounts};
-    use crate::{common::lru_db::RevmLRU, order::state::db_state_utils::test_fetching::MockFetch};
+    use super::{UserAccountProcessor, UserAccountVerificationError, UserAccounts};
+    use crate::{
+        common::lru_db::RevmLRU,
+        order::state::{
+            db_state_utils::test_fetching::MockFetch,
+            pools::{pool_tracker_mock::MockPoolTracker, PoolsTracker}
+        }
+    };
 
     fn setup_test_account_processor(block: u64) -> UserAccountProcessor<NoopProvider, MockFetch> {
         UserAccountProcessor {
@@ -163,5 +176,44 @@ pub mod tests {
     fn test_nonce_rejection() {
         let block = 420;
         let mut processor = setup_test_account_processor(block);
+
+        let user = Address::random();
+        let asset0 = 0;
+        let asset1 = 1;
+
+        let token0 = Address::random();
+        let token1 = Address::random();
+        let pool = 10;
+
+        let mut mock_pool = MockPoolTracker::default();
+
+        mock_pool.add_pool(token0, token1, pool);
+        mock_pool.add_asset(asset0, token0);
+        mock_pool.add_asset(asset1, token1);
+
+        let mut rng = thread_rng();
+        let mut order: GroupedVanillaOrder = generate_limit_order(
+            &mut rng,
+            true,
+            true,
+            Some(pool as usize),
+            None,
+            Some(asset0),
+            Some(asset1),
+            Some(420)
+        )
+        .order;
+
+        // wrap order with details
+        let (pool_info, order) = mock_pool
+            .fetch_pool_info_for_order(order)
+            .expect("pool tracker should have valid state");
+
+        processor
+            .fetch_utils
+            .set_used_nonces(user, HashSet::from([420]));
+        let Err(e) = processor.verify_order(order, pool_info, 420, true) else { panic!("verifying order should of failed")};
+
+        assert!(matches!(e, UserAccountVerificationError::DuplicateNonce(..)));
     }
 }

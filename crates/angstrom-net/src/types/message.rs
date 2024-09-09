@@ -6,10 +6,7 @@ use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     sol_bindings::grouped_orders::AllOrders
 };
-use bincode::{
-    config::standard, decode_from_slice, encode_into_slice, encode_to_vec, serde::encode_to_vec,
-    Decode, Encode
-};
+use bincode::{config::standard, decode_from_slice, encode_to_vec, Decode, Encode};
 use reth_eth_wire::{protocol::Protocol, Capability};
 use reth_network_p2p::error::RequestError;
 use reth_primitives::bytes::{Buf, BufMut};

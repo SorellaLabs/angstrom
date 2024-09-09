@@ -6,7 +6,10 @@ use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     sol_bindings::grouped_orders::AllOrders
 };
-use bincode::{config::standard, decode_from_slice, encode_into_slice, Decode, Encode};
+use bincode::{
+    config::standard, decode_from_slice, encode_into_slice, encode_to_vec, serde::encode_to_vec,
+    Decode, Encode
+};
 use reth_eth_wire::{protocol::Protocol, Capability};
 use reth_network_p2p::error::RequestError;
 use reth_primitives::bytes::{Buf, BufMut};
@@ -83,10 +86,8 @@ impl StromProtocolMessage {
 impl Encodable for StromProtocolMessage {
     fn encode(&self, out: &mut dyn BufMut) {
         Encodable::encode(&self.message_id, out);
-        let mut buf = Vec::with_capacity(1024 * 14); // 14 kb
-
         let mut config = standard().with_no_limit().with_big_endian();
-        let bytes = encode_into_slice(self.message.clone(), &mut buf, config).unwrap();
+        let buf = encode_to_vec(self.message.clone(), config).unwrap();
         Encodable::encode(&buf, out);
     }
 }

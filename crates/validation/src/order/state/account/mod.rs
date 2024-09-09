@@ -142,7 +142,8 @@ pub mod tests {
         sync::{atomic::AtomicU64, Arc}
     };
 
-    use angstrom_types::sol_bindings::grouped_orders::GroupedVanillaOrder;
+    use alloy_primitives::U256;
+    use angstrom_types::sol_bindings::grouped_orders::{GroupedVanillaOrder, PoolOrder};
     use dashmap::DashSet;
     use rand::thread_rng;
     use reth_primitives::Address;
@@ -170,6 +171,57 @@ pub mod tests {
             fetch_utils:           MockFetch::default(),
             known_canceled_orders: DashSet::default()
         }
+    }
+
+    #[test]
+    fn test_baseline_order_verification_for_single_order() {
+        let block = 420;
+        let mut processor = setup_test_account_processor(block);
+
+        let user = Address::random();
+        let asset0 = 0;
+        let asset1 = 1;
+
+        let token0 = Address::random();
+        let token1 = Address::random();
+        let pool = 10;
+
+        let mut mock_pool = MockPoolTracker::default();
+
+        mock_pool.add_pool(token0, token1, pool);
+        mock_pool.add_asset(asset0, token0);
+        mock_pool.add_asset(asset1, token1);
+
+        let mut rng = thread_rng();
+        let mut order: GroupedVanillaOrder = generate_limit_order(
+            &mut rng,
+            false,
+            true,
+            Some(pool as usize),
+            None,
+            Some(asset0),
+            Some(asset1),
+            Some(420)
+        )
+        .order;
+
+        // wrap order with details
+        let (pool_info, order) = mock_pool
+            .fetch_pool_info_for_order(order)
+            .expect("pool tracker should have valid state");
+
+        processor
+            .fetch_utils
+            .set_balance_for_user(user, token0, U256::from(order.amount_in()));
+        processor
+            .fetch_utils
+            .set_approval_for_user(user, token0, U256::from(order.amount_in()));
+
+        processor
+            .verify_order(order, pool_info, 420, true)
+            .expect("order should be valid");
+        // assert!(matches!(e,
+        // UserAccountVerificationError::DuplicateNonce(..)));
     }
 
     #[test]

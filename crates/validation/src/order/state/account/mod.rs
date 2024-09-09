@@ -201,7 +201,8 @@ pub mod tests {
             None,
             Some(asset0),
             Some(asset1),
-            Some(420)
+            Some(420),
+            Some(user)
         )
         .order;
 
@@ -250,7 +251,8 @@ pub mod tests {
             None,
             Some(asset0),
             Some(asset1),
-            Some(420)
+            Some(420),
+            Some(user)
         )
         .order;
 

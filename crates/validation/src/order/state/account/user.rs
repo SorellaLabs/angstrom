@@ -186,6 +186,7 @@ impl UserAccounts {
         value.push(action);
         println!("sorting");
         value.sort_unstable_by_key(|k| k.nonce);
+        drop(entry);
 
         // iterate through all vales collected the orders that
         let fetch = self.fetch_all_invalidated_orders(user, token);

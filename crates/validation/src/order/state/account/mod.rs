@@ -89,7 +89,6 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
             return Err(UserAccountVerificationError::OrderIsCancelled(order_hash))
         }
 
-        println!("getting live state");
         let live_state = self.user_accounts.get_live_state_for_order(
             user,
             pool_info.token,
@@ -97,13 +96,11 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
             &self.fetch_utils,
             &self.db
         );
-        println!("live state got");
 
         // ensure that the current live state is enough to satisfy the order
         let (is_cur_valid, invalid_orders) = live_state
             .can_support_order(&order, &pool_info)
             .map(|pending_user_action| {
-                println!("can support order map");
                 (
                     true,
                     self.user_accounts
@@ -111,7 +108,6 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
                 )
             })
             .unwrap_or_default();
-        println!("got if we can support");
 
         Ok(order.into_order_storage_with_data(
             block,
@@ -286,8 +282,88 @@ pub mod tests {
 
         println!("first order has been set valid");
         // second time should fail
-        let Err(e) = processor.verify_order(order, pool_info, 420, true) else { panic!("verifying order should of failed")};
+        let Err(e) = processor.verify_order(order, pool_info, 420, true) else {
+            panic!("verifying order should of failed")
+        };
         assert!(matches!(e, UserAccountVerificationError::DuplicateNonce(..)));
+    }
+
+    #[test]
+    fn test_order_replacement_on_lower_nonce() {
+        let block = 420;
+        let mut processor = setup_test_account_processor(block);
+
+        let user = Address::random();
+        let asset0 = 0;
+        let asset1 = 1;
+
+        let token0 = Address::random();
+        let token1 = Address::random();
+        let pool = 10;
+
+        let mut mock_pool = MockPoolTracker::default();
+
+        mock_pool.add_pool(token0, token1, pool);
+        mock_pool.add_asset(asset0, token0);
+        mock_pool.add_asset(asset1, token1);
+
+        let mut rng = thread_rng();
+        let mut order0: GroupedVanillaOrder = generate_limit_order(
+            &mut rng,
+            false,
+            true,
+            Some(pool as usize),
+            None,
+            Some(asset0),
+            Some(asset1),
+            Some(420),
+            Some(user)
+        )
+        .order;
+
+        let mut order1: GroupedVanillaOrder = generate_limit_order(
+            &mut rng,
+            false,
+            true,
+            Some(pool as usize),
+            None,
+            Some(asset0),
+            Some(asset1),
+            Some(10),
+            Some(user)
+        )
+        .order;
+        // wrap order with details
+        let (pool_info0, order0) = mock_pool
+            .fetch_pool_info_for_order(order0)
+            .expect("pool tracker should have valid state");
+        let (pool_info1, order1) = mock_pool
+            .fetch_pool_info_for_order(order1)
+            .expect("pool tracker should have valid state");
+
+        processor.fetch_utils.set_balance_for_user(
+            user,
+            token0,
+            U256::from(order0.amount_in() + order1.amount_in() - 10)
+        );
+        processor.fetch_utils.set_approval_for_user(
+            user,
+            token0,
+            U256::from(order0.amount_in() + order1.amount_in() - 10)
+        );
+
+        let order0_hash = order0.hash();
+        // first time verifying should pass
+        processor
+            .verify_order(order0, pool_info0, 420, true)
+            .expect("order should be valid");
+
+        // very second order and that order0 hash is in the invalid_orders
+        // second time should fail
+        let res = processor
+            .verify_order(order1, pool_info1, 420, true)
+            .expect("should be valid");
+        assert_eq!(res.invalidates, vec![order0_hash]);
     }
 
     #[test]
@@ -332,7 +408,9 @@ pub mod tests {
             .fetch_utils
             .set_used_nonces(user, HashSet::from([420]));
 
-        let Err(e) = processor.verify_order(order, pool_info, 420, true) else { panic!("verifying order should of failed")};
+        let Err(e) = processor.verify_order(order, pool_info, 420, true) else {
+            panic!("verifying order should of failed")
+        };
 
         assert!(matches!(e, UserAccountVerificationError::DuplicateNonce(..)));
     }

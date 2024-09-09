@@ -186,7 +186,6 @@ impl UserAccounts {
         value.push(action);
         println!("sorting");
         value.sort_unstable_by_key(|k| k.nonce);
-        println!("finito sorting");
 
         // iterate through all vales collected the orders that
         let fetch = self.fetch_all_invalidated_orders(user, token);
@@ -199,6 +198,7 @@ impl UserAccounts {
         let mut baseline_approval = *baseline.token_approval.get(&token).unwrap();
         let mut baseline_balance = *baseline.token_balance.get(&token).unwrap();
         let mut has_overflowed = false;
+        println!("starting loop");
 
         let mut bad = vec![];
         for pending_state in self
@@ -208,6 +208,7 @@ impl UserAccounts {
             .iter()
             .filter(|state| state.token_address == token)
         {
+            println!("loop");
             let (baseline, overflowed) =
                 baseline_approval.overflowing_sub(pending_state.token_approval);
             has_overflowed |= overflowed;

@@ -74,7 +74,8 @@ pub struct StromProtocolMessage {
 impl StromProtocolMessage {
     pub fn decode_message(buf: &mut &[u8]) -> Result<Self, StromStreamError> {
         let message_id: StromMessageID = Decodable::decode(buf)?;
-        let message: StromMessage = decode_from_slice(buf, standard()).map(|f| f.0).unwrap();
+        let mut config = standard().with_no_limit().with_big_endian();
+        let message: StromMessage = decode_from_slice(buf, config).map(|f| f.0).unwrap();
 
         Ok(StromProtocolMessage { message_id, message })
     }

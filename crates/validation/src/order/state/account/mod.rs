@@ -211,6 +211,7 @@ pub mod tests {
             .fetch_pool_info_for_order(order)
             .expect("pool tracker should have valid state");
 
+        println!("setting balances and approvals");
         processor
             .fetch_utils
             .set_balance_for_user(user, token0, U256::from(order.amount_in()));
@@ -218,6 +219,7 @@ pub mod tests {
             .fetch_utils
             .set_approval_for_user(user, token0, U256::from(order.amount_in()));
 
+        println!("verifying orders");
         processor
             .verify_order(order, pool_info, 420, true)
             .expect("order should be valid");
@@ -272,11 +274,13 @@ pub mod tests {
             U256::from(order.amount_in()) * U256::from(2)
         );
 
+        println!("finished first order config");
         // first time verifying should pass
         processor
             .verify_order(order.clone(), pool_info.clone(), 420, true)
             .expect("order should be valid");
 
+        println!("first order has been set valid");
         // second time should fail
         let Err(e) = processor.verify_order(order, pool_info, 420, true) else { panic!("verifying order should of failed")};
         assert!(matches!(e, UserAccountVerificationError::DuplicateNonce(..)));

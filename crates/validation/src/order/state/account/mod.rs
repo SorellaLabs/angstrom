@@ -89,6 +89,7 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
             return Err(UserAccountVerificationError::OrderIsCancelled(order_hash))
         }
 
+        println!("getting live state");
         let live_state = self.user_accounts.get_live_state_for_order(
             user,
             pool_info.token,
@@ -223,6 +224,7 @@ pub mod tests {
         processor
             .verify_order(order, pool_info, 420, true)
             .expect("order should be valid");
+
     }
 
     #[test]

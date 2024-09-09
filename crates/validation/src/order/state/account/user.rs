@@ -139,6 +139,7 @@ impl UserAccounts {
         utils: &S,
         db: &RevmLRU<DB>
     ) -> LiveState {
+        println!("get live state for order");
         self.try_fetch_live_pending_state(user, token, nonce)
             .unwrap_or_else(|| {
                 self.load_state_for(user, token, utils, db);

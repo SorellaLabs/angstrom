@@ -128,7 +128,7 @@ impl StatusBuilder {
 
     /// Sets the chain id.
     pub fn chain(mut self, chain: Chain) -> Self {
-        self.state.chain = chain;
+        self.state.chain = chain.id();
         self
     }
 }

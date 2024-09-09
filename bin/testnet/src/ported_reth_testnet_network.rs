@@ -44,7 +44,7 @@ where
 
         let state = StatusState {
             version:   0,
-            chain:     Chain::mainnet(),
+            chain:     Chain::mainnet().id(),
             peer:      pk2id(&pub_key),
             timestamp: 0
         };
@@ -101,7 +101,7 @@ where
 
         let state = StatusState {
             version:   0,
-            chain:     Chain::mainnet(),
+            chain:     Chain::mainnet().id(),
             peer:      pk2id(&pub_key),
             timestamp: 0
         };

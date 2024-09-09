@@ -107,7 +107,6 @@ pub fn build_limit_order(
             valid_for_block: valid_block,
             asset_in,
             asset_out,
-            nonce,
             ..Default::default()
         })
     } else {

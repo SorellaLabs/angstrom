@@ -194,7 +194,7 @@ pub mod tests {
         let mut rng = thread_rng();
         let mut order: GroupedVanillaOrder = generate_limit_order(
             &mut rng,
-            true,
+            false,
             true,
             Some(pool as usize),
             None,

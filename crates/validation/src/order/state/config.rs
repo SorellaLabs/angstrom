@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use alloy_primitives::Address;
 use angstrom_types::primitive::PoolId;
@@ -13,6 +13,7 @@ pub struct ValidationConfig {
     pub approvals:               Vec<TokenApprovalSlot>,
     pub balances:                Vec<TokenBalanceSlot>,
     pub pools:                   Vec<PoolConfig>,
+    pub asset_to_indexes:        HashMap<u16, Address>,
     pub max_validation_per_user: usize
 }
 

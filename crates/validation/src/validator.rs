@@ -66,7 +66,9 @@ where
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
             ValidationRequest::Order(order) => self.order_validator.validate_order(order),
-            ValidationRequest::NewBlock { block_number, orders, addresses } => todo!()
+            ValidationRequest::NewBlock { block_number, orders, addresses } => self
+                .order_validator
+                .on_new_block(block_number, orders, addresses)
         }
     }
 }

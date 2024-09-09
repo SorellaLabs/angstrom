@@ -1,9 +1,12 @@
-use alloy_primitives::{Address, U256};
+use std::collections::HashMap;
+
+use alloy_primitives::{Address, FixedBytes, U256};
 use angstrom_pools::AngstromPools;
 use angstrom_types::sol_bindings::grouped_orders::{PoolOrder, RawPoolOrder};
+use dashmap::DashMap;
 use index_to_address::{AssetIndexToAddress, AssetIndexToAddressWrapper};
 
-use super::config::ValidationConfig;
+use super::config::{HashMethod, ValidationConfig};
 
 pub mod angstrom_pools;
 pub mod index_to_address;
@@ -49,7 +52,24 @@ impl PoolsTracker for AngstromPoolsTracker {
 
 impl AngstromPoolsTracker {
     pub fn new(config: ValidationConfig) -> Self {
-        todo!()
+        let pools = config
+            .pools
+            .iter()
+            .flat_map(|pool| {
+                let key0 = AngstromPools::get_key(pool.token0, pool.token1);
+                let key1 = AngstromPools::get_key(pool.token1, pool.token0);
+                [(key0, (true, pool.pool_id)), (key1, (false, pool.pool_id))]
+            })
+            .collect::<DashMap<_, _>>();
+        let angstrom_pools = AngstromPools::new(pools);
+
+        let assets = config
+            .asset_to_indexes
+            .into_iter()
+            .collect::<DashMap<_, _>>();
+        let assets = AssetIndexToAddress::new(assets);
+
+        Self { pools: angstrom_pools, asset_index_to_address: assets }
     }
 }
 
@@ -92,7 +112,7 @@ pub mod pool_tracker_mock {
 
             let (is_bid, pool_id) = self.pools.get(&(token_in, token_out))?.value();
             let wrapped = AssetIndexToAddressWrapper { token_out, token_in, order };
-            let info = UserOrderPoolInfo { pool_id, is_bid, token: token_in };
+            let info = UserOrderPoolInfo { pool_id: *pool_id, is_bid: *is_bid, token: token_in };
 
             Some((info, wrapped))
         }

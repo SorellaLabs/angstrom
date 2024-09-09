@@ -20,6 +20,7 @@ use super::UserOrderPoolInfo;
 #[derive(Clone, Debug, Default)]
 pub struct AssetIndexToAddress(DashMap<u16, Address>);
 
+
 #[derive(Debug, Clone)]
 pub struct AssetIndexToAddressWrapper<Order: RawPoolOrder> {
     pub token_in:  Address,
@@ -41,7 +42,7 @@ impl<Order: RawPoolOrder> AssetIndexToAddressWrapper<Order> {
             priority_data: angstrom_types::orders::OrderPriorityData {
                 price:  self.limit_price(),
                 volume: self.amount_in(),
-                gas:    todo!()
+                gas:    0
             },
             pool_id: pool_info.pool_id,
             is_currently_valid: is_cur_valid,
@@ -114,6 +115,9 @@ impl<Order: RawPoolOrder> DerefMut for AssetIndexToAddressWrapper<Order> {
 }
 
 impl AssetIndexToAddress {
+    pub fn new(map: DashMap<u16, Address>)-> Self {
+        Self(map)
+    }
     pub fn get_address(&self, asset_index: &u16) -> Option<Address> {
         self.0.get(asset_index).map(|f| *f)
     }

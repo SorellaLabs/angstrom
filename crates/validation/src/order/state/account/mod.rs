@@ -148,7 +148,11 @@ pub mod tests {
 
     fn setup_test_account_processor(block: u64) -> UserAccountProcessor<NoopProvider, MockFetch> {
         UserAccountProcessor {
-            db:                    Arc::new(RevmLRU::new(100, Arc::new(NoopProvider), Arc::new(AtomicU64::new(420)))),
+            db:                    Arc::new(RevmLRU::new(
+                100,
+                Arc::new(NoopProvider::default()),
+                Arc::new(AtomicU64::new(420))
+            )),
             user_accounts:         UserAccounts::new(block),
             fetch_utils:           MockFetch::default(),
             known_canceled_orders: DashSet::default()

@@ -184,10 +184,14 @@ impl UserAccounts {
         let mut value = entry.value_mut();
 
         value.push(action);
+        println!("sorting");
         value.sort_unstable_by_key(|k| k.nonce);
+        println!("finito sorting");
 
         // iterate through all vales collected the orders that
-        self.fetch_all_invalidated_orders(user, token)
+        let fetch = self.fetch_all_invalidated_orders(user, token);
+        println!("got all order invalidated");
+        fetch
     }
 
     fn fetch_all_invalidated_orders(&self, user: UserAddress, token: TokenAddress) -> Vec<B256> {

@@ -36,6 +36,15 @@ impl MockValidator {
 impl OrderValidatorHandle for MockValidator {
     type Order = AllOrders;
 
+    fn new_block(
+        &self,
+        _: u64,
+        _: Vec<reth_primitives::B256>,
+        _: Vec<Address>
+    ) -> validation::order::ValidationFuture {
+        Box::pin(async move { OrderValidationResults::TransitionedToBlock })
+    }
+
     fn validate_order(
         &self,
         _origin: angstrom_types::orders::OrderOrigin,

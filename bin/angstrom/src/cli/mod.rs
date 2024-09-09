@@ -190,11 +190,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
         .with_consensus_manager(handles.consensus_tx_op)
         .build_handle(executor.clone(), node.provider.clone());
 
-    let validator = init_validation(
-        node.provider.clone(),
-        config.validation_cache_size,
-        eth_handle.subscribe_network_stream()
-    );
+    let validator = init_validation(node.provider.clone(), config.validation_cache_size);
 
     // Create our pool config
     let pool_config = PoolConfig::default();

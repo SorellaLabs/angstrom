@@ -17,6 +17,14 @@ impl ContractBundle {
             .chain(self.orders.iter().map(|order| order.eip712_hash_struct()))
             .collect()
     }
+
+    pub fn get_addressees_touched(&self) -> Vec<Address> {
+        self.top_of_block_orders
+            .iter()
+            .map(|order| order.from)
+            .chain(self.orders.iter().map(|order| order.from))
+            .collect()
+    }
 }
 
 #[cfg(feature = "testnet")]

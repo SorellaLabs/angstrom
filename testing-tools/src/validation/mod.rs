@@ -8,8 +8,7 @@ use std::{
 };
 
 use alloy_primitives::{Address, U256};
-use angstrom_eth::manager::EthEvent;
-use futures::{FutureExt, Stream};
+use futures::FutureExt;
 use reth_provider::StateProviderFactory;
 use tokio::sync::mpsc::unbounded_channel;
 use validation::{
@@ -22,8 +21,6 @@ use validation::{
     validator::{ValidationClient, Validator}
 };
 
-use crate::mocks::eth_events::MockEthEventHandle;
-
 type ValidatorOperation<DB, T> =
     dyn FnOnce(
         TestOrderValidator<DB>,
@@ -35,16 +32,11 @@ pub struct TestOrderValidator<DB: StateProviderFactory + Clone + Unpin + 'static
     pub revm_lru:   Arc<RevmLRU<DB>>,
     pub config:     ValidationConfig,
     pub client:     ValidationClient,
-    pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils>,
-    pub eth_handle: MockEthEventHandle
+    pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils>
 }
 
 impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> {
-    pub fn new(
-        db: DB,
-        eth_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send + Unpin>>,
-        eth_handle: MockEthEventHandle
-    ) -> Self {
+    pub fn new(db: DB) -> Self {
         let (tx, rx) = unbounded_channel();
         let config_path = Path::new("./state_config.toml");
         let config = load_validation_config(config_path).unwrap();
@@ -59,7 +51,6 @@ impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> 
         let handle = tokio::runtime::Handle::current();
         let val = Validator::new(
             rx,
-            eth_stream,
             task_db,
             current_block.clone(),
             config.max_validation_per_user,
@@ -69,7 +60,7 @@ impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> 
         );
         let client = ValidationClient(tx);
 
-        Self { revm_lru, client, underlying: val, config, eth_handle }
+        Self { revm_lru, client, underlying: val, config }
     }
 
     pub async fn poll_for(&mut self, duration: Duration) {

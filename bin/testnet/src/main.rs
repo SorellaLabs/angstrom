@@ -165,8 +165,7 @@ pub async fn spawn_testnet_node(
     )
     .await?;
 
-    let validator =
-        init_validation(rpc_wrapper, CACHE_VALIDATION_SIZE, eth_handle.subscribe_network_stream());
+    let validator = init_validation(rpc_wrapper, CACHE_VALIDATION_SIZE);
 
     let network_handle = network.handle.clone();
 

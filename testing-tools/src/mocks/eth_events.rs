@@ -20,16 +20,15 @@ impl MockEthEventHandle {
             .expect("failed to send");
     }
 
-    pub fn filled_orders(&self, block: u64, hashes: Vec<B256>) {
+    pub fn block_state_transition(
+        &self,
+        block_number: u64,
+        filled_orders: Vec<B256>,
+        address_changeset: Vec<Address>
+    ) {
         self.tx
-            .send(EthEvent::FilledOrders(hashes, block))
+            .send(EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset })
             .expect("failed to send");
-    }
-
-    pub fn state_changes(&self, addresses: Vec<Address>) {
-        self.tx
-            .send(EthEvent::EOAStateChanges(addresses))
-            .expect("state changes")
     }
 
     pub fn finalize_block(&self, block: u64) {

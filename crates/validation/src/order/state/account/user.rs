@@ -139,7 +139,6 @@ impl UserAccounts {
         utils: &S,
         db: &RevmLRU<DB>
     ) -> LiveState {
-        println!("get live state for order");
         self.try_fetch_live_pending_state(user, token, nonce)
             .unwrap_or_else(|| {
                 self.load_state_for(user, token, utils, db);
@@ -184,13 +183,11 @@ impl UserAccounts {
         let mut value = entry.value_mut();
 
         value.push(action);
-        println!("sorting");
         value.sort_unstable_by_key(|k| k.nonce);
         drop(entry);
 
         // iterate through all vales collected the orders that
         let fetch = self.fetch_all_invalidated_orders(user, token);
-        println!("got all order invalidated");
         fetch
     }
 
@@ -199,7 +196,6 @@ impl UserAccounts {
         let mut baseline_approval = *baseline.token_approval.get(&token).unwrap();
         let mut baseline_balance = *baseline.token_balance.get(&token).unwrap();
         let mut has_overflowed = false;
-        println!("starting loop");
 
         let mut bad = vec![];
         for pending_state in self
@@ -209,7 +205,6 @@ impl UserAccounts {
             .iter()
             .filter(|state| state.token_address == token)
         {
-            println!("loop");
             let (baseline, overflowed) =
                 baseline_approval.overflowing_sub(pending_state.token_approval);
             has_overflowed |= overflowed;

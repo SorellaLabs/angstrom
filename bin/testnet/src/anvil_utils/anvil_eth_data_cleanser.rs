@@ -92,7 +92,7 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         };
 
         let hashes = bundle.get_filled_hashes();
-        let addresses = bundle.get_addressees_touched();
+        let addresses = bundle.get_addresses_touched();
         tracing::info!("found angstrom tx with orders filled {:#?}", hashes);
         self.send_events(EthEvent::NewBlockTransitions {
             block_number:      block.0,

@@ -75,29 +75,34 @@ where
     }
 
     fn handle_reorg(&mut self, old: Arc<Chain>, new: Arc<Chain>) {
-        // let mut eoas = Self::get_eoa(old.clone());
-        // eoas.extend(Self::get_eoa(new.clone()));
-        // // state changes
-        // let state_changes = EthEvent::EOAStateChanges(eoas);
-        // self.send_events(state_changes);
+        let mut eoas = Self::get_eoa(old.clone());
+        eoas.extend(Self::get_eoa(new.clone()));
 
         // get all reorged orders
         let old_filled: HashSet<_> = Self::fetch_filled_orders(old.clone()).collect();
         let new_filled: HashSet<_> = Self::fetch_filled_orders(new.clone()).collect();
         let difference: Vec<_> = old_filled.difference(&new_filled).copied().collect();
         let reorged_orders = EthEvent::ReorgedOrders(difference);
+
+        let transitions = EthEvent::NewBlockTransitions {
+            block_number:      new.tip().number,
+            filled_orders:     new_filled.into_iter().collect(),
+            address_changeset: eoas
+        };
+        self.send_events(transitions);
         self.send_events(reorged_orders);
     }
 
     fn handle_commit(&mut self, new: Arc<Chain>) {
-        // let filled_orders =
-        // Self::fetch_filled_orders(new.clone()).collect::<Vec<_>>();
-        // let tip = new.tip().number;
-        // let filled_orders = EthEvent::FilledOrders(filled_orders, tip);
-        // self.send_events(filled_orders);
-        //
-        // let eoas = Self::get_eoa(new.clone());
-        // self.send_events(EthEvent::EOAStateChanges(eoas));
+        let filled_orders = Self::fetch_filled_orders(new.clone()).collect::<Vec<_>>();
+        let eoas = Self::get_eoa(new.clone());
+
+        let transitions = EthEvent::NewBlockTransitions {
+            block_number: new.tip().number,
+            filled_orders,
+            address_changeset: eoas
+        };
+        self.send_events(transitions);
     }
 
     /// TODO: check contract for state change. if there is change. fetch the
@@ -108,7 +113,7 @@ where
 
     /// fetches all eoa addresses touched
     fn get_eoa(_chain: Arc<Chain>) -> Vec<Address> {
-        // chain.state().state().state().keys().copied().collect()
+        //
         vec![]
     }
 }

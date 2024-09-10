@@ -131,9 +131,12 @@ impl OrderValidatorHandle for ValidationClient {
     ) -> ValidationFuture {
         Box::pin(async move {
             let (tx, rx) = channel();
-            let _ = self
-                .0
-                .send(ValidationRequest::NewBlock { block_number, orders, addresses });
+            let _ = self.0.send(ValidationRequest::NewBlock {
+                sender: tx,
+                block_number,
+                orders,
+                addresses
+            });
 
             rx.await.unwrap()
         })

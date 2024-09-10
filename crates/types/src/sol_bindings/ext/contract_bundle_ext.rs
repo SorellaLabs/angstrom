@@ -18,7 +18,7 @@ impl ContractBundle {
             .collect()
     }
 
-    pub fn get_addressees_touched(&self) -> Vec<Address> {
+    pub fn get_addresses_touched(&self) -> Vec<Address> {
         self.top_of_block_orders
             .iter()
             .map(|order| order.from)

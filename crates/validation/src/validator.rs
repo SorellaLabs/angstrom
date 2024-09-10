@@ -19,13 +19,18 @@ use crate::{
     order::{
         order_validator::OrderValidator,
         state::{config::ValidationConfig, db_state_utils::StateFetchUtils, pools::PoolsTracker},
-        OrderValidationRequest
+        OrderValidationRequest, OrderValidationResults
     }
 };
 
 pub enum ValidationRequest {
     Order(OrderValidationRequest),
-    NewBlock { block_number: u64, orders: Vec<B256>, addresses: Vec<Address> }
+    NewBlock {
+        sender:       tokio::sync::oneshot::Sender<OrderValidationResults>,
+        block_number: u64,
+        orders:       Vec<B256>,
+        addresses:    Vec<Address>
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -66,9 +71,13 @@ where
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
             ValidationRequest::Order(order) => self.order_validator.validate_order(order),
-            ValidationRequest::NewBlock { block_number, orders, addresses } => self
-                .order_validator
-                .on_new_block(block_number, orders, addresses)
+            ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
+                self.order_validator
+                    .on_new_block(block_number, orders, addresses);
+                sender
+                    .send(OrderValidationResults::TransitionedToBlock)
+                    .unwrap();
+            }
         }
     }
 }

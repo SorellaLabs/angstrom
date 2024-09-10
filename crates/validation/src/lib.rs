@@ -94,7 +94,15 @@ pub fn init_validation_tests<
             .unwrap();
         let handle = rt.handle().clone();
 
-        rt.block_on(Validator::new(rx, task_db, current_block.clone(), 10, pool, state, handle))
+        rt.block_on(Validator::new(
+            rx,
+            task_db,
+            current_block.clone(),
+            config.max_validation_per_user,
+            pool,
+            state,
+            handle
+        ))
     });
 
     (ValidationClient(tx), revm_lru)

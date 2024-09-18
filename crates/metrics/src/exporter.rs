@@ -10,7 +10,6 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server
 };
-use metrics::Unit;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use metrics_util::layers::{PrefixLayer, Stack};
 use prometheus::{Encoder, TextEncoder};

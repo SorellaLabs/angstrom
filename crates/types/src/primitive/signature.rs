@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut}
 };
 
-use alloy_primitives::{Address, FixedBytes, B256, U256};
+use alloy_primitives::{Address, FixedBytes, U256};
 use alloy_rlp::{Decodable, Encodable, Error};
 use reth_network_peers::{pk2id, PeerId};
 use reth_primitives::Signature as ESignature;
@@ -97,7 +97,6 @@ pub enum RecoveryError {
 
 #[cfg(test)]
 mod tests {
-
     use rand::thread_rng;
     use reth_primitives::keccak256;
     use secp256k1::SecretKey;

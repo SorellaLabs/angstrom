@@ -9,19 +9,25 @@ use angstrom_types::{
     }
 };
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
-use order_pool::OrderPoolHandle;
+use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use reth_tasks::TaskSpawner;
 
-use crate::{api::OrderApiServer, types::OrderSubscriptionKind};
+use crate::{
+    api::OrderApiServer,
+    types::{OrderSubscriptionKind, OrderSubscriptionResult}
+};
 
 pub struct OrderApi<OrderPool, Spawner> {
-    pool:         OrderPool,
-    task_spawner: Spawner
+    pool:             OrderPool,
+    task_spawner:     Spawner,
 }
 
 impl<OrderPool, Spawner> OrderApi<OrderPool, Spawner> {
     pub fn new(pool: OrderPool, task_spawner: Spawner) -> Self {
-        Self { pool, task_spawner }
+        Self {
+            pool,
+            task_spawner,
+        }
     }
 }
 
@@ -33,27 +39,27 @@ where
 {
     async fn send_partial_standing_order(&self, order: PartialStandingOrder) -> RpcResult<bool> {
         let order = AllOrders::Standing(StandingVariants::Partial(order));
-        Ok(self.validate_and_send_order(order).await)
+        Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
     async fn send_exact_standing_order(&self, order: ExactStandingOrder) -> RpcResult<bool> {
         let order = AllOrders::Standing(StandingVariants::Exact(order));
-        Ok(self.validate_and_send_order(order).await)
+        Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
     async fn send_searcher_order(&self, order: TopOfBlockOrder) -> RpcResult<bool> {
         let order = AllOrders::TOB(order);
-        Ok(self.validate_and_send_order(order).await)
+        Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
     async fn send_partial_flash_order(&self, order: PartialFlashOrder) -> RpcResult<bool> {
         let order = AllOrders::Flash(FlashVariants::Partial(order));
-        Ok(self.validate_and_send_order(order).await)
+        Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
     async fn send_exact_flash_order(&self, order: ExactFlashOrder) -> RpcResult<bool> {
         let order = AllOrders::Flash(FlashVariants::Exact(order));
-        Ok(self.validate_and_send_order(order).await)
+        Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
     async fn subscribe_orders(
@@ -71,20 +77,33 @@ where
                 }
 
                 let msg = match (&kind, order) {
-                    (
-                        OrderSubscriptionKind::NewOrders,
-                        order_pool::PoolManagerUpdate::NewOrder(order_update)
-                    ) => Some(SubscriptionMessage::from_json(&order_update).unwrap()),
-                    (
-                        OrderSubscriptionKind::FilledOrders,
-                        order_pool::PoolManagerUpdate::FilledOrder(filled_order)
-                    ) => Some(SubscriptionMessage::from_json(&filled_order).unwrap()),
-                    _ => None
+                    (OrderSubscriptionKind::NewOrders, PoolManagerUpdate::NewOrder(order_update)) => {
+                        Some(OrderSubscriptionResult::NewOrder(order_update))
+                    },
+                    (OrderSubscriptionKind::FilledOrders, PoolManagerUpdate::FilledOrder((block_number, filled_order))) => {
+                        Some(OrderSubscriptionResult::FilledOrder((block_number, filled_order)))
+                    },
+                    (OrderSubscriptionKind::UnfilleOrders, PoolManagerUpdate::UnfilledOrders(unfilled_order)) => {
+                        Some(OrderSubscriptionResult::UnfilledOrder(unfilled_order))
+                    },
+                    (OrderSubscriptionKind::NewOrders, PoolManagerUpdate::FilledOrder(_)) => None,
+                    (OrderSubscriptionKind::NewOrders, PoolManagerUpdate::UnfilledOrders(_)) => None,
+                    (OrderSubscriptionKind::FilledOrders, PoolManagerUpdate::NewOrder(_)) => None,
+                    (OrderSubscriptionKind::FilledOrders, PoolManagerUpdate::UnfilledOrders(_)) => None,
+                    (OrderSubscriptionKind::UnfilleOrders, PoolManagerUpdate::NewOrder(_)) => None,
+                    (OrderSubscriptionKind::UnfilleOrders, PoolManagerUpdate::FilledOrder(_)) => None,
                 };
 
-                if let Some(msg) = msg {
-                    if sink.send(msg).await.is_err() {
-                        break;
+                if let Some(result) = msg {
+                    match SubscriptionMessage::from_json(&result) {
+                        Ok(message) => {
+                            if sink.send(message).await.is_err() {
+                                break;
+                            }
+                        },
+                        Err(e) => {
+                            tracing::error!("Failed to serialize subscription message: {:?}", e);
+                        }
                     }
                 }
             }
@@ -94,22 +113,9 @@ where
     }
 }
 
-impl<OrderPool, Spawner> OrderApi<OrderPool, Spawner>
-where
-    OrderPool: OrderPoolHandle,
-    Spawner: TaskSpawner + 'static
-{
-    async fn validate_and_send_order(&self, order: AllOrders) -> bool {
-        // self.pool
-        //     .validate_order(OrderOrigin::External, order.clone())
-        //     .await
-        self.pool.new_order(OrderOrigin::External, order)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::future::{ready, Future};
+    use std::{future, future::Future};
 
     use angstrom_network::pool_manager::OrderCommand;
     use angstrom_types::sol_bindings::rpc_orders::{
@@ -194,22 +200,21 @@ mod tests {
     }
 
     impl OrderPoolHandle for MockOrderPoolHandle {
-        fn new_order(&self, origin: OrderOrigin, order: AllOrders) -> bool {
-            self.sender
-                .send(OrderCommand::NewOrder(origin, order))
-                .is_ok()
+        fn new_order(
+            &self,
+            origin: OrderOrigin,
+            order: AllOrders
+        ) -> impl Future<Output = bool> + Send {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let res = self
+                .sender
+                .send(OrderCommand::NewOrder(origin, order, tx))
+                .is_ok();
+            future::ready(true)
         }
 
         fn subscribe_orders(&self) -> Receiver<PoolManagerUpdate> {
             unimplemented!("Not needed for this test")
-        }
-
-        fn validate_order(
-            &self,
-            order_origin: OrderOrigin,
-            order: AllOrders
-        ) -> impl Future<Output = bool> + Send {
-            ready(true)
         }
     }
 }

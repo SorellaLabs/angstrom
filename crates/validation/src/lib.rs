@@ -21,19 +21,18 @@ use order::state::{
     pools::{AngstromPoolsTracker, PoolsTracker}
 };
 use reth_provider::StateProviderFactory;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::unbounded_channel;
 use validator::Validator;
 
-use crate::validator::{ValidationClient, ValidationRequest};
+use crate::validator::ValidationClient;
 
 pub const TOKEN_CONFIG_FILE: &str = "./crates/validation/state_config.toml";
 
 pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
     db: DB,
     cache_max_bytes: usize,
-    validator_tx: UnboundedSender<ValidationRequest>,
-    validator_rx: UnboundedReceiver<ValidationRequest>
 ) -> ValidationClient {
+    let (validator_tx, validator_rx) = unbounded_channel();
     let config_path = Path::new(TOKEN_CONFIG_FILE);
     let config = load_validation_config(config_path).unwrap();
     let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));

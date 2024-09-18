@@ -53,8 +53,6 @@ impl TestnetOrderPool {
                 tx,
                 rx,
                 order_events,
-                order_storage,
-                pool_manager_tx
             ),
             pool_handle:  handle
         }

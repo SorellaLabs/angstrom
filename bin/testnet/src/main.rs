@@ -167,9 +167,7 @@ pub async fn spawn_testnet_node(
 
     let validator = init_validation(
         rpc_wrapper,
-        CACHE_VALIDATION_SIZE,
-        handles.validator_tx.clone(),
-        handles.validator_rx
+        CACHE_VALIDATION_SIZE
     );
 
     let network_handle = network.handle.clone();
@@ -185,11 +183,7 @@ pub async fn spawn_testnet_node(
         handles.pool_rx
     )
     .with_config(pool_config)
-    .build_with_channels(
-        executor,
-        handles.orderpool_tx,
-        handles.orderpool_rx,
-        handles.pool_manager_tx
+    .build_with_channels(executor, handles.orderpool_tx, handles.orderpool_rx, handles.pool_manager_tx
     );
     if let Some(port) = port {
         let server = ServerBuilder::default()

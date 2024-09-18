@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    ops::Deref,
+    collections::{HashMap, HashSet},
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -19,12 +18,16 @@ use angstrom_types::{
 use futures_util::{Stream, StreamExt};
 use reth_network_peers::PeerId;
 use reth_primitives::Address;
+use tokio::sync::oneshot::Sender;
 use tracing::{error, trace};
-use validation::order::{OrderValidationResults, OrderValidatorHandle};
+use validation::order::{
+    state::account::user::UserAddress, OrderValidationResults, OrderValidatorHandle
+};
 
 use crate::{
     order_storage::OrderStorage,
-    validator::{OrderValidator, OrderValidatorRes}
+    validator::{OrderValidator, OrderValidatorRes},
+    PoolManagerUpdate
 };
 
 /// This is used to remove validated orders. During validation
@@ -39,56 +42,86 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     /// current block_number
     block_number:           u64,
     /// Order hash to order id, used for order inclusion lookups
-    hash_to_order_id:       HashMap<B256, OrderId>,
-    /// Orders that are being validated
-    pending_order_indexing: HashMap<B256, Vec<PeerId>>,
+    order_hash_to_order_id: HashMap<B256, OrderId>,
+    /// Used to get trigger reputation side-effects on network order submission
+    order_hash_to_peer_id:  HashMap<B256, Vec<PeerId>>,
+    /// Used to avoid unnecessary computation on order spam
+    seen_invalid_orders:    HashSet<B256>,
     /// Order Validator
-    validator:              OrderValidator<V>
-}
-
-impl<V: OrderValidatorHandle> Deref for OrderIndexer<V> {
-    type Target = OrderStorage;
-
-    fn deref(&self) -> &Self::Target {
-        &self.order_storage
-    }
+    validator:              OrderValidator<V>,
+    /// List of subscribers for order validation result
+    order_validation_subs:  HashMap<B256, Vec<Sender<OrderValidationResults>>>,
+    /// List of subscribers for order state change notifications
+    orders_subscriber_tx:   tokio::sync::broadcast::Sender<PoolManagerUpdate>
 }
 
 impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
-    pub fn new(validator: V, order_storage: Arc<OrderStorage>, block_number: u64) -> Self {
+    pub fn new(
+        validator: V,
+        order_storage: Arc<OrderStorage>,
+        block_number: u64,
+        orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
+    ) -> Self {
         Self {
             order_storage,
             block_number,
             address_to_orders: HashMap::new(),
-            hash_to_order_id: HashMap::new(),
-            pending_order_indexing: HashMap::new(),
-            validator: OrderValidator::new(validator)
+            order_hash_to_order_id: HashMap::new(),
+            order_hash_to_peer_id: HashMap::new(),
+            seen_invalid_orders: HashSet::with_capacity(10000),
+            order_validation_subs: HashMap::new(),
+            validator: OrderValidator::new(validator),
+            orders_subscriber_tx
         }
     }
 
-    pub fn is_valid_order(&self, order: &AllOrders) -> bool {
-        let hash = order.order_hash();
-        self.hash_to_order_id.contains_key(&hash)
+    pub fn new_rpc_order(
+        &mut self,
+        origin: OrderOrigin,
+        order: AllOrders,
+        validation_tx: tokio::sync::oneshot::Sender<OrderValidationResults>
+    ) {
+        self.new_order(None, origin, order, Some(validation_tx))
     }
 
-    pub fn new_order(&mut self, peer_id: PeerId, origin: OrderOrigin, order: AllOrders) {
-        if self.is_duplicate(&order) {
+    pub fn new_network_order(&mut self, peer_id: PeerId, origin: OrderOrigin, order: AllOrders) {
+        self.new_order(Some(peer_id), origin, order, None)
+    }
+
+    fn new_order(
+        &mut self,
+        peer_id: Option<PeerId>,
+        origin: OrderOrigin,
+        order: AllOrders,
+        validation_res_sub: Option<Sender<OrderValidationResults>>
+    ) {
+        let hash = order.order_hash();
+        // network spammers will get penalized only once
+        if self.is_duplicate(&hash) {
+            self.notify_validation_subscribers(&hash, OrderValidationResults::Invalid(hash));
             return
         }
 
         let hash = order.order_hash();
-        self.pending_order_indexing
-            .entry(hash)
-            .or_default()
-            .push(peer_id);
+        if let Some(peer) = peer_id {
+            self.order_hash_to_peer_id
+                .entry(hash)
+                .or_default()
+                .push(peer);
+        }
 
+        if let Some(validation_tx) = validation_res_sub {
+            self.order_validation_subs
+                .entry(hash)
+                .or_default()
+                .push(validation_tx);
+        }
         self.validator.validate_order(origin, order);
     }
 
-    fn is_duplicate(&self, order: &AllOrders) -> bool {
-        let hash = order.order_hash();
-        if self.hash_to_order_id.contains_key(&hash)
-            || self.pending_order_indexing.contains_key(&hash)
+    fn is_duplicate(&self, hash: &B256) -> bool {
+        if self.order_hash_to_order_id.contains_key(hash)
+            || self.seen_invalid_orders.contains(hash)
         {
             trace!(?hash, "got duplicate order");
             return true
@@ -103,7 +136,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs()); // grab all expired hashes
         let hashes = self
-            .hash_to_order_id
+            .order_hash_to_order_id
             .iter()
             .filter(|(_, v)| {
                 v.deadline.map(|i| i <= expiry_deadline).unwrap_or_default()
@@ -116,7 +149,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         let _expired_orders = hashes
             .iter()
             // remove hash from id
-            .map(|hash| self.hash_to_order_id.remove(hash).unwrap())
+            .map(|hash| self.order_hash_to_order_id.remove(hash).unwrap())
             .inspect(|order_id| {
                 self.address_to_orders
                     .values_mut()
@@ -167,7 +200,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.order_storage
             .reorg(orders)
             .into_iter()
-            .for_each(|order| self.validator.validate_order(OrderOrigin::Local, order));
+            .for_each(|order| {
+                self.notify_order_subscribers(PoolManagerUpdate::UnfilledOrders(order.clone()));
+                self.validator.validate_order(OrderOrigin::Local, order)
+            });
     }
 
     /// Removes all filled orders from the pools and moves to regular pool
@@ -178,7 +214,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
         let filled_orders = orders
             .iter()
-            .filter_map(|hash| self.hash_to_order_id.remove(hash))
+            .filter_map(|hash| self.order_hash_to_order_id.remove(hash))
             .filter_map(|order_id| match order_id.location {
                 angstrom_types::orders::OrderLocation::Limit => {
                     self.order_storage.remove_limit_order(&order_id)
@@ -189,6 +225,12 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             })
             .collect::<Vec<OrderWithStorageData<AllOrders>>>();
 
+        filled_orders.iter().for_each(|order| {
+            self.notify_order_subscribers(PoolManagerUpdate::FilledOrder((
+                block,
+                order.order.clone()
+            )));
+        });
         self.order_storage.add_filled_orders(block, filled_orders);
     }
 
@@ -197,7 +239,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     fn park_transactions(&mut self, txes: &[B256]) {
         let order_info = txes
             .iter()
-            .filter_map(|tx_hash| self.hash_to_order_id.get(tx_hash))
+            .filter_map(|tx_hash| self.order_hash_to_order_id.get(tx_hash))
             .collect::<Vec<_>>();
 
         self.order_storage.park_orders(order_info);
@@ -207,90 +249,101 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         &mut self,
         res: OrderValidationResults
     ) -> eyre::Result<PoolInnerEvent> {
-        let res = match res {
-            OrderValidationResults::Valid(valid) => valid,
+        match res {
+            OrderValidationResults::Valid(valid) => {
+                let hash = valid.order_hash();
+
+                // what about the deadline?
+                if valid.valid_block != self.block_number {
+                    self.notify_validation_subscribers(
+                        &hash,
+                        OrderValidationResults::Invalid(hash)
+                    );
+
+                    self.seen_invalid_orders.insert(hash);
+                    let peers = self.order_hash_to_peer_id.remove(&hash).unwrap_or_default();
+                    return Ok(PoolInnerEvent::BadOrderMessages(peers));
+                }
+
+                self.notify_order_subscribers(PoolManagerUpdate::NewOrder(valid.order.clone()));
+                self.notify_validation_subscribers(
+                    &hash,
+                    OrderValidationResults::Valid(valid.clone())
+                );
+
+                let to_propagate = valid.order.clone();
+                self.update_order_tracking(&hash, valid.from(), valid.order_id);
+                self.park_transactions(&valid.invalidates);
+                self.insert_order(valid)?;
+
+                Ok(PoolInnerEvent::Propagation(to_propagate))
+            }
             OrderValidationResults::Invalid(bad_hash) => {
+                self.notify_validation_subscribers(
+                    &bad_hash,
+                    OrderValidationResults::Invalid(bad_hash.clone())
+                );
                 let peers = self
-                    .pending_order_indexing
+                    .order_hash_to_peer_id
                     .remove(&bad_hash)
                     .unwrap_or_default();
-
-                return Ok(PoolInnerEvent::BadOrderMessages(peers))
+                Ok(PoolInnerEvent::BadOrderMessages(peers))
             }
-            OrderValidationResults::TransitionedToBlock => return Ok(PoolInnerEvent::None)
-        };
-
-        if res.valid_block == self.block_number {
-            let to_propagate = res.order.clone();
-            // set tracking
-            self.update_order_tracking(&res);
-            // move orders that this invalidates to pending pools.
-            self.park_transactions(&res.invalidates);
-
-            // insert
-            match res.order_id.location {
-                angstrom_types::orders::OrderLocation::Searcher => {
-                    self.order_storage.add_new_searcher_order(
-                        res.try_map_inner(|inner| {
-                            let AllOrders::TOB(order) = inner else { eyre::bail!("unreachable") };
-                            Ok(order)
-                        })
-                        .expect("should be unreachable")
-                    )?;
-                }
-                angstrom_types::orders::OrderLocation::Limit => {
-                    self.order_storage.add_new_limit_order(
-                        res.try_map_inner(|inner| {
-                            Ok(match inner {
-                                // TODO: will rewire when we have composable orders. good chance we
-                                // will just trait this so we can get rid of match statement
-                                AllOrders::Standing(p) => {
-                                    // if p.hook_data.is_empty() {
-                                    GroupedUserOrder::Vanilla(GroupedVanillaOrder::Partial(p))
-                                    // } else {
-                                    //     GroupedUserOrder::Composable(
-                                    //         GroupedComposableOrder::Partial(p)
-                                    //     )
-                                    // }
-                                }
-                                // TODO: will rewire when we have composable orders. good chance we
-                                AllOrders::Flash(kof) => {
-                                    // if kof.hook_data.is_empty() {
-                                    GroupedUserOrder::Vanilla(GroupedVanillaOrder::KillOrFill(kof))
-                                    // } else {
-                                    //     GroupedUserOrder::Composable(
-                                    //         GroupedComposableOrder::KillOrFill(kof)
-                                    //     )
-                                    // }
-                                }
-                                _ => eyre::bail!("unreachable")
-                            })
-                        })
-                        .expect("should be unreachable")
-                    )?;
-                }
-            }
-
-            return Ok(PoolInnerEvent::Propagation(to_propagate))
+            OrderValidationResults::TransitionedToBlock => Ok(PoolInnerEvent::None)
         }
-
-        // bad order
-        let hash = res.order_hash();
-        let peers = self
-            .pending_order_indexing
-            .remove(&hash)
-            .unwrap_or_default();
-
-        Ok(PoolInnerEvent::BadOrderMessages(peers))
     }
 
-    fn update_order_tracking(&mut self, order: &OrderWithStorageData<AllOrders>) {
-        let hash = order.order_hash();
-        let user = order.from();
-        let id: OrderId = order.order_id;
+    fn notify_order_subscribers(&mut self, update: PoolManagerUpdate) {
+        if let Err(e) = self.orders_subscriber_tx.send(update) {
+            error!("could not send order update {:?}", e)
+        }
+    }
 
-        self.pending_order_indexing.remove(&hash);
-        self.hash_to_order_id.insert(hash, id);
+    fn notify_validation_subscribers(&mut self, hash: &B256, result: OrderValidationResults) {
+        if let Some(subscribers) = self.order_validation_subs.remove(hash) {
+            for subscriber in subscribers {
+                if let Err(e) = subscriber.send(result.clone()) {
+                    error!("Failed to send order validation result to subscriber: {:?}", e);
+                }
+            }
+        }
+    }
+
+    fn insert_order(&mut self, res: OrderWithStorageData<AllOrders>) -> eyre::Result<()> {
+        match res.order_id.location {
+            angstrom_types::orders::OrderLocation::Searcher => self
+                .order_storage
+                .add_new_searcher_order(
+                    res.try_map_inner(|inner| {
+                        let AllOrders::TOB(order) = inner else { eyre::bail!("unreachable") };
+                        Ok(order)
+                    })
+                    .expect("should be unreachable")
+                )
+                .map_err(|e| eyre::anyhow!("{:?}", e)),
+            angstrom_types::orders::OrderLocation::Limit => self
+                .order_storage
+                .add_new_limit_order(
+                    res.try_map_inner(|inner| {
+                        Ok(match inner {
+                            AllOrders::Standing(p) => {
+                                GroupedUserOrder::Vanilla(GroupedVanillaOrder::Partial(p))
+                            }
+                            AllOrders::Flash(kof) => {
+                                GroupedUserOrder::Vanilla(GroupedVanillaOrder::KillOrFill(kof))
+                            }
+                            _ => eyre::bail!("unreachable")
+                        })
+                    })
+                    .expect("should be unreachable")
+                )
+                .map_err(|e| eyre::anyhow!("{:?}", e))
+        }
+    }
+
+    fn update_order_tracking(&mut self, hash: &B256, user: UserAddress, id: OrderId) {
+        self.order_hash_to_peer_id.remove(hash);
+        self.order_hash_to_order_id.insert(hash.clone(), id);
         // nonce overlap is checked during validation so its ok we
         // don't check for duplicates
         self.address_to_orders.entry(user).or_default().push(id);

@@ -88,7 +88,7 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
             assertApproxEqRel(
                 totalReward,
                 angstrom.positionRewardGrowth(id, pos.lowerTick, pos.upperTick, u128(pos.liquidity)),
-                0.0001e18
+                0.000001e18
             );
         }
     }

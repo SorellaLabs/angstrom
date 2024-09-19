@@ -72,7 +72,7 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
         handler.addLiquidity(-10 * TICK_SPACING, -9 * TICK_SPACING, 0.83e21);
     }
 
-    function invariant_rewardsDistributedWell() public view {
+    function invariant_rewardsDistributedWell_1() public view {
         PoolRewardsHandler.Position[] memory positions = handler.ghost_positions();
         TickReward[] memory rewards = handler.ghost_tickRewards();
 
@@ -91,6 +91,66 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
                 0.000001e18
             );
         }
+    }
+
+    function invariant_rewardsDistributedWell_2() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_3() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_4() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_5() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_6() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_7() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_8() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_9() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_10() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_11() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_12() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_13() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_14() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_15() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_16() public view {
+        invariant_rewardsDistributedWell_1();
     }
 
     function poolKey() internal view returns (PoolKey memory) {

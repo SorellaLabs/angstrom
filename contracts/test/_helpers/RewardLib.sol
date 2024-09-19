@@ -134,11 +134,8 @@ library RewardLib {
         bool startTickSet = false;
         int128 cumNetLiquidity = 0;
 
-        console.log("build below loop");
         while (tick <= currentTick) {
-            console.log("i: %s", i);
             if (initialized && startTickSet) {
-                console.log("  adding net of %s", tick.toStr());
                 (, int128 liquidityNet) = uni.getTickLiquidity(id, tick);
                 cumNetLiquidity += liquidityNet;
             }
@@ -161,10 +158,6 @@ library RewardLib {
                 }
             }
         }
-
-        console.log("=== done");
-        console.log("i: %s", i);
-        console.log("rewards.length: %s", rewards.length);
 
         require(i == rewards.length, "Not all rewards used?");
 

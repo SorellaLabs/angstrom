@@ -153,6 +153,198 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
         invariant_rewardsDistributedWell_1();
     }
 
+    function invariant_rewardsDistributedWell_17() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_18() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_19() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_20() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_21() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_22() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_23() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_24() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_25() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_26() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_27() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_28() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_29() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_30() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_31() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_32() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_33() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_34() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_35() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_36() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_37() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_38() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_39() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_40() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_41() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_42() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_43() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_44() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_45() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_46() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_47() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_48() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_49() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_50() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_51() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_52() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_53() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_54() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_55() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_56() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_57() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_58() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_59() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_60() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_61() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_62() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_63() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
+    function invariant_rewardsDistributedWell_64() public view {
+        invariant_rewardsDistributedWell_1();
+    }
+
     function poolKey() internal view returns (PoolKey memory) {
         return ConversionLib.toPoolKey(address(angstrom), address(asset0), address(asset1));
     }

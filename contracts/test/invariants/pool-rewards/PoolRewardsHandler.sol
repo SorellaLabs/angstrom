@@ -94,12 +94,8 @@ contract PoolRewardsHandler is BaseTest {
         assertEq(lowerTick % TICK_SPACING, 0, "Lower tick incorrectly spaced");
         assertEq(upperTick % TICK_SPACING, 0, "Lower tick incorrectly spaced");
         gate.addLiquidity(address(asset0), address(asset1), lowerTick, upperTick, liquidity);
-        if (_ghost_initializedTicks.add(lowerTick)) {
-            console.log("initialized: %s", lowerTick.toStr());
-        }
-        if (_ghost_initializedTicks.add(upperTick)) {
-            console.log("initialized: %s", upperTick.toStr());
-        }
+        if (_ghost_initializedTicks.add(lowerTick)) {}
+        if (_ghost_initializedTicks.add(upperTick)) {}
         _ghost_postitions.push(Position(lowerTick, upperTick, liquidity));
 
         for (int24 tick = lowerTick; tick < upperTick; tick += TICK_SPACING) {
@@ -126,13 +122,9 @@ contract PoolRewardsHandler is BaseTest {
         UsedIndexMap memory map;
         map.init(totalTicks, totalTicks / 4);
         TickReward[] memory rewards = new TickReward[](ticksToReward);
-        console.log("rewards:");
         for (uint256 i = 0; i < ticksToReward; i++) {
-            console.log("i: %s", i);
             int24 tick = int24(_ghost_initializedTicks.at(rng.useRandIndex(map)));
-            console.log("  tick: %s", tick.toStr());
             uint128 amount = u128(rng.randmag(0.8e18, 100.0e18));
-            console.log("  amount: %s", amount.fmtD());
             total += amount;
             _ghost_tickRewards.push(rewards[i] = TickReward({tick: tick, amount: amount}));
         }
@@ -151,25 +143,13 @@ contract PoolRewardsHandler is BaseTest {
 
         vm.roll(angstrom.lastBlockUpdated() + 1);
 
-        console.log("updates");
         for (uint256 i = 0; i < rewardUpdates.length; i++) {
-            console.log("i: %s", i);
             PoolUpdate memory poolUpdate = bundle.poolUpdates[i];
 
             poolUpdate.assetIn = address(asset0);
             poolUpdate.assetOut = address(asset1);
             RewardsUpdate memory rewardUpdate = rewardUpdates[i];
             poolUpdate.rewardUpdate = rewardUpdate;
-            uint256[] memory amounts;
-            {
-                uint128[] memory quants = rewardUpdate.quantities;
-                assembly ("memory-safe") {
-                    amounts := quants
-                }
-            }
-            console.log("  rewardUpdate.below: %s", rewardUpdate.below.toStr());
-            console.log("  rewardUpdate.startTick: %s", rewardUpdate.startTick.toStr());
-            console.log("  amounts: %s", amounts.toStr());
 
             for (uint256 j = 0; j < rewardUpdate.quantities.length; j++) {
                 tob.quantityIn += rewardUpdate.quantities[j];

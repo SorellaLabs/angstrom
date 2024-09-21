@@ -178,8 +178,10 @@ library RewardLib {
         view
         returns (RewardsUpdate memory update)
     {
-        console.log("  below:");
-        debug_logRewards(rewards);
+        if (TEST_LOGS) {
+            console.log("  below:");
+            debug_logRewards(rewards);
+        }
         require(rewards.length > 0, "No rewards");
 
         update.below = true;
@@ -231,8 +233,10 @@ library RewardLib {
         view
         returns (RewardsUpdate memory update)
     {
-        console.log("  above:");
-        debug_logRewards(rewards);
+        if (TEST_LOGS) {
+            console.log("  above:");
+            debug_logRewards(rewards);
+        }
         require(rewards.length > 0, "No rewards");
 
         update.below = false;

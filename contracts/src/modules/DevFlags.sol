@@ -13,4 +13,4 @@ uint256 constant DEBUG_LEVEL = 1;
 uint256 constant MED_LEVEL = 2;
 uint256 constant LOG_LEVEL = 99;
 
-bool constant TEST_LOGS = true;
+bool constant TEST_LOGS = false;

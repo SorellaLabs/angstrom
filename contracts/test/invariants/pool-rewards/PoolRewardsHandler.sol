@@ -190,9 +190,7 @@ contract PoolRewardsHandler is BaseTest {
 
         (uint160 currentPrice,,,,,,) = uniV4.getPool(id);
 
-        vm.assume(targetSqrtPrice != currentPrice);
-
-        // vm.assume(targetSqrtPrice != currentPrice);
+        if (targetSqrtPrice == currentPrice) return;
 
         bool zeroForOne = targetSqrtPrice < currentPrice;
         (MockERC20 assetIn, MockERC20 assetOut) = zeroForOne ? (asset0, asset1) : (asset1, asset0);
@@ -200,23 +198,19 @@ contract PoolRewardsHandler is BaseTest {
         gate.setHook(address(0));
         // Do initial swap to price to get delta.
         uint256 snapshot = vm.snapshot();
-        _debug_logRefPool();
         BalanceDelta delta = gate.swap(address(assetIn), address(assetOut), type(int256).min, targetSqrtPrice);
         if (delta.amount0() == 0 && delta.amount1() == 0) {
             require(vm.revertTo(snapshot), "failed to revert");
             return;
         }
-        _debug_logRefPool();
         // Swap back to original price.
         gate.swap(address(assetOut), address(assetIn), type(int256).min, currentPrice);
-        _debug_logRefPool();
         delta = gate.swap(
             address(assetIn),
             address(assetOut),
             zeroForOne ? delta.amount0() : delta.amount1(),
             zeroForOne ? MIN_SQRT_RATIO : MAX_SQRT_RATIO
         );
-        _debug_logRefPool();
 
         Bundle memory bundle =
             zeroForOne ? _newBundle(uint128(-delta.amount0()), 0) : _newBundle(0, uint128(-delta.amount1()));

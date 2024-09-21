@@ -11,6 +11,7 @@ import {VecLib, UintVec} from "super-sol/collections/Vec.sol";
 
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
+import {TEST_LOGS} from "src/modules/DevFlags.sol";
 
 struct TickReward {
     int24 tick;
@@ -25,7 +26,7 @@ library RewardLib {
 
     using RewardLib for TickReward[];
     using IUniV4 for IPoolManager;
-    using TickLib for uint256;
+    using TickLib for *;
 
     function gt(TickReward memory a, TickReward memory b) internal pure returns (bool) {
         return a.tick > b.tick;
@@ -52,21 +53,65 @@ library RewardLib {
         view
         returns (RewardsUpdate[] memory updates)
     {
+        if (TEST_LOGS) {
+            int24 currentTick = uni.getSlot0(id).tick();
+            console.log(
+                "toUpdates [id: %x  tick: %s ~= %s]",
+                uint256(PoolId.unwrap(id)),
+                currentTick.toStr(),
+                currentTick.normalize().toStr()
+            );
+        }
+        updates = _toUpdates(rewards, uni, id);
+        if (TEST_LOGS) {
+            console.log("  rewards:");
+            debug_logRewards(rewards);
+            for (uint256 i = 0; i < updates.length; i++) {
+                console.log("  updates.%s:", i);
+                RewardsUpdate memory update = updates[i];
+                console.log("    %s", update.below ? "below" : "above");
+                console.log("    startTick: %s", update.startTick.toStr());
+                console.log("    startLiquidity: %s", update.startLiquidity.fmtD(12, 21));
+                console.log("    quantities:%s", update.quantities.length == 0 ? " -" : "");
+                for (uint256 j = 0; j < update.quantities.length; j++) {
+                    uint128 amount = update.quantities[j];
+                    console.log("      amount: %s", amount.fmtD(9));
+                }
+            }
+        }
+    }
+
+    function debug_logRewards(TickReward[] memory rewards) internal pure {
+        if (rewards.length == 0) {
+            console.log("    -");
+        } else {
+            for (uint256 i = 0; i < rewards.length; i++) {
+                TickReward memory reward = rewards[i];
+                console.log("    { tick: %s, amount: %s }", reward.tick.toStr(), reward.amount.fmtD(9));
+            }
+        }
+    }
+
+    function _toUpdates(TickReward[] memory rewards, IPoolManager uni, PoolId id)
+        internal
+        view
+        returns (RewardsUpdate[] memory updates)
+    {
         if (rewards.length == 0) return updates;
 
         _checkTicksInitialized(uni, id, rewards);
         _checkSortedUnique(rewards);
 
-        int24 currentTick = uni.getSlot0(id).tick();
+        int24 currentTick = uni.getSlot0(id).tick().normalize();
 
         // Ensure current tick update doesn't get separated into its own update.
         if (rewards[0].tick == currentTick) {
             updates = new RewardsUpdate[](1);
-            updates[0] = _createRewardUpdateAbove(uni, id, rewards, currentTick);
+            updates[0] = createRewardUpdateAbove(uni, id, rewards, currentTick);
             return updates;
         } else if (rewards[rewards.length - 1].tick == currentTick) {
             updates = new RewardsUpdate[](1);
-            updates[0] = _createRewardUpdateBelow(uni, id, rewards, currentTick);
+            updates[0] = createRewardUpdateBelow(uni, id, rewards, currentTick);
             return updates;
         }
 
@@ -83,16 +128,16 @@ library RewardLib {
 
         if (rewardsBelow.length == 0) {
             updates = new RewardsUpdate[](1);
-            updates[0] = _createRewardUpdateAbove(uni, id, rewardsAbove, currentTick);
+            updates[0] = createRewardUpdateAbove(uni, id, rewardsAbove, currentTick);
             return updates;
         } else if (rewardsAbove.length == 0) {
             updates = new RewardsUpdate[](1);
-            updates[0] = _createRewardUpdateBelow(uni, id, rewardsBelow, currentTick);
+            updates[0] = createRewardUpdateBelow(uni, id, rewardsBelow, currentTick);
             return updates;
         } else {
             updates = new RewardsUpdate[](2);
-            updates[0] = _createRewardUpdateAbove(uni, id, rewardsAbove, currentTick);
-            updates[1] = _createRewardUpdateBelow(uni, id, rewardsBelow, currentTick);
+            updates[0] = createRewardUpdateAbove(uni, id, rewardsAbove, currentTick);
+            updates[1] = createRewardUpdateBelow(uni, id, rewardsBelow, currentTick);
             return updates;
         }
     }
@@ -101,7 +146,8 @@ library RewardLib {
         for (uint256 i = 0; i < rewards.length; i++) {
             int24 tick = rewards[i].tick;
             (int16 wordPos, uint8 bitPos) = TickLib.position(TickLib.compress(tick));
-            require(uni.getPoolBitmapInfo(id, wordPos).isInitialized(bitPos), "Tick not initialized");
+            uint256 word = uni.getPoolBitmapInfo(id, wordPos);
+            require(word.isInitialized(bitPos), "Tick not initialized");
         }
     }
 
@@ -117,11 +163,13 @@ library RewardLib {
         }
     }
 
-    function _createRewardUpdateBelow(IPoolManager uni, PoolId id, TickReward[] memory rewards, int24 currentTick)
-        private
+    function createRewardUpdateBelow(IPoolManager uni, PoolId id, TickReward[] memory rewards, int24 currentTick)
+        internal
         view
         returns (RewardsUpdate memory update)
     {
+        console.log("  below:");
+        debug_logRewards(rewards);
         require(rewards.length > 0, "No rewards");
 
         update.below = true;
@@ -129,89 +177,114 @@ library RewardLib {
         UintVec memory amounts = VecLib.uint_with_cap(rewards.length * 2);
 
         uint256 i = 0;
+        int128 cumulativeNetLiquidity = 0;
+        bool initialized;
         int24 tick = rewards[0].tick;
-        bool initialized = false;
-        bool startTickSet = false;
-        int128 cumNetLiquidity = 0;
 
+        int128 netTickLiquidity;
         while (tick <= currentTick) {
-            if (initialized && startTickSet) {
-                (, int128 liquidityNet) = uni.getTickLiquidity(id, tick);
-                cumNetLiquidity += liquidityNet;
-            }
-            (initialized, tick) = uni.getNextTickUp(id, tick);
+            (initialized, tick) = uni.getNextTickGt(id, tick);
+
+            if (tick > currentTick) break;
+
             if (initialized) {
                 if (i < rewards.length) {
                     TickReward memory reward = rewards[i];
-                    if (reward.tick < tick) {
-                        if (!startTickSet) {
-                            update.startTick = tick;
-                            startTickSet = true;
-                        }
+                    if (tick > reward.tick) {
                         amounts.push(reward.amount);
+                        if (i == 0) {
+                            update.startTick = tick;
+                        }
+                        (, netTickLiquidity) = uni.getTickLiquidity(id, tick);
+                        cumulativeNetLiquidity += netTickLiquidity;
                         i++;
-                    } else if (startTickSet) {
-                        amounts.push(0);
+                        continue;
                     }
-                } else if (startTickSet) {
-                    amounts.push(0);
                 }
+                (, netTickLiquidity) = uni.getTickLiquidity(id, tick);
+                cumulativeNetLiquidity += netTickLiquidity;
+                amounts.push(0);
             }
+        }
+
+        if (i < rewards.length) {
+            TickReward memory reward = rewards[i];
+            amounts.push(reward.amount);
+            if (i == 0) {
+                update.startTick = currentTick;
+            }
+            i++;
+        } else {
+            amounts.push(0);
         }
 
         require(i == rewards.length, "Not all rewards used?");
 
-        update.startLiquidity = MixedSignLib.sub(uni.getPoolLiquidity(id), cumNetLiquidity);
+        update.startLiquidity = MixedSignLib.sub(uni.getPoolLiquidity(id), cumulativeNetLiquidity);
         update.quantities = new uint128[](amounts.length);
         for (i = 0; i < amounts.length; i++) {
             update.quantities[i] = uint128(amounts.get(i));
         }
     }
 
-    function _createRewardUpdateAbove(IPoolManager uni, PoolId id, TickReward[] memory rewards, int24 currentTick)
-        private
+    function createRewardUpdateAbove(IPoolManager uni, PoolId id, TickReward[] memory rewards, int24 currentTick)
+        internal
         view
         returns (RewardsUpdate memory update)
     {
+        console.log("  above:");
+        debug_logRewards(rewards);
         require(rewards.length > 0, "No rewards");
 
         update.below = false;
 
         UintVec memory amounts = VecLib.uint_with_cap(rewards.length * 2);
 
-        uint256 i = 0;
-        int24 tick = update.startTick = rewards[rewards.length - 1].tick;
-        bool initialized = true;
-        int128 cumNetLiquidity = 0;
+        uint256 lastIndex = rewards.length - 1;
+        int24 tick = update.startTick = rewards[lastIndex].tick;
+        amounts.push(rewards[lastIndex].amount);
+        uint256 i = 1;
+        bool initialized;
+        int128 cumulativeNetLiquidity = 0;
 
-        while (currentTick < tick) {
-            if (initialized) {
-                (, int128 liquidityNet) = uni.getTickLiquidity(id, tick);
-                cumNetLiquidity += liquidityNet;
-                if (i < rewards.length) {
-                    TickReward memory reward = rewards[rewards.length - i - 1];
+        console.log("currentTick: %s", currentTick.toStr());
+        console.log("tic: %s", tick.toStr());
 
-                    if (tick == reward.tick) {
-                        amounts.push(reward.amount);
-                        i++;
-                    } else {
-                        amounts.push(0);
+        if (currentTick < tick) {
+            while (true) {
+                int128 netTickLiquidity;
+                (, netTickLiquidity) = uni.getTickLiquidity(id, tick);
+                cumulativeNetLiquidity += netTickLiquidity;
+
+                (initialized, tick) = uni.getNextTickLt(id, tick);
+
+                if (tick <= currentTick) break;
+
+                if (initialized) {
+                    if (i < rewards.length) {
+                        TickReward memory reward = rewards[rewards.length - i - 1];
+
+                        if (tick <= reward.tick) {
+                            amounts.push(reward.amount);
+                            i++;
+                            continue;
+                        }
                     }
+                    amounts.push(0);
                 }
             }
-            (initialized, tick) = uni.getNextTickDown(id, tick);
-        }
+            if (i < rewards.length) {
+                TickReward memory reward = rewards[rewards.length - i - 1];
+                amounts.push(reward.amount);
+                i++;
+            } else {
+                amounts.push(0);
+            }
+        } else {}
 
-        if (i < rewards.length) {
-            require(
-                i + 1 == rewards.length && rewards[0].tick == currentTick, "Donating above in _createRewardUpdateBelow"
-            );
-            amounts.push(rewards[0].amount);
-        } else {
-            amounts.push(0);
-        }
+        require(i == rewards.length, "Not all / too many amounts used");
 
-        update.startLiquidity = MixedSignLib.add(uni.getPoolLiquidity(id), cumNetLiquidity);
+        update.startLiquidity = MixedSignLib.add(uni.getPoolLiquidity(id), cumulativeNetLiquidity);
         update.quantities = new uint128[](amounts.length);
         for (i = 0; i < amounts.length; i++) {
             update.quantities[i] = uint128(amounts.get(i));

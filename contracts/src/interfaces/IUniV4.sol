@@ -121,7 +121,8 @@ library IUniV4 {
         }
     }
 
-    function getNextTickDown(IPoolManager self, PoolId id, int24 tick)
+    /// @dev Gets the next tick down such that `tick ∉ [nextTick; nextTick + TICK_SPACING)`
+    function getNextTickLt(IPoolManager self, PoolId id, int24 tick)
         internal
         view
         returns (bool initialized, int24 nextTick)
@@ -131,7 +132,17 @@ library IUniV4 {
         nextTick = TickLib.toTick(wordPos, bitPos);
     }
 
-    function getNextTickUp(IPoolManager self, PoolId id, int24 tick)
+    function getNextTickLe(IPoolManager self, PoolId id, int24 tick)
+        internal
+        view
+        returns (bool initialized, int24 nextTick)
+    {
+        (int16 wordPos, uint8 bitPos) = TickLib.position(TickLib.compress(tick));
+        (initialized, bitPos) = self.getPoolBitmapInfo(id, wordPos).nextBitPosLte(bitPos);
+        nextTick = TickLib.toTick(wordPos, bitPos);
+    }
+
+    function getNextTickGt(IPoolManager self, PoolId id, int24 tick)
         internal
         view
         returns (bool initialized, int24 nextTick)

@@ -5,6 +5,7 @@ import {LibBit} from "solady/src/utils/LibBit.sol";
 import {TICK_SPACING} from "../Constants.sol";
 
 /// @author philogy <https://github.com/philogy>
+/// @custom:mounted int24, uint256
 library TickLib {
     int24 internal constant MIN_TICK = -887272;
     int24 internal constant MAX_TICK = 887272;
@@ -34,6 +35,10 @@ library TickLib {
         assembly {
             compressed := sub(sdiv(tick, TICK_SPACING), slt(smod(tick, TICK_SPACING), 0))
         }
+    }
+
+    function normalize(int24 tick) internal pure returns (int24) {
+        return TickLib.compress(tick) * TICK_SPACING;
     }
 
     function position(int24 compressed) internal pure returns (int16 wordPos, uint8 bitPos) {

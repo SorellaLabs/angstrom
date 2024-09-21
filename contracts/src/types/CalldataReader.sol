@@ -44,7 +44,6 @@ library CalldataReaderLib {
     using LibString for *;
 
     error ReaderNotAtEnd();
-    error ReaderNotAtEndStrOver(string str, bool wentOver);
 
     function from(bytes calldata data) internal pure returns (CalldataReader reader) {
         assembly {
@@ -64,12 +63,6 @@ library CalldataReaderLib {
 
     function requireAtEndOf(CalldataReader self, CalldataReader end) internal pure {
         if (self != end) revert ReaderNotAtEnd();
-    }
-
-    function requireAtEndOf(CalldataReader self, CalldataReader end, bytes32 message) internal pure {
-        if (self != end) {
-            revert ReaderNotAtEndStrOver(LibString.fromSmallString(message), self > end);
-        }
     }
 
     function offset(CalldataReader self) internal pure returns (uint256) {

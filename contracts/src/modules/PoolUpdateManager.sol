@@ -21,7 +21,6 @@ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {MixedSignLib} from "../libraries/MixedSignLib.sol";
 
 import {console} from "forge-std/console.sol";
-import {DEBUG_LOGS} from "./DevFlags.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
@@ -109,8 +108,6 @@ abstract contract PoolUpdateManager is
         uint256 amountIn;
         (reader, amountIn) = reader.readU128();
 
-        if (DEBUG_LOGS) console.log("[PoolUpdateManager] amountIn: %s", amountIn.fmtD(18));
-
         if (amountIn > 0) {
             int24 tickBefore = UNI_V4.getSlot0(id).tick();
             UNI_V4.swap(
@@ -124,9 +121,6 @@ abstract contract PoolUpdateManager is
             );
             int24 tickAfter = UNI_V4.getSlot0(id).tick();
 
-            if (DEBUG_LOGS) {
-                console.log("[PoolUpdateManager] swapped from %s -> %s", tickBefore.toStr(), tickAfter.toStr());
-            }
             poolRewards[id].updateAfterTickMove(id, UNI_V4, tickBefore, tickAfter);
         }
 

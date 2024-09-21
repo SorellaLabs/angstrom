@@ -8,11 +8,6 @@ import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 abstract contract HookDeployer is Test {
-    function _angstromFlags() internal pure returns (uint160) {
-        return Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG
-            | Hooks.AFTER_REMOVE_LIQUIDITY_FLAG;
-    }
-
     function _newFactory() internal returns (address) {
         return address(new Create2Factory());
     }

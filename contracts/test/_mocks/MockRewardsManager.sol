@@ -10,7 +10,6 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {TICK_SPACING, POOL_FEE} from "../../src/Constants.sol";
 import {IUniV4, IPoolManager} from "../../src/interfaces/IUniV4.sol";
 
-import {MOCK_LOGS} from "../../src/modules/DevFlags.sol";
 import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
@@ -26,10 +25,8 @@ contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdateManager
         CalldataReader reader = CalldataReaderLib.from(encoded);
 
         AssetArray assets;
-        if (MOCK_LOGS) console.log("[MockRewardsManager] loading assets");
         (reader, assets) = AssetLib.readFromAndValidate(reader);
 
-        if (MOCK_LOGS) console.log("[MockRewardsManager] rewarding pool");
         reader = _updatePool(reader, tBundleDeltas, assets);
 
         reader.requireAtEndOf(encoded);

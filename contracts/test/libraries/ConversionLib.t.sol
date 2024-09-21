@@ -16,7 +16,7 @@ contract ConversionLibTest is BaseTest {
         assertEq(ConversionLib.into(x), uint160(x));
     }
 
-    function test_fuzzing_angstrom_uniV4_toId_equivalent(PoolKey calldata poolKey) public {
+    function test_fuzzing_angstrom_uniV4_toId_equivalent(PoolKey calldata poolKey) public pure {
         bytes32 angId = PoolId.unwrap(ConversionLib.toId(poolKey));
         bytes32 v4Id = PoolId.unwrap(PoolIdLibrary.toId(poolKey));
         assertEq(angId, v4Id);

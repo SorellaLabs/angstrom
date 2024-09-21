@@ -7,8 +7,6 @@ import {RayMathLib} from "../libraries/RayMathLib.sol";
 import {PairLib as ActualPairLib} from "../types/Pair.sol";
 import {PriceAB} from "../types/Price.sol";
 
-import {DEBUG_LOGS} from "../modules/DevFlags.sol";
-import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 struct Pair {
@@ -43,10 +41,6 @@ library PairLib {
             b = bytes.concat(b, pairs[i].encode(assets));
         }
         b = bytes.concat(bytes3(b.length.toUint24()), b);
-        if (DEBUG_LOGS) {
-            console.log("Pair[] bytes: %x (%s)", b.length, b.length);
-            console.logBytes(b);
-        }
     }
 
     function gt(Pair memory a, Pair memory b) internal pure returns (bool) {
@@ -54,9 +48,7 @@ library PairLib {
         return a.assetA > b.assetA;
     }
 
-    function sort(Pair[] memory pairs) internal view {
-        uint256 before = gasleft();
-
+    function sort(Pair[] memory pairs) internal pure {
         for (uint256 i = 0; i < pairs.length; i++) {
             pairs[i]._checkOrdered();
         }
@@ -66,11 +58,6 @@ library PairLib {
             for (uint256 j = i + 1; j < pairs.length; j++) {
                 if (pairs[i].gt(pairs[j])) (pairs[i], pairs[j]) = (pairs[j], pairs[i]);
             }
-        }
-
-        unchecked {
-            uint256 skibidi = gasleft();
-            console.log("sort used: %s", before - skibidi);
         }
     }
 

@@ -2,16 +2,15 @@
 pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
-import {TICK_SPACING, POOL_FEE} from "src/Constants.sol";
+import {TICK_SPACING, POOL_FEE, ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
 import {PoolRewardsHandler} from "./PoolRewardsHandler.sol";
 
 import {PoolGate} from "test/_helpers/PoolGate.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 
-import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {PRNG} from "super-sol/collections/PRNG.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
-import {ExtAngstrom} from "../../_view-ext/ExtAngstrom.sol";
+import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
 import {UniV4Inspector} from "test/_view-ext/UniV4Inspector.sol";
 import {TickLib} from "src/libraries/TickLib.sol";
 import {TickReward, RewardLib} from "test/_helpers/RewardLib.sol";
@@ -20,8 +19,6 @@ import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {ConversionLib} from "src/libraries/ConversionLib.sol";
 import {HookDeployer} from "test/_helpers/HookDeployer.sol";
-
-import {TEST_LOGS} from "src/modules/DevFlags.sol";
 
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
@@ -60,7 +57,9 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
         gate.initializePool(address(asset0), address(asset1), startTick.getSqrtPriceAtTick());
 
         (bool success, address angstromAddr,) = deployHook(
-            abi.encodePacked(type(ExtAngstrom).creationCode, abi.encode(uniV4, gov)), _angstromFlags(), CREATE2_FACTORY
+            abi.encodePacked(type(ExtAngstrom).creationCode, abi.encode(uniV4, gov)),
+            ANGSTROM_HOOK_FLAGS,
+            CREATE2_FACTORY
         );
 
         assertTrue(success, "Failed to deploy angstrom");
@@ -79,10 +78,10 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
         targetSelector(FuzzSelector({addr: address(handler), selectors: handlerSelectors}));
         targetContract(address(handler));
 
-        handler.addLiquidity(-2 * TICK_SPACING, startTick, 1e21);
-        handler.addLiquidity(startTick, 2 * TICK_SPACING, 1e21);
-        handler.addLiquidity(-3 * TICK_SPACING, 1 * TICK_SPACING, 0.0083e21);
-        handler.addLiquidity(-10 * TICK_SPACING, -9 * TICK_SPACING, 0.83e21);
+        handler.addLiquidity(address(this), -2 * TICK_SPACING, startTick, 1e21);
+        handler.addLiquidity(address(this), startTick, 2 * TICK_SPACING, 1e21);
+        handler.addLiquidity(address(this), -3 * TICK_SPACING, 1 * TICK_SPACING, 0.0083e21);
+        handler.addLiquidity(address(this), -10 * TICK_SPACING, -9 * TICK_SPACING, 0.83e21);
     }
 
     function invariant_rewardsDistributedWell_1() public view {
@@ -98,14 +97,9 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
                     totalReward += reward.amount * pos.liquidity / handler.ghost_liquidityAtTick(reward.tick);
                 }
             }
-            uint256 computed = angstrom.positionRewardGrowth(id, pos.lowerTick, pos.upperTick, u128(pos.liquidity));
-            if (TEST_LOGS) {
-                console.log(
-                    "checking pos (%s, %s] %s", pos.lowerTick.toStr(), pos.upperTick.toStr(), pos.liquidity.fmtD(6, 21)
-                ); // )
-                console.log("  expected: %s", totalReward.fmtD(12));
-                console.log("  computed: %s", computed.fmtD(12));
-            }
+            uint256 computed = angstrom.positionRewards(
+                id, bytes32(0), address(handler), pos.lowerTick, pos.upperTick, u128(pos.liquidity)
+            );
             assertApproxEqRel(totalReward, computed, 0.000001e18);
         }
     }

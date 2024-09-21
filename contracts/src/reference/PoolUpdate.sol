@@ -4,9 +4,6 @@ pragma solidity ^0.8.13;
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {Asset, AssetLib} from "./Asset.sol";
 
-import {DEBUG_LOGS} from "../modules/DevFlags.sol";
-import {console} from "forge-std/console.sol";
-
 struct PoolUpdate {
     address assetIn;
     address assetOut;
@@ -34,10 +31,6 @@ library PoolUpdateLib {
             b = bytes.concat(b, updates[i].encode(assets));
         }
         b = bytes.concat(bytes3(b.length.toUint24()), b);
-        if (DEBUG_LOGS) {
-            console.log("PoolUpdate[] bytes: %x (%s)", b.length, b.length);
-            console.logBytes(b);
-        }
     }
 
     function encode(PoolUpdate memory self, Asset[] memory assets) internal pure returns (bytes memory) {

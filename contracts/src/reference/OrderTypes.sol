@@ -7,12 +7,8 @@ import {UserOrderBufferLib} from "../types/UserOrderBuffer.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {Pair, PairLib} from "./Pair.sol";
 import {Asset, AssetLib} from "./Asset.sol";
-import {DEBUG_LOGS} from "src/modules/DevFlags.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-
-import {console} from "forge-std/console.sol";
-import {consoleext} from "super-sol/libraries/consoleext.sol";
 
 struct OrderMeta {
     bool isEcdsa;
@@ -184,85 +180,72 @@ library OrdersLib {
 
     function hash(PartialStandingOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    PARTIAL_STANDING_ORDER_TYPEHASH,
-                    order.minAmountIn,
-                    order.maxAmountIn,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.nonce,
-                    order.deadline
-                )
+            abi.encode(
+                PARTIAL_STANDING_ORDER_TYPEHASH,
+                order.minAmountIn,
+                order.maxAmountIn,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.nonce,
+                order.deadline
             )
         );
     }
 
     function hash(ExactStandingOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    EXACT_STANDING_ORDER_TYPEHASH,
-                    order.exactIn,
-                    order.amount,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.nonce,
-                    order.deadline
-                )
+            abi.encode(
+                EXACT_STANDING_ORDER_TYPEHASH,
+                order.exactIn,
+                order.amount,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.nonce,
+                order.deadline
             )
         );
     }
 
     function hash(PartialFlashOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    PARTIAL_FLASH_ORDER_TYPEHASH,
-                    order.minAmountIn,
-                    order.maxAmountIn,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.validForBlock
-                )
+            abi.encode(
+                PARTIAL_FLASH_ORDER_TYPEHASH,
+                order.minAmountIn,
+                order.maxAmountIn,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.validForBlock
             )
         );
     }
 
     function hash(ExactFlashOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    EXACT_FLASH_ORDER_TYPEHASH,
-                    order.exactIn,
-                    order.amount,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.validForBlock
-                )
+            abi.encode(
+                EXACT_FLASH_ORDER_TYPEHASH,
+                order.exactIn,
+                order.amount,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.validForBlock
             )
         );
-    }
-
-    function _logB(bytes memory b) internal pure returns (bytes memory) {
-        if (DEBUG_LOGS) consoleext.logInWords(b);
-        return b;
     }
 
     function hash(TopOfBlockOrder memory order) internal pure returns (bytes32) {

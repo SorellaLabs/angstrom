@@ -25,7 +25,6 @@ import {PriceAB as PriceOutVsIn, AmountA as AmountOut, AmountB as AmountIn} from
 import {RayMathLib} from "./libraries/RayMathLib.sol";
 
 import {console} from "forge-std/console.sol";
-import {DEBUG_LOGS} from "./modules/DevFlags.sol";
 // TODO: Remove
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
@@ -135,8 +134,6 @@ contract Angstrom is
         return reader;
     }
 
-    uint256 debug_orderCounter;
-
     function _validateAndExecuteUserOrders(CalldataReader reader, AssetArray assets, PairArray pairs)
         internal
         returns (CalldataReader)
@@ -147,12 +144,9 @@ contract Angstrom is
         CalldataReader end;
         (reader, end) = reader.readU24End();
 
-        if (DEBUG_LOGS) debug_orderCounter = 0;
-
         // Purposefully devolve into an endless loop if the specified length isn't exactly used s.t.
         // `reader == end` at some point.
         while (reader != end) {
-            if (DEBUG_LOGS) console.log("[%s]", debug_orderCounter++);
             reader = _validateAndExecuteUserOrder(reader, buffer, typedHasher, assets, pairs);
         }
 
@@ -196,8 +190,6 @@ contract Angstrom is
         AmountIn amountIn;
         AmountOut amountOut;
         (reader, amountIn, amountOut) = buffer.loadAndComputeQuantity(reader, variant, price, halfSpreadRay);
-
-        if (DEBUG_LOGS) buffer.logBytes(variant);
 
         bytes32 orderHash = buffer.hash712(variant, typedHasher);
 

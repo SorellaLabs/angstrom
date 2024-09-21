@@ -7,8 +7,6 @@ import {OrderVariantMap} from "./OrderVariantMap.sol";
 import {TypedDataHasher} from "./TypedDataHasher.sol";
 import {PriceAB as PriceOutVsIn, AmountA as AmountOut, AmountB as AmountIn} from "./Price.sol";
 
-import {DEBUG_LOGS} from "../modules/DevFlags.sol";
-
 import {safeconsole as console} from "forge-std/safeconsole.sol";
 import {consoleext} from "super-sol/libraries/consoleext.sol";
 
@@ -107,22 +105,14 @@ library UserOrderBufferLib {
             self.quantity_or_maxQuantityIn = quantity;
         }
 
-        if (DEBUG_LOGS) console.log("price: %27e", PriceOutVsIn.unwrap(price));
-
         if (variant.exactIn() || variant.quantitiesPartial()) {
             quantityIn = AmountIn.wrap(quantity);
-            if (DEBUG_LOGS) console.log("quantity in: %18e", AmountIn.unwrap(quantityIn));
             quantityOut = price.convert(quantityIn);
-            if (DEBUG_LOGS) console.log("quantity out (pre fee): %18e", AmountOut.unwrap(quantityOut));
             quantityOut = quantityOut - quantityOut.mulRayScalar(feeRay);
-            if (DEBUG_LOGS) console.log("quantity out (post fee): %18e", AmountOut.unwrap(quantityOut));
         } else {
             quantityOut = AmountOut.wrap(quantity);
-            if (DEBUG_LOGS) console.log("quantity out: %18e", AmountOut.unwrap(quantityOut));
             quantityIn = price.convert(quantityOut);
-            if (DEBUG_LOGS) console.log("quantity in (pre fee): %18e", AmountIn.unwrap(quantityIn));
             quantityIn = quantityIn + quantityIn.mulRayScalar(feeRay);
-            if (DEBUG_LOGS) console.log("quantity in (post fee): %18e", AmountIn.unwrap(quantityIn));
         }
 
         return (reader, quantityIn, quantityOut);

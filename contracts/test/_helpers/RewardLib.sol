@@ -9,9 +9,7 @@ import {TickLib} from "src/libraries/TickLib.sol";
 import {MixedSignLib} from "src/libraries/MixedSignLib.sol";
 import {VecLib, UintVec} from "super-sol/collections/Vec.sol";
 
-import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-import {TEST_LOGS} from "src/modules/DevFlags.sol";
 
 struct TickReward {
     int24 tick;
@@ -53,43 +51,7 @@ library RewardLib {
         view
         returns (RewardsUpdate[] memory updates)
     {
-        if (TEST_LOGS) {
-            int24 currentTick = uni.getSlot0(id).tick();
-            console.log(
-                "toUpdates [id: %x  tick: %s ~= %s]",
-                uint256(PoolId.unwrap(id)),
-                currentTick.toStr(),
-                currentTick.normalize().toStr()
-            );
-        }
         updates = _toUpdates(rewards, uni, id);
-        if (TEST_LOGS) {
-            console.log("  rewards:");
-            debug_logRewards(rewards);
-            for (uint256 i = 0; i < updates.length; i++) {
-                console.log("  updates.%s:", i);
-                RewardsUpdate memory update = updates[i];
-                console.log("    %s", update.below ? "below" : "above");
-                console.log("    startTick: %s", update.startTick.toStr());
-                console.log("    startLiquidity: %s", update.startLiquidity.fmtD(12, 21));
-                console.log("    quantities:%s", update.quantities.length == 0 ? " -" : "");
-                for (uint256 j = 0; j < update.quantities.length; j++) {
-                    uint128 amount = update.quantities[j];
-                    console.log("      amount: %s", amount.fmtD(9));
-                }
-            }
-        }
-    }
-
-    function debug_logRewards(TickReward[] memory rewards) internal pure {
-        if (rewards.length == 0) {
-            console.log("    -");
-        } else {
-            for (uint256 i = 0; i < rewards.length; i++) {
-                TickReward memory reward = rewards[i];
-                console.log("    { tick: %s, amount: %s }", reward.tick.toStr(), reward.amount.fmtD(9));
-            }
-        }
     }
 
     function _toUpdates(TickReward[] memory rewards, IPoolManager uni, PoolId id)
@@ -178,10 +140,6 @@ library RewardLib {
         view
         returns (RewardsUpdate memory update)
     {
-        if (TEST_LOGS) {
-            console.log("  below:");
-            debug_logRewards(rewards);
-        }
         require(rewards.length > 0, "No rewards");
 
         update.below = true;
@@ -233,10 +191,6 @@ library RewardLib {
         view
         returns (RewardsUpdate memory update)
     {
-        if (TEST_LOGS) {
-            console.log("  above:");
-            debug_logRewards(rewards);
-        }
         require(rewards.length > 0, "No rewards");
 
         update.below = false;

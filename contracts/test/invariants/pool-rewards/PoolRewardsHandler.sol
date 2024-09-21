@@ -25,9 +25,7 @@ import {PoolUpdate, RewardsUpdate} from "src/reference/PoolUpdate.sol";
 import {TopOfBlockOrder} from "src/reference/OrderTypes.sol";
 
 import {EnumerableSetLib} from "solady/src/utils/EnumerableSetLib.sol";
-import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-import {TEST_LOGS} from "src/modules/DevFlags.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract PoolRewardsHandler is BaseTest {
@@ -105,35 +103,21 @@ contract PoolRewardsHandler is BaseTest {
         }
     }
 
-    function debug_showGrowths() public view {
-        int256[] memory initialized = _ghost_initializedTicks.values();
-        LibSort.sort(initialized);
-        (uint160 currentPrice, int24 reportedCurrent,,,,,) = uniV4.getPool(id);
-        int24 currentTick = TickMath.getTickAtSqrtPrice(currentPrice).normalize();
-        console.log("global growth [%s]: %s", reportedCurrent.toStr(), angstrom.globalGrowthOutside(id).fmtD(12));
-        for (uint256 i = 0; i < initialized.length; i++) {
-            int24 tick = int24(initialized[i]);
-            string memory marker = tick == currentTick ? "> " : "  ";
-            console.log("%s%s: %s", marker, tick.toStr().lpad(" ", 4), angstrom.rewardGrowthOutside(id, tick).fmtD(12));
-        }
-    }
-
     function ghost_positions() public view returns (Position[] memory) {
         return _ghost_postitions;
     }
 
-    function addLiquidity(int24 lowerTick, int24 upperTick, uint256 liquidity) public {
-        if (TEST_LOGS) {
-            console.log("addLiquidity(%s, %s, %s)", lowerTick.toStr(), upperTick.toStr(), liquidity.fmtD(6, 21));
-        }
+    function addLiquidity(address sender, int24 lowerTick, int24 upperTick, uint256 liquidity) public {
         assertGt(liquidity, 0, "Liquidity zero");
         assertLt(lowerTick, upperTick, "Upper tick below or equal to lower tick");
         assertEq(lowerTick % TICK_SPACING, 0, "Lower tick incorrectly spaced");
         assertEq(upperTick % TICK_SPACING, 0, "Lower tick incorrectly spaced");
+        vm.startPrank(sender);
         gate.setHook(address(angstrom));
-        gate.addLiquidity(address(asset0), address(asset1), lowerTick, upperTick, liquidity);
+        gate.addLiquidity(address(asset0), address(asset1), lowerTick, upperTick, liquidity, bytes32(0));
         gate.setHook(address(0));
-        gate.addLiquidity(address(asset0), address(asset1), lowerTick, upperTick, liquidity);
+        gate.addLiquidity(address(asset0), address(asset1), lowerTick, upperTick, liquidity, bytes32(0));
+        vm.stopPrank();
         _initializeTick(lowerTick);
         _initializeTick(upperTick);
         _ghost_postitions.push(Position(lowerTick, upperTick, liquidity));
@@ -167,27 +151,18 @@ contract PoolRewardsHandler is BaseTest {
         assertGt(highest, lowest, "Less than 2 unique ticks initialized");
         targetSqrtPrice =
             uint160(bound(targetSqrtPrice, TickMath.getSqrtPriceAtTick(lowest), TickMath.getSqrtPriceAtTick(highest)));
-        if (TEST_LOGS) {
-            console.log("swapToPrice(%s) [%s]", targetSqrtPrice, TickMath.getTickAtSqrtPrice(targetSqrtPrice).toStr());
-        }
 
         _swapTo(targetSqrtPrice);
-        if (TEST_LOGS) console.log("");
     }
 
     function swapToBoundary(uint256 tickIndex) public passesTime {
         tickIndex = bound(tickIndex, 0, _ghost_initializedTicks.length() - 1);
         int24 targetTick = int24(_ghost_initializedTicks.at(tickIndex));
-        if (TEST_LOGS) console.log("swapToBoundary(%s)", targetTick.toStr());
         uint160 targetSqrtPrice = TickMath.getSqrtPriceAtTick(targetTick);
         _swapTo(targetSqrtPrice);
-
-        if (TEST_LOGS) console.log("");
     }
 
     function _swapTo(uint160 targetSqrtPrice) internal {
-        if (TEST_LOGS) debug_showGrowths();
-
         (uint160 currentPrice,,,,,,) = uniV4.getPool(id);
 
         if (targetSqrtPrice == currentPrice) return;
@@ -237,18 +212,6 @@ contract PoolRewardsHandler is BaseTest {
         vm.prank(rewarder.addr);
         bytes memory encoded = bundle.encode();
         angstrom.execute(encoded);
-
-        if (TEST_LOGS) debug_showGrowths();
-    }
-
-    function _debug_poolUpdate(PoolUpdate memory) public pure {}
-
-    function _debug_logRefPool() internal view {
-        (uint160 currentPrice, int24 tick,,,,, uint128 liquidity) = uniV4.getPool(refId);
-        console.log("ref pool");
-        console.log("  currentPrice: %s", currentPrice);
-        console.log("  tick: %s", tick.toStr());
-        console.log("  liquidity: %s", liquidity.fmtD(12, 21));
     }
 
     function rewardLiquidity(uint256 ticksToReward, PRNG memory rng) public passesTime {
@@ -256,26 +219,24 @@ contract PoolRewardsHandler is BaseTest {
         ticksToReward = bound(ticksToReward, 0, totalTicks);
 
         // Select ticks & amounts to reward with.
-        uint128 total = 0;
         UsedIndexMap memory map;
         map.init(totalTicks, totalTicks / 4);
         TickReward[] memory rewards = new TickReward[](ticksToReward);
         for (uint256 i = 0; i < ticksToReward; i++) {
             int24 tick = int24(_ghost_liquidInitializedTicks.at(rng.useRandIndex(map)));
             uint128 amount = u128(rng.randchoice(0.1e18, 0, rng.randmag(0.01e18, 100.0e18)));
-            total += amount;
-            _ghost_tickRewards.push(rewards[i] = TickReward({tick: tick, amount: amount}));
+            rewards[i] = TickReward({tick: tick, amount: amount});
         }
 
-        if (TEST_LOGS) {
-            string memory rewardStr = "";
-            for (uint256 i = 0; i < rewards.length; i++) {
-                TickReward memory reward = rewards[i];
-                if (i > 0) rewardStr = string.concat(rewardStr, ", ");
-                rewardStr = string.concat(rewardStr, "(", reward.tick.toStr(), ", ", reward.amount.fmtD(18), ")");
-            }
-            console.log("rewardLiquidity([%s])", rewardStr);
-            debug_showGrowths();
+        rewardTicks(rewards);
+    }
+
+    function rewardTicks(TickReward[] memory rewards) public {
+        uint128 total = 0;
+        for (uint256 i = 0; i < rewards.length; i++) {
+            TickReward memory reward = rewards[i];
+            total += reward.amount;
+            _ghost_tickRewards.push(reward);
         }
 
         RewardsUpdate[] memory rewardUpdates = rewards.toUpdates(uniV4, id);
@@ -287,15 +248,11 @@ contract PoolRewardsHandler is BaseTest {
             poolUpdate.assetIn = address(asset0);
             poolUpdate.assetOut = address(asset1);
             poolUpdate.rewardUpdate = rewardUpdates[i];
-            this._debug_poolUpdate(poolUpdate);
         }
 
         vm.prank(rewarder.addr);
         bytes memory encoded = bundle.encode();
         angstrom.execute(encoded);
-
-        if (TEST_LOGS) debug_showGrowths();
-        if (TEST_LOGS) console.log("");
     }
 
     function ghost_totalInititalizedTicks() public view returns (uint256) {

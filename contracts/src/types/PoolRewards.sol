@@ -6,7 +6,6 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {IUniV4} from "../interfaces/IUniV4.sol";
 import {TickLib} from "../libraries/TickLib.sol";
 
-import {DEBUG_LOGS} from "../modules/DevFlags.sol";
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
@@ -60,8 +59,6 @@ library PoolRewardsLib {
     function _updateTickMoveUp(PoolRewards storage self, IPoolManager uniV4, PoolId id, int24 tick, int24 newTick)
         private
     {
-        if (DEBUG_LOGS) console.log("[PoolRewards] Updating up %s -> %s", tick.toStr(), newTick.toStr());
-
         uint256 globalGrowth = self.globalGrowth;
         do {
             bool initialized;
@@ -76,8 +73,6 @@ library PoolRewardsLib {
     function _updateTickMoveDown(PoolRewards storage self, IPoolManager uniV4, PoolId id, int24 tick, int24 newTick)
         private
     {
-        if (DEBUG_LOGS) console.log("[PoolRewards] Updating down %s -> %s", tick.toStr(), newTick.toStr());
-
         uint256 globalGrowth = self.globalGrowth;
 
         while (true) {

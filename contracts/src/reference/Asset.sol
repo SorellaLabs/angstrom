@@ -5,9 +5,6 @@ import {AssetLib as ActualAssetLib} from "../types/Asset.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {BitPackLib} from "./BitPackLib.sol";
 
-import {DEBUG_LOGS} from "../modules/DevFlags.sol";
-import {console} from "forge-std/console.sol";
-
 struct Asset {
     address addr;
     uint128 take;
@@ -42,10 +39,6 @@ library AssetLib {
             b = bytes.concat(b, assets[i].encode());
         }
         b = bytes.concat(bytes3(b.length.toUint24()), b);
-        if (DEBUG_LOGS) {
-            console.log("Asset[] bytes: %x (%s)", b.length, b.length);
-            console.logBytes(b);
-        }
     }
 
     function sort(Asset[] memory assets) internal pure {
@@ -63,7 +56,6 @@ library AssetLib {
         for (uint256 i = 0; i < assets.length; i++) {
             if (asset == assets[i].addr) return i;
         }
-        console.log("asset: %s", asset);
         revert("Asset not found");
     }
 

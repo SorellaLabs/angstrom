@@ -26,7 +26,15 @@ library IUniV4 {
     uint256 internal constant _POOL_STATE_BITMAP_OFFSET = 5;
     uint256 internal constant _POOL_STATE_POSITIONS_OFFSET = 6;
 
-    function computePoolStateSlot(IPoolManager, PoolId id) internal pure returns (bytes32 slot) {
+    uint256 internal constant _POSITION_LIQUIDITY_OFFSET = 0;
+    uint256 internal constant _POSITION_FEE_GROWTH_OUTSIDE0_OFFSET = 1;
+    uint256 internal constant _POSITION_FEE_GROWTH_OUTSIDE1_OFFSET = 2;
+
+    function extsload(IPoolManager self, uint256 slot) internal view returns (uint256 rawValue) {
+        rawValue = uint256(self.extsload(bytes32(slot)));
+    }
+
+    function computePoolStateSlot(IPoolManager, PoolId id) internal pure returns (uint256 slot) {
         assembly ("memory-safe") {
             mstore(0x00, id)
             mstore(0x20, _POOLS_SLOT)
@@ -38,7 +46,7 @@ library IUniV4 {
      * @dev WARNING: use of this method with a dirty `int16` for `wordPos` may be vulnerable as the
      * value is taken as is and used in assembly. If not sign extended will result in useless slots.
      */
-    function computeBitmapWordSlot(IPoolManager, PoolId id, int16 wordPos) internal pure returns (bytes32 slot) {
+    function computeBitmapWordSlot(IPoolManager, PoolId id, int16 wordPos) internal pure returns (uint256 slot) {
         assembly ("memory-safe") {
             mstore(0x00, id)
             mstore(0x20, _POOLS_SLOT)
@@ -68,9 +76,22 @@ library IUniV4 {
         }
     }
 
+    function computePositionStateSlot(IPoolManager self, PoolId id, bytes32 positionKey)
+        internal
+        pure
+        returns (uint256 slot)
+    {
+        uint256 poolStateSlot = self.computePoolStateSlot(id);
+        assembly ("memory-safe") {
+            mstore(0x00, positionKey)
+            mstore(0x20, poolStateSlot)
+            slot := keccak256(0x00, 0x40)
+        }
+    }
+
     function getSlot0(IPoolManager self, PoolId id) internal view returns (Slot0) {
-        bytes32 slot = self.computePoolStateSlot(id);
-        return Slot0.wrap(self.extsload(slot));
+        uint256 slot = self.computePoolStateSlot(id);
+        return Slot0.wrap(self.extsload(bytes32(slot)));
     }
 
     /**
@@ -78,8 +99,8 @@ library IUniV4 {
      * value is taken as is and used in assembly. If not sign extended will result in useless slots.
      */
     function getPoolBitmapInfo(IPoolManager self, PoolId id, int16 wordPos) internal view returns (uint256) {
-        bytes32 slot = self.computeBitmapWordSlot(id, wordPos);
-        return uint256(self.extsload(slot));
+        uint256 slot = self.computeBitmapWordSlot(id, wordPos);
+        return self.extsload(slot);
     }
 
     /**
@@ -99,11 +120,19 @@ library IUniV4 {
         }
     }
 
-    function getPoolLiquidity(IPoolManager self, PoolId id) internal view returns (uint128) {
-        bytes32 slot = self.computePoolStateSlot(id);
+    function getPositionLiquidity(IPoolManager self, PoolId id, bytes32 positionKey) internal view returns (uint128) {
         unchecked {
-            bytes32 liquidity = self.extsload(bytes32(uint256(slot) + _POOL_STATE_LIQUIDITY_OFFSET));
-            return uint128(uint256(liquidity));
+            uint256 positionStateSlot = self.computePositionStateSlot(id, positionKey);
+            uint256 rawLiquidity = self.extsload(positionStateSlot + _POSITION_LIQUIDITY_OFFSET);
+            return uint128(rawLiquidity);
+        }
+    }
+
+    function getPoolLiquidity(IPoolManager self, PoolId id) internal view returns (uint128) {
+        uint256 slot = self.computePoolStateSlot(id);
+        unchecked {
+            uint256 rawLiquidity = self.extsload(slot + _POOL_STATE_LIQUIDITY_OFFSET);
+            return uint128(rawLiquidity);
         }
     }
 
@@ -115,10 +144,12 @@ library IUniV4 {
             tslot := keccak256(0x00, 0x40)
         }
         bytes32 value = self.exttload(tslot);
-        assembly {
-            // Direct type cast.
-            delta := value
-        }
+        delta = int256(uint256(value));
+    }
+
+    function isInitialized(IPoolManager self, PoolId id, int24 tick) internal view returns (bool initialized) {
+        (int16 wordPos, uint8 bitPos) = TickLib.position(TickLib.compress(tick) - 1);
+        initialized = self.getPoolBitmapInfo(id, wordPos).isInitialized(bitPos);
     }
 
     /// @dev Gets the next tick down such that `tick ∉ [nextTick; nextTick + TICK_SPACING)`

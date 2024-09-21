@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Script} from "forge-std/Script.sol";
 import {HookDeployer} from "../test/_helpers/HookDeployer.sol";
 import {MockRewardsManager} from "../test/_mocks/MockRewardsManager.sol";
+import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
 
 import {console2 as console} from "forge-std/console2.sol";
 
@@ -24,7 +25,7 @@ contract MockRewardsManagerScript is Test, Script, HookDeployer {
 
         (bool suc, address mockRewardsAddr,) = deployHook(
             abi.encodePacked(type(MockRewardsManager).creationCode, abi.encode(UNI_V4_PM)),
-            _angstromFlags(),
+            ANGSTROM_HOOK_FLAGS,
             CREATE2_FACTORY
         );
 

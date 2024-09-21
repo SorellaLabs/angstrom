@@ -34,6 +34,14 @@ contract ExtAngstrom is Angstrom {
         return _hashTypedData(structHash);
     }
 
+    function rewardGrowthOutside(PoolId id, int24 tick) external view returns (uint256) {
+        return poolRewards[id].rewardGrowthOutside[uint24(tick)];
+    }
+
+    function globalGrowthOutside(PoolId id) external view returns (uint256) {
+        return poolRewards[id].globalGrowth;
+    }
+
     function positionRewardGrowth(PoolId id, int24 lowerTick, int24 upperTick, uint128 liquidity)
         external
         view

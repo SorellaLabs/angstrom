@@ -55,22 +55,15 @@ contract Angstrom is
     function unlockCallback(bytes calldata data) external override onlyUniV4 returns (bytes memory) {
         CalldataReader reader = CalldataReaderLib.from(data);
 
-        if (DEBUG_LOGS) console.log("[Angstrom] Reading & Validating assets");
         AssetArray assets;
         (reader, assets) = AssetLib.readFromAndValidate(reader);
-        if (DEBUG_LOGS) console.log("[Angstrom] Reading & Validating pairs");
         PairArray pairs;
         (reader, pairs) = PairLib.readFromAndValidate(reader);
 
-        if (DEBUG_LOGS) console.log("[Angstrom] Executing takes");
         _takeAssets(assets);
-        if (DEBUG_LOGS) console.log("[Angstrom] Updating pools");
         reader = _updatePools(reader, tBundleDeltas, assets);
-        if (DEBUG_LOGS) console.log("[Angstrom] Executing ToB Orders");
         reader = _validateAndExecuteToBOrders(reader, assets);
-        if (DEBUG_LOGS) console.log("[Angstrom] Executing User orders");
         reader = _validateAndExecuteUserOrders(reader, assets, pairs);
-        if (DEBUG_LOGS) console.log("[Angstrom] Saving & Settling");
         _saveAndSettle(assets);
 
         reader.requireAtEndOf(data);

@@ -35,6 +35,8 @@ contract FakeUni is PoolManager {
         _initialize(upperTick);
         _pools[id].ticks[lowerTick].liquidityNet += int128(liquidity);
         _pools[id].ticks[upperTick].liquidityNet -= int128(liquidity);
+        console.log("  %s net: %s", lowerTick.toStr(), _pools[id].ticks[lowerTick].liquidityNet.toStr());
+        console.log("  %s net: %s", upperTick.toStr(), _pools[id].ticks[upperTick].liquidityNet.toStr());
         int24 tick = _pools[id].slot0.tick();
 
         if (lowerTick <= tick && tick < upperTick) {
@@ -85,6 +87,14 @@ contract RewardLibTest is BaseTest {
 
         uni.setCurrentTick(tick = -120);
         assertCreatesUpdates(re(TickReward(tick, amount)), RewardsUpdate(ABOVE, tick, uni.liq(), [amount].into()));
+    }
+
+    function test_bad(uint128 amount) public {
+        uni.setCurrentTick(tick = -1);
+
+        assertCreatesUpdates(
+            re(TickReward(-120, amount)), RewardsUpdate(BELOW, -120, uni.tickLiq(-120), [amount].into())
+        );
     }
 
     function test_fuzzing_currentOnlyUpdate_tickInInitRange(uint128 amount) public {

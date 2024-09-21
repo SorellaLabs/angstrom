@@ -17,6 +17,8 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {ConversionLib} from "src/libraries/ConversionLib.sol";
 
+import {console} from "forge-std/console.sol";
+
 /// @author philogy <https://github.com/philogy>
 abstract contract SettlementManager is UniConsumer {
     using IUniV4 for IPoolManager;
@@ -65,8 +67,11 @@ abstract contract SettlementManager is UniConsumer {
     function _settleOrderIn(address from, address asset, AmountIn amountIn, bool useInternal) internal {
         uint256 amount = amountIn.into();
         tBundleDeltas.add(asset, amount);
-        if (useInternal) _angstromReserves[from][asset] -= amount;
-        else asset.safeTransferFrom(from, address(this), amount);
+        if (useInternal) {
+            _angstromReserves[from][asset] -= amount;
+        } else {
+            asset.safeTransferFrom(from, address(this), amount);
+        }
     }
 
     function _settleOrderOut(address to, address asset, AmountOut amountOut, bool useInternal) internal {

@@ -10,6 +10,7 @@ import {IUniV4} from "../../src/interfaces/IUniV4.sol";
 import {PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {Slot0} from "v4-core/src/types/Slot0.sol";
 import {ConversionLib} from "../../src/libraries/ConversionLib.sol";
+import {Currency} from "v4-core/src/types/Currency.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 
 import {SignedUnsignedLib} from "super-sol/libraries/SignedUnsignedLib.sol";
@@ -25,8 +26,6 @@ contract PoolGate is IUnlockCallback {
     using IUniV4 for IPoolManager;
     using ConversionLib for address;
 
-    error CallFailed(bytes);
-
     IPoolManager internal immutable UNI_V4;
     address public hook;
 
@@ -41,6 +40,15 @@ contract PoolGate is IUnlockCallback {
     function initializePool(address asset0, address asset1, uint160 initialSqrtPriceX96) public returns (int24 tick) {
         bytes memory data = UNI_V4.unlock(abi.encodeCall(this.__initializePool, (asset0, asset1, initialSqrtPriceX96)));
         return abi.decode(data, (int24));
+    }
+
+    function swap(address assetIn, address assetOut, int256 amountSpecified, uint160 sqrtPriceLimitX96)
+        public
+        returns (BalanceDelta delta)
+    {
+        bytes memory data =
+            UNI_V4.unlock(abi.encodeCall(this.__swap, (assetIn, assetOut, amountSpecified, sqrtPriceLimitX96)));
+        delta = abi.decode(data, (BalanceDelta));
     }
 
     function addLiquidity(address asset0, address asset1, int24 tickLower, int24 tickUpper, uint256 liquidity)
@@ -71,8 +79,21 @@ contract PoolGate is IUnlockCallback {
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
         (bool success, bytes memory retData) = address(this).call(data);
-        if (!success) revert CallFailed(retData);
+        assembly ("memory-safe") {
+            if iszero(success) { revert(add(retData, 0x20), mload(retData)) }
+        }
         return retData;
+    }
+
+    function __swap(address assetIn, address assetOut, int256 amountSpecified, uint160 sqrtPriceLimitX96)
+        public
+        returns (BalanceDelta swapDelta)
+    {
+        bool zeroForOne = assetIn < assetOut;
+        PoolKey memory key = zeroForOne ? hook.toPoolKey(assetIn, assetOut) : hook.toPoolKey(assetOut, assetIn);
+        swapDelta = UNI_V4.swap(key, IPoolManager.SwapParams(zeroForOne, amountSpecified, sqrtPriceLimitX96), "");
+        _clearDelta(Currency.unwrap(key.currency0), swapDelta.amount0());
+        _clearDelta(Currency.unwrap(key.currency1), swapDelta.amount1());
     }
 
     function __initializePool(address asset0, address asset1, uint160 initialSqrtPriceX96)
@@ -113,6 +134,16 @@ contract PoolGate is IUnlockCallback {
             if (needsSync) UNI_V4.sync(asset.intoC());
             MockERC20(asset).mint(address(UNI_V4), amount);
             UNI_V4.settle();
+        }
+    }
+
+    function _clearDelta(address asset, int128 delta) internal {
+        if (delta > 0) {
+            UNI_V4.clear(asset.intoC(), uint128(delta));
+        } else if (delta < 0) {
+            unchecked {
+                _settleMintable(asset, uint128(-delta), true);
+            }
         }
     }
 }

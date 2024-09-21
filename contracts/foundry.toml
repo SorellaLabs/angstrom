@@ -24,7 +24,7 @@ remappings = [
 fail_on_revert = true
 
 [profile.light-fuzz.invariant]
-runs = 2
+runs = 10
 depth = 100
 
 [profile.heavy-fuzz.invariant]

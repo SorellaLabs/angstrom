@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
-import {TICK_SPACING} from "src/Constants.sol";
+import {TICK_SPACING, POOL_FEE} from "src/Constants.sol";
 import {PoolRewardsHandler} from "./PoolRewardsHandler.sol";
 
 import {PoolGate} from "test/_helpers/PoolGate.sol";
@@ -21,16 +21,23 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {ConversionLib} from "src/libraries/ConversionLib.sol";
 import {HookDeployer} from "test/_helpers/HookDeployer.sol";
 
+import {TEST_LOGS} from "src/modules/DevFlags.sol";
+
 import {console} from "forge-std/console.sol";
+import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
+    using FormatLib for *;
+
     using TickMath for int24;
+    using ConversionLib for *;
 
     UniV4Inspector public uniV4;
     ExtAngstrom public angstrom;
     PoolGate public gate;
     PoolId public id;
+    PoolId public refId;
 
     MockERC20 public asset0 = new MockERC20();
     MockERC20 public asset1 = new MockERC20();
@@ -47,21 +54,27 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
         uniV4 = new UniV4Inspector();
         gate = new PoolGate(address(uniV4));
 
+        int24 startTick = 0;
+        refId = PoolIdLibrary.toId(address(0).toPoolKey(address(asset0), address(asset1)));
+        gate.setHook(address(0));
+        gate.initializePool(address(asset0), address(asset1), startTick.getSqrtPriceAtTick());
+
         (bool success, address angstromAddr,) = deployHook(
             abi.encodePacked(type(ExtAngstrom).creationCode, abi.encode(uniV4, gov)), _angstromFlags(), CREATE2_FACTORY
         );
-        gate.setHook(angstromAddr);
 
         assertTrue(success, "Failed to deploy angstrom");
         angstrom = ExtAngstrom(angstromAddr);
         id = PoolIdLibrary.toId(poolKey());
 
-        int24 startTick = 0;
+        gate.setHook(angstromAddr);
         gate.initializePool(address(asset0), address(asset1), startTick.getSqrtPriceAtTick());
 
-        handler = new PoolRewardsHandler(uniV4, angstrom, gate, id, asset0, asset1, gov);
+        handler = new PoolRewardsHandler(uniV4, angstrom, gate, id, refId, asset0, asset1, gov);
 
         handlerSelectors.push(PoolRewardsHandler.rewardLiquidity.selector);
+        handlerSelectors.push(PoolRewardsHandler.swapToPrice.selector);
+        handlerSelectors.push(PoolRewardsHandler.swapToBoundary.selector);
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: handlerSelectors}));
         targetContract(address(handler));
@@ -85,11 +98,15 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
                     totalReward += reward.amount * pos.liquidity / handler.ghost_liquidityAtTick(reward.tick);
                 }
             }
-            assertApproxEqRel(
-                totalReward,
-                angstrom.positionRewardGrowth(id, pos.lowerTick, pos.upperTick, u128(pos.liquidity)),
-                0.000001e18
-            );
+            uint256 computed = angstrom.positionRewardGrowth(id, pos.lowerTick, pos.upperTick, u128(pos.liquidity));
+            if (TEST_LOGS) {
+                console.log(
+                    "checking pos (%s, %s] %s", pos.lowerTick.toStr(), pos.upperTick.toStr(), pos.liquidity.fmtD(6, 21)
+                ); // )
+                console.log("  expected: %s", totalReward.fmtD(12));
+                console.log("  computed: %s", computed.fmtD(12));
+            }
+            assertApproxEqRel(totalReward, computed, 0.000001e18);
         }
     }
 

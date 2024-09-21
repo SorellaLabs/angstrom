@@ -102,20 +102,21 @@ library RewardLib {
         _checkTicksInitialized(uni, id, rewards);
         _checkSortedUnique(rewards);
 
-        int24 currentTick = uni.getSlot0(id).tick().normalize();
+        int24 currentTick = uni.getSlot0(id).tick();
+        int24 currentTickNormalized = currentTick.normalize();
 
         // Ensure current tick update doesn't get separated into its own update.
-        if (rewards[0].tick == currentTick) {
+        if (rewards[0].tick == currentTickNormalized) {
             updates = new RewardsUpdate[](1);
-            updates[0] = createRewardUpdateAbove(uni, id, rewards, currentTick);
+            updates[0] = createRewardUpdateAbove(uni, id, rewards, currentTickNormalized);
             return updates;
-        } else if (rewards[rewards.length - 1].tick == currentTick) {
+        } else if (rewards[rewards.length - 1].tick == currentTickNormalized) {
             updates = new RewardsUpdate[](1);
             updates[0] = createRewardUpdateBelow(uni, id, rewards, currentTick);
             return updates;
         }
 
-        uint256 index = rewards.findTickGte(currentTick);
+        uint256 index = rewards.findTickGte(currentTickNormalized);
         TickReward[] memory rewardsBelow = new TickReward[](index);
         TickReward[] memory rewardsAbove = new TickReward[](rewards.length - index);
         for (uint256 i = 0; i < rewards.length; i++) {
@@ -128,7 +129,7 @@ library RewardLib {
 
         if (rewardsBelow.length == 0) {
             updates = new RewardsUpdate[](1);
-            updates[0] = createRewardUpdateAbove(uni, id, rewardsAbove, currentTick);
+            updates[0] = createRewardUpdateAbove(uni, id, rewardsAbove, currentTickNormalized);
             return updates;
         } else if (rewardsAbove.length == 0) {
             updates = new RewardsUpdate[](1);
@@ -136,7 +137,7 @@ library RewardLib {
             return updates;
         } else {
             updates = new RewardsUpdate[](2);
-            updates[0] = createRewardUpdateAbove(uni, id, rewardsAbove, currentTick);
+            updates[0] = createRewardUpdateAbove(uni, id, rewardsAbove, currentTickNormalized);
             updates[1] = createRewardUpdateBelow(uni, id, rewardsBelow, currentTick);
             return updates;
         }
@@ -163,6 +164,15 @@ library RewardLib {
         }
     }
 
+    function getCurrentTickRangeStart(IPoolManager uni, PoolId id, int24 currentTick) internal view returns (int24) {
+        bool initialized;
+        while (true) {
+            (initialized, currentTick) = uni.getNextTickLe(id, currentTick);
+            if (initialized) return currentTick;
+        }
+        revert("unreachable");
+    }
+
     function createRewardUpdateBelow(IPoolManager uni, PoolId id, TickReward[] memory rewards, int24 currentTick)
         internal
         view
@@ -174,57 +184,46 @@ library RewardLib {
 
         update.below = true;
 
-        UintVec memory amounts = VecLib.uint_with_cap(rewards.length * 2);
-
-        uint256 i = 0;
-        int128 cumulativeNetLiquidity = 0;
-        bool initialized;
+        // Create list of initialized ticks, including start (checked before) and the tick of the
+        // current range.
         int24 tick = rewards[0].tick;
-
-        int128 netTickLiquidity;
-        while (tick <= currentTick) {
+        bool initialized = true;
+        UintVec memory initializedTicks = VecLib.uint_with_cap(rewards.length * 3 / 2);
+        while (true) {
             (initialized, tick) = uni.getNextTickGt(id, tick);
+            if (currentTick < tick) break;
+            if (initialized) initializedTicks.push(uint256(int256(tick)));
+        }
 
-            if (tick > currentTick) break;
+        update.quantities = new uint128[](initializedTicks.length + 1);
 
-            if (initialized) {
-                if (i < rewards.length) {
-                    TickReward memory reward = rewards[i];
-                    if (tick > reward.tick) {
-                        amounts.push(reward.amount);
-                        if (i == 0) {
-                            update.startTick = tick;
-                        }
-                        (, netTickLiquidity) = uni.getTickLiquidity(id, tick);
-                        cumulativeNetLiquidity += netTickLiquidity;
-                        i++;
-                        continue;
-                    }
+        uint256 ri = 0;
+        int128 cumulativeNetLiquidity = 0;
+
+        for (uint256 i = 0; i < initializedTicks.length; i++) {
+            tick = int24(int256(initializedTicks.get(i)));
+            int128 tickNetLiquidity;
+            (, tickNetLiquidity) = uni.getTickLiquidity(id, tick);
+            cumulativeNetLiquidity += tickNetLiquidity;
+            if (ri < rewards.length) {
+                TickReward memory reward = rewards[ri];
+                if (reward.tick < tick) {
+                    update.quantities[i] = reward.amount;
+                    ri++;
                 }
-                (, netTickLiquidity) = uni.getTickLiquidity(id, tick);
-                cumulativeNetLiquidity += netTickLiquidity;
-                amounts.push(0);
             }
         }
 
-        if (i < rewards.length) {
-            TickReward memory reward = rewards[i];
-            amounts.push(reward.amount);
-            if (i == 0) {
-                update.startTick = currentTick;
-            }
-            i++;
-        } else {
-            amounts.push(0);
+        if (ri < rewards.length) {
+            update.quantities[initializedTicks.length] = rewards[ri].amount;
+            ri++;
         }
 
-        require(i == rewards.length, "Not all rewards used?");
+        require(ri == rewards.length, "Not all rewards used?");
 
-        update.startLiquidity = MixedSignLib.sub(uni.getPoolLiquidity(id), cumulativeNetLiquidity);
-        update.quantities = new uint128[](amounts.length);
-        for (i = 0; i < amounts.length; i++) {
-            update.quantities[i] = uint128(amounts.get(i));
-        }
+        update.startTick = initializedTicks.length > 0 ? int24(uint24(initializedTicks.get(0))) : currentTick + 1;
+        uint128 poolLiq = uni.getPoolLiquidity(id);
+        update.startLiquidity = MixedSignLib.sub(poolLiq, cumulativeNetLiquidity);
     }
 
     function createRewardUpdateAbove(IPoolManager uni, PoolId id, TickReward[] memory rewards, int24 currentTick)
@@ -247,14 +246,11 @@ library RewardLib {
         bool initialized;
         int128 cumulativeNetLiquidity = 0;
 
-        console.log("currentTick: %s", currentTick.toStr());
-        console.log("tic: %s", tick.toStr());
-
         if (currentTick < tick) {
             while (true) {
-                int128 netTickLiquidity;
-                (, netTickLiquidity) = uni.getTickLiquidity(id, tick);
-                cumulativeNetLiquidity += netTickLiquidity;
+                int128 tickNetLiquidity;
+                (, tickNetLiquidity) = uni.getTickLiquidity(id, tick);
+                cumulativeNetLiquidity += tickNetLiquidity;
 
                 (initialized, tick) = uni.getNextTickLt(id, tick);
 

@@ -7,6 +7,7 @@ import {RayMathLib} from "../libraries/RayMathLib.sol";
 import {PairLib as ActualPairLib} from "../types/Pair.sol";
 import {PriceAB} from "../types/Price.sol";
 
+import {DEBUG_LOGS} from "../modules/DevFlags.sol";
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
@@ -27,13 +28,6 @@ library PairLib {
 
     error PairAssetsWrong(Pair);
 
-    uint256 constant MAX_U12 = (1 << 12) - 1;
-
-    function u12(uint256 x) internal pure returns (uint256) {
-        require(x <= MAX_U12, "Overflow u12");
-        return x;
-    }
-
     function _checkOrdered(Pair memory pair) internal pure {
         if (pair.assetB <= pair.assetA) revert PairAssetsWrong(pair);
     }
@@ -49,6 +43,10 @@ library PairLib {
             b = bytes.concat(b, pairs[i].encode(assets));
         }
         b = bytes.concat(bytes3(b.length.toUint24()), b);
+        if (DEBUG_LOGS) {
+            console.log("Pair[] bytes: %x (%s)", b.length, b.length);
+            console.logBytes(b);
+        }
     }
 
     function gt(Pair memory a, Pair memory b) internal pure returns (bool) {

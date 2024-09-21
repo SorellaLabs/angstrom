@@ -7,7 +7,7 @@ import {PoolUpdateManager} from "../../src/modules/PoolUpdateManager.sol";
 import {SettlementManager} from "../../src/modules/SettlementManager.sol";
 import {UniConsumer} from "../../src/modules/UniConsumer.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
-import {TICK_SPACING, SET_POOL_FEE} from "../../src/Constants.sol";
+import {TICK_SPACING, POOL_FEE} from "../../src/Constants.sol";
 import {IUniV4, IPoolManager} from "../../src/interfaces/IUniV4.sol";
 
 import {MOCK_LOGS} from "../../src/modules/DevFlags.sol";
@@ -41,7 +41,7 @@ contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdateManager
 
     function consts() external pure returns (int24 tickSpacing, uint24 poolFee) {
         tickSpacing = TICK_SPACING;
-        poolFee = SET_POOL_FEE;
+        poolFee = POOL_FEE;
     }
 
     function getGrowthInsideTick(PoolId id, int24 tick) public view returns (uint256) {

@@ -7,6 +7,7 @@ import {console2 as console} from "forge-std/console2.sol";
 import {HookDeployer} from "./HookDeployer.sol";
 import {stdError} from "forge-std/StdError.sol";
 import {OrderMeta} from "src/reference/OrderTypes.sol";
+import {TickLib, TICK_SPACING} from "src/libraries/TickLib.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 

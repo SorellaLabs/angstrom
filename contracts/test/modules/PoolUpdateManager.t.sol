@@ -97,7 +97,7 @@ contract PoolUpdateManagerTest is BaseTest, HookDeployer {
         uint128 amount1 = 4.0e18;
         bumpBlock();
         handler.rewardTicks(re(TickReward({tick: -180, amount: amount1})));
-        assertApproxEqRel(positionRewards(lp1, -180, 180, liq1), amount1, 1.0e18 / 1e6, "reward while alone");
+        assertApproxEqRel(positionRewards(lp1, -180, 180, liq1), amount1, 1.0e18 / 1e12, "reward while alone");
 
         uint128 liq2 = 0.64e21;
         address lp2 = makeAddr("lp_2");
@@ -136,12 +136,34 @@ contract PoolUpdateManagerTest is BaseTest, HookDeployer {
         assertEq(positionRewards(lp3, -60, 60, liq3), 0, "lp3 rewards not kept at 0");
     }
 
+    function test_addAndRemove_simple() public {
+        uint128 liq1 = 8.2e21;
+        address lp1 = makeAddr("lp_1");
+        handler.addLiquidity(lp1, -180, 180, liq1);
+
+        uint128 amount = 1006.87299e18;
+        bumpBlock();
+        handler.rewardTicks(re(TickReward({tick: -180, amount: amount})));
+        assertApproxEqRel(positionRewards(lp1, -180, 180, liq1), amount, 1.0e18 / 1e12, "reward while alone");
+
+        vm.startPrank(lp1);
+        gate.setHook(address(angstrom));
+        (uint256 amount0Out, uint256 amount1Out) = removeLiquidity(-180, 180, 0);
+        vm.stopPrank();
+        assertApproxEqRel(amount0Out, amount, 1.0e18 / 1e12, "no reward");
+        assertEq(amount1Out, 0, "got something from amount1");
+    }
+
     function positionRewards(address owner, int24 lowerTick, int24 upperTick, uint128 liquidity)
         internal
         view
         returns (uint256)
     {
         return angstrom.positionRewards(id, owner, lowerTick, upperTick, bytes32(0), liquidity);
+    }
+
+    function removeLiquidity(int24 lowerTick, int24 upperTick, uint256 liquidity) internal returns (uint256, uint256) {
+        return gate.removeLiquidity(address(asset0), address(asset1), lowerTick, upperTick, liquidity, bytes32(0));
     }
 
     function poolKey() internal view returns (PoolKey memory) {

@@ -32,8 +32,8 @@ import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 contract Angstrom is
     ERC712,
     InvalidationManager,
-    PoolUpdateManager,
     SettlementManager,
+    PoolUpdateManager,
     NodeManager,
     HookManager,
     IUnlockCallback

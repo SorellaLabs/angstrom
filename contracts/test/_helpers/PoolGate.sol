@@ -13,7 +13,7 @@ import {PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {Slot0} from "v4-core/src/types/Slot0.sol";
 import {ConversionLib} from "../../src/libraries/ConversionLib.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
-import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
+import {BalanceDelta, toBalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 
 import {SignedUnsignedLib} from "super-sol/libraries/SignedUnsignedLib.sol";
 import {console2 as console} from "forge-std/console2.sol";
@@ -155,14 +155,20 @@ contract PoolGate is IUnlockCallback, CommonBase {
         address asset1,
         address sender,
         IPoolManager.ModifyLiquidityParams calldata params
-    ) public returns (BalanceDelta callerDelta) {
+    ) public returns (BalanceDelta delta) {
         PoolKey memory poolKey = hook.toPoolKey(asset0, asset1);
         vm.startPrank(sender);
-        BalanceDelta feeDelta;
-        (callerDelta, feeDelta) = UNI_V4.modifyLiquidity(poolKey, params, "");
-        require(feeDelta.amount0() == 0 && feeDelta.amount1() == 0, "Getting fees?");
-        require(callerDelta.amount0() >= 0 && callerDelta.amount1() >= 0, "losing money for removing liquidity");
-        _clear(asset0, asset1, callerDelta);
+        (delta,) = UNI_V4.modifyLiquidity(poolKey, params, "");
+
+        bytes32 delta0Slot = keccak256(abi.encode(sender, asset0));
+        bytes32 delta1Slot = keccak256(abi.encode(sender, asset1));
+        bytes32 rawDelta0 = UNI_V4.exttload(delta0Slot);
+        bytes32 rawDelta1 = UNI_V4.exttload(delta1Slot);
+        delta = delta + toBalanceDelta(int128(int256(uint256(rawDelta0))), int128(int256(uint256(rawDelta1))));
+
+        require(delta.amount0() >= 0 && delta.amount1() >= 0, "losing money for removing liquidity");
+        _clear(asset0, asset1, delta);
+
         vm.stopPrank();
     }
 

@@ -30,18 +30,18 @@ library PoolRewardsLib {
     function getGrowthInside(PoolRewards storage self, int24 current, int24 lower, int24 upper)
         internal
         view
-        returns (uint256)
+        returns (uint256 growthInside)
     {
         uint256 lowerGrowth = self.rewardGrowthOutside[uint24(lower)];
         uint256 upperGrowth = self.rewardGrowthOutside[uint24(upper)];
 
         if (current < lower) {
             return lowerGrowth - upperGrowth;
-        } else if (current >= upper) {
-            return upperGrowth - lowerGrowth;
-        } else {
-            return self.globalGrowth - lowerGrowth - upperGrowth;
         }
+        if (upper <= current) {
+            return upperGrowth - lowerGrowth;
+        }
+        return growthInside = self.globalGrowth - lowerGrowth - upperGrowth;
     }
 
     function updateAfterTickMove(PoolRewards storage self, PoolId id, IPoolManager uniV4, int24 prevTick, int24 newTick)

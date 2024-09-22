@@ -98,7 +98,7 @@ contract PoolRewardsInvariantTest is BaseTest, HookDeployer {
                 }
             }
             uint256 computed = angstrom.positionRewards(
-                id, bytes32(0), address(handler), pos.lowerTick, pos.upperTick, u128(pos.liquidity)
+                id, address(handler), pos.lowerTick, pos.upperTick, bytes32(0), u128(pos.liquidity)
             );
             assertApproxEqRel(totalReward, computed, 0.000001e18);
         }

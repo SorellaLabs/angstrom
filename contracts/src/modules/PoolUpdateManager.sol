@@ -3,12 +3,13 @@ pragma solidity ^0.8.0;
 
 import {RewardsUpdater} from "./RewardsUpdater.sol";
 import {UniConsumer} from "./UniConsumer.sol";
-import {IBeforeAddLiquidityHook, IAfterRemoveLiquidityHook} from "../interfaces/IHooks.sol";
+import {IBeforeAddLiquidityHook, IBeforeRemoveLiquidityHook} from "../interfaces/IHooks.sol";
 
 import {DeltaTracker} from "../types/DeltaTracker.sol";
 import {AssetArray} from "../types/Asset.sol";
 import {CalldataReader} from "../types/CalldataReader.sol";
 import {PoolRewards} from "../types/PoolRewards.sol";
+import {Positions, Position} from "src/libraries/Positions.sol";
 
 import {SignedUnsignedLib} from "super-sol/libraries/SignedUnsignedLib.sol";
 import {IUniV4} from "../interfaces/IUniV4.sol";
@@ -19,6 +20,8 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {MixedSignLib} from "../libraries/MixedSignLib.sol";
+/// @custom:mounted uint256 (external)
+import {FixedPointMathLib} from "solady/src/utils/FixedPointMathLib.sol";
 
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
@@ -28,49 +31,82 @@ abstract contract PoolUpdateManager is
     RewardsUpdater,
     UniConsumer,
     IBeforeAddLiquidityHook,
-    IAfterRemoveLiquidityHook
+    IBeforeRemoveLiquidityHook
 {
     using FormatLib for *;
 
-    using PoolIdLibrary for PoolKey;
+    using FixedPointMathLib for uint256;
     using IUniV4 for IPoolManager;
-    using MixedSignLib for uint128;
     using SignedUnsignedLib for uint256;
-
-    struct Position {
-        uint256 rewardDebt;
-    }
 
     /// @dev Uniswap's `MIN_SQRT_RATIO + 1` to pass the limit check.
     uint160 internal constant MIN_SQRT_RATIO = 4295128740;
     /// @dev Uniswap's `MAX_SQRT_RATIO - 1` to pass the limit check.
     uint160 internal constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970341;
 
-    mapping(PoolId id => mapping(uint208 positionKey => Position)) positions;
+    Positions internal positions;
     mapping(PoolId id => PoolRewards) internal poolRewards;
 
     constructor() {
-        _checkHookPermissions(Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.AFTER_REMOVE_LIQUIDITY_FLAG);
+        _checkHookPermissions(Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG);
     }
 
-    function beforeAddLiquidity(address, PoolKey calldata, IPoolManager.ModifyLiquidityParams calldata, bytes calldata)
-        external
-        view
-        override
-        onlyUniV4
-        returns (bytes4)
-    {
+    /// @dev Maintain reward growth & `poolRewards` values such that no one's owed rewards change.
+    function beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params,
+        bytes calldata
+    ) external override onlyUniV4 returns (bytes4) {
+        uint256 liquidityDelta;
+        if (params.liquidityDelta <= 0) return this.beforeAddLiquidity.selector;
+        else liquidityDelta = uint256(params.liquidityDelta);
+
+        PoolId id = ConversionLib.toId(key);
+        int24 lowerTick = params.tickLower;
+        int24 upperTick = params.tickUpper;
+        (Position storage position,) = positions.get(id, sender, lowerTick, upperTick, params.salt);
+        PoolRewards storage rewards = poolRewards[id];
+
+        int24 currentTick = UNI_V4.getSlot0(id).tick();
+
+        uint256 lowerGrowth = rewards.rewardGrowthOutside[uint24(lowerTick)];
+        uint256 upperGrowth = rewards.rewardGrowthOutside[uint24(upperTick)];
+
+        uint256 newGrowthInside;
+        if (currentTick < lowerTick) {
+            // Check to maintain invariant that `currentTick < lowerTick -> upperGrowth <= lowerGrowth`
+            if (lowerGrowth < upperGrowth) {
+                // Should only be the case for newly initialized ticks.
+                rewards.rewardGrowthOutside[uint24(lowerTick)] = lowerGrowth = upperGrowth;
+            } else {
+                newGrowthInside = lowerGrowth - upperGrowth;
+            }
+        } else if (upperTick <= currentTick) {
+            // Check to maintain invariant that `upperTick <= currentTick -> lowerGrowth <= upperGrowth`
+            if (upperGrowth < lowerGrowth) {
+                // Should only be the case for newly initialized ticks.
+                rewards.rewardGrowthOutside[uint24(upperTick)] = upperGrowth = lowerGrowth;
+            } else {
+                newGrowthInside = upperGrowth - lowerGrowth;
+            }
+        } else {
+            newGrowthInside = rewards.globalGrowth - lowerGrowth - upperGrowth;
+        }
+
+        uint256 newPastRewards = newGrowthInside.mulWad(liquidityDelta);
+        position.pastRewards += newPastRewards;
+
         return this.beforeAddLiquidity.selector;
     }
 
-    function afterRemoveLiquidity(
+    function beforeRemoveLiquidity(
         address,
         PoolKey calldata,
         IPoolManager.ModifyLiquidityParams calldata,
-        BalanceDelta,
         bytes calldata
-    ) external pure override returns (bytes4, BalanceDelta) {
-        return (bytes4(0), BalanceDelta.wrap(0));
+    ) external view override onlyUniV4 returns (bytes4) {
+        return bytes4(0);
     }
 
     function _updatePools(CalldataReader reader, DeltaTracker storage deltas, AssetArray assets)

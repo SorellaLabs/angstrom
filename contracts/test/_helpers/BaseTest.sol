@@ -135,4 +135,8 @@ contract BaseTest is Test {
         targetMeta.from = account.addr;
         targetMeta.signature = abi.encodePacked(v, r, s);
     }
+
+    function bumpBlock() internal {
+        vm.roll(block.number + 1);
+    }
 }

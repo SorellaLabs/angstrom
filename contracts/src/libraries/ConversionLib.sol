@@ -32,14 +32,4 @@ library ConversionLib {
             id := keccak256(ptr, mul(32, 5))
         }
     }
-
-    function into(bool x) internal pure returns (uint256 y) {
-        // forgefmt: disable-next-item
-        assembly { y := x }
-    }
-
-    function into(address x) internal pure returns (uint256 y) {
-        // forgefmt: disable-next-item
-        assembly { y := x }
-    }
 }

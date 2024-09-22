@@ -269,7 +269,7 @@ contract PoolRewardsHandler is BaseTest {
         bundle.assets = new Asset[](2);
         bundle.assets[0].addr = address(asset0);
         bundle.assets[1].addr = address(asset1);
-        uint256 length = (amount0 > 0).into() + (amount1 > 0).into();
+        uint256 length = (amount0 > 0 ? 1 : 0) + (amount1 > 0 ? 1 : 0);
         bundle.toBOrders = new TopOfBlockOrder[](length);
         if (amount0 > 0) {
             asset0.mint(rewarder.addr, amount0);
@@ -279,7 +279,7 @@ contract PoolRewardsHandler is BaseTest {
         }
         if (amount1 > 0) {
             asset1.mint(rewarder.addr, amount1);
-            TopOfBlockOrder memory tob = bundle.toBOrders[(amount0 > 0).into()];
+            TopOfBlockOrder memory tob = bundle.toBOrders[amount0 > 0 ? 1 : 0];
             tob.quantityIn = amount1;
             _fillAndSign(tob, false);
         }

@@ -82,9 +82,10 @@ library IUniV4 {
         returns (uint256 slot)
     {
         uint256 poolStateSlot = self.computePoolStateSlot(id);
+
         assembly ("memory-safe") {
             mstore(0x00, positionKey)
-            mstore(0x20, poolStateSlot)
+            mstore(0x20, add(poolStateSlot, _POOL_STATE_POSITIONS_OFFSET))
             slot := keccak256(0x00, 0x40)
         }
     }

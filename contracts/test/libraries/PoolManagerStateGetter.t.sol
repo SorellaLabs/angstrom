@@ -9,9 +9,13 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {Pool} from "v4-core/src/libraries/Pool.sol";
 import {Slot0} from "v4-core/src/types/Slot0.sol";
 
+import {Position} from "v4-core/src/libraries/Position.sol";
+import {Positions} from "src/libraries/Positions.sol";
+
 /// @author philogy <https://github.com/philogy>
 contract PoolManagerStateGetterTest is BaseTest {
     InvasiveV4 uni;
+    Positions positions;
 
     function setUp() public {
         uni = new InvasiveV4();
@@ -58,6 +62,29 @@ contract PoolManagerStateGetterTest is BaseTest {
             PoolManagerStateGetter.getTickLiquidity(uni, id, tick);
         assertEq(retrievedLiquidityGross, retrievedInfo.liquidityGross, "retrieved != expected (liquidity gross)");
         assertEq(retreivedLiquidityNet, retrievedInfo.liquidityNet, "retrieved != expected (liquidity net)");
+    }
+
+    function test_fuzzing_getPositionLiquidity(
+        PoolId id,
+        address owner,
+        int24 lowerTick,
+        int24 upperTick,
+        bytes32 salt,
+        uint128 liquidity
+    ) public {
+        (, bytes32 positionKey) = positions.get(id, owner, lowerTick, upperTick, salt);
+
+        Position.State memory newState;
+        newState.liquidity = liquidity;
+        uni.setPosition(id, positionKey, newState);
+
+        Position.State memory state = uni.getPosition(id, owner, lowerTick, upperTick, salt);
+        assertEq(state.liquidity, liquidity, "setting failed");
+        assertEq(
+            PoolManagerStateGetter.getPositionLiquidity(uni, id, positionKey),
+            liquidity,
+            "retrieved != expected (position liquidity)"
+        );
     }
 
     function assertEq(Slot0 a, Slot0 b, string memory error) internal pure {

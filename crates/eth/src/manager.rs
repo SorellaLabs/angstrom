@@ -4,7 +4,10 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy::primitives::{Address, B256};
+use alloy::{
+    primitives::{Address, B256},
+    sol_types::SolEvent
+};
 use angstrom_types::contract_payloads::angstrom::AngstromBundle;
 use futures::Future;
 use futures_util::{FutureExt, StreamExt};
@@ -15,6 +18,11 @@ use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
 use crate::handle::{EthCommand, EthHandle};
+
+alloy::sol!(
+    event Transfer(address indexed _from, address indexed _to, uint256 _value);
+    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+);
 
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
@@ -28,6 +36,7 @@ pub struct EthDataCleanser<DB> {
 
     /// Notifications for Canonical Block updates
     canonical_updates: BroadcastStream<CanonStateNotification>,
+    angstrom_tokens:   Vec<Address>,
     /// used to fetch data from db
     #[allow(dead_code)]
     db:                DB
@@ -43,7 +52,8 @@ where
         db: DB,
         tp: TP,
         tx: Sender<EthCommand>,
-        rx: Receiver<EthCommand>
+        rx: Receiver<EthCommand>,
+        angstrom_tokens: Vec<Address>
     ) -> anyhow::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
 
@@ -52,6 +62,7 @@ where
             canonical_updates: BroadcastStream::new(canonical_updates),
             commander: stream,
             event_listeners: Vec::new(),
+            angstrom_tokens,
             db
         };
         tp.spawn_critical("eth handle", this.boxed());
@@ -128,10 +139,21 @@ where
 
     /// fetches all eoa addresses touched
     fn get_eoa(chain: Arc<Chain>) -> Vec<Address> {
-        // this gets weird as if another service modifies a given address, then we need
-        // to invalidate.
+        let tip = chain.tip().block.number;
 
-        vec![]
+        chain
+            .execution_outcome()
+            .receipts_by_block(tip)
+            .into_iter()
+            .flatten()
+            .flat_map(|receipt| &receipt.logs)
+            .map(|logs| {
+                Transfer::decode_log(logs, true)
+                    .map(|log| log._from)
+                    .or_else(|_| Approval::decode_log(logs, true).map(|log| log._owner))
+            })
+            .flatten()
+            .collect()
     }
 }
 

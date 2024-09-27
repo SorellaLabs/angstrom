@@ -91,11 +91,8 @@ library PairLib {
         zeroForOne = assetIn < assetOut;
         (address asset0, address asset1) = zeroForOne ? (assetIn, assetOut) : (assetOut, assetIn);
 
-        console.log("getIndex: (%s, %s)", asset0, asset1);
-
         for (index = 0; index < pairs.length; index++) {
             Pair memory pair = pairs[index];
-            console.log("  %s: (%s, %s)", index, pair.asset0, pair.asset1);
             pair._checkOrdered();
             if (pair.asset0 == asset0 && pair.asset1 == asset1) return (index, zeroForOne);
         }

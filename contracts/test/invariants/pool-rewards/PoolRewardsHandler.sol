@@ -226,7 +226,6 @@ contract PoolRewardsHandler is BaseTest {
 
     function rewardLiquidity(uint256 ticksToReward, PRNG memory rng) public passesTime {
         uint256 totalTicks = _ghost_liquidInitializedTicks.length();
-        console.log("totalTicks: %s", totalTicks);
 
         ticksToReward = bound(ticksToReward, 0, totalTicks);
 
@@ -238,10 +237,7 @@ contract PoolRewardsHandler is BaseTest {
             int24 tick = int24(_ghost_liquidInitializedTicks.at(rng.useRandIndex(map)));
             uint128 amount = u128(rng.randchoice(0.1e18, 0, rng.randmag(0.01e18, 100.0e18)));
             rewards[i] = TickReward({tick: tick, amount: amount});
-            console.log("  %s: TickReward({tick: %s, amount: %s})", i, tick.toStr(), amount);
         }
-
-        console.log("rewardTicks");
 
         rewardTicks(rewards);
     }

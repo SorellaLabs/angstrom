@@ -84,7 +84,7 @@ contract RewardLibTest is BaseTest {
         assertCreatesUpdates(re(TickReward(tick, amount)), CurrentOnlyReward(amount));
     }
 
-    function test_bad(uint128 amount) public {
+    function test_fuzzing_currentOnlyUpdate_tickInUninitializedRange(uint128 amount) public {
         uni.setCurrentTick(tick = -1);
 
         assertCreatesUpdates(re(TickReward(-120, amount)), CurrentOnlyReward(amount));
@@ -226,7 +226,7 @@ contract RewardLibTest is BaseTest {
         view
     {
         RewardsUpdate[] memory updates = RewardLib.toUpdates(r, uni, id, TICK_SPACING);
-        assertEq(updates.length, 1, "length != 1: Expected update");
+        assertEq(updates.length, 1, "length != 1: Expected single update");
         RewardsUpdate memory update = updates[0];
         assertTrue(
             update.onlyCurrent == expected.onlyCurrent

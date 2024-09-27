@@ -3,7 +3,7 @@ solc           = "0.8.26"
 bytecode_hash  = "none"
 viaIR = false
 show_progress = true
-optimizer_runs = 1_000_000
+optimizer_runs = 0xffffffff
 verbosity      = 3
 fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
 evm_version    = "cancun"

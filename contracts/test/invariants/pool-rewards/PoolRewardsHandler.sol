@@ -15,6 +15,7 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {ConversionLib} from "src/libraries/ConversionLib.sol";
+import {PoolConfigStore} from "src/libraries/pool-config/PoolConfigStore.sol";
 
 import {LibSort} from "solady/src/utils/LibSort.sol";
 
@@ -218,9 +219,9 @@ contract PoolRewardsHandler is BaseTest {
 
         poolUpdate.rewardUpdate.onlyCurrent = true;
 
-        address store = angstrom.configStore();
+        PoolConfigStore store = angstrom.configStore();
         vm.prank(rewarder.addr);
-        bytes memory encoded = bundle.encode(store);
+        bytes memory encoded = bundle.encode(PoolConfigStore.unwrap(store));
         angstrom.execute(encoded);
     }
 
@@ -261,9 +262,9 @@ contract PoolRewardsHandler is BaseTest {
             poolUpdate.rewardUpdate = rewardUpdates[i];
         }
 
-        address store = angstrom.configStore();
+        PoolConfigStore store = angstrom.configStore();
         vm.prank(rewarder.addr);
-        bytes memory encoded = bundle.encode(store);
+        bytes memory encoded = bundle.encode(PoolConfigStore.unwrap(store));
         angstrom.execute(encoded);
     }
 

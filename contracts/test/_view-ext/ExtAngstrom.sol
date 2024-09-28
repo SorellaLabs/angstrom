@@ -20,20 +20,12 @@ contract ExtAngstrom is Angstrom {
         Angstrom(uniV4PoolManager, governance)
     {}
 
-    function __ilegalMint(address to, address asset, uint256 amount) external {
-        _angstromReserves[to][asset] += amount;
-    }
-
     function lastBlockUpdated() public view returns (uint64) {
         return _lastBlockUpdated;
     }
 
-    function configStore() public view returns (address) {
-        return PoolConfigStore.unwrap(_configStore);
-    }
-
-    function updateLastBlock() public {
-        _lastBlockUpdated = SafeCastLib.toUint64(block.number);
+    function configStore() public view returns (PoolConfigStore) {
+        return _configStore;
     }
 
     function isNode(address addr) public view returns (bool) {

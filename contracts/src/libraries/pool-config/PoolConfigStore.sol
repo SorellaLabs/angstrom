@@ -23,6 +23,9 @@ uint256 constant STORE_HEADER_SIZE = 1;
 /// @dev Left shift in bits to convert the full hash `keccak256(abi.encode(asset0, asset1))` to a store key.
 uint256 constant HASH_TO_STORE_KEY_SHIFT = 40;
 
+/// @dev Max fee allowed.
+uint24 constant MAX_FEE = 0.2e6;
+
 type StoreKey is bytes27;
 
 using PoolConfigStoreLib for PoolConfigStore global;
@@ -38,8 +41,6 @@ library PoolConfigStoreLib {
     error InvalidTickSpacing();
     error FeeAboveMax();
     error FailedToDeployNewStore();
-
-    uint24 internal constant MAX_FEE = 0.2e6;
 
     /*
      * @dev Generated from ./StoreDeployer.huff using https://github.com/Philogy/py-huff (commit: 44bbb4b)
@@ -152,7 +153,10 @@ library PoolConfigStoreLib {
         pure
         returns (StoreKey key)
     {
-        return
-            StoreKey.wrap(bytes27(keccak256(abi.encode(asset0, asset1)) << HASH_TO_STORE_KEY_SHIFT));
+        assembly ("memory-safe") {
+            mstore(0x00, asset0)
+            mstore(0x20, asset1)
+            key := shl(HASH_TO_STORE_KEY_SHIFT, keccak256(0x00, 0x40))
+        }
     }
 }

@@ -35,7 +35,6 @@ library PoolConfigStoreLib {
     PoolConfigStore internal constant NULL_CONFIG_CACHE = PoolConfigStore.wrap(address(0));
 
     error NoEntry();
-    error EntryNotInStore(StoreKey key);
 
     error AssetsUnsorted();
     error InvalidTickSpacing();

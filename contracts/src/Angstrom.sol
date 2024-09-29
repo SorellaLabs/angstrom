@@ -72,7 +72,7 @@ contract Angstrom is
         (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
 
         _takeAssets(assets);
-        reader = _updatePools(reader, tBundleDeltas, pairs);
+        reader = _updatePools(reader, bundleDeltas, pairs);
         reader = _validateAndExecuteToBOrders(reader, pairs);
         reader = _validateAndExecuteUserOrders(reader, pairs);
         reader.requireAtEndOf(data);

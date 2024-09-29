@@ -28,7 +28,7 @@ abstract contract SettlementManager is UniConsumer {
     error BundleChangeNetNegative(address asset);
 
     mapping(address => uint256) internal savedFees;
-    DeltaTracker internal tBundleDeltas;
+    DeltaTracker internal bundleDeltas;
 
     mapping(address => mapping(address => uint256)) internal _angstromReserves;
 
@@ -40,7 +40,7 @@ abstract contract SettlementManager is UniConsumer {
             if (amount > 0) {
                 address addr = asset.addr();
                 UNI_V4.take(addr.intoC(), address(this), amount);
-                tBundleDeltas.add(addr, amount);
+                bundleDeltas.add(addr, amount);
             }
         }
     }
@@ -53,7 +53,7 @@ abstract contract SettlementManager is UniConsumer {
             uint256 saving = asset.save();
             uint256 settle = asset.settle();
 
-            if (tBundleDeltas.sub(addr, saving + settle) < 0) {
+            if (bundleDeltas.sub(addr, saving + settle) < 0) {
                 revert BundleChangeNetNegative(addr);
             }
 
@@ -79,7 +79,7 @@ abstract contract SettlementManager is UniConsumer {
         internal
     {
         uint256 amount = amountIn.into();
-        tBundleDeltas.add(asset, amount);
+        bundleDeltas.add(asset, amount);
         if (useInternal) {
             _angstromReserves[from][asset] -= amount;
         } else {
@@ -91,7 +91,7 @@ abstract contract SettlementManager is UniConsumer {
         internal
     {
         uint256 amount = amountOut.into();
-        tBundleDeltas.sub(asset, amount);
+        bundleDeltas.sub(asset, amount);
         if (useInternal) _angstromReserves[to][asset] += amount;
         else asset.safeTransfer(to, amount);
     }

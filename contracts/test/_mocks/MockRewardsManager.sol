@@ -42,7 +42,7 @@ contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdateManager
         (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
 
         UniSwapCallBuffer memory swapCall = UniCallLib.newSwapCall(address(this));
-        reader = _updatePool(reader, swapCall, tBundleDeltas, pairs);
+        reader = _updatePool(reader, swapCall, bundleDeltas, pairs);
 
         reader.requireAtEndOf(encoded);
     }

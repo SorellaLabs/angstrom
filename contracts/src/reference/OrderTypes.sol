@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {OrderVariantMap} from "../types/OrderVariantMap.sol";
+import {UserOrderVariantMap} from "../types/UserOrderVariantMap.sol";
 import {OrderVariant as RefOrderVariant} from "../reference/OrderVariant.sol";
 import {UserOrderBufferLib} from "../types/UserOrderBuffer.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {Pair, PairLib} from "./Pair.sol";
-import {Asset, AssetLib} from "./Asset.sol";
-import {DEBUG_LOGS} from "src/modules/DevFlags.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-
 import {console} from "forge-std/console.sol";
-import {consoleext} from "super-sol/libraries/consoleext.sol";
 
 struct OrderMeta {
     bool isEcdsa;
@@ -101,7 +97,6 @@ using OrdersLib for ExactFlashOrder global;
 using OrdersLib for TopOfBlockOrder global;
 
 library OrdersLib {
-    using AssetLib for *;
     using PairLib for *;
     using FormatLib for *;
     using SafeCastLib for *;
@@ -184,85 +179,72 @@ library OrdersLib {
 
     function hash(PartialStandingOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    PARTIAL_STANDING_ORDER_TYPEHASH,
-                    order.minAmountIn,
-                    order.maxAmountIn,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.nonce,
-                    order.deadline
-                )
+            abi.encode(
+                PARTIAL_STANDING_ORDER_TYPEHASH,
+                order.minAmountIn,
+                order.maxAmountIn,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.nonce,
+                order.deadline
             )
         );
     }
 
     function hash(ExactStandingOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    EXACT_STANDING_ORDER_TYPEHASH,
-                    order.exactIn,
-                    order.amount,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.nonce,
-                    order.deadline
-                )
+            abi.encode(
+                EXACT_STANDING_ORDER_TYPEHASH,
+                order.exactIn,
+                order.amount,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.nonce,
+                order.deadline
             )
         );
     }
 
     function hash(PartialFlashOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    PARTIAL_FLASH_ORDER_TYPEHASH,
-                    order.minAmountIn,
-                    order.maxAmountIn,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.validForBlock
-                )
+            abi.encode(
+                PARTIAL_FLASH_ORDER_TYPEHASH,
+                order.minAmountIn,
+                order.maxAmountIn,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.validForBlock
             )
         );
     }
 
     function hash(ExactFlashOrder memory order) internal pure returns (bytes32) {
         return keccak256(
-            _logB(
-                abi.encode(
-                    EXACT_FLASH_ORDER_TYPEHASH,
-                    order.exactIn,
-                    order.amount,
-                    order.minPrice,
-                    order.useInternal,
-                    order.assetIn,
-                    order.assetOut,
-                    order.recipient,
-                    keccak256(_toHookData(order.hook, order.hookPayload)),
-                    order.validForBlock
-                )
+            abi.encode(
+                EXACT_FLASH_ORDER_TYPEHASH,
+                order.exactIn,
+                order.amount,
+                order.minPrice,
+                order.useInternal,
+                order.assetIn,
+                order.assetOut,
+                order.recipient,
+                keccak256(_toHookData(order.hook, order.hookPayload)),
+                order.validForBlock
             )
         );
-    }
-
-    function _logB(bytes memory b) internal pure returns (bytes memory) {
-        if (DEBUG_LOGS) consoleext.logInWords(b);
-        return b;
     }
 
     function hash(TopOfBlockOrder memory order) internal pure returns (bytes32) {
@@ -282,7 +264,11 @@ library OrdersLib {
     }
 
     /// @dev WARNING: Assumes `pairs` are sorted.
-    function encode(PartialStandingOrder memory order, Pair[] memory pairs) internal pure returns (bytes memory) {
+    function encode(PartialStandingOrder memory order, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory)
+    {
         (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
@@ -298,7 +284,7 @@ library OrdersLib {
 
         return bytes.concat(
             bytes.concat(
-                bytes1(OrderVariantMap.unwrap(variantMap.encode())),
+                bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
                 bytes2(pairIndex),
                 bytes32(order.minPrice),
                 _encodeRecipient(order.recipient),
@@ -313,7 +299,11 @@ library OrdersLib {
         );
     }
 
-    function encode(ExactStandingOrder memory order, Pair[] memory pairs) internal pure returns (bytes memory) {
+    function encode(ExactStandingOrder memory order, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory)
+    {
         (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
@@ -328,7 +318,7 @@ library OrdersLib {
         });
 
         return bytes.concat(
-            bytes1(OrderVariantMap.unwrap(variantMap.encode())),
+            bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
             bytes2(pairIndex),
             bytes32(order.minPrice),
             _encodeRecipient(order.recipient),
@@ -340,7 +330,11 @@ library OrdersLib {
         );
     }
 
-    function encode(PartialFlashOrder memory order, Pair[] memory pairs) internal pure returns (bytes memory) {
+    function encode(PartialFlashOrder memory order, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory)
+    {
         (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
@@ -355,7 +349,7 @@ library OrdersLib {
         });
 
         return bytes.concat(
-            bytes1(OrderVariantMap.unwrap(variantMap.encode())),
+            bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
             bytes2(pairIndex),
             bytes32(order.minPrice),
             _encodeRecipient(order.recipient),
@@ -367,7 +361,11 @@ library OrdersLib {
         );
     }
 
-    function encode(ExactFlashOrder memory order, Pair[] memory pairs) internal pure returns (bytes memory) {
+    function encode(ExactFlashOrder memory order, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory)
+    {
         (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
@@ -382,7 +380,7 @@ library OrdersLib {
         });
 
         return bytes.concat(
-            bytes1(OrderVariantMap.unwrap(variantMap.encode())),
+            bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
             bytes2(pairIndex),
             bytes32(order.minPrice),
             _encodeRecipient(order.recipient),
@@ -392,32 +390,33 @@ library OrdersLib {
         );
     }
 
-    function encode(TopOfBlockOrder[] memory orders, Asset[] memory assets) internal pure returns (bytes memory b) {
+    function encode(TopOfBlockOrder[] memory orders, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory b)
+    {
         for (uint256 i = 0; i < orders.length; i++) {
-            b = bytes.concat(b, orders[i].encode(assets));
+            b = bytes.concat(b, orders[i].encode(pairs));
         }
         b = bytes.concat(bytes3(b.length.toUint24()), b);
     }
 
-    function encode(TopOfBlockOrder memory order, Asset[] memory assets) internal pure returns (bytes memory) {
-        // TODO: Update encoding.
-        RefOrderVariant memory variantMap = RefOrderVariant({
-            noHook: order.hook == address(0),
-            useInternal: order.useInternal,
-            hasRecipient: order.recipient != address(0),
-            isEcdsa: order.meta.isEcdsa,
-            aToB: order.assetIn < order.assetOut,
-            isExact: false,
-            isFlash: false,
-            isOut: false
-        });
+    function encode(TopOfBlockOrder memory order, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(order.assetIn, order.assetOut);
+
+        uint8 varMap = (order.useInternal ? 1 : 0) | (zeroForOne ? 2 : 0)
+            | (order.recipient != address(0) ? 4 : 0) | (order.hook != address(0) ? 8 : 0)
+            | (order.meta.isEcdsa ? 16 : 0);
 
         return bytes.concat(
-            bytes1(OrderVariantMap.unwrap(variantMap.encode())),
+            bytes1(varMap),
             bytes16(order.quantityIn),
             bytes16(order.quantityOut),
-            bytes2(assets.getIndex(order.assetIn).toUint16()),
-            bytes2(assets.getIndex(order.assetOut).toUint16()),
+            bytes2(pairIndex),
             _encodeRecipient(order.recipient),
             _encodeHookData(order.hook, order.hookPayload),
             _encodeSig(order.meta)
@@ -572,14 +571,23 @@ library OrdersLib {
         );
     }
 
-    function _encodeHookData(address hook, bytes memory hookPayload) internal pure returns (bytes memory) {
+    function _encodeHookData(address hook, bytes memory hookPayload)
+        internal
+        pure
+        returns (bytes memory)
+    {
         if (hook == address(0)) {
             return new bytes(0);
         }
-        return bytes.concat(bytes20(hook), bytes3(hookPayload.length.toUint24()), hookPayload);
+        return
+            bytes.concat(bytes3((hookPayload.length + 20).toUint24()), bytes20(hook), hookPayload);
     }
 
-    function _toHookData(address hook, bytes memory hookPayload) internal pure returns (bytes memory) {
+    function _toHookData(address hook, bytes memory hookPayload)
+        internal
+        pure
+        returns (bytes memory)
+    {
         if (hook == address(0)) {
             return new bytes(0);
         }
@@ -595,7 +603,9 @@ library OrdersLib {
             return meta.signature;
         } else {
             // ERC1271
-            return bytes.concat(bytes20(meta.from), bytes3(meta.signature.length.toUint24()), meta.signature);
+            return bytes.concat(
+                bytes20(meta.from), bytes3(meta.signature.length.toUint24()), meta.signature
+            );
         }
     }
 }

@@ -6,6 +6,7 @@ import {Asset, AssetLib} from "./Asset.sol";
 import {Pair, PairLib} from "./Pair.sol";
 import {TopOfBlockOrder, OrdersLib} from "./OrderTypes.sol";
 import {PoolUpdate, PoolUpdateLib} from "./PoolUpdate.sol";
+import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 
 import {console} from "forge-std/console.sol";
 
@@ -27,13 +28,21 @@ library BundleLib {
     using PairLib for Pair[];
     using PoolUpdateLib for PoolUpdate[];
 
-    function encode(Bundle memory bundle) internal pure returns (bytes memory) {
+    function encode(Bundle memory self, address configStore) internal view returns (bytes memory) {
         return bytes.concat(
-            bundle.assets.encode(),
-            bundle.pairs.encode(bundle.assets),
-            bundle.poolUpdates.encode(bundle.assets),
-            bundle.toBOrders.encode(bundle.assets),
-            bundle.userOrders.encode(bundle.pairs)
+            self.assets.encode(),
+            self.pairs.encode(self.assets, configStore),
+            self.poolUpdates.encode(self.pairs),
+            self.toBOrders.encode(self.pairs),
+            self.userOrders.encode(self.pairs)
         );
+    }
+
+    function addDeltas(Bundle memory self, uint256 index0, uint256 index1, BalanceDelta deltas)
+        internal
+        pure
+    {
+        self.assets[index0].addDelta(deltas.amount0());
+        self.assets[index1].addDelta(deltas.amount1());
     }
 }

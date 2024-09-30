@@ -162,7 +162,7 @@ impl AngstromTestnet {
         let (_, peer) = self.peers.iter_mut().take(1).collect::<Vec<_>>().remove(0);
 
         // send message to other peers
-        peer.handle.broadcast_tx(msg.clone());
+        peer.handle.broadcast_message(msg.clone());
         let expected_msg_cnt = self.peers.len() - 1;
 
         let expected = if let StromMessage::PropagatePooledOrders(o) = msg {
@@ -207,7 +207,7 @@ impl AngstromTestnet {
         }));
 
         let sid = *sid;
-        first.handle.send_transactions(sid, msg);
+        first.handle.send_message(sid, msg);
         let result = self.message_test(rx, expected, 1).await;
 
         self.peers
@@ -235,7 +235,7 @@ impl AngstromTestnet {
         let rx = Box::pin(rx.map(ConsensusMsgTestCmp::from));
 
         let sid = *sid;
-        first.handle.send_transactions(sid, msg);
+        first.handle.send_message(sid, msg);
         let result = self.message_test(rx, expected, 1).await;
 
         self.peers
@@ -258,7 +258,7 @@ impl AngstromTestnet {
         let (_, peer) = self.peers.iter_mut().take(1).collect::<Vec<_>>().remove(0);
 
         // send message to other peers
-        peer.handle.broadcast_tx(msg.clone());
+        peer.handle.broadcast_message(msg.clone());
         let expected_msg_cnt = self.peers.len() - 1;
 
         let Ok(expected) = msg.clone().try_into() else {

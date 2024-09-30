@@ -1,4 +1,3 @@
-pub mod envelopes;
 pub mod ext;
 pub mod rpc_orders;
 pub mod sol;

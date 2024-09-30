@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use angstrom_metrics::SearcherOrderPoolMetricsWrapper;
 use angstrom_types::{
     orders::OrderId,
-    primitive::PoolId,
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 use angstrom_utils::map::OwnedMap;
@@ -67,6 +67,14 @@ impl SearcherPool {
             .values()
             .flat_map(|p| p.get_all_orders())
             .collect()
+    }
+
+    pub fn new_pool(&mut self, pool: NewInitializedPool) {
+        let old_is_none = self
+            .searcher_orders
+            .insert(pool.id, PendingPool::new())
+            .is_none();
+        assert!(old_is_none);
     }
 }
 

@@ -6,14 +6,21 @@ import {Asset, AssetLib} from "./Asset.sol";
 import {RayMathLib} from "../libraries/RayMathLib.sol";
 import {PairLib as ActualPairLib} from "../types/Pair.sol";
 import {PriceAB} from "../types/Price.sol";
+import {
+    PoolConfigStore,
+    PoolConfigStoreLib,
+    StoreKey,
+    STORE_HEADER_SIZE
+} from "src/libraries/pool-config/PoolConfigStore.sol";
+import {ConfigEntry, ENTRY_SIZE} from "src/libraries/pool-config/ConfigEntry.sol";
 
-import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
+import {console} from "forge-std/console.sol";
 
 struct Pair {
-    address assetA;
-    address assetB;
-    PriceAB priceAB;
+    address asset0;
+    address asset1;
+    PriceAB price10;
 }
 
 using PairLib for Pair global;
@@ -27,38 +34,41 @@ library PairLib {
 
     error PairAssetsWrong(Pair);
 
-    uint256 constant MAX_U12 = (1 << 12) - 1;
-
-    function u12(uint256 x) internal pure returns (uint256) {
-        require(x <= MAX_U12, "Overflow u12");
-        return x;
-    }
-
     function _checkOrdered(Pair memory pair) internal pure {
-        if (pair.assetB <= pair.assetA) revert PairAssetsWrong(pair);
+        if (pair.asset1 <= pair.asset0) revert PairAssetsWrong(pair);
     }
 
-    function encode(Pair memory self, Asset[] memory assets) internal pure returns (bytes memory) {
+    function encode(Pair memory self, Asset[] memory assets, address configStore)
+        internal
+        view
+        returns (bytes memory b)
+    {
         self._checkOrdered();
-        (uint16 indexA, uint16 indexB) = assets.getIndexPair(self.assetA, self.assetB);
-        return bytes.concat(bytes2(indexA), bytes2(indexB), bytes32(self.priceAB.into()));
+        (uint16 indexA, uint16 indexB) = assets.getIndexPair(self.asset0, self.asset1);
+        uint16 storeIndex = getStoreIndex(configStore, self.asset0, self.asset1);
+        b = bytes.concat(
+            bytes2(indexA), bytes2(indexB), bytes2(storeIndex), bytes32(self.price10.into())
+        );
+        require(b.length == ActualPairLib.PAIR_CD_BYTES);
     }
 
-    function encode(Pair[] memory pairs, Asset[] memory assets) internal pure returns (bytes memory b) {
+    function encode(Pair[] memory pairs, Asset[] memory assets, address configStore)
+        internal
+        view
+        returns (bytes memory b)
+    {
         for (uint256 i = 0; i < pairs.length; i++) {
-            b = bytes.concat(b, pairs[i].encode(assets));
+            b = bytes.concat(b, pairs[i].encode(assets, configStore));
         }
         b = bytes.concat(bytes3(b.length.toUint24()), b);
     }
 
     function gt(Pair memory a, Pair memory b) internal pure returns (bool) {
-        if (a.assetA == b.assetA) return a.assetB > b.assetB;
-        return a.assetA > b.assetA;
+        if (a.asset0 == b.asset0) return a.asset1 > b.asset1;
+        return a.asset0 > b.asset0;
     }
 
-    function sort(Pair[] memory pairs) internal view {
-        uint256 before = gasleft();
-
+    function sort(Pair[] memory pairs) internal pure {
         for (uint256 i = 0; i < pairs.length; i++) {
             pairs[i]._checkOrdered();
         }
@@ -69,39 +79,56 @@ library PairLib {
                 if (pairs[i].gt(pairs[j])) (pairs[i], pairs[j]) = (pairs[j], pairs[i]);
             }
         }
-
-        unchecked {
-            uint256 skibidi = gasleft();
-            console.log("sort used: %s", before - skibidi);
-        }
     }
 
     function getIndex(Pair[] memory pairs, address assetIn, address assetOut)
         internal
         pure
-        returns (uint16 index, bool aToB)
+        returns (uint16 index, bool zeroForOne)
     {
         require(assetIn != assetOut, "assetIn == assetOut");
 
-        aToB = assetIn < assetOut;
-        (address assetA, address assetB) = aToB ? (assetIn, assetOut) : (assetOut, assetIn);
+        zeroForOne = assetIn < assetOut;
+        (address asset0, address asset1) = zeroForOne ? (assetIn, assetOut) : (assetOut, assetIn);
 
         for (index = 0; index < pairs.length; index++) {
             Pair memory pair = pairs[index];
             pair._checkOrdered();
-            if (pair.assetA == assetA && pair.assetB == assetB) break;
+            if (pair.asset0 == asset0 && pair.asset1 == asset1) return (index, zeroForOne);
         }
         require(index < pairs.length, "Pair not found");
     }
 
+    function getStoreIndex(address store, address asset0, address asset1)
+        internal
+        view
+        returns (uint16 index)
+    {
+        require(asset0 < asset1, "getStoreIndex:assets unsorted");
+        StoreKey key = PoolConfigStoreLib.keyFromAssetsUnchecked(asset0, asset1);
+        uint256 totalEntries = store.code.length / ENTRY_SIZE;
+        PoolConfigStore configStore = PoolConfigStore.wrap(store);
+        for (index = 0; index < totalEntries; index++) {
+            StoreKey entryKey;
+            assembly ("memory-safe") {
+                extcodecopy(
+                    configStore, 0x00, add(STORE_HEADER_SIZE, mul(ENTRY_SIZE, index)), ENTRY_SIZE
+                )
+                entryKey := mload(0x00)
+            }
+            if (StoreKey.unwrap(entryKey) == StoreKey.unwrap(key)) return index;
+        }
+        revert("Pool not enabled");
+    }
+
     function toStr(Pair memory self) internal pure returns (string memory) {
         return string.concat(
-            "Pair {\n    assetA: ",
-            self.assetA.toStr(),
-            ",\n    assetOut: ",
-            self.assetB.toStr(),
-            ",\n    priceAB: ",
-            self.priceAB.into().fmtD(27, 27),
+            "Pair {\n    asset0: ",
+            self.asset0.toStr(),
+            ",\n    asset1: ",
+            self.asset1.toStr(),
+            ",\n    price10: ",
+            self.price10.into().fmtD(27, 27),
             "\n}"
         );
     }

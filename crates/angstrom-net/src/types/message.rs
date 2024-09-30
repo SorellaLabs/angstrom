@@ -6,7 +6,6 @@ use angstrom_types::{
     consensus::{Commit, PreProposal, Proposal},
     sol_bindings::grouped_orders::AllOrders
 };
-use bincode::{deserialize, serialize};
 use reth_eth_wire::{protocol::Protocol, Capability};
 use reth_network_p2p::error::RequestError;
 use reth_primitives::bytes::{Buf, BufMut};

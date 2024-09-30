@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Script} from "forge-std/Script.sol";
 import {HookDeployer} from "../test/_helpers/HookDeployer.sol";
 import {MockRewardsManager} from "../test/_mocks/MockRewardsManager.sol";
+import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
 
 import {console2 as console} from "forge-std/console2.sol";
 
@@ -23,8 +24,10 @@ contract MockRewardsManagerScript is Test, Script, HookDeployer {
         vm.startBroadcast(key);
 
         (bool suc, address mockRewardsAddr,) = deployHook(
-            abi.encodePacked(type(MockRewardsManager).creationCode, abi.encode(UNI_V4_PM)),
-            _angstromFlags(),
+            abi.encodePacked(
+                type(MockRewardsManager).creationCode, abi.encode(UNI_V4_PM, vm.addr(key))
+            ),
+            ANGSTROM_HOOK_FLAGS,
             CREATE2_FACTORY
         );
 
@@ -33,5 +36,10 @@ contract MockRewardsManagerScript is Test, Script, HookDeployer {
         console.log("mockRewardsAddr: %s", mockRewardsAddr);
 
         vm.stopBroadcast();
+    }
+
+    /// @dev Ensure compiler warns me about changes to the `MockRewardsManager` constructor interface
+    function MockRewardsManager_constructorRef() public {
+        new MockRewardsManager(address(0), address(0));
     }
 }

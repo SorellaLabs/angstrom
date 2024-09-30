@@ -11,7 +11,13 @@ struct OrderStorageMetrics {
     // number of searcher orders
     searcher_orders:             IntGauge,
     // number of pending finalization orders
-    pending_finalization_orders: IntGauge
+    pending_finalization_orders: IntGauge,
+    // number of cancelled vanilla orders
+    cancelled_vanilla_orders:    IntGauge,
+    // number of cancelled composable orders
+    cancelled_composable_orders: IntGauge,
+    // number of cancelled searcher orders
+    cancelled_searcher_orders:   IntGauge
 }
 
 impl Default for OrderStorageMetrics {
@@ -40,11 +46,32 @@ impl Default for OrderStorageMetrics {
         )
         .unwrap();
 
+        let cancelled_vanilla_orders = prometheus::register_int_gauge!(
+            "order_storage_cancelled_vanilla_orders",
+            "number of cancelled vanilla orders",
+        )
+        .unwrap();
+
+        let cancelled_composable_orders = prometheus::register_int_gauge!(
+            "order_storage_cancelled_composable_orders",
+            "number of cancelled composable orders",
+        )
+        .unwrap();
+
+        let cancelled_searcher_orders = prometheus::register_int_gauge!(
+            "order_storage_cancelled_searcher_orders",
+            "number of cancelled searcher orders",
+        )
+        .unwrap();
+
         Self {
             vanilla_limit_orders,
             searcher_orders,
             pending_finalization_orders,
-            composable_limit_orders
+            composable_limit_orders,
+            cancelled_vanilla_orders,
+            cancelled_composable_orders,
+            cancelled_searcher_orders
         }
     }
 }
@@ -80,6 +107,18 @@ impl OrderStorageMetrics {
 
     pub fn decr_pending_finalization_orders(&self, count: usize) {
         self.pending_finalization_orders.sub(count as i64);
+    }
+
+    pub fn incr_cancelled_vanilla_orders(&self, count: usize) {
+        self.cancelled_vanilla_orders.add(count as i64);
+    }
+
+    pub fn incr_cancelled_composable_orders(&self, count: usize) {
+        self.cancelled_composable_orders.add(count as i64);
+    }
+
+    pub fn incr_cancelled_searcher_orders(&self, count: usize) {
+        self.cancelled_searcher_orders.add(count as i64);
     }
 }
 
@@ -118,6 +157,24 @@ impl OrderStorageMetricsWrapper {
     pub fn incr_composable_limit_orders(&self, count: usize) {
         if let Some(this) = self.0.as_ref() {
             this.incr_composable_limit_orders(count)
+        }
+    }
+
+    pub fn incr_cancelled_vanilla_orders(&self) {
+        if let Some(this) = self.0.as_ref() {
+            this.incr_cancelled_vanilla_orders(1)
+        }
+    }
+
+    pub fn incr_cancelled_composable_orders(&self) {
+        if let Some(this) = self.0.as_ref() {
+            this.incr_cancelled_composable_orders(1)
+        }
+    }
+
+    pub fn incr_cancelled_searcher_orders(&self) {
+        if let Some(this) = self.0.as_ref() {
+            this.incr_cancelled_searcher_orders(1)
         }
     }
 

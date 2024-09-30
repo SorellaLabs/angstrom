@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {OrderVariantMap as Variant, OrderVariantMapLib as VariantLib} from "../types/OrderVariantMap.sol";
+import {
+    UserOrderVariantMap as Variant,
+    UserOrderVariantMapLib as VariantLib
+} from "../types/UserOrderVariantMap.sol";
 import {BitPackLib} from "./BitPackLib.sol";
 
 struct OrderVariant {

@@ -151,7 +151,7 @@ impl ConsensusManager {
         );
         tracing::info!("Sending out preproposal");
         self.network
-            .broadcast_tx(StromMessage::PrePropose(preproposal.clone()));
+            .broadcast_message(StromMessage::PrePropose(preproposal.clone()));
         self.broadcast(ConsensusMessage::PrePropose(preproposal));
     }
 
@@ -202,7 +202,7 @@ impl ConsensusManager {
     /// Send a built proposal out over the network
     fn broadcast_proposal(&mut self, proposal: Proposal) {
         self.network
-            .broadcast_tx(StromMessage::Propose(proposal.clone()));
+            .broadcast_message(StromMessage::Propose(proposal.clone()));
         self.broadcast(ConsensusMessage::Proposal(proposal));
     }
 
@@ -235,7 +235,7 @@ impl ConsensusManager {
 
                 // Then, broadcast our Commit message to all local subscribers and the network
                 self.network
-                    .broadcast_tx(StromMessage::Commit(Box::new(commit.clone())));
+                    .broadcast_message(StromMessage::Commit(Box::new(commit.clone())));
                 self.broadcast(ConsensusMessage::Commit(Box::new(commit)));
             }
             ConsensusTaskResult::BuiltProposal(p) => {
@@ -345,7 +345,7 @@ impl ConsensusManager {
                     self.broadcast(ConsensusMessage::Commit(commit.clone()));
                     // Also broadcast to the Strom network
                     self.network
-                        .broadcast_tx(angstrom_network::StromMessage::Commit(commit.clone()));
+                        .broadcast_message(angstrom_network::StromMessage::Commit(commit.clone()));
                     // Store it locally as a commit we've seen
                     let _ = self.roundstate.on_commit(peer, *commit.clone());
                     // Broadcast to all our internal subscribers

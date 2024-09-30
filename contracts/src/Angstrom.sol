@@ -16,16 +16,19 @@ import {AssetArray, AssetLib} from "./types/Asset.sol";
 import {PairArray, Pair, PairLib} from "./types/Pair.sol";
 import {ToBOrderBuffer} from "./types/ToBOrderBuffer.sol";
 import {UserOrderBuffer} from "./types/UserOrderBuffer.sol";
-import {OrderVariantMap} from "./types/OrderVariantMap.sol";
+import {UserOrderVariantMap} from "./types/UserOrderVariantMap.sol";
+import {ToBOrderVariantMap} from "./types/ToBOrderVariantMap.sol";
 import {HookBuffer, HookBufferLib} from "./types/HookBuffer.sol";
 import {CalldataReader, CalldataReaderLib} from "./types/CalldataReader.sol";
 import {SignatureLib} from "./libraries/SignatureLib.sol";
-import {PriceAB as PriceOutVsIn, AmountA as AmountOut, AmountB as AmountIn} from "./types/Price.sol";
+import {
+    PriceAB as PriceOutVsIn, AmountA as AmountOut, AmountB as AmountIn
+} from "./types/Price.sol";
+import {PoolConfigStore} from "./libraries/pool-config/PoolConfigStore.sol";
 
 import {RayMathLib} from "./libraries/RayMathLib.sol";
 
 import {console} from "forge-std/console.sol";
-import {DEBUG_LOGS} from "./modules/DevFlags.sol";
 // TODO: Remove
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
@@ -33,10 +36,10 @@ import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 contract Angstrom is
     ERC712,
     InvalidationManager,
-    PoolUpdateManager,
     SettlementManager,
     NodeManager,
     HookManager,
+    PoolUpdateManager,
     IUnlockCallback
 {
     using RayMathLib for uint256;
@@ -45,40 +48,51 @@ contract Angstrom is
 
     error LimitViolated();
 
-    constructor(address uniV4PoolManager, address governance) UniConsumer(uniV4PoolManager) NodeManager(governance) {}
+    constructor(address uniV4PoolManager, address controller)
+        UniConsumer(uniV4PoolManager)
+        NodeManager(controller)
+    {}
 
     function execute(bytes calldata encoded) external {
         _nodeBundleLock();
         UNI_V4.unlock(encoded);
     }
 
-    function unlockCallback(bytes calldata data) external override onlyUniV4 returns (bytes memory) {
+    function unlockCallback(bytes calldata data)
+        external
+        override
+        onlyUniV4
+        returns (bytes memory)
+    {
         CalldataReader reader = CalldataReaderLib.from(data);
 
-        if (DEBUG_LOGS) console.log("[Angstrom] Reading & Validating assets");
         AssetArray assets;
         (reader, assets) = AssetLib.readFromAndValidate(reader);
-        if (DEBUG_LOGS) console.log("[Angstrom] Reading & Validating pairs");
         PairArray pairs;
-        (reader, pairs) = PairLib.readFromAndValidate(reader);
+        (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
 
-        if (DEBUG_LOGS) console.log("[Angstrom] Executing takes");
         _takeAssets(assets);
-        if (DEBUG_LOGS) console.log("[Angstrom] Updating pools");
-        reader = _updatePools(reader, tBundleDeltas, assets);
-        if (DEBUG_LOGS) console.log("[Angstrom] Executing ToB Orders");
-        reader = _validateAndExecuteToBOrders(reader, assets);
-        if (DEBUG_LOGS) console.log("[Angstrom] Executing User orders");
-        reader = _validateAndExecuteUserOrders(reader, assets, pairs);
-        if (DEBUG_LOGS) console.log("[Angstrom] Saving & Settling");
-        _saveAndSettle(assets);
-
+        reader = _updatePools(reader, tBundleDeltas, pairs);
+        reader = _validateAndExecuteToBOrders(reader, pairs);
+        reader = _validateAndExecuteUserOrders(reader, pairs);
         reader.requireAtEndOf(data);
+
+        _saveAndSettle(assets);
 
         return new bytes(0);
     }
 
-    function _validateAndExecuteToBOrders(CalldataReader reader, AssetArray assets) internal returns (CalldataReader) {
+    function extsload(bytes32 slot) external view returns (bytes32) {
+        assembly ("memory-safe") {
+            mstore(0x00, sload(slot))
+            return(0x00, 0x20)
+        }
+    }
+
+    function _validateAndExecuteToBOrders(CalldataReader reader, PairArray pairs)
+        internal
+        returns (CalldataReader)
+    {
         CalldataReader end;
         (reader, end) = reader.readU24End();
 
@@ -90,7 +104,7 @@ contract Angstrom is
         // Purposefully devolve into an endless loop if the specified length isn't exactly used s.t.
         // `reader == end` at some point.
         while (reader != end) {
-            reader = _validateAndExecuteToBOrder(reader, buffer, typedHasher, assets);
+            reader = _validateAndExecuteToBOrder(reader, buffer, typedHasher, pairs);
         }
 
         return reader;
@@ -100,29 +114,32 @@ contract Angstrom is
         CalldataReader reader,
         ToBOrderBuffer memory buffer,
         TypedDataHasher typedHasher,
-        AssetArray assets
+        PairArray pairs
     ) internal returns (CalldataReader) {
-        OrderVariantMap variant;
-        (reader, variant) = reader.readVariant();
+        ToBOrderVariantMap variantMap;
+        {
+            uint8 variantByte;
+            (reader, variantByte) = reader.readU8();
+            variantMap = ToBOrderVariantMap.wrap(variantByte);
+        }
 
-        buffer.useInternal = variant.useInternal();
+        buffer.useInternal = variantMap.useInternal();
 
         (reader, buffer.quantityIn) = reader.readU128();
         (reader, buffer.quantityOut) = reader.readU128();
 
         {
-            uint16 indexA;
-            (reader, indexA) = reader.readU16();
-            buffer.assetIn = assets.get(indexA).addr();
-            uint16 indexB;
-            (reader, indexB) = reader.readU16();
-            buffer.assetOut = assets.get(indexB).addr();
+            uint16 pairIndex;
+            (reader, pairIndex) = reader.readU16();
+            (buffer.assetIn, buffer.assetOut) =
+                pairs.get(pairIndex).getAssets(variantMap.zeroForOne());
         }
 
-        (reader, buffer.recipient) = variant.recipientIsSome() ? reader.readAddr() : (reader, address(0));
+        (reader, buffer.recipient) =
+            variantMap.recipientIsSome() ? reader.readAddr() : (reader, address(0));
 
         HookBuffer hook;
-        (reader, hook, buffer.hookDataHash) = HookBufferLib.readFrom(reader, variant.noHook());
+        (reader, hook, buffer.hookDataHash) = HookBufferLib.readFrom(reader, variantMap.noHook());
 
         // The `.hash` method validates the `block.number` for flash orders.
         bytes32 orderHash = typedHasher.hashTypedData(buffer.hash());
@@ -130,21 +147,23 @@ contract Angstrom is
         _invalidateOrderHash(orderHash);
 
         address from;
-        (reader, from) = variant.isEcdsa()
+        (reader, from) = variantMap.isEcdsa()
             ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
             : SignatureLib.readAndCheckERC1271(reader, orderHash);
 
         hook.tryTrigger(from);
 
-        _settleOrderIn(from, buffer.assetIn, AmountIn.wrap(buffer.quantityIn), variant.useInternal());
+        _settleOrderIn(
+            from, buffer.assetIn, AmountIn.wrap(buffer.quantityIn), variantMap.useInternal()
+        );
         address to = _defaultOr(buffer.recipient, from);
-        _settleOrderOut(to, buffer.assetOut, AmountOut.wrap(buffer.quantityOut), variant.useInternal());
+        _settleOrderOut(
+            to, buffer.assetOut, AmountOut.wrap(buffer.quantityOut), variantMap.useInternal()
+        );
         return reader;
     }
 
-    uint256 debug_orderCounter;
-
-    function _validateAndExecuteUserOrders(CalldataReader reader, AssetArray assets, PairArray pairs)
+    function _validateAndExecuteUserOrders(CalldataReader reader, PairArray pairs)
         internal
         returns (CalldataReader)
     {
@@ -154,13 +173,10 @@ contract Angstrom is
         CalldataReader end;
         (reader, end) = reader.readU24End();
 
-        if (DEBUG_LOGS) debug_orderCounter = 0;
-
         // Purposefully devolve into an endless loop if the specified length isn't exactly used s.t.
         // `reader == end` at some point.
         while (reader != end) {
-            if (DEBUG_LOGS) console.log("[%s]", debug_orderCounter++);
-            reader = _validateAndExecuteUserOrder(reader, buffer, typedHasher, assets, pairs);
+            reader = _validateAndExecuteUserOrder(reader, buffer, typedHasher, pairs);
         }
 
         return reader;
@@ -170,50 +186,56 @@ contract Angstrom is
         CalldataReader reader,
         UserOrderBuffer memory buffer,
         TypedDataHasher typedHasher,
-        AssetArray assets,
         PairArray pairs
     ) internal returns (CalldataReader) {
-        OrderVariantMap variant;
-        (reader, variant) = reader.readVariant();
+        UserOrderVariantMap variantMap;
+        {
+            uint8 variantByte;
+            (reader, variantByte) = reader.readU8();
+            variantMap = UserOrderVariantMap.wrap(variantByte);
+        }
 
-        buffer.setTypeHash(variant);
-        buffer.useInternal = variant.useInternal();
+        buffer.setTypeHash(variantMap);
+        buffer.useInternal = variantMap.useInternal();
 
         // Load and lookup asset in/out and dependent values.
         PriceOutVsIn price;
+        uint256 feeInE6;
         {
             uint256 priceOutVsIn;
-            (reader, buffer.assetIn, buffer.assetOut, priceOutVsIn) =
-                pairs.decodeAndLookupPair(reader, assets, variant.aToB());
+            uint16 pairIndex;
+            (reader, pairIndex) = reader.readU16();
+            (buffer.assetIn, buffer.assetOut, priceOutVsIn, feeInE6) =
+                pairs.get(pairIndex).getSwapInfo(variantMap.aToB());
             price = PriceOutVsIn.wrap(priceOutVsIn);
         }
 
         (reader, buffer.minPrice) = reader.readU256();
         if (price.into() < buffer.minPrice) revert LimitViolated();
 
-        (reader, buffer.recipient) = variant.recipientIsSome() ? reader.readAddr() : (reader, address(0));
+        (reader, buffer.recipient) =
+            variantMap.recipientIsSome() ? reader.readAddr() : (reader, address(0));
 
         HookBuffer hook;
-        (reader, hook, buffer.hookDataHash) = HookBufferLib.readFrom(reader, variant.noHook());
+        (reader, hook, buffer.hookDataHash) = HookBufferLib.readFrom(reader, variantMap.noHook());
 
         // For flash orders sets the current block number as `validForBlock` so that it's
         // implicitly validated via hashing later.
-        reader = buffer.readOrderValidation(reader, variant);
+        reader = buffer.readOrderValidation(reader, variantMap);
 
         AmountIn amountIn;
         AmountOut amountOut;
-        (reader, amountIn, amountOut) = buffer.loadAndComputeQuantity(reader, variant, price, halfSpreadRay);
+        (reader, amountIn, amountOut) =
+            buffer.loadAndComputeQuantity(reader, variantMap, price, feeInE6);
 
-        if (DEBUG_LOGS) buffer.logBytes(variant);
-
-        bytes32 orderHash = buffer.hash712(variant, typedHasher);
+        bytes32 orderHash = buffer.hash712(variantMap, typedHasher);
 
         address from;
-        (reader, from) = variant.isEcdsa()
+        (reader, from) = variantMap.isEcdsa()
             ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
             : SignatureLib.readAndCheckERC1271(reader, orderHash);
 
-        if (variant.isStanding()) {
+        if (variantMap.isStanding()) {
             _checkDeadline(buffer.deadline_or_empty);
             _invalidateNonce(from, buffer.nonce_or_validForBlock);
         } else {
@@ -222,9 +244,9 @@ contract Angstrom is
 
         hook.tryTrigger(from);
 
-        _settleOrderIn(from, buffer.assetIn, amountIn, variant.useInternal());
+        _settleOrderIn(from, buffer.assetIn, amountIn, variantMap.useInternal());
         address to = _defaultOr(buffer.recipient, from);
-        _settleOrderOut(to, buffer.assetOut, amountOut, variant.useInternal());
+        _settleOrderOut(to, buffer.assetOut, amountOut, variantMap.useInternal());
 
         return reader;
     }

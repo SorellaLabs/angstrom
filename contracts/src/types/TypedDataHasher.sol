@@ -20,7 +20,11 @@ library TypedDataHasherLib {
         }
     }
 
-    function hashTypedData(TypedDataHasher hasher, bytes32 structHash) internal pure returns (bytes32 digest) {
+    function hashTypedData(TypedDataHasher hasher, bytes32 structHash)
+        internal
+        pure
+        returns (bytes32 digest)
+    {
         assembly ("memory-safe") {
             mstore(add(hasher, 0x22), structHash)
             digest := keccak256(hasher, 0x42)

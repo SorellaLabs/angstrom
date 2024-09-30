@@ -5,7 +5,6 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
-import {TICK_SPACING} from "../Constants.sol";
 
 /// @author philogy <https://github.com/philogy>
 library ConversionLib {
@@ -15,12 +14,16 @@ library ConversionLib {
         return Currency.wrap(addr);
     }
 
-    function toPoolKey(address hook, address asset0, address asset1) internal pure returns (PoolKey memory) {
+    function toPoolKey(address hook, address asset0, address asset1, int24 tickSpacing)
+        internal
+        pure
+        returns (PoolKey memory)
+    {
         return PoolKey({
             currency0: intoC(asset0),
             currency1: intoC(asset1),
             fee: 0,
-            tickSpacing: TICK_SPACING,
+            tickSpacing: tickSpacing,
             hooks: IHooks(hook)
         });
     }
@@ -31,15 +34,5 @@ library ConversionLib {
             calldatacopy(ptr, poolKey, mul(32, 5))
             id := keccak256(ptr, mul(32, 5))
         }
-    }
-
-    function into(bool x) internal pure returns (uint256 y) {
-        // forgefmt: disable-next-item
-        assembly { y := x }
-    }
-
-    function into(address x) internal pure returns (uint256 y) {
-        // forgefmt: disable-next-item
-        assembly { y := x }
     }
 }

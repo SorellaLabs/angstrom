@@ -14,8 +14,10 @@ library RayMathLib {
         return x * RAY / y;
     }
 
-    function invRay(uint256 x) internal pure returns (uint256) {
-        return RAY_2 / x;
+    function invRayUnchecked(uint256 x) internal pure returns (uint256 y) {
+        assembly {
+            y := div(RAY_2, x)
+        }
     }
 
     function wadToRay(uint256 x) internal pure returns (uint256) {

@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    default::Default,
     fmt::Debug,
     sync::{Arc, Mutex},
     time::Instant
@@ -8,9 +9,13 @@ use std::{
 use alloy::primitives::FixedBytes;
 use angstrom_metrics::OrderStorageMetricsWrapper;
 use angstrom_types::{
-    orders::{OrderId, OrderSet},
+    orders::{OrderId, OrderLocation, OrderSet},
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::{
-        grouped_orders::{AllOrders, GroupedUserOrder, GroupedVanillaOrder, OrderWithStorageData},
+        grouped_orders::{
+            AllOrders, GroupedUserOrder, GroupedVanillaOrder, OrderWithStorageData,
+            StandingVariants
+        },
         rpc_orders::TopOfBlockOrder
     }
 };
@@ -60,6 +65,55 @@ impl OrderStorage {
             searcher_orders,
             pending_finalization_orders,
             metrics: OrderStorageMetricsWrapper::default()
+        }
+    }
+
+    // unfortunately, any other solution is just as ugly
+    // this needs to be revisited once composable orders are in place
+    pub fn log_cancel_order(&self, order: &AllOrders) {
+        let order_id = OrderId::from_all_orders(order, PoolId::default());
+        match order_id.location {
+            OrderLocation::Limit => self.metrics.incr_cancelled_vanilla_orders(),
+            OrderLocation::Searcher => self.metrics.incr_cancelled_searcher_orders()
+        }
+    }
+
+    pub fn cancel_order(&self, order_id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
+        if self
+            .pending_finalization_orders
+            .lock()
+            .expect("poisoned")
+            .has_order(&order_id.hash)
+        {
+            return None;
+        }
+
+        match order_id.location {
+            angstrom_types::orders::OrderLocation::Limit => self
+                .limit_orders
+                .lock()
+                .expect("lock poisoned")
+                .remove_order(order_id)
+                .and_then(|order| {
+                    match order.order {
+                        GroupedUserOrder::Composable(_) => {
+                            self.metrics.incr_cancelled_composable_orders()
+                        }
+                        GroupedUserOrder::Vanilla(_) => self.metrics.incr_cancelled_vanilla_orders()
+                    }
+                    order.try_map_inner(|inner| Ok(inner.into())).ok()
+                }),
+            angstrom_types::orders::OrderLocation::Searcher => self
+                .searcher_orders
+                .lock()
+                .expect("lock poisoned")
+                .remove_order(order_id)
+                .map(|order| {
+                    self.metrics.incr_cancelled_searcher_orders();
+                    order
+                        .try_map_inner(|inner| Ok(AllOrders::TOB(inner)))
+                        .unwrap()
+                })
         }
     }
 
@@ -207,5 +261,13 @@ impl OrderStorage {
             .get_all_orders();
 
         OrderSet { limit, searcher }
+    }
+
+    pub fn new_pool(&self, pool: NewInitializedPool) {
+        self.limit_orders.lock().expect("poisoned").new_pool(pool);
+        self.searcher_orders
+            .lock()
+            .expect("poisoned")
+            .new_pool(pool);
     }
 }

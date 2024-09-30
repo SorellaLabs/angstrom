@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {
+    PoolConfigStore,
+    PoolConfigStoreLib,
+    StoreKey
+} from "../libraries/pool-config/PoolConfigStore.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 
 /// @author philogy <https://github.com/philogy>
@@ -13,8 +18,8 @@ abstract contract NodeManager {
 
     mapping(address => bool) internal _isNode;
 
-    uint64 public lastBlockUpdated;
-    uint96 public halfSpreadRay;
+    uint64 internal _lastBlockUpdated;
+    PoolConfigStore internal _configStore;
 
     constructor(address controller) {
         _CONTROLLER = controller;
@@ -25,11 +30,15 @@ abstract contract NodeManager {
         _;
     }
 
-    function govUpdateHalfSpread(uint96 newHalfSpreadRay) external onlyController {
-        halfSpreadRay = newHalfSpreadRay;
+    /// @dev Allow controller to set parameters of a given pool.
+    function configurePool(address asset0, address asset1, uint16 tickSpacing, uint24 feeInE6)
+        external
+        onlyController
+    {
+        _configStore = _configStore.setIntoNew(asset0, asset1, tickSpacing, feeInE6);
     }
 
-    function govToggleNodes(address[] calldata nodes) external onlyController {
+    function toggleNodes(address[] calldata nodes) external onlyController {
         for (uint256 i = 0; i < nodes.length; i++) {
             address node = nodes[i];
             _isNode[node] = !_isNode[node];
@@ -40,8 +49,8 @@ abstract contract NodeManager {
     /// Blocks reentrant calls as well as separate calls in the same block.
     function _nodeBundleLock() internal {
         // Block-wide reentrancy lock. Prevents general reentrancy and replay of flash orders.
-        if (lastBlockUpdated == block.number) revert OnlyOncePerBlock();
+        if (_lastBlockUpdated == block.number) revert OnlyOncePerBlock();
         if (!_isNode[msg.sender]) revert NotNode();
-        lastBlockUpdated = SafeCastLib.toUint64(block.number);
+        _lastBlockUpdated = SafeCastLib.toUint64(block.number);
     }
 }

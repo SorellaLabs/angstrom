@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::path::Path;
 
 use alloy::primitives::Address;
 use angstrom_types::primitive::PoolId;
@@ -7,13 +7,15 @@ use reth_revm::DatabaseRef;
 use serde::Deserialize;
 
 use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
+#[derive(Debug, Clone, Deserialize)]
+pub struct DataFetcherConfig {
+    pub approvals: Vec<TokenApprovalSlot>,
+    pub balances:  Vec<TokenBalanceSlot>
+}
 
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct ValidationConfig {
-    pub approvals:               Vec<TokenApprovalSlot>,
-    pub balances:                Vec<TokenBalanceSlot>,
     pub pools:                   Vec<PoolConfig>,
-    pub asset_to_indexes:        HashMap<Address, u16>,
     pub max_validation_per_user: usize
 }
 
@@ -105,6 +107,11 @@ impl TokenApprovalSlot {
 
         Ok(db.storage_ref(self.token, self.generate_slot(user, contract)?)?)
     }
+}
+
+pub fn load_data_fetcher_config(config_path: &Path) -> eyre::Result<DataFetcherConfig> {
+    let file = std::fs::read_to_string(config_path)?;
+    Ok(toml::from_str(&file)?)
 }
 
 pub fn load_validation_config(config_path: &Path) -> eyre::Result<ValidationConfig> {

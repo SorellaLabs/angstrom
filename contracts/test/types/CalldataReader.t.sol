@@ -175,8 +175,11 @@ contract CalladataReaderTest is Test {
         reader.requireAtEndOf(data);
     }
 
-    function test_fuzzing_requireAtEndOf_revertsIfNotAtEnd(bytes calldata data, uint256 bytesToRead) public {
-        bytesToRead = (bound(bytesToRead, 1, data.length * 2 + 1) + data.length) % (data.length * 2 + 2);
+    function test_fuzzing_requireAtEndOf_revertsIfNotAtEnd(bytes calldata data, uint256 bytesToRead)
+        public
+    {
+        bytesToRead =
+            (bound(bytesToRead, 1, data.length * 2 + 1) + data.length) % (data.length * 2 + 2);
         assertTrue(bytesToRead != data.length, "Failed to constrain bytes to read");
         CalldataReader reader = CalldataReaderLib.from(data);
         for (uint256 i = 0; i < bytesToRead; i++) {

@@ -8,10 +8,7 @@ use angstrom_types::sol_bindings::{ext::RawPoolOrder, RespendAvoidanceMethod};
 use dashmap::DashMap;
 use reth_primitives::{B256, U256};
 
-use crate::{
-    order::state::{db_state_utils::StateFetchUtils, pools::UserOrderPoolInfo},
-    BlockStateProviderFactory, RevmLRU
-};
+use crate::order::state::{db_state_utils::StateFetchUtils, pools::UserOrderPoolInfo};
 
 pub type UserAddress = Address;
 pub type TokenAddress = Address;
@@ -134,17 +131,16 @@ impl UserAccounts {
         }
     }
 
-    pub fn get_live_state_for_order<DB: Send + BlockStateProviderFactory, S: StateFetchUtils>(
+    pub fn get_live_state_for_order<S: StateFetchUtils>(
         &self,
         user: UserAddress,
         token: TokenAddress,
         respend: RespendAvoidanceMethod,
-        utils: &S,
-        db: &RevmLRU<DB>
+        utils: &S
     ) -> LiveState {
         self.try_fetch_live_pending_state(user, token, respend)
             .unwrap_or_else(|| {
-                self.load_state_for(user, token, utils, db);
+                self.load_state_for(user, token, utils);
                 self.try_fetch_live_pending_state(user, token, respend)
                     .expect(
                         "after loading state for a address, the state wasn't found. this should \
@@ -153,18 +149,17 @@ impl UserAccounts {
             })
     }
 
-    fn load_state_for<DB: Send + BlockStateProviderFactory, S: StateFetchUtils>(
+    fn load_state_for<S: StateFetchUtils>(
         &self,
         user: UserAddress,
         token: TokenAddress,
-        utils: &S,
-        db: &RevmLRU<DB>
+        utils: &S
     ) {
         let approvals = utils
-            .fetch_approval_balance_for_token(user, token, db)
+            .fetch_approval_balance_for_token(user, token)
             .unwrap_or_default();
         let balances = utils
-            .fetch_balance_for_token(user, token, db)
+            .fetch_balance_for_token(user, token)
             .unwrap_or_default();
 
         let mut entry = self.last_known_state.entry(user).or_default();

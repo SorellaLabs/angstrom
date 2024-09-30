@@ -1,0 +1,15 @@
+#define macro CONSTRUCTOR() = takes(0) returns(0) {
+    __RUNTIME_START()        // [constructor_size]
+    codesize                 // [constructor_size, total_constructor_bytes]
+    sub                      // [runtime_bytes]
+    dup1                     // [runtime_bytes, runtime_bytes]
+    __RUNTIME_START()        // [runtime_bytes, runtime_bytes, runtime_offset]
+    0x0                      // [runtime_bytes, runtime_bytes, runtime_offset, 0]
+    codecopy                 // [runtime_bytes]
+    0x0                      // [runtime_bytes, 0]
+    return                   // []
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    stop
+}

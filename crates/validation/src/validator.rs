@@ -1,9 +1,11 @@
 use std::{
+    pin::Pin,
     sync::{atomic::AtomicU64, Arc},
     task::Poll
 };
 
 use alloy::primitives::{Address, B256};
+use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures_util::{Future, FutureExt};
 use tokio::{
     runtime::Handle,
@@ -11,10 +13,11 @@ use tokio::{
 };
 
 use crate::{
-    common::lru_db::{BlockStateProviderFactory, RevmLRU},
+    common::lru_db::BlockStateProviderFactory,
     order::{
         order_validator::OrderValidator,
-        state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
+        sim::SimValidation,
+        state::{account::user::UserAddress, db_state_utils::StateFetchUtils, pools::PoolsTracker},
         OrderValidationRequest, OrderValidationResults
     }
 };
@@ -34,7 +37,6 @@ pub struct ValidationClient(pub UnboundedSender<ValidationRequest>);
 
 pub struct Validator<DB, Pools, Fetch> {
     rx:              UnboundedReceiver<ValidationRequest>,
-    db:              Arc<RevmLRU<DB>>,
     order_validator: OrderValidator<DB, Pools, Fetch>
 }
 
@@ -46,22 +48,9 @@ where
 {
     pub fn new(
         rx: UnboundedReceiver<ValidationRequest>,
-        db: Arc<RevmLRU<DB>>,
-        block_number: Arc<AtomicU64>,
-        max_validation_per_user: usize,
-        pools: Pools,
-        fetch: Fetch,
-        handle: Handle
+        order_validator: OrderValidator<DB, Pools, Fetch>
     ) -> Self {
-        let order_validator = OrderValidator::new(
-            db.clone(),
-            block_number,
-            max_validation_per_user,
-            pools,
-            fetch,
-            handle
-        );
-        Self { db, order_validator, rx }
+        Self { order_validator, rx }
     }
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {

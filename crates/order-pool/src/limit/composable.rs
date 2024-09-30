@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use angstrom_metrics::ComposableLimitOrderPoolMetricsWrapper;
 use angstrom_types::{
-    primitive::PoolId,
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::grouped_orders::{GroupedComposableOrder, OrderWithStorageData}
 };
 use angstrom_utils::map::OwnedMap;
@@ -45,5 +45,10 @@ impl ComposableLimitPool {
             .get_mut(&pool_id)?
             .remove_order(tx_id)
             .owned_map(|| self.metrics.decr_all_orders(pool_id, 1))
+    }
+
+    pub fn new_pool(&mut self, pool: NewInitializedPool) {
+        let old_is_none = self.map.insert(pool.id, PendingPool::new()).is_none();
+        assert!(old_is_none);
     }
 }

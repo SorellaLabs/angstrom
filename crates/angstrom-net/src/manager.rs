@@ -92,7 +92,7 @@ impl<DB: Unpin> StromNetworkManager<DB> {
     fn on_handle_message(&mut self, msg: StromNetworkHandleMsg) {
         match msg {
             StromNetworkHandleMsg::SubscribeEvents(tx) => self.event_listeners.push(tx),
-            StromNetworkHandleMsg::SendOrders { peer_id, msg } => {
+            StromNetworkHandleMsg::SendStromMessage { peer_id, msg } => {
                 self.swarm.sessions_mut().send_message(&peer_id, msg)
             }
             StromNetworkHandleMsg::Shutdown(tx) => {
@@ -113,7 +113,7 @@ impl<DB: Unpin> StromNetworkManager<DB> {
                 .state_mut()
                 .peers_mut()
                 .change_weight(peer_id, kind),
-            StromNetworkHandleMsg::BroadcastOrder { msg } => {
+            StromNetworkHandleMsg::BroadcastStromMessage { msg } => {
                 self.swarm_mut().sessions_mut().broadcast_message(msg);
             }
             StromNetworkHandleMsg::DisconnectPeer(id, reason) => {

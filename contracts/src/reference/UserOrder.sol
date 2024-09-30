@@ -99,7 +99,11 @@ library UserOrderLib {
         }
     }
 
-    function encode(UserOrder[] memory orders, Pair[] memory pairs) internal pure returns (bytes memory b) {
+    function encode(UserOrder[] memory orders, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory b)
+    {
         for (uint256 i = 0; i < orders.length; i++) {
             b = bytes.concat(b, _logB(orders[i].encode(pairs)));
         }

@@ -14,7 +14,12 @@ contract InvasiveV4 is PoolManager {
     function getPoolState(PoolId id)
         public
         view
-        returns (Slot0 slot0, uint256 feeGrowthGlobal0X128, uint256 feeGrowthGlobal1X128, uint128 liquidity)
+        returns (
+            Slot0 slot0,
+            uint256 feeGrowthGlobal0X128,
+            uint256 feeGrowthGlobal1X128,
+            uint128 liquidity
+        )
     {
         Pool.State storage state = _pools[id];
         slot0 = state.slot0;

@@ -6,7 +6,12 @@ import {TypedDataHasher, TypedDataHasherLib} from "../types/TypedDataHasher.sol"
 
 /// @author philogy <https://github.com/philogy>
 abstract contract ERC712 is EIP712 {
-    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
+    function _domainNameAndVersion()
+        internal
+        pure
+        override
+        returns (string memory, string memory)
+    {
         return ("Angstrom", "v1");
     }
 

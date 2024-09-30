@@ -1,6 +1,7 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::IntoFuture,
+    hash::Hash,
     marker::PhantomData,
     num::NonZeroUsize,
     pin::Pin,
@@ -17,7 +18,8 @@ use angstrom_types::{
         grouped_orders::{
             AllOrders, FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
         },
-        sol::TopOfBlockOrder
+        sol::TopOfBlockOrder,
+        RawPoolOrder
     }
 };
 use futures::{
@@ -33,7 +35,7 @@ use order_pool::{
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_network::transactions::ValidationOutcome;
 use reth_network_peers::PeerId;
-use reth_primitives::{TxHash, B256};
+use reth_primitives::{Address, TxHash, B256};
 use reth_rpc_types::txpool::TxpoolStatus;
 use reth_tasks::TaskSpawner;
 use tokio::sync::{
@@ -64,14 +66,14 @@ const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
 #[derive(Debug, Clone)]
 pub struct PoolHandle {
     pub manager_tx:      UnboundedSender<OrderCommand>,
-    pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
-    pub validator_tx:    UnboundedSender<ValidationRequest>
+    pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
 }
 
 #[derive(Debug)]
 pub enum OrderCommand {
     // new orders
-    NewOrder(OrderOrigin, AllOrders, tokio::sync::oneshot::Sender<OrderValidationResults>)
+    NewOrder(OrderOrigin, AllOrders, tokio::sync::oneshot::Sender<OrderValidationResults>),
+    CancelOrder(Address, B256, tokio::sync::oneshot::Sender<bool>)
 }
 
 impl PoolHandle {
@@ -81,15 +83,6 @@ impl PoolHandle {
 
     async fn send_request<T>(&self, rx: oneshot::Receiver<T>, cmd: OrderCommand) -> T {
         self.send(cmd);
-        rx.await.unwrap()
-    }
-
-    async fn send_validation_request<T>(
-        &self,
-        rx: oneshot::Receiver<T>,
-        cmd: ValidationRequest
-    ) -> T {
-        self.validator_tx.send(cmd);
         rx.await.unwrap()
     }
 }
@@ -114,25 +107,11 @@ impl OrderPoolHandle for PoolHandle {
         self.pool_manager_tx.subscribe()
     }
 
-    fn validate_order(
-        &self,
-        order_origin: OrderOrigin,
-        order: AllOrders
-    ) -> impl Future<Output = bool> + Send {
-        let (tx, rx) = oneshot::channel::<OrderValidationResults>();
-        self.send_validation_request(
-            rx,
-            ValidationRequest::Order(OrderValidationRequest::ValidateOrder(
-                tx,
-                order,
-                order_origin
-            ))
-        )
-        .map(|result| match result {
-            OrderValidationResults::Valid(_) => true,
-            OrderValidationResults::Invalid(_) => false,
-            OrderValidationResults::TransitionedToBlock => false
-        })
+    fn cancel_order(&self, from: Address, order_hash: B256) -> impl Future<Output = bool> + Send {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.send(OrderCommand::CancelOrder(from, order_hash, tx))
+            .is_ok();
+        rx.map(|res| res.unwrap_or_else(|_| false))
     }
 }
 
@@ -186,18 +165,14 @@ where
         task_spawner: TP,
         tx: UnboundedSender<OrderCommand>,
         rx: UnboundedReceiver<OrderCommand>,
-        validator_tx: UnboundedSender<ValidationRequest>,
         pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
     ) -> PoolHandle {
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
             .order_storage
             .unwrap_or_else(|| Arc::new(OrderStorage::new(&self.config)));
-        let handle = PoolHandle {
-            manager_tx:      tx.clone(),
-            pool_manager_tx: pool_manager_tx.clone(),
-            validator_tx:    validator_tx.clone()
-        };
+        let handle =
+            PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
         let inner = OrderIndexer::new(
             self.validator.clone(),
             order_storage.clone(),
@@ -208,14 +183,13 @@ where
         task_spawner.spawn_critical(
             "transaction manager",
             Box::pin(PoolManager {
-                eth_network_events: self.eth_network_events,
+                eth_network_events:   self.eth_network_events,
                 strom_network_events: self.strom_network_events,
-                order_events: self.order_events,
-                peers: HashMap::default(),
-                order_indexer: inner,
-                network: self.network_handle,
-                command_rx: rx,
-                pool_manager_tx
+                order_events:         self.order_events,
+                peer_to_info:         HashMap::default(),
+                order_indexer:        inner,
+                network:              self.network_handle,
+                command_rx:           rx
             })
         );
 
@@ -224,18 +198,13 @@ where
 
     pub fn build<TP: TaskSpawner>(self, task_spawner: TP) -> PoolHandle {
         let (tx, rx) = unbounded_channel();
-        // TODO: Fix me
-        let (validator_tx, validator_rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
             .order_storage
             .unwrap_or_else(|| Arc::new(OrderStorage::new(&self.config)));
         let (pool_manager_tx, _) = broadcast::channel(100);
-        let handle = PoolHandle {
-            manager_tx:      tx.clone(),
-            pool_manager_tx: pool_manager_tx.clone(),
-            validator_tx:    validator_tx.clone()
-        };
+        let handle =
+            PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
         let inner = OrderIndexer::new(
             self.validator.clone(),
             order_storage.clone(),
@@ -246,14 +215,13 @@ where
         task_spawner.spawn_critical(
             "transaction manager",
             Box::pin(PoolManager {
-                eth_network_events: self.eth_network_events,
+                eth_network_events:   self.eth_network_events,
                 strom_network_events: self.strom_network_events,
-                order_events: self.order_events,
-                peers: HashMap::default(),
-                order_indexer: inner,
-                network: self.network_handle,
-                command_rx: rx,
-                pool_manager_tx
+                order_events:         self.order_events,
+                peer_to_info:         HashMap::default(),
+                order_indexer:        inner,
+                network:              self.network_handle,
+                command_rx:           rx
             })
         );
 
@@ -281,9 +249,7 @@ where
     /// Incoming events from the ProtocolManager.
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     /// All the connected peers.
-    peers:                HashMap<PeerId, StromPeer>,
-    /// Broadcast channel for orders.
-    pool_manager_tx:      broadcast::Sender<PoolManagerUpdate>
+    peer_to_info:         HashMap<PeerId, StromPeer>
 }
 
 impl<V> PoolManager<V>
@@ -305,11 +271,10 @@ where
             strom_network_events,
             network,
             order_indexer,
-            peers: HashMap::new(),
+            peer_to_info: HashMap::new(),
             order_events,
             command_rx,
-            eth_network_events,
-            pool_manager_tx
+            eth_network_events
         }
     }
 
@@ -317,7 +282,11 @@ where
         match cmd {
             OrderCommand::NewOrder(origin, order, validation_response) => self
                 .order_indexer
-                .new_rpc_order(OrderOrigin::External, order, validation_response)
+                .new_rpc_order(OrderOrigin::External, order, validation_response),
+            OrderCommand::CancelOrder(from, order_hash, receiver) => {
+                let res = self.order_indexer.cancel_order(from, order_hash);
+                receiver.send(res);
+            }
         }
     }
 
@@ -336,6 +305,7 @@ where
             EthEvent::FinalizedBlock(block) => {
                 self.order_indexer.finalized_block(block);
             }
+            EthEvent::NewPool(pool) => self.order_indexer.new_pool(pool),
             EthEvent::NewBlock(block) => {}
         }
     }
@@ -344,7 +314,7 @@ where
         match event {
             NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
                 orders.into_iter().for_each(|order| {
-                    self.peers
+                    self.peer_to_info
                         .get_mut(&peer_id)
                         .map(|peer| peer.orders.insert(order.order_hash()));
 
@@ -353,11 +323,6 @@ where
                         OrderOrigin::External,
                         order.clone()
                     );
-                    // TODO: add an "await" for the new_order() to complete
-                    // if !self.order_sorter.is_valid_order(&order) {
-                    //     self.network
-                    //         .peer_reputation_change(peer_id,
-                    // ReputationChangeKind::BadOrder); }
                 });
             }
         }
@@ -367,7 +332,7 @@ where
         match event {
             StromNetworkEvent::SessionEstablished { peer_id } => {
                 // insert a new peer into the peerset
-                self.peers.insert(
+                self.peer_to_info.insert(
                     peer_id,
                     StromPeer {
                         orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap())
@@ -376,13 +341,13 @@ where
             }
             StromNetworkEvent::SessionClosed { peer_id, .. } => {
                 // remove the peer
-                self.peers.remove(&peer_id);
+                self.peer_to_info.remove(&peer_id);
             }
             StromNetworkEvent::PeerRemoved(peer_id) => {
-                self.peers.remove(&peer_id);
+                self.peer_to_info.remove(&peer_id);
             }
             StromNetworkEvent::PeerAdded(peer_id) => {
-                self.peers.insert(
+                self.peer_to_info.insert(
                     peer_id,
                     StromPeer {
                         orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap())
@@ -393,10 +358,10 @@ where
     }
 
     fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>) {
-        let broadcast_orders = orders
+        let valid_orders = orders
             .into_iter()
             .filter_map(|order| match order {
-                PoolInnerEvent::Propagation(p) => Some(p),
+                PoolInnerEvent::Propagation(order) => Some(order),
                 PoolInnerEvent::BadOrderMessages(o) => {
                     o.into_iter().for_each(|peer| {
                         self.network.peer_reputation_change(
@@ -410,13 +375,22 @@ where
             })
             .collect::<Vec<_>>();
 
-        broadcast_orders.iter().for_each(|order| {
-            self.pool_manager_tx
-                .send(PoolManagerUpdate::NewOrder(order.clone()));
-        });
-        // need to update network types for this
-        self.network
-            .broadcast_tx(StromMessage::PropagatePooledOrders(broadcast_orders));
+        self.broadcast_orders_to_peers(valid_orders);
+    }
+
+    fn broadcast_orders_to_peers(&mut self, valid_orders: Vec<AllOrders>) {
+        for order in valid_orders.iter() {
+            for (peer_id, info) in self.peer_to_info.iter_mut() {
+                let order_hash = order.order_hash();
+                if !info.orders.contains(&order_hash) {
+                    self.network.send_message(
+                        *peer_id,
+                        StromMessage::PropagatePooledOrders(vec![order.clone()])
+                    );
+                    info.orders.insert(order_hash);
+                }
+            }
+        }
     }
 }
 
@@ -473,6 +447,5 @@ pub enum NetworkTransactionEvent {
 #[derive(Debug)]
 struct StromPeer {
     /// Keeps track of transactions that we know the peer has seen.
-    #[allow(dead_code)]
     orders: LruCache<B256>
 }

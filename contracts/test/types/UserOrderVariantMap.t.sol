@@ -2,15 +2,15 @@
 pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
-import {OrderVariantMap} from "src/types/OrderVariantMap.sol";
+import {UserOrderVariantMap} from "src/types/UserOrderVariantMap.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract OrderVariantMapTest is BaseTest {
     function setUp() public {}
 
-    function test_fuzzing_oneBitPerProp(OrderVariantMap map, uint256 bitToFlip) public pure {
+    function test_fuzzing_oneBitPerProp(UserOrderVariantMap map, uint256 bitToFlip) public pure {
         bitToFlip = bound(bitToFlip, 0, 7);
-        OrderVariantMap newMap = xor(map, uint8(1 << bitToFlip));
+        UserOrderVariantMap newMap = xor(map, uint8(1 << bitToFlip));
 
         bool[8] memory startProps = toProps(map);
         bool[8] memory newProps = toProps(newMap);
@@ -23,7 +23,7 @@ contract OrderVariantMapTest is BaseTest {
         assertEq(totalChanges, 1);
     }
 
-    function toProps(OrderVariantMap map) internal pure returns (bool[8] memory props) {
+    function toProps(UserOrderVariantMap map) internal pure returns (bool[8] memory props) {
         props[0] = map.useInternal();
         props[1] = map.recipientIsSome();
         props[2] = map.noHook();
@@ -34,7 +34,7 @@ contract OrderVariantMapTest is BaseTest {
         props[7] = map.isEcdsa();
     }
 
-    function xor(OrderVariantMap map, uint8 bit) internal pure returns (OrderVariantMap) {
-        return OrderVariantMap.wrap(OrderVariantMap.unwrap(map) ^ bit);
+    function xor(UserOrderVariantMap map, uint8 bit) internal pure returns (UserOrderVariantMap) {
+        return UserOrderVariantMap.wrap(UserOrderVariantMap.unwrap(map) ^ bit);
     }
 }

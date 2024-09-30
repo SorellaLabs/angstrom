@@ -57,8 +57,9 @@ contract ToBOrderBufferTest is Test {
         buffer.assetIn = order.assetIn;
         buffer.assetOut = order.assetOut;
         buffer.recipient = order.recipient;
-        buffer.hookDataHash =
-            order.hook == address(0) ? keccak256("") : keccak256(abi.encodePacked(order.hook, order.hookPayload));
+        buffer.hookDataHash = order.hook == address(0)
+            ? keccak256("")
+            : keccak256(abi.encodePacked(order.hook, order.hookPayload));
 
         assertEq(buffer.hash(), refOrder.hash());
     }

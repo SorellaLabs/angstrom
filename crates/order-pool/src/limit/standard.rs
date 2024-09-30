@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use angstrom_metrics::VanillaLimitOrderPoolMetricsWrapper;
 use angstrom_types::{
     orders::OrderId,
-    primitive::PoolId,
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
 };
 use angstrom_utils::map::OwnedMap;
@@ -84,5 +84,18 @@ impl LimitPool {
         let Some(mut order) = self.remove_order(order_id.pool_id, order_id.hash) else { return };
         order.is_currently_valid = false;
         self.add_order(order).unwrap();
+    }
+
+    pub fn new_pool(&mut self, pool: NewInitializedPool) {
+        let old_is_none = self
+            .pending_orders
+            .insert(pool.id, PendingPool::new())
+            .is_none()
+            || self
+                .parked_orders
+                .insert(pool.id, ParkedPool::new())
+                .is_none();
+
+        assert!(old_is_none);
     }
 }

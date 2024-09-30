@@ -77,6 +77,10 @@ struct Bundle {
 }
 ```
 
+|Field|Description|
+|-----|-----------|
+|`use_store: bool`| Whether to use storage or the store for retrieving pool configs. |
+
 #### `Asset`
 
 Solidity: [decoding implementation](../../contracts/src/types/Asset.sol) | [reference
@@ -108,22 +112,24 @@ encoding (`src/reference/Pair.sol`)](../../contracts/src/reference/Pair.sol)
 
 ```rust
 struct Pair {
-    index_a: u16,
-    index_b: u16,
-    price_AOverB: u256
+    index0: u16,
+    index1: u16,
+    store_index: u16,
+    price_1over0: u256
 }
 ```
 
 This list of pairs defines the unique uniform clearing prices for the different pairs in the bundle.
-The elements **must be** sorted in ascending order according to the tuple `(.index_a, .index_b)`.
+The elements **must be** sorted in ascending order according to the tuple `(.index0, .index1)`.
 
-Note that to ensure pair uniqueness `.index_a` **must** be less than `.index_b`.
+Note that to ensure pair uniqueness `.index0` **must** be less than `.index1`.
 
 |Field|Description|
 |-----|-----------|
-|`index_a: u16`|Pair's asset A as index into the asset array|
-|`index_b: u16`|Pair's asset B as index into the asset array|
-|`price_AOverB: u256`|Uniform clearing price of pair in asset A **over** asset B base units in Ray e.g. `13.2e27` represents 13.2 base units of A for every base unit of A.|
+|`index0: u16`|Pair's asset 0 as index into the asset array|
+|`index1: u16`|Pair's asset 1 as index into the asset array|
+|`store_index: u16`|The pair's [store index](./bundle-building.md#Store-Index)|
+|`price_1over0: u256`|Uniform clearing price of pair in asset 1 **over** asset 0 base units in Ray e.g. `13.2e27` represents 13.2 base units of 1 for every base unit of 0.|
 
 
 
@@ -137,8 +143,8 @@ encoding (`src/reference/PoolSwap.sol`)](../../contracts/src/reference/PoolSwap.
 
 ```rust
 struct PoolUpdate {
-    asset_in_index: u16,
-    asset_out_index: u16,
+    zero_for_one: bool,
+    pair_index: u16,
     swap_in_quantity: u128,
     rewards_update: RewardsUpdate
 }
@@ -151,37 +157,39 @@ recommended to net out multiple swaps against the same pool into one to save on 
 
 |Field|Description|
 |-----|-----------|
-|`asset_in_index: u16`|Swap's input asset as index into the assets array|
-|`asset_out_index: u16`|Swap's output asset as index into the assets array|
+|`zero_for_one: bool`|Whether the swap is asset0 => asset1 (`zero_for_one = true`) or the other way.|
+|`pair_index: u16`|Index of the pair in the pair's list to retrieve the pool information from.|
 |`swap_in_quantity: u128`|The swap input quantity in the input asset's base units.|
-|`rewards_update: RewardsUpdate`| The pool's LP rewards to distribute *after* the pool swap is executed  |
+|`rewards_update: RewardsUpdate`| The pool's LP rewards to distribute *after* the pool swap is executed. |
 
 ##### Rewards Update
 
 Solidity: [decoding implementation (`_decodeAndReward`)](../../contracts/src/modules/RewardsUpdater.sol) | [reference encoding](../../contracts/src/reference/PoolRewardsUpdate.sol).
 
 ```rust
-struct RewardsUpdate {
-    below: bool,
-    start_tick: i24,
-    start_liquidity: u128,
-    quantities: List<u128>
+enum RewardsUpdate {
+    MultiTick {
+        start_tick: i24,
+        start_liquidity: u128,
+        quantities: List<u128>
+    },
+    CurrentOnly {
+        amount: u128
+    }
 }
 ```
 
-The rewards update data informs the Angstrom contract where to begin the reward update loop
-(`startTick`) and what quantities to donate. The `start_liquidity` value informs the contract what
-the total liquidity is at the start as this cannot be efficiently querried. Note that the value is
-eventually checked however and is computed as the loop progresses to ensure consistency of reward
-distribution.
+The rewards update data informs the Angstrom contract where to begin the reward update loop and what
+quantities to donate. The `::CurrentOnly` variant donates the specified amount to the current
+tick (post-swap), the rest of this section describes the `MultiTick` variant. Which is required
+whenever 1 or more ticks are being rewarded, or a single tick that is not the current tick. The
+`start_liquidity` value informs the contract what the total liquidity is at the start as this
+cannot be efficiently querried. Note that the value is eventually checked however and is computed
+as the loop progresses to ensure consistency of reward distribution.
 
-To donate only to the current tick one must set a `start_tick` that is itself already out-of-bounds
-(for `below = true` this is any tick `> current_tick`, for `below = false` this is nay tick `<=
-current_tick`).
 
 |Field|Description |
 |-----|-----------|
-|`below: bool`| Whether the reward update starts below or above the current tick.|
 |`start_tick: i24`| When `below = true` the current tick: the first tick **above** the first tick to donate to. <br> When rewarding above: just the first tick actually being donated to. |
 |`start_liquidity: u128`|The current liquidity if `start_tick` were the current tick.|
 |`quantities: List<u128>`|The reward for each initialized tick range *including* the current tick in
@@ -250,8 +258,8 @@ struct TopOfBlockOrder {
     use_internal: bool,
     quantity_in: u128,
     quantity_out: u128,
-    asset_in_index: u16,
-    asset_out_index: u16,
+    pairs_index: u16,
+    zero_for_one: bool,
     recipient: Option<address>,
     hook_data: Option<List<bytes1>>,
     signature: Signature
@@ -273,12 +281,12 @@ struct TopOfBlockOrder {
 
 ```rust
 struct UserOrder {
-    use_interal: bool,
+    use_internal: bool,
     pair_index: u16,
     min_price: u256,
     recipient: Option<address>,
     hook_data: Option<List<bytes1>>,
-    a_to_b: bool,
+    zero_for_one: bool,
     standing_validation: Option<StandingValidation>,
     order_quantities: OrderQuantities,
     exact_in: bool,
@@ -311,7 +319,7 @@ enum OrderQuantities {
 |`min_price: u256`|The minimum price in asset out over asset in base units in RAY|
 |`recipient: Option<address>`|Recipient for order output, `None` implies signer.|
 |`hook_data: Option<List<bytes1>>`|Optional hook for composable orders, consisting of the hook address concatenated to the hook extra data.|
-|`a_to_b: bool`|Whether the order is swapping in the pair's asset A and getting out B (`true`) or the other way around (`false`)|
+|`zero_for_one: bool`|Whether the order is swapping in the pair's `asset0` and getting out `asset1` (`true`) or the other way around (`false`)|
 |`standing_validation: Option<StandingValidation>`|The one-time order validation data. (`None` implies a flash order which is validated via the block number)|
 |`order_quantities: OrderQuantities`|Description of the quantities the order trades.|
 |`exact_in: bool`|For exact orders: whether the specified quantity is the input or output (disregarded for partial orders).|

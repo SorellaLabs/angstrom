@@ -2,15 +2,20 @@
 pragma solidity ^0.8.13;
 
 import {CalldataReader} from "./CalldataReader.sol";
-import {StructArrayLib} from "../libraries/StructArrayLib.sol";
 import {AssetArray} from "./Asset.sol";
 import {RayMathLib} from "../libraries/RayMathLib.sol";
+import {
+    PoolConfigStore,
+    StoreKey,
+    HASH_TO_STORE_KEY_SHIFT
+} from "../libraries/pool-config/PoolConfigStore.sol";
+// TODO: Remove
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-
 import {console} from "forge-std/console.sol";
 
 type Pair is uint256;
 
+/// @dev
 type PairArray is uint256;
 
 using PairLib for Pair global;
@@ -18,87 +23,161 @@ using PairLib for PairArray global;
 
 /// @author philogy <https://github.com/philogy>
 library PairLib {
+    // TODO: Remove
     using FormatLib for *;
+
     using RayMathLib for uint256;
-    using StructArrayLib for uint256;
 
     error OutOfOrderOrDuplicatePairs();
-    error UnsortedPair();
+    error PairAccessOutOfBounds(uint256 index, uint256 length);
 
-    uint256 internal constant PAIR_BYTES = 36;
+    uint256 internal constant PAIR_ARRAY_MEM_OFFSET_OFFSET = 32;
+    uint256 internal constant PAIR_ARRAY_LENGTH_MASK = 0xffffffff;
 
-    uint256 internal constant INDEX_A_OFFSET = 0;
-    uint256 internal constant INDEX_B_OFFSET = 2;
-    uint256 internal constant PRICE_AB_OFFSET = 4;
+    /// @dev 6 words for: asset0, asset1, priceAB, priceBA, tickSpacing, fee
+    uint256 internal constant PAIR_MEM_BYTES = 0xc0;
 
-    function readFromAndValidate(CalldataReader reader) internal pure returns (CalldataReader, PairArray) {
-        uint256 packed;
-        (reader, packed) = StructArrayLib.readPackedFrom(reader, PAIR_BYTES);
-        return (reader, PairArray.wrap(packed)._validated());
-    }
+    uint256 internal constant PAIR_ASSET0_OFFSET = 0x00;
+    uint256 internal constant PAIR_ASSET1_OFFSET = 0x20;
+    uint256 internal constant PAIR_TICK_SPACING_OFFSET = 0x40;
+    uint256 internal constant PAIR_FEE_OFFSET = 0x60;
+    uint256 internal constant PAIR_PRICE_10_OFFSET = 0x80;
+    uint256 internal constant PAIR_PRICE_01_OFFSET = 0xa0;
 
-    function into(PairArray pairs) internal pure returns (uint256) {
-        return PairArray.unwrap(pairs);
-    }
+    uint256 internal constant INDEX_A_OFFSET = 16;
+    uint256 internal constant INDEX_B_MASK = 0xffff;
 
-    function into(Pair pair) internal pure returns (uint256) {
-        return Pair.unwrap(pair);
-    }
+    uint256 internal constant PAIR_CD_BYTES = 38;
 
-    function len(PairArray pairs) internal pure returns (uint256) {
-        return pairs.into().len();
-    }
+    function readFromAndValidate(CalldataReader reader, AssetArray assets, PoolConfigStore store)
+        internal
+        view
+        returns (CalldataReader, PairArray pairs)
+    {
+        uint256 raw_memoryOffset;
+        uint256 raw_memoryEnd;
 
-    function _validated(PairArray self) internal pure returns (PairArray) {
-        uint256 length = self.len();
-        if (length == 0) return self;
+        CalldataReader end;
+        {
+            (reader, end) = reader.readU24End();
+            uint256 length = (end.offset() - reader.offset()) / PAIR_CD_BYTES;
 
-        uint32 lastIndices = self.get(0).assetIndices();
-        for (uint256 i = 1; i < length; i++) {
-            uint32 indices = self.get(i).assetIndices();
-            if (indices <= lastIndices) revert OutOfOrderOrDuplicatePairs();
-            lastIndices = indices;
+            assembly ("memory-safe") {
+                // WARN: Memory is allocated, but **not cleaned**.
+                raw_memoryOffset := mload(0x40)
+                raw_memoryEnd := add(raw_memoryOffset, mul(PAIR_MEM_BYTES, length))
+                mstore(0x40, raw_memoryEnd)
+                // No need to mask length because we know it's less than 4 bytes (u24.max / PAIR_BYTES < u32.max)
+                pairs := or(shl(PAIR_ARRAY_MEM_OFFSET_OFFSET, raw_memoryOffset), length)
+            }
         }
 
-        return self;
+        uint32 lastIndices;
+        for (; raw_memoryOffset < raw_memoryEnd;) {
+            // Load, decode and validate assets of pair.
+            {
+                uint32 indices;
+                (reader, indices) = reader.readU32();
+                address asset0 = assets.get(indices >> INDEX_A_OFFSET).addr();
+                address asset1 = assets.get(indices & INDEX_B_MASK).addr();
+                // We ensure pair uniqueness by ensuring that the list is sorted and that every pair
+                // is unique by ensuring there's only one valid ordering of asset 0 & 1.
+                if (indices <= lastIndices || asset0 >= asset1) revert OutOfOrderOrDuplicatePairs();
+                lastIndices = indices;
+
+                assembly ("memory-safe") {
+                    mstore(add(raw_memoryOffset, PAIR_ASSET0_OFFSET), asset0)
+                    mstore(add(raw_memoryOffset, PAIR_ASSET1_OFFSET), asset1)
+                }
+            }
+
+            // Load and store pool config.
+            {
+                StoreKey key;
+                assembly ("memory-safe") {
+                    key :=
+                        shl(
+                            HASH_TO_STORE_KEY_SHIFT,
+                            keccak256(add(raw_memoryOffset, PAIR_ASSET0_OFFSET), 0x40)
+                        )
+                }
+
+                uint16 storeIndex;
+                (reader, storeIndex) = reader.readU16();
+                (int24 tickSpacing, uint24 feeIne6) = store.get(key, storeIndex);
+
+                assembly ("memory-safe") {
+                    mstore(add(raw_memoryOffset, PAIR_TICK_SPACING_OFFSET), tickSpacing)
+                    mstore(add(raw_memoryOffset, PAIR_FEE_OFFSET), feeIne6)
+                }
+            }
+
+            // Load main AB price, compute inverse, store both.
+            {
+                uint256 price1Over0;
+                (reader, price1Over0) = reader.readU256();
+                uint256 price0Over1 = price1Over0.invRayUnchecked();
+                assembly ("memory-safe") {
+                    mstore(add(raw_memoryOffset, PAIR_PRICE_10_OFFSET), price1Over0)
+                    mstore(add(raw_memoryOffset, PAIR_PRICE_01_OFFSET), price0Over1)
+                }
+            }
+
+            unchecked {
+                raw_memoryOffset += PAIR_MEM_BYTES;
+            }
+        }
+
+        return (end, pairs);
     }
 
-    function get(PairArray self, uint256 index) internal pure returns (Pair asset) {
-        self.into()._checkBounds(index);
-        return Pair.wrap(self.into().ptr() + index * PAIR_BYTES);
+    function len(PairArray self) internal pure returns (uint256 length) {
+        return PairArray.unwrap(self) & PAIR_ARRAY_LENGTH_MASK;
     }
 
-    function assetIndices(Pair self) internal pure returns (uint32 packedIndicies) {
-        packedIndicies = self.into().readU32MemberFromPtr(INDEX_A_OFFSET);
+    function get(PairArray self, uint256 index) internal pure returns (Pair pair) {
+        if (self.len() <= index) revert PairAccessOutOfBounds(index, self.len());
+        uint256 raw_memoryOffset = PairArray.unwrap(self) >> PAIR_ARRAY_MEM_OFFSET_OFFSET;
+        unchecked {
+            return Pair.wrap(raw_memoryOffset + index * PAIR_MEM_BYTES);
+        }
     }
 
-    function indexA(Pair self) internal pure returns (uint16 ia) {
-        ia = self.into().readU16MemberFromPtr(INDEX_A_OFFSET);
-    }
-
-    function indexB(Pair self) internal pure returns (uint16 ib) {
-        ib = self.into().readU16MemberFromPtr(INDEX_B_OFFSET);
-    }
-
-    function priceAB(Pair self) internal pure returns (uint256 priceAB_) {
-        priceAB_ = self.into().readU256MemberFromPtr(PRICE_AB_OFFSET);
-    }
-
-    function decodeAndLookupPair(PairArray self, CalldataReader reader, AssetArray assets, bool aToB)
+    function getPoolInfo(Pair self)
         internal
         pure
-        returns (CalldataReader, address assetIn, address assetOut, uint256 priceOutVsIn)
+        returns (address asset0, address asset1, int24 tickSpacing)
     {
-        uint256 pairIndex;
-        (reader, pairIndex) = reader.readU16();
-        Pair pair = self.get(pairIndex);
-        uint256 pAB = pair.priceAB();
+        assembly ("memory-safe") {
+            asset0 := mload(add(self, PAIR_ASSET0_OFFSET))
+            asset1 := mload(add(self, PAIR_ASSET1_OFFSET))
+            tickSpacing := mload(add(self, PAIR_TICK_SPACING_OFFSET))
+        }
+    }
 
-        address assetA = assets.get(pair.indexA()).addr();
-        address assetB = assets.get(pair.indexB()).addr();
+    function getAssets(Pair self, bool zeroToOne)
+        internal
+        pure
+        returns (address assetIn, address assetOut)
+    {
+        assembly ("memory-safe") {
+            let offsetIfZeroToOne := shl(5, zeroToOne)
+            assetIn := mload(add(self, xor(offsetIfZeroToOne, 0x20)))
+            assetOut := mload(add(self, offsetIfZeroToOne))
+        }
+    }
 
-        (assetIn, assetOut, priceOutVsIn) = aToB ? (assetA, assetB, pAB.invRay()) : (assetB, assetA, pAB);
-
-        return (reader, assetIn, assetOut, priceOutVsIn);
+    function getSwapInfo(Pair self, bool zeroToOne)
+        internal
+        pure
+        returns (address assetIn, address assetOut, uint256 priceOutVsIn, uint256 feeInE6)
+    {
+        assembly ("memory-safe") {
+            let offsetIfZeroToOne := shl(5, zeroToOne)
+            assetIn := mload(add(self, xor(offsetIfZeroToOne, 0x20)))
+            assetOut := mload(add(self, offsetIfZeroToOne))
+            priceOutVsIn := mload(add(self, add(PAIR_PRICE_10_OFFSET, offsetIfZeroToOne)))
+            feeInE6 := mload(add(self, PAIR_FEE_OFFSET))
+        }
     }
 }

@@ -1142,6 +1142,7 @@ name = "angstrom-eth"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-sol-types 0.7.7",
  "angstrom-types",
  "angstrom-utils",
  "anyhow",

@@ -59,12 +59,20 @@ library TickRangeMapLib {
         return self.keys[ri];
     }
 
-    function rangeToIndex(TickRangeMap memory self, uint256 ri) internal pure returns (uint256 index) {
+    function rangeToIndex(TickRangeMap memory self, uint256 ri)
+        internal
+        pure
+        returns (uint256 index)
+    {
         if (ri >= self.size) revert OutOfBounds(ri, self.size);
         index = self.values[ri];
     }
 
-    function tickToRange(TickRangeMap memory self, int24 key) internal pure returns (bool inRange, uint256 ri) {
+    function tickToRange(TickRangeMap memory self, int24 key)
+        internal
+        pure
+        returns (bool inRange, uint256 ri)
+    {
         uint256 size = self.size;
         for (; ri < size; ri++) {
             if (self.keys[ri] <= key) break;

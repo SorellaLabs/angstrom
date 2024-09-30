@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use alloy_primitives::B256;
 use angstrom_types::{
     consensus::*, primitive::Angstrom::PoolKey, sol_bindings::grouped_orders::AllOrders
 };
@@ -41,7 +42,9 @@ pub enum OrderSubscriptionKind {
     /// Any new filled orders
     FilledOrders,
     /// Any new reorged orders
-    UnfilleOrders
+    UnfilleOrders,
+    /// Any new cancelled orders
+    CancelledOrders
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -50,7 +53,8 @@ pub enum OrderSubscriptionKind {
 pub enum OrderSubscriptionResult {
     NewOrder(AllOrders),
     FilledOrder((u64, AllOrders)),
-    UnfilledOrder(AllOrders)
+    UnfilledOrder(AllOrders),
+    CancelledOrder(B256)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]

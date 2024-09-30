@@ -40,12 +40,8 @@ impl TestnetOrderPool {
         let (sub_tx, sub_rx) = tokio::sync::broadcast::channel(100);
         let rx = UnboundedReceiverStream::<OrderCommand>::new(rx);
         let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
-        let (validator_tx, _) = unbounded_channel();
-        let handle = PoolHandle {
-            manager_tx: tx.clone(),
-            pool_manager_tx: pool_manager_tx.clone(),
-            validator_tx
-        };
+        let handle =
+            PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
         let order_storage = Arc::new(OrderStorage::new(&config));
         let inner = OrderIndexer::new(validator, order_storage.clone(), block_number, sub_tx);
 

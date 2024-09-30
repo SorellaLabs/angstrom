@@ -34,7 +34,7 @@ contract RayMathLibTest is BaseTest {
     function test_fuzzing_invRay_divOne_equivalence(uint256 x) public pure {
         x = bound(x, 1, type(uint256).max);
         uint256 y1 = RayMathLib.RAY.divRay(x);
-        uint256 y2 = x.invRay();
+        uint256 y2 = x.invRayUnchecked();
         assertEq(y1, y2);
     }
 

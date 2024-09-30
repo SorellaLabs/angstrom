@@ -28,7 +28,12 @@ contract SignatureLibTest is BaseTest {
         reverting = new RevertingERC1271();
     }
 
-    function test_fuzzing_readAndCheckEcdsa_ecrecoverEquivalence(bytes32 hash, uint8 v, bytes32 r, bytes32 s) public {
+    function test_fuzzing_readAndCheckEcdsa_ecrecoverEquivalence(
+        bytes32 hash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public {
         address recovered = ecrecover(hash, v, r, s);
 
         bytes memory data = abi.encodePacked(v, r, s);
@@ -44,7 +49,10 @@ contract SignatureLibTest is BaseTest {
         }
     }
 
-    function test_fuzzing_readAndCheckEcdsa_recoversSigner(bytes32 hash, uint256 privateKey) public view {
+    function test_fuzzing_readAndCheckEcdsa_recoversSigner(bytes32 hash, uint256 privateKey)
+        public
+        view
+    {
         privateKey = boundPrivateKey(privateKey);
         address signer = vm.addr(privateKey);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, hash);
@@ -54,11 +62,16 @@ contract SignatureLibTest is BaseTest {
         assertEq(startReader.offset() + 65, endReader.offset());
     }
 
-    function test_fuzzing_readAndCheckERC1271_revertWithExpectedIsInvalid(bytes32 hash, bytes calldata sig) public {
+    function test_fuzzing_readAndCheckERC1271_revertWithExpectedIsInvalid(
+        bytes32 hash,
+        bytes calldata sig
+    ) public {
         vm.assume(sig.length <= type(uint24).max);
         reverting.setRevertData(abi.encode(IERC1271.isValidSignature.selector));
         vm.expectRevert(SignatureLib.InvalidSignature.selector);
-        this._readAndCheckERC1271(abi.encodePacked(address(reverting), uint24(sig.length), sig), hash);
+        this._readAndCheckERC1271(
+            abi.encodePacked(address(reverting), uint24(sig.length), sig), hash
+        );
     }
 
     function test_fuzzing_readAndCheckERC1271_revertAlwaysInvalid(
@@ -69,24 +82,32 @@ contract SignatureLibTest is BaseTest {
         vm.assume(sig.length <= type(uint24).max);
         reverting.setRevertData(revertData);
         vm.expectRevert(SignatureLib.InvalidSignature.selector);
-        this._readAndCheckERC1271(abi.encodePacked(address(reverting), uint24(sig.length), sig), hash);
+        this._readAndCheckERC1271(
+            abi.encodePacked(address(reverting), uint24(sig.length), sig), hash
+        );
     }
 
-    function test_fuzzing_readAndCheckERC1271_revertsInvalidReturn(bytes32 hash, bytes calldata sig, bytes4 returnValue)
-        public
-    {
+    function test_fuzzing_readAndCheckERC1271_revertsInvalidReturn(
+        bytes32 hash,
+        bytes calldata sig,
+        bytes4 returnValue
+    ) public {
         vm.assume(sig.length <= type(uint24).max);
         vm.assume(returnValue != IERC1271.isValidSignature.selector);
         returner.setReturnValue(returnValue);
         vm.expectRevert(SignatureLib.InvalidSignature.selector);
-        this._readAndCheckERC1271(abi.encodePacked(address(returner), uint24(sig.length), sig), hash);
+        this._readAndCheckERC1271(
+            abi.encodePacked(address(returner), uint24(sig.length), sig), hash
+        );
     }
 
-    function test_fuzzing_readAndCheckERC1271_acceptsValidReturn(bytes32 hash, bytes calldata sig) public {
+    function test_fuzzing_readAndCheckERC1271_acceptsValidReturn(bytes32 hash, bytes calldata sig)
+        public
+    {
         vm.assume(sig.length <= type(uint24).max);
         returner.setReturnValue(IERC1271.isValidSignature.selector);
-        (CalldataReader startReader, CalldataReader endReader, address recovered) =
-            this._readAndCheckERC1271(abi.encodePacked(address(returner), uint24(sig.length), sig), hash);
+        (CalldataReader startReader, CalldataReader endReader, address recovered) = this
+            ._readAndCheckERC1271(abi.encodePacked(address(returner), uint24(sig.length), sig), hash);
         assertEq(recovered, address(returner));
         assertEq(startReader.offset() + 20 + 3 + sig.length, endReader.offset());
     }
@@ -99,8 +120,10 @@ contract SignatureLibTest is BaseTest {
 
         bytes memory totalSig = bytes.concat(sig1, sig2);
 
-        (CalldataReader startReader, CalldataReader endReader, address recovered) =
-            this._readAndCheckERC1271(abi.encodePacked(address(twoSig), uint24(totalSig.length), totalSig), hash);
+        (CalldataReader startReader, CalldataReader endReader, address recovered) = this
+            ._readAndCheckERC1271(
+            abi.encodePacked(address(twoSig), uint24(totalSig.length), totalSig), hash
+        );
         assertEq(recovered, address(twoSig));
         assertEq(startReader.offset() + 20 + 3 + totalSig.length, endReader.offset());
     }

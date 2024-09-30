@@ -15,7 +15,8 @@ library HookBufferLib {
 
     /// @dev Hash of empty sequence of bytes `keccak256("")`
     /// @custom:test test/types/OrderIterator.t.sol:test_emptyBytesHash
-    uint256 internal constant EMPTY_BYTES_HASH = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
+    uint256 internal constant EMPTY_BYTES_HASH =
+        0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
 
     uint256 internal constant HOOK_ADDR_OFFSET = 32;
     uint256 internal constant HOOK_MEM_PTR_OFFSET = 192;
@@ -67,7 +68,10 @@ library HookBufferLib {
                 // `payloadLength` bounded to [-20; 2^24-21], + 0x64 => [+80, 2^24+79] (cannot
                 // overflow its aloted 32 bits in the packed hook pointer).
                 hook :=
-                    or(shl(HOOK_MEM_PTR_OFFSET, memPtr), or(shl(HOOK_ADDR_OFFSET, hookAddr), add(payloadLength, 0x64)))
+                    or(
+                        shl(HOOK_MEM_PTR_OFFSET, memPtr),
+                        or(shl(HOOK_ADDR_OFFSET, hookAddr), add(payloadLength, 0x64))
+                    )
             }
         }
 
@@ -91,7 +95,12 @@ library HookBufferLib {
 
                 // Check that the call was successful, sufficient data was returned and the expected
                 // return magic was returned.
-                if iszero(and(success, and(gt(returndatasize(), 31), eq(mload(0x00), EXPECTED_HOOK_RETURN_MAGIC)))) {
+                if iszero(
+                    and(
+                        success,
+                        and(gt(returndatasize(), 31), eq(mload(0x00), EXPECTED_HOOK_RETURN_MAGIC))
+                    )
+                ) {
                     mstore(0x00, 0xf959fdae /* InvalidHookReturn() */ )
                     revert(0x1c, 0x04)
                 }

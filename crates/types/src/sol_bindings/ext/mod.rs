@@ -4,6 +4,8 @@ use std::fmt;
 use alloy::primitives::{Address, TxHash, U256};
 use serde::{Deserialize, Serialize};
 
+use crate::orders::OrderLocation;
+
 pub mod contract_bundle_ext;
 pub mod grouped_orders;
 pub mod top_of_block_ext;
@@ -40,6 +42,8 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
     fn token_out(&self) -> Address;
 
     fn is_valid_signature(&self) -> bool;
+
+    fn order_location(&self) -> OrderLocation;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash, Copy)]

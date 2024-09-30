@@ -18,9 +18,8 @@ PADE inherits some of [ABI's primitive types](https://docs.soliditylang.org/en/l
 
 **Note on convention**
 
-Unlike Solidity or the ABI spec we will always use angled brack (e.g. `uint<8>`) and the number
-**always** represents the type's width in bytes not bits e.g. (PADE `uint<8>` is equivalent to ABI
-`uint64`).
+We follow Solidity's convention of having `uint<N>` types be suffixed with their size in **bits**,
+and `bytes<N>` to be suffixed with their length in bytes.
 
 Rust-like syntax will used to define the types.
 
@@ -44,7 +43,7 @@ Types can be aliased or composed into larger product types aka "structs" e.g.
 struct Trade {
     asset_in: address,
     asset_out: address,
-    quanitity: uint<16>
+    quanitity: uint64
 }
 
 struct Matched {
@@ -52,7 +51,7 @@ struct Matched {
     bids: List<Trade>,
 }
 
-struct String<N: size>(List<bytes<1>>);
+struct String(List<bytes1>);
 ```
 
 ### Sum Types (aka "Enums")
@@ -63,11 +62,11 @@ e.g.:
 ```rust
 enum OrderInvalidation {
     Flash {
-        valid_for_block: uint<8>
+        valid_for_block: uint64
     },
     Standing {
-        deadline: uint<5>,
-        nocne: uint<8>
+        deadline: uint40,
+        nocne: uint64
     }
 }
 
@@ -138,6 +137,8 @@ field / struct).
 
 ```python
 
+LIST_MAX_LENGTH_BYTES = 3
+
 def pade_encode(x: PadeValue, T: PadeType) -> bytes:
     if T.is_abi_primitve():
         return x.abi_encode_packed()
@@ -157,7 +158,7 @@ def pade_encode(x: PadeValue, T: PadeType) -> bytes:
             pade_encode(item)
             for item in x.items
         ])
-        length_bytes = len(encoded_items).to_bytes(T.max_length_bytes, 'big')
+        length_bytes = len(encoded_items).to_bytes(LIST_MAX_LENGTH_BYTES, 'big')
         return length_bytes + encoded_items
     if T.is_struct():
         # the variants of enum fields are packed together
@@ -166,7 +167,7 @@ def pade_encode(x: PadeValue, T: PadeType) -> bytes:
         fields_encoded: bytes = b''
 
         # Encode fields
-        for field_value, (field_type, name) in zip(x.values, T.fields):
+        for field_value, field_type in zip(x.values, T.fields):
             if field_type.is_enum():
                 variant_size = bits(len(field_type.variants))
                 variant: int = field_value.variant

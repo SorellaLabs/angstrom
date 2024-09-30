@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::{RawPoolOrder, RespendAvoidanceMethod};
 use crate::{
     matching::Ray,
-    orders::{OrderId, OrderPriorityData},
+    orders::{OrderId, OrderLocation, OrderPriorityData},
     primitive::{PoolId, Signature, ANGSTROM_DOMAIN},
     sol_bindings::rpc_orders::{
         ExactFlashOrder, ExactStandingOrder, OmitOrderMeta, PartialFlashOrder,
@@ -295,6 +295,10 @@ impl RawPoolOrder for StandingVariants {
             StandingVariants::Partial(p) => p.is_valid_signature()
         }
     }
+
+    fn order_location(&self) -> OrderLocation {
+        OrderLocation::Limit
+    }
 }
 
 impl RawPoolOrder for FlashVariants {
@@ -373,6 +377,10 @@ impl RawPoolOrder for FlashVariants {
             FlashVariants::Exact(e) => e.flash_block(),
             FlashVariants::Partial(p) => p.flash_block()
         }
+    }
+
+    fn order_location(&self) -> OrderLocation {
+        OrderLocation::Limit
     }
 }
 
@@ -512,6 +520,10 @@ impl RawPoolOrder for TopOfBlockOrder {
             .filter(|recovered_addr| recovered_addr == &self.meta.from)
             .is_some()
     }
+
+    fn order_location(&self) -> OrderLocation {
+        OrderLocation::Searcher
+    }
 }
 impl RawPoolOrder for PartialStandingOrder {
     fn is_valid_signature(&self) -> bool {
@@ -560,6 +572,10 @@ impl RawPoolOrder for PartialStandingOrder {
 
     fn token_out(&self) -> Address {
         self.assetOut
+    }
+
+    fn order_location(&self) -> OrderLocation {
+        OrderLocation::Limit
     }
 }
 
@@ -613,6 +629,10 @@ impl RawPoolOrder for ExactStandingOrder {
     fn token_out(&self) -> Address {
         self.assetOut
     }
+
+    fn order_location(&self) -> OrderLocation {
+        OrderLocation::Limit
+    }
 }
 
 impl RawPoolOrder for PartialFlashOrder {
@@ -663,6 +683,10 @@ impl RawPoolOrder for PartialFlashOrder {
     fn token_out(&self) -> Address {
         self.assetOut
     }
+
+    fn order_location(&self) -> OrderLocation {
+        OrderLocation::Limit
+    }
 }
 
 impl RawPoolOrder for ExactFlashOrder {
@@ -712,6 +736,10 @@ impl RawPoolOrder for ExactFlashOrder {
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
         RespendAvoidanceMethod::Block(self.validForBlock)
+    }
+
+    fn order_location(&self) -> OrderLocation {
+        OrderLocation::Limit
     }
 }
 
@@ -803,6 +831,14 @@ impl RawPoolOrder for AllOrders {
             AllOrders::TOB(tob) => tob.flash_block()
         }
     }
+
+    fn order_location(&self) -> OrderLocation {
+        match &self {
+            AllOrders::Standing(_) => OrderLocation::Limit,
+            AllOrders::Flash(_) => OrderLocation::Limit,
+            AllOrders::TOB(_) => OrderLocation::Searcher
+        }
+    }
 }
 
 impl RawPoolOrder for GroupedVanillaOrder {
@@ -882,6 +918,13 @@ impl RawPoolOrder for GroupedVanillaOrder {
             GroupedVanillaOrder::KillOrFill(kof) => kof.amount_out_min()
         }
     }
+
+    fn order_location(&self) -> OrderLocation {
+        match &self {
+            GroupedVanillaOrder::Standing(_) => OrderLocation::Limit,
+            GroupedVanillaOrder::KillOrFill(_) => OrderLocation::Limit
+        }
+    }
 }
 
 impl RawPoolOrder for GroupedComposableOrder {
@@ -959,6 +1002,13 @@ impl RawPoolOrder for GroupedComposableOrder {
         match self {
             GroupedComposableOrder::Partial(p) => p.is_valid_signature(),
             GroupedComposableOrder::KillOrFill(kof) => kof.is_valid_signature()
+        }
+    }
+
+    fn order_location(&self) -> OrderLocation {
+        match &self {
+            GroupedComposableOrder::Partial(_) => OrderLocation::Limit,
+            GroupedComposableOrder::KillOrFill(_) => OrderLocation::Limit
         }
     }
 }

@@ -1,44 +1,32 @@
 use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
-    marker::PhantomData,
     pin::Pin,
     sync::{atomic::AtomicU64, Arc},
-    task::{Context, Poll}
+    task::Poll
 };
 
-use alloy::primitives::{Address, B256, U256};
-use angstrom_utils::{
-    key_split_threadpool::KeySplitThreadpool,
-    sync_pipeline::{
-        PipelineAction, PipelineBuilder, PipelineFut, PipelineOperation, PipelineWithIntermediary
-    }
-};
-use futures::{stream::FuturesUnordered, Future, StreamExt};
-use futures_util::{future, FutureExt, Stream};
-use tokio::{runtime::Handle, task::JoinHandle};
+use alloy::primitives::{Address, B256};
+use angstrom_types::primitive::NewInitializedPool;
+use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
+use futures::{Future, StreamExt};
+use tokio::runtime::Handle;
 
 use super::{
     sim::SimValidation,
     state::{
-        account::user::UserAddress, config::ValidationConfig, db_state_utils::StateFetchUtils,
-        pools::PoolsTracker, StateValidation
+        account::user::UserAddress, db_state_utils::StateFetchUtils, pools::PoolsTracker,
+        StateValidation
     },
     OrderValidationRequest
 };
 use crate::{
-    common::{
-        executor::ThreadPool,
-        lru_db::{BlockStateProviderFactory, RevmLRU}
-    },
-    order::{sim, OrderValidation},
-    validator::ValidationRequest
+    common::lru_db::BlockStateProviderFactory,
+    order::{state::account::UserAccountProcessor, OrderValidation}
 };
 
 pub struct OrderValidator<DB, Pools, Fetch> {
     sim:          SimValidation<DB>,
-    state:        StateValidation<DB, Pools, Fetch>,
-    threadpool:   KeySplitThreadpool<UserAddress, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>,
+    state:        StateValidation<Pools, Fetch>,
+    thread_pool:  KeySplitThreadpool<UserAddress, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>,
     block_number: Arc<AtomicU64>
 }
 
@@ -49,26 +37,24 @@ where
     Fetch: StateFetchUtils + Sync + 'static
 {
     pub fn new(
-        db: Arc<RevmLRU<DB>>,
+        sim: SimValidation<DB>,
         block_number: Arc<AtomicU64>,
-        max_validation_per_user: usize,
         pools: Pools,
         fetch: Fetch,
-        handle: Handle
+        thread_pool: KeySplitThreadpool<
+            UserAddress,
+            Pin<Box<dyn Future<Output = ()> + Send>>,
+            Handle
+        >
     ) -> Self {
-        let threadpool = KeySplitThreadpool::new(handle, max_validation_per_user);
         let state = StateValidation::new(
-            db.clone(),
-            block_number.load(std::sync::atomic::Ordering::SeqCst),
-            pools,
-            fetch
+            UserAccountProcessor::new(
+                block_number.load(std::sync::atomic::Ordering::SeqCst),
+                fetch
+            ),
+            pools
         );
-        let sim = SimValidation::new(db);
-
-        let new_state = state.clone();
-        let new_sim = sim.clone();
-
-        Self { state, sim, block_number, threadpool }
+        Self { state, sim, block_number, thread_pool }
     }
 
     pub fn on_new_block(
@@ -90,12 +76,16 @@ where
         let user = order_validation.user();
         let cloned_state = self.state.clone();
 
-        self.threadpool.add_new_task(
+        self.thread_pool.add_new_task(
             user,
             Box::pin(async move {
                 cloned_state.validate_state_of_regular_order(order_validation, block_number)
             })
         );
+    }
+
+    pub fn index_new_pool(&mut self, pool: NewInitializedPool) {
+        self.state.index_new_pool(pool);
     }
 }
 
@@ -111,9 +101,9 @@ where
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>
     ) -> std::task::Poll<Self::Output> {
-        self.threadpool.try_register_waker(|| cx.waker().clone());
+        self.thread_pool.try_register_waker(|| cx.waker().clone());
 
-        while let Poll::Ready(Some(_)) = self.threadpool.poll_next_unpin(cx) {}
+        while let Poll::Ready(Some(_)) = self.thread_pool.poll_next_unpin(cx) {}
 
         Poll::Pending
     }

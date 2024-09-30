@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {Asset as RefAsset, AssetLib as RefAssetLib} from "../../src/reference/Asset.sol";
 import {CalldataReader, CalldataReaderLib} from "../../src/types/CalldataReader.sol";
 import {Asset, AssetArray, AssetLib} from "../../src/types/Asset.sol";
-import {StructArrayLib} from "../../src/libraries/StructArrayLib.sol";
 
 import {console} from "forge-std/console.sol";
 
@@ -15,10 +14,12 @@ contract AssetTest is Test {
 
     function setUp() public {}
 
-    function test_fuzzing_referenceAssetEncoding(address addr, uint128 take, uint128 save, uint128 settle)
-        public
-        pure
-    {
+    function test_fuzzing_referenceAssetEncoding(
+        address addr,
+        uint128 take,
+        uint128 save,
+        uint128 settle
+    ) public pure {
         assertEq(
             RefAsset({addr: addr, take: take, save: save, settle: settle}).encode(),
             abi.encodePacked(addr, take, save, settle)
@@ -26,14 +27,17 @@ contract AssetTest is Test {
     }
 
     function test_fuzzing_sortedArrayIsAccepted(RefAsset[] memory assets) public view {
-        vm.assume(assets.length <= type(uint24).max / AssetLib.ASSET_BYTES);
+        vm.assume(assets.length <= type(uint24).max / AssetLib.ASSET_CD_BYTES);
         assets.sort();
         vm.assume(_uniqueAndOrdered(assets));
         bytes memory data = assets.encode();
         this._fuzzing_sortedArrayIsAccepted(data, assets);
     }
 
-    function _fuzzing_sortedArrayIsAccepted(bytes calldata data, RefAsset[] calldata inputAssets) external pure {
+    function _fuzzing_sortedArrayIsAccepted(bytes calldata data, RefAsset[] calldata inputAssets)
+        external
+        pure
+    {
         CalldataReader reader = CalldataReaderLib.from(data);
         (, AssetArray encodedAssets) = AssetLib.readFromAndValidate(reader);
         assertEq(encodedAssets.len(), inputAssets.length);
@@ -48,7 +52,7 @@ contract AssetTest is Test {
     }
 
     function test_fuzzing_revertsOutOfBoundAccess(RefAsset[] memory assets, uint256 index) public {
-        vm.assume(assets.length <= type(uint24).max / AssetLib.ASSET_BYTES);
+        vm.assume(assets.length <= type(uint24).max / AssetLib.ASSET_CD_BYTES);
         assets.sort();
         vm.assume(_uniqueAndOrdered(assets));
         index = bound(index, assets.length, type(uint256).max);
@@ -59,7 +63,11 @@ contract AssetTest is Test {
     function _fuzzing_revertsOutOfBoundAccess(bytes calldata data, uint256 index) external {
         CalldataReader reader = CalldataReaderLib.from(data);
         (, AssetArray encodedAssets) = AssetLib.readFromAndValidate(reader);
-        vm.expectRevert(abi.encodeWithSelector(StructArrayLib.OutOfBoundRead.selector, index, encodedAssets.len()));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AssetLib.AssetAccessOutOfBounds.selector, index, encodedAssets.len()
+            )
+        );
         encodedAssets.get(index);
     }
 
@@ -94,12 +102,13 @@ contract AssetTest is Test {
         uint256 duplicateFromIndex,
         uint256 duplicateToIndex
     ) public {
-        vm.assume(assets.length <= type(uint24).max / AssetLib.ASSET_BYTES);
+        vm.assume(assets.length <= type(uint24).max / AssetLib.ASSET_CD_BYTES);
         vm.assume(assets.length >= 2);
         assets.sort();
         vm.assume(_uniqueAndOrdered(assets));
         duplicateFromIndex = bound(duplicateFromIndex, 0, assets.length - 1);
-        duplicateToIndex = (bound(duplicateToIndex, 1, assets.length - 1) + duplicateFromIndex) % assets.length;
+        duplicateToIndex =
+            (bound(duplicateToIndex, 1, assets.length - 1) + duplicateFromIndex) % assets.length;
         assertTrue(duplicateFromIndex != duplicateToIndex);
 
         assets[duplicateToIndex].addr = assets[duplicateFromIndex].addr;

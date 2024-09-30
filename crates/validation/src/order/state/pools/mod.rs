@@ -1,6 +1,9 @@
 use alloy::primitives::Address;
 use angstrom_pools::AngstromPools;
-use angstrom_types::{primitive::PoolId, sol_bindings::ext::RawPoolOrder};
+use angstrom_types::{
+    primitive::{NewInitializedPool, PoolId},
+    sol_bindings::ext::RawPoolOrder
+};
 use dashmap::DashMap;
 
 use super::config::ValidationConfig;
@@ -9,10 +12,10 @@ pub mod angstrom_pools;
 
 pub trait PoolsTracker: Clone + Send + Unpin {
     /// Returns None if no pool is found
-    fn fetch_pool_info_for_order<O: RawPoolOrder>(
-        &self,
-        order: O
-    ) -> Option<(UserOrderPoolInfo, O)>;
+    fn fetch_pool_info_for_order<O: RawPoolOrder>(&self, order: &O) -> Option<UserOrderPoolInfo>;
+
+    /// indexes a new pool into the tracker
+    fn index_new_pool(&mut self, pool: NewInitializedPool);
 }
 
 #[derive(Debug, Clone)]
@@ -28,19 +31,6 @@ pub struct UserOrderPoolInfo {
 pub struct AngstromPoolsTracker {
     /// TODO: we can most likely flatten this but will circle back
     pub pools: AngstromPools
-}
-
-impl PoolsTracker for AngstromPoolsTracker {
-    fn fetch_pool_info_for_order<O: RawPoolOrder>(
-        &self,
-        order: O
-    ) -> Option<(UserOrderPoolInfo, O)> {
-        let (is_bid, pool_id) = self.pools.order_info(order.token_in(), order.token_out())?;
-
-        let user_info = UserOrderPoolInfo { pool_id, is_bid, token: order.token_in() };
-
-        Some((user_info, order))
-    }
 }
 
 impl AngstromPoolsTracker {
@@ -63,61 +53,60 @@ impl AngstromPoolsTracker {
     }
 }
 
+impl PoolsTracker for AngstromPoolsTracker {
+    /// None if no pool was found
+    fn fetch_pool_info_for_order<O: RawPoolOrder>(&self, order: &O) -> Option<UserOrderPoolInfo> {
+        let (is_bid, pool_id) = self.pools.order_info(order.token_in(), order.token_out())?;
+
+        let user_info = UserOrderPoolInfo { pool_id, is_bid, token: order.token_in() };
+
+        Some(user_info)
+    }
+
+    fn index_new_pool(&mut self, pool: NewInitializedPool) {
+        self.pools.new_pool(pool);
+    }
+}
+
 #[cfg(test)]
 pub mod pool_tracker_mock {
     use alloy::primitives::{Address, FixedBytes};
+    use angstrom_types::primitive::PoolId;
     use dashmap::DashMap;
 
     use super::*;
 
     #[derive(Clone, Default)]
     pub struct MockPoolTracker {
-        asset_index_to_address: DashMap<u16, Address>,
-        asset_address_to_index: DashMap<Address, u16>,
-        pools:                  DashMap<(Address, Address), PoolId>
+        pools: DashMap<(Address, Address), PoolId>
     }
 
     impl MockPoolTracker {
-        pub fn add_asset(&self, index: u16, address: Address) {
-            self.asset_index_to_address.insert(index, address);
-            self.asset_address_to_index.insert(address, index);
-        }
-
-        pub fn get_key(token0: Address, token1: Address) -> (Address, Address) {
-            match token0.cmp(&token1) {
-                std::cmp::Ordering::Greater => (token1, token0),
-                std::cmp::Ordering::Less => (token0, token1),
-                std::cmp::Ordering::Equal => panic!("Can't have a pool with equal tokens")
-            }
-        }
-
-        pub fn add_pool(&self, token0: Address, token1: Address, id: Option<PoolId>) -> PoolId {
-            let key = Self::get_key(token0, token1);
-            let pool_id = id.unwrap_or_else(|| FixedBytes::random());
-            match self.pools.entry(key) {
-                dashmap::Entry::Occupied(_) => panic!("Tried to double-add a pool entry"),
-                dashmap::Entry::Vacant(e) => {
-                    e.insert(pool_id);
-                }
-            }
-            pool_id
+        pub fn add_pool(&self, token0: Address, token1: Address, pool: PoolId) {
+            self.pools.insert((token0, token1), pool);
+            self.pools.insert((token1, token0), pool);
         }
     }
 
     impl PoolsTracker for MockPoolTracker {
         fn fetch_pool_info_for_order<O: RawPoolOrder>(
             &self,
-            order: O
-        ) -> Option<(UserOrderPoolInfo, O)> {
-            let asset_in = order.token_in();
-            let asset_out = order.token_out();
-            let asset_in_idx = *self.asset_address_to_index.get(&asset_in)?;
-            let asset_out_idx = *self.asset_address_to_index.get(&asset_out)?;
-            let key = Self::get_key(asset_in, asset_out);
-            let pool_id = *self.pools.get(&(key))?.value();
-            let is_bid = asset_in > asset_out;
-            let info = UserOrderPoolInfo { pool_id, is_bid, token: asset_in };
-            Some((info, order))
+            order: &O
+        ) -> Option<UserOrderPoolInfo> {
+            let pool_id = self.pools.get(&(order.token_in(), order.token_out()))?;
+
+            let user_info = UserOrderPoolInfo {
+                pool_id: *pool_id,
+                is_bid:  order.token_in() > order.token_out(),
+                token:   order.token_in()
+            };
+
+            Some(user_info)
+        }
+
+        fn index_new_pool(&mut self, pool: NewInitializedPool) {
+            self.pools
+                .insert((pool.currency_in, pool.currency_out), pool.id);
         }
     }
 }

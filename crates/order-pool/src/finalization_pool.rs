@@ -44,6 +44,10 @@ impl FinalizationPool {
         self.metrics.incr_blocks_tracked();
     }
 
+    pub fn has_order(&mut self, order: &FixedBytes<32>) -> bool {
+        self.id_to_orders.contains_key(order)
+    }
+
     pub fn reorg(&mut self, orders: Vec<FixedBytes<32>>) -> impl Iterator<Item = AllOrders> + '_ {
         orders.into_iter().filter_map(|id| {
             self.id_to_orders

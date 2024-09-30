@@ -1,10 +1,6 @@
-use std::{
-    net::SocketAddr,
-    sync::{atomic::AtomicUsize, Arc}
-};
+use std::sync::{atomic::AtomicUsize, Arc};
 
 use angstrom_types::sol_bindings::grouped_orders::AllOrders;
-use order_pool::OrderPoolHandle;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;
 use reth_rpc_types::PeerId;
@@ -35,26 +31,27 @@ impl StromNetworkHandle {
     }
 
     /// Sends a [`NetworkHandleMessage`] to the manager
-    pub(crate) fn send_message(&self, msg: StromNetworkHandleMsg) {
+    fn send_to_network_manager(&self, msg: StromNetworkHandleMsg) {
         let _ = self.inner.to_manager_tx.send(msg);
     }
 
-    /// Send full transactions to the peer
-    pub fn send_transactions(&self, peer_id: PeerId, msg: StromMessage) {
-        self.send_message(StromNetworkHandleMsg::SendOrders { peer_id, msg })
+    /// Send Strom message to peer
+    pub fn send_message(&self, peer_id: PeerId, msg: StromMessage) {
+        self.send_to_network_manager(StromNetworkHandleMsg::SendStromMessage { peer_id, msg })
     }
 
-    pub fn broadcast_tx(&self, msg: StromMessage) {
-        self.send_message(StromNetworkHandleMsg::BroadcastOrder { msg });
+    /// Broadcast Strom message to all peers
+    pub fn broadcast_message(&self, msg: StromMessage) {
+        self.send_to_network_manager(StromNetworkHandleMsg::BroadcastStromMessage { msg })
     }
 
     pub fn peer_reputation_change(&self, peer: PeerId, change: ReputationChangeKind) {
-        self.send_message(StromNetworkHandleMsg::ReputationChange(peer, change));
+        self.send_to_network_manager(StromNetworkHandleMsg::ReputationChange(peer, change));
     }
 
     pub fn subscribe_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
         let (tx, rx) = unbounded_channel();
-        self.send_message(StromNetworkHandleMsg::SubscribeEvents(tx));
+        self.send_to_network_manager(StromNetworkHandleMsg::SubscribeEvents(tx));
 
         UnboundedReceiverStream::from(rx)
     }
@@ -65,14 +62,14 @@ impl StromNetworkHandle {
     /// new connections to be established.
     pub async fn shutdown(&self) -> Result<(), oneshot::error::RecvError> {
         let (tx, rx) = oneshot::channel();
-        self.send_message(StromNetworkHandleMsg::Shutdown(tx));
+        self.send_to_network_manager(StromNetworkHandleMsg::Shutdown(tx));
         rx.await
     }
 
     /// Sends a message to the [`NetworkManager`](crate::NetworkManager) to
     /// remove a peer from the set corresponding to given kind.
     pub fn remove_peer(&self, peer: PeerId) {
-        self.send_message(StromNetworkHandleMsg::RemovePeer(peer))
+        self.send_to_network_manager(StromNetworkHandleMsg::RemovePeer(peer))
     }
 
     pub fn peer_count(&self) -> usize {
@@ -104,14 +101,14 @@ pub enum StromNetworkHandleMsg {
     /// Disconnect a connection to a peer if it exists.
     DisconnectPeer(PeerId, Option<DisconnectReason>),
 
-    /// Sends the list of transactions to the given peer.
-    SendOrders {
+    /// Sends the strom message to a single peer.
+    SendStromMessage {
         peer_id: PeerId,
         msg:     StromMessage
     },
 
-    /// broadcasts the order
-    BroadcastOrder {
+    /// Broadcasts the storm message to all peers
+    BroadcastStromMessage {
         msg: StromMessage
     },
 

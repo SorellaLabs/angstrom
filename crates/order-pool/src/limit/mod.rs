@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use angstrom_types::{
     orders::OrderId,
-    primitive::PoolId,
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::grouped_orders::{
         GroupedComposableOrder, GroupedUserOrder, GroupedVanillaOrder, OrderWithStorageData
     }
@@ -83,6 +83,11 @@ impl LimitOrderPool {
 
     pub fn park_order(&mut self, id: &OrderId) {
         self.limit_orders.park_order(id);
+    }
+
+    pub fn new_pool(&mut self, pool: NewInitializedPool) {
+        self.limit_orders.new_pool(pool);
+        self.composable_orders.new_pool(pool);
     }
 }
 

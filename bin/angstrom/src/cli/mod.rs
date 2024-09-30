@@ -42,7 +42,7 @@ use reth_cli_util::get_secret_key;
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_network_peers::pk2id;
 use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
-use validation::{init_validation, validator::ValidationRequest};
+use validation::init_validation;
 
 use crate::cli::network_builder::AngstromNetworkBuilder;
 
@@ -82,7 +82,6 @@ pub fn run() -> eyre::Result<()> {
                 let order_api = OrderApi::new(pool.clone(), executor_clone);
                 // let quotes_api = QuotesApi { pool: pool.clone() };
                 // let consensus_api = ConsensusApi { consensus: consensus.clone() };
-
                 rpc_context.modules.merge_configured(order_api.into_rpc())?;
                 // rpc_context
                 //     .modules
@@ -131,8 +130,6 @@ pub struct StromHandles {
 
     pub orderpool_tx: UnboundedSender<DefaultOrderCommand>,
     pub orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
-    pub validator_tx: UnboundedSender<ValidationRequest>,
-    pub validator_rx: UnboundedReceiver<ValidationRequest>,
 
     pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
 
@@ -146,8 +143,7 @@ impl StromHandles {
     pub fn get_pool_handle(&self) -> DefaultPoolHandle {
         PoolHandle {
             manager_tx:      self.orderpool_tx.clone(),
-            pool_manager_tx: self.pool_manager_tx.clone(),
-            validator_tx:    self.validator_tx.clone()
+            pool_manager_tx: self.pool_manager_tx.clone()
         }
     }
 
@@ -162,7 +158,6 @@ pub fn initialize_strom_handles() -> StromHandles {
     let (consensus_tx, consensus_rx) = channel(100);
     let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
     let (orderpool_tx, orderpool_rx) = unbounded_channel();
-    let (validator_tx, validator_rx) = unbounded_channel();
     let (consensus_tx_op, consensus_rx_op) =
         reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
 
@@ -174,8 +169,6 @@ pub fn initialize_strom_handles() -> StromHandles {
         orderpool_tx,
         pool_manager_tx,
         orderpool_rx,
-        validator_tx,
-        validator_rx,
         consensus_tx,
         consensus_rx,
         consensus_tx_op,
@@ -205,12 +198,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
         .with_consensus_manager(handles.consensus_tx_op)
         .build_handle(executor.clone(), node.provider.clone());
 
-    let validator = init_validation(
-        node.provider.clone(),
-        config.validation_cache_size,
-        handles.validator_tx.clone(),
-        handles.validator_rx
-    );
+    let validator = init_validation(node.provider.clone(), config.validation_cache_size);
 
     // Create our pool config
     let pool_config = PoolConfig::default();
@@ -232,7 +220,6 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
         executor.clone(),
         handles.orderpool_tx,
         handles.orderpool_rx,
-        handles.validator_tx,
         handles.pool_manager_tx
     );
 

@@ -61,7 +61,11 @@ contract UniV4Inspector is PoolManager {
     function getPosition(PoolId id, address owner, int24 tickLower, int24 tickUpper, bytes32 salt)
         external
         view
-        returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)
+        returns (
+            uint128 liquidity,
+            uint256 feeGrowthInside0LastX128,
+            uint256 feeGrowthInside1LastX128
+        )
     {
         Position.State storage info = _getPool(id).positions.get(owner, tickLower, tickUpper, salt);
         liquidity = info.liquidity;

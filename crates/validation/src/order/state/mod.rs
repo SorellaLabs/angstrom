@@ -1,28 +1,18 @@
-use std::{collections::HashMap, sync::Arc, task::Poll};
+use std::{collections::HashMap, sync::Arc};
 
 use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256, U256};
-use angstrom_types::sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders};
+use angstrom_types::{
+    primitive::NewInitializedPool,
+    sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
+};
 use db_state_utils::StateFetchUtils;
 use futures::{Stream, StreamExt};
-use futures_util::stream::FuturesUnordered;
 use parking_lot::RwLock;
-use pools::{AngstromPoolsTracker, PoolsTracker};
-use revm::db::{AccountStatus, BundleState};
-use tokio::{
-    sync::oneshot::Sender,
-    task::{yield_now, JoinHandle}
-};
+use pools::PoolsTracker;
 
-use self::db_state_utils::UserAccountDetails;
 use super::{OrderValidation, OrderValidationResults};
-use crate::{
-    common::{
-        executor::ThreadPool,
-        lru_db::{BlockStateProviderFactory, RevmLRU}
-    },
-    order::state::config::ValidationConfig
-};
+use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 pub mod account;
 pub mod config;
@@ -39,23 +29,18 @@ type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 /// 4) deals with possible pending state
 #[allow(dead_code)]
 #[derive(Clone)]
-pub struct StateValidation<DB, Pools, Fetch> {
-    db:                   Arc<RevmLRU<DB>>,
+pub struct StateValidation<Pools, Fetch> {
     /// tracks everything user related.
-    user_account_tracker: Arc<UserAccountProcessor<DB, Fetch>>,
+    user_account_tracker: Arc<UserAccountProcessor<Fetch>>,
     /// tracks all info about the current angstrom pool state.
-    pool_tacker:          Arc<Pools>
+    pool_tacker:          Arc<RwLock<Pools>>
 }
 
-impl<DB, Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<DB, Pools, Fetch>
-where
-    DB: BlockStateProviderFactory + Unpin + 'static
-{
-    pub fn new(db: Arc<RevmLRU<DB>>, block: u64, pools: Pools, fetch: Fetch) -> Self {
+impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> {
+    pub fn new(user_account_tracker: UserAccountProcessor<Fetch>, pools: Pools) -> Self {
         Self {
-            db:                   db.clone(),
-            pool_tacker:          Arc::new(pools),
-            user_account_tracker: Arc::new(UserAccountProcessor::new(db, block, fetch))
+            pool_tacker:          Arc::new(RwLock::new(pools)),
+            user_account_tracker: Arc::new(user_account_tracker)
         }
     }
 
@@ -80,14 +65,17 @@ where
             return OrderValidationResults::Invalid(order_hash)
         }
 
-        let Some((pool_info, wrapped_order)) = self.pool_tacker.fetch_pool_info_for_order(order)
+        let Some(pool_info) = self
+            .pool_tacker
+            .read_arc()
+            .fetch_pool_info_for_order(&order)
         else {
             return OrderValidationResults::Invalid(order_hash)
         };
 
         self.user_account_tracker
-            .verify_order(wrapped_order, pool_info, block, is_limit)
-            .map(|o| {
+            .verify_order::<O>(order, pool_info, block, is_limit)
+            .map(|o: _| {
                 OrderValidationResults::Valid(o.try_map_inner(|inner| Ok(inner.into())).unwrap())
             })
             .unwrap_or_else(|_| OrderValidationResults::Invalid(order_hash))
@@ -105,5 +93,9 @@ where
             }
             _ => unreachable!()
         }
+    }
+
+    pub fn index_new_pool(&mut self, pool: NewInitializedPool) {
+        self.pool_tacker.write_arc().index_new_pool(pool);
     }
 }

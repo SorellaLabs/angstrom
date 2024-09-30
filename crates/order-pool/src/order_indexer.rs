@@ -9,10 +9,11 @@ use std::{
 use alloy::primitives::{B256, U256};
 use angstrom_types::{
     orders::{OrderId, OrderOrigin, OrderSet},
-    primitive::PoolId,
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::{
         grouped_orders::{AllOrders, OrderWithStorageData, *},
-        rpc_orders::TopOfBlockOrder
+        rpc_orders::TopOfBlockOrder,
+        RawPoolOrder
     }
 };
 use futures_util::{Stream, StreamExt};
@@ -33,6 +34,18 @@ use crate::{
 /// This is used to remove validated orders. During validation
 /// the same check wil be ran but with more accuracy
 const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
+/// mostly arbitrary
+const SEEN_INVALID_ORDERS_CAPACITY: usize = 10000;
+/// represents the maximum number of blocks that we allow for new orders to not
+/// propagate (again mostly arbitrary)
+const MAX_NEW_ORDER_DELAY_PROPAGATION: u64 = 7000;
+
+struct CancelOrderRequest {
+    /// The address of the entity requesting the cancellation.
+    pub from:        Address,
+    // The time until the cancellation request is valid.
+    pub valid_until: u64
+}
 
 pub struct OrderIndexer<V: OrderValidatorHandle> {
     /// order storage
@@ -47,6 +60,8 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     order_hash_to_peer_id:  HashMap<B256, Vec<PeerId>>,
     /// Used to avoid unnecessary computation on order spam
     seen_invalid_orders:    HashSet<B256>,
+    /// Used to protect against late order propagation
+    cancelled_orders:       HashMap<B256, CancelOrderRequest>,
     /// Order Validator
     validator:              OrderValidator<V>,
     /// List of subscribers for order validation result
@@ -68,16 +83,34 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             address_to_orders: HashMap::new(),
             order_hash_to_order_id: HashMap::new(),
             order_hash_to_peer_id: HashMap::new(),
-            seen_invalid_orders: HashSet::with_capacity(10000),
+            seen_invalid_orders: HashSet::with_capacity(SEEN_INVALID_ORDERS_CAPACITY),
+            cancelled_orders: HashMap::new(),
             order_validation_subs: HashMap::new(),
             validator: OrderValidator::new(validator),
             orders_subscriber_tx
         }
     }
 
-    pub fn is_valid_order(&self, order: &AllOrders) -> bool {
-        let hash = order.order_hash();
-        self.order_hash_to_order_id.contains_key(&hash)
+    fn is_missing(&self, order_hash: &B256) -> bool {
+        !self.order_hash_to_order_id.contains_key(order_hash)
+    }
+
+    fn is_seen_invalid(&self, order_hash: &B256) -> bool {
+        self.seen_invalid_orders.contains(order_hash)
+    }
+
+    fn is_cancelled(&self, order_hash: &B256) -> bool {
+        self.cancelled_orders.contains_key(order_hash)
+    }
+
+    fn is_duplicate(&self, order_hash: &B256) -> bool {
+        if self.order_hash_to_order_id.contains_key(order_hash) || self.is_seen_invalid(order_hash)
+        {
+            trace!(?order_hash, "got duplicate order");
+            return true
+        }
+
+        false
     }
 
     pub fn new_rpc_order(
@@ -93,6 +126,68 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.new_order(Some(peer_id), origin, order, None)
     }
 
+    pub fn cancel_order(&mut self, from: Address, order_hash: B256) -> bool {
+        if self.is_seen_invalid(&order_hash) || self.is_cancelled(&order_hash) {
+            return true
+        }
+
+        // the cancel arrived before the new order request
+        // nothing more needs to be done, since new_order() will return early
+        if self.is_missing(&order_hash) {
+            // optimistically assuming that orders won't take longer than a day to propagate
+            let deadline = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + MAX_NEW_ORDER_DELAY_PROPAGATION * ETH_BLOCK_TIME.as_secs();
+            self.insert_cancel_request_with_deadline(from, &order_hash, Some(U256::from(deadline)));
+            self.notify_order_subscribers(PoolManagerUpdate::CancelledOrder(order_hash));
+            return true;
+        }
+
+        let order_id = self.order_hash_to_order_id.get(&order_hash).unwrap();
+        if order_id.address != from {
+            return false;
+        }
+
+        let removed = self.order_storage.cancel_order(order_id);
+        let removed_from_storage = removed.is_some();
+        if removed_from_storage {
+            let order = removed.unwrap();
+            self.order_hash_to_order_id.remove(&order_hash);
+            self.order_hash_to_peer_id.remove(&order_hash);
+            self.insert_cancel_request_with_deadline(from, &order_hash, order.deadline());
+            self.notify_order_subscribers(PoolManagerUpdate::CancelledOrder(order_hash));
+        }
+
+        removed_from_storage
+    }
+
+    fn insert_cancel_request_with_deadline(
+        &mut self,
+        from: Address,
+        order_hash: &B256,
+        deadline: Option<U256>
+    ) {
+        let valid_until = deadline.map_or_else(
+            || {
+                // if no deadline is provided the cancellation request is valid until block
+                // transition
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+            },
+            |deadline| {
+                let bytes: [u8; U256::BYTES] = deadline.to_le_bytes();
+                // should be safe
+                u64::from_le_bytes(bytes[..8].try_into().unwrap())
+            }
+        );
+        self.cancelled_orders
+            .insert(*order_hash, CancelOrderRequest { from, valid_until });
+    }
+
     fn new_order(
         &mut self,
         peer_id: Option<PeerId>,
@@ -101,8 +196,15 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         validation_res_sub: Option<Sender<OrderValidationResults>>
     ) {
         let hash = order.order_hash();
+        let cancel_request = self.cancelled_orders.get(&hash);
+        let is_valid_cancel_request =
+            cancel_request.is_some() && cancel_request.unwrap().from == order.from();
         // network spammers will get penalized only once
-        if self.is_duplicate(&hash) {
+        if self.is_duplicate(&hash) || is_valid_cancel_request {
+            if is_valid_cancel_request {
+                self.insert_cancel_request_with_deadline(order.from(), &hash, order.deadline());
+                self.order_storage.log_cancel_order(&order);
+            }
             self.notify_validation_subscribers(&hash, OrderValidationResults::Invalid(hash));
             return
         }
@@ -122,16 +224,6 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 .push(validation_tx);
         }
         self.validator.validate_order(origin, order);
-    }
-
-    fn is_duplicate(&self, hash: &B256) -> bool {
-        if self.order_hash_to_order_id.contains_key(hash) || self.seen_invalid_orders.contains(hash)
-        {
-            trace!(?hash, "got duplicate order");
-            return true
-        }
-
-        false
     }
 
     /// used to remove orders that expire before the next ethereum block
@@ -285,7 +377,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             OrderValidationResults::Invalid(bad_hash) => {
                 self.notify_validation_subscribers(
                     &bad_hash,
-                    OrderValidationResults::Invalid(bad_hash.clone())
+                    OrderValidationResults::Invalid(bad_hash)
                 );
                 let peers = self
                     .order_hash_to_peer_id
@@ -347,7 +439,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     fn update_order_tracking(&mut self, hash: &B256, user: UserAddress, id: OrderId) {
         self.order_hash_to_peer_id.remove(hash);
-        self.order_hash_to_order_id.insert(hash.clone(), id);
+        self.order_hash_to_order_id.insert(*hash, id);
         // nonce overlap is checked during validation so its ok we
         // don't check for duplicates
         self.address_to_orders.entry(user).or_default().push(id);
@@ -355,6 +447,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     pub fn get_all_orders(&self) -> OrderSet<GroupedVanillaOrder, TopOfBlockOrder> {
         self.order_storage.get_all_orders()
+    }
+
+    pub fn new_pool(&self, pool: NewInitializedPool) {
+        self.order_storage.new_pool(pool);
     }
 
     pub fn start_new_block_processing(
@@ -381,6 +477,12 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         // add expired orders to completed
         completed_orders.extend(self.remove_expired_orders(block));
 
+        let time_now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        self.cancelled_orders
+            .retain(|_, request| request.valid_until >= time_now);
         self.validator
             .notify_validation_on_changes(block, completed_orders, address_changes);
     }

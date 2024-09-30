@@ -8,11 +8,6 @@ import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 abstract contract HookDeployer is Test {
-    function _angstromFlags() internal pure returns (uint160) {
-        return Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG
-            | Hooks.AFTER_REMOVE_LIQUIDITY_FLAG;
-    }
-
     function _newFactory() internal returns (address) {
         return address(new Create2Factory());
     }
@@ -24,13 +19,20 @@ abstract contract HookDeployer is Test {
         bytes32 initcodeHash = keccak256(initcode);
 
         uint256 salt = 0;
-        while (uint160(addr = computeCreate2(factory, salt, initcodeHash)) & Hooks.ALL_HOOK_MASK != flags) {
+        while (
+            uint160(addr = computeCreate2(factory, salt, initcodeHash)) & Hooks.ALL_HOOK_MASK
+                != flags
+        ) {
             salt++;
         }
 
         (success, retdata) = factory.call(abi.encodePacked(salt, initcode));
         if (success) {
-            assertEq(retdata, abi.encodePacked(addr), "Sanity check: factory returned data is not mined address");
+            assertEq(
+                retdata,
+                abi.encodePacked(addr),
+                "Sanity check: factory returned data is not mined address"
+            );
         } else {
             assembly ("memory-safe") {
                 revert(add(retdata, 0x20), mload(retdata))
@@ -38,8 +40,14 @@ abstract contract HookDeployer is Test {
         }
     }
 
-    function computeCreate2(address factory, uint256 salt, bytes32 initcodeHash) internal pure returns (address) {
-        return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), factory, salt, initcodeHash)))));
+    function computeCreate2(address factory, uint256 salt, bytes32 initcodeHash)
+        internal
+        pure
+        returns (address)
+    {
+        return address(
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), factory, salt, initcodeHash))))
+        );
     }
 }
 

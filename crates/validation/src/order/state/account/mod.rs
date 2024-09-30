@@ -1,9 +1,8 @@
 //! keeps track of account state for orders
-use std::sync::Arc;
 
 use alloy::primitives::{Address, B256};
 use angstrom_types::{
-    orders::OrderLocation,
+    orders::OrderId,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::OrderWithStorageData}
 };
 use dashmap::DashSet;
@@ -11,15 +10,13 @@ use thiserror::Error;
 use user::UserAccounts;
 
 use super::{db_state_utils::StateFetchUtils, pools::UserOrderPoolInfo};
-use crate::{common::lru_db::BlockStateProviderFactory, RevmLRU};
+use crate::common::lru_db::BlockStateProviderFactory;
 
 pub mod user;
 
 /// processes a user account and tells us based on there current live orders
 /// wether or not this order is valid.
-pub struct UserAccountProcessor<DB, S> {
-    /// database for fetching verification info
-    db:                    Arc<RevmLRU<DB>>,
+pub struct UserAccountProcessor<S> {
     /// keeps track of all user accounts
     user_accounts:         UserAccounts,
     /// utils for fetching the required data to verify
@@ -29,12 +26,10 @@ pub struct UserAccountProcessor<DB, S> {
     known_canceled_orders: DashSet<B256>
 }
 
-impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
-    UserAccountProcessor<DB, S>
-{
-    pub fn new(db: Arc<RevmLRU<DB>>, current_block: u64, fetch_utils: S) -> Self {
+impl<S: StateFetchUtils> UserAccountProcessor<S> {
+    pub fn new(current_block: u64, fetch_utils: S) -> Self {
         let user_accounts = UserAccounts::new(current_block);
-        Self { db, fetch_utils, user_accounts, known_canceled_orders: DashSet::default() }
+        Self { fetch_utils, user_accounts, known_canceled_orders: DashSet::default() }
     }
 
     /// Fetches the state overrides that are required for the hook simulation.
@@ -70,10 +65,7 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
         let respend = order.respend_avoidance_strategy();
         match respend {
             angstrom_types::sol_bindings::RespendAvoidanceMethod::Nonce(nonce) => {
-                if !self
-                    .fetch_utils
-                    .is_valid_nonce(user, nonce, self.db.clone())
-                {
+                if !self.fetch_utils.is_valid_nonce(user, nonce) {
                     return Err(UserAccountVerificationError::DuplicateNonce(order_hash))
                 }
             }
@@ -98,8 +90,7 @@ impl<DB: BlockStateProviderFactory + Unpin + 'static, S: StateFetchUtils>
             user,
             pool_info.token,
             respend,
-            &self.fetch_utils,
-            &self.db
+            &self.fetch_utils
         );
 
         // ensure that the current live state is enough to satisfy the order
@@ -148,19 +139,7 @@ pub trait StorageWithData: RawPoolOrder {
             is_bid: pool_info.is_bid,
             is_valid,
             valid_block: block,
-            order_id: angstrom_types::orders::OrderId {
-                reuse_avoidance: self.respend_avoidance_strategy(),
-                flash_block:     self.flash_block(),
-                address:         self.from(),
-                pool_id:         pool_info.pool_id,
-                hash:            self.order_hash(),
-                deadline:        self.deadline(),
-                location:        if is_limit {
-                    OrderLocation::Limit
-                } else {
-                    OrderLocation::Searcher
-                }
-            },
+            order_id: OrderId::from_all_orders(&self, pool_info.pool_id),
             invalidates,
             order: self
         }
@@ -181,36 +160,27 @@ pub enum UserAccountVerificationError<O: RawPoolOrder> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::{
-        collections::HashSet,
-        sync::{atomic::AtomicU64, Arc}
-    };
+    use std::collections::HashSet;
 
-    use alloy::primitives::{FixedBytes, U256};
-    use angstrom_types::sol_bindings::{grouped_orders::GroupedVanillaOrder, RawPoolOrder};
+    use alloy::primitives::U256;
+    use angstrom_types::{
+        primitive::PoolId,
+        sol_bindings::{grouped_orders::GroupedVanillaOrder, RawPoolOrder}
+    };
     use dashmap::DashSet;
     use rand::thread_rng;
     use reth_primitives::Address;
-    use reth_provider::test_utils::NoopProvider;
     use revm::primitives::bitvec::store::BitStore;
     use testing_tools::type_generator::orders::generate_limit_order;
 
     use super::{UserAccountProcessor, UserAccountVerificationError, UserAccounts};
-    use crate::{
-        common::lru_db::RevmLRU,
-        order::state::{
-            db_state_utils::test_fetching::MockFetch,
-            pools::{pool_tracker_mock::MockPoolTracker, PoolsTracker}
-        }
+    use crate::order::state::{
+        db_state_utils::test_fetching::MockFetch,
+        pools::{pool_tracker_mock::MockPoolTracker, PoolsTracker}
     };
 
-    fn setup_test_account_processor(block: u64) -> UserAccountProcessor<NoopProvider, MockFetch> {
+    fn setup_test_account_processor(block: u64) -> UserAccountProcessor<MockFetch> {
         UserAccountProcessor {
-            db:                    Arc::new(RevmLRU::new(
-                100,
-                Arc::new(NoopProvider::default()),
-                Arc::new(AtomicU64::new(420))
-            )),
             user_accounts:         UserAccounts::new(block),
             fetch_utils:           MockFetch::default(),
             known_canceled_orders: DashSet::default()
@@ -223,17 +193,15 @@ pub mod tests {
         let mut processor = setup_test_account_processor(block);
 
         let user = Address::random();
-        let asset0 = 0;
-        let asset1 = 1;
 
         let token0 = Address::random();
         let token1 = Address::random();
 
         let mut mock_pool = MockPoolTracker::default();
 
-        let pool = mock_pool.add_pool(token0, token1, None);
-        mock_pool.add_asset(asset0, token0);
-        mock_pool.add_asset(asset1, token1);
+        let pool = PoolId::default();
+
+        mock_pool.add_pool(token0, token1, pool);
 
         let mut rng = thread_rng();
         let mut order: GroupedVanillaOrder = generate_limit_order(
@@ -250,8 +218,8 @@ pub mod tests {
         .order;
 
         // wrap order with details
-        let (pool_info, order) = mock_pool
-            .fetch_pool_info_for_order(order)
+        let pool_info = mock_pool
+            .fetch_pool_info_for_order(&order)
             .expect("pool tracker should have valid state");
 
         println!("setting balances and approvals");
@@ -274,17 +242,14 @@ pub mod tests {
         let mut processor = setup_test_account_processor(block);
 
         let user = Address::random();
-        let asset0 = 0;
-        let asset1 = 1;
 
         let token0 = Address::random();
         let token1 = Address::random();
 
         let mut mock_pool = MockPoolTracker::default();
+        let pool = PoolId::default();
 
-        let pool = mock_pool.add_pool(token0, token1, None);
-        mock_pool.add_asset(asset0, token0);
-        mock_pool.add_asset(asset1, token1);
+        mock_pool.add_pool(token0, token1, pool);
 
         let mut rng = thread_rng();
         let mut order: GroupedVanillaOrder = generate_limit_order(
@@ -301,8 +266,8 @@ pub mod tests {
         .order;
 
         // wrap order with details
-        let (pool_info, order) = mock_pool
-            .fetch_pool_info_for_order(order)
+        let pool_info = mock_pool
+            .fetch_pool_info_for_order(&order)
             .expect("pool tracker should have valid state");
 
         processor.fetch_utils.set_balance_for_user(
@@ -336,17 +301,14 @@ pub mod tests {
         let mut processor = setup_test_account_processor(block);
 
         let user = Address::random();
-        let asset0 = 0;
-        let asset1 = 1;
 
         let token0 = Address::random();
         let token1 = Address::random();
 
         let mut mock_pool = MockPoolTracker::default();
+        let pool = PoolId::default();
 
-        let pool = mock_pool.add_pool(token0, token1, None);
-        mock_pool.add_asset(asset0, token0);
-        mock_pool.add_asset(asset1, token1);
+        mock_pool.add_pool(token0, token1, pool);
 
         let mut rng = thread_rng();
         let mut order0: GroupedVanillaOrder = generate_limit_order(
@@ -375,11 +337,11 @@ pub mod tests {
         )
         .order;
         // wrap order with details
-        let (pool_info0, order0) = mock_pool
-            .fetch_pool_info_for_order(order0)
+        let pool_info0 = mock_pool
+            .fetch_pool_info_for_order(&order0)
             .expect("pool tracker should have valid state");
-        let (pool_info1, order1) = mock_pool
-            .fetch_pool_info_for_order(order1)
+        let pool_info1 = mock_pool
+            .fetch_pool_info_for_order(&order1)
             .expect("pool tracker should have valid state");
 
         processor.fetch_utils.set_balance_for_user(
@@ -413,17 +375,14 @@ pub mod tests {
         let mut processor = setup_test_account_processor(block);
 
         let user = Address::random();
-        let asset0 = 0;
-        let asset1 = 1;
 
         let token0 = Address::random();
         let token1 = Address::random();
 
         let mut mock_pool = MockPoolTracker::default();
+        let pool = PoolId::default();
 
-        let pool = mock_pool.add_pool(token0, token1, None);
-        mock_pool.add_asset(asset0, token0);
-        mock_pool.add_asset(asset1, token1);
+        mock_pool.add_pool(token0, token1, pool);
 
         let mut rng = thread_rng();
         let mut order: GroupedVanillaOrder = generate_limit_order(
@@ -440,8 +399,8 @@ pub mod tests {
         .order;
 
         // wrap order with details
-        let (pool_info, order) = mock_pool
-            .fetch_pool_info_for_order(order)
+        let pool_info = mock_pool
+            .fetch_pool_info_for_order(&order)
             .expect("pool tracker should have valid state");
 
         processor

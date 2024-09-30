@@ -8,15 +8,20 @@ use std::{
 };
 
 use alloy_primitives::{Address, U256};
+use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::FutureExt;
 use reth_provider::StateProviderFactory;
 use tokio::sync::mpsc::unbounded_channel;
 use validation::{
     common::lru_db::RevmLRU,
-    order::state::{
-        config::{load_validation_config, ValidationConfig},
-        db_state_utils::{nonces::Nonces, FetchUtils},
-        pools::AngstromPoolsTracker
+    order::{
+        order_validator::OrderValidator,
+        sim::SimValidation,
+        state::{
+            config::{load_data_fetcher_config, load_validation_config, ValidationConfig},
+            db_state_utils::{nonces::Nonces, FetchUtils},
+            pools::AngstromPoolsTracker
+        }
     },
     validator::{ValidationClient, Validator}
 };
@@ -32,35 +37,31 @@ pub struct TestOrderValidator<DB: StateProviderFactory + Clone + Unpin + 'static
     pub revm_lru:   Arc<RevmLRU<DB>>,
     pub config:     ValidationConfig,
     pub client:     ValidationClient,
-    pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils>
+    pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils<DB>>
 }
 
 impl<DB: StateProviderFactory + Clone + Unpin + 'static> TestOrderValidator<DB> {
     pub fn new(db: DB) -> Self {
         let (tx, rx) = unbounded_channel();
         let config_path = Path::new("./state_config.toml");
-        let config = load_validation_config(config_path).unwrap();
-        tracing::debug!(?config);
+        let fetch_config = load_data_fetcher_config(config_path).unwrap();
+        let validation_config = load_validation_config(config_path).unwrap();
+        tracing::debug!(?fetch_config, ?validation_config);
         let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));
         let revm_lru = Arc::new(RevmLRU::new(10000000, Arc::new(db), current_block.clone()));
 
-        let task_db = revm_lru.clone();
-        let fetch = FetchUtils::new(config.clone());
-        let pools = AngstromPoolsTracker::new(config.clone());
+        let fetch = FetchUtils::new(fetch_config.clone(), revm_lru.clone());
+        let pools = AngstromPoolsTracker::new(validation_config.clone());
 
         let handle = tokio::runtime::Handle::current();
-        let val = Validator::new(
-            rx,
-            task_db,
-            current_block.clone(),
-            config.max_validation_per_user,
-            pools,
-            fetch,
-            handle
-        );
+        let thread_pool =
+            KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
+        let sim = SimValidation::new(revm_lru.clone());
+        let order_validator = OrderValidator::new(sim, current_block, pools, fetch, thread_pool);
+        let val = Validator::new(rx, order_validator);
         let client = ValidationClient(tx);
 
-        Self { revm_lru, client, underlying: val, config }
+        Self { revm_lru, client, underlying: val, config: validation_config }
     }
 
     pub async fn poll_for(&mut self, duration: Duration) {

@@ -10,6 +10,7 @@ mod validator;
 
 use std::future::Future;
 
+use alloy::primitives::{Address, B256};
 use angstrom_types::{orders::OrderOrigin, sol_bindings::grouped_orders::AllOrders};
 pub use angstrom_utils::*;
 pub use config::PoolConfig;
@@ -20,7 +21,8 @@ use tokio::sync::broadcast::Receiver;
 pub enum PoolManagerUpdate {
     NewOrder(AllOrders),
     FilledOrder((u64, AllOrders)),
-    UnfilledOrders(AllOrders)
+    UnfilledOrders(AllOrders),
+    CancelledOrder(B256)
 }
 
 /// The OrderPool Trait is how other processes can interact with the orderpool
@@ -30,9 +32,5 @@ pub trait OrderPoolHandle: Send + Sync + Clone + Unpin + 'static {
     fn new_order(&self, origin: OrderOrigin, order: AllOrders)
         -> impl Future<Output = bool> + Send;
     fn subscribe_orders(&self) -> Receiver<PoolManagerUpdate>;
-    fn validate_order(
-        &self,
-        order_origin: OrderOrigin,
-        order: AllOrders
-    ) -> impl Future<Output = bool> + Send;
+    fn cancel_order(&self, sender: Address, order_hash: B256) -> impl Future<Output = bool> + Send;
 }

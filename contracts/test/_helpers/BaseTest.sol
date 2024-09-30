@@ -7,7 +7,7 @@ import {Trader} from "./types/Trader.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {HookDeployer} from "./HookDeployer.sol";
 import {stdError} from "forge-std/StdError.sol";
-import {OrderMeta} from "src/reference/OrderTypes.sol";
+import {OrderMeta, TopOfBlockOrder} from "src/reference/OrderTypes.sol";
 import {TickLib} from "src/libraries/TickLib.sol";
 import {HookDeployer} from "./HookDeployer.sol";
 import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
@@ -25,13 +25,26 @@ contract BaseTest is Test, HookDeployer {
 
     bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x4));
 
+    function pm(address addr) internal pure returns (IPoolManager) {
+        return IPoolManager(addr);
+    }
+
     function deployAngstrom(bytes memory initcode, IPoolManager uni, address controller)
         internal
-        returns (address addr)
+        returns (address)
     {
+        return deployAngstrom(initcode, uni, controller, address(0));
+    }
+
+    function deployAngstrom(
+        bytes memory initcode,
+        IPoolManager uni,
+        address controller,
+        address feeMaster
+    ) internal returns (address addr) {
         bool success;
         (success, addr,) = deployHook(
-            bytes.concat(initcode, abi.encode(uni, controller, address(0))),
+            bytes.concat(initcode, abi.encode(uni, controller, feeMaster)),
             ANGSTROM_HOOK_FLAGS,
             CREATE2_FACTORY
         );
@@ -40,6 +53,20 @@ contract BaseTest is Test, HookDeployer {
 
     function rawGetConfigStore(address angstrom) internal view returns (address) {
         return address(bytes20(vm.load(address(angstrom), ANG_CONFIG_STORE_SLOT) << 32));
+    }
+
+    function computeDomainSeparator(address angstrom) internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                keccak256(
+                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+                ),
+                keccak256("Angstrom"),
+                keccak256("v1"),
+                block.chainid,
+                address(angstrom)
+            )
+        );
     }
 
     function i24(uint256 x) internal pure returns (int24 y) {
@@ -154,6 +181,13 @@ contract BaseTest is Test, HookDeployer {
         }
     }
 
+    function sign(Account memory account, TopOfBlockOrder memory order, bytes32 domainSeparator)
+        internal
+        pure
+    {
+        sign(account, order.meta, erc712Hash(domainSeparator, order.hash()));
+    }
+
     function sign(Account memory account, OrderMeta memory targetMeta, bytes32 hash)
         internal
         pure
@@ -187,5 +221,12 @@ contract BaseTest is Test, HookDeployer {
         address asset0 = address(new MockERC20());
         address asset1 = address(new MockERC20());
         return asset0 < asset1 ? (asset0, asset1) : (asset1, asset0);
+    }
+
+    function addrs(bytes memory encoded) internal pure returns (address[] memory) {
+        return abi.decode(
+            bytes.concat(bytes32(uint256(0x20)), bytes32(encoded.length / 0x20), encoded),
+            (address[])
+        );
     }
 }

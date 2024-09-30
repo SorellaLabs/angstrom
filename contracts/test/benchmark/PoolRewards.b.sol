@@ -68,17 +68,7 @@ contract PoolRewardsTest is BaseTest {
         angstrom.configurePool(asset0, asset1, 60, 0);
         // Note hardcoded slot for `Angstrom.sol`, might be different for test derivations.
         configStore = rawGetConfigStore(address(angstrom));
-        domainSeparator = keccak256(
-            abi.encode(
-                keccak256(
-                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-                ),
-                keccak256("Angstrom"),
-                keccak256("v1"),
-                block.chainid,
-                address(angstrom)
-            )
-        );
+        domainSeparator = computeDomainSeparator(address(angstrom));
 
         gate.tickSpacing(tickSpacing = 60);
         id = gate.initializePool(

@@ -7,8 +7,8 @@ import {BitPackLib} from "./BitPackLib.sol";
 
 struct Asset {
     address addr;
-    uint128 take;
     uint128 save;
+    uint128 take;
     uint128 settle;
 }
 

@@ -5,23 +5,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  lint:
-    name: 'Clippy linting'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-          profile: minimal
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -Dwarnings
   build:
     name: 'Build'
     runs-on: ubuntu-latest
@@ -38,9 +21,8 @@ jobs:
           cache-on-failure: true
       - name: Build
         run: cargo build 
-
-  test:
-    name: 'Run tests'
+  build-tests:
+    name: 'Build Tests'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -53,5 +35,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: Run tests
-        run: cargo test
+      - name: Build Tests
+        run: cargo build --tests

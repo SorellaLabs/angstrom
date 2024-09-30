@@ -31,7 +31,7 @@ contract BaseTest is Test, HookDeployer {
     {
         bool success;
         (success, addr,) = deployHook(
-            bytes.concat(initcode, abi.encode(uni, controller)),
+            bytes.concat(initcode, abi.encode(uni, controller, address(0))),
             ANGSTROM_HOOK_FLAGS,
             CREATE2_FACTORY
         );

@@ -20,8 +20,8 @@ abstract contract UniConsumer {
         _;
     }
 
-    constructor(address uniV4PoolManager) {
-        UNI_V4 = IPoolManager(uniV4PoolManager);
+    constructor(IPoolManager uniV4) {
+        UNI_V4 = uniV4;
     }
 
     function _checkHookPermissions(uint160 flags) internal view {

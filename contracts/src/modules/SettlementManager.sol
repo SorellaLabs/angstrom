@@ -26,10 +26,26 @@ abstract contract SettlementManager is UniConsumer {
     using ConversionLib for address;
 
     error BundleChangeNetNegative(address asset);
+    error NotFeeMaster();
+
+    /// @dev Address that can pull arbitrary funds from the contract, assumed to be trustless,
+    /// log proof checking contract.
+    address internal immutable FEE_MASTER;
 
     DeltaTracker internal bundleDeltas;
 
     mapping(address => mapping(address => uint256)) internal _angstromReserves;
+
+    constructor(address feeMaster) {
+        FEE_MASTER = feeMaster;
+    }
+
+    /// @dev Function to allow `FEE_MASTER` to pull an arbitrary amount of tokens from the contract.
+    /// Assumed to be accrued validator fees.
+    function pullFee(address asset, uint256 amount) external {
+        if (msg.sender != FEE_MASTER) revert NotFeeMaster();
+        asset.safeTransfer(msg.sender, amount);
+    }
 
     function _takeAssets(AssetArray assets) internal {
         uint256 length = assets.len();

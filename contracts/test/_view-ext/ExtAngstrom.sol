@@ -16,9 +16,7 @@ contract ExtAngstrom is Angstrom {
     using IUniV4 for IPoolManager;
     using FixedPointMathLib for *;
 
-    constructor(address uniV4PoolManager, address governance)
-        Angstrom(uniV4PoolManager, governance)
-    {}
+    constructor(IPoolManager uniV4, address governance) Angstrom(uniV4, governance, address(0)) {}
 
     function lastBlockUpdated() public view returns (uint64) {
         return _lastBlockUpdated;

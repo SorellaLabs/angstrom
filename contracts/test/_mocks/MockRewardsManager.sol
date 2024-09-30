@@ -25,9 +25,10 @@ contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdateManager
     using FormatLib for *;
     using IUniV4 for IPoolManager;
 
-    constructor(address uniV4PoolManager, address controller)
-        UniConsumer(uniV4PoolManager)
+    constructor(IPoolManager uniV4, address controller)
+        UniConsumer(uniV4)
         NodeManager(controller)
+        SettlementManager(address(0))
     {
         console.log("rewards manager deployed");
     }

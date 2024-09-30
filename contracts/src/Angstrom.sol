@@ -7,6 +7,7 @@ import {SettlementManager} from "./modules/SettlementManager.sol";
 import {PoolUpdateManager} from "./modules/PoolUpdateManager.sol";
 import {InvalidationManager} from "./modules/InvalidationManager.sol";
 import {HookManager} from "./modules/HookManager.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {UniConsumer} from "./modules/UniConsumer.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 
@@ -48,9 +49,10 @@ contract Angstrom is
 
     error LimitViolated();
 
-    constructor(address uniV4PoolManager, address controller)
-        UniConsumer(uniV4PoolManager)
+    constructor(IPoolManager uniV4, address controller, address feeMaster)
+        UniConsumer(uniV4)
         NodeManager(controller)
+        SettlementManager(feeMaster)
     {}
 
     function execute(bytes calldata encoded) external {

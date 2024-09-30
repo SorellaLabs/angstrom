@@ -20,7 +20,6 @@ impl From<Log<Initialize>> for NewInitializedPool {
         Self {
             currency_in:  value.currency0,
             currency_out: value.currency1,
-            // where is this `bool` value generated?
             id:           value.id
         }
     }

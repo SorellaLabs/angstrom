@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    slice::Iter,
     sync::Arc,
     task::{Context, Poll}
 };
@@ -39,7 +38,7 @@ pub struct EthDataCleanser<DB> {
 
     /// Notifications for Canonical Block updates
     canonical_updates: BroadcastStream<CanonStateNotification>,
-    angstrom_tokens:   Vec<Address>,
+    angstrom_tokens:   HashSet<Address>,
     /// used to fetch data from db
     #[allow(dead_code)]
     db:                DB
@@ -56,7 +55,7 @@ where
         tp: TP,
         tx: Sender<EthCommand>,
         rx: Receiver<EthCommand>,
-        angstrom_tokens: Vec<Address>
+        angstrom_tokens: HashSet<Address>
     ) -> anyhow::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
 
@@ -94,12 +93,12 @@ where
     }
 
     fn handle_reorg(&mut self, old: Arc<Chain>, new: Arc<Chain>) {
-        let mut eoas = Self::get_eoa(old.clone());
-        eoas.extend(Self::get_eoa(new.clone()));
+        let mut eoas = self.get_eoa(old.clone());
+        eoas.extend(self.get_eoa(new.clone()));
 
         // get all reorged orders
-        let old_filled: HashSet<_> = self.fetch_filled_order(old.clone()).into_iter().collect();
-        let new_filled: HashSet<_> = self.fetch_filled_order(new.clone()).into_iter().collect();
+        let old_filled: HashSet<_> = self.fetch_filled_order(&old).collect();
+        let new_filled: HashSet<_> = self.fetch_filled_order(&new).collect();
 
         let difference: Vec<_> = old_filled.difference(&new_filled).copied().collect();
         let reorged_orders = EthEvent::ReorgedOrders(difference);
@@ -114,12 +113,12 @@ where
     }
 
     fn handle_commit(&mut self, new: Arc<Chain>) {
-        let filled_orders = self.fetch_filled_order(new.clone());
         // handle this first so the newest state is the first available
         self.handle_new_pools(new.clone());
 
-        let filled_orders = Self::fetch_filled_orders(new.clone()).collect::<Vec<_>>();
-        let eoas = Self::get_eoa(new.clone());
+        let filled_orders = self.fetch_filled_order(&new).collect::<Vec<_>>();
+
+        let eoas = self.get_eoa(new.clone());
 
         let transitions = EthEvent::NewBlockTransitions {
             block_number: new.tip().number,
@@ -131,13 +130,25 @@ where
 
     fn handle_new_pools(&mut self, chain: Arc<Chain>) {
         Self::get_new_pools(&chain)
+            .map(|pool| {
+                let token_0 = pool.currency_in;
+                let token_1 = pool.currency_out;
+                self.angstrom_tokens.insert(token_0);
+                self.angstrom_tokens.insert(token_1);
+
+                pool
+            })
             .map(EthEvent::NewPool)
-            .for_each(|pool_event| self.send_events(pool_event));
+            .for_each(|pool_event| {
+                // didn't use send event fn because of lifetimes.
+                self.event_listeners
+                    .retain(|e| e.send(pool_event.clone()).is_ok());
+            });
     }
 
     /// TODO: check contract for state change. if there is change. fetch the
     /// transaction on Angstrom and process call-data to pull order-hashes.
-    fn fetch_filled_order(&self, chain: Arc<Chain>) -> Vec<B256> {
+    fn fetch_filled_order<'a>(&'a self, chain: &'a Chain) -> impl Iterator<Item = B256> + 'a {
         chain
             .tip()
             .transactions()
@@ -148,12 +159,12 @@ where
                 AngstromBundle::pade_decode(&mut input, None).ok()
             })
             .flat_map(move |bundle| bundle.get_order_hashes().collect::<Vec<_>>())
-            .collect()
+        // .collect()
     }
 
     /// fetches all eoa addresses touched
-    fn get_eoa(chain: Arc<Chain>) -> Vec<Address> {
-        let tip = chain.tip().block.number;
+    fn get_eoa(&self, chain: Arc<Chain>) -> Vec<Address> {
+        let tip = chain.tip().number;
 
         chain
             .execution_outcome()
@@ -161,6 +172,7 @@ where
             .into_iter()
             .flatten()
             .flat_map(|receipt| &receipt.logs)
+            .filter(|log| self.angstrom_tokens.contains(&log.address))
             .map(|logs| {
                 Transfer::decode_log(logs, true)
                     .map(|log| log._from)

@@ -89,8 +89,8 @@ encoding (`src/reference/Asset.sol`)](../../contracts/src/reference/Asset.sol)
 ```rust
 struct Asset {
     addr: address,
-    take: u128,
     save: u128,
+    take: u128,
     settle: u128
 }
 ```
@@ -101,8 +101,8 @@ The elements **must be** sorted in ascending order according the value of `.addr
 |Field|Description|
 |-----|-----------|
 |`addr: address`|Contract address of ERC20 token of the asset. |
-|`take: uint128`|Amount of the asset to take from Uniswap (`.addr` base unit) |
 |`save: uint128`|Amount of the asset to save as the network fee (`.addr` base unit)|
+|`take: uint128`|Amount of the asset to take from Uniswap (`.addr` base unit) |
 |`settle: uint128`|Final amount to be repayed to Uniswap post-bundle execution. (`.addr` base unit)|
 
 #### `Pair`

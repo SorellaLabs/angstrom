@@ -3,6 +3,7 @@ on: push
 
 env:
   CARGO_TERM_COLOR: always
+  FOUNDRY_PROFILE: ci
 
 jobs:
   build:
@@ -37,3 +38,40 @@ jobs:
           cache-on-failure: true
       - name: Build Tests
         run: cargo build --tests
+  contracts-build:
+    name: 'Build Contracts'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./my-directory
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Show Forge version
+        run: |
+          forge --version
+  contracts-lint:
+    name: 'Format Contracts'
+    needs: ['contracts-build']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Forge fmt
+        run: |
+          forge fmt --check
+        id: fmt
+  contracts-test:
+    name: 'Test Contracts'
+    needs: ['contracts-build']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Forge tests
+        run: |
+          forge test -vvv
+        id: test
+
+

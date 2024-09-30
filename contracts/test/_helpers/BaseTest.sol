@@ -23,7 +23,7 @@ contract BaseTest is Test, HookDeployer {
 
     uint256 internal constant REAL_TIMESTAMP = 1721652639;
 
-    bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x5));
+    bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x4));
 
     function deployAngstrom(bytes memory initcode, IPoolManager uni, address controller)
         internal
@@ -36,6 +36,10 @@ contract BaseTest is Test, HookDeployer {
             CREATE2_FACTORY
         );
         assertTrue(success);
+    }
+
+    function rawGetConfigStore(address angstrom) internal view returns (address) {
+        return address(bytes20(vm.load(address(angstrom), ANG_CONFIG_STORE_SLOT) << 32));
     }
 
     function i24(uint256 x) internal pure returns (int24 y) {

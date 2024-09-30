@@ -5,6 +5,8 @@ import {CalldataReader} from "./CalldataReader.sol";
 
 import {console} from "forge-std/console.sol";
 
+uint256 constant FEE_SUMMARY_ENTRY_SIZE = 36;
+
 type Asset is uint256;
 
 type AssetArray is uint256;
@@ -17,12 +19,12 @@ library AssetLib {
     error AssetsOutOfOrderOrNotUnique();
     error AssetAccessOutOfBounds(uint256 index, uint256 length);
 
-    /// @dev Size of a single encoded asset (b20:addr ++ b16:borrow ++ b16:save ++ b16:settle)
+    /// @dev Size of a single encoded asset (b20:addr ++ b16:save ++ b16:borrow ++ b16:settle)
     uint256 internal constant ASSET_CD_BYTES = 68;
 
     uint256 internal constant ADDR_OFFSET = 0;
-    uint256 internal constant TAKE_OFFSET = 20;
-    uint256 internal constant SAVE_OFFSET = 36;
+    uint256 internal constant SAVE_OFFSET = 20;
+    uint256 internal constant TAKE_OFFSET = 36;
     uint256 internal constant SETTLE_OFFSET = 52;
 
     uint256 internal constant LENGTH_MASK = 0xffffffff;
@@ -61,8 +63,14 @@ library AssetLib {
 
     function getUnchecked(AssetArray self, uint256 index) internal pure returns (Asset asset) {
         unchecked {
-            uint256 raw_cdOffset = AssetArray.unwrap(self) >> CALLDATA_PTR_OFFSET;
-            return Asset.wrap(raw_cdOffset + index * ASSET_CD_BYTES);
+            uint256 raw_calldataOffset = AssetArray.unwrap(self) >> CALLDATA_PTR_OFFSET;
+            return Asset.wrap(raw_calldataOffset + index * ASSET_CD_BYTES);
+        }
+    }
+
+    function raw_copyFeeEntryToMemory(Asset self, uint256 raw_memOffset) internal pure {
+        assembly ("memory-safe") {
+            calldatacopy(raw_memOffset, add(self, ADDR_OFFSET), FEE_SUMMARY_ENTRY_SIZE)
         }
     }
 

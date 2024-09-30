@@ -67,7 +67,7 @@ contract PoolRewardsTest is BaseTest {
         vm.prank(controller);
         angstrom.configurePool(asset0, asset1, 60, 0);
         // Note hardcoded slot for `Angstrom.sol`, might be different for test derivations.
-        configStore = address(bytes20(vm.load(address(angstrom), ANG_CONFIG_STORE_SLOT) << 32));
+        configStore = rawGetConfigStore(address(angstrom));
         domainSeparator = keccak256(
             abi.encode(
                 keccak256(

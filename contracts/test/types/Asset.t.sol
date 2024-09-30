@@ -22,7 +22,7 @@ contract AssetTest is Test {
     ) public pure {
         assertEq(
             RefAsset({addr: addr, take: take, save: save, settle: settle}).encode(),
-            abi.encodePacked(addr, take, save, settle)
+            abi.encodePacked(addr, save, take, settle)
         );
     }
 

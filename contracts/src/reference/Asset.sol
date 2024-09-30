@@ -30,7 +30,7 @@ library AssetLib {
     }
 
     function encode(Asset memory asset) internal pure returns (bytes memory b) {
-        b = abi.encodePacked(asset.addr, asset.take, asset.save, asset.settle);
+        b = abi.encodePacked(asset.addr, asset.save, asset.take, asset.settle);
         require(b.length == ActualAssetLib.ASSET_CD_BYTES, "Assets unexpected length");
     }
 

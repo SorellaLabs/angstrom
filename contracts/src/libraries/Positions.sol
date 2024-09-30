@@ -35,6 +35,7 @@ library PositionsLib {
             // WARN: Free memory pointer temporarily invalid from here on.
             mstore(0x26, salt)
             positionKey := keccak256(12, add(add(3, 3), add(20, 32)))
+            // Upper bytes of free memory pointer cleared.
             mstore(0x26, 0)
         }
         position = self.positions[id][positionKey];

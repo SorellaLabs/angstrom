@@ -1,4 +1,4 @@
-use alloy::{primitives::Address, sol};
+use alloy::sol;
 use pade_macro::{PadeDecode, PadeEncode};
 
 sol! {

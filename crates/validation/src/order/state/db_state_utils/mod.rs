@@ -139,14 +139,14 @@ pub mod test_fetching {
         pub fn set_balance_for_user(&self, user: Address, token: Address, value: U256) {
             self.balance_values
                 .entry(user)
-                .or_insert(HashMap::default())
+                .or_default()
                 .insert(token, value);
         }
 
         pub fn set_approval_for_user(&self, user: Address, token: Address, value: U256) {
             self.approval_values
                 .entry(user)
-                .or_insert(HashMap::default())
+                .or_default()
                 .insert(token, value);
         }
 

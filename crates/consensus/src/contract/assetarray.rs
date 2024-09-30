@@ -10,6 +10,12 @@ pub struct AssetArray {
     assets_idx: HashMap<Address, usize>
 }
 
+impl Default for AssetArray {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AssetArray {
     pub fn new() -> Self {
         Self { assets: Vec::new(), assets_idx: HashMap::new() }
@@ -35,8 +41,8 @@ impl AssetArray {
     }
 }
 
-impl Into<Vec<Asset>> for AssetArray {
-    fn into(self) -> Vec<Asset> {
-        self.assets
+impl From<AssetArray> for Vec<Asset> {
+    fn from(val: AssetArray) -> Self {
+        val.assets
     }
 }

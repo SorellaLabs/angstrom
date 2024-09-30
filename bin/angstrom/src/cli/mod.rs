@@ -1,5 +1,6 @@
 //! CLI definition and entrypoint to executable
 use std::{
+    collections::HashSet,
     path::PathBuf,
     sync::{Arc, Mutex}
 };
@@ -7,6 +8,7 @@ use std::{
 use angstrom_metrics::{initialize_prometheus_metrics, METRICS_ENABLED};
 use angstrom_network::manager::StromConsensusEvent;
 use order_pool::{order_storage::OrderStorage, PoolConfig, PoolManagerUpdate};
+use reth::primitives::Address;
 use reth_node_builder::{FullNode, NodeHandle};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use tokio::sync::mpsc::{
@@ -95,7 +97,15 @@ pub fn run() -> eyre::Result<()> {
             .launch()
             .await?;
 
-        initialize_strom_components(args, secret_key, channels, network, node, &executor);
+        initialize_strom_components(
+            Address::ZERO,
+            args,
+            secret_key,
+            channels,
+            network,
+            node,
+            &executor
+        );
 
         node_exit_future.await
     })
@@ -177,6 +187,7 @@ pub fn initialize_strom_handles() -> StromHandles {
 }
 
 pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
+    angstrom_address: Address,
     config: AngstromConfig,
     secret_key: SecretKey,
     handles: StromHandles,
@@ -185,11 +196,13 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
     executor: &TaskExecutor
 ) {
     let eth_handle = EthDataCleanser::spawn(
+        angstrom_address,
         node.provider.subscribe_to_canonical_state(),
         node.provider.clone(),
         executor.clone(),
         handles.eth_tx,
-        handles.eth_rx
+        handles.eth_rx,
+        HashSet::new()
     )
     .unwrap();
 

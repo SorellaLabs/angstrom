@@ -111,7 +111,7 @@ impl OrderPoolHandle for PoolHandle {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.send(OrderCommand::CancelOrder(from, order_hash, tx))
             .is_ok();
-        rx.map(|res| res.unwrap_or_else(|_| false))
+        rx.map(|res| res.unwrap_or(false))
     }
 }
 

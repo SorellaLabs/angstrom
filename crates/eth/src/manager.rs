@@ -130,13 +130,11 @@ where
 
     fn handle_new_pools(&mut self, chain: Arc<Chain>) {
         Self::get_new_pools(&chain)
-            .map(|pool| {
+            .inspect(|pool| {
                 let token_0 = pool.currency_in;
                 let token_1 = pool.currency_out;
                 self.angstrom_tokens.insert(token_0);
                 self.angstrom_tokens.insert(token_1);
-
-                pool
             })
             .map(EthEvent::NewPool)
             .for_each(|pool_event| {
@@ -155,7 +153,7 @@ where
             .filter(|tx| tx.transaction.to().is_some())
             .filter(|tx| tx.to().unwrap() == self.angstrom_address)
             .filter_map(|transaction| {
-                let mut input: &[u8] = &*transaction.input();
+                let mut input: &[u8] = transaction.input();
                 AngstromBundle::pade_decode(&mut input, None).ok()
             })
             .flat_map(move |bundle| bundle.get_order_hashes().collect::<Vec<_>>())
@@ -169,16 +167,15 @@ where
         chain
             .execution_outcome()
             .receipts_by_block(tip)
-            .into_iter()
+            .iter()
             .flatten()
             .flat_map(|receipt| &receipt.logs)
             .filter(|log| self.angstrom_tokens.contains(&log.address))
-            .map(|logs| {
+            .flat_map(|logs| {
                 Transfer::decode_log(logs, true)
                     .map(|log| log._from)
                     .or_else(|_| Approval::decode_log(logs, true).map(|log| log._owner))
             })
-            .flatten()
             .collect()
     }
 
@@ -191,7 +188,7 @@ where
             .into_iter()
             .flat_map(|receipt| {
                 receipt.logs.iter().filter_map(|log| {
-                    contract_bindings::poolmanager::PoolManager::Initialize::decode_log(&log, true)
+                    contract_bindings::poolmanager::PoolManager::Initialize::decode_log(log, true)
                         .map(Into::into)
                         .ok()
                 })

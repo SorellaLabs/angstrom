@@ -30,6 +30,8 @@ library BundleLib {
     using PoolUpdateLib for PoolUpdate[];
 
     function encode(Bundle memory self, address configStore) internal view returns (bytes memory) {
+        self.assets.sort();
+        self.pairs.sort();
         return bytes.concat(
             self.assets.encode(),
             self.pairs.encode(self.assets, configStore),

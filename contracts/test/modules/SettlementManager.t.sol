@@ -6,7 +6,10 @@ import {PoolManager} from "v4-core/src/PoolManager.sol";
 import {Bundle, TopOfBlockOrder, Asset} from "src/reference/Bundle.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 import {Angstrom} from "src/Angstrom.sol";
+import {SettlementManager} from "src/modules/SettlementManager.sol";
 import {LibSort} from "solady/src/utils/LibSort.sol";
+
+import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract SettlementManagerTest is BaseTest {
@@ -57,7 +60,9 @@ contract SettlementManagerTest is BaseTest {
 
         bytes memory payload = bundle.encode(rawGetConfigStore(address(angstrom)));
         vm.expectEmitAnonymous(address(angstrom));
-        emit AngstromFeeSummary(bundle.feeSummary());
+        bytes32 feeSummary = bundle.feeSummary();
+        assertEq(feeSummary, keccak256(abi.encodePacked(asset, amount, otherAsset, uint128(0))));
+        emit AngstromFeeSummary(feeSummary);
         vm.prank(validator);
         angstrom.execute(payload);
 
@@ -66,6 +71,62 @@ contract SettlementManagerTest is BaseTest {
         vm.prank(feeMaster);
         angstrom.pullFee(asset, amount);
         assertEq(MockERC20(asset).balanceOf(feeMaster), amount);
+    }
+
+    function test_multi() public {
+        Bundle memory bundle;
+        address asset1 = assets[61];
+        uint128 amount1 = 0.037e18;
+        addFee(bundle, asset1, amount1);
+        enablePool(asset1, otherAsset);
+
+        address asset2 = assets[34];
+        uint128 amount2 = 982_737.9738e18;
+        addFee(bundle, asset2, amount2);
+        enablePool(asset2, otherAsset);
+
+        bytes memory payload = bundle.encode(rawGetConfigStore(address(angstrom)));
+        vm.expectEmitAnonymous(address(angstrom));
+        bytes32 feeSummary = bundle.feeSummary();
+        assertEq(
+            feeSummary,
+            keccak256(abi.encodePacked(asset2, amount2, asset1, amount1, otherAsset, uint128(0)))
+        );
+        emit AngstromFeeSummary(feeSummary);
+        vm.prank(validator);
+        angstrom.execute(payload);
+
+        // Pull fee (first).
+        assertEq(MockERC20(asset1).balanceOf(feeMaster), 0);
+        vm.prank(feeMaster);
+        angstrom.pullFee(asset1, amount1);
+        assertEq(MockERC20(asset1).balanceOf(feeMaster), amount1);
+
+        // Pull fee (second).
+        assertEq(MockERC20(asset2).balanceOf(feeMaster), 0);
+        vm.prank(feeMaster);
+        angstrom.pullFee(asset2, amount2);
+        assertEq(MockERC20(asset2).balanceOf(feeMaster), amount2);
+    }
+
+    function test_fuzzing_prevents_nonFeeMasterPull(
+        address puller,
+        uint256 assetIndex,
+        uint128 amount
+    ) public {
+        vm.assume(puller != feeMaster);
+        address asset = assets[bound(assetIndex, 0, assets.length - 1)];
+
+        Bundle memory bundle;
+        addFee(bundle, asset, amount);
+        enablePool(asset, otherAsset);
+
+        vm.prank(validator);
+        angstrom.execute(bundle.encode(rawGetConfigStore(address(angstrom))));
+
+        vm.expectRevert(SettlementManager.NotFeeMaster.selector);
+        vm.prank(puller);
+        angstrom.pullFee(asset, amount);
     }
 
     function enablePool(address asset0, address asset1) internal {

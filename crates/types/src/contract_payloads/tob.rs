@@ -5,8 +5,8 @@ sol! {
     #[derive(PadeEncode, Debug)]
     struct Asset {
         address addr;
-        uint128 borrow;
         uint128 save;
+        uint128 borrow;
         uint128 settle;
     }
 

@@ -59,6 +59,9 @@ jobs:
     name: 'Format Contracts'
     needs: ['contracts-build']
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./contracts
     steps:
       - name: Run Forge fmt
         run: |
@@ -68,6 +71,9 @@ jobs:
     name: 'Test Contracts'
     needs: ['contracts-build']
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./contracts
     steps:
       - name: Run Forge tests
         run: |

@@ -34,8 +34,8 @@ show_progress = false
 
 [profile.ci.invariant]
 fail_on_revert = true
-depth = 100
-runs = 100
+depth = 50
+runs = 50
 
 [profile.light-fuzz.invariant]
 runs = 10

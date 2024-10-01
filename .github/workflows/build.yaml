@@ -38,8 +38,8 @@ jobs:
           cache-on-failure: true
       - name: Build Tests
         run: cargo build --tests
-  contracts-build:
-    name: 'Build Contracts'
+  contracts:
+    name: 'Build, Format & Test Contracts'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -53,31 +53,12 @@ jobs:
         with:
           version: nightly
       - name: Show Forge version
-        run: |
-          forge --version
-  contracts-lint:
-    name: 'Format Contracts'
-    needs: ['contracts-build']
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./contracts
-    steps:
+        run: forge --version
       - name: Run Forge fmt
-        run: |
-          forge fmt --check
+        run: forge fmt --check
         id: fmt
-  contracts-test:
-    name: 'Test Contracts'
-    needs: ['contracts-build']
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./contracts
-    steps:
       - name: Run Forge tests
-        run: |
-          forge test -vvv
+        run: forge test -vvv
         id: test
 
 

@@ -36,7 +36,7 @@ library PoolConfigStoreLib {
 
     error NoEntry();
 
-    error AssetsUnsorted();
+    error DuplicateAsset();
     error InvalidTickSpacing();
     error FeeAboveMax();
     error FailedToDeployNewStore();
@@ -74,7 +74,8 @@ library PoolConfigStoreLib {
         uint16 tickSpacing,
         uint24 feeInE6
     ) internal returns (PoolConfigStore newStore) {
-        if (asset1 <= asset0) revert AssetsUnsorted();
+        if (asset0 > asset1) (asset0, asset1) = (asset1, asset0);
+        if (asset1 == asset0) revert DuplicateAsset();
         if (tickSpacing == 0) revert InvalidTickSpacing();
         if (feeInE6 > MAX_FEE) revert FeeAboveMax();
 

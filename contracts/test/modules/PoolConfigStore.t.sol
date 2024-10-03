@@ -143,18 +143,16 @@ contract PoolConfigStoreTest is BaseTest {
         angstrom.configurePool(asset0, asset1, tickSpacing, feeInE6);
     }
 
-    function test_fuzzing_prevents_providingUnsorted(
-        address asset0,
-        address asset1,
+    function test_fuzzing_prevents_providingDuplicate(
+        address asset,
         uint16 tickSpacing,
         uint24 feeInE6
     ) public {
         tickSpacing = uint16(bound(tickSpacing, 1, type(uint16).max));
         feeInE6 = uint24(bound(feeInE6, 0, MAX_FEE));
-        if (asset0 < asset1) (asset0, asset1) = (asset1, asset0);
         vm.prank(controller);
-        vm.expectRevert(PoolConfigStoreLib.AssetsUnsorted.selector);
-        angstrom.configurePool(asset0, asset1, tickSpacing, feeInE6);
+        vm.expectRevert(PoolConfigStoreLib.DuplicateAsset.selector);
+        angstrom.configurePool(asset, asset, tickSpacing, feeInE6);
     }
 
     function test_fuzzing_prevents_providingTickSpacingZero(

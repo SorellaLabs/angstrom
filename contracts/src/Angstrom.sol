@@ -10,6 +10,7 @@ import {HookManager} from "./modules/HookManager.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {UniConsumer} from "./modules/UniConsumer.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {PermitSubmitterHook} from "./modules/PermitSubmitterHook.sol";
 
 import {TypedDataHasher} from "./types/TypedDataHasher.sol";
 
@@ -41,7 +42,8 @@ contract Angstrom is
     NodeManager,
     HookManager,
     PoolUpdateManager,
-    IUnlockCallback
+    IUnlockCallback,
+    PermitSubmitterHook
 {
     using RayMathLib for uint256;
     // TODO: Remove

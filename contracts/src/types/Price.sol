@@ -71,15 +71,12 @@ library PriceLib {
         return AmountA.wrap(amountB.into().mulRay(priceAB.into()));
     }
 
-    function mulRayScalar(AmountA x, uint256 ray) internal pure returns (AmountA) {
-        return AmountA.wrap(x.into().mulRay(ray));
-    }
-
-    function mulRayScalar(AmountB x, uint256 ray) internal pure returns (AmountB) {
-        return AmountB.wrap(x.into().mulRay(ray));
-    }
-
-    function mulRayScalar(PriceAB price, uint256 ray) internal pure returns (PriceAB) {
-        return PriceAB.wrap(price.into().mulRay(ray));
+    /// @dev Scale `price` by `(1 - feeE6)` such that `feeE6/1e6` A is received for every B.
+    function reduceByFeeE6(PriceAB price, uint256 feeE6) internal pure returns (PriceAB) {
+        uint256 oneMinusFee;
+        unchecked {
+            oneMinusFee = 1e6 - feeE6;
+        }
+        return PriceAB.wrap(PriceAB.unwrap(price) * oneMinusFee / 1e6);
     }
 }

@@ -11,6 +11,7 @@ struct ToBOrderBuffer {
     bytes32 typeHash;
     uint256 quantityIn;
     uint256 quantityOut;
+    uint256 maxGasAsset0;
     bool useInternal;
     address assetIn;
     address assetOut;
@@ -25,8 +26,7 @@ using ToBOrderBufferLib for ToBOrderBuffer global;
 library ToBOrderBufferLib {
     using FormatLib for *;
 
-    // TODO: TEST
-    uint256 internal constant BUFFER_BYTES = 288;
+    uint256 internal constant BUFFER_BYTES = 320;
 
     function setTypeHash(ToBOrderBuffer memory self) internal pure {
         self.typeHash = OrdersLib.TOP_OF_BLOCK_ORDER_TYPEHASH;

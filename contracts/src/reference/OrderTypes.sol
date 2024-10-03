@@ -19,6 +19,8 @@ struct OrderMeta {
 struct PartialStandingOrder {
     uint128 minAmountIn;
     uint128 maxAmountIn;
+    uint128 maxGasAsset0;
+    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -35,6 +37,8 @@ struct PartialStandingOrder {
 struct ExactStandingOrder {
     bool exactIn;
     uint128 amount;
+    uint128 maxGasAsset0;
+    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -50,6 +54,8 @@ struct ExactStandingOrder {
 struct PartialFlashOrder {
     uint128 minAmountIn;
     uint128 maxAmountIn;
+    uint128 maxGasAsset0;
+    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -65,6 +71,8 @@ struct PartialFlashOrder {
 struct ExactFlashOrder {
     bool exactIn;
     uint128 amount;
+    uint128 maxGasAsset0;
+    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -79,6 +87,8 @@ struct ExactFlashOrder {
 struct TopOfBlockOrder {
     uint128 quantityIn;
     uint128 quantityOut;
+    uint128 maxGasAsset0;
+    uint128 gasUsedAsset0;
     bool useInternal;
     address assetIn;
     address assetOut;
@@ -104,8 +114,9 @@ library OrdersLib {
     /// forgefmt: disable-next-item
     bytes32 internal constant PARTIAL_STANDING_ORDER_TYPEHASH = keccak256(
         "PartialStandingOrder("
-           "uint256 min_amount_in,"
-           "uint256 max_amount_in,"
+           "uint128 min_amount_in,"
+           "uint128 max_amount_in,"
+           "uint128 max_gas_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -121,7 +132,8 @@ library OrdersLib {
     bytes32 internal constant EXACT_STANDING_ORDER_TYPEHASH = keccak256(
         "ExactStandingOrder("
            "bool exact_in,"
-           "uint256 amount,"
+           "uint128 amount,"
+           "uint128 max_gas_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -136,8 +148,9 @@ library OrdersLib {
     /// forgefmt: disable-next-item
     bytes32 internal constant PARTIAL_FLASH_ORDER_TYPEHASH = keccak256(
         "PartialFlashOrder("
-           "uint256 min_amount_in,"
-           "uint256 max_amount_in,"
+           "uint128 min_amount_in,"
+           "uint128 max_amount_in,"
+           "uint128 max_gas_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -152,7 +165,8 @@ library OrdersLib {
     bytes32 internal constant EXACT_FLASH_ORDER_TYPEHASH = keccak256(
         "ExactFlashOrder("
            "bool exact_in,"
-           "uint256 amount,"
+           "uint128 amount,"
+           "uint128 max_gas_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -166,8 +180,9 @@ library OrdersLib {
     /// forgefmt: disable-next-item
     bytes32 internal constant TOP_OF_BLOCK_ORDER_TYPEHASH = keccak256(
         "TopOfBlockOrder("
-           "uint256 quantity_in,"
-           "uint256 quantity_out,"
+           "uint128 quantity_in,"
+           "uint128 quantity_out,"
+           "uint128 max_gas_asset0,"
            "bool use_internal,"
            "address asset_in,"
            "address asset_out,"
@@ -183,6 +198,7 @@ library OrdersLib {
                 PARTIAL_STANDING_ORDER_TYPEHASH,
                 order.minAmountIn,
                 order.maxAmountIn,
+                order.maxGasAsset0,
                 order.minPrice,
                 order.useInternal,
                 order.assetIn,
@@ -201,6 +217,7 @@ library OrdersLib {
                 EXACT_STANDING_ORDER_TYPEHASH,
                 order.exactIn,
                 order.amount,
+                order.maxGasAsset0,
                 order.minPrice,
                 order.useInternal,
                 order.assetIn,
@@ -219,6 +236,7 @@ library OrdersLib {
                 PARTIAL_FLASH_ORDER_TYPEHASH,
                 order.minAmountIn,
                 order.maxAmountIn,
+                order.maxGasAsset0,
                 order.minPrice,
                 order.useInternal,
                 order.assetIn,
@@ -236,6 +254,7 @@ library OrdersLib {
                 EXACT_FLASH_ORDER_TYPEHASH,
                 order.exactIn,
                 order.amount,
+                order.maxGasAsset0,
                 order.minPrice,
                 order.useInternal,
                 order.assetIn,
@@ -253,6 +272,7 @@ library OrdersLib {
                 TOP_OF_BLOCK_ORDER_TYPEHASH,
                 order.quantityIn,
                 order.quantityOut,
+                order.maxGasAsset0,
                 order.useInternal,
                 order.assetIn,
                 order.assetOut,
@@ -269,7 +289,7 @@ library OrdersLib {
         pure
         returns (bytes memory)
     {
-        (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
+        (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
             isExact: false,
@@ -279,7 +299,7 @@ library OrdersLib {
             useInternal: order.useInternal,
             hasRecipient: order.recipient != address(0),
             isEcdsa: order.meta.isEcdsa,
-            aToB: aToB
+            zeroForOne: zeroForOne
         });
 
         return bytes.concat(
@@ -295,6 +315,8 @@ library OrdersLib {
             bytes16(order.minAmountIn),
             bytes16(order.maxAmountIn),
             bytes16(order.amountFilled),
+            bytes16(order.maxGasAsset0),
+            bytes16(order.gasUsedAsset0),
             _encodeSig(order.meta)
         );
     }
@@ -304,7 +326,7 @@ library OrdersLib {
         pure
         returns (bytes memory)
     {
-        (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
+        (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
             isExact: true,
@@ -314,18 +336,22 @@ library OrdersLib {
             useInternal: order.useInternal,
             hasRecipient: order.recipient != address(0),
             isEcdsa: order.meta.isEcdsa,
-            aToB: aToB
+            zeroForOne: zeroForOne
         });
 
         return bytes.concat(
-            bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
-            bytes2(pairIndex),
-            bytes32(order.minPrice),
-            _encodeRecipient(order.recipient),
-            _encodeHookData(order.hook, order.hookPayload),
-            bytes8(order.nonce),
+            bytes.concat(
+                bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
+                bytes2(pairIndex),
+                bytes32(order.minPrice),
+                _encodeRecipient(order.recipient),
+                _encodeHookData(order.hook, order.hookPayload),
+                bytes8(order.nonce)
+            ),
             bytes5(order.deadline),
             bytes16(order.amount),
+            bytes16(order.maxGasAsset0),
+            bytes16(order.gasUsedAsset0),
             _encodeSig(order.meta)
         );
     }
@@ -335,7 +361,7 @@ library OrdersLib {
         pure
         returns (bytes memory)
     {
-        (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
+        (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
             isExact: false,
@@ -345,18 +371,22 @@ library OrdersLib {
             useInternal: order.useInternal,
             hasRecipient: order.recipient != address(0),
             isEcdsa: order.meta.isEcdsa,
-            aToB: aToB
+            zeroForOne: zeroForOne
         });
 
         return bytes.concat(
-            bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
-            bytes2(pairIndex),
-            bytes32(order.minPrice),
-            _encodeRecipient(order.recipient),
-            _encodeHookData(order.hook, order.hookPayload),
-            bytes16(order.minAmountIn),
+            bytes.concat(
+                bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
+                bytes2(pairIndex),
+                bytes32(order.minPrice),
+                _encodeRecipient(order.recipient),
+                _encodeHookData(order.hook, order.hookPayload),
+                bytes16(order.minAmountIn)
+            ),
             bytes16(order.maxAmountIn),
             bytes16(order.amountFilled),
+            bytes16(order.maxGasAsset0),
+            bytes16(order.gasUsedAsset0),
             _encodeSig(order.meta)
         );
     }
@@ -366,7 +396,7 @@ library OrdersLib {
         pure
         returns (bytes memory)
     {
-        (uint16 pairIndex, bool aToB) = pairs.getIndex(order.assetIn, order.assetOut);
+        (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(order.assetIn, order.assetOut);
 
         RefOrderVariant memory variantMap = RefOrderVariant({
             isExact: true,
@@ -376,7 +406,7 @@ library OrdersLib {
             useInternal: order.useInternal,
             hasRecipient: order.recipient != address(0),
             isEcdsa: order.meta.isEcdsa,
-            aToB: aToB
+            zeroForOne: zeroForOne
         });
 
         return bytes.concat(
@@ -386,6 +416,8 @@ library OrdersLib {
             _encodeRecipient(order.recipient),
             _encodeHookData(order.hook, order.hookPayload),
             bytes16(order.amount),
+            bytes16(order.maxGasAsset0),
+            bytes16(order.gasUsedAsset0),
             _encodeSig(order.meta)
         );
     }
@@ -416,6 +448,8 @@ library OrdersLib {
             bytes1(varMap),
             bytes16(order.quantityIn),
             bytes16(order.quantityOut),
+            bytes16(order.maxGasAsset0),
+            bytes16(order.gasUsedAsset0),
             bytes2(pairIndex),
             _encodeRecipient(order.recipient),
             _encodeHookData(order.hook, order.hookPayload),

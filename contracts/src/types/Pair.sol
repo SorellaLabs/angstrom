@@ -49,6 +49,8 @@ library PairLib {
 
     uint256 internal constant PAIR_CD_BYTES = 38;
 
+    uint256 internal constant ONE_E6 = 1e6;
+
     function readFromAndValidate(CalldataReader reader, AssetArray assets, PoolConfigStore store)
         internal
         view
@@ -170,14 +172,16 @@ library PairLib {
     function getSwapInfo(Pair self, bool zeroToOne)
         internal
         pure
-        returns (address assetIn, address assetOut, uint256 priceOutVsIn, uint256 feeInE6)
+        returns (address assetIn, address assetOut, uint256 priceOutVsIn)
     {
+        uint256 oneMinusFee;
         assembly ("memory-safe") {
             let offsetIfZeroToOne := shl(5, zeroToOne)
             assetIn := mload(add(self, xor(offsetIfZeroToOne, 0x20)))
             assetOut := mload(add(self, offsetIfZeroToOne))
             priceOutVsIn := mload(add(self, add(PAIR_PRICE_10_OFFSET, offsetIfZeroToOne)))
-            feeInE6 := mload(add(self, PAIR_FEE_OFFSET))
+            oneMinusFee := sub(ONE_E6, mload(add(self, PAIR_FEE_OFFSET)))
         }
+        priceOutVsIn = priceOutVsIn * oneMinusFee / ONE_E6;
     }
 }

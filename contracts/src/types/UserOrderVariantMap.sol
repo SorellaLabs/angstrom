@@ -12,11 +12,13 @@ library UserOrderVariantMapLib {
     uint256 internal constant USE_INTERNAL_BIT = 0x01;
     uint256 internal constant HAS_RECIPIENT_BIT = 0x02;
     uint256 internal constant HAS_HOOK_BIT = 0x04;
-    uint256 internal constant A_TO_B_BIT = 0x08;
+    uint256 internal constant ZERO_FOR_ONE_BIT = 0x08;
     uint256 internal constant IS_STANDING_BIT = 0x10;
     uint256 internal constant QTY_PARTIAL_BIT = 0x20;
     uint256 internal constant IS_EXACT_IN_BIT = 0x40;
     uint256 internal constant IS_ECDSA_BIT = 0x80;
+
+    uint256 internal constant SPECIFYING_IN_MASK = QTY_PARTIAL_BIT | IS_EXACT_IN_BIT;
 
     function useInternal(UserOrderVariantMap variant) internal pure returns (bool) {
         return UserOrderVariantMap.unwrap(variant) & USE_INTERNAL_BIT != 0;
@@ -30,8 +32,12 @@ library UserOrderVariantMapLib {
         return UserOrderVariantMap.unwrap(variant) & HAS_HOOK_BIT == 0;
     }
 
-    function aToB(UserOrderVariantMap variant) internal pure returns (bool) {
-        return UserOrderVariantMap.unwrap(variant) & A_TO_B_BIT != 0;
+    function zeroForOne(UserOrderVariantMap variant) internal pure returns (bool) {
+        return UserOrderVariantMap.unwrap(variant) & ZERO_FOR_ONE_BIT != 0;
+    }
+
+    function specifyingInput(UserOrderVariantMap variant) internal pure returns (bool) {
+        return UserOrderVariantMap.unwrap(variant) & SPECIFYING_IN_MASK != 0;
     }
 
     function isStanding(UserOrderVariantMap variant) internal pure returns (bool) {

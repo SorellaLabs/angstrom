@@ -14,6 +14,7 @@ struct UserOrderBuffer {
     bytes32 typeHash;
     uint256 exactIn_or_minQuantityIn;
     uint256 quantity_or_maxQuantityIn;
+    uint256 maxGasAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -30,10 +31,11 @@ using UserOrderBufferLib for UserOrderBuffer global;
 library UserOrderBufferLib {
     error FillingTooLittle();
     error FillingTooMuch();
+    error GasAboveMax();
 
     // TODO: Make test that ensures that buffer space is always enough.
-    uint256 internal constant STANDING_ORDER_BYTES = 352;
-    uint256 internal constant FLASH_ORDER_BYTES = 320;
+    uint256 internal constant STANDING_ORDER_BYTES = 384;
+    uint256 internal constant FLASH_ORDER_BYTES = 352;
 
     function setTypeHash(UserOrderBuffer memory self, UserOrderVariantMap variant) internal pure {
         if (variant.quantitiesPartial()) {
@@ -87,8 +89,7 @@ library UserOrderBufferLib {
         UserOrderBuffer memory self,
         CalldataReader reader,
         UserOrderVariantMap variant,
-        PriceOutVsIn price,
-        uint256 feeRay
+        PriceOutVsIn price
     ) internal pure returns (CalldataReader, AmountIn quantityIn, AmountOut quantityOut) {
         uint256 quantity;
         if (variant.quantitiesPartial()) {
@@ -109,14 +110,31 @@ library UserOrderBufferLib {
             self.quantity_or_maxQuantityIn = quantity;
         }
 
-        if (variant.exactIn() || variant.quantitiesPartial()) {
-            quantityIn = AmountIn.wrap(quantity);
-            quantityOut = price.convert(quantityIn);
-            quantityOut = quantityOut - quantityOut.mulRayScalar(feeRay);
+        uint128 gasUsedAsset0;
+        {
+            uint128 maxGasAsset0;
+            (reader, maxGasAsset0) = reader.readU128();
+            (reader, gasUsedAsset0) = reader.readU128();
+            if (gasUsedAsset0 > maxGasAsset0) revert GasAboveMax();
+            self.maxGasAsset0 = maxGasAsset0;
+        }
+
+        if (variant.zeroForOne()) {
+            if (variant.specifyingInput()) {
+                quantityIn = AmountIn.wrap(quantity - gasUsedAsset0);
+                quantityOut = price.convert(quantityIn);
+            } else {
+                quantityOut = AmountOut.wrap(quantity);
+                quantityIn = price.convert(quantityOut) - AmountIn.wrap(gasUsedAsset0);
+            }
         } else {
-            quantityOut = AmountOut.wrap(quantity);
-            quantityIn = price.convert(quantityOut);
-            quantityIn = quantityIn + quantityIn.mulRayScalar(feeRay);
+            if (variant.specifyingInput()) {
+                quantityIn = AmountIn.wrap(quantity);
+                quantityOut = price.convert(quantityIn) - AmountOut.wrap(gasUsedAsset0);
+            } else {
+                quantityOut = AmountOut.wrap(quantity - gasUsedAsset0);
+                quantityIn = price.convert(quantityOut);
+            }
         }
 
         return (reader, quantityIn, quantityOut);

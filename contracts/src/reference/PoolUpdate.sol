@@ -46,8 +46,8 @@ library PoolUpdateLib {
         pure
         returns (bytes memory)
     {
-        (uint16 pairIndex, bool zeroToOne) = pairs.getIndex(self.assetIn, self.assetOut);
-        uint8 variantByte = (zeroToOne ? 1 : 0) | (self.rewardUpdate.onlyCurrent ? 2 : 0);
+        (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(self.assetIn, self.assetOut);
+        uint8 variantByte = (zeroForOne ? 1 : 0) | (self.rewardUpdate.onlyCurrent ? 2 : 0);
         return bytes.concat(
             bytes1(variantByte),
             bytes2(pairIndex),

@@ -126,7 +126,10 @@ abstract contract SettlementManager is UniConsumer {
     {
         uint256 amount = amountOut.into();
         bundleDeltas.sub(asset, amount);
-        if (useInternal) _angstromReserves[to][asset] += amount;
-        else asset.safeTransfer(to, amount);
+        if (useInternal) {
+            _angstromReserves[to][asset] += amount;
+        } else {
+            asset.safeTransfer(to, amount);
+        }
     }
 }

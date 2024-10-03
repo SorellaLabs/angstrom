@@ -29,8 +29,8 @@ import {PoolConfigStore} from "./libraries/pool-config/PoolConfigStore.sol";
 
 import {RayMathLib} from "./libraries/RayMathLib.sol";
 
-import {console} from "forge-std/console.sol";
 // TODO: Remove
+import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
@@ -48,6 +48,7 @@ contract Angstrom is
     using FormatLib for *;
 
     error LimitViolated();
+    error ToBGasUsedAboveMax();
 
     constructor(IPoolManager uniV4, address controller, address feeMaster)
         UniConsumer(uniV4)
@@ -129,6 +130,12 @@ contract Angstrom is
 
         (reader, buffer.quantityIn) = reader.readU128();
         (reader, buffer.quantityOut) = reader.readU128();
+        (reader, buffer.maxGasAsset0) = reader.readU128();
+        uint128 gasUsedAsset0;
+        {
+            (reader, gasUsedAsset0) = reader.readU128();
+            if (gasUsedAsset0 > buffer.maxGasAsset0) revert ToBGasUsedAboveMax();
+        }
 
         {
             uint16 pairIndex;
@@ -155,13 +162,28 @@ contract Angstrom is
 
         hook.tryTrigger(from);
 
-        _settleOrderIn(
-            from, buffer.assetIn, AmountIn.wrap(buffer.quantityIn), variantMap.useInternal()
-        );
         address to = _defaultOr(buffer.recipient, from);
-        _settleOrderOut(
-            to, buffer.assetOut, AmountOut.wrap(buffer.quantityOut), variantMap.useInternal()
-        );
+        if (variantMap.zeroForOne()) {
+            _settleOrderIn(
+                from,
+                buffer.assetIn,
+                AmountIn.wrap(buffer.quantityIn - gasUsedAsset0),
+                variantMap.useInternal()
+            );
+            _settleOrderOut(
+                to, buffer.assetOut, AmountOut.wrap(buffer.quantityOut), variantMap.useInternal()
+            );
+        } else {
+            _settleOrderIn(
+                from, buffer.assetIn, AmountIn.wrap(buffer.quantityIn), variantMap.useInternal()
+            );
+            _settleOrderOut(
+                to,
+                buffer.assetOut,
+                AmountOut.wrap(buffer.quantityOut - gasUsedAsset0),
+                variantMap.useInternal()
+            );
+        }
         return reader;
     }
 
@@ -202,13 +224,12 @@ contract Angstrom is
 
         // Load and lookup asset in/out and dependent values.
         PriceOutVsIn price;
-        uint256 feeInE6;
         {
             uint256 priceOutVsIn;
             uint16 pairIndex;
             (reader, pairIndex) = reader.readU16();
-            (buffer.assetIn, buffer.assetOut, priceOutVsIn, feeInE6) =
-                pairs.get(pairIndex).getSwapInfo(variantMap.aToB());
+            (buffer.assetIn, buffer.assetOut, priceOutVsIn) =
+                pairs.get(pairIndex).getSwapInfo(variantMap.zeroForOne());
             price = PriceOutVsIn.wrap(priceOutVsIn);
         }
 
@@ -227,8 +248,7 @@ contract Angstrom is
 
         AmountIn amountIn;
         AmountOut amountOut;
-        (reader, amountIn, amountOut) =
-            buffer.loadAndComputeQuantity(reader, variantMap, price, feeInE6);
+        (reader, amountIn, amountOut) = buffer.loadAndComputeQuantity(reader, variantMap, price);
 
         bytes32 orderHash = buffer.hash712(variantMap, typedHasher);
 

@@ -27,7 +27,7 @@ contract OrderVariantMapTest is BaseTest {
         props[0] = map.useInternal();
         props[1] = map.recipientIsSome();
         props[2] = map.noHook();
-        props[3] = map.aToB();
+        props[3] = map.zeroForOne();
         props[4] = map.isStanding();
         props[5] = map.quantitiesPartial();
         props[6] = map.exactIn();

@@ -26,6 +26,7 @@ contract ToBOrderBufferTest is Test {
     struct ToBERC712 {
         uint128 quantityIn;
         uint128 quantityOut;
+        uint128 maxGasAsset0;
         bool useInternal;
         address assetIn;
         address assetOut;
@@ -39,6 +40,7 @@ contract ToBOrderBufferTest is Test {
         TopOfBlockOrder memory refOrder;
         refOrder.quantityIn = order.quantityIn;
         refOrder.quantityOut = order.quantityOut;
+        refOrder.maxGasAsset0 = order.maxGasAsset0;
         refOrder.useInternal = order.useInternal;
         refOrder.assetIn = order.assetIn;
         refOrder.assetOut = order.assetOut;
@@ -53,6 +55,7 @@ contract ToBOrderBufferTest is Test {
         buffer.setTypeHash();
         buffer.quantityIn = order.quantityIn;
         buffer.quantityOut = order.quantityOut;
+        buffer.maxGasAsset0 = order.maxGasAsset0;
         buffer.useInternal = order.useInternal;
         buffer.assetIn = order.assetIn;
         buffer.assetOut = order.assetOut;

@@ -258,6 +258,8 @@ struct TopOfBlockOrder {
     use_internal: bool,
     quantity_in: u128,
     quantity_out: u128,
+    max_gas_asset0: u128,
+    gas_used_asset0: u128,
     pairs_index: u16,
     zero_for_one: bool,
     recipient: Option<address>,
@@ -271,6 +273,8 @@ struct TopOfBlockOrder {
 |`use_internal: bool`|Whether to use angstrom internal balance (`true`) or actual ERC20 balance (`false`) to settle|
 |`quantity_in: u128`|The order offered input quanity in the input asset's base units.|
 |`quantity_out: u128`|The order expected output quantity in the output asset's base units.|
+|`max_gas_asset0: u128`|The maximum gas the searcher accepts to be charged (in asset0 base units)|
+|`gas_used_asset0: u128`|The actual gas the searcher ended up getting charged for their order (in asset0 base units)|
 |`asset_in_index: u16`|Order's input asset as index into the assets array|
 |`asset_out_index: u16`|Order's output asset as index into the assets array|
 |`recipient: Option<address>`|Recipient for order output, `None` implies signer.|
@@ -289,6 +293,8 @@ struct UserOrder {
     zero_for_one: bool,
     standing_validation: Option<StandingValidation>,
     order_quantities: OrderQuantities,
+    max_gas_asset0: u128,
+    gas_used_asset0: u128,
     exact_in: bool,
     signature: Signature
 }
@@ -322,6 +328,8 @@ enum OrderQuantities {
 |`zero_for_one: bool`|Whether the order is swapping in the pair's `asset0` and getting out `asset1` (`true`) or the other way around (`false`)|
 |`standing_validation: Option<StandingValidation>`|The one-time order validation data. (`None` implies a flash order which is validated via the block number)|
 |`order_quantities: OrderQuantities`|Description of the quantities the order trades.|
+|`max_gas_asset0: u128`|The maximum gas the user accepts to be charged (in asset0 base units)|
+|`gas_used_asset0: u128`|The actual gas the user ended up getting charged for their order (in asset0 base units)|
 |`exact_in: bool`|For exact orders: whether the specified quantity is the input or output (disregarded for partial orders).|
 |`signature: Signature`|The signature validating the order.|
 

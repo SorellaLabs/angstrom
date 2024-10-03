@@ -15,7 +15,7 @@ struct OrderVariant {
     bool useInternal;
     bool hasRecipient;
     bool isEcdsa;
-    bool aToB;
+    bool zeroForOne;
 }
 
 using OrderVariantLib for OrderVariant global;
@@ -35,7 +35,7 @@ library OrderVariantLib {
                     .bitOverlay(variant.useInternal ? VariantLib.USE_INTERNAL_BIT : 0)
                     .bitOverlay(variant.hasRecipient ? VariantLib.HAS_RECIPIENT_BIT : 0)
                     .bitOverlay(variant.isEcdsa ? VariantLib.IS_ECDSA_BIT : 0)
-                    .bitOverlay(variant.aToB ? VariantLib.A_TO_B_BIT : 0)
+                    .bitOverlay(variant.zeroForOne ? VariantLib.ZERO_FOR_ONE_BIT : 0)
             )
         );
     }

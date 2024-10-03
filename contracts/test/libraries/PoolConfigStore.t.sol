@@ -10,8 +10,8 @@ import {
     STORE_HEADER_SIZE,
     PoolConfigStoreLib,
     StoreKey
-} from "src/libraries/pool-config/PoolConfigStore.sol";
-import {ENTRY_SIZE} from "src/libraries/pool-config/ConfigEntry.sol";
+} from "src/libraries/PoolConfigStore.sol";
+import {ENTRY_SIZE} from "src/types/ConfigEntry.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {console} from "forge-std/console.sol";
 

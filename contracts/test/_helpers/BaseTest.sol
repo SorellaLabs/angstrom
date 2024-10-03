@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {Angstrom} from "src/Angstrom.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {Currency} from "v4-core/src/types/Currency.sol";
 import {Test} from "forge-std/Test.sol";
 import {Trader} from "./types/Trader.sol";
 import {console2 as console} from "forge-std/console2.sol";
@@ -67,6 +71,27 @@ contract BaseTest is Test, HookDeployer {
                 keccak256(abi.encode(owner, keccak256(abi.encode(asset, ANG_BALANCES_SLOT))))
             )
         );
+    }
+
+    function poolKey(Angstrom angstrom, address asset0, address asset1, int24 tickSpacing)
+        internal
+        pure
+        returns (PoolKey memory pk)
+    {
+        pk.hooks = IHooks(address(angstrom));
+        pk.currency0 = Currency.wrap(asset0);
+        pk.currency1 = Currency.wrap(asset1);
+        pk.tickSpacing = tickSpacing;
+    }
+
+    function poolKey(address asset0, address asset1, int24 tickSpacing)
+        internal
+        pure
+        returns (PoolKey memory pk)
+    {
+        pk.currency0 = Currency.wrap(asset0);
+        pk.currency1 = Currency.wrap(asset1);
+        pk.tickSpacing = tickSpacing;
     }
 
     function computeDomainSeparator(address angstrom) internal view returns (bytes32) {

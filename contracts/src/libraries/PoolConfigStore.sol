@@ -10,7 +10,7 @@ import {
     TICK_SPACING_MASK,
     FEE_OFFSET,
     FEE_MASK
-} from "./ConfigEntry.sol";
+} from "../types/ConfigEntry.sol";
 
 type PoolConfigStore is address;
 
@@ -53,7 +53,7 @@ library PoolConfigStoreLib {
      *   5   600b       PUSH1 11      [11, run_size, run_size]     Push constructor size again
      *   7   5f         PUSH0         [0, 11, run_size, run_size]
      *   8   39         CODECOPY      [run_size]                   Copy the runtime code into memory
-     *                                                             (`memory[0:run_size] = code[11:run_size]`)
+     *                                                             (`memory[0:0+run_size] = code[11:11+run_size]`)
      *   9   5f         PUSH0         [0, run_size]
      *  10   f3         RETURN        []                           Return runtime from memory as final code
      *                                                             (`runtime = memory[0:runsize]`)
@@ -85,7 +85,9 @@ library PoolConfigStoreLib {
         assembly ("memory-safe") {
             // Get free memory & copy in the entire store's contents.
             let free := mload(0x40)
+            // Leave one word free for `STORE_DEPLOYER`.
             let entryOffset := add(free, 0x20)
+            // Copy the old store into memory.
             let totalEntryBytes := mul(ENTRY_SIZE, total)
             extcodecopy(previousStore, entryOffset, STORE_HEADER_SIZE, totalEntryBytes)
             // Construct new entry by splicing in the values.

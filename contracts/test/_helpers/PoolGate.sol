@@ -7,11 +7,11 @@ import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {Angstrom} from "../../src/Angstrom.sol";
+import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {IUniV4} from "../../src/interfaces/IUniV4.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {Slot0} from "v4-core/src/types/Slot0.sol";
-import {ConversionLib} from "../../src/libraries/ConversionLib.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {BalanceDelta, toBalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 
@@ -21,12 +21,11 @@ import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
 /// @dev Interacts with pools
-contract PoolGate is IUnlockCallback, CommonBase {
+contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
     using FormatLib for *;
     using SignedUnsignedLib for *;
     using PoolIdLibrary for PoolKey;
     using IUniV4 for IPoolManager;
-    using ConversionLib for address;
 
     IPoolManager internal immutable UNI_V4;
     address public hook;
@@ -125,8 +124,8 @@ contract PoolGate is IUnlockCallback, CommonBase {
     }
 
     function isInitialized(address asset0, address asset1) public view returns (bool) {
-        PoolKey memory poolKey = hook.toPoolKey(asset0, asset1, _tickSpacing);
-        Slot0 slot0 = UNI_V4.getSlot0(poolKey.toId());
+        PoolKey memory pk = poolKey(Angstrom(hook), asset0, asset1, _tickSpacing);
+        Slot0 slot0 = UNI_V4.getSlot0(pk.toId());
         return slot0.sqrtPriceX96() != 0;
     }
 
@@ -145,9 +144,7 @@ contract PoolGate is IUnlockCallback, CommonBase {
         uint160 sqrtPriceLimitX96
     ) public returns (BalanceDelta swapDelta) {
         bool zeroForOne = assetIn < assetOut;
-        PoolKey memory key = zeroForOne
-            ? hook.toPoolKey(assetIn, assetOut, _tickSpacing)
-            : hook.toPoolKey(assetOut, assetIn, _tickSpacing);
+        PoolKey memory key = zeroForOne ? poolKey(assetIn, assetOut) : poolKey(assetOut, assetIn);
         swapDelta = UNI_V4.swap(
             key, IPoolManager.SwapParams(zeroForOne, amountSpecified, sqrtPriceLimitX96), ""
         );
@@ -161,9 +158,9 @@ contract PoolGate is IUnlockCallback, CommonBase {
         uint160 initialSqrtPriceX96,
         uint16 storeIndex
     ) public returns (PoolId) {
-        PoolKey memory poolKey = hook.toPoolKey(asset0, asset1, _tickSpacing);
-        UNI_V4.initialize(poolKey, initialSqrtPriceX96, bytes.concat(bytes2(storeIndex)));
-        return PoolIdLibrary.toId(poolKey);
+        PoolKey memory pk = poolKey(asset0, asset1);
+        UNI_V4.initialize(pk, initialSqrtPriceX96, bytes.concat(bytes2(storeIndex)));
+        return PoolIdLibrary.toId(pk);
     }
 
     function __addLiquidity(
@@ -172,10 +169,10 @@ contract PoolGate is IUnlockCallback, CommonBase {
         address sender,
         IPoolManager.ModifyLiquidityParams calldata params
     ) public returns (BalanceDelta callerDelta) {
-        PoolKey memory poolKey = hook.toPoolKey(asset0, asset1, _tickSpacing);
+        PoolKey memory pk = poolKey(asset0, asset1);
         if (address(vm).code.length > 0) vm.startPrank(sender);
         BalanceDelta feeDelta;
-        (callerDelta, feeDelta) = UNI_V4.modifyLiquidity(poolKey, params, "");
+        (callerDelta, feeDelta) = UNI_V4.modifyLiquidity(pk, params, "");
         require(feeDelta.amount0() == 0 && feeDelta.amount1() == 0, "Getting fees?");
         require(
             callerDelta.amount0() <= 0 && callerDelta.amount1() <= 0,
@@ -191,9 +188,9 @@ contract PoolGate is IUnlockCallback, CommonBase {
         address sender,
         IPoolManager.ModifyLiquidityParams calldata params
     ) public returns (BalanceDelta delta) {
-        PoolKey memory poolKey = hook.toPoolKey(asset0, asset1, _tickSpacing);
+        PoolKey memory pk = poolKey(Angstrom(hook), asset0, asset1, _tickSpacing);
         if (address(vm).code.length > 0) vm.startPrank(sender);
-        (delta,) = UNI_V4.modifyLiquidity(poolKey, params, "");
+        (delta,) = UNI_V4.modifyLiquidity(pk, params, "");
 
         bytes32 delta0Slot = keccak256(abi.encode(sender, asset0));
         bytes32 delta1Slot = keccak256(abi.encode(sender, asset1));
@@ -218,7 +215,7 @@ contract PoolGate is IUnlockCallback, CommonBase {
 
     function _settleMintable(address asset, uint256 amount, bool needsSync) internal {
         if (amount > 0) {
-            if (needsSync) UNI_V4.sync(asset.intoC());
+            if (needsSync) UNI_V4.sync(Currency.wrap(asset));
             MockERC20(asset).mint(address(UNI_V4), amount);
             UNI_V4.settle();
         }
@@ -231,11 +228,15 @@ contract PoolGate is IUnlockCallback, CommonBase {
 
     function _clearDelta(address asset, int128 delta) internal {
         if (delta > 0) {
-            UNI_V4.clear(asset.intoC(), uint128(delta));
+            UNI_V4.clear(Currency.wrap(asset), uint128(delta));
         } else if (delta < 0) {
             unchecked {
                 _settleMintable(asset, uint128(-delta), true);
             }
         }
+    }
+
+    function poolKey(address asset0, address asset1) internal view returns (PoolKey memory) {
+        return poolKey(Angstrom(hook), asset0, asset1, _tickSpacing);
     }
 }

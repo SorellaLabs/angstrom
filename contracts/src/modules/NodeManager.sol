@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {
-    PoolConfigStore,
-    PoolConfigStoreLib,
-    StoreKey
-} from "../libraries/pool-config/PoolConfigStore.sol";
+import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "../libraries/PoolConfigStore.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 
 /// @author philogy <https://github.com/philogy>
@@ -48,7 +44,6 @@ abstract contract NodeManager {
     /// @dev Validates that the caller is a node and that the last call is at least 1 block old.
     /// Blocks reentrant calls as well as separate calls in the same block.
     function _nodeBundleLock() internal {
-        // Block-wide reentrancy lock. Prevents general reentrancy and replay of flash orders.
         if (_lastBlockUpdated == block.number) revert OnlyOncePerBlock();
         if (!_isNode[msg.sender]) revert NotNode();
         _lastBlockUpdated = SafeCastLib.toUint64(block.number);

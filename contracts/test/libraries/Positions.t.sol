@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
-import {Positions, Position} from "src/libraries/Positions.sol";
+import {Positions, Position} from "src/types/Positions.sol";
 import {Position as UniPosition} from "v4-core/src/libraries/Position.sol";
 import {POSITIONS_STORAGE_PREFIX} from "src/Constants.sol";
 

@@ -9,11 +9,7 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 
 import {console} from "forge-std/console.sol";
 import {POOL_FEE} from "../Constants.sol";
-import {
-    PoolConfigStore,
-    PoolConfigStoreLib,
-    StoreKey
-} from "../libraries/pool-config/PoolConfigStore.sol";
+import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "../libraries/PoolConfigStore.sol";
 import {IBeforeInitializeHook} from "../interfaces/IHooks.sol";
 
 /// @author philogy <https://github.com/philogy>

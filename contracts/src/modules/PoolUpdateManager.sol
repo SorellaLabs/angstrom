@@ -11,11 +11,10 @@ import {DeltaTracker} from "../types/DeltaTracker.sol";
 import {PairArray} from "../types/Pair.sol";
 import {CalldataReader} from "../types/CalldataReader.sol";
 import {PoolRewards} from "../types/PoolRewards.sol";
-import {Positions, Position} from "src/libraries/Positions.sol";
-import {UniCallLib, UniSwapCallBuffer} from "src/libraries/UniCallLib.sol";
-import {PoolUpdateVariantMap} from "src/types/PoolUpdateVariantMap.sol";
+import {Positions, Position} from "../types/Positions.sol";
+import {UniCallLib, UniSwapCallBuffer} from "../libraries/UniCallLib.sol";
+import {PoolUpdateVariantMap} from "../types/PoolUpdateVariantMap.sol";
 
-import {ConversionLib} from "src/libraries/ConversionLib.sol";
 import {SignedUnsignedLib} from "super-sol/libraries/SignedUnsignedLib.sol";
 import {IUniV4} from "../interfaces/IUniV4.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
@@ -28,11 +27,8 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 import {FixedPointMathLib} from "solady/src/utils/FixedPointMathLib.sol";
 /// @custom:mounted uint256 (external)
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
-
-import {console} from "forge-std/console.sol";
-import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-
 /// @author philogy <https://github.com/philogy>
+
 abstract contract PoolUpdateManager is
     UniConsumer,
     RewardsUpdater,
@@ -41,8 +37,6 @@ abstract contract PoolUpdateManager is
     IBeforeAddLiquidityHook,
     IBeforeRemoveLiquidityHook
 {
-    using FormatLib for *;
-
     using SafeCastLib for uint256;
 
     using IUniV4 for IPoolManager;
@@ -65,7 +59,7 @@ abstract contract PoolUpdateManager is
     ) external override onlyUniV4 returns (bytes4) {
         uint256 liquidityDelta = uint256(params.liquidityDelta);
 
-        PoolId id = ConversionLib.toId(key);
+        PoolId id = _toId(key);
         int24 lowerTick = params.tickLower;
         int24 upperTick = params.tickUpper;
         PoolRewards storage rewards = poolRewards[id];
@@ -111,7 +105,7 @@ abstract contract PoolUpdateManager is
     ) external override onlyUniV4 returns (bytes4) {
         uint256 liquidityDelta = params.liquidityDelta.neg();
 
-        PoolId id = ConversionLib.toId(key);
+        PoolId id = _toId(key);
         (Position storage position, bytes32 positionKey) =
             positions.get(id, sender, params.tickLower, params.tickUpper, params.salt);
         int24 currentTick = UNI_V4.getSlot0(id).tick();
@@ -189,5 +183,13 @@ abstract contract PoolUpdateManager is
         deltas.sub(swapCall.asset0, rewardTotal);
 
         return reader;
+    }
+
+    function _toId(PoolKey calldata poolKey) internal pure returns (PoolId id) {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            calldatacopy(ptr, poolKey, mul(32, 5))
+            id := keccak256(ptr, mul(32, 5))
+        }
     }
 }

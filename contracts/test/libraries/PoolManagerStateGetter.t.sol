@@ -10,7 +10,7 @@ import {Pool} from "v4-core/src/libraries/Pool.sol";
 import {Slot0} from "v4-core/src/types/Slot0.sol";
 
 import {Position} from "v4-core/src/libraries/Position.sol";
-import {Positions} from "src/libraries/Positions.sol";
+import {Positions} from "src/types/Positions.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract PoolManagerStateGetterTest is BaseTest {

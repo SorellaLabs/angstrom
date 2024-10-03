@@ -13,7 +13,6 @@ import {UniV4Inspector} from "test/_view-ext/UniV4Inspector.sol";
 import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
 import {PoolGate} from "test/_helpers/PoolGate.sol";
 import {HookDeployer} from "test/_helpers/HookDeployer.sol";
-import {ConversionLib} from "src/libraries/ConversionLib.sol";
 import {PoolUpdateManager} from "src/modules/PoolUpdateManager.sol";
 import {Position} from "v4-core/src/libraries/Position.sol";
 
@@ -47,9 +46,7 @@ contract PoolUpdateManagerTest is HookDeployer, BaseTest {
         gate = new PoolGate(address(uniV4));
 
         int24 startTick = 0;
-        refId = PoolIdLibrary.toId(
-            ConversionLib.toPoolKey(address(0), address(asset0), address(asset1), TICK_SPACING)
-        );
+        refId = PoolIdLibrary.toId(poolKey(asset0, asset1, TICK_SPACING));
         gate.setHook(address(0));
         gate.initializePool(address(asset0), address(asset1), startTick.getSqrtPriceAtTick(), 0);
 
@@ -201,9 +198,7 @@ contract PoolUpdateManagerTest is HookDeployer, BaseTest {
     }
 
     function poolKey() internal view returns (PoolKey memory) {
-        return ConversionLib.toPoolKey(
-            address(angstrom), address(asset0), address(asset1), TICK_SPACING
-        );
+        return poolKey(angstrom, asset0, asset1, TICK_SPACING);
     }
 
     function re(TickReward memory reward) internal pure returns (TickReward[] memory r) {

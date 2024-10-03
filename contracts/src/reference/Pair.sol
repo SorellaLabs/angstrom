@@ -11,8 +11,8 @@ import {
     PoolConfigStoreLib,
     StoreKey,
     STORE_HEADER_SIZE
-} from "src/libraries/pool-config/PoolConfigStore.sol";
-import {ConfigEntry, ENTRY_SIZE} from "src/libraries/pool-config/ConfigEntry.sol";
+} from "src/libraries/PoolConfigStore.sol";
+import {ConfigEntry, ENTRY_SIZE} from "src/types/ConfigEntry.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 import {console} from "forge-std/console.sol";

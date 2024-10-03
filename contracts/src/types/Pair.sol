@@ -5,10 +5,8 @@ import {CalldataReader} from "./CalldataReader.sol";
 import {AssetArray} from "./Asset.sol";
 import {RayMathLib} from "../libraries/RayMathLib.sol";
 import {
-    PoolConfigStore,
-    StoreKey,
-    HASH_TO_STORE_KEY_SHIFT
-} from "../libraries/pool-config/PoolConfigStore.sol";
+    PoolConfigStore, StoreKey, HASH_TO_STORE_KEY_SHIFT
+} from "../libraries/PoolConfigStore.sol";
 // TODO: Remove
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 import {console} from "forge-std/console.sol";

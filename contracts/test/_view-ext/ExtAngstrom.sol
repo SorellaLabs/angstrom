@@ -6,8 +6,8 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {IUniV4, IPoolManager} from "../../src/interfaces/IUniV4.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {FixedPointMathLib} from "solady/src/utils/FixedPointMathLib.sol";
-import {Position} from "src/libraries/Positions.sol";
-import {PoolConfigStore} from "src/libraries/pool-config/PoolConfigStore.sol";
+import {Position} from "src/types/Positions.sol";
+import {PoolConfigStore} from "src/libraries/PoolConfigStore.sol";
 
 import {console} from "forge-std/console.sol";
 

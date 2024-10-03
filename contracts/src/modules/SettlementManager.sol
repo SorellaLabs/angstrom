@@ -15,17 +15,12 @@ import {IUniV4} from "../interfaces/IUniV4.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
-
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
-import {ConversionLib} from "src/libraries/ConversionLib.sol";
-
-import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 abstract contract SettlementManager is UniConsumer {
     using IUniV4 for IPoolManager;
     using SafeTransferLib for address;
-    using ConversionLib for address;
 
     error BundleChangeNetNegative(address asset);
     error NotFeeMaster();
@@ -80,7 +75,7 @@ abstract contract SettlementManager is UniConsumer {
             uint256 amount = asset.take();
             if (amount > 0) {
                 address addr = asset.addr();
-                UNI_V4.take(addr.intoC(), address(this), amount);
+                UNI_V4.take(Currency.wrap(addr), address(this), amount);
                 bundleDeltas.add(addr, amount);
             }
         }
@@ -108,7 +103,7 @@ abstract contract SettlementManager is UniConsumer {
             }
 
             if (settle > 0) {
-                UNI_V4.sync(addr.intoC());
+                UNI_V4.sync(Currency.wrap(addr));
                 addr.safeTransfer(address(UNI_V4), settle);
                 UNI_V4.settle();
             }

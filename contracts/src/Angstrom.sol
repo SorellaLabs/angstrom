@@ -15,7 +15,7 @@ import {PermitSubmitterHook} from "./modules/PermitSubmitterHook.sol";
 import {TypedDataHasher} from "./types/TypedDataHasher.sol";
 
 import {AssetArray, AssetLib} from "./types/Asset.sol";
-import {PairArray, Pair, PairLib} from "./types/Pair.sol";
+import {PairArray, PairLib} from "./types/Pair.sol";
 import {ToBOrderBuffer} from "./types/ToBOrderBuffer.sol";
 import {UserOrderBuffer} from "./types/UserOrderBuffer.sol";
 import {UserOrderVariantMap} from "./types/UserOrderVariantMap.sol";
@@ -26,13 +26,6 @@ import {SignatureLib} from "./libraries/SignatureLib.sol";
 import {
     PriceAB as PriceOutVsIn, AmountA as AmountOut, AmountB as AmountIn
 } from "./types/Price.sol";
-import {PoolConfigStore} from "./libraries/pool-config/PoolConfigStore.sol";
-
-import {RayMathLib} from "./libraries/RayMathLib.sol";
-
-// TODO: Remove
-import {console} from "forge-std/console.sol";
-import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract Angstrom is
@@ -45,10 +38,6 @@ contract Angstrom is
     IUnlockCallback,
     PermitSubmitterHook
 {
-    using RayMathLib for uint256;
-    // TODO: Remove
-    using FormatLib for *;
-
     error LimitViolated();
     error ToBGasUsedAboveMax();
 

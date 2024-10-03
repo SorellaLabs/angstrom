@@ -6,7 +6,6 @@ import {HookManager} from "src/modules/HookManager.sol";
 import {Asset, AssetArray, AssetLib} from "../../src/types/Asset.sol";
 import {PairArray, PairLib} from "src/types/Pair.sol";
 import {UniSwapCallBuffer, UniCallLib} from "../../src/libraries/UniCallLib.sol";
-import {PoolConfigStore} from "../../src/libraries/pool-config/PoolConfigStore.sol";
 import {PoolUpdateManager} from "../../src/modules/PoolUpdateManager.sol";
 import {SettlementManager} from "../../src/modules/SettlementManager.sol";
 import {NodeManager} from "src/modules/NodeManager.sol";
@@ -14,8 +13,6 @@ import {UniConsumer} from "../../src/modules/UniConsumer.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {POOL_FEE} from "../../src/Constants.sol";
 import {IUniV4, IPoolManager} from "../../src/interfaces/IUniV4.sol";
-
-import {PoolConfigStoreLib} from "src/libraries/pool-config/PoolConfigStore.sol";
 
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";

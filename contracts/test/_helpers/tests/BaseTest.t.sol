@@ -5,7 +5,7 @@ import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
 import {Angstrom} from "src/Angstrom.sol";
-import {PoolConfigStore} from "src/libraries/pool-config/PoolConfigStore.sol";
+import {PoolConfigStore} from "src/libraries/PoolConfigStore.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract BaseTestTest is BaseTest {

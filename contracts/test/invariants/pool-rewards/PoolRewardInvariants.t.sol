@@ -17,19 +17,12 @@ import {TickReward, RewardLib} from "test/_helpers/RewardLib.sol";
 import {UsedIndexMap} from "super-sol/collections/UsedIndexMap.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
-import {ConversionLib} from "src/libraries/ConversionLib.sol";
-
-import {console} from "forge-std/console.sol";
-import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 int24 constant TICK_SPACING = 60;
 
 /// @author philogy <https://github.com/philogy>
 contract PoolRewardsInvariantTest is BaseTest {
-    using FormatLib for *;
-
     using TickMath for int24;
-    using ConversionLib for *;
 
     UniV4Inspector public uniV4;
     ExtAngstrom public angstrom;
@@ -54,8 +47,7 @@ contract PoolRewardsInvariantTest is BaseTest {
         gate.tickSpacing(TICK_SPACING);
 
         int24 startTick = 0;
-        refId =
-            PoolIdLibrary.toId(address(0).toPoolKey(address(asset0), address(asset1), TICK_SPACING));
+        refId = PoolIdLibrary.toId(poolKey(address(asset0), address(asset1), TICK_SPACING));
         gate.setHook(address(0));
         gate.initializePool(address(asset0), address(asset1), startTick.getSqrtPriceAtTick(), 0);
 
@@ -358,8 +350,6 @@ contract PoolRewardsInvariantTest is BaseTest {
     }
 
     function poolKey() internal view returns (PoolKey memory) {
-        return ConversionLib.toPoolKey(
-            address(angstrom), address(asset0), address(asset1), TICK_SPACING
-        );
+        return poolKey(angstrom, asset0, asset1, TICK_SPACING);
     }
 }

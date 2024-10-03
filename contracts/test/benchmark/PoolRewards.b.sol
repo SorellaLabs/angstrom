@@ -16,11 +16,11 @@ import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {console} from "forge-std/console.sol";
 
-import {Bundle, Asset, Pair, PoolUpdate} from "src/reference/Bundle.sol";
-import {PairLib} from "src/reference/Pair.sol";
+import {Bundle, Asset, Pair, PoolUpdate} from "test/_reference/Bundle.sol";
+import {PairLib} from "test/_reference/Pair.sol";
 import {PriceAB} from "src/types/Price.sol";
-import {TopOfBlockOrder} from "src/reference/OrderTypes.sol";
-import {PoolUpdate, RewardsUpdate} from "src/reference/PoolUpdate.sol";
+import {TopOfBlockOrder} from "test/_reference/OrderTypes.sol";
+import {PoolUpdate, RewardsUpdate} from "test/_reference/PoolUpdate.sol";
 
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";

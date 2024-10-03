@@ -2,9 +2,9 @@
 pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {Asset as RefAsset, AssetLib as RefAssetLib} from "../../src/reference/Asset.sol";
-import {CalldataReader, CalldataReaderLib} from "../../src/types/CalldataReader.sol";
-import {Asset, AssetArray, AssetLib} from "../../src/types/Asset.sol";
+import {Asset as RefAsset, AssetLib as RefAssetLib} from "test/_reference/Asset.sol";
+import {CalldataReader, CalldataReaderLib} from "src/types/CalldataReader.sol";
+import {Asset, AssetArray, AssetLib} from "src/types/Asset.sol";
 
 import {console} from "forge-std/console.sol";
 

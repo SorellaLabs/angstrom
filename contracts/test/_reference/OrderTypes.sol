@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {UserOrderVariantMap} from "../types/UserOrderVariantMap.sol";
-import {OrderVariant as RefOrderVariant} from "../reference/OrderVariant.sol";
-import {UserOrderBufferLib} from "../types/UserOrderBuffer.sol";
+import {UserOrderVariantMap} from "src/types/UserOrderVariantMap.sol";
+import {OrderVariant as RefOrderVariant} from "./OrderVariant.sol";
+import {UserOrderBufferLib} from "src/types/UserOrderBuffer.sol";
+import {ToBOrderBufferLib} from "src/types/ToBOrderBuffer.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {Pair, PairLib} from "./Pair.sol";
 
@@ -109,90 +110,10 @@ library OrdersLib {
     using FormatLib for *;
     using SafeCastLib for *;
 
-    /// forgefmt: disable-next-item
-    bytes32 internal constant PARTIAL_STANDING_ORDER_TYPEHASH = keccak256(
-        "PartialStandingOrder("
-           "uint128 min_amount_in,"
-           "uint128 max_amount_in,"
-           "uint128 max_gas_asset0,"
-           "uint256 min_price,"
-           "bool use_internal,"
-           "address asset_in,"
-           "address asset_out,"
-           "address recipient,"
-           "bytes hook_data,"
-           "uint64 nonce,"
-           "uint40 deadline"
-        ")"
-    );
-
-    /// forgefmt: disable-next-item
-    bytes32 internal constant EXACT_STANDING_ORDER_TYPEHASH = keccak256(
-        "ExactStandingOrder("
-           "bool exact_in,"
-           "uint128 amount,"
-           "uint128 max_gas_asset0,"
-           "uint256 min_price,"
-           "bool use_internal,"
-           "address asset_in,"
-           "address asset_out,"
-           "address recipient,"
-           "bytes hook_data,"
-           "uint64 nonce,"
-           "uint40 deadline"
-        ")"
-    );
-
-    /// forgefmt: disable-next-item
-    bytes32 internal constant PARTIAL_FLASH_ORDER_TYPEHASH = keccak256(
-        "PartialFlashOrder("
-           "uint128 min_amount_in,"
-           "uint128 max_amount_in,"
-           "uint128 max_gas_asset0,"
-           "uint256 min_price,"
-           "bool use_internal,"
-           "address asset_in,"
-           "address asset_out,"
-           "address recipient,"
-           "bytes hook_data,"
-           "uint64 valid_for_block"
-        ")"
-    );
-
-    /// forgefmt: disable-next-item
-    bytes32 internal constant EXACT_FLASH_ORDER_TYPEHASH = keccak256(
-        "ExactFlashOrder("
-           "bool exact_in,"
-           "uint128 amount,"
-           "uint128 max_gas_asset0,"
-           "uint256 min_price,"
-           "bool use_internal,"
-           "address asset_in,"
-           "address asset_out,"
-           "address recipient,"
-           "bytes hook_data,"
-           "uint64 valid_for_block"
-        ")"
-    );
-
-    /// forgefmt: disable-next-item
-    bytes32 internal constant TOP_OF_BLOCK_ORDER_TYPEHASH = keccak256(
-        "TopOfBlockOrder("
-           "uint128 quantity_in,"
-           "uint128 quantity_out,"
-           "uint128 max_gas_asset0,"
-           "bool use_internal,"
-           "address asset_in,"
-           "address asset_out,"
-           "address recipient,"
-           "uint256 valid_for_block"
-        ")"
-    );
-
     function hash(PartialStandingOrder memory order) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                PARTIAL_STANDING_ORDER_TYPEHASH,
+                UserOrderBufferLib.PARTIAL_STANDING_ORDER_TYPEHASH,
                 order.minAmountIn,
                 order.maxAmountIn,
                 order.maxGasAsset0,
@@ -211,7 +132,7 @@ library OrdersLib {
     function hash(ExactStandingOrder memory order) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                EXACT_STANDING_ORDER_TYPEHASH,
+                UserOrderBufferLib.EXACT_STANDING_ORDER_TYPEHASH,
                 order.exactIn,
                 order.amount,
                 order.maxGasAsset0,
@@ -230,7 +151,7 @@ library OrdersLib {
     function hash(PartialFlashOrder memory order) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                PARTIAL_FLASH_ORDER_TYPEHASH,
+                UserOrderBufferLib.PARTIAL_FLASH_ORDER_TYPEHASH,
                 order.minAmountIn,
                 order.maxAmountIn,
                 order.maxGasAsset0,
@@ -248,7 +169,7 @@ library OrdersLib {
     function hash(ExactFlashOrder memory order) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                EXACT_FLASH_ORDER_TYPEHASH,
+                UserOrderBufferLib.EXACT_FLASH_ORDER_TYPEHASH,
                 order.exactIn,
                 order.amount,
                 order.maxGasAsset0,
@@ -266,7 +187,7 @@ library OrdersLib {
     function hash(TopOfBlockOrder memory order) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                TOP_OF_BLOCK_ORDER_TYPEHASH,
+                ToBOrderBufferLib.TOP_OF_BLOCK_ORDER_TYPEHASH,
                 order.quantityIn,
                 order.quantityOut,
                 order.maxGasAsset0,

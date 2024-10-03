@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IUniV4} from "../../src/interfaces/IUniV4.sol";
-import {RewardsUpdate} from "../../src/reference/PoolUpdate.sol";
+import {RewardsUpdate} from "test/_reference/PoolUpdate.sol";
 import {TickLib} from "src/libraries/TickLib.sol";
 import {MixedSignLib} from "src/libraries/MixedSignLib.sol";
 import {VecLib, UintVec} from "super-sol/collections/Vec.sol";

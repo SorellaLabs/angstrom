@@ -2,7 +2,6 @@
 pragma solidity ^0.8.13;
 
 import {PoolId} from "v4-core/src/types/PoolId.sol";
-import {POSITIONS_STORAGE_PREFIX} from "src/Constants.sol";
 
 struct Positions {
     mapping(PoolId id => mapping(bytes32 uniPositionKey => Position)) positions;

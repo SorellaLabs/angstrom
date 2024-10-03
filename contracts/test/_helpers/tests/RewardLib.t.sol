@@ -7,7 +7,7 @@ import {PoolManager} from "v4-core/src/PoolManager.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {TickLib} from "src/libraries/TickLib.sol";
 import {SuperConversionLib} from "super-sol/libraries/SuperConversionLib.sol";
-import {RewardsUpdate} from "../../../src/reference/PoolUpdate.sol";
+import {RewardsUpdate} from "test/_reference/PoolUpdate.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 import {console} from "forge-std/console.sol";

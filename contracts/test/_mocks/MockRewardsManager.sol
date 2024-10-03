@@ -27,7 +27,7 @@ contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdateManager
         NodeManager(controller)
         SettlementManager(address(0))
     {
-        console.log("rewards manager deployed");
+        _checkAngstromHookFlags();
     }
 
     /// @param encoded PADE `(List<Asset>, List<Pair>, PoolUpdate)`.

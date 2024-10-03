@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {AssetLib as ActualAssetLib} from "../types/Asset.sol";
+import {AssetLib as ActualAssetLib} from "src/types/Asset.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {BitPackLib} from "./BitPackLib.sol";
 

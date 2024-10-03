@@ -11,7 +11,7 @@ import {Trader} from "./types/Trader.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {HookDeployer} from "./HookDeployer.sol";
 import {stdError} from "forge-std/StdError.sol";
-import {OrderMeta, TopOfBlockOrder} from "src/reference/OrderTypes.sol";
+import {OrderMeta, TopOfBlockOrder} from "test/_reference/OrderTypes.sol";
 import {TickLib} from "src/libraries/TickLib.sol";
 import {HookDeployer} from "./HookDeployer.sol";
 import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";

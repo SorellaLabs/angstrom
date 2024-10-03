@@ -46,17 +46,15 @@ abstract contract PoolUpdateManager is
     Positions internal positions;
     mapping(PoolId id => PoolRewards) internal poolRewards;
 
-    constructor() {
-        _checkHookPermissions(Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG);
-    }
-
     /// @dev Maintain reward growth & `poolRewards` values such that no one's owed rewards change.
     function beforeAddLiquidity(
         address sender,
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata
-    ) external override onlyUniV4 returns (bytes4) {
+    ) external override returns (bytes4) {
+        _onlyUniV4();
+
         uint256 liquidityDelta = uint256(params.liquidityDelta);
 
         PoolId id = _toId(key);
@@ -102,7 +100,9 @@ abstract contract PoolUpdateManager is
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata
-    ) external override onlyUniV4 returns (bytes4) {
+    ) external override returns (bytes4) {
+        _onlyUniV4();
+
         uint256 liquidityDelta = params.liquidityDelta.neg();
 
         PoolId id = _toId(key);

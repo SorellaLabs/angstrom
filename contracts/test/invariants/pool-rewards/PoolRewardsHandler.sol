@@ -18,10 +18,10 @@ import {PoolConfigStore} from "src/libraries/PoolConfigStore.sol";
 
 import {LibSort} from "solady/src/utils/LibSort.sol";
 
-import {Bundle, Pair} from "src/reference/Bundle.sol";
-import {Asset} from "src/reference/Asset.sol";
-import {PoolUpdate, RewardsUpdate} from "src/reference/PoolUpdate.sol";
-import {TopOfBlockOrder} from "src/reference/OrderTypes.sol";
+import {Bundle, Pair} from "test/_reference/Bundle.sol";
+import {Asset} from "test/_reference/Asset.sol";
+import {PoolUpdate, RewardsUpdate} from "test/_reference/PoolUpdate.sol";
+import {TopOfBlockOrder} from "test/_reference/OrderTypes.sol";
 
 import {EnumerableSetLib} from "solady/src/utils/EnumerableSetLib.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";

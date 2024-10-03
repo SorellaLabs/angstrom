@@ -16,16 +16,14 @@ import {IBeforeInitializeHook} from "../interfaces/IHooks.sol";
 abstract contract HookManager is UniConsumer, NodeManager, IBeforeInitializeHook {
     error InvalidPoolKey();
 
-    constructor() {
-        _checkHookPermissions(Hooks.BEFORE_SWAP_FLAG | Hooks.BEFORE_INITIALIZE_FLAG);
-    }
-
     function beforeInitialize(
         address,
         PoolKey calldata poolKey,
         uint160,
         bytes calldata storeIndexBytes
-    ) external view onlyUniV4 returns (bytes4) {
+    ) external view returns (bytes4) {
+        _onlyUniV4();
+
         // Uniswap ensures that `currency0 < currency1`.
         StoreKey key = PoolConfigStoreLib.keyFromAssetsUnchecked(
             Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1)

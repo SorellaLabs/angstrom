@@ -45,19 +45,18 @@ contract Angstrom is
         UniConsumer(uniV4)
         NodeManager(controller)
         SettlementManager(feeMaster)
-    {}
+    {
+        _checkAngstromHookFlags();
+    }
 
     function execute(bytes calldata encoded) external {
         _nodeBundleLock();
         UNI_V4.unlock(encoded);
     }
 
-    function unlockCallback(bytes calldata data)
-        external
-        override
-        onlyUniV4
-        returns (bytes memory)
-    {
+    function unlockCallback(bytes calldata data) external override returns (bytes memory) {
+        _onlyUniV4();
+
         CalldataReader reader = CalldataReaderLib.from(data);
 
         AssetArray assets;
@@ -97,8 +96,7 @@ contract Angstrom is
 
         TypedDataHasher typedHasher = _erc712Hasher();
         ToBOrderBuffer memory buffer;
-        // No ERC712 variants for ToB orders so typehash can remain unchanged.
-        buffer.setTypeHash();
+        buffer.init();
 
         // Purposefully devolve into an endless loop if the specified length isn't exactly used s.t.
         // `reader == end` at some point.

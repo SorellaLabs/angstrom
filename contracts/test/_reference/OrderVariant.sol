@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {
     UserOrderVariantMap as Variant,
     UserOrderVariantMapLib as VariantLib
-} from "../types/UserOrderVariantMap.sol";
+} from "src/types/UserOrderVariantMap.sol";
 import {BitPackLib} from "./BitPackLib.sol";
 
 struct OrderVariant {

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {ToBOrderBuffer, ToBOrderBufferLib} from "src/types/ToBOrderBuffer.sol";
-import {TopOfBlockOrder} from "src/reference/OrderTypes.sol";
+import {TopOfBlockOrder} from "test/_reference/OrderTypes.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract ToBOrderBufferTest is Test {
@@ -48,7 +48,7 @@ contract ToBOrderBufferTest is Test {
         vm.roll(order.validForBlock);
 
         ToBOrderBuffer memory buffer;
-        buffer.setTypeHash();
+        buffer.init();
         buffer.quantityIn = order.quantityIn;
         buffer.quantityOut = order.quantityOut;
         buffer.maxGasAsset0 = order.maxGasAsset0;

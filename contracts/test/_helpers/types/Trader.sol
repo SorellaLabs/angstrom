@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Vm} from "forge-std/Vm.sol";
 import {UintVec, VecLib} from "super-sol/collections/Vec.sol";
-import {UserOrder, OrderMeta} from "../../../src/reference/UserOrder.sol";
+import {UserOrder, OrderMeta} from "test/_reference/UserOrder.sol";
 import {TypedDataHasher} from "src/types/TypedDataHasher.sol";
 
 import {console2 as console} from "forge-std/console2.sol";

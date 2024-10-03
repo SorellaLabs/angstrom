@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {stdError} from "forge-std/StdError.sol";
 import {PoolManager} from "v4-core/src/PoolManager.sol";
-import {Bundle, TopOfBlockOrder, Asset} from "src/reference/Bundle.sol";
+import {Bundle, TopOfBlockOrder, Asset} from "test/_reference/Bundle.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 import {Angstrom} from "src/Angstrom.sol";
 import {SettlementManager} from "src/modules/SettlementManager.sol";

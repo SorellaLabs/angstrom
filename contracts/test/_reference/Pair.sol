@@ -3,9 +3,9 @@ pragma solidity ^0.8.0;
 
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {Asset, AssetLib} from "./Asset.sol";
-import {RayMathLib} from "../libraries/RayMathLib.sol";
-import {PairLib as ActualPairLib} from "../types/Pair.sol";
-import {PriceAB} from "../types/Price.sol";
+import {RayMathLib} from "src/libraries/RayMathLib.sol";
+import {PairLib as ActualPairLib} from "src/types/Pair.sol";
+import {PriceAB} from "src/types/Price.sol";
 import {
     PoolConfigStore,
     PoolConfigStoreLib,

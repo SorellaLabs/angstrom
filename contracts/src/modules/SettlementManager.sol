@@ -19,6 +19,8 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {ConversionLib} from "src/libraries/ConversionLib.sol";
 
+import {console} from "forge-std/console.sol";
+
 /// @author philogy <https://github.com/philogy>
 abstract contract SettlementManager is UniConsumer {
     using IUniV4 for IPoolManager;
@@ -34,10 +36,36 @@ abstract contract SettlementManager is UniConsumer {
 
     DeltaTracker internal bundleDeltas;
 
-    mapping(address => mapping(address => uint256)) internal _angstromReserves;
+    mapping(address asset => mapping(address owner => uint256 balance)) internal _balances;
 
     constructor(address feeMaster) {
         FEE_MASTER = feeMaster;
+    }
+
+    /// @notice Pulls tokens from the caller and credits them to the caller for trading.
+    /// @dev WARN: Assumes `asset` charges 0 fees upon transfers and is not rebasing.
+    function deposit(address asset, uint256 amount) external {
+        asset.safeTransferFrom(msg.sender, address(this), amount);
+        _balances[asset][msg.sender] += amount;
+    }
+
+    /// @notice Pulls tokens from the caller and credits them to the `to` address for trading.
+    /// @dev WARN: Assumes `asset` charges 0 fees upon transfers and is not rebasing.
+    function deposit(address asset, address to, uint256 amount) external {
+        asset.safeTransferFrom(msg.sender, address(this), amount);
+        _balances[asset][to] += amount;
+    }
+
+    function withdraw(address asset, uint256 amount) external {
+        console.log("_balances: %s", _balances[asset][msg.sender]);
+        console.log("amount: %s", amount);
+        _balances[asset][msg.sender] -= amount;
+        asset.safeTransfer(msg.sender, amount);
+    }
+
+    function withdraw(address asset, address to, uint256 amount) external {
+        _balances[asset][msg.sender] -= amount;
+        asset.safeTransfer(to, amount);
     }
 
     /// @dev Function to allow `FEE_MASTER` to pull an arbitrary amount of tokens from the contract.
@@ -115,7 +143,7 @@ abstract contract SettlementManager is UniConsumer {
         uint256 amount = amountIn.into();
         bundleDeltas.add(asset, amount);
         if (useInternal) {
-            _angstromReserves[from][asset] -= amount;
+            _balances[from][asset] -= amount;
         } else {
             asset.safeTransferFrom(from, address(this), amount);
         }
@@ -127,7 +155,7 @@ abstract contract SettlementManager is UniConsumer {
         uint256 amount = amountOut.into();
         bundleDeltas.sub(asset, amount);
         if (useInternal) {
-            _angstromReserves[to][asset] += amount;
+            _balances[to][asset] += amount;
         } else {
             asset.safeTransfer(to, amount);
         }

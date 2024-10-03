@@ -23,6 +23,7 @@ contract BaseTest is Test, HookDeployer {
 
     uint256 internal constant REAL_TIMESTAMP = 1721652639;
 
+    bytes32 internal constant ANG_BALANCES_SLOT = bytes32(uint256(0x2));
     bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x4));
 
     function pm(address addr) internal pure returns (IPoolManager) {
@@ -52,7 +53,20 @@ contract BaseTest is Test, HookDeployer {
     }
 
     function rawGetConfigStore(address angstrom) internal view returns (address) {
-        return address(bytes20(vm.load(address(angstrom), ANG_CONFIG_STORE_SLOT) << 32));
+        return address(bytes20(vm.load(angstrom, ANG_CONFIG_STORE_SLOT) << 32));
+    }
+
+    function rawGetBalance(address angstrom, address asset, address owner)
+        internal
+        view
+        returns (uint256)
+    {
+        return uint256(
+            vm.load(
+                angstrom,
+                keccak256(abi.encode(owner, keccak256(abi.encode(asset, ANG_BALANCES_SLOT))))
+            )
+        );
     }
 
     function computeDomainSeparator(address angstrom) internal view returns (bytes32) {
@@ -228,5 +242,13 @@ contract BaseTest is Test, HookDeployer {
             bytes.concat(bytes32(uint256(0x20)), bytes32(encoded.length / 0x20), encoded),
             (address[])
         );
+    }
+
+    function min(uint256 x, uint256 y) internal pure returns (uint256) {
+        return x < y ? x : y;
+    }
+
+    function max(uint256 x, uint256 y) internal pure returns (uint256) {
+        return x > y ? x : y;
     }
 }

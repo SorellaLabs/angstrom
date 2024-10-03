@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {PoolManager} from "v4-core/src/PoolManager.sol";
 import {Bundle, TopOfBlockOrder, Asset} from "src/reference/Bundle.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
@@ -49,6 +50,131 @@ contract SettlementManagerTest is BaseTest {
 
         vm.prank(controller);
         angstrom.toggleNodes(addrs(abi.encode(validator)));
+    }
+
+    function test_fuzzing_depositCaller(address user, uint256 assetIndex, uint256 amount) public {
+        address asset = assets[bound(assetIndex, 0, assets.length - 1)];
+        MockERC20 token = MockERC20(asset);
+        token.mint(user, amount);
+        vm.prank(user);
+        token.approve(address(angstrom), type(uint256).max);
+
+        assertEq(token.balanceOf(user), amount);
+
+        vm.prank(user);
+        angstrom.deposit(asset, amount);
+
+        assertEq(token.balanceOf(user), 0);
+        assertEq(rawGetBalance(address(angstrom), asset, user), amount);
+    }
+
+    function test_fuzzing_depositTo(
+        address user,
+        address recipient,
+        uint256 assetIndex,
+        uint256 amount
+    ) public {
+        address asset = assets[bound(assetIndex, 0, assets.length - 1)];
+        MockERC20 token = MockERC20(asset);
+        token.mint(user, amount);
+        vm.prank(user);
+        token.approve(address(angstrom), type(uint256).max);
+
+        assertEq(token.balanceOf(user), amount);
+
+        vm.prank(user);
+        angstrom.deposit(asset, recipient, amount);
+
+        assertEq(token.balanceOf(user), 0);
+        assertEq(rawGetBalance(address(angstrom), asset, recipient), amount);
+        assertEq(rawGetBalance(address(angstrom), asset, user), 0);
+    }
+
+    function test_fuzzing_withdraw(
+        address user,
+        uint256 assetIndex,
+        uint256 mintAmount,
+        uint256 depositAmount,
+        uint256 withdrawAmount
+    ) public {
+        address asset = assets[bound(assetIndex, 0, assets.length - 1)];
+        MockERC20 token = MockERC20(asset);
+        depositAmount = bound(depositAmount, 0, mintAmount);
+        withdrawAmount = bound(withdrawAmount, 0, depositAmount);
+        token.mint(user, mintAmount);
+        vm.prank(user);
+        token.approve(address(angstrom), type(uint256).max);
+
+        vm.prank(user);
+        angstrom.deposit(asset, depositAmount);
+
+        assertEq(token.balanceOf(user), mintAmount - depositAmount);
+        assertEq(rawGetBalance(address(angstrom), asset, user), depositAmount);
+
+        vm.prank(user);
+        angstrom.withdraw(asset, withdrawAmount);
+
+        assertEq(token.balanceOf(user), mintAmount - depositAmount + withdrawAmount);
+        assertEq(rawGetBalance(address(angstrom), asset, user), depositAmount - withdrawAmount);
+    }
+
+    function test_fuzzing_withdrawTo(
+        address user,
+        address recipient,
+        uint256 assetIndex,
+        uint256 mintAmount,
+        uint256 depositAmount,
+        uint256 withdrawAmount
+    ) public {
+        address asset = assets[bound(assetIndex, 0, assets.length - 1)];
+        MockERC20 token = MockERC20(asset);
+        depositAmount = bound(depositAmount, 0, mintAmount);
+        withdrawAmount = bound(withdrawAmount, 0, depositAmount);
+        token.mint(user, mintAmount);
+        vm.prank(user);
+        token.approve(address(angstrom), type(uint256).max);
+
+        vm.prank(user);
+        angstrom.deposit(asset, depositAmount);
+
+        assertEq(token.balanceOf(user), mintAmount - depositAmount);
+        assertEq(rawGetBalance(address(angstrom), asset, user), depositAmount);
+
+        vm.prank(user);
+        angstrom.withdraw(asset, recipient, withdrawAmount);
+
+        if (recipient != user) {
+            assertEq(token.balanceOf(user), mintAmount - depositAmount);
+            assertEq(rawGetBalance(address(angstrom), asset, user), depositAmount - withdrawAmount);
+            assertEq(token.balanceOf(recipient), withdrawAmount);
+        } else {
+            assertEq(token.balanceOf(user), mintAmount - depositAmount + withdrawAmount);
+            assertEq(rawGetBalance(address(angstrom), asset, user), depositAmount - withdrawAmount);
+        }
+    }
+
+    function test_fuzzing_prevents_withdrawingTooMuch(
+        address user,
+        uint256 assetIndex,
+        uint256 mintAmount,
+        uint256 depositAmount,
+        uint256 withdrawAmount
+    ) public {
+        address asset = assets[bound(assetIndex, 0, assets.length - 1)];
+        MockERC20 token = MockERC20(asset);
+        depositAmount = bound(depositAmount, 0, min(mintAmount, type(uint256).max - 1));
+        withdrawAmount = bound(withdrawAmount, depositAmount + 1, type(uint256).max);
+
+        token.mint(user, mintAmount);
+        vm.prank(user);
+        token.approve(address(angstrom), type(uint256).max);
+
+        vm.prank(user);
+        angstrom.deposit(asset, depositAmount);
+
+        vm.prank(user);
+        vm.expectRevert(stdError.arithmeticError);
+        angstrom.withdraw(asset, withdrawAmount);
     }
 
     function test_single() public {

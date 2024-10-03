@@ -150,8 +150,7 @@ where
         chain
             .tip()
             .transactions()
-            .filter(|tx| tx.transaction.to().is_some())
-            .filter(|tx| tx.to().unwrap() == self.angstrom_address)
+            .filter(|tx| tx.transaction.to() == Some(self.angstrom_address))
             .filter_map(|transaction| {
                 let mut input: &[u8] = transaction.input();
                 AngstromBundle::pade_decode(&mut input, None).ok()

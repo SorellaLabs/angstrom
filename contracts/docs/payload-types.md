@@ -263,7 +263,6 @@ struct TopOfBlockOrder {
     pairs_index: u16,
     zero_for_one: bool,
     recipient: Option<address>,
-    hook_data: Option<List<bytes1>>,
     signature: Signature
 }
 ```
@@ -278,7 +277,6 @@ struct TopOfBlockOrder {
 |`asset_in_index: u16`|Order's input asset as index into the assets array|
 |`asset_out_index: u16`|Order's output asset as index into the assets array|
 |`recipient: Option<address>`|Recipient for order output, `None` implies signer.|
-|`hook_data: Option<List<bytes1>>`|Optional hook for composable orders, consisting of the hook address concatenated to the hook extra data.|
 |`signature: Signature`|The signature validating the order.|
 
 #### `UserOrder`

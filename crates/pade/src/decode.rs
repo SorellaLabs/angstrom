@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 pub trait PadeDecode: super::PadeEncode {
-    /// the var field should be None while calling this on any struct or enum. 
+    /// the var field should be None while calling this on any struct or enum.
     /// It is only here for dealing with the case where a struct contains enum
     /// fields. However this is delt with the decoding macro and thus should
     /// be ignored.

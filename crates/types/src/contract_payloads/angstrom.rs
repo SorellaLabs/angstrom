@@ -3,6 +3,7 @@ use alloy::{
     sol
 };
 use pade_macro::{PadeDecode, PadeEncode};
+use reth_primitives::keccak256;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -29,8 +30,9 @@ pub struct TopOfBlockOrder {
 }
 
 impl TopOfBlockOrder {
+    // eip-712 hash_struct
     pub fn order_hash(&self) -> B256 {
-        todo!()
+        keccak256(&self.signature)
     }
 
     pub fn of(
@@ -86,7 +88,7 @@ pub struct UserOrder {
 
 impl UserOrder {
     pub fn order_hash(&self) -> B256 {
-        todo!()
+        keccak256(&self.signature)
     }
 }
 

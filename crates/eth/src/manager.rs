@@ -157,7 +157,6 @@ where
                 AngstromBundle::pade_decode(&mut input, None).ok()
             })
             .flat_map(move |bundle| bundle.get_order_hashes().collect::<Vec<_>>())
-        // .collect()
     }
 
     /// fetches all eoa addresses touched

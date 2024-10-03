@@ -53,6 +53,8 @@ contract SettlementManagerTest is BaseTest {
     }
 
     function test_fuzzing_depositCaller(address user, uint256 assetIndex, uint256 amount) public {
+        vm.assume(user != address(angstrom));
+
         address asset = assets[bound(assetIndex, 0, assets.length - 1)];
         MockERC20 token = MockERC20(asset);
         token.mint(user, amount);
@@ -74,6 +76,9 @@ contract SettlementManagerTest is BaseTest {
         uint256 assetIndex,
         uint256 amount
     ) public {
+        vm.assume(user != address(angstrom));
+        vm.assume(recipient != address(angstrom));
+
         address asset = assets[bound(assetIndex, 0, assets.length - 1)];
         MockERC20 token = MockERC20(asset);
         token.mint(user, amount);
@@ -86,8 +91,11 @@ contract SettlementManagerTest is BaseTest {
         angstrom.deposit(asset, recipient, amount);
 
         assertEq(token.balanceOf(user), 0);
+
         assertEq(rawGetBalance(address(angstrom), asset, recipient), amount);
-        assertEq(rawGetBalance(address(angstrom), asset, user), 0);
+        if (user != recipient) {
+            assertEq(rawGetBalance(address(angstrom), asset, user), 0);
+        }
     }
 
     function test_fuzzing_withdraw(
@@ -97,6 +105,8 @@ contract SettlementManagerTest is BaseTest {
         uint256 depositAmount,
         uint256 withdrawAmount
     ) public {
+        vm.assume(user != address(angstrom));
+
         address asset = assets[bound(assetIndex, 0, assets.length - 1)];
         MockERC20 token = MockERC20(asset);
         depositAmount = bound(depositAmount, 0, mintAmount);
@@ -126,6 +136,9 @@ contract SettlementManagerTest is BaseTest {
         uint256 depositAmount,
         uint256 withdrawAmount
     ) public {
+        vm.assume(user != address(angstrom));
+        vm.assume(recipient != address(angstrom));
+
         address asset = assets[bound(assetIndex, 0, assets.length - 1)];
         MockERC20 token = MockERC20(asset);
         depositAmount = bound(depositAmount, 0, mintAmount);
@@ -160,6 +173,8 @@ contract SettlementManagerTest is BaseTest {
         uint256 depositAmount,
         uint256 withdrawAmount
     ) public {
+        vm.assume(user != address(angstrom));
+
         address asset = assets[bound(assetIndex, 0, assets.length - 1)];
         MockERC20 token = MockERC20(asset);
         depositAmount = bound(depositAmount, 0, min(mintAmount, type(uint256).max - 1));

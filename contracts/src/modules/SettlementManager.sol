@@ -57,8 +57,6 @@ abstract contract SettlementManager is UniConsumer {
     }
 
     function withdraw(address asset, uint256 amount) external {
-        console.log("_balances: %s", _balances[asset][msg.sender]);
-        console.log("amount: %s", amount);
         _balances[asset][msg.sender] -= amount;
         asset.safeTransfer(msg.sender, amount);
     }

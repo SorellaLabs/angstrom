@@ -10,22 +10,18 @@ import {CalldataReader, CalldataReaderLib} from "../types/CalldataReader.sol";
 
 /// @author philogy <https://github.com/philogy>
 abstract contract PermitSubmitterHook is IAngstromComposable {
-    enum PermitPayloadType {
-        ERC2612_INFINITE,
-        ERC2612_SPECIFIC,
-        DAI_INFINITE
-    }
+    uint256 internal constant ERC2612_INFINITE = 0x00;
+    uint256 internal constant ERC2612_SPECIFIC = 0x01;
+    uint256 internal constant DAI_INFINITE = 0x02;
+
+    error InvalidPermitType(uint8);
 
     function compose(address from, bytes calldata payload) external override returns (uint32) {
         CalldataReader reader = CalldataReaderLib.from(payload);
-        PermitPayloadType payloadType;
-        {
-            uint8 typeByte;
-            (reader, typeByte) = reader.readU8();
-            payloadType = PermitPayloadType(typeByte);
-        }
+        uint8 permitType;
+        (reader, permitType) = reader.readU8();
 
-        if (payloadType == PermitPayloadType.ERC2612_INFINITE) {
+        if (permitType == ERC2612_INFINITE) {
             address token;
             (reader, token) = reader.readAddr();
             uint40 deadline;
@@ -39,7 +35,7 @@ abstract contract PermitSubmitterHook is IAngstromComposable {
             IERC2612(token).permit(
                 from, msg.sender, type(uint256).max, deadline, v, bytes32(r), bytes32(s)
             );
-        } else if (payloadType == PermitPayloadType.ERC2612_SPECIFIC) {
+        } else if (permitType == ERC2612_SPECIFIC) {
             address token;
             (reader, token) = reader.readAddr();
             uint128 value;
@@ -53,7 +49,7 @@ abstract contract PermitSubmitterHook is IAngstromComposable {
             uint256 s;
             (reader, s) = reader.readU256();
             IERC2612(token).permit(from, msg.sender, value, deadline, v, bytes32(r), bytes32(s));
-        } else if (payloadType == PermitPayloadType.DAI_INFINITE) {
+        } else if (permitType == DAI_INFINITE) {
             address token;
             (reader, token) = reader.readAddr();
             uint32 nonce;
@@ -69,7 +65,11 @@ abstract contract PermitSubmitterHook is IAngstromComposable {
             IDaiPermit(token).permit(
                 from, msg.sender, nonce, deadline, true, v, bytes32(r), bytes32(s)
             );
+        } else {
+            revert InvalidPermitType(permitType);
         }
+
+        reader.requireAtEndOf(payload);
 
         return EXPECTED_HOOK_RETURN_MAGIC;
     }

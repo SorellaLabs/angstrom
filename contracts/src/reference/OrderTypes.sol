@@ -93,8 +93,6 @@ struct TopOfBlockOrder {
     address assetIn;
     address assetOut;
     address recipient;
-    address hook;
-    bytes hookPayload;
     uint64 validForBlock;
     OrderMeta meta;
 }
@@ -187,7 +185,6 @@ library OrdersLib {
            "address asset_in,"
            "address asset_out,"
            "address recipient,"
-           "bytes hook_data,"
            "uint256 valid_for_block"
         ")"
     );
@@ -277,7 +274,6 @@ library OrdersLib {
                 order.assetIn,
                 order.assetOut,
                 order.recipient,
-                keccak256(_toHookData(order.hook, order.hookPayload)),
                 order.validForBlock
             )
         );
@@ -441,8 +437,7 @@ library OrdersLib {
         (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(order.assetIn, order.assetOut);
 
         uint8 varMap = (order.useInternal ? 1 : 0) | (zeroForOne ? 2 : 0)
-            | (order.recipient != address(0) ? 4 : 0) | (order.hook != address(0) ? 8 : 0)
-            | (order.meta.isEcdsa ? 16 : 0);
+            | (order.recipient != address(0) ? 4 : 0) | (order.meta.isEcdsa ? 8 : 0);
 
         return bytes.concat(
             bytes1(varMap),
@@ -452,7 +447,6 @@ library OrdersLib {
             bytes16(order.gasUsedAsset0),
             bytes2(pairIndex),
             _encodeRecipient(order.recipient),
-            _encodeHookData(order.hook, order.hookPayload),
             _encodeSig(order.meta)
         );
     }

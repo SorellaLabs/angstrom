@@ -31,8 +31,6 @@ contract ToBOrderBufferTest is Test {
         address assetIn;
         address assetOut;
         address recipient;
-        address hook;
-        bytes hookPayload;
         uint64 validForBlock;
     }
 
@@ -45,8 +43,6 @@ contract ToBOrderBufferTest is Test {
         refOrder.assetIn = order.assetIn;
         refOrder.assetOut = order.assetOut;
         refOrder.recipient = order.recipient;
-        refOrder.hook = order.hook;
-        refOrder.hookPayload = order.hookPayload;
         refOrder.validForBlock = order.validForBlock;
 
         vm.roll(order.validForBlock);
@@ -60,9 +56,6 @@ contract ToBOrderBufferTest is Test {
         buffer.assetIn = order.assetIn;
         buffer.assetOut = order.assetOut;
         buffer.recipient = order.recipient;
-        buffer.hookDataHash = order.hook == address(0)
-            ? keccak256("")
-            : keccak256(abi.encodePacked(order.hook, order.hookPayload));
 
         assertEq(buffer.hash(), refOrder.hash());
     }

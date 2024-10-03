@@ -59,10 +59,10 @@ library BundleLib {
         revert("asset not found");
     }
 
-    function addAsset(Bundle memory self, address newAddr) internal pure {
+    function addAsset(Bundle memory self, address newAddr) internal pure returns (Bundle memory) {
         for (uint256 i = 0; i < self.assets.length; i++) {
             Asset memory asset = self.assets[i];
-            if (asset.addr == newAddr) return;
+            if (asset.addr == newAddr) return self;
         }
         Asset[] memory newAssets = new Asset[](self.assets.length + 1);
         for (uint256 i = 0; i < self.assets.length; i++) {
@@ -70,6 +70,7 @@ library BundleLib {
         }
         newAssets[self.assets.length].addr = newAddr;
         self.assets = newAssets;
+        return self;
     }
 
     function addPair(Bundle memory self, address asset0, address asset1)

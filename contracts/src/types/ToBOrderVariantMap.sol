@@ -12,8 +12,7 @@ library ToBOrderVariantMapLib {
     uint256 internal constant USE_INTERNAL_BIT = 0x01;
     uint256 internal constant ZERO_FOR_ONE_BIT = 0x02;
     uint256 internal constant HAS_RECIPIENT_BIT = 0x04;
-    uint256 internal constant HAS_HOOK_BIT = 0x08;
-    uint256 internal constant IS_ECDSA_BIT = 0x10;
+    uint256 internal constant IS_ECDSA_BIT = 0x08;
 
     function useInternal(ToBOrderVariantMap variant) internal pure returns (bool) {
         return ToBOrderVariantMap.unwrap(variant) & USE_INTERNAL_BIT != 0;
@@ -25,10 +24,6 @@ library ToBOrderVariantMapLib {
 
     function recipientIsSome(ToBOrderVariantMap variant) internal pure returns (bool) {
         return ToBOrderVariantMap.unwrap(variant) & HAS_RECIPIENT_BIT != 0;
-    }
-
-    function noHook(ToBOrderVariantMap variant) internal pure returns (bool) {
-        return ToBOrderVariantMap.unwrap(variant) & HAS_HOOK_BIT == 0;
     }
 
     function isEcdsa(ToBOrderVariantMap variant) internal pure returns (bool) {

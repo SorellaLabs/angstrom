@@ -82,7 +82,12 @@ contract Angstrom is
 
         _saveAndSettle(assets);
 
-        return new bytes(0);
+        // Return empty bytes.
+        assembly ("memory-safe") {
+            mstore(0x00, 0x20)
+            mstore(0x20, 0x00)
+            return(0x00, 0x40)
+        }
     }
 
     function extsload(bytes32 slot) external view returns (bytes32) {
@@ -147,9 +152,6 @@ contract Angstrom is
         (reader, buffer.recipient) =
             variantMap.recipientIsSome() ? reader.readAddr() : (reader, address(0));
 
-        HookBuffer hook;
-        (reader, hook, buffer.hookDataHash) = HookBufferLib.readFrom(reader, variantMap.noHook());
-
         // The `.hash` method validates the `block.number` for flash orders.
         bytes32 orderHash = typedHasher.hashTypedData(buffer.hash());
 
@@ -159,8 +161,6 @@ contract Angstrom is
         (reader, from) = variantMap.isEcdsa()
             ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
             : SignatureLib.readAndCheckERC1271(reader, orderHash);
-
-        hook.tryTrigger(from);
 
         address to = _defaultOr(buffer.recipient, from);
         if (variantMap.zeroForOne()) {

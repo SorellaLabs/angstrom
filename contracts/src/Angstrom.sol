@@ -66,7 +66,6 @@ contract Angstrom is
         reader = _validateAndExecuteToBOrders(reader, pairs);
         reader = _validateAndExecuteUserOrders(reader, pairs);
         reader.requireAtEndOf(data);
-
         _saveAndSettle(assets);
 
         // Return empty bytes.
@@ -122,10 +121,15 @@ contract Angstrom is
         (reader, buffer.quantityIn) = reader.readU128();
         (reader, buffer.quantityOut) = reader.readU128();
         (reader, buffer.maxGasAsset0) = reader.readU128();
-        uint128 gasUsedAsset0;
         {
+            uint128 gasUsedAsset0;
             (reader, gasUsedAsset0) = reader.readU128();
             if (gasUsedAsset0 > buffer.maxGasAsset0) revert ToBGasUsedAboveMax();
+            if (variantMap.zeroForOne()) {
+                buffer.quantityIn += gasUsedAsset0;
+            } else {
+                buffer.quantityOut -= gasUsedAsset0;
+            }
         }
 
         {
@@ -152,27 +156,13 @@ contract Angstrom is
         assembly {
             to := or(mul(iszero(to), from), to)
         }
-        if (variantMap.zeroForOne()) {
-            _settleOrderIn(
-                from,
-                buffer.assetIn,
-                AmountIn.wrap(buffer.quantityIn - gasUsedAsset0),
-                variantMap.useInternal()
-            );
-            _settleOrderOut(
-                to, buffer.assetOut, AmountOut.wrap(buffer.quantityOut), variantMap.useInternal()
-            );
-        } else {
-            _settleOrderIn(
-                from, buffer.assetIn, AmountIn.wrap(buffer.quantityIn), variantMap.useInternal()
-            );
-            _settleOrderOut(
-                to,
-                buffer.assetOut,
-                AmountOut.wrap(buffer.quantityOut - gasUsedAsset0),
-                variantMap.useInternal()
-            );
-        }
+        _settleOrderIn(
+            from, buffer.assetIn, AmountIn.wrap(buffer.quantityIn), variantMap.useInternal()
+        );
+        _settleOrderOut(
+            to, buffer.assetOut, AmountOut.wrap(buffer.quantityOut), variantMap.useInternal()
+        );
+
         return reader;
     }
 

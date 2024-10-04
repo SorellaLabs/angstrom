@@ -21,7 +21,7 @@ import {console} from "forge-std/console.sol";
 int24 constant TICK_SPACING = 60;
 
 /// @author philogy <https://github.com/philogy>
-contract PoolUpdateManagerTest is HookDeployer, BaseTest {
+contract PoolUpdatesTest is HookDeployer, BaseTest {
     using TickMath for int24;
 
     UniV4Inspector public uniV4;

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {GrowthOutsideUpdater} from "./GrowthOutsideUpdater.sol";
 import {UniConsumer} from "./UniConsumer.sol";
-import {SettlementManager} from "./SettlementManager.sol";
+import {Settlement} from "./Settlement.sol";
 import {TopLevelAuth} from "./TopLevelAuth.sol";
 import {IBeforeAddLiquidityHook, IBeforeRemoveLiquidityHook} from "../interfaces/IHooks.sol";
 
@@ -12,7 +12,7 @@ import {PairArray} from "../types/Pair.sol";
 import {CalldataReader} from "../types/CalldataReader.sol";
 import {PoolRewards} from "../types/PoolRewards.sol";
 import {Positions, Position} from "../types/Positions.sol";
-import {UniCallLib, UniSwapCallBuffer} from "../libraries/UniCallLib.sol";
+import {SwapCall, SwapCallLib} from "../types/SwapCall.sol";
 import {PoolUpdateVariantMap} from "../types/PoolUpdateVariantMap.sol";
 
 import {SignedUnsignedLib} from "super-sol/libraries/SignedUnsignedLib.sol";
@@ -31,7 +31,7 @@ import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 abstract contract PoolUpdates is
     UniConsumer,
     GrowthOutsideUpdater,
-    SettlementManager,
+    Settlement,
     TopLevelAuth,
     IBeforeAddLiquidityHook,
     IBeforeRemoveLiquidityHook
@@ -133,7 +133,7 @@ abstract contract PoolUpdates is
     {
         CalldataReader end;
         (reader, end) = reader.readU24End();
-        UniSwapCallBuffer memory swapCall = UniCallLib.newSwapCall(address(this));
+        SwapCall memory swapCall = SwapCallLib.newSwapCall(address(this));
         while (reader != end) {
             reader = _updatePool(reader, swapCall, deltas, pairs);
         }
@@ -143,7 +143,7 @@ abstract contract PoolUpdates is
 
     function _updatePool(
         CalldataReader reader,
-        UniSwapCallBuffer memory swapCall,
+        SwapCall memory swapCall,
         DeltaTracker storage deltas,
         PairArray pairs
     ) internal returns (CalldataReader) {

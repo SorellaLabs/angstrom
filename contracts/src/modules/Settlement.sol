@@ -18,7 +18,7 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 
 /// @author philogy <https://github.com/philogy>
-abstract contract SettlementManager is UniConsumer {
+abstract contract Settlement is UniConsumer {
     using IUniV4 for IPoolManager;
     using SafeTransferLib for address;
 

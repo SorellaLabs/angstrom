@@ -1,30 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {CalldataReader, CalldataReaderLib} from "../../src/types/CalldataReader.sol";
-import {Asset, AssetArray, AssetLib} from "../../src/types/Asset.sol";
+import {CalldataReader, CalldataReaderLib} from "src/types/CalldataReader.sol";
+import {Asset, AssetArray, AssetLib} from "src/types/Asset.sol";
 import {PairArray, PairLib} from "src/types/Pair.sol";
-import {UniSwapCallBuffer, UniCallLib} from "../../src/libraries/UniCallLib.sol";
-import {PoolUpdates} from "../../src/modules/PoolUpdates.sol";
-import {SettlementManager} from "../../src/modules/SettlementManager.sol";
+import {SwapCall, SwapCallLib} from "src/types/SwapCall.sol";
+import {PoolUpdates} from "src/modules/PoolUpdates.sol";
+import {Settlement} from "src/modules/Settlement.sol";
 import {TopLevelAuth} from "src/modules/TopLevelAuth.sol";
-import {UniConsumer} from "../../src/modules/UniConsumer.sol";
+import {UniConsumer} from "src/modules/UniConsumer.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
-import {POOL_FEE} from "../../src/Constants.sol";
-import {IUniV4, IPoolManager} from "../../src/interfaces/IUniV4.sol";
+import {POOL_FEE} from "src/Constants.sol";
+import {IUniV4, IPoolManager} from "src/interfaces/IUniV4.sol";
 
 import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdates {
+contract MockRewardsManager is UniConsumer, Settlement, PoolUpdates {
     using FormatLib for *;
     using IUniV4 for IPoolManager;
 
     constructor(IPoolManager uniV4, address controller)
         UniConsumer(uniV4)
         TopLevelAuth(controller)
-        SettlementManager(address(0))
+        Settlement(address(0))
     {
         _checkAngstromHookFlags();
     }
@@ -38,7 +38,7 @@ contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdates {
         PairArray pairs;
         (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
 
-        UniSwapCallBuffer memory swapCall = UniCallLib.newSwapCall(address(this));
+        SwapCall memory swapCall = SwapCallLib.newSwapCall(address(this));
         reader = _updatePool(reader, swapCall, bundleDeltas, pairs);
 
         reader.requireAtEndOf(encoded);

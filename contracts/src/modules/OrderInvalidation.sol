@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {tuint256} from "transient-goodies/TransientPrimitives.sol";
 
 /// @author philogy <https://github.com/philogy>
-abstract contract InvalidationManager {
+abstract contract OrderInvalidation {
     error NonceReuse();
     error OrderAlreadyExecuted();
     error Expired();

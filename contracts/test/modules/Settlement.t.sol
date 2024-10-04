@@ -7,13 +7,13 @@ import {PoolManager} from "v4-core/src/PoolManager.sol";
 import {Bundle, TopOfBlockOrder, Asset} from "test/_reference/Bundle.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 import {Angstrom} from "src/Angstrom.sol";
-import {SettlementManager} from "src/modules/SettlementManager.sol";
+import {Settlement} from "src/modules/Settlement.sol";
 import {LibSort} from "solady/src/utils/LibSort.sol";
 
 import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract SettlementManagerTest is BaseTest {
+contract SettlementTest is BaseTest {
     Angstrom angstrom;
     address controller = makeAddr("controller");
     address feeMaster = makeAddr("fee_master");
@@ -265,7 +265,7 @@ contract SettlementManagerTest is BaseTest {
         vm.prank(validator);
         angstrom.execute(bundle.encode(rawGetConfigStore(address(angstrom))));
 
-        vm.expectRevert(SettlementManager.NotFeeMaster.selector);
+        vm.expectRevert(Settlement.NotFeeMaster.selector);
         vm.prank(puller);
         angstrom.pullFee(asset, amount);
     }

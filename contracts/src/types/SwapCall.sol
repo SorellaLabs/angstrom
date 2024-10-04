@@ -6,7 +6,7 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {POOL_FEE} from "src/Constants.sol";
 
 // forgefmt: disable-next-item
-struct UniSwapCallBuffer {
+struct SwapCall {
     uint256 leftPaddedSelector;
     /* 0x000 */ address asset0;
     /* 0x020 */ address asset1;
@@ -20,10 +20,10 @@ struct UniSwapCallBuffer {
     /* 0x120 */ uint256 hookDataLength;
 }
 
-using UniCallLib for UniSwapCallBuffer global;
+using SwapCallLib for SwapCall global;
 
 /// @author philogy <https://github.com/philogy>
-library UniCallLib {
+library SwapCallLib {
     error SwapFailed();
 
     /// @dev Uniswap's `MIN_SQRT_RATIO + 1` to pass the limit check.
@@ -37,28 +37,24 @@ library UniCallLib {
     uint256 internal constant POOL_KEY_OFFSET = 0x20;
     uint256 internal constant POOL_KEY_SIZE = 0xa0;
 
-    function newSwapCall(address hook)
-        internal
-        pure
-        returns (UniSwapCallBuffer memory callBuffer)
-    {
-        callBuffer.leftPaddedSelector = uint256(uint32(IPoolManager.swap.selector));
-        callBuffer.hook = hook;
-        callBuffer.hookDataRelativeOffset = HOOK_DATA_CD_REL_OFFSET;
+    function newSwapCall(address hook) internal pure returns (SwapCall memory swapCall) {
+        swapCall.leftPaddedSelector = uint256(uint32(IPoolManager.swap.selector));
+        swapCall.hook = hook;
+        swapCall.hookDataRelativeOffset = HOOK_DATA_CD_REL_OFFSET;
     }
 
-    function setZeroForOne(UniSwapCallBuffer memory self, bool zeroForOne) internal pure {
+    function setZeroForOne(SwapCall memory self, bool zeroForOne) internal pure {
         self.zeroForOne = zeroForOne;
         self.sqrtPriceLimitX96 = zeroForOne ? MIN_SQRT_RATIO : MAX_SQRT_RATIO;
     }
 
-    function getId(UniSwapCallBuffer memory self) internal pure returns (PoolId id) {
+    function getId(SwapCall memory self) internal pure returns (PoolId id) {
         assembly ("memory-safe") {
             id := keccak256(add(self, POOL_KEY_OFFSET), POOL_KEY_SIZE)
         }
     }
 
-    function call(UniSwapCallBuffer memory self, IPoolManager uni) internal {
+    function call(SwapCall memory self, IPoolManager uni) internal {
         assembly ("memory-safe") {
             let success :=
                 call(gas(), uni, 0, add(self, CALL_PAYLOAD_START_OFFSET), CALL_PAYLOAD_CD_BYTES, 0, 0)

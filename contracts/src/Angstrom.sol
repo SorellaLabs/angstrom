@@ -3,9 +3,9 @@ pragma solidity 0.8.26;
 
 import {EIP712} from "solady/src/utils/EIP712.sol";
 import {TopLevelAuth} from "./modules/TopLevelAuth.sol";
-import {SettlementManager} from "./modules/SettlementManager.sol";
+import {Settlement} from "./modules/Settlement.sol";
 import {PoolUpdates} from "./modules/PoolUpdates.sol";
-import {InvalidationManager} from "./modules/InvalidationManager.sol";
+import {OrderInvalidation} from "./modules/OrderInvalidation.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {UniConsumer} from "./modules/UniConsumer.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
@@ -28,8 +28,8 @@ import {
 /// @author philogy <https://github.com/philogy>
 contract Angstrom is
     EIP712,
-    InvalidationManager,
-    SettlementManager,
+    OrderInvalidation,
+    Settlement,
     TopLevelAuth,
     PoolUpdates,
     IUnlockCallback,
@@ -41,7 +41,7 @@ contract Angstrom is
     constructor(IPoolManager uniV4, address controller, address feeMaster)
         UniConsumer(uniV4)
         TopLevelAuth(controller)
-        SettlementManager(feeMaster)
+        Settlement(feeMaster)
     {
         _checkAngstromHookFlags();
     }

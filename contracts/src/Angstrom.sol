@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {ERC712} from "./modules/ERC712.sol";
-import {NodeManager} from "./modules/NodeManager.sol";
+import {EIP712} from "solady/src/utils/EIP712.sol";
+import {TopLevelAuth} from "./modules/TopLevelAuth.sol";
 import {SettlementManager} from "./modules/SettlementManager.sol";
-import {PoolUpdateManager} from "./modules/PoolUpdateManager.sol";
+import {PoolUpdates} from "./modules/PoolUpdates.sol";
 import {InvalidationManager} from "./modules/InvalidationManager.sol";
-import {HookManager} from "./modules/HookManager.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {UniConsumer} from "./modules/UniConsumer.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PermitSubmitterHook} from "./modules/PermitSubmitterHook.sol";
 
-import {TypedDataHasher} from "./types/TypedDataHasher.sol";
-
+import {TypedDataHasher, TypedDataHasherLib} from "./types/TypedDataHasher.sol";
 import {AssetArray, AssetLib} from "./types/Asset.sol";
 import {PairArray, PairLib} from "./types/Pair.sol";
 import {ToBOrderBuffer} from "./types/ToBOrderBuffer.sol";
@@ -29,12 +27,11 @@ import {
 
 /// @author philogy <https://github.com/philogy>
 contract Angstrom is
-    ERC712,
+    EIP712,
     InvalidationManager,
     SettlementManager,
-    NodeManager,
-    HookManager,
-    PoolUpdateManager,
+    TopLevelAuth,
+    PoolUpdates,
     IUnlockCallback,
     PermitSubmitterHook
 {
@@ -43,7 +40,7 @@ contract Angstrom is
 
     constructor(IPoolManager uniV4, address controller, address feeMaster)
         UniConsumer(uniV4)
-        NodeManager(controller)
+        TopLevelAuth(controller)
         SettlementManager(feeMaster)
     {
         _checkAngstromHookFlags();
@@ -151,7 +148,10 @@ contract Angstrom is
             ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
             : SignatureLib.readAndCheckERC1271(reader, orderHash);
 
-        address to = _defaultOr(buffer.recipient, from);
+        address to = buffer.recipient;
+        assembly {
+            to := or(mul(iszero(to), from), to)
+        }
         if (variantMap.zeroForOne()) {
             _settleOrderIn(
                 from,
@@ -256,15 +256,25 @@ contract Angstrom is
         hook.tryTrigger(from);
 
         _settleOrderIn(from, buffer.assetIn, amountIn, variantMap.useInternal());
-        address to = _defaultOr(buffer.recipient, from);
+        address to = buffer.recipient;
+        assembly {
+            to := or(mul(iszero(to), from), to)
+        }
         _settleOrderOut(to, buffer.assetOut, amountOut, variantMap.useInternal());
 
         return reader;
     }
 
-    function _defaultOr(address defaultAddr, address alt) internal pure returns (address addr) {
-        assembly {
-            addr := xor(shr(defaultAddr, alt), defaultAddr)
-        }
+    function _domainNameAndVersion()
+        internal
+        pure
+        override
+        returns (string memory, string memory)
+    {
+        return ("Angstrom", "v1");
+    }
+
+    function _erc712Hasher() internal view returns (TypedDataHasher) {
+        return TypedDataHasherLib.init(_domainSeparator());
     }
 }

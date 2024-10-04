@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
-import {NodeManager} from "src/modules/NodeManager.sol";
+import {TopLevelAuth} from "src/modules/TopLevelAuth.sol";
 import {
     PoolConfigStore,
     MAX_FEE,
@@ -138,7 +138,7 @@ contract PoolConfigStoreTest is BaseTest {
         tickSpacing = uint16(bound(tickSpacing, 1, type(uint16).max));
         feeInE6 = uint24(bound(feeInE6, 0, MAX_FEE));
         vm.prank(configurer);
-        vm.expectRevert(NodeManager.NotController.selector);
+        vm.expectRevert(TopLevelAuth.NotController.selector);
         if (asset0 > asset1) (asset0, asset1) = (asset1, asset0);
         angstrom.configurePool(asset0, asset1, tickSpacing, feeInE6);
     }

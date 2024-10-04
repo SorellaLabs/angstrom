@@ -13,7 +13,6 @@ import {UniV4Inspector} from "test/_view-ext/UniV4Inspector.sol";
 import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
 import {PoolGate} from "test/_helpers/PoolGate.sol";
 import {HookDeployer} from "test/_helpers/HookDeployer.sol";
-import {PoolUpdateManager} from "src/modules/PoolUpdateManager.sol";
 import {Position} from "v4-core/src/libraries/Position.sol";
 
 import {TickReward, RewardLib} from "test/_helpers/RewardLib.sol";

@@ -2,13 +2,12 @@
 pragma solidity ^0.8.0;
 
 import {CalldataReader, CalldataReaderLib} from "../../src/types/CalldataReader.sol";
-import {HookManager} from "src/modules/HookManager.sol";
 import {Asset, AssetArray, AssetLib} from "../../src/types/Asset.sol";
 import {PairArray, PairLib} from "src/types/Pair.sol";
 import {UniSwapCallBuffer, UniCallLib} from "../../src/libraries/UniCallLib.sol";
-import {PoolUpdateManager} from "../../src/modules/PoolUpdateManager.sol";
+import {PoolUpdates} from "../../src/modules/PoolUpdates.sol";
 import {SettlementManager} from "../../src/modules/SettlementManager.sol";
-import {NodeManager} from "src/modules/NodeManager.sol";
+import {TopLevelAuth} from "src/modules/TopLevelAuth.sol";
 import {UniConsumer} from "../../src/modules/UniConsumer.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {POOL_FEE} from "../../src/Constants.sol";
@@ -18,13 +17,13 @@ import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdateManager, HookManager {
+contract MockRewardsManager is UniConsumer, SettlementManager, PoolUpdates {
     using FormatLib for *;
     using IUniV4 for IPoolManager;
 
     constructor(IPoolManager uniV4, address controller)
         UniConsumer(uniV4)
-        NodeManager(controller)
+        TopLevelAuth(controller)
         SettlementManager(address(0))
     {
         _checkAngstromHookFlags();

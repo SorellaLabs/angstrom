@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
-import {RewardsUpdater} from "./RewardsUpdater.sol";
+import {GrowthOutsideUpdater} from "./GrowthOutsideUpdater.sol";
 import {UniConsumer} from "./UniConsumer.sol";
 import {SettlementManager} from "./SettlementManager.sol";
-import {NodeManager} from "./NodeManager.sol";
+import {TopLevelAuth} from "./TopLevelAuth.sol";
 import {IBeforeAddLiquidityHook, IBeforeRemoveLiquidityHook} from "../interfaces/IHooks.sol";
 
 import {DeltaTracker} from "../types/DeltaTracker.sol";
@@ -16,6 +16,7 @@ import {UniCallLib, UniSwapCallBuffer} from "../libraries/UniCallLib.sol";
 import {PoolUpdateVariantMap} from "../types/PoolUpdateVariantMap.sol";
 
 import {SignedUnsignedLib} from "super-sol/libraries/SignedUnsignedLib.sol";
+import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {IUniV4} from "../interfaces/IUniV4.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "../interfaces/IUniV4.sol";
@@ -23,20 +24,19 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {MixedSignLib} from "../libraries/MixedSignLib.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
-/// @custom:mounted uint256 (external)
 import {FixedPointMathLib} from "solady/src/utils/FixedPointMathLib.sol";
-/// @custom:mounted uint256 (external)
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
-/// @author philogy <https://github.com/philogy>
 
-abstract contract PoolUpdateManager is
+/// @author philogy <https://github.com/philogy>
+abstract contract PoolUpdates is
     UniConsumer,
-    RewardsUpdater,
+    GrowthOutsideUpdater,
     SettlementManager,
-    NodeManager,
+    TopLevelAuth,
     IBeforeAddLiquidityHook,
     IBeforeRemoveLiquidityHook
 {
+    using SafeTransferLib for address;
     using SafeCastLib for uint256;
 
     using IUniV4 for IPoolManager;
@@ -115,7 +115,11 @@ abstract contract PoolUpdateManager is
         uint128 positionTotalLiquidity = UNI_V4.getPositionLiquidity(id, positionKey);
         uint256 rewards = growthInside.mulWad(positionTotalLiquidity) - position.pastRewards;
 
-        _settleRewardViaUniswapTo(sender, key.currency0, rewards);
+        if (rewards > 0) {
+            UNI_V4.sync(key.currency0);
+            Currency.unwrap(key.currency0).safeTransfer(address(UNI_V4), rewards);
+            UNI_V4.settleFor(sender);
+        }
 
         position.pastRewards =
             growthInside.mulWad(positionTotalLiquidity - liquidityDelta.toUint128());

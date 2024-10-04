@@ -11,16 +11,11 @@ import {TickLib} from "../libraries/TickLib.sol";
 import {MixedSignLib} from "../libraries/MixedSignLib.sol";
 import {FixedPointMathLib} from "solady/src/utils/FixedPointMathLib.sol";
 
-import {console} from "forge-std/console.sol";
-import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-
 /// @author philogy <https://github.com/philogy>
-abstract contract RewardsUpdater is UniConsumer {
+abstract contract GrowthOutsideUpdater is UniConsumer {
     using IUniV4 for IPoolManager;
     using FixedPointMathLib for uint256;
     using TickLib for uint256;
-    // TODO: Remove
-    using FormatLib for *;
 
     error WrongEndLiquidity(uint128 endLiquidity, uint128 actualCurrentLiquidity);
 

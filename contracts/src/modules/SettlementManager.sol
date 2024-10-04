@@ -121,15 +121,6 @@ abstract contract SettlementManager is UniConsumer {
         }
     }
 
-    /// @dev Sends rewards by crediting them delta in the pool manager. WARN: expects invoker to
-    /// validate accounting for `amount`.
-    function _settleRewardViaUniswapTo(address to, Currency asset, uint256 amount) internal {
-        if (amount == 0) return;
-        UNI_V4.sync(asset);
-        Currency.unwrap(asset).safeTransfer(address(UNI_V4), amount);
-        UNI_V4.settleFor(to);
-    }
-
     function _settleOrderIn(address from, address asset, AmountIn amountIn, bool useInternal)
         internal
     {

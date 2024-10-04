@@ -84,7 +84,7 @@ struct Bundle {
 #### `Asset`
 
 Solidity: [decoding implementation](../src/types/Asset.sol) | [reference
-encoding (`src/reference/Asset.sol`)](../src/reference/Asset.sol)
+encoding (`test/_reference/Asset.sol`)](../test/_reference/Asset.sol)
 
 ```rust
 struct Asset {
@@ -108,7 +108,7 @@ The elements **must be** sorted in ascending order according the value of `.addr
 #### `Pair`
 
 Solidity: [decoding implementation](../src/types/Pair.sol) | [reference
-encoding (`src/reference/Pair.sol`)](../src/reference/Pair.sol)
+encoding (`test/_reference/Pair.sol`)](../test/_reference/Pair.sol)
 
 ```rust
 struct Pair {
@@ -138,7 +138,7 @@ Note that to ensure pair uniqueness `.index0` **must** be less than `.index1`.
 TODO: Update solidity link
 
 Solidity: [decoding implementation](../src/types/PoolSwap.sol) | [reference
-encoding (`src/reference/PoolSwap.sol`)](../src/reference/PoolSwap.sol)
+encoding (`test/_reference/PoolSwap.sol`)](../test/_reference/PoolSwap.sol)
 
 
 ```rust
@@ -164,7 +164,7 @@ recommended to net out multiple swaps against the same pool into one to save on 
 
 ##### Rewards Update
 
-Solidity: [decoding implementation (`_decodeAndReward`)](../src/modules/RewardsUpdater.sol) | [reference encoding](../src/reference/PoolRewardsUpdate.sol).
+Solidity: [decoding implementation (`_decodeAndReward`)](../src/modules/RewardsUpdater.sol) | [reference encoding](../test/_reference/PoolRewardsUpdate.sol).
 
 ```rust
 enum RewardsUpdate {
@@ -251,7 +251,7 @@ def update_rewards(
 
 #### `TopOfBlockOrder`
 
-Solidity: [decoding implementation (`_validateAndExecuteToB`)](../src/Angstrom.sol) | [reference encoding](../src/reference/OrderTypes.sol).
+Solidity: [decoding implementation (`_validateAndExecuteToB`)](../src/Angstrom.sol) | [reference encoding](../test/_reference/OrderTypes.sol).
 
 ```rust
 struct TopOfBlockOrder {

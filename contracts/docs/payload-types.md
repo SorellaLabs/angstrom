@@ -1,6 +1,6 @@
 # Angstrom Payload Struct Specification
 
-**Corresponding Source file:** [`Angstrom.sol`](../../contracts/src/Angstrom.sol)
+**Corresponding Source file:** [`Angstrom.sol`](../src/Angstrom.sol)
 
 ## Overview
 
@@ -58,7 +58,7 @@ signature validation process.
 
 ### Bundle contents
 
-The bundle is a struct encoded using the [PADE format](./Encoding.md). The string of bytes is the
+The bundle is a struct encoded using the [PADE format](./pade-encoding-format.md). The string of bytes is the
 value that the `execute` method is called with (not that the call itself is still ABI encoded, just
 the contents of the single `bytes` parameter itself is PADE).
 
@@ -83,8 +83,8 @@ struct Bundle {
 
 #### `Asset`
 
-Solidity: [decoding implementation](../../contracts/src/types/Asset.sol) | [reference
-encoding (`src/reference/Asset.sol`)](../../contracts/src/reference/Asset.sol)
+Solidity: [decoding implementation](../src/types/Asset.sol) | [reference
+encoding (`src/reference/Asset.sol`)](../src/reference/Asset.sol)
 
 ```rust
 struct Asset {
@@ -107,8 +107,8 @@ The elements **must be** sorted in ascending order according the value of `.addr
 
 #### `Pair`
 
-Solidity: [decoding implementation](../../contracts/src/types/Pair.sol) | [reference
-encoding (`src/reference/Pair.sol`)](../../contracts/src/reference/Pair.sol)
+Solidity: [decoding implementation](../src/types/Pair.sol) | [reference
+encoding (`src/reference/Pair.sol`)](../src/reference/Pair.sol)
 
 ```rust
 struct Pair {
@@ -137,8 +137,8 @@ Note that to ensure pair uniqueness `.index0` **must** be less than `.index1`.
 
 TODO: Update solidity link
 
-Solidity: [decoding implementation](../../contracts/src/types/PoolSwap.sol) | [reference
-encoding (`src/reference/PoolSwap.sol`)](../../contracts/src/reference/PoolSwap.sol)
+Solidity: [decoding implementation](../src/types/PoolSwap.sol) | [reference
+encoding (`src/reference/PoolSwap.sol`)](../src/reference/PoolSwap.sol)
 
 
 ```rust
@@ -164,7 +164,7 @@ recommended to net out multiple swaps against the same pool into one to save on 
 
 ##### Rewards Update
 
-Solidity: [decoding implementation (`_decodeAndReward`)](../../contracts/src/modules/RewardsUpdater.sol) | [reference encoding](../../contracts/src/reference/PoolRewardsUpdate.sol).
+Solidity: [decoding implementation (`_decodeAndReward`)](../src/modules/RewardsUpdater.sol) | [reference encoding](../src/reference/PoolRewardsUpdate.sol).
 
 ```rust
 enum RewardsUpdate {
@@ -251,7 +251,7 @@ def update_rewards(
 
 #### `TopOfBlockOrder`
 
-Solidity: [decoding implementation (`_validateAndExecuteToB`)](../../contracts/src/Angstrom.sol) | [reference encoding](../../contracts/src/reference/OrderTypes.sol).
+Solidity: [decoding implementation (`_validateAndExecuteToB`)](../src/Angstrom.sol) | [reference encoding](../src/reference/OrderTypes.sol).
 
 ```rust
 struct TopOfBlockOrder {

@@ -137,8 +137,8 @@ Note that to ensure pair uniqueness `.index0` **must** be less than `.index1`.
 
 TODO: Update solidity link
 
-Solidity: [decoding implementation](../src/types/PoolSwap.sol) | [reference
-encoding (`test/_reference/PoolSwap.sol`)](../test/_reference/PoolSwap.sol)
+Solidity: [decoding implementation](../src/types/PoolUpdates.sol) | [reference
+encoding (`test/_reference/PoolUpdate.sol`)](../test/_reference/PoolUpdate.sol)
 
 
 ```rust
@@ -164,7 +164,7 @@ recommended to net out multiple swaps against the same pool into one to save on 
 
 ##### Rewards Update
 
-Solidity: [decoding implementation (`_decodeAndReward`)](../src/modules/RewardsUpdater.sol) | [reference encoding](../test/_reference/PoolRewardsUpdate.sol).
+Solidity: [decoding implementation (`_decodeAndReward`)](../src/modules/GrowthOutsideUpdater.sol) | [reference encoding](../test/_reference/PoolUpdate.sol).
 
 ```rust
 enum RewardsUpdate {

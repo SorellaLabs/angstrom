@@ -7,7 +7,6 @@ import {IBeforeInitializeHook} from "../interfaces/IHooks.sol";
 import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "../libraries/PoolConfigStore.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
-import {Currency} from "v4-core/src/types/Currency.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {POOL_FEE} from "src/Constants.sol";
 

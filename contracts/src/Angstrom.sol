@@ -8,22 +8,22 @@ import {PoolUpdates} from "./modules/PoolUpdates.sol";
 import {OrderInvalidation} from "./modules/OrderInvalidation.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {UniConsumer} from "./modules/UniConsumer.sol";
-import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PermitSubmitterHook} from "./modules/PermitSubmitterHook.sol";
+import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 
-import {TypedDataHasher, TypedDataHasherLib} from "./types/TypedDataHasher.sol";
+import {CalldataReader, CalldataReaderLib} from "./types/CalldataReader.sol";
 import {AssetArray, AssetLib} from "./types/Asset.sol";
 import {PairArray, PairLib} from "./types/Pair.sol";
-import {ToBOrderBuffer} from "./types/ToBOrderBuffer.sol";
-import {UserOrderBuffer} from "./types/UserOrderBuffer.sol";
-import {UserOrderVariantMap} from "./types/UserOrderVariantMap.sol";
-import {ToBOrderVariantMap} from "./types/ToBOrderVariantMap.sol";
+import {TypedDataHasher, TypedDataHasherLib} from "./types/TypedDataHasher.sol";
 import {HookBuffer, HookBufferLib} from "./types/HookBuffer.sol";
-import {CalldataReader, CalldataReaderLib} from "./types/CalldataReader.sol";
 import {SignatureLib} from "./libraries/SignatureLib.sol";
 import {
     PriceAB as PriceOutVsIn, AmountA as AmountOut, AmountB as AmountIn
 } from "./types/Price.sol";
+import {ToBOrderBuffer} from "./types/ToBOrderBuffer.sol";
+import {ToBOrderVariantMap} from "./types/ToBOrderVariantMap.sol";
+import {UserOrderBuffer} from "./types/UserOrderBuffer.sol";
+import {UserOrderVariantMap} from "./types/UserOrderVariantMap.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract Angstrom is
@@ -62,7 +62,7 @@ contract Angstrom is
         (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
 
         _takeAssets(assets);
-        reader = _updatePools(reader, bundleDeltas, pairs);
+        reader = _updatePools(reader, pairs);
         reader = _validateAndExecuteToBOrders(reader, pairs);
         reader = _validateAndExecuteUserOrders(reader, pairs);
         reader.requireAtEndOf(data);
@@ -70,8 +70,8 @@ contract Angstrom is
 
         // Return empty bytes.
         assembly ("memory-safe") {
-            mstore(0x00, 0x20)
-            mstore(0x20, 0x00)
+            mstore(0x00, 0x20) // Dynamic type relative offset
+            mstore(0x20, 0x00) // Bytes length
             return(0x00, 0x40)
         }
     }
@@ -142,7 +142,6 @@ contract Angstrom is
         (reader, buffer.recipient) =
             variantMap.recipientIsSome() ? reader.readAddr() : (reader, address(0));
 
-        // The `.hash` method validates the `block.number` for flash orders.
         bytes32 orderHash = typedHasher.hashTypedData(buffer.hash());
 
         _invalidateOrderHash(orderHash);

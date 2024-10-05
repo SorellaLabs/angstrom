@@ -138,7 +138,7 @@ library IUniV4 {
             // Position state slot.
             mstore(0x20, add(keccak256(0x00, 0x40), _POOL_STATE_POSITIONS_OFFSET))
             mstore(0x00, positionKey)
-            // Inilined gudExtsload.
+            // Inlined gudExtsload.
             mstore(0x20, keccak256(0x00, 0x40))
             mstore(0x00, EXTSLOAD_SELECTOR)
             if iszero(staticcall(gas(), self, 0x1c, 0x24, 0x00, 0x20)) {

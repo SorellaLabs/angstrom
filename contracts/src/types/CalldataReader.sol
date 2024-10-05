@@ -49,7 +49,7 @@ library CalldataReaderLib {
     }
 
     function requireAtEndOf(CalldataReader self, bytes calldata data) internal pure {
-        assembly {
+        assembly ("memory-safe") {
             let end := add(data.offset, data.length)
             if iszero(eq(self, end)) {
                 mstore(0x00, 0x01842f8c /* ReaderNotAtEnd() */ )
@@ -67,7 +67,7 @@ library CalldataReaderLib {
     }
 
     function readBool(CalldataReader self) internal pure returns (CalldataReader, bool value) {
-        assembly {
+        assembly ("memory-safe") {
             value := gt(byte(0, calldataload(self)), 0)
             self := add(self, 1)
         }
@@ -75,7 +75,7 @@ library CalldataReaderLib {
     }
 
     function readU8(CalldataReader self) internal pure returns (CalldataReader, uint8 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := byte(0, calldataload(self))
             self := add(self, 1)
         }
@@ -83,7 +83,7 @@ library CalldataReaderLib {
     }
 
     function readU16(CalldataReader self) internal pure returns (CalldataReader, uint16 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := shr(240, calldataload(self))
             self := add(self, 2)
         }
@@ -91,7 +91,7 @@ library CalldataReaderLib {
     }
 
     function readU32(CalldataReader self) internal pure returns (CalldataReader, uint32 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := shr(224, calldataload(self))
             self := add(self, 4)
         }
@@ -99,7 +99,7 @@ library CalldataReaderLib {
     }
 
     function readI24(CalldataReader self) internal pure returns (CalldataReader, int24 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := sar(232, calldataload(self))
             self := add(self, 3)
         }
@@ -107,7 +107,7 @@ library CalldataReaderLib {
     }
 
     function readU40(CalldataReader self) internal pure returns (CalldataReader, uint40 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := shr(216, calldataload(self))
             self := add(self, 5)
         }
@@ -115,7 +115,7 @@ library CalldataReaderLib {
     }
 
     function readU64(CalldataReader self) internal pure returns (CalldataReader, uint64 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := shr(192, calldataload(self))
             self := add(self, 8)
         }
@@ -123,7 +123,7 @@ library CalldataReaderLib {
     }
 
     function readU128(CalldataReader self) internal pure returns (CalldataReader, uint128 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := shr(128, calldataload(self))
             self := add(self, 16)
         }
@@ -131,7 +131,7 @@ library CalldataReaderLib {
     }
 
     function readAddr(CalldataReader self) internal pure returns (CalldataReader, address addr) {
-        assembly {
+        assembly ("memory-safe") {
             addr := shr(96, calldataload(self))
             self := add(self, 20)
         }
@@ -139,7 +139,7 @@ library CalldataReaderLib {
     }
 
     function readU256(CalldataReader self) internal pure returns (CalldataReader, uint256 value) {
-        assembly {
+        assembly ("memory-safe") {
             value := calldataload(self)
             self := add(self, 32)
         }

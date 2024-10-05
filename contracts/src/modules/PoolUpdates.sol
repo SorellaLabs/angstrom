@@ -127,7 +127,7 @@ abstract contract PoolUpdates is
         return this.beforeRemoveLiquidity.selector;
     }
 
-    function _updatePools(CalldataReader reader, DeltaTracker storage deltas, PairArray pairs)
+    function _updatePools(CalldataReader reader, PairArray pairs)
         internal
         returns (CalldataReader)
     {
@@ -135,18 +135,16 @@ abstract contract PoolUpdates is
         (reader, end) = reader.readU24End();
         SwapCall memory swapCall = SwapCallLib.newSwapCall(address(this));
         while (reader != end) {
-            reader = _updatePool(reader, swapCall, deltas, pairs);
+            reader = _updatePool(reader, swapCall, pairs);
         }
 
         return reader;
     }
 
-    function _updatePool(
-        CalldataReader reader,
-        SwapCall memory swapCall,
-        DeltaTracker storage deltas,
-        PairArray pairs
-    ) internal returns (CalldataReader) {
+    function _updatePool(CalldataReader reader, SwapCall memory swapCall, PairArray pairs)
+        internal
+        returns (CalldataReader)
+    {
         PoolUpdateVariantMap variantMap;
         {
             uint8 variantByte;
@@ -184,7 +182,7 @@ abstract contract PoolUpdates is
         (reader, rewardTotal) = _decodeAndReward(
             variantMap.currentOnly(), reader, poolRewards[id], id, swapCall.tickSpacing, currentTick
         );
-        deltas.sub(swapCall.asset0, rewardTotal);
+        bundleDeltas.sub(swapCall.asset0, rewardTotal);
 
         return reader;
     }

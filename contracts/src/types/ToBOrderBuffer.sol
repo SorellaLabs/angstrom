@@ -35,12 +35,12 @@ library ToBOrderBufferLib {
         ")"
     );
 
-    function init(ToBOrderBuffer memory self) internal pure {
+    function init(ToBOrderBuffer memory self) internal view {
         self.typeHash = TOP_OF_BLOCK_ORDER_TYPEHASH;
+        self.validForBlock = uint64(block.number);
     }
 
-    function hash(ToBOrderBuffer memory self) internal view returns (bytes32 orderHash) {
-        self.validForBlock = uint64(block.number);
+    function hash(ToBOrderBuffer memory self) internal pure returns (bytes32 orderHash) {
         assembly ("memory-safe") {
             orderHash := keccak256(self, BUFFER_BYTES)
         }

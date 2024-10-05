@@ -14,6 +14,7 @@ import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
 import {PoolGate} from "test/_helpers/PoolGate.sol";
 import {HookDeployer} from "test/_helpers/HookDeployer.sol";
 import {Position} from "v4-core/src/libraries/Position.sol";
+import {PairLib} from "test/_reference/Pair.sol";
 
 import {TickReward, RewardLib} from "test/_helpers/RewardLib.sol";
 import {console} from "forge-std/console.sol";
@@ -56,7 +57,12 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
         angstrom.configurePool(address(asset0), address(asset1), uint16(uint24(TICK_SPACING)), 0);
 
         gate.setHook(address(angstrom));
-        gate.initializePool(address(asset0), address(asset1), startTick.getSqrtPriceAtTick(), 0);
+        angstrom.initializePool(
+            asset0,
+            asset1,
+            PairLib.getStoreIndex(rawGetConfigStore(address(angstrom)), asset0, asset1),
+            startTick.getSqrtPriceAtTick()
+        );
 
         handler = new PoolRewardsHandler(uniV4, angstrom, gate, id, refId, asset0, asset1, gov);
     }

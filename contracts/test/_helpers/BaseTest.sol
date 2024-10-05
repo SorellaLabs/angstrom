@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Angstrom} from "src/Angstrom.sol";
+import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
@@ -16,6 +17,8 @@ import {TickLib} from "src/libraries/TickLib.sol";
 import {HookDeployer} from "./HookDeployer.sol";
 import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
 import {TypedDataHasherLib} from "src/types/TypedDataHasher.sol";
+import {PoolConfigStore, PoolConfigStoreLib} from "src/libraries/PoolConfigStore.sol";
+import {PairLib} from "test/_reference/Pair.sol";
 
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 
@@ -275,5 +278,19 @@ contract BaseTest is Test, HookDeployer {
 
     function max(uint256 x, uint256 y) internal pure returns (uint256) {
         return x > y ? x : y;
+    }
+
+    function poolId(Angstrom angstrom, address asset0, address asset1)
+        internal
+        view
+        returns (PoolId)
+    {
+        if (asset0 > asset1) (asset0, asset1) = (asset1, asset0);
+        address store = rawGetConfigStore(address(angstrom));
+        uint256 storeIndex = PairLib.getStoreIndex(store, asset0, asset1);
+        (int24 tickSpacing,) = PoolConfigStore.wrap(store).get(
+            PoolConfigStoreLib.keyFromAssetsUnchecked(asset0, asset1), storeIndex
+        );
+        return poolKey(angstrom, asset0, asset1, tickSpacing).toId();
     }
 }

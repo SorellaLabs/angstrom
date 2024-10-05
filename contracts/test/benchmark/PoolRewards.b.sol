@@ -75,12 +75,13 @@ contract PoolRewardsTest is BaseTest {
         domainSeparator = computeDomainSeparator(address(angstrom));
 
         gate.tickSpacing(tickSpacing = 60);
-        id = gate.initializePool(
+        angstrom.initializePool(
             asset0,
             asset1,
-            int24(4).getSqrtPriceAtTick(),
-            PairLib.getStoreIndex(configStore, asset0, asset1)
+            PairLib.getStoreIndex(configStore, asset0, asset1),
+            int24(4).getSqrtPriceAtTick()
         );
+        id = poolId(angstrom, asset0, asset1);
 
         gate.addLiquidity(asset0, asset1, -60, 0, 1e21, bytes32(0));
         gate.addLiquidity(asset0, asset1, 0, 60, 1e21, bytes32(0));

@@ -5,6 +5,7 @@ import {UniConsumer} from "./UniConsumer.sol";
 import {IBeforeInitializeHook} from "../interfaces/IHooks.sol";
 
 import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "../libraries/PoolConfigStore.sol";
+import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
@@ -16,6 +17,7 @@ abstract contract TopLevelAuth is UniConsumer, IBeforeInitializeHook {
     error OnlyOncePerBlock();
     error NotNode();
     error InvalidPoolKey();
+    error NotFromHook();
 
     address internal immutable _CONTROLLER;
 
@@ -28,29 +30,40 @@ abstract contract TopLevelAuth is UniConsumer, IBeforeInitializeHook {
         _CONTROLLER = controller;
     }
 
-    function beforeInitialize(
-        address,
-        PoolKey calldata poolKey,
-        uint160,
-        bytes calldata storeIndexBytes
-    ) external view returns (bytes4) {
+    function initializePool(
+        address assetA,
+        address assetB,
+        uint256 storeIndex,
+        uint160 sqrtPriceX96
+    ) public {
+        if (assetA > assetB) (assetA, assetB) = (assetB, assetA);
+        StoreKey key = PoolConfigStoreLib.keyFromAssetsUnchecked(assetA, assetB);
+        (int24 tickSpacing,) = _configStore.get(key, storeIndex);
+        UNI_V4.initialize(
+            PoolKey(_c(assetA), _c(assetB), POOL_FEE, tickSpacing, IHooks(address(this))),
+            sqrtPriceX96,
+            ""
+        );
+    }
+
+    function beforeInitialize(address caller, PoolKey calldata, uint160, bytes calldata)
+        external
+        view
+        returns (bytes4)
+    {
         _onlyUniV4();
 
-        // Uniswap ensures that `currency0 < currency1`.
-        StoreKey key = PoolConfigStoreLib.keyFromAssetsUnchecked(
-            Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1)
-        );
-        (int24 tickSpacing,) = _configStore.get(key, uint16(bytes2(storeIndexBytes)));
-        if (poolKey.tickSpacing != tickSpacing || poolKey.fee != POOL_FEE) revert InvalidPoolKey();
+        if (caller != address(this)) revert NotFromHook();
+
         return this.beforeInitialize.selector;
     }
 
     /// @dev Allow controller to set parameters of a given pool.
-    function configurePool(address asset0, address asset1, uint16 tickSpacing, uint24 feeInE6)
+    function configurePool(address assetA, address assetB, uint16 tickSpacing, uint24 feeInE6)
         external
     {
         _onlyController();
-        _configStore = _configStore.setIntoNew(asset0, asset1, tickSpacing, feeInE6);
+        _configStore = _configStore.setIntoNew(assetA, assetB, tickSpacing, feeInE6);
     }
 
     function toggleNodes(address[] calldata nodes) external {

@@ -18,10 +18,10 @@ struct OrderMeta {
 }
 
 struct PartialStandingOrder {
+    uint32 refId;
     uint128 minAmountIn;
     uint128 maxAmountIn;
     uint128 maxGasAsset0;
-    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -31,15 +31,16 @@ struct PartialStandingOrder {
     bytes hookPayload;
     uint64 nonce;
     uint40 deadline;
-    uint128 amountFilled;
     OrderMeta meta;
+    uint128 amountFilled;
+    uint128 gasUsedAsset0;
 }
 
 struct ExactStandingOrder {
+    uint32 refId;
     bool exactIn;
     uint128 amount;
     uint128 maxGasAsset0;
-    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -50,13 +51,14 @@ struct ExactStandingOrder {
     uint64 nonce;
     uint40 deadline;
     OrderMeta meta;
+    uint128 gasUsedAsset0;
 }
 
 struct PartialFlashOrder {
+    uint32 refId;
     uint128 minAmountIn;
     uint128 maxAmountIn;
     uint128 maxGasAsset0;
-    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -65,15 +67,16 @@ struct PartialFlashOrder {
     address hook;
     bytes hookPayload;
     uint64 validForBlock;
-    uint128 amountFilled;
     OrderMeta meta;
+    uint128 amountFilled;
+    uint128 gasUsedAsset0;
 }
 
 struct ExactFlashOrder {
+    uint32 refId;
     bool exactIn;
     uint128 amount;
     uint128 maxGasAsset0;
-    uint128 gasUsedAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -83,19 +86,20 @@ struct ExactFlashOrder {
     bytes hookPayload;
     uint64 validForBlock;
     OrderMeta meta;
+    uint128 gasUsedAsset0;
 }
 
 struct TopOfBlockOrder {
     uint128 quantityIn;
     uint128 quantityOut;
     uint128 maxGasAsset0;
-    uint128 gasUsedAsset0;
     bool useInternal;
     address assetIn;
     address assetOut;
     address recipient;
     uint64 validForBlock;
     OrderMeta meta;
+    uint128 gasUsedAsset0;
 }
 
 using OrdersLib for OrderMeta global;
@@ -114,6 +118,7 @@ library OrdersLib {
         return keccak256(
             abi.encode(
                 UserOrderBufferLib.PARTIAL_STANDING_ORDER_TYPEHASH,
+                order.refId,
                 order.minAmountIn,
                 order.maxAmountIn,
                 order.maxGasAsset0,
@@ -133,6 +138,7 @@ library OrdersLib {
         return keccak256(
             abi.encode(
                 UserOrderBufferLib.EXACT_STANDING_ORDER_TYPEHASH,
+                order.refId,
                 order.exactIn,
                 order.amount,
                 order.maxGasAsset0,
@@ -152,6 +158,7 @@ library OrdersLib {
         return keccak256(
             abi.encode(
                 UserOrderBufferLib.PARTIAL_FLASH_ORDER_TYPEHASH,
+                order.refId,
                 order.minAmountIn,
                 order.maxAmountIn,
                 order.maxGasAsset0,
@@ -170,6 +177,7 @@ library OrdersLib {
         return keccak256(
             abi.encode(
                 UserOrderBufferLib.EXACT_FLASH_ORDER_TYPEHASH,
+                order.refId,
                 order.exactIn,
                 order.amount,
                 order.maxGasAsset0,
@@ -222,6 +230,7 @@ library OrdersLib {
         return bytes.concat(
             bytes.concat(
                 bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
+                bytes4(order.refId),
                 bytes2(pairIndex),
                 bytes32(order.minPrice),
                 _encodeRecipient(order.recipient),
@@ -259,6 +268,7 @@ library OrdersLib {
         return bytes.concat(
             bytes.concat(
                 bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
+                bytes4(order.refId),
                 bytes2(pairIndex),
                 bytes32(order.minPrice),
                 _encodeRecipient(order.recipient),
@@ -294,6 +304,7 @@ library OrdersLib {
         return bytes.concat(
             bytes.concat(
                 bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
+                bytes4(order.refId),
                 bytes2(pairIndex),
                 bytes32(order.minPrice),
                 _encodeRecipient(order.recipient),
@@ -328,6 +339,7 @@ library OrdersLib {
 
         return bytes.concat(
             bytes1(UserOrderVariantMap.unwrap(variantMap.encode())),
+            bytes4(order.refId),
             bytes2(pairIndex),
             bytes32(order.minPrice),
             _encodeRecipient(order.recipient),

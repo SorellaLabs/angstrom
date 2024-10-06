@@ -191,14 +191,8 @@ contract Angstrom is
         PairArray pairs
     ) internal returns (CalldataReader) {
         UserOrderVariantMap variantMap;
-        {
-            uint8 variantByte;
-            (reader, variantByte) = reader.readU8();
-            variantMap = UserOrderVariantMap.wrap(variantByte);
-        }
-
-        buffer.setTypeHash(variantMap);
-        buffer.useInternal = variantMap.useInternal();
+        // Load variant map, ref id and set use internal.
+        (reader, variantMap) = buffer.init(reader);
 
         // Load and lookup asset in/out and dependent values.
         PriceOutVsIn price;

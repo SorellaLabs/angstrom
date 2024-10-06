@@ -6,11 +6,9 @@ import {UserOrderVariantMap} from "./UserOrderVariantMap.sol";
 import {TypedDataHasher} from "./TypedDataHasher.sol";
 import {PriceAB as PriceOutVsIn, AmountA as AmountOut, AmountB as AmountIn} from "./Price.sol";
 
-import {safeconsole as console} from "forge-std/safeconsole.sol";
-import {consoleext} from "super-sol/libraries/consoleext.sol";
-
 struct UserOrderBuffer {
     bytes32 typeHash;
+    uint32 refId;
     uint256 exactIn_or_minQuantityIn;
     uint256 quantity_or_maxQuantityIn;
     uint256 maxGasAsset0;
@@ -36,9 +34,14 @@ library UserOrderBufferLib {
     uint256 internal constant STANDING_ORDER_BYTES = 384;
     uint256 internal constant FLASH_ORDER_BYTES = 352;
 
+    uint256 internal constant VARIANT_MAP_BYTES = 1;
+    uint256 internal constant REF_ID_MEM_OFFSET = 0x3c;
+    uint256 internal constant REF_ID_BYTES = 4;
+
     /// forgefmt: disable-next-item
     bytes32 internal constant PARTIAL_STANDING_ORDER_TYPEHASH = keccak256(
         "PartialStandingOrder("
+           "uint32 ref_id,"
            "uint128 min_amount_in,"
            "uint128 max_amount_in,"
            "uint128 max_gas_asset0,"
@@ -56,6 +59,7 @@ library UserOrderBufferLib {
     /// forgefmt: disable-next-item
     bytes32 internal constant EXACT_STANDING_ORDER_TYPEHASH = keccak256(
         "ExactStandingOrder("
+           "uint32 ref_id,"
            "bool exact_in,"
            "uint128 amount,"
            "uint128 max_gas_asset0,"
@@ -73,6 +77,7 @@ library UserOrderBufferLib {
     /// forgefmt: disable-next-item
     bytes32 internal constant PARTIAL_FLASH_ORDER_TYPEHASH = keccak256(
         "PartialFlashOrder("
+           "uint32 ref_id,"
            "uint128 min_amount_in,"
            "uint128 max_amount_in,"
            "uint128 max_gas_asset0,"
@@ -89,6 +94,7 @@ library UserOrderBufferLib {
     /// forgefmt: disable-next-item
     bytes32 internal constant EXACT_FLASH_ORDER_TYPEHASH = keccak256(
         "ExactFlashOrder("
+           "uint32 ref_id,"
            "bool exact_in,"
            "uint128 amount,"
            "uint128 max_gas_asset0,"
@@ -102,17 +108,33 @@ library UserOrderBufferLib {
         ")"
     );
 
-    function setTypeHash(UserOrderBuffer memory self, UserOrderVariantMap variant) internal pure {
+    function init(UserOrderBuffer memory self, CalldataReader reader)
+        internal
+        pure
+        returns (CalldataReader, UserOrderVariantMap variantMap)
+    {
+        assembly ("memory-safe") {
+            variantMap := byte(0, calldataload(reader))
+            reader := add(reader, VARIANT_MAP_BYTES)
+            // Copy `refId` from calldata directly to memory.
+            calldatacopy(add(self, REF_ID_MEM_OFFSET), reader, REF_ID_BYTES)
+            // Advance reader.
+            reader := add(reader, REF_ID_BYTES)
+        }
         // forgefmt: disable-next-item
-        if (variant.quantitiesPartial()) {
-            self.typeHash = variant.isStanding()
+        if (variantMap.quantitiesPartial()) {
+            self.typeHash = variantMap.isStanding()
                 ? PARTIAL_STANDING_ORDER_TYPEHASH
                 : PARTIAL_FLASH_ORDER_TYPEHASH;
         } else {
-            self.typeHash = variant.isStanding()
+            self.typeHash = variantMap.isStanding()
                 ? EXACT_STANDING_ORDER_TYPEHASH
                 : EXACT_FLASH_ORDER_TYPEHASH;
         }
+
+        self.useInternal = variantMap.useInternal();
+
+        return (reader, variantMap);
     }
 
     function _hash(UserOrderBuffer memory self, UserOrderVariantMap variant)
@@ -132,16 +154,6 @@ library UserOrderBufferLib {
         TypedDataHasher typedHasher
     ) internal pure returns (bytes32) {
         return typedHasher.hashTypedData(self._hash(variant));
-    }
-
-    function logBytes(UserOrderBuffer memory self, UserOrderVariantMap variant) internal pure {
-        uint256 structLength = variant.isStanding() ? STANDING_ORDER_BYTES : FLASH_ORDER_BYTES;
-        uint256 offset;
-        assembly ("memory-safe") {
-            offset := self
-        }
-        console.log("structLength: %s", structLength);
-        consoleext.logMemWords(offset, offset + structLength);
     }
 
     function loadAndComputeQuantity(

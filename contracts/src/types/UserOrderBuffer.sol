@@ -31,12 +31,17 @@ library UserOrderBufferLib {
     error GasAboveMax();
 
     // TODO: Make test that ensures that buffer space is always enough.
-    uint256 internal constant STANDING_ORDER_BYTES = 384;
-    uint256 internal constant FLASH_ORDER_BYTES = 352;
+    uint256 internal constant STANDING_ORDER_BYTES = 416;
+    uint256 internal constant FLASH_ORDER_BYTES = 384;
 
     uint256 internal constant VARIANT_MAP_BYTES = 1;
     uint256 internal constant REF_ID_MEM_OFFSET = 0x3c;
     uint256 internal constant REF_ID_BYTES = 4;
+
+    uint256 internal constant NONCE_MEM_OFFSET = 0x160;
+    uint256 internal constant NONCE_BYTES = 8;
+    uint256 internal constant DEADLINE_MEM_OFFSET = 0x180;
+    uint256 internal constant DEADLINE_BYTES = 5;
 
     /// forgefmt: disable-next-item
     bytes32 internal constant PARTIAL_STANDING_ORDER_TYPEHASH = keccak256(
@@ -219,9 +224,16 @@ library UserOrderBufferLib {
         if (variant.isStanding()) {
             // Copy slices directly from calldata into memory.
             assembly ("memory-safe") {
-                calldatacopy(add(self, add(0x120, sub(0x20, 8))), reader, 8)
-                calldatacopy(add(self, add(0x140, sub(0x20, 5))), add(reader, 8), 5)
-                reader := add(reader, 13)
+                calldatacopy(
+                    add(self, add(NONCE_MEM_OFFSET, sub(0x20, NONCE_BYTES))), reader, NONCE_BYTES
+                )
+                reader := add(reader, NONCE_BYTES)
+                calldatacopy(
+                    add(self, add(DEADLINE_MEM_OFFSET, sub(0x20, DEADLINE_BYTES))),
+                    reader,
+                    DEADLINE_BYTES
+                )
+                reader := add(reader, DEADLINE_BYTES)
             }
         } else {
             // Nothing loaded from calldata, reader stays unmodified.

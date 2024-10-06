@@ -111,6 +111,25 @@ contract BaseTest is Test, HookDeployer {
         );
     }
 
+    function pythonRunCmd() internal pure returns (string[] memory args) {
+        args = new string[](1);
+        args[0] = ".venv/bin/python3.12";
+    }
+
+    function ffiPython(string[] memory args) internal returns (bytes memory) {
+        string[] memory runArgs = pythonRunCmd();
+        string[] memory all = new string[](runArgs.length + args.length);
+        for (uint256 i = 0; i < runArgs.length; i++) {
+            all[i] = runArgs[i];
+        }
+
+        for (uint256 i = 0; i < args.length; i++) {
+            all[runArgs.length + i] = args[i];
+        }
+
+        return vm.ffi(all);
+    }
+
     function i24(uint256 x) internal pure returns (int24 y) {
         assertLe(x, uint24(type(int24).max), "Unsafe cast to int24");
         y = int24(int256(x));

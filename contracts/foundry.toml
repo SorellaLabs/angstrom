@@ -6,6 +6,7 @@ show_progress = true
 optimizer_runs = 0xffffffff
 verbosity      = 3
 fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
+ast = true
 evm_version    = "cancun"
 
 ignored_error_codes = [

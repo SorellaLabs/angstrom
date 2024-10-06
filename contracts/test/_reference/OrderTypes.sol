@@ -17,6 +17,7 @@ struct OrderMeta {
     bytes signature;
 }
 
+/// @custom:erc712:exclude meta, amountFilled, gasUsedAsset0
 struct PartialStandingOrder {
     uint32 refId;
     uint128 minAmountIn;
@@ -36,6 +37,7 @@ struct PartialStandingOrder {
     uint128 gasUsedAsset0;
 }
 
+/// @custom:erc712:exclude meta, gasUsedAsset0
 struct ExactStandingOrder {
     uint32 refId;
     bool exactIn;
@@ -54,6 +56,7 @@ struct ExactStandingOrder {
     uint128 gasUsedAsset0;
 }
 
+/// @custom:erc712:exclude meta, amountFilled, gasUsedAsset0
 struct PartialFlashOrder {
     uint32 refId;
     uint128 minAmountIn;
@@ -72,6 +75,7 @@ struct PartialFlashOrder {
     uint128 gasUsedAsset0;
 }
 
+/// @custom:erc712:exclude meta, gasUsedAsset0
 struct ExactFlashOrder {
     uint32 refId;
     bool exactIn;
@@ -89,6 +93,8 @@ struct ExactFlashOrder {
     uint128 gasUsedAsset0;
 }
 
+/// @custom:erc712:exclude meta, gasUsedAsset0
+/// @custom:another
 struct TopOfBlockOrder {
     uint128 quantityIn;
     uint128 quantityOut;

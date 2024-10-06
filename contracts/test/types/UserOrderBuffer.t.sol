@@ -13,6 +13,8 @@ import {UserOrderVariantMap} from "src/types/UserOrderVariantMap.sol";
 import {OrderVariant} from "test/_reference/OrderVariant.sol";
 import {CalldataReader, CalldataReaderLib} from "src/types/CalldataReader.sol";
 
+import {console} from "forge-std/console.sol";
+
 /// @author philogy <https://github.com/philogy>
 contract UserOrderBufferTest is BaseTest {
     function setUp() public {}
@@ -209,5 +211,16 @@ contract UserOrderBufferTest is BaseTest {
         buffer.readOrderValidation(reader, varMap);
 
         assertEq(buffer._hash(varMap), order.hash());
+    }
+
+    function test_ffi_stuff() public {
+        string[] memory args = new string[](5);
+        args[0] = "test/_reference/eip712.py";
+        args[1] = "test/_reference/OrderTypes.sol:OrderMeta";
+        args[2] = "false";
+        args[3] = "0x33CC24dbf9c8FDDB574077eE0Fa1d2b93B566381";
+        args[4] = "0x01";
+        bytes memory res = ffiPython(args);
+        console.logBytes(res);
     }
 }

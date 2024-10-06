@@ -5,12 +5,12 @@
 # ]
 # ///
 
-from typing import Dict, List, TypeAlias, Callable, Generator
+from typing import Any, Dict, TypeAlias, Callable, Generator
 import json
 import argparse
 import os
-import sys
-from eth_account._utils.encode_typed_data.encoding_and_hashing import hash_struct, encode_data
+from time import time
+from eth_account._utils.encode_typed_data.encoding_and_hashing import hash_struct
 
 
 NestedDirs: TypeAlias = bool | Dict[str, 'NestedDirs']
@@ -127,6 +127,17 @@ def ast_to_eip712_type(ast: JsonObject) -> tuple[str, list[Dict[str, str]]]:
     return name, fields
 
 
+def parse_field_value(value: str, field_type: str) -> Any:
+    if field_type == 'bool':
+        if value in ('false', 'False', '0'):
+            return False
+        elif value in ('true', 'True', '1'):
+            return True
+        else:
+            raise TypeError(f'Unrecognized boolean value "{value!r}"')
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('path_struct', type=str)
@@ -134,12 +145,14 @@ def main():
     parser.add_argument('values', nargs='*')
     args = parser.parse_args()
 
+    struct_path, struct_name = str(args.path_struct).split(':', 1)
+
     out_dir = map_dir(args.out)
 
-    struct_path, struct_name = str(args.path_struct).split(':', 1)
     _, path_tail = os.path.split(struct_path)
 
-    possibilities = matching_paths(out_dir, path_tail, path_so_far=(args.out,))
+    possibilities = matching_paths(
+        out_dir, path_tail, path_so_far=(args.out,))
     artifacts_path = max(
         possibilities,
         key=lambda m: path_match(struct_path, m)
@@ -170,7 +183,7 @@ def main():
         struct_name,
         file_types,
         {
-            field['name']: value
+            field['name']: parse_field_value(value, field['type'])
             for field, value in zip(fields, args.values)
         }
     )

@@ -3,7 +3,6 @@
 /broadcast
 /target
 /lcov.info
-/*.txt
 !requirements.txt
 .DS_Store
 .env

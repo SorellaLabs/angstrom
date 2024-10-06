@@ -142,7 +142,7 @@ library UserOrderBufferLib {
         return (reader, variantMap);
     }
 
-    function _hash(UserOrderBuffer memory self, UserOrderVariantMap variant)
+    function structHash(UserOrderBuffer memory self, UserOrderVariantMap variant)
         internal
         pure
         returns (bytes32 hashed)
@@ -151,14 +151,6 @@ library UserOrderBufferLib {
         assembly ("memory-safe") {
             hashed := keccak256(self, structLength)
         }
-    }
-
-    function hash712(
-        UserOrderBuffer memory self,
-        UserOrderVariantMap variant,
-        TypedDataHasher typedHasher
-    ) internal pure returns (bytes32) {
-        return typedHasher.hashTypedData(self._hash(variant));
     }
 
     function loadAndComputeQuantity(

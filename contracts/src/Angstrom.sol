@@ -222,7 +222,7 @@ contract Angstrom is
         AmountOut amountOut;
         (reader, amountIn, amountOut) = buffer.loadAndComputeQuantity(reader, variantMap, price);
 
-        bytes32 orderHash = buffer.hash712(variantMap, typedHasher);
+        bytes32 orderHash = typedHasher.hashTypedData(buffer.structHash(variantMap));
 
         address from;
         (reader, from) = variantMap.isEcdsa()

@@ -30,7 +30,6 @@ library UserOrderBufferLib {
     error FillingTooMuch();
     error GasAboveMax();
 
-    // TODO: Make test that ensures that buffer space is always enough.
     uint256 internal constant STANDING_ORDER_BYTES = 416;
     uint256 internal constant FLASH_ORDER_BYTES = 384;
 

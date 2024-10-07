@@ -11,7 +11,7 @@ struct UserOrderBuffer {
     uint32 refId;
     uint256 exactIn_or_minQuantityIn;
     uint256 quantity_or_maxQuantityIn;
-    uint256 maxGasAsset0;
+    uint256 maxExtraFeeAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -49,7 +49,7 @@ library UserOrderBufferLib {
            "uint32 ref_id,"
            "uint128 min_amount_in,"
            "uint128 max_amount_in,"
-           "uint128 max_gas_asset0,"
+           "uint128 max_extra_fee_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -67,7 +67,7 @@ library UserOrderBufferLib {
            "uint32 ref_id,"
            "bool exact_in,"
            "uint128 amount,"
-           "uint128 max_gas_asset0,"
+           "uint128 max_extra_fee_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -85,7 +85,7 @@ library UserOrderBufferLib {
            "uint32 ref_id,"
            "uint128 min_amount_in,"
            "uint128 max_amount_in,"
-           "uint128 max_gas_asset0,"
+           "uint128 max_extra_fee_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -102,7 +102,7 @@ library UserOrderBufferLib {
            "uint32 ref_id,"
            "bool exact_in,"
            "uint128 amount,"
-           "uint128 max_gas_asset0,"
+           "uint128 max_extra_fee_asset0,"
            "uint256 min_price,"
            "bool use_internal,"
            "address asset_in,"
@@ -178,29 +178,29 @@ library UserOrderBufferLib {
             self.quantity_or_maxQuantityIn = quantity;
         }
 
-        uint128 gasUsedAsset0;
+        uint128 extraFeeAsset0;
         {
-            uint128 maxGasAsset0;
-            (reader, maxGasAsset0) = reader.readU128();
-            (reader, gasUsedAsset0) = reader.readU128();
-            if (gasUsedAsset0 > maxGasAsset0) revert GasAboveMax();
-            self.maxGasAsset0 = maxGasAsset0;
+            uint128 maxExtraFeeAsset0;
+            (reader, maxExtraFeeAsset0) = reader.readU128();
+            (reader, extraFeeAsset0) = reader.readU128();
+            if (extraFeeAsset0 > maxExtraFeeAsset0) revert GasAboveMax();
+            self.maxExtraFeeAsset0 = maxExtraFeeAsset0;
         }
 
         if (variant.zeroForOne()) {
             if (variant.specifyingInput()) {
-                quantityIn = AmountIn.wrap(quantity - gasUsedAsset0);
+                quantityIn = AmountIn.wrap(quantity - extraFeeAsset0);
                 quantityOut = price.convert(quantityIn);
             } else {
                 quantityOut = AmountOut.wrap(quantity);
-                quantityIn = price.convert(quantityOut) - AmountIn.wrap(gasUsedAsset0);
+                quantityIn = price.convert(quantityOut) - AmountIn.wrap(extraFeeAsset0);
             }
         } else {
             if (variant.specifyingInput()) {
                 quantityIn = AmountIn.wrap(quantity);
-                quantityOut = price.convert(quantityIn) - AmountOut.wrap(gasUsedAsset0);
+                quantityOut = price.convert(quantityIn) - AmountOut.wrap(extraFeeAsset0);
             } else {
-                quantityOut = AmountOut.wrap(quantity - gasUsedAsset0);
+                quantityOut = AmountOut.wrap(quantity - extraFeeAsset0);
                 quantityIn = price.convert(quantityOut);
             }
         }

@@ -8,7 +8,7 @@ struct PartialStandingOrder {
     uint32 ref_id;
     uint128 min_amount_in;
     uint128 max_amount_in;
-    uint128 max_gas_asset0;
+    uint128 max_extra_fee_asset0;
     uint256 min_price;
     bool use_internal;
     address asset_in;
@@ -23,7 +23,7 @@ struct ExactStandingOrder {
     uint32 ref_id;
     bool exact_in;
     uint128 amount;
-    uint128 max_gas_asset0;
+    uint128 max_extra_fee_asset0;
     uint256 min_price;
     bool use_internal;
     address asset_in;
@@ -38,7 +38,7 @@ struct PartialFlashOrder {
     uint32 ref_id;
     uint128 min_amount_in;
     uint128 max_amount_in;
-    uint128 max_gas_asset0;
+    uint128 max_extra_fee_asset0;
     uint256 min_price;
     bool use_internal;
     address asset_in;
@@ -52,7 +52,7 @@ struct ExactFlashOrder {
     uint32 ref_id;
     bool exact_in;
     uint128 amount;
-    uint128 max_gas_asset0;
+    uint128 max_extra_fee_asset0;
     uint256 min_price;
     bool use_internal;
     address asset_in;
@@ -88,7 +88,7 @@ library SignedTypesLib {
                 self.ref_id,
                 self.min_amount_in,
                 self.max_amount_in,
-                self.max_gas_asset0,
+                self.max_extra_fee_asset0,
                 self.min_price,
                 self.use_internal,
                 self.asset_in,
@@ -108,7 +108,7 @@ library SignedTypesLib {
                 self.ref_id,
                 self.exact_in,
                 self.amount,
-                self.max_gas_asset0,
+                self.max_extra_fee_asset0,
                 self.min_price,
                 self.use_internal,
                 self.asset_in,
@@ -128,7 +128,7 @@ library SignedTypesLib {
                 self.ref_id,
                 self.min_amount_in,
                 self.max_amount_in,
-                self.max_gas_asset0,
+                self.max_extra_fee_asset0,
                 self.min_price,
                 self.use_internal,
                 self.asset_in,
@@ -147,7 +147,7 @@ library SignedTypesLib {
                 self.ref_id,
                 self.exact_in,
                 self.amount,
-                self.max_gas_asset0,
+                self.max_extra_fee_asset0,
                 self.min_price,
                 self.use_internal,
                 self.asset_in,

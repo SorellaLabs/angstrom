@@ -145,7 +145,7 @@ def track(name: str):
     before = time.perf_counter()
     yield
     delta = time.perf_counter() - before
-    print(f'{name}: {delta * 1e3:.2f} ms', file=sys.stderr)
+    # print(f'{name}: {delta * 1e3:.2f} ms', file=sys.stderr)
 
 
 def main():

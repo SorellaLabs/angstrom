@@ -283,6 +283,7 @@ struct TopOfBlockOrder {
 
 ```rust
 struct UserOrder {
+    ref_id: u32,
     use_internal: bool,
     pair_index: u16,
     min_price: u256,
@@ -291,8 +292,8 @@ struct UserOrder {
     zero_for_one: bool,
     standing_validation: Option<StandingValidation>,
     order_quantities: OrderQuantities,
-    max_gas_asset0: u128,
-    gas_used_asset0: u128,
+    max_extra_fee_asset0: u128,
+    extra_fee_asset0: u128,
     exact_in: bool,
     signature: Signature
 }
@@ -318,6 +319,7 @@ enum OrderQuantities {
 
 |Field|Description|
 |-----|-----------|
+|`ref_id: uint32`|Opt-in tag for source of order flow. May opt the user into being charged extra fees beyond gas.|
 |`use_internal: bool`|Whether to use angstrom internal balance (`true`) or actual ERC20 balance (`false`) to settle|
 |`pair_index: u16`|The index into the `List<Pair>` array that the order is trading in.|
 |`min_price: u256`|The minimum price in asset out over asset in base units in RAY|
@@ -326,8 +328,8 @@ enum OrderQuantities {
 |`zero_for_one: bool`|Whether the order is swapping in the pair's `asset0` and getting out `asset1` (`true`) or the other way around (`false`)|
 |`standing_validation: Option<StandingValidation>`|The one-time order validation data. (`None` implies a flash order which is validated via the block number)|
 |`order_quantities: OrderQuantities`|Description of the quantities the order trades.|
-|`max_gas_asset0: u128`|The maximum gas the user accepts to be charged (in asset0 base units)|
-|`gas_used_asset0: u128`|The actual gas the user ended up getting charged for their order (in asset0 base units)|
+|`max_extra_fee_asset0: u128`|The maximum gas + referral fee the user accepts to be charged (in asset0 base units)|
+|`extra_fee_asset0: u128`|The actual extra fee the user ended up getting charged for their order (in asset0 base units)|
 |`exact_in: bool`|For exact orders: whether the specified quantity is the input or output (disregarded for partial orders).|
 |`signature: Signature`|The signature validating the order.|
 

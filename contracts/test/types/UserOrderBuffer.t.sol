@@ -100,7 +100,7 @@ contract UserOrderBufferTest is BaseTest {
 
         buffer.exactIn_or_minQuantityIn = order.minAmountIn;
         buffer.quantity_or_maxQuantityIn = order.maxAmountIn;
-        buffer.maxGasAsset0 = order.maxGasAsset0;
+        buffer.maxExtraFeeAsset0 = order.maxExtraFeeAsset0;
         buffer.minPrice = order.minPrice;
         buffer.useInternal = order.useInternal;
         buffer.assetIn = order.assetIn;
@@ -124,7 +124,7 @@ contract UserOrderBufferTest is BaseTest {
         args[i++] = vm.toString(order.refId);
         args[i++] = vm.toString(order.minAmountIn);
         args[i++] = vm.toString(order.maxAmountIn);
-        args[i++] = vm.toString(order.maxGasAsset0);
+        args[i++] = vm.toString(order.maxExtraFeeAsset0);
         args[i++] = vm.toString(order.minPrice);
         args[i++] = vm.toString(order.useInternal);
         args[i++] = vm.toString(order.assetIn);
@@ -173,7 +173,7 @@ contract UserOrderBufferTest is BaseTest {
 
         buffer.exactIn_or_minQuantityIn = order.exactIn ? 1 : 0;
         buffer.quantity_or_maxQuantityIn = order.amount;
-        buffer.maxGasAsset0 = order.maxGasAsset0;
+        buffer.maxExtraFeeAsset0 = order.maxExtraFeeAsset0;
         buffer.minPrice = order.minPrice;
         buffer.useInternal = order.useInternal;
         buffer.assetIn = order.assetIn;
@@ -197,7 +197,7 @@ contract UserOrderBufferTest is BaseTest {
         args[i++] = vm.toString(order.refId);
         args[i++] = vm.toString(order.exactIn);
         args[i++] = vm.toString(order.amount);
-        args[i++] = vm.toString(order.maxGasAsset0);
+        args[i++] = vm.toString(order.maxExtraFeeAsset0);
         args[i++] = vm.toString(order.minPrice);
         args[i++] = vm.toString(order.useInternal);
         args[i++] = vm.toString(order.assetIn);
@@ -242,7 +242,7 @@ contract UserOrderBufferTest is BaseTest {
 
         buffer.exactIn_or_minQuantityIn = order.minAmountIn;
         buffer.quantity_or_maxQuantityIn = order.maxAmountIn;
-        buffer.maxGasAsset0 = order.maxGasAsset0;
+        buffer.maxExtraFeeAsset0 = order.maxExtraFeeAsset0;
         buffer.minPrice = order.minPrice;
         buffer.useInternal = order.useInternal;
         buffer.assetIn = order.assetIn;
@@ -266,7 +266,7 @@ contract UserOrderBufferTest is BaseTest {
         args[i++] = vm.toString(order.refId);
         args[i++] = vm.toString(order.minAmountIn);
         args[i++] = vm.toString(order.maxAmountIn);
-        args[i++] = vm.toString(order.maxGasAsset0);
+        args[i++] = vm.toString(order.maxExtraFeeAsset0);
         args[i++] = vm.toString(order.minPrice);
         args[i++] = vm.toString(order.useInternal);
         args[i++] = vm.toString(order.assetIn);
@@ -310,7 +310,7 @@ contract UserOrderBufferTest is BaseTest {
 
         buffer.exactIn_or_minQuantityIn = order.exactIn ? 1 : 0;
         buffer.quantity_or_maxQuantityIn = order.amount;
-        buffer.maxGasAsset0 = order.maxGasAsset0;
+        buffer.maxExtraFeeAsset0 = order.maxExtraFeeAsset0;
         buffer.minPrice = order.minPrice;
         buffer.useInternal = order.useInternal;
         buffer.assetIn = order.assetIn;
@@ -334,7 +334,7 @@ contract UserOrderBufferTest is BaseTest {
         args[i++] = vm.toString(order.refId);
         args[i++] = vm.toString(order.exactIn);
         args[i++] = vm.toString(order.amount);
-        args[i++] = vm.toString(order.maxGasAsset0);
+        args[i++] = vm.toString(order.maxExtraFeeAsset0);
         args[i++] = vm.toString(order.minPrice);
         args[i++] = vm.toString(order.useInternal);
         args[i++] = vm.toString(order.assetIn);

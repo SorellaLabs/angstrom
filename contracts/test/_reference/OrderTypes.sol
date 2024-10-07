@@ -28,7 +28,7 @@ struct PartialStandingOrder {
     uint32 refId;
     uint128 minAmountIn;
     uint128 maxAmountIn;
-    uint128 maxGasAsset0;
+    uint128 maxExtraFeeAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -40,14 +40,14 @@ struct PartialStandingOrder {
     uint40 deadline;
     OrderMeta meta;
     uint128 amountFilled;
-    uint128 gasUsedAsset0;
+    uint128 extraFeeAsset0;
 }
 
 struct ExactStandingOrder {
     uint32 refId;
     bool exactIn;
     uint128 amount;
-    uint128 maxGasAsset0;
+    uint128 maxExtraFeeAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -58,14 +58,14 @@ struct ExactStandingOrder {
     uint64 nonce;
     uint40 deadline;
     OrderMeta meta;
-    uint128 gasUsedAsset0;
+    uint128 extraFeeAsset0;
 }
 
 struct PartialFlashOrder {
     uint32 refId;
     uint128 minAmountIn;
     uint128 maxAmountIn;
-    uint128 maxGasAsset0;
+    uint128 maxExtraFeeAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -76,14 +76,14 @@ struct PartialFlashOrder {
     uint64 validForBlock;
     OrderMeta meta;
     uint128 amountFilled;
-    uint128 gasUsedAsset0;
+    uint128 extraFeeAsset0;
 }
 
 struct ExactFlashOrder {
     uint32 refId;
     bool exactIn;
     uint128 amount;
-    uint128 maxGasAsset0;
+    uint128 maxExtraFeeAsset0;
     uint256 minPrice;
     bool useInternal;
     address assetIn;
@@ -93,7 +93,7 @@ struct ExactFlashOrder {
     bytes hookPayload;
     uint64 validForBlock;
     OrderMeta meta;
-    uint128 gasUsedAsset0;
+    uint128 extraFeeAsset0;
 }
 
 struct TopOfBlockOrder {
@@ -126,7 +126,7 @@ library OrdersLib {
             order.refId,
             order.minAmountIn,
             order.maxAmountIn,
-            order.maxGasAsset0,
+            order.maxExtraFeeAsset0,
             order.minPrice,
             order.useInternal,
             order.assetIn,
@@ -143,7 +143,7 @@ library OrdersLib {
             order.refId,
             order.exactIn,
             order.amount,
-            order.maxGasAsset0,
+            order.maxExtraFeeAsset0,
             order.minPrice,
             order.useInternal,
             order.assetIn,
@@ -160,7 +160,7 @@ library OrdersLib {
             order.refId,
             order.minAmountIn,
             order.maxAmountIn,
-            order.maxGasAsset0,
+            order.maxExtraFeeAsset0,
             order.minPrice,
             order.useInternal,
             order.assetIn,
@@ -176,7 +176,7 @@ library OrdersLib {
             order.refId,
             order.exactIn,
             order.amount,
-            order.maxGasAsset0,
+            order.maxExtraFeeAsset0,
             order.minPrice,
             order.useInternal,
             order.assetIn,
@@ -233,8 +233,8 @@ library OrdersLib {
             bytes16(order.minAmountIn),
             bytes16(order.maxAmountIn),
             bytes16(order.amountFilled),
-            bytes16(order.maxGasAsset0),
-            bytes16(order.gasUsedAsset0),
+            bytes16(order.maxExtraFeeAsset0),
+            bytes16(order.extraFeeAsset0),
             _encodeSig(order.meta)
         );
     }
@@ -269,8 +269,8 @@ library OrdersLib {
             ),
             bytes5(order.deadline),
             bytes16(order.amount),
-            bytes16(order.maxGasAsset0),
-            bytes16(order.gasUsedAsset0),
+            bytes16(order.maxExtraFeeAsset0),
+            bytes16(order.extraFeeAsset0),
             _encodeSig(order.meta)
         );
     }
@@ -305,8 +305,8 @@ library OrdersLib {
             ),
             bytes16(order.maxAmountIn),
             bytes16(order.amountFilled),
-            bytes16(order.maxGasAsset0),
-            bytes16(order.gasUsedAsset0),
+            bytes16(order.maxExtraFeeAsset0),
+            bytes16(order.extraFeeAsset0),
             _encodeSig(order.meta)
         );
     }
@@ -337,8 +337,8 @@ library OrdersLib {
             _encodeRecipient(order.recipient),
             _encodeHookData(order.hook, order.hookPayload),
             bytes16(order.amount),
-            bytes16(order.maxGasAsset0),
-            bytes16(order.gasUsedAsset0),
+            bytes16(order.maxExtraFeeAsset0),
+            bytes16(order.extraFeeAsset0),
             _encodeSig(order.meta)
         );
     }

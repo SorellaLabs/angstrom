@@ -12,7 +12,6 @@ import os
 import time
 import sys
 import contextlib
-import re
 from eth_account._utils.encode_typed_data.encoding_and_hashing import hash_struct
 
 
@@ -146,45 +145,7 @@ def track(name: str):
     before = time.perf_counter()
     yield
     delta = time.perf_counter() - before
-    # print(f'{name}: {delta * 1e3:.2f} ms', file=sys.stderr)
-
-
-def parse_to_struct_defs(sol: str) -> Generator[tuple[str, list[Dict[str, str]]], None, None]:
-    struct_pattern = re.compile(r'struct ([_A-Za-z]\w+) {(.*?)}', re.S)
-    i = 0
-    in_block_comment = False
-    in_line_comment = False
-    while i < len(sol):
-        if in_block_comment:
-            if sol[i:].startswith('*/'):
-                in_block_comment = False
-                i += 2
-                continue
-        elif in_line_comment:
-            if sol[i] == '\n':
-                in_line_comment = False
-        elif sol[i:].startswith('/*'):
-            in_block_comment = True
-            i += 2
-            continue
-        elif sol[i:].startswith('//'):
-            in_line_comment = True
-            i += 2
-            continue
-        elif (match := re.match(struct_pattern, sol[i:])):
-            name = match.group(1)
-            body = match.group(2)
-            fields = list(filter(None, map(str.strip, body.split(';'))))
-            yield (name, [
-                {
-                    'type': ftype,
-                    'name': name
-                }
-                for ftype, name in map(lambda f: map(str.strip, f.split()), fields)
-            ])
-            i += match.end() - match.start()
-            continue
-        i += 1
+    print(f'{name}: {delta * 1e3:.2f} ms', file=sys.stderr)
 
 
 def main():
@@ -196,15 +157,40 @@ def main():
 
     struct_path, struct_name = str(args.path_struct).split(':', 1)
 
-    if not os.path.isfile(struct_path):
-        raise ValueError(f'File {struct_path} not found')
+    # if not os.path.isfile(struct_path):
+    #     raise ValueError(f'File {struct_path} not found')
 
-    with track('load file'):
-        with open(struct_path, 'r') as f:
-            target_file = f.read()
+    # with open(struct_path, 'r') as f:
+    #     target_file = f.read()
 
-    with track('parse_file'):
-        file_types = dict(parse_to_struct_defs(target_file))
+    with track('map_dir'):
+        out_dir = map_dir(args.out)
+
+    _, path_tail = os.path.split(struct_path)
+
+    possibilities = matching_paths(
+        out_dir, path_tail, path_so_far=(args.out,))
+    artifacts_path = max(
+        possibilities,
+        key=lambda m: path_match(struct_path, m)
+    )
+    artifact_path = os.listdir(artifacts_path)[0]
+    artifact_path = os.path.join(artifacts_path, artifact_path)
+
+    with track('load ast'):
+        with open(artifact_path, 'r') as f:
+            ast = json.load(f)['ast']
+    with track('traverse ast'):
+        struct_defs = ast_get_all_nodes(
+            ast,
+            lambda node: node['nodeType'] == 'StructDefinition'
+        )
+
+    with track('to eip712'):
+        file_types = dict(
+            ast_to_eip712_type(struct_def)
+            for struct_def in struct_defs
+        )
 
     fields = file_types[struct_name]
 

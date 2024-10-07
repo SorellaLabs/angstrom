@@ -80,7 +80,9 @@ To ensure the contract remains solvent the [`DeltaTracker`](../src/types/DeltaTr
 track of net balance changes for every asset and is checked at the end.
 
 The _solvency_ invariant it maintains for every asset $\alpha$ is:
-$$\text{TotalTokenBalance}_{\alpha}=\text{Delta}_{\alpha} + \sum^N_i \text{UserBalance}_{i,\alpha} + \sum^N_i \text{LPReward}_{i,\alpha}$$
+```math
+\text{TotalTokenBalance}_{\alpha}=\text{Delta}_{\alpha} + \sum^N_i \text{UserBalance}_{i,\alpha} + \sum^N_i \text{LPReward}_{i,\alpha}
+```
 
 Here a visualization of how each action in a bundle is accountd for:
 

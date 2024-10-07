@@ -100,7 +100,7 @@ come with the tradeoff that updating/adding new pools is quite expensive, which 
 off since generally >1 pair / bundle is expected & updating the config should be relatively
 infrequent.
 
-![](./assets/sstore2-update.png)
+<img src="./assets/sstore2-update.png" width="600"/>
 
 #### Pool Rewards
 

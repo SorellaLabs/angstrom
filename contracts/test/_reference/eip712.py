@@ -9,7 +9,9 @@ from typing import Any, Dict, TypeAlias, Callable, Generator
 import json
 import argparse
 import os
-from time import time
+import time
+import sys
+import contextlib
 from eth_account._utils.encode_typed_data.encoding_and_hashing import hash_struct
 
 
@@ -138,6 +140,14 @@ def parse_field_value(value: str, field_type: str) -> Any:
     return value
 
 
+@contextlib.contextmanager
+def track(name: str):
+    before = time.perf_counter()
+    yield
+    delta = time.perf_counter() - before
+    print(f'{name}: {delta * 1e3:.2f} ms', file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('path_struct', type=str)
@@ -147,7 +157,14 @@ def main():
 
     struct_path, struct_name = str(args.path_struct).split(':', 1)
 
-    out_dir = map_dir(args.out)
+    # if not os.path.isfile(struct_path):
+    #     raise ValueError(f'File {struct_path} not found')
+
+    # with open(struct_path, 'r') as f:
+    #     target_file = f.read()
+
+    with track('map_dir'):
+        out_dir = map_dir(args.out)
 
     _, path_tail = os.path.split(struct_path)
 
@@ -160,17 +177,20 @@ def main():
     artifact_path = os.listdir(artifacts_path)[0]
     artifact_path = os.path.join(artifacts_path, artifact_path)
 
-    with open(artifact_path, 'r') as f:
-        ast = json.load(f)['ast']
-    struct_defs = ast_get_all_nodes(
-        ast,
-        lambda node: node['nodeType'] == 'StructDefinition'
-    )
+    with track('load ast'):
+        with open(artifact_path, 'r') as f:
+            ast = json.load(f)['ast']
+    with track('traverse ast'):
+        struct_defs = ast_get_all_nodes(
+            ast,
+            lambda node: node['nodeType'] == 'StructDefinition'
+        )
 
-    file_types = dict(
-        ast_to_eip712_type(struct_def)
-        for struct_def in struct_defs
-    )
+    with track('to eip712'):
+        file_types = dict(
+            ast_to_eip712_type(struct_def)
+            for struct_def in struct_defs
+        )
 
     fields = file_types[struct_name]
 
@@ -179,17 +199,19 @@ def main():
             f'Got {len(args.values)} values, expected {len(fields)} in:\n{json.dumps(fields)}'
         )
 
-    hash = hash_struct(
-        struct_name,
-        file_types,
-        {
-            field['name']: parse_field_value(value, field['type'])
-            for field, value in zip(fields, args.values)
-        }
-    )
+    with track('hash_struct'):
+        hash = hash_struct(
+            struct_name,
+            file_types,
+            {
+                field['name']: parse_field_value(value, field['type'])
+                for field, value in zip(fields, args.values)
+            }
+        )
 
     print(f'0x{hash.hex()}')
 
 
 if __name__ == '__main__':
-    main()
+    with track('overall'):
+        main()

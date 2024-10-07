@@ -160,3 +160,16 @@ growth outside range is **exclusive**, above it is **inclusive**.
 
 When rewarding multiple ranges in one go as in Angstrom one must consider this asymmetry when
 handling the above and below cases.
+
+#### Gas Payment & Extra Fee
+
+To ensure users trading on Angstrom don't have to think about ETH-denominated gas payments gas is
+charged in either the input/output asset of the respective trade.
+
+On top of this users may be charged a referral fee if they opted into one via a referral tag
+(`ref_id` field). Validating the ref id, retrieving the fee rate and applying it correctly is the
+responsibility of the nodes. They will use a registry in the periphery contracts as their source of
+truth.
+
+The total gas fee + referral fee is called the "extra fee" and is charged in the respective `asset0`
+of the pair.

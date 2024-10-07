@@ -17,6 +17,7 @@ abstract contract TopLevelAuth is UniConsumer, IBeforeInitializeHook {
     error NotNode();
     error InvalidPoolKey();
     error NotFromHook();
+    error IndexMayHaveChanged();
 
     address internal immutable _CONTROLLER;
 
@@ -55,6 +56,13 @@ abstract contract TopLevelAuth is UniConsumer, IBeforeInitializeHook {
         if (caller != address(this)) revert NotFromHook();
 
         return this.beforeInitialize.selector;
+    }
+
+    function removePool(address expectedStore, uint256 storeIndex) external {
+        _onlyController();
+        PoolConfigStore store = _configStore;
+        if (PoolConfigStore.unwrap(store) != expectedStore) revert IndexMayHaveChanged();
+        _configStore = store.removeIntoNew(storeIndex);
     }
 
     /// @dev Allow controller to set parameters of a given pool.

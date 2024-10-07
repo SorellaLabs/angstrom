@@ -40,6 +40,7 @@ library PoolConfigStoreLib {
     error InvalidTickSpacing();
     error FeeAboveMax();
     error FailedToDeployNewStore();
+    error InvalidStoreIndex();
 
     /*
      * @dev Generated from ./StoreDeployer.huff using https://github.com/Philogy/py-huff (commit: 44bbb4b)
@@ -65,6 +66,43 @@ library PoolConfigStoreLib {
     uint256 internal constant STORE_DEPLOYER = 0x600b380380600b5f395ff300;
     uint256 internal constant STORE_DEPLOYER_BYTES = 12;
 
+    function removeIntoNew(PoolConfigStore previousStore, uint256 storeIndex)
+        internal
+        returns (PoolConfigStore newStore)
+    {
+        uint256 total = previousStore.totalEntries();
+        if (storeIndex >= total) revert InvalidStoreIndex();
+        // If removing last entry, we can return an empty store.
+        if (total == 1) return newStore;
+        uint256 entriesAfterToBeRemoved = total - storeIndex - 1;
+        assembly ("memory-safe") {
+            // Get free memory & copy in the entire store's contents.
+            let free := mload(0x40)
+            // Add deployment code to the front.
+            mstore(free, STORE_DEPLOYER)
+            // Get offset after store deployer code for entries.
+            let entryOffset := add(free, 0x20)
+            // Copy the old store into memory.
+            let totalEntryBytes := mul(ENTRY_SIZE, total)
+            extcodecopy(previousStore, entryOffset, STORE_HEADER_SIZE, totalEntryBytes)
+            // Shift all entries in memory after the one to be removed back by one entry.
+            let toBeRemovedMemOffset := add(entryOffset, mul(storeIndex, ENTRY_SIZE))
+            mcopy(
+                toBeRemovedMemOffset,
+                add(toBeRemovedMemOffset, 0x20),
+                mul(entriesAfterToBeRemoved, ENTRY_SIZE)
+            )
+            // Deploy store.
+            newStore :=
+                create(
+                    0,
+                    add(free, sub(32, STORE_DEPLOYER_BYTES)),
+                    add(sub(totalEntryBytes, ENTRY_SIZE), STORE_DEPLOYER_BYTES)
+                )
+        }
+        if (PoolConfigStore.unwrap(newStore) == address(0)) revert FailedToDeployNewStore();
+    }
+
     /// @dev Create a new store from an old when appending or overriding the entry for the given
     /// asset pair.
     function setIntoNew(
@@ -85,7 +123,9 @@ library PoolConfigStoreLib {
         assembly ("memory-safe") {
             // Get free memory & copy in the entire store's contents.
             let free := mload(0x40)
-            // Leave one word free for `STORE_DEPLOYER`.
+            // Add deployment code to the front.
+            mstore(free, STORE_DEPLOYER)
+            // Get offset after store deployer code for entries.
             let entryOffset := add(free, 0x20)
             // Copy the old store into memory.
             let totalEntryBytes := mul(ENTRY_SIZE, total)
@@ -113,8 +153,7 @@ library PoolConfigStoreLib {
             // Append the entry to the end incase we include it (`totalEntryBytes` will ensure we don't
             // if the entry was found & replaced).
             mstore(entriesEnd, newEntry)
-            // Add deployment code to the front and deploy
-            mstore(free, STORE_DEPLOYER)
+            // Deploy store.
             newStore :=
                 create(
                     0,

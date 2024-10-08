@@ -236,14 +236,16 @@ contract Angstrom is
             _invalidateOrderHash(orderHash);
         }
 
-        hook.tryTrigger(from);
-
-        _settleOrderIn(from, buffer.assetIn, amountIn, variantMap.useInternal());
+        // Push before hook as a potential loan.
         address to = buffer.recipient;
         assembly {
             to := or(mul(iszero(to), from), to)
         }
         _settleOrderOut(to, buffer.assetOut, amountOut, variantMap.useInternal());
+
+        hook.tryTrigger(from);
+
+        _settleOrderIn(from, buffer.assetIn, amountIn, variantMap.useInternal());
 
         return reader;
     }

@@ -25,11 +25,11 @@ safety_byte = 0x00
 config_entry = pool_partial_key tick_spacing fee_in_e6
 ```
 
-#### Partial Key
+#### Store Key
 
-[Solidity implementation](../src/libraries/pool-config/PartialKey.sol)
+[Solidity implementation](../src/libraries/PoolConfigStore.sol)
 
-Pools in the store are uniquely identified by their partial key. The partial key is derived by
+Pools in the store are uniquely identified by their store key. The store key is derived by
 hashing the sorted `(asset0, asset1)` and then truncating the upper 5 bytes (such that every
 `config_entry` is 27 bytes).
 

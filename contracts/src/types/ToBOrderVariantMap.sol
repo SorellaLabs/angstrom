@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {LibString} from "solady/src/utils/LibString.sol";
-
 type ToBOrderVariantMap is uint8;
 
 using ToBOrderVariantMapLib for ToBOrderVariantMap global;

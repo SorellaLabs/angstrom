@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {LibString} from "solady/src/utils/LibString.sol";
-
 type UserOrderVariantMap is uint8;
 
 using UserOrderVariantMapLib for UserOrderVariantMap global;
@@ -54,19 +52,5 @@ library UserOrderVariantMapLib {
 
     function isEcdsa(UserOrderVariantMap variant) internal pure returns (bool) {
         return UserOrderVariantMap.unwrap(variant) & IS_ECDSA_BIT != 0;
-    }
-
-    function asB32(UserOrderVariantMap variant) internal pure returns (bytes32) {
-        if (variant.isStanding()) {
-            if (variant.quantitiesPartial()) return "Standing_Partial";
-            else return "Standing_Exact";
-        } else {
-            if (variant.quantitiesPartial()) return "Flash_Partial";
-            else return "Flash_Exact";
-        }
-    }
-
-    function toStr(UserOrderVariantMap variant) internal pure returns (string memory) {
-        return LibString.fromSmallString(variant.asB32());
     }
 }

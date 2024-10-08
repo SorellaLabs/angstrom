@@ -3,8 +3,6 @@ pragma solidity ^0.8.13;
 
 import {CalldataReader} from "./CalldataReader.sol";
 
-import {console} from "forge-std/console.sol";
-
 uint256 constant FEE_SUMMARY_ENTRY_SIZE = 36;
 
 type Asset is uint256;

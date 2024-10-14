@@ -37,13 +37,22 @@ will be upheld/enforced via the off-chain, staked Angstrom network.
 - **Economic security assumption:** When behaving as rational actors the design of the Å-Network
 guarantees censorship resistance & correct order matching.
 - **Sufficiently staked assumption:** All Å-Nodes have provided a stake such that should they
-submit the worst possible bundles ("worst" classified as a valid bundle where the maximal value is
+submit the worst possible bundles ("worst" classified as a non-reverting bundle where the maximal value is
 extracted from users via e.g. worst-case trade execution) for the longest possible time, the
-slashing amount & kicking period will ensure that any users losses can be compensated via the
+slashing amount & kicking period will ensure that any user losses can be compensated via the
 slashed stake.
 - **Trustless Fee Master:** The configured `FEE_MASTER` address is a trustless contract that verifies
 and aggregates fee summaries such that it's only ever able to pull the otherwise unaccounted validator
 & referral fees from the contract.
+- **Well behaving routers:** Users will use sound routers to add & remove
+liquidity. A malicious router could steal rewards distributed in the beforeRemoveLiquidity hook.
+- **No fee-on-transfer/rebase tokens:** The controller will only whitelist tokens that transfer the
+  exact amount specified upon successful `transfer` calls and that token balances do not on their
+own *decrease* over time.
+- **Environment is canonical L1 Ethereum:** The `Angstrom` contracts will only be deployed to the
+Ethereum L1 Mainnet or canonical testnets with identical semantics.
+- **The `_CONTROLLER` is sound:** The controller will maintain the approved set of nodes such that
+the _economic security assumption_ and _sufficiently staked assumption_ is maintained over time
 
 ### Core
 

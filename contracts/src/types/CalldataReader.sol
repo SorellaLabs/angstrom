@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-/// @dev Represents a calldata offset.
+/// @dev Represents a raw calldata offset.
 type CalldataReader is uint256;
 
 using CalldataReaderLib for CalldataReader global;

@@ -16,6 +16,8 @@ using PairLib for Pair global;
 using PairLib for PairArray global;
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Keeps track of pairs used in a given transaction, ensuring they've been initialized and are
+/// unique.
 library PairLib {
     using RayMathLib for uint256;
 

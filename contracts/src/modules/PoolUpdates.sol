@@ -28,6 +28,8 @@ import {FixedPointMathLib} from "solady/src/utils/FixedPointMathLib.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Top-level entry point for updating any state related to the underyling hooked Uniswap V4
+/// pools. Updates individual positions rewards, initiates swaps and reward distribution.
 abstract contract PoolUpdates is
     UniConsumer,
     GrowthOutsideUpdater,

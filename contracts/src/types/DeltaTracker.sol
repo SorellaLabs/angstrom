@@ -12,6 +12,9 @@ struct DeltaTracker {
 using DeltaTrackerLib for DeltaTracker global;
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Tracks intermediate value changes in the contract that need to be resolved. A _negative_
+/// delta means the contract is temporarily insolvent, a _positive_ delta means that contract has
+/// funds to use for payouts of different kinds.
 library DeltaTrackerLib {
     function add(DeltaTracker storage self, address asset, uint256 amount) internal {
         tint256 storage delta = self.deltas[asset];

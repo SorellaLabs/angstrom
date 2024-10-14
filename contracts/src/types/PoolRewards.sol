@@ -17,6 +17,7 @@ struct PoolRewards {
 using PoolRewardsLib for PoolRewards global;
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Computes and maintains global LP rewards.
 library PoolRewardsLib {
     using IUniV4 for IPoolManager;
     using TickLib for uint256;

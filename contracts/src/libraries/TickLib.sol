@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {LibBit} from "solady/src/utils/LibBit.sol";
 
 /// @author philogy <https://github.com/philogy>
-/// @custom:mounted int24, uint256
 library TickLib {
     int24 internal constant MIN_TICK = -887272;
     int24 internal constant MAX_TICK = 887272;

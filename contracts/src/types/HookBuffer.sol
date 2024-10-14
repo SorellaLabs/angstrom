@@ -10,6 +10,9 @@ type HookBuffer is uint256;
 using HookBufferLib for HookBuffer global;
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Custom bytes allocation that stores a partially encoded hook call such that hashing of
+/// hook data for validation & actual hook triggering can be done in different parts of the order
+/// processing lifecycle.
 library HookBufferLib {
     error InvalidHookReturn();
 

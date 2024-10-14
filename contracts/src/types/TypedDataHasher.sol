@@ -7,6 +7,8 @@ type TypedDataHasher is uint256;
 using TypedDataHasherLib for TypedDataHasher global;
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Custom bytes allocation used to compute the EIP712 message digest from a struct hash and
+/// domain hash.
 library TypedDataHasherLib {
     function init(bytes32 separator) internal pure returns (TypedDataHasher hasher) {
         assembly ("memory-safe") {

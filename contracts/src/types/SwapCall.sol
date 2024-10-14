@@ -23,6 +23,8 @@ struct SwapCall {
 using SwapCallLib for SwapCall global;
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Maintains a partially encoded swap call such that it doesn't have to be re-allocated and
+/// set for every swap.
 library SwapCallLib {
     error SwapFailed();
 

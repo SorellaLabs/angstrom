@@ -31,6 +31,11 @@ type StoreKey is bytes27;
 using PoolConfigStoreLib for PoolConfigStore global;
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Handles deploying and querying of "pool config store contracts", SSTORE2 contracts that
+/// store the list of configured pools in their bytecode for the sake of saving gas (cold contract
+/// code read costs `2600 + 3 * n` vs. `2100 * ceil(n / 32)` for storage, where `n` is the number of
+/// bytes to be read). Since the pool config is read with every bundle and we expect to very quickly
+/// have more than 1 pair leveraging the "more expensive writes for cheaper reads" trade-off is worth it.
 library PoolConfigStoreLib {
     PoolConfigStore internal constant NULL_CONFIG_CACHE = PoolConfigStore.wrap(address(0));
 

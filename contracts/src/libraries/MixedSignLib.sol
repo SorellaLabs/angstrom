@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-/// @custom:mounted
+/// @author philogy <https://github.com/philogy>
+/// @dev Adds helper methods to enable safe, checked arithmetic between signed & unsigned types. Not
+/// generalized as only these 4 particular instantiations were required.
 library MixedSignLib {
     error ArithmeticOverflowUnderflow();
 

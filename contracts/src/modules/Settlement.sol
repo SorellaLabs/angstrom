@@ -9,6 +9,7 @@ import {AmountA as AmountOut, AmountB as AmountIn} from "../types/Price.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Handles settlement as well as maintaining Angstrom's solvency invariant.
 abstract contract Settlement is UniConsumer {
     using SafeTransferLib for address;
 

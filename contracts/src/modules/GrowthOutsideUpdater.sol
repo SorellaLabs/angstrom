@@ -12,6 +12,7 @@ import {MixedSignLib} from "../libraries/MixedSignLib.sol";
 import {FixedPointMathLib} from "solady/src/utils/FixedPointMathLib.sol";
 
 /// @author philogy <https://github.com/philogy>
+/// @dev Core logic responsible for updating reward accumulators to distribute rewards.
 abstract contract GrowthOutsideUpdater is UniConsumer {
     using IUniV4 for IPoolManager;
     using FixedPointMathLib for uint256;

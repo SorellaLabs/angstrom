@@ -76,6 +76,8 @@ contract Angstrom is
         }
     }
 
+    /// @dev Load arbitrary storage slot from this contract, enables on-chain introspection without
+    /// view methods.
     function extsload(bytes32 slot) external view returns (bytes32) {
         assembly ("memory-safe") {
             mstore(0x00, sload(slot))
@@ -109,6 +111,7 @@ contract Angstrom is
         TypedDataHasher typedHasher,
         PairArray pairs
     ) internal returns (CalldataReader) {
+        // Load `TopOfBlockOrder` PADE variant map which will inform later variable-type encoding.
         ToBOrderVariantMap variantMap;
         {
             uint8 variantByte;
@@ -121,6 +124,7 @@ contract Angstrom is
         (reader, buffer.quantityIn) = reader.readU128();
         (reader, buffer.quantityOut) = reader.readU128();
         (reader, buffer.maxGasAsset0) = reader.readU128();
+        // Decode, validate & apply gas fee.
         {
             uint128 gasUsedAsset0;
             (reader, gasUsedAsset0) = reader.readU128();

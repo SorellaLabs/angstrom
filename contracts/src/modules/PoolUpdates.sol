@@ -115,6 +115,7 @@ abstract contract PoolUpdates is
         uint128 positionTotalLiquidity = UNI_V4.getPositionLiquidity(id, positionKey);
         uint256 rewards = growthInside.mulWad(positionTotalLiquidity) - position.pastRewards;
 
+        // Pay rewards to owner via uniswap delta => assumes that router is not malicious.
         if (rewards > 0) {
             UNI_V4.sync(key.currency0);
             Currency.unwrap(key.currency0).safeTransfer(address(UNI_V4), rewards);

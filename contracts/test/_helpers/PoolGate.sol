@@ -44,18 +44,6 @@ contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
         _tickSpacing = spacing;
     }
 
-    function initializePool(
-        address asset0,
-        address asset1,
-        uint160 initialSqrtPriceX96,
-        uint16 storeIndex
-    ) public returns (PoolId) {
-        bytes memory data = UNI_V4.unlock(
-            abi.encodeCall(this.__initializePool, (asset0, asset1, initialSqrtPriceX96, storeIndex))
-        );
-        return abi.decode(data, (PoolId));
-    }
-
     function swap(
         address assetIn,
         address assetOut,
@@ -150,17 +138,6 @@ contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
         );
         _clearDelta(Currency.unwrap(key.currency0), swapDelta.amount0());
         _clearDelta(Currency.unwrap(key.currency1), swapDelta.amount1());
-    }
-
-    function __initializePool(
-        address asset0,
-        address asset1,
-        uint160 initialSqrtPriceX96,
-        uint16 storeIndex
-    ) public returns (PoolId) {
-        PoolKey memory pk = poolKey(asset0, asset1);
-        UNI_V4.initialize(pk, initialSqrtPriceX96, bytes.concat(bytes2(storeIndex)));
-        return PoolIdLibrary.toId(pk);
     }
 
     function __addLiquidity(

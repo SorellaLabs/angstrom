@@ -48,7 +48,9 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
         int24 startTick = 0;
         refId = PoolIdLibrary.toId(poolKey(asset0, asset1, TICK_SPACING));
         gate.setHook(address(0));
-        gate.initializePool(address(asset0), address(asset1), startTick.getSqrtPriceAtTick(), 0);
+        uniV4.initialize(
+            poolKey(address(asset0), address(asset1), TICK_SPACING), startTick.getSqrtPriceAtTick()
+        );
 
         angstrom = ExtAngstrom(deployAngstrom(type(ExtAngstrom).creationCode, uniV4, gov));
         id = PoolIdLibrary.toId(poolKey());

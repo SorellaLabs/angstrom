@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity 0.8.26;
+pragma solidity =0.8.26;
 
 import {EIP712} from "solady/src/utils/EIP712.sol";
 import {TopLevelAuth} from "./modules/TopLevelAuth.sol";

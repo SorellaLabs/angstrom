@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.26;
 
 import {UniConsumer} from "./UniConsumer.sol";
-import {IBeforeInitializeHook} from "../interfaces/IHooks.sol";
 
 import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "../libraries/PoolConfigStore.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
@@ -11,7 +10,7 @@ import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {POOL_FEE} from "src/Constants.sol";
 
 /// @author philogy <https://github.com/philogy>
-abstract contract TopLevelAuth is UniConsumer, IBeforeInitializeHook {
+abstract contract TopLevelAuth is UniConsumer {
     error NotController();
     error OnlyOncePerBlock();
     error NotNode();
@@ -41,21 +40,8 @@ abstract contract TopLevelAuth is UniConsumer, IBeforeInitializeHook {
         (int24 tickSpacing,) = _configStore.get(key, storeIndex);
         UNI_V4.initialize(
             PoolKey(_c(assetA), _c(assetB), POOL_FEE, tickSpacing, IHooks(address(this))),
-            sqrtPriceX96,
-            ""
+            sqrtPriceX96
         );
-    }
-
-    function beforeInitialize(address caller, PoolKey calldata, uint160, bytes calldata)
-        external
-        view
-        returns (bytes4)
-    {
-        _onlyUniV4();
-
-        if (caller != address(this)) revert NotFromHook();
-
-        return this.beforeInitialize.selector;
     }
 
     function removePool(address expectedStore, uint256 storeIndex) external {

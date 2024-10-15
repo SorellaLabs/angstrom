@@ -6,7 +6,7 @@ use std::{
     thread::current
 };
 
-use alloy_primitives::{bloom, private::proptest::collection::vec, BlockNumber};
+use alloy_primitives::{bloom, BlockNumber};
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, Peer, StromMessage, StromNetworkHandle};
 use angstrom_types::{

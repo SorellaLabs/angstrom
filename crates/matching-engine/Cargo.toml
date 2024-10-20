@@ -39,6 +39,7 @@ reth-primitives.workspace = true
 reth-provider.workspace = true
 
 arraydeque = "0.5"
+num-bigfloat = "1.7"
 
 # Using clap for our bookgen command-line tool
 clap = "4.5.4"

@@ -108,7 +108,6 @@ contract GetUniswapV3PoolDataBatchRequest {
         poolData.tick = tick;
         poolData.liquidityNet = liquidityNet;
 
-
         bytes memory abiEncodedData = abi.encode(poolData);
         assembly {
             let dataStart := add(abiEncodedData, 0x20)

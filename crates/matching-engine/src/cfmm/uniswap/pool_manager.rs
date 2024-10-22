@@ -9,14 +9,8 @@ use std::{
 };
 
 use alloy::{
-    dyn_abi::DynSolType,
-    network::Network,
-    primitives::{Address, BlockNumber, FixedBytes},
-    providers::Provider,
-    rpc::types::eth::{Block, Filter},
-    sol,
-    sol_types::{SolEvent, SolType},
-    transports::Transport
+    primitives::{Address, BlockNumber},
+    rpc::types::{eth::Filter, Block}
 };
 use amms::errors::EventLogError;
 use angstrom_types::matching::{
@@ -25,8 +19,7 @@ use angstrom_types::matching::{
 };
 use arraydeque::ArrayDeque;
 use eyre::Error;
-use futures::StreamExt;
-use futures_util::stream::BoxStream;
+use futures_util::{stream::BoxStream, StreamExt};
 use itertools::Itertools;
 use reth_primitives::Log;
 use thiserror::Error;
@@ -40,8 +33,7 @@ use tokio::{
 
 use super::pool::SwapSimulationError;
 use crate::cfmm::uniswap::{
-    pool::EnhancedUniswapPool,
-    pool_data_loader::{DataLoader, PoolDataLoader},
+    pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader,
     pool_providers::PoolManagerProvider
 };
 
@@ -211,6 +203,7 @@ where
                 //     .map(|log| (log.address.into(), log))
                 //     .into_group_map();
 
+                // TODO: this might be a problem
                 let logs_by_address: HashMap<A, Vec<Log>> = HashMap::new();
 
                 for (addr, logs) in logs_by_address {

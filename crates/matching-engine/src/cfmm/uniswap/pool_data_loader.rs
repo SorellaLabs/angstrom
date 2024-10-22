@@ -1,4 +1,4 @@
-use std::{fmt::Debug, future::Future, sync::Arc};
+use std::{future::Future, sync::Arc};
 
 use alloy::{
     primitives::{aliases::I24, Address, BlockNumber, U256},

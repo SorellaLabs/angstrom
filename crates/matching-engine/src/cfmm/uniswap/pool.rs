@@ -1,29 +1,21 @@
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use alloy::{
-    dyn_abi::DynSolType,
     network::Network,
-    primitives::{aliases::I24, Address, BlockNumber, Bytes, FixedBytes, B256, I256, U256},
+    primitives::{aliases::I24, Address, BlockNumber, B256, I256, U256},
     providers::Provider,
-    sol,
-    sol_types::{SolEvent, SolType},
+    sol_types::SolEvent,
     transports::Transport
 };
 use amms::{
     amm::{
         consts::U256_1,
-        uniswap_v3::{
-            batch_request, batch_request::IGetUniswapV3PoolDataBatchRequest, IUniswapV3Pool, Info,
-            UniswapV3Pool
-        },
-        AutomatedMarketMaker
+        uniswap_v3::{IUniswapV3Pool, Info}
     },
-    errors::{AMMError, ArithmeticError, EventLogError}
+    errors::{AMMError, EventLogError}
 };
-use num_bigfloat::BigFloat;
-use reth_primitives::{Log, LogData};
+use reth_primitives::Log;
 use thiserror::Error;
-use tracing::debug;
 use uniswap_v3_math::{
     error::UniswapV3MathError,
     tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK}

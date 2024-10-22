@@ -150,8 +150,7 @@ pub fn mine_address_with_factory(
 pub struct OrderGasCalculations<DB> {
     db:               CacheDB<Arc<DB>>,
     // the deployed addresses in cache_db
-    angstrom_address: Address,
-    uniswap_address:  Address
+    angstrom_address: Address
 }
 
 impl<DB> OrderGasCalculations<DB>
@@ -159,11 +158,14 @@ where
     DB: Unpin + Clone + 'static + revm::DatabaseRef,
     <DB as revm::DatabaseRef>::Error: Send + Sync
 {
-    pub fn new(db: Arc<DB>) -> eyre::Result<Self> {
-        let ConfiguredRevm { db, uni_swap, angstrom } =
-            Self::setup_revm_cache_database_for_simulation(db)?;
-
-        Ok(Self { db, uniswap_address: uni_swap, angstrom_address: angstrom })
+    pub fn new(db: Arc<DB>, angstrom_address: Option<Address>) -> eyre::Result<Self> {
+        if let Some(angstrom_address) = angstrom_address {
+            Ok(Self { db: CacheDB::new(db), angstrom_address })
+        } else {
+            let ConfiguredRevm { db, angstrom, .. } =
+                Self::setup_revm_cache_database_for_simulation(db)?;
+            Ok(Self { db, angstrom_address: angstrom })
+        }
     }
 
     pub fn gas_of_tob_order(

@@ -67,6 +67,7 @@ pub fn run() -> eyre::Result<()> {
         let pool = channels.get_pool_handle();
         let executor_clone = executor.clone();
         // let consensus = channels.get_consensus_handle();
+
         let NodeHandle { node, node_exit_future } = builder
             .with_types::<EthereumNode>()
             .with_components(
@@ -93,7 +94,7 @@ pub fn run() -> eyre::Result<()> {
             .await?;
 
         initialize_strom_components(
-            Address::ZERO,
+            args.angstrom_addr,
             args,
             secret_key,
             channels,
@@ -182,7 +183,7 @@ pub fn initialize_strom_handles() -> StromHandles {
 }
 
 pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
-    angstrom_address: Address,
+    angstrom_address: Option<Address>,
     config: AngstromConfig,
     secret_key: SecretKey,
     handles: StromHandles,
@@ -191,7 +192,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
     executor: &TaskExecutor
 ) {
     let eth_handle = EthDataCleanser::spawn(
-        angstrom_address,
+        angstrom_address.unwrap(),
         node.provider.subscribe_to_canonical_state(),
         node.provider.clone(),
         executor.clone(),
@@ -210,6 +211,7 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
         RethDbWrapper::new(node.provider.clone()),
         config.validation_cache_size,
         block_height,
+        angstrom_address,
         node.provider.subscribe_to_canonical_state()
     );
 
@@ -265,6 +267,8 @@ pub struct AngstromConfig {
     pub mev_guard:             bool,
     #[clap(long)]
     pub secret_key_location:   PathBuf,
+    #[clap(long)]
+    pub angstrom_addr:         Option<Address>,
     // default is 100mb
     #[clap(long, default_value = "1000000")]
     pub validation_cache_size: usize,

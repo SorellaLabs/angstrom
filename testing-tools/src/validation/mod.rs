@@ -67,7 +67,7 @@ where
         let handle = tokio::runtime::Handle::current();
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
-        let sim = SimValidation::new(db.clone());
+        let sim = SimValidation::new(db.clone(), None);
         let (_, state_notification) =
             tokio::sync::broadcast::channel::<CanonStateNotification>(100);
 
@@ -83,7 +83,6 @@ where
 
         let val = Validator::new(rx, order_validator);
         let client = ValidationClient(tx);
-        let config = ValidationConfig::default();
 
         Self { db, client, underlying: val, config: validation_config }
     }

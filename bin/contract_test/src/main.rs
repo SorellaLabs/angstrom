@@ -100,7 +100,9 @@ async fn main() -> eyre::Result<()> {
         .call()
         .await?
         ._0;
+
     println!("Got range check res: {}", range_check_res);
     println!("Done!");
+
     Ok(())
 }

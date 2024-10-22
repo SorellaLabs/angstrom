@@ -3,7 +3,6 @@ use reth_network::{protocol::IntoRlpxSubProtocol, NetworkHandle, NetworkManager}
 use reth_node_builder::{
     components::NetworkBuilder, node::FullNodeTypes, BuilderContext, NodeTypes
 };
-// use reth_tracing::tracing::{debug, info};
 
 /// A basic ethereum payload service.
 pub struct AngstromNetworkBuilder<I: IntoRlpxSubProtocol + Send> {

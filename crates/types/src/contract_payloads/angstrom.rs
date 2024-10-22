@@ -148,6 +148,10 @@ pub struct AngstromBundle {
 }
 
 impl AngstromBundle {
+    pub fn get_prices_per_pair(&self) -> &[Pair] {
+        &self.pairs
+    }
+
     pub fn get_order_hashes(&self) -> impl Iterator<Item = B256> + '_ {
         self.top_of_block_orders
             .iter()

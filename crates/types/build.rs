@@ -82,7 +82,7 @@ pub mod {mod_name} {{
         .unwrap();
 
     for contract_build in sol_macro_invocation {
-        writeln!(&mut f, "{}", contract_build).expect("failed to write sol macro to contract");
+        write!(&mut f, "{}", contract_build).expect("failed to write sol macro to contract");
     }
 }
 

@@ -51,6 +51,7 @@ pub fn init_validation<DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + 
     db: DB,
     cache_max_bytes: usize,
     current_block: u64,
+    angstrom_address: Option<Address>,
     state_notification: CanonStateNotifications
 ) -> ValidationClient
 where
@@ -100,7 +101,7 @@ where
         );
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
-        let sim = SimValidation::new(revm_lru.clone());
+        let sim = SimValidation::new(revm_lru.clone(), angstrom_address);
         let pool_watcher_handle = rt
             .block_on(async { pool_manager.watch_state_changes().await })
             .unwrap();
@@ -145,7 +146,7 @@ where
         let handle = rt.handle().clone();
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
-        let sim = SimValidation::new(task_db);
+        let sim = SimValidation::new(task_db, None);
 
         let mut uniswap_pools: Vec<EnhancedUniswapV3Pool> = validation_config
             .pools

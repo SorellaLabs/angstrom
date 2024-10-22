@@ -21,6 +21,7 @@ pub mod account;
 pub mod config;
 pub mod db_state_utils;
 pub mod pools;
+pub mod token_pricing;
 
 type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 

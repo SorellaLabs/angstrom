@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+futures.workspace = true
 base64 = "0.22.1"
 bitmaps.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }

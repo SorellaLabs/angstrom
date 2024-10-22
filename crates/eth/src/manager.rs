@@ -28,7 +28,6 @@ alloy::sol!(
 
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
-#[allow(dead_code)]
 pub struct EthDataCleanser<DB> {
     angstrom_address: Address,
     /// our command receiver

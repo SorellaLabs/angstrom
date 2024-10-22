@@ -7,7 +7,6 @@ pub mod pool_manager {
         "../../contracts/out/PoolManager.sol/PoolManager.json"
     );
 }
-
 #[rustfmt::skip]
 pub mod mock_rewards_manager {
     alloy::sol!(
@@ -17,7 +16,6 @@ pub mod mock_rewards_manager {
         "../../contracts/out/MockRewardsManager.sol/MockRewardsManager.json"
     );
 }
-
 #[rustfmt::skip]
 pub mod angstrom {
     alloy::sol!(
@@ -27,7 +25,6 @@ pub mod angstrom {
         "../../contracts/out/Angstrom.sol/Angstrom.json"
     );
 }
-
 #[rustfmt::skip]
 pub mod pool_gate {
     alloy::sol!(
@@ -37,7 +34,6 @@ pub mod pool_gate {
         "../../contracts/out/PoolGate.sol/PoolGate.json"
     );
 }
-
 #[rustfmt::skip]
 pub mod mintable_mock_erc_20 {
     alloy::sol!(

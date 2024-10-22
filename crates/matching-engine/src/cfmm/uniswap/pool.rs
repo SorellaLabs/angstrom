@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use alloy::{
     dyn_abi::DynSolType,
     network::Network,
-    primitives::{aliases::I24, Address, Bytes, FixedBytes, B256, I256, U256},
+    primitives::{aliases::I24, Address, BlockNumber, Bytes, FixedBytes, B256, I256, U256},
     providers::Provider,
     sol,
     sol_types::{SolEvent, SolType},
@@ -21,7 +21,7 @@ use amms::{
     errors::{AMMError, ArithmeticError, EventLogError}
 };
 use num_bigfloat::BigFloat;
-use reth_primitives::{BlockNumber, Log, LogData};
+use reth_primitives::{Log, LogData};
 use thiserror::Error;
 use tracing::debug;
 use uniswap_v3_math::{
@@ -50,11 +50,10 @@ struct SwapResult {
 const MAX_TICKS_PER_REQUEST: u16 = 150;
 
 #[derive(Debug, Clone, Default)]
-pub struct EnhancedUniswapPool<Loader: PoolDataLoader, A = Address> {
+pub struct EnhancedUniswapPool<Loader: PoolDataLoader<A> = DataLoader<Address>, A = Address> {
     sync_swap_with_sim:     bool,
     initial_ticks_per_side: u16,
     data_loader:            Loader,
-    pub address:            A,
     pub token_a:            Address,
     pub token_a_decimals:   u8,
     pub token_b:            Address,
@@ -66,17 +65,17 @@ pub struct EnhancedUniswapPool<Loader: PoolDataLoader, A = Address> {
     pub tick:               i32,
     pub tick_spacing:       i32,
     pub tick_bitmap:        HashMap<i16, U256>,
-    pub ticks:              HashMap<i32, Info>
+    pub ticks:              HashMap<i32, Info>,
+    pub _phantom:           PhantomData<A>
 }
 
 impl<Loader, A> EnhancedUniswapPool<Loader, A>
 where
-    Loader: PoolDataLoader + Default + Clone,
+    Loader: PoolDataLoader<A> + Default,
     A: Debug + Copy + Default
 {
-    pub fn new(address: A, data_loader: Loader, initial_ticks_per_side: u16) -> Self {
+    pub fn new(data_loader: Loader, initial_ticks_per_side: u16) -> Self {
         Self {
-            address: address.clone(),
             initial_ticks_per_side,
             sync_swap_with_sim: false,
             data_loader,
@@ -98,6 +97,10 @@ where
 
     pub fn set_sim_swap_sync(&mut self, sync_swap_with_sim: bool) {
         self.sync_swap_with_sim = sync_swap_with_sim;
+    }
+
+    pub fn address(&self) -> A {
+        self.data_loader.address()
     }
 
     pub async fn get_tick_data_batch_request<P, T, N>(
@@ -409,7 +412,7 @@ where
     fn sync_swap_with_sim(&mut self, log: Log) -> Result<(), PoolManagerError> {
         let swap_event = IUniswapV3Pool::Swap::decode_log(&log, true)?;
 
-        tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.address, "pool before");
+        tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.data_loader.address(), "pool before");
         tracing::debug!(swap_tick=swap_event.tick.as_i32(), swap_price=?swap_event.sqrtPriceX96, swap_liquidity=?swap_event.liquidity, swap_amount0=?swap_event.amount0, swap_amount1=?swap_event.amount1, "swap event");
 
         let combinations = [
@@ -437,7 +440,7 @@ where
 
         if simulation_failed {
             tracing::error!(
-                pool_address = ?self.address,
+                pool_address = ?self.data_loader.address(),
                 pool_price = ?self.sqrt_price,
                 pool_liquidity = ?self.liquidity,
                 pool_tick = ?self.tick,
@@ -450,7 +453,7 @@ where
             );
             return Err(PoolManagerError::SwapSimulationFailed);
         } else {
-            tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.address, "pool after");
+            tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.data_loader.address(), "pool after");
         }
 
         Ok(())
@@ -481,7 +484,7 @@ where
             -(burn_event.amount as i128)
         );
 
-        tracing::debug!(?burn_event, address = ?self.address, sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "burn event");
+        tracing::debug!(?burn_event, address = ?self.data_loader.address(), sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "burn event");
 
         Ok(())
     }
@@ -495,7 +498,7 @@ where
             mint_event.amount as i128
         );
 
-        tracing::debug!(?mint_event, address = ?self.address, sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "mint event");
+        tracing::debug!(?mint_event, address = ?self.data_loader.address(), sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "mint event");
 
         Ok(())
     }
@@ -507,7 +510,7 @@ where
         self.liquidity = swap_event.liquidity;
         self.tick = swap_event.tick.as_i32();
 
-        tracing::debug!(?swap_event, address = ?self.address, sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "swap event");
+        tracing::debug!(?swap_event, address = ?self.data_loader.address(), sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "swap event");
 
         Ok(())
     }
@@ -661,6 +664,8 @@ pub enum SwapSimulationError {
 
 #[cfg(test)]
 mod test {
+    use std::{str::FromStr, sync::Arc};
+
     use alloy::{
         hex,
         network::Ethereum,
@@ -672,7 +677,6 @@ mod test {
             layers::{RetryBackoffLayer, RetryBackoffService}
         }
     };
-    use std::{str::FromStr, sync::Arc};
 
     use super::*;
 
@@ -694,8 +698,7 @@ mod test {
         ticks_per_side: u16
     ) -> EnhancedUniswapPool<DataLoader<Address>, Address> {
         let address = address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640");
-        let mut pool =
-            EnhancedUniswapPool::new(address.into(), DataLoader::new(address), ticks_per_side);
+        let mut pool = EnhancedUniswapPool::new(DataLoader::new(address), ticks_per_side);
         pool.populate_data(Some(block_number), provider.clone())
             .await
             .unwrap();
@@ -709,7 +712,7 @@ mod test {
         let provider = setup_provider().await;
         let pool = setup_pool(provider.clone(), block_number, ticks_per_side).await;
 
-        assert_eq!(pool.address, address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"));
+        assert_eq!(pool.address(), address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"));
         assert_eq!(pool.token_a, address!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
         assert_eq!(pool.token_a_decimals, 6);
         assert_eq!(pool.token_b, address!("C02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"));
@@ -813,7 +816,7 @@ mod test {
             .expect("failed to sync ticks");
 
         // Compare fields of after_burn_pool and pool
-        assert_eq!(pool.address, after_burn_pool.address, "Address mismatch");
+        assert_eq!(pool.address(), after_burn_pool.address(), "Address mismatch");
         assert_eq!(pool.token_a, after_burn_pool.token_a, "Token A mismatch");
         assert_eq!(pool.token_b, after_burn_pool.token_b, "Token B mismatch");
         assert_eq!(

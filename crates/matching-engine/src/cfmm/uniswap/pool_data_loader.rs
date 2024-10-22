@@ -1,7 +1,7 @@
 use std::{fmt::Debug, future::Future, sync::Arc};
 
 use alloy::{
-    primitives::{aliases::I24, Address, U256},
+    primitives::{aliases::I24, Address, BlockNumber, U256},
     providers::{Network, Provider},
     sol,
     sol_types::SolType,
@@ -9,7 +9,6 @@ use alloy::{
 };
 use amms::errors::AMMError;
 use angstrom_types::primitive::PoolId;
-use reth_primitives::BlockNumber;
 
 sol! {
     #[allow(missing_docs)]
@@ -65,13 +64,13 @@ pub struct DataLoader<A> {
     address: A
 }
 
-impl<A: Debug + Clone + Default> DataLoader<A> {
+impl<A> DataLoader<A> {
     pub fn new(address: A) -> Self {
         DataLoader { address }
     }
 }
 
-pub trait PoolDataLoader {
+pub trait PoolDataLoader<A> {
     fn load_tick_data<P: Provider<T, N>, T: Transport + Clone, N: Network>(
         &self,
         current_tick: I24,
@@ -81,6 +80,8 @@ pub trait PoolDataLoader {
         block_number: Option<BlockNumber>,
         provider: Arc<P>
     ) -> impl Future<Output = Result<(Vec<UniswapV3TickData>, U256), AMMError>> + Send;
+
+    fn address(&self) -> A;
 
     fn load_pool_data<T, N, P>(
         &self,
@@ -93,7 +94,7 @@ pub trait PoolDataLoader {
         P: Provider<T, N>;
 }
 
-impl PoolDataLoader for DataLoader<Address> {
+impl PoolDataLoader<Address> for DataLoader<Address> {
     async fn load_tick_data<P: Provider<T, N>, T: Transport + Clone, N: Network>(
         &self,
         current_tick: I24,
@@ -132,6 +133,10 @@ impl PoolDataLoader for DataLoader<Address> {
         Ok((tick_data, result.blockNumber))
     }
 
+    fn address(&self) -> Address {
+        self.address
+    }
+
     async fn load_pool_data<T, N, P>(
         &self,
         block_number: Option<BlockNumber>,
@@ -154,7 +159,7 @@ impl PoolDataLoader for DataLoader<Address> {
     }
 }
 
-impl PoolDataLoader for DataLoader<PoolId> {
+impl PoolDataLoader<PoolId> for DataLoader<PoolId> {
     async fn load_tick_data<P: Provider<T, N>, T: Transport + Clone, N: Network>(
         &self,
         current_tick: I24,
@@ -165,6 +170,10 @@ impl PoolDataLoader for DataLoader<PoolId> {
         provider: Arc<P>
     ) -> Result<(Vec<UniswapV3TickData>, U256), AMMError> {
         todo!()
+    }
+
+    fn address(&self) -> PoolId {
+        self.address
     }
 
     async fn load_pool_data<T, N, P>(

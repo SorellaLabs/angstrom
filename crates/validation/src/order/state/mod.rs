@@ -2,16 +2,15 @@ use std::{collections::HashMap, sync::Arc};
 
 use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256, U256};
-use angstrom_types::primitive::PoolId;
 use angstrom_types::{
-    primitive::NewInitializedPool,
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
 use db_state_utils::StateFetchUtils;
 use futures::{Stream, StreamExt};
-use matching_engine::cfmm::uniswap::pool_data_loader::DataLoader;
 use matching_engine::cfmm::uniswap::{
-    pool_manager::UniswapPoolManager, pool_providers::PoolManagerProvider, tob::calculate_reward
+    pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
+    pool_providers::PoolManagerProvider, tob::calculate_reward
 };
 use parking_lot::RwLock;
 use pools::PoolsTracker;
@@ -85,11 +84,11 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
     ) -> OrderValidationResults {
         let order_hash = order.order_hash();
         if !order.is_valid_signature() {
-            return OrderValidationResults::Invalid(order_hash)
+            return OrderValidationResults::Invalid(order_hash);
         }
 
         let Some(pool_info) = self.pool_tacker.read().fetch_pool_info_for_order(&order) else {
-            return OrderValidationResults::Invalid(order_hash)
+            return OrderValidationResults::Invalid(order_hash);
         };
 
         self.user_account_tracker
@@ -109,19 +108,21 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
             OrderValidation::Searcher(tx, order, origin) => {
                 let mut results = self.handle_regular_order(order, block, false);
                 if let OrderValidationResults::Valid(ref mut order_with_storage) = results {
-                    let tob_order = order_with_storage
-                        .clone()
-                        .try_map_inner(|inner| {
-                            let AllOrders::TOB(order) = inner else { eyre::bail!("unreachable") };
-                            Ok(order)
-                        })
-                        .expect("should be unreachable");
-                    // TODO: make the pool work with UniswapV4 addresses
-                    let pool_address = order_with_storage.pool_id;
-                    let market_snapshot =
-                        self.pool_manager.get_market_snapshot(pool_address).unwrap();
-                    let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();
-                    order_with_storage.tob_reward = rewards.total_reward;
+                        let tob_order = order_with_storage
+                            .clone()
+                            .try_map_inner(|inner| {
+                                let AllOrders::TOB(order) = inner else {
+                                    eyre::bail!("unreachable")
+                                };
+                                Ok(order)
+                            })
+                            .expect("should be unreachable");
+                        let pool_address = order_with_storage.pool_id;
+                        let market_snapshot =
+                            self.pool_manager.get_market_snapshot(pool_address).unwrap();
+                        let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();
+                        order_with_storage.tob_reward = rewards.total_reward;
+
                 }
 
                 let _ = tx.send(results);

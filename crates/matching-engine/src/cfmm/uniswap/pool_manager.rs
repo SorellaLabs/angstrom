@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     hash::Hash,
-    ops::Add,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc
@@ -20,7 +19,10 @@ use alloy::{
     transports::Transport
 };
 use amms::errors::EventLogError;
-use angstrom_types::matching::SqrtPriceX96;
+use angstrom_types::matching::{
+    uniswap::{LiqRange, PoolSnapshot},
+    SqrtPriceX96
+};
 use arraydeque::ArrayDeque;
 use eyre::Error;
 use futures::StreamExt;
@@ -36,7 +38,7 @@ use tokio::{
     task::JoinHandle
 };
 
-use super::{pool::SwapSimulationError, MarketSnapshot, PoolRange};
+use super::pool::SwapSimulationError;
 use crate::cfmm::uniswap::{
     pool::EnhancedUniswapPool,
     pool_data_loader::{DataLoader, PoolDataLoader},
@@ -46,7 +48,10 @@ use crate::cfmm::uniswap::{
 pub type StateChangeCache<Loader, A> = HashMap<A, ArrayDeque<StateChange<Loader, A>, 150>>;
 
 #[derive(Default)]
-pub struct UniswapPoolManager<P, Loader: PoolDataLoader, A = Address> {
+pub struct UniswapPoolManager<P, Loader: PoolDataLoader<A>, A = Address>
+where
+    A: Debug + Copy
+{
     pools:               Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>>,
     latest_synced_block: u64,
     state_change_buffer: usize,
@@ -58,7 +63,7 @@ pub struct UniswapPoolManager<P, Loader: PoolDataLoader, A = Address> {
 impl<P, Loader, A> UniswapPoolManager<P, Loader, A>
 where
     A: Eq + Hash + Debug + Default + Copy + Sync + Send + 'static,
-    Loader: PoolDataLoader + Default + Clone + Send + Sync + 'static,
+    Loader: PoolDataLoader<A> + Default + Clone + Send + Sync + 'static,
     P: PoolManagerProvider + Send + Sync + 'static
 {
     pub fn new(
@@ -69,7 +74,7 @@ where
     ) -> Self {
         let rwlock_pools = pools
             .into_iter()
-            .map(|pool| (pool.address, RwLock::new(pool)))
+            .map(|pool| (pool.address(), RwLock::new(pool)))
             .collect();
         Self {
             pools: Arc::new(rwlock_pools),
@@ -227,7 +232,7 @@ where
                     )?;
 
                     if let Some(tx) = &pool_updated_tx {
-                        tx.send((pool_guard.address, chain_head_block_number))
+                        tx.send((pool_guard.address(), chain_head_block_number))
                             .await
                             .map_err(|e| tracing::error!("Failed to send pool update: {}", e))
                             .ok();
@@ -250,7 +255,7 @@ where
         state_change_cache: &mut StateChangeCache<Loader, A>,
         block_to_unwind: u64
     ) -> Result<(), PoolManagerError> {
-        if let Some(cache) = state_change_cache.get_mut(&pool.address) {
+        if let Some(cache) = state_change_cache.get_mut(&pool.address()) {
             loop {
                 // check if the most recent state change block is >= the block to unwind
                 match cache.get(0) {
@@ -311,11 +316,11 @@ where
         Self::add_state_change_to_cache(
             state_change_cache,
             StateChange::new(Some(pool_clone), block_number),
-            pool.address
+            pool.address()
         )
     }
 
-    pub fn get_market_snapshot(&self, address: A) -> Result<MarketSnapshot, Error> {
+    pub fn get_market_snapshot(&self, address: A) -> Result<PoolSnapshot, Error> {
         let (ranges, price) = {
             let pool_lock = self
                 .blocking_pool(&address)
@@ -328,31 +333,31 @@ where
                 .collect::<Vec<_>>();
             // Sort the ticks low-to-high
             tick_vec.sort_by_key(|x| x.0);
-            // Build our PoolRanges out of our ticks, if any
+            // Build our LiqRanges out of our ticks, if any
             let ranges = tick_vec
                 .windows(2)
                 .map(|tickwindow| {
                     let lower_tick = tickwindow[0].0;
                     let upper_tick = tickwindow[1].0;
                     let liquidity = tickwindow[0].1.liquidity_gross;
-                    PoolRange::new(*lower_tick, *upper_tick, liquidity)
+                    LiqRange::new(*lower_tick, *upper_tick, liquidity)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             // Get our starting price
             let price = SqrtPriceX96::from(pool_lock.sqrt_price);
             (ranges, price)
         };
-        MarketSnapshot::new(ranges, price)
+        PoolSnapshot::new(ranges, price)
     }
 }
 
 #[derive(Debug)]
-pub struct StateChange<Loader: PoolDataLoader, A> {
+pub struct StateChange<Loader: PoolDataLoader<A>, A> {
     state_change: Option<EnhancedUniswapPool<Loader, A>>,
     block_number: u64
 }
 
-impl<Loader: PoolDataLoader, A> StateChange<Loader, A> {
+impl<Loader: PoolDataLoader<A>, A> StateChange<Loader, A> {
     pub fn new(state_change: Option<EnhancedUniswapPool<Loader, A>>, block_number: u64) -> Self {
         Self { state_change, block_number }
     }

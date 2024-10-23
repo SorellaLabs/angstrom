@@ -3,7 +3,7 @@ use alloy::{
     sol_types::SolValue
 };
 
-use crate::{PadeDecode, PadeEncode};
+use crate::{PadeDecode, PadeDecodeError, PadeEncode};
 
 /// Uses the default alloy `abi_encode_packed` to PADE-encode this type.  We
 /// share many primitives with Alloy so this makes it simple to implement the
@@ -25,22 +25,25 @@ macro_rules! prim_decode {
     ($( $x:ty ), *) => {
         $(
             impl PadeDecode for $x {
-                fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, ()>
+                fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, PadeDecodeError>
                 where
                     Self: Sized
                 {
                     const BYTES : usize  = <$x>::BITS as usize / 8usize;
                     let mut con_buf = [0u8; BYTES];
-                    for i in 0..BYTES {
-                        let Some(next) = buf.get(i) else { return Err(()) };
-                        con_buf[i] = *next;
+
+                    for (i, con) in con_buf.iter_mut().enumerate().take(BYTES) {
+
+                        let Some(next) = buf.get(i) else { return Err(PadeDecodeError::InvalidSize) };
+                        *con = *next;
                     }
+
                     let res = <$x>::from_be_bytes(con_buf);
                     *buf = &buf[BYTES..];
                     Ok(res)
                 }
 
-                fn pade_decode_with_width(buf: &mut &[u8], size: usize, _: Option<u8>) -> Result<Self, ()>
+                fn pade_decode_with_width(buf: &mut &[u8], size: usize, _: Option<u8>) -> Result<Self, PadeDecodeError>
                 where
                     Self: Sized
                 {
@@ -56,7 +59,7 @@ macro_rules! prim_decode {
                     for i in 0..size {
                         let Some(next) = subslice.get(i) else {
                             eprintln!("subslice.get() failed");
-                            return Err(())
+                            return Err(PadeDecodeError::InvalidSize)
                         };
 
                         con_buf[i + padding_offset] = *next;
@@ -82,22 +85,26 @@ impl PadeEncode for u8 {
 }
 
 impl PadeDecode for Address {
-    fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, ()>
+    fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, PadeDecodeError>
     where
         Self: Sized
     {
         const BYTES: usize = 160 / 8usize;
         let mut con_buf = [0u8; BYTES];
-        for i in 0..BYTES {
-            let Some(next) = buf.get(i) else { return Err(()) };
-            con_buf[i] = *next;
+        for (i, con) in con_buf.iter_mut().enumerate().take(BYTES) {
+            let Some(next) = buf.get(i) else { return Err(PadeDecodeError::InvalidSize) };
+            *con = *next;
         }
         let res = Address::from_slice(&con_buf);
         *buf = &buf[BYTES..];
         Ok(res)
     }
 
-    fn pade_decode_with_width(buf: &mut &[u8], size: usize, _: Option<u8>) -> Result<Self, ()>
+    fn pade_decode_with_width(
+        buf: &mut &[u8],
+        size: usize,
+        _: Option<u8>
+    ) -> Result<Self, PadeDecodeError>
     where
         Self: Sized
     {
@@ -107,9 +114,9 @@ impl PadeDecode for Address {
         let subslice = &buf[offset..size];
 
         let mut con_buf = [0u8; BYTES];
-        for i in 0..BYTES {
-            let Some(next) = subslice.get(i) else { return Err(()) };
-            con_buf[i] = *next;
+        for (i, con) in con_buf.iter_mut().enumerate().take(BYTES) {
+            let Some(next) = subslice.get(i) else { return Err(PadeDecodeError::InvalidSize) };
+            *con = *next;
         }
 
         let res = Address::from_slice(&con_buf);
@@ -120,7 +127,7 @@ impl PadeDecode for Address {
 }
 
 impl PadeDecode for Bytes {
-    fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, ()>
+    fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, PadeDecodeError>
     where
         Self: Sized
     {
@@ -128,7 +135,11 @@ impl PadeDecode for Bytes {
         Ok(Bytes::copy_from_slice(&res))
     }
 
-    fn pade_decode_with_width(_: &mut &[u8], _: usize, _: Option<u8>) -> Result<Self, ()>
+    fn pade_decode_with_width(
+        _: &mut &[u8],
+        _: usize,
+        _: Option<u8>
+    ) -> Result<Self, PadeDecodeError>
     where
         Self: Sized
     {
@@ -160,7 +171,7 @@ impl PadeEncode for Signature {
 }
 
 impl PadeDecode for Signature {
-    fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, ()>
+    fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, PadeDecodeError>
     where
         Self: Sized
     {
@@ -174,7 +185,11 @@ impl PadeDecode for Signature {
         Ok(Signature::new(r, s, alloy::primitives::Parity::Parity(v != 0)))
     }
 
-    fn pade_decode_with_width(_: &mut &[u8], _: usize, _: Option<u8>) -> Result<Self, ()>
+    fn pade_decode_with_width(
+        _: &mut &[u8],
+        _: usize,
+        _: Option<u8>
+    ) -> Result<Self, PadeDecodeError>
     where
         Self: Sized
     {

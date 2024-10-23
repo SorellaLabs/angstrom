@@ -47,6 +47,12 @@ jobs:
         with:
           components: clippy,rustfmt
           toolchain: nightly
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true

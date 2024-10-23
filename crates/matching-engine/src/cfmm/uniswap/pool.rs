@@ -1,101 +1,96 @@
-use num_bigfloat::BigFloat;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-use alloy::dyn_abi::DynSolType;
-use alloy::primitives::{FixedBytes, B256};
 use alloy::{
+    dyn_abi::DynSolType,
     network::Network,
-    primitives::{aliases::I24, Address, BlockNumber, Log, I256, U256},
+    primitives::{aliases::I24, Address, Bytes, FixedBytes, B256, I256, U256},
     providers::Provider,
     sol,
     sol_types::{SolEvent, SolType},
-    transports::Transport,
+    transports::Transport
 };
-use amms::amm::uniswap_v3::batch_request;
-use amms::amm::uniswap_v3::batch_request::IGetUniswapV3PoolDataBatchRequest;
-use amms::errors::ArithmeticError;
 use amms::{
     amm::{
         consts::U256_1,
-        uniswap_v3::{IUniswapV3Pool, Info, UniswapV3Pool},
-        AutomatedMarketMaker,
+        uniswap_v3::{
+            batch_request, batch_request::IGetUniswapV3PoolDataBatchRequest, IUniswapV3Pool, Info,
+            UniswapV3Pool
+        },
+        AutomatedMarketMaker
     },
-    errors::{AMMError, EventLogError},
+    errors::{AMMError, ArithmeticError, EventLogError}
 };
+use num_bigfloat::BigFloat;
+use reth_primitives::{BlockNumber, Log, LogData};
 use thiserror::Error;
 use tracing::debug;
 use uniswap_v3_math::{
     error::UniswapV3MathError,
-    tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK},
+    tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK}
 };
 
-use crate::cfmm::uniswap::pool_manager::PoolManagerError;
-
-sol! {
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    IGetUniswapV3TickDataBatchRequest,
-    "src/cfmm/uniswap/GetUniswapV3TickDataBatchRequestABI.json"
-}
-
-sol! {
-    struct TickData {
-        bool initialized;
-        int24 tick;
-        uint128 liquidityGross;
-        int128 liquidityNet;
-    }
-
-    struct TicksWithBlock {
-        TickData[] ticks;
-        uint256 blockNumber;
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct UniswapV3TickData {
-    pub initialized: bool,
-    pub tick: i32,
-    pub liquidity_gross: u128,
-    pub liquidity_net: i128,
-}
+use crate::cfmm::uniswap::{
+    pool_data_loader::{
+        DataLoader, IGetUniswapV3TickDataBatchRequest, PoolDataLoader, TicksWithBlock,
+        UniswapV3TickData
+    },
+    pool_manager::PoolManagerError
+};
 
 #[derive(Default)]
 struct SwapResult {
-    amount0: I256,
-    amount1: I256,
+    amount0:         I256,
+    amount1:         I256,
     sqrt_price_x_96: U256,
-    liquidity: u128,
-    tick: i32,
+    liquidity:       u128,
+    tick:            i32
 }
 
 // at around 190 is when "max code size exceeded" comes up
 const MAX_TICKS_PER_REQUEST: u16 = 150;
 
-#[derive(Debug, Clone)]
-pub struct EnhancedUniswapV3Pool<const AddressLen: usize = 20> {
-    inner: InnerPool<AddressLen>,
-    sync_swap_with_sim: bool,
+#[derive(Debug, Clone, Default)]
+pub struct EnhancedUniswapPool<Loader: PoolDataLoader, A = Address> {
+    sync_swap_with_sim:     bool,
     initial_ticks_per_side: u16,
+    data_loader:            Loader,
+    pub address:            A,
+    pub token_a:            Address,
+    pub token_a_decimals:   u8,
+    pub token_b:            Address,
+    pub token_b_decimals:   u8,
+    pub liquidity:          u128,
+    pub liquidity_net:      i128,
+    pub sqrt_price:         U256,
+    pub fee:                u32,
+    pub tick:               i32,
+    pub tick_spacing:       i32,
+    pub tick_bitmap:        HashMap<i16, U256>,
+    pub ticks:              HashMap<i32, Info>
 }
 
-impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
-    pub fn new(address: FixedBytes<AddressLen>, initial_ticks_per_side: u16) -> Self {
+impl<Loader, A> EnhancedUniswapPool<Loader, A>
+where
+    Loader: PoolDataLoader + Default + Clone,
+    A: Debug + Copy + Default
+{
+    pub fn new(address: A, data_loader: Loader, initial_ticks_per_side: u16) -> Self {
         Self {
-            inner: InnerPool { address, ..Default::default() },
+            address: address.clone(),
             initial_ticks_per_side,
             sync_swap_with_sim: false,
+            data_loader,
+            ..Default::default()
         }
     }
 
     pub async fn initialize<T: Transport + Clone, N: Network>(
         &mut self,
         block_number: Option<BlockNumber>,
-        ws_provider: Arc<impl Provider<T, N>>,
+        ws_provider: Arc<impl Provider<T, N>>
     ) -> Result<(), AMMError> {
         tracing::info!(block_number = block_number, "loading old pool");
-        self.inner.populate_data(block_number, ws_provider.clone())
+        self.populate_data(block_number, ws_provider.clone())
             .await?;
         self.sync_ticks(block_number, ws_provider.clone()).await?;
         Ok(())
@@ -105,18 +100,18 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
         self.sync_swap_with_sim = sync_swap_with_sim;
     }
 
-    pub async fn get_uniswap_v3_tick_data_batch_request<P, T, N>(
+    pub async fn get_tick_data_batch_request<P, T, N>(
         &self,
         tick_start: i32,
         zero_for_one: bool,
         num_ticks: u16,
-        block_number: Option<u64>,
-        provider: Arc<P>,
+        block_number: Option<BlockNumber>,
+        provider: Arc<P>
     ) -> Result<(Vec<UniswapV3TickData>, U256), AMMError>
     where
         P: Provider<T, N>,
         T: Transport + Clone,
-        N: Network,
+        N: Network
     {
         let current_tick = I24::try_from(tick_start).map_err(|_| {
             AMMError::ABICodecError(alloy::dyn_abi::Error::InvalidPropertyDefinition(format!(
@@ -124,77 +119,63 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
                 tick_start
             )))
         })?;
-        let tick_spacing = I24::try_from(self.inner.tick_spacing).map_err(|_| {
+        let tick_spacing = I24::try_from(self.tick_spacing).map_err(|_| {
             AMMError::ABICodecError(alloy::dyn_abi::Error::InvalidPropertyDefinition(format!(
                 "Tick spacing out of range: {}",
-                self.inner.tick_spacing
+                self.tick_spacing
             )))
         })?;
-        let deployer = IGetUniswapV3TickDataBatchRequest::deploy_builder(
-            provider.clone(),
-            Address(self.inner.address),
-            zero_for_one,
-            current_tick,
-            num_ticks,
-            tick_spacing,
-        );
 
-        let data = match block_number {
-            Some(number) => deployer.block(number.into()).call_raw().await?,
-            None => deployer.call_raw().await?
-        };
+        let (tick_data, block_number) = self
+            .data_loader
+            .load_tick_data(
+                current_tick,
+                zero_for_one,
+                num_ticks,
+                tick_spacing,
+                block_number,
+                provider.clone()
+            )
+            .await?;
 
-        let result = TicksWithBlock::abi_decode(&data, true)?;
-
-        let tick_data: Vec<UniswapV3TickData> = result
-            .ticks
-            .iter()
-            .map(|tick| UniswapV3TickData {
-                initialized: tick.initialized,
-                tick: tick.tick.as_i32(),
-                liquidity_gross: tick.liquidityGross,
-                liquidity_net: tick.liquidityNet,
-            })
-            .collect();
-
-        Ok((tick_data, result.blockNumber))
+        Ok((tick_data, block_number))
     }
 
     pub async fn sync_ticks<T, N, P>(
         &mut self,
         block_number: Option<u64>,
-        provider: Arc<P>,
+        provider: Arc<P>
     ) -> Result<(), AMMError>
     where
         T: Transport + Clone,
         N: Network,
-        P: Provider<T, N>,
+        P: Provider<T, N>
     {
-        if !self.inner.data_is_populated() {
+        if !self.data_is_populated() {
             return Err(AMMError::PoolDataError);
         }
 
-        self.inner.ticks.clear();
-        self.inner.tick_bitmap.clear();
+        self.ticks.clear();
+        self.tick_bitmap.clear();
 
         let total_ticks_to_fetch = self.initial_ticks_per_side * 2;
         let mut remaining_ticks = total_ticks_to_fetch;
         //  +1 because the retrieve is gt start_tick, i.e. start one step back to
         // include the tick
-        let mut start_tick = (self.inner.tick / self.inner.tick_spacing) * self.inner.tick_spacing
-            - self.inner.tick_spacing * (self.initial_ticks_per_side + 1) as i32;
+        let mut start_tick = (self.tick / self.tick_spacing) * self.tick_spacing
+            - self.tick_spacing * (self.initial_ticks_per_side + 1) as i32;
 
         // Fetch ticks from left to right
         let mut fetched_ticks = Vec::new();
         while remaining_ticks > 0 {
             let ticks_to_fetch = remaining_ticks.min(MAX_TICKS_PER_REQUEST);
             let (mut batch_ticks, _) = self
-                .get_uniswap_v3_tick_data_batch_request(
+                .get_tick_data_batch_request(
                     start_tick,
                     false,
                     ticks_to_fetch,
                     block_number,
-                    provider.clone(),
+                    provider.clone()
                 )
                 .await?;
             batch_ticks.sort_by_key(|s| s.tick);
@@ -211,15 +192,15 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
             .into_iter()
             .filter(|tick| tick.initialized)
             .for_each(|tick| {
-                self.inner.ticks.insert(
+                self.ticks.insert(
                     tick.tick,
                     Info {
-                        initialized: tick.initialized,
+                        initialized:     tick.initialized,
                         liquidity_gross: tick.liquidity_gross,
-                        liquidity_net: tick.liquidity_net,
-                    },
+                        liquidity_net:   tick.liquidity_net
+                    }
                 );
-                self.inner.flip_tick(tick.tick, self.inner.tick_spacing);
+                self.flip_tick(tick.tick, self.tick_spacing);
             });
 
         Ok(())
@@ -249,13 +230,13 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
         &self,
         token_in: Address,
         amount_specified: I256,
-        sqrt_price_limit_x96: Option<U256>,
+        sqrt_price_limit_x96: Option<U256>
     ) -> Result<SwapResult, SwapSimulationError> {
         if amount_specified.is_zero() {
             return Err(SwapSimulationError::ZeroAmountSpecified);
         }
 
-        let zero_for_one = token_in == self.inner.token_a;
+        let zero_for_one = token_in == self.token_a;
         let exact_input = amount_specified.is_positive();
 
         let sqrt_price_limit_x96 = sqrt_price_limit_x96.unwrap_or(if zero_for_one {
@@ -265,19 +246,19 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
         });
 
         if (zero_for_one
-            && (sqrt_price_limit_x96 >= self.inner.sqrt_price || sqrt_price_limit_x96 <= MIN_SQRT_RATIO))
+            && (sqrt_price_limit_x96 >= self.sqrt_price || sqrt_price_limit_x96 <= MIN_SQRT_RATIO))
             || (!zero_for_one
-            && (sqrt_price_limit_x96 <= self.inner.sqrt_price
-            || sqrt_price_limit_x96 >= MAX_SQRT_RATIO))
+                && (sqrt_price_limit_x96 <= self.sqrt_price
+                    || sqrt_price_limit_x96 >= MAX_SQRT_RATIO))
         {
             return Err(SwapSimulationError::InvalidSqrtPriceLimit);
         }
 
         let mut amount_specified_remaining = amount_specified;
         let mut amount_calculated = I256::ZERO;
-        let mut sqrt_price_x_96 = self.inner.sqrt_price;
-        let mut tick = self.inner.tick;
-        let mut liquidity = self.inner.liquidity;
+        let mut sqrt_price_x_96 = self.sqrt_price;
+        let mut tick = self.tick;
+        let mut liquidity = self.liquidity;
 
         tracing::trace!(
             token_in = ?token_in,
@@ -299,10 +280,10 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
             let sqrt_price_start_x_96 = sqrt_price_x_96;
             let (tick_next, initialized) =
                 uniswap_v3_math::tick_bitmap::next_initialized_tick_within_one_word(
-                    &self.inner.tick_bitmap,
+                    &self.tick_bitmap,
                     tick,
-                    self.inner.tick_spacing,
-                    zero_for_one,
+                    self.tick_spacing,
+                    zero_for_one
                 )?;
 
             let tick_next = tick_next.clamp(MIN_TICK, MAX_TICK);
@@ -323,7 +304,7 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
                     target_sqrt_ratio,
                     liquidity,
                     amount_specified_remaining,
-                    self.inner.fee,
+                    self.fee
                 )?;
 
             sqrt_price_x_96 = new_sqrt_price_x_96;
@@ -339,7 +320,7 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
             if sqrt_price_x_96 == sqrt_price_next_x96 {
                 if initialized {
                     let liquidity_net =
-                        self.inner.ticks
+                        self.ticks
                             .get(&tick_next)
                             .map(|info| {
                                 if zero_for_one {
@@ -396,7 +377,7 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
         &self,
         token_in: Address,
         amount_specified: I256,
-        sqrt_price_limit_x96: Option<U256>,
+        sqrt_price_limit_x96: Option<U256>
     ) -> Result<(I256, I256), SwapSimulationError> {
         let swap_result = self._simulate_swap(token_in, amount_specified, sqrt_price_limit_x96)?;
         Ok((swap_result.amount0, swap_result.amount1))
@@ -406,7 +387,7 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
         &mut self,
         token_in: Address,
         amount_specified: I256,
-        sqrt_price_limit_x96: Option<U256>,
+        sqrt_price_limit_x96: Option<U256>
     ) -> Result<(I256, I256), SwapSimulationError> {
         let swap_result = self._simulate_swap(token_in, amount_specified, sqrt_price_limit_x96)?;
 
@@ -497,7 +478,7 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
         self.modify_position(
             burn_event.tickLower.as_i32(),
             burn_event.tickUpper.as_i32(),
-            -(burn_event.amount as i128),
+            -(burn_event.amount as i128)
         );
 
         tracing::debug!(?burn_event, address = ?self.address, sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "burn event");
@@ -511,7 +492,7 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
         self.modify_position(
             mint_event.tickLower.as_i32(),
             mint_event.tickUpper.as_i32(),
-            mint_event.amount as i128,
+            mint_event.amount as i128
         );
 
         tracing::debug!(?mint_event, address = ?self.address, sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "mint event");
@@ -530,71 +511,35 @@ impl<const AddressLen: usize> EnhancedUniswapV3Pool<AddressLen> {
 
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, Default)]
-struct InnerPool<const AddressLen: usize = 20> {
-    pub address: FixedBytes<AddressLen>,
-    pub token_a: Address,
-    pub token_a_decimals: u8,
-    pub token_b: Address,
-    pub token_b_decimals: u8,
-    pub liquidity: u128,
-    pub sqrt_price: U256,
-    pub fee: u32,
-    pub tick: i32,
-    pub tick_spacing: i32,
-    pub tick_bitmap: HashMap<i16, U256>,
-    pub ticks: HashMap<i32, Info>,
-}
-impl<const AddressLen: usize> InnerPool<AddressLen> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        address: FixedBytes<AddressLen>,
-        token_a: Address,
-        token_a_decimals: u8,
-        token_b: Address,
-        token_b_decimals: u8,
-        fee: u32,
-        liquidity: u128,
-        sqrt_price: U256,
-        tick: i32,
-        tick_spacing: i32,
-        tick_bitmap: HashMap<i16, U256>,
-        ticks: HashMap<i32, Info>,
-    ) -> Self {
-        Self {
-            address: address.into(),
-            token_a,
-            token_a_decimals,
-            token_b,
-            token_b_decimals,
-            fee,
-            liquidity,
-            sqrt_price,
-            tick,
-            tick_spacing,
-            tick_bitmap,
-            ticks,
-        }
-    }
 
     pub async fn populate_data<T, N, P>(
         &mut self,
         block_number: Option<u64>,
-        provider: Arc<P>,
+        provider: Arc<P>
     ) -> Result<(), AMMError>
     where
         T: Transport + Clone,
         N: Network,
-        P: Provider<T, N>,
+        P: Provider<T, N>
     {
+        let pool_data = self
+            .data_loader
+            .load_pool_data(block_number, provider)
+            .await?;
+
+        self.token_a = pool_data.tokenA;
+        self.token_a_decimals = pool_data.tokenADecimals;
+        self.token_b = pool_data.tokenB;
+        self.token_b_decimals = pool_data.tokenBDecimals;
+        self.liquidity = pool_data.liquidity;
+        self.sqrt_price = U256::from(pool_data.sqrtPrice);
+        self.tick = pool_data.tick.as_i32();
+        self.tick_spacing = pool_data.tickSpacing.as_i32();
+        let mut bytes = [0u8; 4];
+        bytes[..3].copy_from_slice(&pool_data.fee.to_le_bytes::<3>());
+        self.fee = u32::from_le_bytes(bytes);
+        self.liquidity_net = pool_data.liquidityNet;
         Ok(())
-    }
-
-
-    pub fn fee(&self) -> u32 {
-        self.fee
     }
 
     pub fn data_is_populated(&self) -> bool {
@@ -681,7 +626,10 @@ impl<const AddressLen: usize> InnerPool<AddressLen> {
         let (word_pos, bit_pos) = uniswap_v3_math::tick_bitmap::position(tick / tick_spacing);
         let mask = U256::from(1) << bit_pos;
 
-        self.tick_bitmap.entry(word_pos).and_modify(|word| *word ^= mask).or_insert(mask);
+        self.tick_bitmap
+            .entry(word_pos)
+            .and_modify(|word| *word ^= mask)
+            .or_insert(mask);
     }
 
     pub fn get_token_out(&self, token_in: Address) -> Address {
@@ -696,6 +644,7 @@ impl<const AddressLen: usize> InnerPool<AddressLen> {
         uniswap_v3_math::tick_bitmap::position(compressed)
     }
 }
+
 #[derive(Error, Debug)]
 pub enum SwapSimulationError {
     #[error("Could not get next tick")]
@@ -707,13 +656,11 @@ pub enum SwapSimulationError {
     #[error("Invalid sqrt price limit")]
     InvalidSqrtPriceLimit,
     #[error("Amount specified must be non-zero")]
-    ZeroAmountSpecified,
+    ZeroAmountSpecified
 }
 
 #[cfg(test)]
 mod test {
-    use std::{str::FromStr, sync::Arc};
-
     use alloy::{
         hex,
         network::Ethereum,
@@ -722,9 +669,10 @@ mod test {
         rpc::client::ClientBuilder,
         transports::{
             http::{Client, Http},
-            layers::{RetryBackoffLayer, RetryBackoffService},
-        },
+            layers::{RetryBackoffLayer, RetryBackoffService}
+        }
     };
+    use std::{str::FromStr, sync::Arc};
 
     use super::*;
 
@@ -743,10 +691,11 @@ mod test {
     async fn setup_pool(
         provider: Arc<RootProvider<RetryBackoffService<Http<Client>>, Ethereum>>,
         block_number: u64,
-        ticks_per_side: u16,
-    ) -> EnhancedUniswapV3Pool {
+        ticks_per_side: u16
+    ) -> EnhancedUniswapPool<DataLoader<Address>, Address> {
         let address = address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640");
-        let mut pool = EnhancedUniswapV3Pool::new(address, ticks_per_side);
+        let mut pool =
+            EnhancedUniswapPool::new(address.into(), DataLoader::new(address), ticks_per_side);
         pool.populate_data(Some(block_number), provider.clone())
             .await
             .unwrap();

@@ -4,15 +4,6 @@ use std::{
     task::Poll
 };
 
-use alloy::primitives::{Address, BlockNumber, B256};
-use angstrom_types::primitive::NewInitializedPool;
-use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
-use futures::{Future, StreamExt};
-use matching_engine::cfmm::uniswap::{
-    pool_manager::UniswapPoolManager, pool_providers::PoolManagerProvider
-};
-use tokio::runtime::Handle;
-
 use super::{
     sim::SimValidation,
     state::{
@@ -25,6 +16,15 @@ use crate::{
     common::lru_db::BlockStateProviderFactory,
     order::{state::account::UserAccountProcessor, OrderValidation}
 };
+use alloy::primitives::{Address, BlockNumber, B256};
+use angstrom_types::primitive::{NewInitializedPool, PoolId};
+use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
+use futures::{Future, StreamExt};
+use matching_engine::cfmm::uniswap::pool_data_loader::DataLoader;
+use matching_engine::cfmm::uniswap::{
+    pool_manager::UniswapPoolManager, pool_providers::PoolManagerProvider
+};
+use tokio::runtime::Handle;
 
 pub struct OrderValidator<DB, Pools, Fetch, Provider> {
     sim:          SimValidation<DB>,
@@ -45,7 +45,7 @@ where
         block_number: Arc<AtomicU64>,
         pools: Pools,
         fetch: Fetch,
-        pool_manager: UniswapPoolManager<Provider>,
+        pool_manager: UniswapPoolManager<Provider, DataLoader<PoolId>, PoolId>,
         thread_pool: KeySplitThreadpool<
             UserAddress,
             Pin<Box<dyn Future<Output = ()> + Send>>,

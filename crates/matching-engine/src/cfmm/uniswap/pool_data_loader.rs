@@ -1,4 +1,4 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, future::Future, sync::Arc};
 
 use alloy::{
     primitives::{aliases::I24, Address, U256},
@@ -8,8 +8,8 @@ use alloy::{
     transports::Transport
 };
 use amms::errors::AMMError;
+use angstrom_types::primitive::PoolId;
 use reth_primitives::BlockNumber;
-
 
 sol! {
     #[allow(missing_docs)]
@@ -25,8 +25,6 @@ sol! {
     "src/cfmm/uniswap/GetUniswapV3PoolDataBatchRequest.json"
 }
 
-
-
 sol! {
     struct PoolData {
         address tokenA;
@@ -40,12 +38,6 @@ sol! {
         uint24 fee;
         int128 liquidityNet;
     }
-
-    struct PoolDataWithBlock {
-        PoolData[] pools;
-        uint256 blockNumber;
-    }
-
 
     struct TickData {
         bool initialized;
@@ -69,12 +61,12 @@ pub struct UniswapV3TickData {
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct DataLoader<T> {
-    address: T
+pub struct DataLoader<A> {
+    address: A
 }
 
-impl<T: Debug + Clone + Default> DataLoader<T> {
-    pub fn new(address: T) -> Self {
+impl<A: Debug + Clone + Default> DataLoader<A> {
+    pub fn new(address: A) -> Self {
         DataLoader { address }
     }
 }
@@ -88,13 +80,13 @@ pub trait PoolDataLoader {
         tick_spacing: I24,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
-    ) -> impl std::future::Future<Output = Result<(Vec<UniswapV3TickData>, U256), AMMError>> + Send;
+    ) -> impl Future<Output = Result<(Vec<UniswapV3TickData>, U256), AMMError>> + Send;
 
     fn load_pool_data<T, N, P>(
         &self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
-    ) -> impl std::future::Future<Output = Result<PoolData, AMMError>> + Send
+    ) -> impl Future<Output = Result<PoolData, AMMError>> + Send
     where
         T: Transport + Clone,
         N: Network,
@@ -150,33 +142,41 @@ impl PoolDataLoader for DataLoader<Address> {
         N: Network,
         P: Provider<T, N>
     {
-        let deployer =
-            IGetUniswapV3PoolDataBatchRequest::deploy_builder(provider, vec![self.address]);
+        let deployer = IGetUniswapV3PoolDataBatchRequest::deploy_builder(provider, self.address);
         let res = if let Some(block_number) = block_number {
             deployer.block(block_number.into()).call_raw().await?
         } else {
             deployer.call_raw().await?
         };
-        println!("Address: {:?}", self.address);
-        println!("Raw bytes from response: {:?}", res);
-        let pool_data: PoolDataWithBlock = PoolDataWithBlock::abi_decode(&res, true)?;
 
-        for pool in &pool_data.pools {
-            println!(
-                "PoolData: tokenA: {:?}, tokenADecimals: {:?}, tokenB: {:?}, tokenBDecimals: {:?}, liquidity: {:?}, sqrtPrice: {:?}, tick: {:?}, tickSpacing: {:?}, fee: {:?}, liquidityNet: {:?}",
-                pool.tokenA,
-                pool.tokenADecimals,
-                pool.tokenB,
-                pool.tokenBDecimals,
-                pool.liquidity,
-                pool.sqrtPrice,
-                pool.tick,
-                pool.tickSpacing,
-                pool.fee,
-                pool.liquidityNet
-            );
-        }
-        println!("Block Number: {:?}", pool_data.blockNumber);
-        Ok(pool_data.pools[0].clone())
+        let pool_data = PoolData::abi_decode(&res, true)?;
+        Ok(pool_data)
+    }
+}
+
+impl PoolDataLoader for DataLoader<PoolId> {
+    async fn load_tick_data<P: Provider<T, N>, T: Transport + Clone, N: Network>(
+        &self,
+        current_tick: I24,
+        zero_for_one: bool,
+        num_ticks: u16,
+        tick_spacing: I24,
+        block_number: Option<BlockNumber>,
+        provider: Arc<P>
+    ) -> Result<(Vec<UniswapV3TickData>, U256), AMMError> {
+        todo!()
+    }
+
+    async fn load_pool_data<T, N, P>(
+        &self,
+        block_number: Option<BlockNumber>,
+        provider: Arc<P>
+    ) -> Result<PoolData, AMMError>
+    where
+        T: Transport + Clone,
+        N: Network,
+        P: Provider<T, N>
+    {
+        todo!()
     }
 }

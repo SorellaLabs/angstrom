@@ -106,7 +106,7 @@ fn build_struct_impl(name: &Ident, generics: &Generics, s: &DataStruct) -> Token
     quote! (
       #[automatically_derived]
       impl #impl_gen pade::PadeDecode for #name #ty_gen #where_clause {
-          fn pade_decode(buf: &mut &[u8], var: Option<u8>) -> Result<Self, ()> {
+          fn pade_decode(buf: &mut &[u8], var: Option<u8>) -> Result<Self, pade::PadeDecodeError> {
               let mut bitmap_bits = 0usize;
               #(
                   bitmap_bits +=
@@ -122,7 +122,7 @@ fn build_struct_impl(name: &Ident, generics: &Generics, s: &DataStruct) -> Token
               #struct_building
           }
 
-            fn pade_decode_with_width(buf: &mut &[u8], width: usize, var: Option<u8>) -> Result<Self, ()>
+            fn pade_decode_with_width(buf: &mut &[u8], width: usize, var: Option<u8>) -> Result<Self, pade::PadeDecodeError>
             where
                 Self: Sized
             {
@@ -201,7 +201,7 @@ fn build_enum_impl(name: &Ident, generics: &Generics, e: &DataEnum) -> TokenStre
     quote! {
         #[automatically_derived]
         impl #impl_gen pade::PadeDecode for #name #ty_gen #where_clause {
-            fn pade_decode(buf: &mut &[u8], var: Option<u8>) -> Result<Self, ()>
+            fn pade_decode(buf: &mut &[u8], var: Option<u8>) -> Result<Self, pade::PadeDecodeError>
             where
                 Self: Sized
             {
@@ -214,12 +214,12 @@ fn build_enum_impl(name: &Ident, generics: &Generics, e: &DataEnum) -> TokenStre
 
                 match variant {
                     #(#branches)*
-                    _ => return Err(())
+                    _ => return Err(pade::PadeDecodeError::InvalidEnumVariant(variant))
                 }
 
             }
 
-            fn pade_decode_with_width(buf: &mut &[u8], width: usize, var: Option<u8>) -> Result<Self, ()>
+            fn pade_decode_with_width(buf: &mut &[u8], width: usize, var: Option<u8>) -> Result<Self, pade::PadeDecodeError>
             where
                 Self: Sized
             {

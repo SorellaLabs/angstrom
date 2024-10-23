@@ -9,6 +9,7 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
+thiserror.workspace = true
 bitvec = "1.0.1"
 pade-macro.workspace = true
 bytes = "1.7.2"

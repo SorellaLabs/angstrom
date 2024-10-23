@@ -1,7 +1,6 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    default::Default,
     fs::File,
     io::{self, Read, Write}
 };
@@ -42,7 +41,7 @@ impl WeightedRoundRobin {
             let mut contents = String::new();
             if file.read_to_string(&mut contents).is_ok() {
                 if let Ok(state) = serde_json::from_str(&contents) {
-                    return state;
+                    return state
                 }
             }
         }
@@ -133,7 +132,7 @@ impl WeightedRoundRobin {
         // will not have seen the reorg, thus would not have executed the extra rounds
         // after this if statement
         if block_number <= self.block_number {
-            return self.last_proposer;
+            return self.last_proposer()
         }
 
         let rounds_to_catchup = (block_number - self.block_number) as usize;
@@ -148,11 +147,15 @@ impl WeightedRoundRobin {
         leader
     }
 
+    // tests
+    #[allow(dead_code)]
     fn remove_validator(&mut self, peer_id: &PeerId) {
         let validator = AngstromValidator::new(*peer_id, 0);
         self.validators.remove(&validator);
     }
 
+    // tests
+    #[allow(dead_code)]
     fn add_validator(&mut self, peer_id: PeerId, voting_power: u64) {
         let mut new_validator = AngstromValidator::new(peer_id, voting_power);
         let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power).sum();
@@ -208,9 +211,9 @@ mod tests {
             ("Charlie".to_string(), PeerId::random())
         ]);
         let validators = vec![
-            AngstromValidator::new(peers["Alice"].clone(), 100),
-            AngstromValidator::new(peers["Bob"].clone(), 200),
-            AngstromValidator::new(peers["Charlie"].clone(), 300),
+            AngstromValidator::new(peers["Alice"], 100),
+            AngstromValidator::new(peers["Bob"], 200),
+            AngstromValidator::new(peers["Charlie"], 300),
         ];
         let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
@@ -251,8 +254,8 @@ mod tests {
             ("Charlie".to_string(), PeerId::random())
         ]);
         let validators = vec![
-            AngstromValidator::new(peers["Alice"].clone(), 100),
-            AngstromValidator::new(peers["Bob"].clone(), 200),
+            AngstromValidator::new(peers["Alice"], 100),
+            AngstromValidator::new(peers["Bob"], 200),
         ];
         let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
@@ -273,7 +276,7 @@ mod tests {
         let initial_stats = simulate_rounds(&mut algo, rounds, 1);
         assert_eq!(initial_stats.len(), 2);
 
-        algo.add_validator(peers["Charlie"].clone(), 300);
+        algo.add_validator(peers["Charlie"], 300);
 
         let after_add_stats = simulate_rounds(&mut algo, rounds, 1001);
         assert_eq!(after_add_stats.len(), 3);
@@ -297,15 +300,15 @@ mod tests {
             ("Charlie".to_string(), PeerId::random())
         ]);
         let validators = vec![
-            AngstromValidator::new(peers["Alice"].clone(), 100),
-            AngstromValidator::new(peers["Bob"].clone(), 200),
-            AngstromValidator::new(peers["Charlie"].clone(), 300),
+            AngstromValidator::new(peers["Alice"], 100),
+            AngstromValidator::new(peers["Bob"], 200),
+            AngstromValidator::new(peers["Charlie"], 300),
         ];
-        let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
+        let algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
         algo.save_state().unwrap();
 
-        let mut loaded_algo = WeightedRoundRobin::new(vec![], BlockNumber::default());
+        let loaded_algo = WeightedRoundRobin::new(vec![], BlockNumber::default());
 
         assert_eq!(algo.validators, loaded_algo.validators);
         assert_eq!(algo.new_joiner_penalty_factor, loaded_algo.new_joiner_penalty_factor);

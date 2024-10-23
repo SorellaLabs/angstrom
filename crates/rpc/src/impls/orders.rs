@@ -67,7 +67,7 @@ where
             .recover_signer_full_public_key(request.hash)
             .map(|s| Address::from_raw_public_key(&*s));
         if sender.is_err() {
-            return Err(InvalidSignature.into());
+            return Err(InvalidSignature.into())
         }
         Ok(self.pool.cancel_order(sender.unwrap(), request.hash).await)
     }
@@ -83,7 +83,7 @@ where
         self.task_spawner.spawn(Box::pin(async move {
             while let Ok(order) = subscription.recv().await {
                 if sink.is_closed() {
-                    break;
+                    break
                 }
 
                 let msg = Self::return_order(&kind, order);
@@ -91,7 +91,7 @@ where
                     match SubscriptionMessage::from_json(&result) {
                         Ok(message) => {
                             if sink.send(message).await.is_err() {
-                                break;
+                                break
                             }
                         }
                         Err(e) => {
@@ -254,12 +254,12 @@ mod tests {
         let pool_handle = MockOrderPoolHandle { sender: to_pool };
         let task_executor = TokioTaskExecutor::default();
         let api = OrderApi::new(pool_handle.clone(), task_executor);
-        let handle = OrderApiTestHandle { from_api: pool_rx };
+        let handle = OrderApiTestHandle { _from_api: pool_rx };
         (handle, api)
     }
 
     struct OrderApiTestHandle {
-        from_api: UnboundedReceiver<OrderCommand>
+        _from_api: UnboundedReceiver<OrderCommand>
     }
 
     #[derive(Clone)]
@@ -273,8 +273,8 @@ mod tests {
             origin: OrderOrigin,
             order: AllOrders
         ) -> impl Future<Output = bool> + Send {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            let res = self
+            let (tx, _) = tokio::sync::oneshot::channel();
+            let _ = self
                 .sender
                 .send(OrderCommand::NewOrder(origin, order, tx))
                 .is_ok();
@@ -290,8 +290,8 @@ mod tests {
             from: Address,
             order_hash: B256
         ) -> impl Future<Output = bool> + Send {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            let res = self
+            let (tx, _) = tokio::sync::oneshot::channel();
+            let _ = self
                 .sender
                 .send(OrderCommand::CancelOrder(from, order_hash, tx))
                 .is_ok();

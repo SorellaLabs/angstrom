@@ -1,18 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
-    marker::PhantomData,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
     time::Duration
 };
 
-use alloy::{
-    primitives::{BlockNumber, Bytes},
-    providers::{network::Network, Provider},
-    transports::Transport
-};
+use alloy::primitives::BlockNumber;
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage};
 use angstrom_types::{
@@ -26,7 +21,7 @@ use angstrom_types::{
     }
 };
 use angstrom_utils::timer::async_time_fn;
-use futures::{future::BoxFuture, Future, Stream, StreamExt};
+use futures::{future::BoxFuture, Future, Stream};
 use itertools::Itertools;
 use matching_engine::MatchingManager;
 use order_pool::order_storage::OrderStorage;
@@ -94,7 +89,7 @@ impl RoundStateMachine {
     }
 
     pub fn has_quorum(&self, voters: usize) -> bool {
-        voters >= (self.validators.len() * 2) / 3 + 1
+        voters > (self.validators.len() * 2) / 3
     }
 
     pub fn reset_round(&mut self, block: BlockNumber, leader: PeerId) {
@@ -128,11 +123,11 @@ impl RoundStateMachine {
             StromConsensusEvent::PreProposal(_, pre_proposal) => {
                 // we do not want to allow another node to push us to transition
                 if !matches!(self.current_state, ConsensusState::BidAggregation(_)) {
-                    return None;
+                    return None
                 }
 
                 if !pre_proposal.is_valid() {
-                    return None;
+                    return None
                 }
 
                 if !i_am_leader {
@@ -154,12 +149,12 @@ impl RoundStateMachine {
                     {
                         // send the quorum pre_proposal to the leader
                         return Some((
-                            Some(self.round_leader.clone()),
+                            Some(self.round_leader),
                             StromMessage::PrePropose(merged_pre_proposal)
-                        ));
+                        ))
                     }
 
-                    return Some((None, StromMessage::PrePropose(merged_pre_proposal)));
+                    return Some((None, StromMessage::PrePropose(merged_pre_proposal)))
                 }
 
                 // Leader path
@@ -175,7 +170,7 @@ impl RoundStateMachine {
                         proposal: None,
                         pre_proposals: pre_proposals.clone()
                     }));
-                    return None;
+                    return None
                 }
             }
             StromConsensusEvent::Proposal(msg_sender, proposal) => {
@@ -313,7 +308,7 @@ impl RoundStateMachine {
                 // someone already proposed and we are not a leader
                 if finalization.proposal.is_some() {
                     // TODO: use this opportunity to trigger the proposal validation
-                    return new_state;
+                    return new_state
                 }
 
                 let (proposal_result, timer) = async_time_fn(|| async {
@@ -334,7 +329,7 @@ impl RoundStateMachine {
                         finalization.proposal = Some(proposal.clone());
                         // TODO: use the actual pools
                         let pools = HashMap::new();
-                        let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
+                        let _bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
                     }
                     Err(err) => {
                         // Handle the error from build_proposal
@@ -368,7 +363,7 @@ impl Stream for RoundStateMachine {
             return match future.as_mut().poll(cx) {
                 Poll::Ready(new_state) => Poll::Ready(Some(new_state)),
                 Poll::Pending => Poll::Pending
-            };
+            }
         }
 
         if let Some(timer) = &mut this.initial_state_timer {

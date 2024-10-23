@@ -1,49 +1,21 @@
-use std::{
-    borrow::BorrowMut,
-    collections::{HashMap, HashSet},
-    marker::PhantomData,
-    pin::Pin,
-    sync::{Arc, Mutex},
-    task::{Context, Poll},
-    thread::current
-};
+use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 
 use alloy::{
-    network::Network,
-    primitives::{bloom, BlockNumber},
-    providers::Provider,
-    transports::Transport
+    network::Network, primitives::BlockNumber, providers::Provider, transports::Transport
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
-use angstrom_network::{manager::StromConsensusEvent, Peer, StromMessage, StromNetworkHandle};
-use angstrom_types::{
-    consensus::{PreProposal, Proposal},
-    contract_payloads::angstrom::TopOfBlockOrder,
-    orders::PoolSolution,
-    primitive::PeerId
-};
-use futures::{pin_mut, FutureExt, Stream, StreamExt};
-use matching_engine::{
-    cfmm::uniswap::pool_providers::provider_adapter::ProviderAdapter, MatchingManager
-};
-use order_pool::{order_storage::OrderStorage, timer::async_time_fn};
+use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};
+use futures::StreamExt;
+use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
-use reth_tasks::TaskSpawner;
-use serde::__private::ser::FlatMapSerializeStructVariantAsMapValue;
-use serde_json::error::Category::Data;
-use tokio::{
-    select,
-    sync::mpsc::{channel, unbounded_channel, Receiver, Sender, UnboundedReceiver},
-    task::{JoinHandle, JoinSet}
-};
-use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
-use tracing::{error, warn};
+use tokio::select;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     leader_selection::WeightedRoundRobin,
     round::{BidAggregation, BidSubmission, ConsensusState, Finalization, RoundStateMachine},
-    AngstromValidator, ConsensusListener, ConsensusMessage, ConsensusUpdater, Signer
+    AngstromValidator, Signer
 };
 
 pub struct ConsensusManager<P, TR, N> {
@@ -56,7 +28,7 @@ pub struct ConsensusManager<P, TR, N> {
 
     /// Track broadcasted messages to avoid rebroadcasting
     broadcasted_messages: HashSet<StromConsensusEvent>,
-    provider:             P,
+    _provider:            P,
     _phantom:             PhantomData<(TR, N)>
 }
 
@@ -88,7 +60,7 @@ where
         validators: Vec<AngstromValidator>,
         order_storage: Arc<OrderStorage>,
         current_height: BlockNumber,
-        provider: P
+        _provider: P
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
@@ -109,7 +81,7 @@ where
             network,
             canonical_block_stream: wrapped_broadcast_stream,
             broadcasted_messages: HashSet::new(),
-            provider,
+            _provider,
             _phantom: PhantomData
         }
     }
@@ -134,7 +106,7 @@ where
                 current_height=%self.current_height,
                 "ignoring event for wrong block",
             );
-            return;
+            return
         }
 
         if self.state_transition.my_id() == event.payload_source() {
@@ -144,7 +116,7 @@ where
                 message_type=%event.message_type(),
                 "ignoring event that we sent to node",
             );
-            return;
+            return
         }
 
         if !self.broadcasted_messages.contains(&event) {
@@ -165,7 +137,7 @@ where
         match new_stat {
             // means we transitioned from commit phase to bid submission.
             // nothing much to do here. we just wait sometime to accumulate orders
-            ConsensusState::BidSubmission(BidSubmission { pre_proposals, .. }) => {}
+            ConsensusState::BidSubmission(BidSubmission { .. }) => {}
             // means we transitioned from bid submission to aggregation, therefore we broadcast our
             // pre-proposal to the network
             ConsensusState::BidAggregation(BidAggregation { pre_proposals, .. }) => {

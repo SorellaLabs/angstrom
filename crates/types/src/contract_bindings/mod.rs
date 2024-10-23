@@ -1,9 +1,9 @@
-pub mod pool_manager {
+pub mod mintable_mock_erc_20 {
     alloy::sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        PoolManager,
-        "../../contracts/out/PoolManager.sol/PoolManager.json"
+        MintableMockERC20,
+        "../../contracts/out/MintableMockERC20.sol/MintableMockERC20.json"
     );
 }
 pub mod mock_rewards_manager {
@@ -14,12 +14,12 @@ pub mod mock_rewards_manager {
         "../../contracts/out/MockRewardsManager.sol/MockRewardsManager.json"
     );
 }
-pub mod angstrom {
+pub mod pool_manager {
     alloy::sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        Angstrom,
-        "../../contracts/out/Angstrom.sol/Angstrom.json"
+        PoolManager,
+        "../../contracts/out/PoolManager.sol/PoolManager.json"
     );
 }
 pub mod pool_gate {
@@ -30,11 +30,11 @@ pub mod pool_gate {
         "../../contracts/out/PoolGate.sol/PoolGate.json"
     );
 }
-pub mod mintable_mock_erc_20 {
+pub mod angstrom {
     alloy::sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        MintableMockERC20,
-        "../../contracts/out/MintableMockERC20.sol/MintableMockERC20.json"
+        Angstrom,
+        "../../contracts/out/Angstrom.sol/Angstrom.json"
     );
 }

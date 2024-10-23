@@ -108,21 +108,18 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
             OrderValidation::Searcher(tx, order, origin) => {
                 let mut results = self.handle_regular_order(order, block, false);
                 if let OrderValidationResults::Valid(ref mut order_with_storage) = results {
-                        let tob_order = order_with_storage
-                            .clone()
-                            .try_map_inner(|inner| {
-                                let AllOrders::TOB(order) = inner else {
-                                    eyre::bail!("unreachable")
-                                };
-                                Ok(order)
-                            })
-                            .expect("should be unreachable");
-                        let pool_address = order_with_storage.pool_id;
-                        let market_snapshot =
-                            self.pool_manager.get_market_snapshot(pool_address).unwrap();
-                        let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();
-                        order_with_storage.tob_reward = rewards.total_reward;
-
+                    let tob_order = order_with_storage
+                        .clone()
+                        .try_map_inner(|inner| {
+                            let AllOrders::TOB(order) = inner else { eyre::bail!("unreachable") };
+                            Ok(order)
+                        })
+                        .expect("should be unreachable");
+                    let pool_address = order_with_storage.pool_id;
+                    let market_snapshot =
+                        self.pool_manager.get_market_snapshot(pool_address).unwrap();
+                    let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();
+                    order_with_storage.tob_reward = rewards.total_reward;
                 }
 
                 let _ = tx.send(results);

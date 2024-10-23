@@ -1,27 +1,32 @@
-use std::{future::Future, sync::Arc};
+use std::{collections::HashMap, future::Future, sync::Arc};
 
 use alloy::{
-    primitives::{aliases::I24, Address, BlockNumber, U256},
+    primitives::{
+        address,
+        aliases::{I24, U24},
+        Address, BlockNumber, U256
+    },
     providers::{Network, Provider},
     sol,
     sol_types::SolType,
     transports::Transport
 };
 use amms::errors::AMMError;
-use angstrom_types::primitive::PoolId;
+use angstrom_types::primitive::{PoolId, PoolKey};
+use once_cell::sync::Lazy;
 
 sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
     IGetUniswapV3TickDataBatchRequest,
-    "src/cfmm/uniswap/GetUniswapV3TickDataBatchRequest.json"
+    "src/cfmm/uniswap/GetUniswapV3TickData.json"
 }
 
 sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
     IGetUniswapV3PoolDataBatchRequest,
-    "src/cfmm/uniswap/GetUniswapV3PoolDataBatchRequest.json"
+    "src/cfmm/uniswap/GetUniswapV3PoolData.json"
 }
 
 sol! {
@@ -156,6 +161,25 @@ impl PoolDataLoader<Address> for DataLoader<Address> {
 
         let pool_data = PoolData::abi_decode(&res, true)?;
         Ok(pool_data)
+    }
+}
+
+static V4_POOL_TABLE: Lazy<HashMap<PoolId, PoolKey>> = Lazy::new(|| {
+    HashMap::from([(
+        PoolId::default(),
+        PoolKey {
+            currency0:   address!("0000000000000000000000000000000000000000"),
+            currency1:   address!("0000000000000000000000000000000000000000"),
+            fee:         U24::try_from(3000).unwrap(),
+            tickSpacing: I24::try_from(60).unwrap(),
+            hooks:       address!("0000000000000000000000000000000000000000")
+        }
+    )])
+});
+
+impl DataLoader<PoolId> {
+    fn get_pool(&self, address: &PoolId) -> PoolKey {
+        V4_POOL_TABLE.get(address).unwrap().clone()
     }
 }
 

@@ -76,8 +76,7 @@ impl RoundStateMachine {
             transition_future: None,
             initial_state_timer: Some(timer),
 
-            waker: None /* provider,
-                         * _phantom: PhantomData, */
+            waker: None
         }
     }
 
@@ -334,6 +333,7 @@ impl RoundStateMachine {
                         finalization.proposal = Some(proposal.clone());
                         // TODO: use the actual pools
                         let pools = HashMap::new();
+
                         let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
                     }
                     Err(err) => {

@@ -1,5 +1,7 @@
 use std::{
     collections::HashMap,
+    fmt::Debug,
+    hash::Hash,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc
@@ -8,17 +10,16 @@ use std::{
 
 use alloy::{
     primitives::{Address, BlockNumber},
-    rpc::types::eth::{Block, Filter}
+    rpc::types::{eth::Filter, Block}
 };
-use amms::{amm::AutomatedMarketMaker, errors::EventLogError};
+use amms::errors::EventLogError;
 use angstrom_types::matching::{
     uniswap::{LiqRange, PoolSnapshot},
     SqrtPriceX96
 };
 use arraydeque::ArrayDeque;
 use eyre::Error;
-use futures::StreamExt;
-use futures_util::stream::BoxStream;
+use futures_util::{stream::BoxStream, StreamExt};
 use itertools::Itertools;
 use reth_primitives::Log;
 use thiserror::Error;
@@ -31,26 +32,34 @@ use tokio::{
 };
 
 use super::pool::SwapSimulationError;
-use crate::cfmm::uniswap::{pool::EnhancedUniswapV3Pool, pool_providers::PoolManagerProvider};
+use crate::cfmm::uniswap::{
+    pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader,
+    pool_providers::PoolManagerProvider
+};
 
-pub type StateChangeCache = HashMap<Address, ArrayDeque<StateChange, 150>>;
+pub type StateChangeCache<Loader, A> = HashMap<A, ArrayDeque<StateChange<Loader, A>, 150>>;
 
 #[derive(Default)]
-pub struct UniswapPoolManager<P> {
-    pools:               Arc<HashMap<Address, RwLock<EnhancedUniswapV3Pool>>>,
+pub struct UniswapPoolManager<P, Loader: PoolDataLoader<A>, A = Address>
+where
+    A: Debug + Copy
+{
+    pools:               Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>>,
     latest_synced_block: u64,
     state_change_buffer: usize,
-    state_change_cache:  Arc<RwLock<StateChangeCache>>,
+    state_change_cache:  Arc<RwLock<StateChangeCache<Loader, A>>>,
     provider:            Arc<P>,
     sync_started:        AtomicBool
 }
 
-impl<P> UniswapPoolManager<P>
+impl<P, Loader, A> UniswapPoolManager<P, Loader, A>
 where
+    A: Eq + Hash + Debug + Default + Copy + Sync + Send + 'static,
+    Loader: PoolDataLoader<A> + Default + Clone + Send + Sync + 'static,
     P: PoolManagerProvider + Send + Sync + 'static
 {
     pub fn new(
-        pools: Vec<EnhancedUniswapV3Pool>,
+        pools: Vec<EnhancedUniswapPool<Loader, A>>,
         latest_synced_block: BlockNumber,
         state_change_buffer: usize,
         provider: Arc<P>
@@ -71,23 +80,23 @@ where
 
     pub fn blocking_pool(
         &self,
-        address: &Address
-    ) -> Option<RwLockReadGuard<'_, EnhancedUniswapV3Pool>> {
-        self.pools.get(address).map(|pool| pool.blocking_read())
+        address: &A
+    ) -> Option<RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>> {
+        self.pools.get(&address).map(|pool| pool.blocking_read())
     }
 
     pub async fn pool_mut(
         &self,
-        address: &Address
-    ) -> Option<RwLockWriteGuard<'_, EnhancedUniswapV3Pool>> {
+        address: &A
+    ) -> Option<RwLockWriteGuard<'_, EnhancedUniswapPool<Loader, A>>> {
         let pool = self.pools.get(address)?;
         Some(pool.write().await)
     }
 
     pub async fn pool(
         &self,
-        address: &Address
-    ) -> Option<RwLockReadGuard<'_, EnhancedUniswapV3Pool>> {
+        address: &A
+    ) -> Option<RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>> {
         let pool = self.pools.get(address)?;
         Some(pool.read().await)
     }
@@ -104,7 +113,7 @@ where
     pub async fn subscribe_state_changes(
         &self
     ) -> Result<
-        (Receiver<(Address, BlockNumber)>, JoinHandle<Result<(), PoolManagerError>>),
+        (Receiver<(A, BlockNumber)>, JoinHandle<Result<(), PoolManagerError>>),
         PoolManagerError
     > {
         if self
@@ -116,7 +125,7 @@ where
         }
 
         let (pool_updated_tx, pool_updated_rx) =
-            tokio::sync::mpsc::channel(self.state_change_buffer);
+            tokio::sync::mpsc::channel::<(A, BlockNumber)>(self.state_change_buffer);
 
         let updated_pool_handle = self.handle_state_changes(Some(pool_updated_tx)).await?;
 
@@ -142,7 +151,7 @@ where
 
     async fn handle_state_changes(
         &self,
-        pool_updated_tx: Option<Sender<(Address, BlockNumber)>>
+        pool_updated_tx: Option<Sender<(A, BlockNumber)>>
     ) -> Result<JoinHandle<Result<(), PoolManagerError>>, PoolManagerError> {
         let mut last_synced_block = self.latest_synced_block;
 
@@ -188,10 +197,14 @@ where
                     )
                     .await?;
 
-                let logs_by_address = logs
-                    .into_iter()
-                    .map(|log| (log.address, log))
-                    .into_group_map();
+                // TODO! fix it somehow ehre
+                // let logs_by_address = logs
+                //     .into_iter()
+                //     .map(|log| (log.address.into(), log))
+                //     .into_group_map();
+
+                // TODO: this might be a problem
+                let logs_by_address: HashMap<A, Vec<Log>> = HashMap::new();
 
                 for (addr, logs) in logs_by_address {
                     if logs.is_empty() {
@@ -231,8 +244,8 @@ where
     /// Unwinds the state changes cache for every block from the most recent
     /// state change cache back to the block to unwind -1.
     fn unwind_state_changes(
-        pool: &mut EnhancedUniswapV3Pool,
-        state_change_cache: &mut StateChangeCache,
+        pool: &mut EnhancedUniswapPool<Loader, A>,
+        state_change_cache: &mut StateChangeCache<Loader, A>,
         block_to_unwind: u64
     ) -> Result<(), PoolManagerError> {
         if let Some(cache) = state_change_cache.get_mut(&pool.address()) {
@@ -269,9 +282,9 @@ where
     }
 
     fn add_state_change_to_cache(
-        state_change_cache: &mut StateChangeCache,
-        state_change: StateChange,
-        address: Address
+        state_change_cache: &mut StateChangeCache<Loader, A>,
+        state_change: StateChange<Loader, A>,
+        address: A
     ) -> Result<(), PoolManagerError> {
         let cache = state_change_cache.entry(address).or_default();
         if cache.is_full() {
@@ -283,8 +296,8 @@ where
     }
 
     fn handle_state_changes_from_logs(
-        pool: &mut EnhancedUniswapV3Pool,
-        state_change_cache: &mut StateChangeCache,
+        pool: &mut EnhancedUniswapPool<Loader, A>,
+        state_change_cache: &mut StateChangeCache<Loader, A>,
         logs: Vec<Log>,
         block_number: BlockNumber
     ) -> Result<(), PoolManagerError> {
@@ -300,7 +313,7 @@ where
         )
     }
 
-    pub fn get_market_snapshot(&self, address: Address) -> Result<PoolSnapshot, Error> {
+    pub fn get_market_snapshot(&self, address: A) -> Result<PoolSnapshot, Error> {
         let (ranges, price) = {
             let pool_lock = self
                 .blocking_pool(&address)
@@ -313,7 +326,7 @@ where
                 .collect::<Vec<_>>();
             // Sort the ticks low-to-high
             tick_vec.sort_by_key(|x| x.0);
-            // Build our PoolRanges out of our ticks, if any
+            // Build our LiqRanges out of our ticks, if any
             let ranges = tick_vec
                 .windows(2)
                 .map(|tickwindow| {
@@ -332,13 +345,13 @@ where
 }
 
 #[derive(Debug)]
-pub struct StateChange {
-    state_change: Option<EnhancedUniswapV3Pool>,
+pub struct StateChange<Loader: PoolDataLoader<A>, A> {
+    state_change: Option<EnhancedUniswapPool<Loader, A>>,
     block_number: u64
 }
 
-impl StateChange {
-    pub fn new(state_change: Option<EnhancedUniswapV3Pool>, block_number: u64) -> Self {
+impl<Loader: PoolDataLoader<A>, A> StateChange<Loader, A> {
+    pub fn new(state_change: Option<EnhancedUniswapPool<Loader, A>>, block_number: u64) -> Self {
         Self { state_change, block_number }
     }
 }

@@ -3,13 +3,14 @@ use std::{collections::HashMap, sync::Arc};
 use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
-    primitive::NewInitializedPool,
+    primitive::{NewInitializedPool, PoolId},
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
 use db_state_utils::StateFetchUtils;
 use futures::{Stream, StreamExt};
 use matching_engine::cfmm::uniswap::{
-    pool_manager::UniswapPoolManager, pool_providers::PoolManagerProvider, tob::calculate_reward
+    pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
+    pool_providers::PoolManagerProvider, tob::calculate_reward
 };
 use parking_lot::RwLock;
 use pools::PoolsTracker;
@@ -37,7 +38,7 @@ pub struct StateValidation<Pools, Fetch, Provider> {
     /// tracks all info about the current angstrom pool state.
     pool_tacker:          Arc<RwLock<Pools>>,
     /// keeps up-to-date with the on-chain pool
-    pool_manager:         Arc<UniswapPoolManager<Provider>>
+    pool_manager:         Arc<UniswapPoolManager<Provider, DataLoader<PoolId>, PoolId>>
 }
 
 impl<Pools, Fetch, Provider> Clone for StateValidation<Pools, Fetch, Provider> {
@@ -56,7 +57,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
     pub fn new(
         user_account_tracker: UserAccountProcessor<Fetch>,
         pools: Pools,
-        pool_manager: UniswapPoolManager<Provider>
+        pool_manager: UniswapPoolManager<Provider, DataLoader<PoolId>, PoolId>
     ) -> Self {
         Self {
             pool_tacker:          Arc::new(RwLock::new(pools)),
@@ -83,11 +84,11 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
     ) -> OrderValidationResults {
         let order_hash = order.order_hash();
         if !order.is_valid_signature() {
-            return OrderValidationResults::Invalid(order_hash)
+            return OrderValidationResults::Invalid(order_hash);
         }
 
         let Some(pool_info) = self.pool_tacker.read().fetch_pool_info_for_order(&order) else {
-            return OrderValidationResults::Invalid(order_hash)
+            return OrderValidationResults::Invalid(order_hash);
         };
 
         self.user_account_tracker
@@ -114,8 +115,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
                             Ok(order)
                         })
                         .expect("should be unreachable");
-                    // TODO: make the pool work with UniswapV4 addresses
-                    let pool_address = Address::from_slice(&order_with_storage.pool_id[..20]);
+                    let pool_address = order_with_storage.pool_id;
                     let market_snapshot =
                         self.pool_manager.get_market_snapshot(pool_address).unwrap();
                     let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();

@@ -1650,6 +1650,7 @@ dependencies = [
  "convert_case 0.6.0",
  "derive_more 0.99.18",
  "eyre",
+ "foldhash",
  "hex-literal",
  "itertools 0.12.1",
  "malachite",
@@ -1659,9 +1660,13 @@ dependencies = [
  "pade",
  "pade-macro",
  "rand",
+ "reth-chainspec",
  "reth-codecs",
  "reth-network-peers",
  "reth-primitives",
+ "reth-provider",
+ "reth-storage-api",
+ "reth-trie",
  "revm 14.0.3",
  "secp256k1 0.29.1",
  "serde",
@@ -2202,9 +2207,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f43644eed690f5374f1af436ecd6aea01cd201f6fbdf0178adaf6907afb2cec"
+checksum = "504e3947307ac8326a5437504c517c4b56716c9d98fac0028c2acc7ca47d70ae"
 dependencies = [
  "async-trait",
  "axum-core",
@@ -2229,9 +2234,9 @@ dependencies = [
 
 [[package]]
 name = "axum-core"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e6b8ba012a258d63c9adfa28b9ddcf66149da6f986c5b5452e629d5ee64bf00"
+checksum = "09f2bd6146b97ae3359fa0cc6d6b376d9539582c7b4220f041a33ec24c226199"
 dependencies = [
  "async-trait",
  "bytes",
@@ -11130,6 +11135,7 @@ dependencies = [
  "reth-tokio-util",
  "reth-tracing",
  "reth-transaction-pool",
+ "revm 14.0.3",
  "secp256k1 0.29.1",
  "serial_test",
  "tempfile",
@@ -12071,6 +12077,7 @@ dependencies = [
  "futures-util",
  "hex-literal",
  "matching-engine",
+ "pade",
  "parking_lot 0.12.3",
  "pin-project 1.1.5",
  "rand",

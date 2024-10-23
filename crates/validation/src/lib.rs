@@ -9,6 +9,7 @@ pub mod order;
 pub mod validator;
 
 use std::{
+    fmt::Debug,
     path::Path,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -21,7 +22,7 @@ use alloy::{
     signers::k256::elliptic_curve::rand_core::block::BlockRngCore, transports::Transport
 };
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
-use common::lru_db::{BlockStateProviderFactory, RevmLRU};
+use common::db::BlockStateProviderFactory;
 use futures::Stream;
 use matching_engine::cfmm::uniswap::{
     pool::EnhancedUniswapV3Pool, pool_manager::UniswapPoolManager,
@@ -46,17 +47,21 @@ use crate::{
 
 pub const TOKEN_CONFIG_FILE: &str = "./crates/validation/state_config.toml";
 
-pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
+pub fn init_validation<DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync>(
     db: DB,
-    state_notification: CanonStateNotifications,
-    cache_max_bytes: usize
-) -> ValidationClient {
+    cache_max_bytes: usize,
+    current_block: u64,
+    state_notification: CanonStateNotifications
+) -> ValidationClient
+where
+    <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
+{
     let (validator_tx, validator_rx) = unbounded_channel();
     let config_path = Path::new(TOKEN_CONFIG_FILE);
     let validation_config = load_validation_config(config_path).unwrap();
     let data_fetcher_config = load_data_fetcher_config(config_path).unwrap();
-    let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));
-    let revm_lru = Arc::new(RevmLRU::new(cache_max_bytes, Arc::new(db), current_block.clone()));
+    let current_block = Arc::new(AtomicU64::new(current_block));
+    let revm_lru = Arc::new(db);
     let fetch = FetchUtils::new(data_fetcher_config.clone(), revm_lru.clone());
 
     std::thread::spawn(move || {
@@ -109,7 +114,7 @@ pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
 }
 
 pub fn init_validation_tests<
-    DB: BlockStateProviderFactory + Unpin + Clone + 'static,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
     State: StateFetchUtils + Sync + 'static,
     Pool: PoolsTracker + Sync + 'static
 >(
@@ -117,14 +122,18 @@ pub fn init_validation_tests<
     cache_max_bytes: usize,
     state_notification: CanonStateNotifications,
     state: State,
-    pool: Pool
-) -> (ValidationClient, Arc<RevmLRU<DB>>) {
+    pool: Pool,
+    block_number: u64
+) -> (ValidationClient, Arc<DB>)
+where
+    <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
+{
     let (tx, rx) = unbounded_channel();
     let config_path = Path::new(TOKEN_CONFIG_FILE);
     let validation_config = load_validation_config(config_path).unwrap();
     let fetcher_config = load_data_fetcher_config(config_path).unwrap();
-    let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));
-    let revm_lru = Arc::new(RevmLRU::new(cache_max_bytes, Arc::new(db), current_block.clone()));
+    let current_block = Arc::new(AtomicU64::new(block_number));
+    let revm_lru = Arc::new(db);
     let task_db = revm_lru.clone();
 
     std::thread::spawn(move || {

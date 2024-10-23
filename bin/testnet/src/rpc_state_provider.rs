@@ -5,9 +5,11 @@ use alloy::{
     providers::Provider,
     transports::TransportResult
 };
+use eyre::bail;
 use futures::Future;
 use reth_provider::{ProviderError, ProviderResult};
-use validation::common::lru_db::{BlockStateProvider, BlockStateProviderFactory};
+use reth_revm::primitives::Bytecode;
+use validation::common::db::{BlockStateProvider, BlockStateProviderFactory};
 
 use crate::anvil_utils::AnvilWalletRpc;
 
@@ -75,6 +77,53 @@ pub struct RpcStateProviderFactory {
 impl RpcStateProviderFactory {
     pub fn new(provider: AnvilWalletRpc) -> eyre::Result<Self> {
         Ok(Self { provider })
+    }
+}
+
+impl reth_revm::DatabaseRef for RpcStateProviderFactory {
+    type Error = eyre::Error;
+
+    fn basic_ref(
+        &self,
+        address: Address
+    ) -> Result<Option<reth_revm::primitives::AccountInfo>, Self::Error> {
+        let acc = async_to_sync(self.provider.get_account(address).latest().into_future())?;
+        let code = async_to_sync(self.provider.get_code_at(address).latest().into_future())?;
+        let code = Some(Bytecode::new_raw(code));
+
+        Ok(Some(reth_revm::primitives::AccountInfo {
+            code_hash: acc.code_hash,
+            balance: acc.balance,
+            nonce: acc.nonce,
+            code
+        }))
+    }
+
+    fn storage_ref(
+        &self,
+        address: Address,
+        index: reth_primitives::U256
+    ) -> Result<reth_primitives::U256, Self::Error> {
+        let acc = async_to_sync(self.provider.get_storage_at(address, index).into_future())?;
+        Ok(acc)
+    }
+
+    fn block_hash_ref(&self, number: u64) -> Result<reth_primitives::B256, Self::Error> {
+        let acc = async_to_sync(
+            self.provider
+                .get_block_by_number(reth_rpc_types::BlockNumberOrTag::Number(number), false)
+                .into_future()
+        )?;
+
+        let Some(block) = acc else { bail!("failed to load block") };
+        Ok(block.header.hash)
+    }
+
+    fn code_by_hash_ref(
+        &self,
+        code_hash: reth_primitives::B256
+    ) -> Result<reth_revm::primitives::Bytecode, Self::Error> {
+        panic!("This should not be called, as the code is already loaded");
     }
 }
 

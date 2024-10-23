@@ -31,20 +31,13 @@ use order_pool::{order_storage::OrderStorage, timer::async_time_fn};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
 use reth_tasks::TaskSpawner;
-use serde::__private::ser::FlatMapSerializeStructVariantAsMapValue;
-use serde_json::error::Category::Data;
-use tokio::{
-    select,
-    sync::mpsc::{channel, unbounded_channel, Receiver, Sender, UnboundedReceiver},
-    task::{JoinHandle, JoinSet}
-};
-use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
-use tracing::{error, warn};
+use tokio::{select, task::JoinHandle};
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     leader_selection::WeightedRoundRobin,
     round::{BidAggregation, BidSubmission, ConsensusState, Finalization, RoundStateMachine},
-    AngstromValidator, ConsensusListener, ConsensusMessage, ConsensusUpdater, Signer
+    AngstromValidator, Signer
 };
 
 pub struct ConsensusManager<P, TR, N> {
@@ -135,7 +128,7 @@ where
                 current_height=%self.current_height,
                 "ignoring event for wrong block",
             );
-            return;
+            return
         }
 
         if self.state_transition.my_id() == event.payload_source() {
@@ -145,7 +138,7 @@ where
                 message_type=%event.message_type(),
                 "ignoring event that we sent to node",
             );
-            return;
+            return
         }
 
         if !self.broadcasted_messages.contains(&event) {

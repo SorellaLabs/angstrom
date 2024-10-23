@@ -112,7 +112,7 @@ where
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err(PoolManagerError::SyncAlreadyStarted);
+            return Err(PoolManagerError::SyncAlreadyStarted)
         }
 
         let (pool_updated_tx, pool_updated_rx) =
@@ -132,7 +132,7 @@ where
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            return Err(PoolManagerError::SyncAlreadyStarted);
+            return Err(PoolManagerError::SyncAlreadyStarted)
         }
 
         let updated_pool_handle = self.handle_state_changes(None).await?;
@@ -195,7 +195,7 @@ where
 
                 for (addr, logs) in logs_by_address {
                     if logs.is_empty() {
-                        continue;
+                        continue
                     }
 
                     let Some(pool) = pools.get(&addr) else {
@@ -248,7 +248,7 @@ where
                             // We know that there is a state change from cache.get(0) so
                             // when we pop front without returning a value,
                             // there is an issue
-                            return Err(PoolManagerError::PopFrontError);
+                            return Err(PoolManagerError::PopFrontError)
                         }
                     }
                     Some(_) => return Ok(()),
@@ -259,7 +259,7 @@ where
                         // then immediately after there is a chain reorg to 95,
                         // we can not roll back the state changes for an accurate state
                         // space. In this case, we return an error
-                        return Err(PoolManagerError::NoStateChangesInCache);
+                        return Err(PoolManagerError::NoStateChangesInCache)
                     }
                 }
             }

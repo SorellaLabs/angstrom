@@ -94,7 +94,7 @@ impl RoundStateMachine {
     }
 
     pub fn has_quorum(&self, voters: usize) -> bool {
-        voters >= (self.validators.len() * 2) / 3 + 1
+        voters > (self.validators.len() * 2) / 3
     }
 
     pub fn reset_round(&mut self, block: BlockNumber, leader: PeerId) {

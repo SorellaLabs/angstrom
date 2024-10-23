@@ -5,7 +5,6 @@ use angstrom_types::{
 };
 
 // Basically only tests in here now
-
 pub fn calculate_reward(
     tob: &OrderWithStorageData<TopOfBlockOrder>,
     snapshot: &PoolSnapshot

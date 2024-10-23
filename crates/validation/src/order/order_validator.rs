@@ -22,7 +22,7 @@ use super::{
     OrderValidationRequest
 };
 use crate::{
-    common::lru_db::BlockStateProviderFactory,
+    common::db::BlockStateProviderFactory,
     order::{state::account::UserAccountProcessor, OrderValidation}
 };
 
@@ -35,7 +35,8 @@ pub struct OrderValidator<DB, Pools, Fetch, Provider> {
 
 impl<DB, Pools, Fetch, Provider> OrderValidator<DB, Pools, Fetch, Provider>
 where
-    DB: BlockStateProviderFactory + Unpin + Clone + 'static,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + Sync + Send,
+    <DB as revm::DatabaseRef>::Error: Send + Sync,
     Pools: PoolsTracker + Sync + 'static,
     Fetch: StateFetchUtils + Sync + 'static,
     Provider: PoolManagerProvider + Sync + 'static
@@ -81,11 +82,28 @@ where
         let order_validation: OrderValidation = order.into();
         let user = order_validation.user();
         let cloned_state = self.state.clone();
+        let cloned_sim = self.sim.clone();
 
         self.thread_pool.add_new_task(
             user,
             Box::pin(async move {
-                cloned_state.validate_state_of_regular_order(order_validation, block_number)
+                match order_validation {
+                    OrderValidation::Limit(tx, order, origin) => {
+                        let mut results =
+                            cloned_state.handle_regular_order(order, block_number, true);
+                        results.add_gas_cost_or_invalidate(&cloned_sim, true);
+
+                        let _ = tx.send(results);
+                    }
+                    OrderValidation::Searcher(tx, order, origin) => {
+                        let mut results =
+                            cloned_state.handle_regular_order(order, block_number, false);
+                        results.add_gas_cost_or_invalidate(&cloned_sim, false);
+
+                        let _ = tx.send(results);
+                    }
+                    _ => unreachable!()
+                }
             })
         );
     }
@@ -97,7 +115,8 @@ where
 
 impl<DB, Pools, Fetch, Provider> Future for OrderValidator<DB, Pools, Fetch, Provider>
 where
-    DB: BlockStateProviderFactory + Clone + Unpin + 'static,
+    DB: Clone + Unpin + 'static + revm::DatabaseRef + Send + Sync,
+    <DB as revm::DatabaseRef>::Error: Send + Sync,
     Pools: PoolsTracker + Sync + Unpin + 'static,
     Fetch: StateFetchUtils + Sync + Unpin + 'static,
     Provider: PoolManagerProvider + Sync + Unpin + 'static

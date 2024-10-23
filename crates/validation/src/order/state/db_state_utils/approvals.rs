@@ -9,7 +9,7 @@ use reth_provider::StateProvider;
 use reth_revm::DatabaseRef;
 
 use super::ANGSTROM_CONTRACT;
-use crate::order::state::{config::TokenApprovalSlot, BlockStateProviderFactory, RevmLRU};
+use crate::order::state::{config::TokenApprovalSlot, BlockStateProviderFactory};
 
 #[derive(Clone)]
 pub struct Approvals(HashMap<Address, TokenApprovalSlot>);
@@ -19,11 +19,11 @@ impl Approvals {
         Self(current_slots)
     }
 
-    pub fn fetch_approval_balance_for_token_overrides<DB: BlockStateProviderFactory>(
+    pub fn fetch_approval_balance_for_token_overrides<DB: revm::DatabaseRef>(
         &self,
         user: Address,
         token: Address,
-        db: Arc<RevmLRU<DB>>,
+        db: Arc<DB>,
         overrides: &HashMap<Address, HashMap<U256, U256>>
     ) -> Option<U256> {
         self.0.get(&token).and_then(|slot| {
@@ -38,12 +38,15 @@ impl Approvals {
         })
     }
 
-    pub fn fetch_approval_balance_for_token<DB: BlockStateProviderFactory>(
+    pub fn fetch_approval_balance_for_token<DB: revm::DatabaseRef>(
         &self,
         user: Address,
         token: Address,
-        db: &RevmLRU<DB>
-    ) -> Option<U256> {
+        db: &DB
+    ) -> Option<U256>
+    where
+        <DB as DatabaseRef>::Error: Sync + Send + 'static
+    {
         self.0
             .get(&token)
             .and_then(|slot| slot.load_approval_amount(user, ANGSTROM_CONTRACT, db).ok())

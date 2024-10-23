@@ -66,7 +66,6 @@ sol! {
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
     struct ExactFlashOrder {
-        bool exactIn;
         uint128 amount;
         uint256 minPrice;
         bool useInternal;

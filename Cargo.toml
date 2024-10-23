@@ -84,6 +84,9 @@ revm = { version = "14.0.1", features = [
 # reth
 reth = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-trie= { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-provider = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }

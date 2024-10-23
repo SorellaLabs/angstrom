@@ -4,6 +4,7 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use alloy_primitives::Address;
 use angstrom_metrics::{initialize_prometheus_metrics, METRICS_ENABLED};
 use angstrom_network::manager::StromConsensusEvent;
+use angstrom_types::reth_db_wrapper::RethDbWrapper;
 use order_pool::{order_storage::OrderStorage, PoolConfig, PoolManagerUpdate};
 use reth_node_builder::{FullNode, NodeHandle};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
@@ -208,9 +209,10 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         .build_handle(executor.clone(), node.provider.clone());
     let block_height = node.provider.best_block_number().unwrap();
     let validator = init_validation(
-        node.provider.clone(),
-        node.provider.subscribe_to_canonical_state(),
-        config.validation_cache_size
+        RethDbWrapper::new(node.provider.clone()),
+        config.validation_cache_size,
+        block_height,
+        node.provider.subscribe_to_canonical_state()
     );
 
     // Create our pool config

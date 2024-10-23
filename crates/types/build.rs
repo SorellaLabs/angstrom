@@ -58,7 +58,8 @@ fn main() {
 
             let mod_name = name.clone().to_case(Case::Snake);
             format!(
-                r#"pub mod {mod_name} {{
+                r#"#[rustfmt::skip]
+pub mod {mod_name} {{
     alloy::sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]

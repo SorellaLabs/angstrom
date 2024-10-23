@@ -1,7 +1,6 @@
 use std::{
     cmp::Ordering,
     collections::HashSet,
-    default::Default,
     fs::File,
     io::{self, Read, Write}
 };
@@ -208,9 +207,9 @@ mod tests {
             ("Charlie".to_string(), PeerId::random())
         ]);
         let validators = vec![
-            AngstromValidator::new(peers["Alice"].clone(), 100),
-            AngstromValidator::new(peers["Bob"].clone(), 200),
-            AngstromValidator::new(peers["Charlie"].clone(), 300),
+            AngstromValidator::new(peers["Alice"], 100),
+            AngstromValidator::new(peers["Bob"], 200),
+            AngstromValidator::new(peers["Charlie"], 300),
         ];
         let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
@@ -251,8 +250,8 @@ mod tests {
             ("Charlie".to_string(), PeerId::random())
         ]);
         let validators = vec![
-            AngstromValidator::new(peers["Alice"].clone(), 100),
-            AngstromValidator::new(peers["Bob"].clone(), 200),
+            AngstromValidator::new(peers["Alice"], 100),
+            AngstromValidator::new(peers["Bob"], 200),
         ];
         let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
@@ -273,7 +272,7 @@ mod tests {
         let initial_stats = simulate_rounds(&mut algo, rounds, 1);
         assert_eq!(initial_stats.len(), 2);
 
-        algo.add_validator(peers["Charlie"].clone(), 300);
+        algo.add_validator(peers["Charlie"], 300);
 
         let after_add_stats = simulate_rounds(&mut algo, rounds, 1001);
         assert_eq!(after_add_stats.len(), 3);
@@ -297,9 +296,9 @@ mod tests {
             ("Charlie".to_string(), PeerId::random())
         ]);
         let validators = vec![
-            AngstromValidator::new(peers["Alice"].clone(), 100),
-            AngstromValidator::new(peers["Bob"].clone(), 200),
-            AngstromValidator::new(peers["Charlie"].clone(), 300),
+            AngstromValidator::new(peers["Alice"], 100),
+            AngstromValidator::new(peers["Bob"], 200),
+            AngstromValidator::new(peers["Charlie"], 300),
         ];
         let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 

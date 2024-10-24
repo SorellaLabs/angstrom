@@ -43,6 +43,7 @@ matching-engine.workspace = true
 validation.workspace = true
 tokio-stream.workspace = true
 eyre.workspace = true
+pade.workspace = true
 
 [dev-dependencies]
 testing-tools.workspace = true

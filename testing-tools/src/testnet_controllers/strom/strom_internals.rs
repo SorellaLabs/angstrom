@@ -1,19 +1,5 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
-use alloy::{network::Ethereum, providers::Provider, pubsub::PubSubFrontend};
-use angstrom::cli::StromHandles;
-use angstrom_eth::handle::Eth;
-use angstrom_network::{pool_manager::PoolHandle, PoolManagerBuilder, StromNetworkHandle};
-use angstrom_rpc::{api::OrderApiServer, OrderApi};
-use angstrom_types::sol_bindings::testnet::TestnetHub;
-use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
-use futures::StreamExt;
-use jsonrpsee::server::ServerBuilder;
-use order_pool::{order_storage::OrderStorage, PoolConfig};
-use reth_provider::CanonStateSubscriptions;
-use reth_tasks::TokioTaskExecutor;
-use secp256k1::SecretKey;
-
 use crate::{
     anvil_state_provider::{
         utils::{AnvilWalletRpc, StromContractInstance},
@@ -25,6 +11,20 @@ use crate::{
     types::SendingStromHandles,
     validation::TestOrderValidator
 };
+use alloy::{network::Ethereum, providers::Provider, pubsub::PubSubFrontend};
+use angstrom::cli::StromHandles;
+use angstrom_eth::handle::Eth;
+use angstrom_network::{pool_manager::PoolHandle, PoolManagerBuilder, StromNetworkHandle};
+use angstrom_rpc::{api::OrderApiServer, OrderApi};
+use angstrom_types::contract_payloads::angstrom::UniswapAngstromRegistry;
+use angstrom_types::sol_bindings::testnet::TestnetHub;
+use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
+use futures::StreamExt;
+use jsonrpsee::server::ServerBuilder;
+use order_pool::{order_storage::OrderStorage, PoolConfig};
+use reth_provider::CanonStateSubscriptions;
+use reth_tasks::TokioTaskExecutor;
+use secp256k1::SecretKey;
 
 pub struct AngstromTestnetNodeInternals {
     pub rpc_port:         u64,
@@ -34,7 +34,7 @@ pub struct AngstromTestnetNodeInternals {
     pub tx_strom_handles: SendingStromHandles,
     pub testnet_hub:      StromContractInstance,
     pub validator:        TestOrderValidator<RpcStateProviderFactory>,
-    consensus:            TestnetConsensusFuture<AnvilWalletRpc, PubSubFrontend, Ethereum>,
+    consensus:            TestnetConsensusFuture,
     consensus_running:    Arc<AtomicBool>
 }
 
@@ -150,6 +150,7 @@ impl AngstromTestnetNodeInternals {
                 .provider()
                 .get_block_number()
                 .await?,
+            UniswapAngstromRegistry::default(),
             state_provider.provider().provider()
         );
 

@@ -1406,9 +1406,11 @@ dependencies = [
  "reth-provider",
  "revm-inspectors 0.5.5",
  "secp256k1 0.29.1",
+ "serde",
  "tikv-jemallocator",
  "tokio",
  "tokio-util",
+ "toml",
  "validation",
 ]
 
@@ -2704,6 +2706,7 @@ dependencies = [
  "itertools 0.12.1",
  "matching-engine",
  "order-pool",
+ "pade",
  "rayon",
  "reth-metrics",
  "reth-primitives",
@@ -12262,8 +12265,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "blstrs_plus"
-version = "0.8.18"
-source = "git+https://github.com/JamesHinshelwood/blstrs?branch=update-blst#2706a367813056c6791a097012f3c0c22b494ea7"

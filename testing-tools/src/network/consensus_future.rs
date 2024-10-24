@@ -15,21 +15,16 @@ use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 use tracing::{span, Level};
 
-pub(crate) struct TestnetConsensusFuture<P, TR, N> {
-    consensus: Arc<Mutex<ConsensusManager<P, TR, N>>>,
+pub(crate) struct TestnetConsensusFuture {
+    consensus: Arc<Mutex<ConsensusManager>>,
     /// JoinHandle for the consensus future
     fut:       JoinHandle<()>
 }
 
-impl<P, TR, N> TestnetConsensusFuture<P, TR, N>
-where
-    P: Provider<TR, N> + Send + Sync + Unpin + 'static,
-    TR: Transport + Clone + Send + Sync + Unpin,
-    N: Network + Send + Sync + Unpin
-{
+impl TestnetConsensusFuture {
     pub(crate) fn new(
         testnet_node_id: u64,
-        consensus: ConsensusManager<P, TR, N>,
+        consensus: ConsensusManager,
         running: Arc<AtomicBool>
     ) -> Self {
         let consensus = Arc::new(Mutex::new(consensus));
@@ -40,46 +35,36 @@ where
 
     pub(crate) fn consensus_manager<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&ConsensusManager<P, TR, N>) -> R
+        F: FnOnce(&ConsensusManager) -> R
     {
         f(&self.consensus.lock())
     }
 
     pub(crate) fn consensus_manager_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&mut ConsensusManager<P, TR, N>) -> R
+        F: FnOnce(&mut ConsensusManager) -> R
     {
         f(&mut self.consensus.lock())
     }
 }
 
-struct TestnetConsensusFutureInternals<P, TR, N> {
+struct TestnetConsensusFutureInternals {
     testnet_node_id: u64,
-    consensus:       Arc<Mutex<ConsensusManager<P, TR, N>>>,
+    consensus:       Arc<Mutex<ConsensusManager>>,
     running:         Arc<AtomicBool>
 }
 
-impl<P, TR, N> TestnetConsensusFutureInternals<P, TR, N>
-where
-    P: Provider<TR, N> + Send + Sync,
-    TR: Transport + Clone + Send + Sync,
-    N: Network + Send + Sync
-{
+impl TestnetConsensusFutureInternals {
     fn new(
         testnet_node_id: u64,
-        consensus: Arc<Mutex<ConsensusManager<P, TR, N>>>,
+        consensus: Arc<Mutex<ConsensusManager>>,
         running: Arc<AtomicBool>
     ) -> Self {
         Self { testnet_node_id, consensus, running }
     }
 }
 
-impl<P, TR, N> Future for TestnetConsensusFutureInternals<P, TR, N>
-where
-    P: Provider<TR, N> + Send + Sync + Unpin,
-    TR: Transport + Clone + Send + Sync + Unpin,
-    N: Network + Send + Sync + Unpin
-{
+impl Future for TestnetConsensusFutureInternals {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -104,7 +89,7 @@ where
     }
 }
 
-impl<P, TR, N> Drop for TestnetConsensusFuture<P, TR, N> {
+impl Drop for TestnetConsensusFuture {
     fn drop(&mut self) {
         self.fut.abort();
     }

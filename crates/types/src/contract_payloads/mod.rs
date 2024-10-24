@@ -6,6 +6,8 @@ pub mod asset;
 pub mod rewards;
 pub mod tob;
 
+pub const POOL_CONFIG_STORE_ENTRY_SIZE: usize = 32;
+
 sol! {
     #[derive(Debug, PadeEncode, PadeDecode)]
     struct Asset {

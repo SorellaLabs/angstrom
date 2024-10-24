@@ -168,6 +168,7 @@ impl WeightedRoundRobin {
     }
 }
 
+#[cfg(not(test))]
 impl Drop for WeightedRoundRobin {
     fn drop(&mut self) {
         self.save_state().unwrap();
@@ -193,11 +194,6 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-
-    fn cleanup(vm: WeightedRoundRobin) {
-        drop(vm);
-        std::fs::remove_file(format!("{}/state.json", ROUND_ROBIN_CACHE)).unwrap_or(());
-    }
 
     #[test]
     fn test_round_robin_simulation() {
@@ -237,9 +233,6 @@ mod tests {
         assert!((alice_ratio - 0.167).abs() < 0.05);
         assert!((bob_ratio - 0.333).abs() < 0.05);
         assert!((charlie_ratio - 0.5).abs() < 0.05);
-
-        // important otherwise you'd be working with cached state
-        cleanup(algo);
     }
 
     #[test]
@@ -283,9 +276,6 @@ mod tests {
         let after_remove_stats = simulate_rounds(&mut algo, rounds, 2001);
         assert_eq!(after_remove_stats.len(), 2);
         assert!(!after_remove_stats.contains_key(&peers["Bob"]));
-
-        // important otherwise you'd be working with cached state
-        cleanup(algo);
     }
 
     #[test]
@@ -309,8 +299,5 @@ mod tests {
         assert_eq!(algo.validators, loaded_algo.validators);
         assert_eq!(algo.new_joiner_penalty_factor, loaded_algo.new_joiner_penalty_factor);
         assert_eq!(algo.block_number, loaded_algo.block_number);
-
-        // important otherwise you'd be working with cached state
-        cleanup(algo);
     }
 }

@@ -7,7 +7,7 @@ use super::{Direction, PoolSnapshot, Tick};
 
 /// A LiqRange describes the liquidity conditions within a specific range of
 /// ticks.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct LiqRange {
     /// Lower tick for this range
     pub(super) lower_tick: Tick,

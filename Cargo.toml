@@ -80,7 +80,6 @@ bitmaps = "3.2.1"
 revm = { version = "14.0.3", features = [
     "std",
     "secp256k1",
-    "blst",
 ], default-features = false }
 
 # reth
@@ -241,7 +240,3 @@ pprof = "0.13"
 proptest = "1.0"
 proptest-derive = "0.4"
 serial_test = "3.0.0"
-
-
-[patch.crates-io]
-blstrs_plus = { git = "https://github.com/JamesHinshelwood/blstrs", branch = "update-blst" }

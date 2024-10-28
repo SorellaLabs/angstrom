@@ -160,7 +160,7 @@ impl AngstromBundle {
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
         let pool_updates = Vec::new();
-        let pairs = Vec::new();
+        let mut pairs = Vec::new();
         let user_orders = Vec::new();
         let mut asset_builder = AssetBuilder::new();
 
@@ -181,10 +181,15 @@ impl AngstromBundle {
         let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
 
         // TODO this wasn't done when pulled from davids branch.
-        let pair_idx = pairs.len() - 1;
+        let pair = Pair {
+            index0:       t0_idx,
+            index1:       t1_idx,
+            store_index:  0,
+            price_1over0: U256::from(1)
+        };
+        pairs.push(pair);
 
-        let outcome =
-            OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
+        OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of(user_order, t0_idx, t1_idx));
 

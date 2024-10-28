@@ -28,8 +28,8 @@ use crate::{
 #[derive(Default)]
 pub struct AngstromTestnet<C> {
     peers:               HashMap<u64, TestnetNode<C>>,
-    disconnected_peers:  HashSet<u64>,
-    dropped_peers:       HashSet<u64>,
+    _disconnected_peers: HashSet<u64>,
+    _dropped_peers:      HashSet<u64>,
     current_max_peer_id: u64,
     config:              AngstromTestnetConfig
 }
@@ -47,8 +47,8 @@ where
     pub async fn spawn_testnet(c: C, config: AngstromTestnetConfig) -> eyre::Result<Self> {
         let mut this = Self {
             peers: Default::default(),
-            disconnected_peers: HashSet::new(),
-            dropped_peers: HashSet::new(),
+            _disconnected_peers: HashSet::new(),
+            _dropped_peers: HashSet::new(),
             current_max_peer_id: 0,
             config
         };
@@ -124,19 +124,21 @@ where
     }
 
     fn random_valid_id(&self) -> u64 {
-        let ids = self.peers.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+        let ids = self.peers.keys().copied().collect::<Vec<_>>();
         let id_idx = rand::thread_rng().gen_range(0..ids.len());
         ids[id_idx]
     }
 
     pub fn get_peer(&self, id: u64) -> &TestnetNode<C> {
-        self.peers.get(&id).expect(&format!("peer {id} not found"))
+        self.peers
+            .get(&id)
+            .unwrap_or_else(|| panic!("peer {id} not found"))
     }
 
     fn get_peer_mut(&mut self, id: u64) -> &mut TestnetNode<C> {
         self.peers
             .get_mut(&id)
-            .expect(&format!("peer {id} not found"))
+            .unwrap_or_else(|| panic!("peer {id} not found"))
     }
 
     pub fn get_random_peer(&self, not_allowed_ids: Vec<u64>) -> &TestnetNode<C> {
@@ -144,8 +146,8 @@ where
 
         let peer_ids = self
             .peers
-            .iter()
-            .map(|(id, _)| *id)
+            .keys()
+            .copied()
             .filter(|id| !not_allowed_ids.contains(id))
             .collect::<Vec<_>>();
 
@@ -160,7 +162,7 @@ where
 
         self.peers
             .get(&random_peer)
-            .expect(&format!("peer {random_peer} not found"))
+            .unwrap_or_else(|| panic!("peer {random_peer} not found"))
     }
 
     /// updates the anvil state of all the peers from a given peer
@@ -283,8 +285,8 @@ where
             assert!(!self.peers.is_empty());
             assert!(self
                 .peers
-                .iter()
-                .map(|(id, _)| *id)
+                .keys()
+                .copied()
                 .collect::<HashSet<_>>()
                 .contains(&i));
             i

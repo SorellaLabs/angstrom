@@ -4,13 +4,13 @@ use super::AngstromTestnet;
 use crate::types::{StateMachineActionHookFn, StateMachineCheckHookFn, StateMachineHook};
 
 pub struct StateMachineTestnet<C> {
-    testnet: AngstromTestnet<C>,
-    hooks:   Vec<(&'static str, StateMachineHook<C>)>
+    _testnet: AngstromTestnet<C>,
+    hooks:    Vec<(&'static str, StateMachineHook<C>)>
 }
 
 impl<C> StateMachineTestnet<C> {
-    pub(crate) fn new(testnet: AngstromTestnet<C>) -> Self {
-        Self { testnet, hooks: Vec::new() }
+    pub(crate) fn new(_testnet: AngstromTestnet<C>) -> Self {
+        Self { _testnet, hooks: Vec::new() }
     }
 
     pub async fn run(mut self) {
@@ -59,14 +59,14 @@ trait HookResult: Sized {
 
     fn fmt_result(self, i: usize, name: &'static str) {
         if let Some(e) = self.error() {
-            tracing::error!(target: "testnet::state-machine", hook = i, name, "{:?}", e);
+            tracing::error!(target: "_testnet::state-machine", hook = i, name, "{:?}", e);
             panic!();
         }
 
         if self.is_pass() {
-            tracing::info!(target: "testnet::state-machine", hook = i, name, "hook PASSED");
+            tracing::info!(target: "_testnet::state-machine", hook = i, name, "hook PASSED");
         } else {
-            tracing::warn!(target: "testnet::state-machine", hook = i, name, "hook FAILED");
+            tracing::warn!(target: "_testnet::state-machine", hook = i, name, "hook FAILED");
         }
     }
 }
@@ -83,10 +83,7 @@ impl HookResult for eyre::Result<()> {
 
 impl HookResult for eyre::Result<bool> {
     fn is_pass(&self) -> bool {
-        match self.as_ref() {
-            Ok(true) => true,
-            _ => false
-        }
+        matches!(self.as_ref(), Ok(true))
     }
 
     fn error(&self) -> Option<&eyre::ErrReport> {

@@ -142,11 +142,13 @@ impl WeightedRoundRobin {
         leader
     }
 
+    #[allow(dead_code)]
     fn remove_validator(&mut self, peer_id: &PeerId) {
         let validator = AngstromValidator::new(*peer_id, 0);
         self.validators.remove(&validator);
     }
 
+    #[allow(dead_code)]
     fn add_validator(&mut self, peer_id: PeerId, voting_power: u64) {
         let mut new_validator = AngstromValidator::new(peer_id, voting_power);
         let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power).sum();

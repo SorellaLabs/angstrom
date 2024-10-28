@@ -69,6 +69,7 @@ impl<T> RoundStateMachine<T>
 where
     T: Transport + Clone
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         block_height: BlockNumber,
         order_storage: Arc<OrderStorage>,

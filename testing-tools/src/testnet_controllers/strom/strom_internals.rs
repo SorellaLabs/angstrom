@@ -42,8 +42,8 @@ pub struct AngstromTestnetNodeInternals {
     pub tx_strom_handles: SendingStromHandles,
     pub testnet_hub:      StromContractInstance,
     pub validator:        TestOrderValidator<RpcStateProviderFactory>,
-    consensus:            TestnetConsensusFuture<PubSubFrontend>,
-    consensus_running:    Arc<AtomicBool>
+    _consensus:           TestnetConsensusFuture<PubSubFrontend>,
+    _consensus_running:   Arc<AtomicBool>
 }
 
 impl AngstromTestnetNodeInternals {
@@ -176,12 +176,12 @@ impl AngstromTestnetNodeInternals {
             state_provider.provider().provider()
         );
 
-        let consensus_running = Arc::new(AtomicBool::new(true));
+        let _consensus_running = Arc::new(AtomicBool::new(true));
 
-        let consensus = TestnetConsensusFuture::new(
+        let _consensus = TestnetConsensusFuture::new(
             testnet_node_id,
             consensus_handle,
-            consensus_running.clone()
+            _consensus_running.clone()
         );
 
         Ok(Self {
@@ -192,8 +192,8 @@ impl AngstromTestnetNodeInternals {
             tx_strom_handles,
             testnet_hub,
             validator,
-            consensus,
-            consensus_running
+            _consensus,
+            _consensus_running
         })
     }
 }

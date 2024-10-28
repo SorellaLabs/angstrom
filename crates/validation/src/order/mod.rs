@@ -85,7 +85,13 @@ pub enum OrderValidationResults {
 impl OrderValidationResults {
     pub fn add_gas_cost_or_invalidate<DB>(&mut self, sim: &SimValidation<DB>, is_limit: bool)
     where
-        DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
+        DB: Unpin
+            + Clone
+            + 'static
+            + revm::DatabaseRef
+            + reth_provider::BlockNumReader
+            + Send
+            + Sync,
         <DB as revm::DatabaseRef>::Error: Send + Sync
     {
         // TODO: this can be done without a clone but is super annoying

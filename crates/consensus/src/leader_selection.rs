@@ -124,9 +124,8 @@ impl WeightedRoundRobin {
         // 1. this is not ideal, since on multi-block reorgs the same proposer will be
         //    chosen for the length of the reorg
         // 2. reverting the block number (self.block_number = block_number) is also not
-        //    ideal, since nodes who were offline
-        // will not have seen the reorg, thus would not have executed the extra rounds
-        // after this if statement
+        //    ideal, since nodes who were offline will not have seen the reorg, thus
+        //    would not have executed the extra rounds after this if statement
         if block_number <= self.block_number {
             return self.last_proposer;
         }

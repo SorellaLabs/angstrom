@@ -1337,28 +1337,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "amms"
-version = "0.6.3"
-source = "git+https://github.com/darkforestry/amms-rs.git#b6e8d3802f591710c315a32d8a213d1813557aff"
-dependencies = [
- "alloy 0.4.2",
- "arraydeque",
- "async-trait",
- "eyre",
- "futures",
- "lazy_static",
- "num-bigfloat",
- "regex",
- "rug",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
- "uniswap_v3_math",
-]
-
-[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1917,12 +1895,6 @@ name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
-
-[[package]]
-name = "az"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b7e4c2464d97fe331d41de9d5db0def0a96f4d823b8b32a2efd503578988973"
 
 [[package]]
 name = "backon"
@@ -3902,16 +3874,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gmp-mpfr-sys"
-version = "1.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0205cd82059bc63b63cf516d714352a30c44f2c74da9961dfda2617ae6b5918"
-dependencies = [
- "libc",
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5273,7 +5235,6 @@ version = "0.1.0"
 dependencies = [
  "alloy 0.4.2",
  "alloy-primitives 0.8.9",
- "amms",
  "angstrom-types",
  "angstrom-utils",
  "arraydeque",
@@ -5286,6 +5247,8 @@ dependencies = [
  "itertools 0.12.1",
  "malachite",
  "malachite-q",
+ "num-bigfloat",
+ "once_cell",
  "pade",
  "pade-macro",
  "rand",
@@ -9629,18 +9592,6 @@ name = "route-recognizer"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
-
-[[package]]
-name = "rug"
-version = "1.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97ae2c1089ec0575193eb9222881310cc1ed8bce3646ef8b81b44b518595b79d"
-dependencies = [
- "az",
- "gmp-mpfr-sys",
- "libc",
- "libm",
-]
 
 [[package]]
 name = "ruint"

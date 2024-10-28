@@ -18,8 +18,6 @@ use reth_revm::{Database, DatabaseRef};
 use revm::db::DbAccount;
 use schnellru::{ByMemoryUsage, LruMap};
 
-use crate::common::state::{AddressSlots, RevmBackend};
-
 pub trait BlockStateProvider {
     fn get_basic_account(&self, address: Address) -> ProviderResult<Option<Account>>;
 

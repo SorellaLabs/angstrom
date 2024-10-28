@@ -18,14 +18,14 @@ use std::{
 };
 
 use alloy::{
-    network::Network, primitives::Address, providers::Provider,
+    network::Network, providers::Provider,
     signers::k256::elliptic_curve::rand_core::block::BlockRngCore, transports::Transport
 };
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use common::db::BlockStateProviderFactory;
 use futures::Stream;
 use matching_engine::cfmm::uniswap::{
-    pool::EnhancedUniswapV3Pool, pool_manager::UniswapPoolManager,
+    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
     pool_providers::canonical_state_adapter::CanonicalStateAdapter
 };
 use order::state::{
@@ -77,15 +77,12 @@ where
         let pools = AngstromPoolsTracker::new(validation_config.clone());
 
         // TODO: make the pool work with new styles addresses
-        let mut uniswap_pools: Vec<EnhancedUniswapV3Pool> = validation_config
+        let mut uniswap_pools: Vec<_> = validation_config
             .pools
             .iter()
             .map(|pool| {
                 let initial_ticks_per_side = 200;
-                EnhancedUniswapV3Pool::new(
-                    Address::from_slice(&pool.pool_id[..20]),
-                    initial_ticks_per_side
-                )
+                EnhancedUniswapPool::new(DataLoader::new(pool.pool_id), initial_ticks_per_side)
             })
             .collect();
         uniswap_pools.iter_mut().for_each(|pool| {
@@ -149,16 +146,12 @@ where
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
         let sim = SimValidation::new(task_db);
 
-        let mut uniswap_pools: Vec<EnhancedUniswapV3Pool> = validation_config
+        let mut uniswap_pools: Vec<_> = validation_config
             .pools
             .iter()
             .map(|pool| {
                 let initial_ticks_per_side = 200;
-                // TODO: make the pool work with UniswapV4 addresses
-                EnhancedUniswapV3Pool::new(
-                    Address::from_slice(&pool.pool_id[..20]),
-                    initial_ticks_per_side
-                )
+                EnhancedUniswapPool::new(DataLoader::new(pool.pool_id), initial_ticks_per_side)
             })
             .collect();
         uniswap_pools.iter_mut().for_each(|pool| {

@@ -53,22 +53,7 @@ jobs:
           cache-on-failure: true
       - name: Build Tests
         run: cargo build --tests
-  format:
-    name: 'Ensure Rust Fmt'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          override: true
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - name: fmt  
-        run: cargo fmt --all --check
+
   contracts:
     name: 'Build, Format & Test Contracts'
     runs-on: ubuntu-latest

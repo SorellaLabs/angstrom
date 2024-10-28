@@ -23,7 +23,7 @@ pub struct SimValidation<DB> {
 
 impl<DB> SimValidation<DB>
 where
-    DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Send + Sync,
     <DB as revm::DatabaseRef>::Error: Send + Sync
 {
     pub fn new(db: Arc<DB>) -> Self {

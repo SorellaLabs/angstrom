@@ -47,7 +47,9 @@ use crate::{
 
 pub const TOKEN_CONFIG_FILE: &str = "./crates/validation/state_config.toml";
 
-pub fn init_validation<DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync>(
+pub fn init_validation<
+    DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync
+>(
     db: DB,
     cache_max_bytes: usize,
     current_block: u64,
@@ -114,7 +116,7 @@ where
 }
 
 pub fn init_validation_tests<
-    DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Send + Sync,
     State: StateFetchUtils + Sync + 'static,
     Pool: PoolsTracker + Sync + 'static
 >(

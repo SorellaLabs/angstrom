@@ -471,7 +471,7 @@ pub mod test {
         assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
         let mut gas_calculations = gas_calculations.unwrap();
 
-        let block = gas_calculations.db.last_block_number().unwrap() + 1;
+        let block = gas_calculations.db.db.last_block_number().unwrap() + 1;
         let (swapper, order) = signed_tob_order(block);
 
         // ensure we give the proper approvals of token in as this is

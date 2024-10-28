@@ -1,16 +1,23 @@
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
+    marker::PhantomData,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
     time::Duration
 };
 
-use alloy_primitives::BlockNumber;
+use alloy::{
+    primitives::{BlockNumber, Bytes},
+    providers::{network::Network, Provider},
+    transports::Transport
+};
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage};
 use angstrom_types::{
     consensus::{PreProposal, Proposal},
+    contract_payloads::angstrom::AngstromBundle,
     orders::{OrderSet, PoolSolution},
     primitive::PeerId,
     sol_bindings::{
@@ -18,55 +25,22 @@ use angstrom_types::{
         rpc_orders::TopOfBlockOrder
     }
 };
-use futures::{future::BoxFuture, Future, Stream};
+use angstrom_utils::timer::async_time_fn;
+use futures::{future::BoxFuture, Future, Stream, StreamExt};
+use itertools::Itertools;
 use matching_engine::MatchingManager;
 use order_pool::order_storage::OrderStorage;
 use serde::{Deserialize, Serialize};
-use tokio::time::{self};
+use tokio::time;
 
 use crate::{AngstromValidator, Signer};
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct BidSubmission {
-    pub block_height:  BlockNumber,
-    // this is used mostly for early messages
-    pub pre_proposals: HashSet<PreProposal>
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct BidAggregation {
-    pub block_height:  BlockNumber,
-    pub pre_proposals: HashSet<PreProposal>
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Finalization {
-    pub block_height:  BlockNumber,
-    pub pre_proposals: HashSet<PreProposal>,
-    pub proposal:      Option<Proposal>
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum ConsensusState {
-    BidSubmission(BidSubmission),
-    BidAggregation(BidAggregation),
-    Finalization(Finalization)
-}
-
-impl ConsensusState {
-    fn name(&self) -> &'static str {
-        match self {
-            Self::BidSubmission(_) => "BidSubmission",
-            Self::BidAggregation(_) => "BidAggregation",
-            Self::Finalization(_) => "Finalization"
-        }
-    }
-}
 
 async fn build_proposal(pre_proposals: Vec<PreProposal>) -> Result<Vec<PoolSolution>, String> {
     let matcher = MatchingManager {};
     matcher.build_proposal(pre_proposals).await
 }
+
+const INITIAL_STATE_DURATION: Duration = Duration::from_secs(3);
 
 pub struct RoundStateMachine {
     current_state:          ConsensusState,
@@ -88,24 +62,22 @@ impl RoundStateMachine {
         signer: Signer,
         round_leader: PeerId,
         validators: Vec<AngstromValidator>,
-        metrics: ConsensusMetricsWrapper,
-        initial_state_duration: Option<Duration>
+        metrics: ConsensusMetricsWrapper
     ) -> Self {
-        let initial_state_duration =
-            initial_state_duration.unwrap_or_else(|| Duration::from_secs(3));
-        let timer = Box::pin(time::sleep(initial_state_duration));
-
+        let timer = Box::pin(time::sleep(INITIAL_STATE_DURATION));
         Self {
             current_state: Self::initial_state(block_height),
             round_leader,
             validators,
-            initial_state_duration,
+            initial_state_duration: INITIAL_STATE_DURATION,
             order_storage,
             signer,
             metrics,
             transition_future: None,
             initial_state_timer: Some(timer),
-            waker: None
+
+            waker: None /* provider,
+                         * _phantom: PhantomData, */
         }
     }
 
@@ -147,389 +119,237 @@ impl RoundStateMachine {
     /// Invariants:
     ///  * won't be called with messages with payload from ourselves
     ///  * won't be called with messages for non-current block height
-    ///
-    /// Returns:
-    ///   In general we do not want to return an updated message for broadcast.
-    ///   However, during bid aggregation, we need to tell the rest of the
-    ///   network what our updated pre_proposal is, so when it's time for the
-    ///   leader to propose, it needs to see an agreement on the ToB and RoB
-    pub fn on_strom_message(&mut self, strom_msg: StromConsensusEvent) -> Option<StromMessage> {
-        let current_state = self.current_state.clone();
-        let new_state = match current_state {
-            ConsensusState::BidSubmission(bid_submission) => {
-                let (updated_submission, new_state) =
-                    self.handle_strom_msg_in_submission(bid_submission, strom_msg);
-                self.current_state = ConsensusState::BidSubmission(updated_submission);
-                new_state
-            }
-            ConsensusState::BidAggregation(bid_aggregation) => {
-                let (updated_aggregation, new_state) =
-                    self.handle_strom_msg_in_aggregation(bid_aggregation, strom_msg);
-                self.current_state = ConsensusState::BidAggregation(updated_aggregation);
-                new_state
-            }
-            ConsensusState::Finalization(finalization) => {
-                let (updated_finalization, new_state) =
-                    self.handle_strom_msg_in_finalization(finalization, strom_msg);
-                self.current_state = ConsensusState::Finalization(updated_finalization);
-                new_state
-            }
-        };
+    pub fn on_strom_message(
+        &mut self,
+        strom_msg: StromConsensusEvent
+    ) -> Option<(Option<PeerId>, StromMessage)> {
+        let i_am_leader = self.i_am_leader();
+        match strom_msg {
+            StromConsensusEvent::PreProposal(_, pre_proposal) => {
+                // we do not want to allow another node to push us to transition
+                if !matches!(self.current_state, ConsensusState::BidAggregation(_)) {
+                    return None;
+                }
 
-        if let Some(new_state) = new_state {
-            self.force_transition(new_state);
-        }
+                if !pre_proposal.is_valid() {
+                    return None;
+                }
 
-        // send the updated pre-proposal with the new orders
-        if let ConsensusState::BidAggregation(BidAggregation { pre_proposals, .. }) =
-            &self.current_state
-        {
-            return self.my_pre_proposal(pre_proposals);
+                if !i_am_leader {
+                    let block_height = self.current_state.block_height();
+                    let merged_pre_proposal = Self::generate_our_merged_pre_proposal(
+                        block_height,
+                        Vec::new(),
+                        Vec::new(),
+                        self.current_state.pre_proposals(),
+                        &self.signer
+                    );
+                    self.current_state
+                        .pre_proposals_mut()
+                        .insert(merged_pre_proposal.clone());
+                    let pre_proposals = self.current_state.pre_proposals();
+
+                    if self.have_quorum(self.all_searcher_orders(pre_proposals))
+                        && self.have_quorum(self.all_limit_orders(pre_proposals))
+                    {
+                        // send the quorum pre_proposal to the leader
+                        return Some((
+                            Some(self.round_leader.clone()),
+                            StromMessage::PrePropose(merged_pre_proposal)
+                        ));
+                    }
+
+                    return Some((None, StromMessage::PrePropose(merged_pre_proposal)));
+                }
+
+                // Leader path
+                self.current_state.pre_proposals_mut().insert(pre_proposal);
+                let pre_proposals = self.current_state.pre_proposals();
+                let block_height = self.current_state.block_height();
+
+                if self.have_quorum(self.all_searcher_orders(pre_proposals))
+                    && self.have_quorum(self.all_limit_orders(pre_proposals))
+                {
+                    self.force_transition(ConsensusState::Finalization(Finalization {
+                        block_height,
+                        proposal: None,
+                        pre_proposals: pre_proposals.clone()
+                    }));
+                    return None;
+                }
+            }
+            StromConsensusEvent::Proposal(msg_sender, proposal) => {
+                let Proposal {
+                    source: proposal_sender, block_height: proposal_block_height, ..
+                } = proposal;
+
+                let pre_proposals = self.current_state.pre_proposals();
+                if proposal.is_valid() && !i_am_leader {
+                    self.force_transition(ConsensusState::Finalization(Finalization {
+                        block_height:  proposal_block_height,
+                        proposal:      Some(proposal),
+                        pre_proposals: pre_proposals.clone()
+                    }));
+                }
+
+                if i_am_leader {
+                    panic!(
+                        "Message sender: {}, Proposal block height: {}, Proposal source: {}, \
+                         Current state {}, something is terribly wrong",
+                        msg_sender,
+                        proposal_block_height,
+                        proposal_sender,
+                        self.current_state.name()
+                    );
+                }
+            }
         }
 
         None
     }
 
-    fn handle_strom_msg_in_submission(
+    fn generate_bid_aggregation(
         &self,
-        mut bid_submission: BidSubmission,
-        strom_msg: StromConsensusEvent
-    ) -> (BidSubmission, Option<ConsensusState>) {
-        match strom_msg {
-            // we are lagging, we should transition to bid aggregation
-            StromConsensusEvent::PreProposal(msg_sender, pre_proposal) => {
-                let PreProposal {
-                    block_height: pre_proposal_height,
-                    source: pre_proposal_sender,
-                    ..
-                } = pre_proposal;
-                if !pre_proposal.is_valid() {
-                    tracing::warn!(
-                        %msg_sender,
-                        %bid_submission.block_height,
-                        %pre_proposal_sender,
-                        %pre_proposal_height,
-                        "received pre_proposal with invalid signature",
-                    );
-                    return (bid_submission, None);
-                }
-                bid_submission.pre_proposals.insert(pre_proposal.clone());
-
-                let bid_aggregation = self.generate_bid_aggregation(bid_submission.clone());
-
-                bid_submission.pre_proposals = bid_aggregation.pre_proposals.clone();
-
-                // TODO: do we want to skip bid aggregation if we have quorum here ?
-                (bid_submission, Some(ConsensusState::BidAggregation(bid_aggregation)))
-            }
-            StromConsensusEvent::Proposal(msg_sender, proposal) => {
-                let Proposal {
-                    block_height: proposal_block_height, source: proposal_sender, ..
-                } = proposal;
-                // TODO: we got an invalid proposal; start slashing ?
-                if !proposal.is_valid() || !self.is_leader(proposal_sender) {
-                    return (bid_submission, None);
-                }
-
-                // we are following and lagging a lot
-                if !self.i_am_leader() {
-                    let pre_proposals = bid_submission.pre_proposals.clone();
-                    return (
-                        bid_submission,
-                        Some(ConsensusState::Finalization(Finalization {
-                            block_height: proposal_block_height,
-                            proposal: Some(proposal),
-                            pre_proposals
-                        }))
-                    );
-                }
-
-                // that should not be possible. it means we got our own proposal from another
-                // node, while we are in bid submission state
-                panic!(
-                    "Message sender: {}, Proposal block height: {}, Proposal source: {}, Current \
-                     state {}, something is terribly wrong",
-                    msg_sender,
-                    proposal_block_height,
-                    proposal_sender,
-                    self.current_state.name()
-                );
-            }
-            // TODO: this could be used  by the leader to gossip the 2/3 + 1 pre_proposals that were
-            // used for the bundle
-            StromConsensusEvent::Commit(..) => (bid_submission, None)
-        }
-    }
-
-    fn generate_bid_aggregation(&self, bid_submission: BidSubmission) -> BidAggregation {
-        let BidSubmission { block_height, pre_proposals } = bid_submission;
+        block_height: BlockNumber,
+        pre_proposals: &HashSet<PreProposal>
+    ) -> BidAggregation {
         let OrderSet { limit, searcher } = self.order_storage.get_all_orders();
         let mut pre_proposals = pre_proposals.clone();
 
-        let pre_proposal =
-            self.generate_our_merged_pre_proposal(block_height, limit, searcher, &pre_proposals);
+        let pre_proposal = Self::generate_our_merged_pre_proposal(
+            block_height,
+            limit,
+            searcher,
+            &pre_proposals,
+            &self.signer
+        );
         pre_proposals.insert(pre_proposal);
 
         BidAggregation { block_height, pre_proposals }
     }
 
     fn generate_our_merged_pre_proposal(
-        &self,
         block_height: BlockNumber,
         limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pre_proposals: &HashSet<PreProposal>
+        pre_proposals: &HashSet<PreProposal>,
+        signer: &Signer
     ) -> PreProposal {
-        let merged_limit_orders = self.merge_limit_orders(
-            pre_proposals
-                .iter()
-                .flat_map(|p| p.limit.clone())
-                .chain(limit)
-                .collect()
-        );
+        let merged_limit_orders: Vec<_> = pre_proposals
+            .iter()
+            .flat_map(|p| p.limit.clone())
+            .chain(limit)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
 
-        let merged_searcher_orders = self.merge_searcher_orders(
-            pre_proposals
-                .iter()
-                .flat_map(|p| p.searcher.clone())
-                .chain(searcher)
-                .collect()
-        );
+        let merged_searcher_orders: Vec<_> = pre_proposals
+            .iter()
+            .flat_map(|p| p.searcher.clone())
+            .chain(searcher)
+            .into_group_map_by(|order| order.pool_id)
+            .into_values()
+            .filter_map(|group| group.into_iter().max_by_key(|order| order.tob_reward))
+            .collect();
 
         PreProposal::generate_pre_proposal(
             block_height,
-            self.my_id(),
+            signer.my_id,
             merged_limit_orders,
             merged_searcher_orders,
-            &self.signer.key
+            &signer.key
         )
     }
 
-    fn handle_strom_msg_in_aggregation(
+    fn all_searcher_orders(
         &self,
-        mut bid_aggregation: BidAggregation,
-        strom_msg: StromConsensusEvent
-    ) -> (BidAggregation, Option<ConsensusState>) {
-        match strom_msg {
-            StromConsensusEvent::PreProposal(_, pre_proposal) => {
-                let PreProposal { block_height, .. } = pre_proposal;
-
-                if !pre_proposal.is_valid() {
-                    return (bid_aggregation, None);
-                }
-
-                bid_aggregation.pre_proposals.insert(pre_proposal.clone());
-
-                // TODO: make it prettier
-                let self_proposal = self.generate_our_merged_pre_proposal(
-                    block_height,
-                    Vec::new(),
-                    Vec::new(),
-                    &bid_aggregation.pre_proposals
-                );
-
-                bid_aggregation.pre_proposals.insert(self_proposal);
-
-                if self.has_quorum(bid_aggregation.pre_proposals.len()) {
-                    return (
-                        bid_aggregation.clone(),
-                        Some(ConsensusState::Finalization(Finalization {
-                            block_height,
-                            proposal: None,
-                            pre_proposals: bid_aggregation.pre_proposals
-                        }))
-                    );
-                }
-
-                (bid_aggregation, None)
-            }
-            StromConsensusEvent::Proposal(msg_sender, proposal) => {
-                let Proposal {
-                    block_height: proposal_block_height, source: proposal_sender, ..
-                } = proposal;
-                // TODO: we got an invalid proposal; start slashing ?
-                if !proposal.is_valid() || !self.is_leader(proposal_sender) {
-                    return (bid_aggregation, None);
-                }
-
-                // we are following and lagging a bit
-                if !self.i_am_leader() {
-                    let pre_proposals = bid_aggregation.pre_proposals.clone();
-                    return (
-                        bid_aggregation,
-                        Some(ConsensusState::Finalization(Finalization {
-                            block_height: proposal_block_height,
-                            proposal: Some(proposal),
-                            pre_proposals
-                        }))
-                    );
-                }
-
-                // that should not be possible. it means we got our own proposal from another
-                // node, while we are in bid aggregation state
-                panic!(
-                    "Message sender: {}, Proposal block height: {}, Proposal source: {}, Current \
-                     state {}, something is terribly wrong",
-                    msg_sender,
-                    proposal_block_height,
-                    proposal_sender,
-                    self.current_state.name()
-                );
-            }
-            // TODO: used to broadcast after the bundle submission
-            StromConsensusEvent::Commit(..) => (bid_aggregation, None),
-            _ => (bid_aggregation, None)
-        }
-    }
-
-    fn handle_strom_msg_in_finalization(
-        &self,
-        mut finalization: Finalization,
-        strom_msg: StromConsensusEvent
-    ) -> (Finalization, Option<ConsensusState>) {
-        match strom_msg {
-            StromConsensusEvent::PreProposal(msg_sender, pre_proposal) => {
-                let PreProposal {
-                    block_height: pre_proposal_height,
-                    source: pre_proposal_sender,
-                    ..
-                } = pre_proposal;
-                if !pre_proposal.is_valid() {
-                    tracing::warn!(
-                        %msg_sender,
-                        %finalization.block_height,
-                        %pre_proposal_sender,
-                        %pre_proposal_height,
-                        "received pre_proposal with invalid signature",
-                    );
-                    return (finalization, None);
-                }
-
-                finalization.pre_proposals.insert(pre_proposal);
-
-                if !self.i_am_leader() {
-                    // if we are not leader wait for Ethereum to restart us
-                    return (finalization, None);
-                }
-
-                if !self.has_quorum(finalization.pre_proposals.len()) {
-                    return (finalization, None);
-                }
-
-                (finalization, None)
-            }
-            StromConsensusEvent::Proposal(msg_sender, proposal) => {
-                let Proposal {
-                    block_height: proposal_block_height, source: proposal_sender, ..
-                } = proposal;
-                // TODO: we got an invalid proposal; start slashing ?
-                if !proposal.is_valid() || !self.is_leader(proposal_sender) {
-                    return (finalization, None);
-                }
-
-                // we are following and lagging a bit
-                if !self.i_am_leader() {
-                    let pre_proposals = finalization.pre_proposals.clone();
-                    return (
-                        finalization,
-                        Some(ConsensusState::Finalization(Finalization {
-                            block_height: proposal_block_height,
-                            proposal: Some(proposal),
-                            pre_proposals
-                        }))
-                    );
-                }
-
-                // that should not be possible. it means we got our own proposal from another
-                // node, while we are in bid aggregation state
-                panic!(
-                    "Message sender: {}, Proposal block height: {}, Proposal source: {}, Current \
-                     state {}, something is terribly wrong",
-                    msg_sender,
-                    proposal_block_height,
-                    proposal_sender,
-                    self.current_state.name()
-                );
-            }
-            // TODO: this could be used  by the leader to gossip the 2/3 + 1 pre_proposals that were
-            // used for the bundle
-            StromConsensusEvent::Commit(..) => (finalization, None)
-        }
-    }
-
-    fn merge_limit_orders(
-        &self,
-        left_limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>
-    ) -> Vec<OrderWithStorageData<GroupedVanillaOrder>> {
-        let mut unique_limit_per_pool: HashMap<_, HashSet<GroupedVanillaOrder>> = HashMap::new();
-
-        for order_with_data in left_limit {
-            unique_limit_per_pool
-                .entry(order_with_data.pool_id)
-                .or_insert_with(HashSet::new)
-                .insert(order_with_data.order.clone());
-        }
-
-        unique_limit_per_pool
-            .into_iter()
-            .flat_map(|(pool_id, orders)| {
-                orders.into_iter().map(move |order| OrderWithStorageData {
-                    pool_id,
-                    order,
-                    ..Default::default()
-                })
-            })
+        pre_proposals: &HashSet<PreProposal>
+    ) -> Vec<OrderWithStorageData<TopOfBlockOrder>> {
+        pre_proposals
+            .iter()
+            .flat_map(|pre_proposal| pre_proposal.searcher.clone())
             .collect()
     }
 
-    fn merge_searcher_orders(
+    fn all_limit_orders(
         &self,
-        left_searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>
-    ) -> Vec<OrderWithStorageData<TopOfBlockOrder>> {
-        let mut top_searcher_per_pool: HashMap<_, OrderWithStorageData<TopOfBlockOrder>> =
-            HashMap::new();
-        for order_with_data in left_searcher {
-            let pool_id = order_with_data.pool_id;
-            top_searcher_per_pool
-                .entry(pool_id)
-                .and_modify(|existing_order| {
-                    if order_with_data.tob_reward > existing_order.tob_reward {
-                        *existing_order = order_with_data.clone();
-                    }
-                })
-                .or_insert(order_with_data);
-        }
-        top_searcher_per_pool.into_values().collect()
+        pre_proposals: &HashSet<PreProposal>
+    ) -> Vec<OrderWithStorageData<GroupedVanillaOrder>> {
+        pre_proposals
+            .iter()
+            .flat_map(|pre_proposal| pre_proposal.limit.clone())
+            .collect()
+    }
+
+    fn have_quorum<T: Hash + Eq + Clone>(&self, orders: Vec<OrderWithStorageData<T>>) -> bool {
+        orders.len() == self.filter_quorum_orders(orders).len()
+    }
+
+    fn filter_quorum_orders<T: Hash + Eq + Clone>(
+        &self,
+        input: Vec<OrderWithStorageData<T>>
+    ) -> Vec<OrderWithStorageData<T>> {
+        input
+            .into_iter()
+            .fold(HashMap::new(), |mut acc, order| {
+                *acc.entry(order).or_insert(0) += 1;
+                acc
+            })
+            .into_iter()
+            .filter(|(_, count)| self.has_quorum(*count))
+            .map(|(order, _)| order)
+            .collect()
     }
 
     fn force_transition(&mut self, mut new_state: ConsensusState) {
-        let from_state = self.current_state.clone();
         let signer = self.signer.clone();
+        let metrics = self.metrics.clone();
+        let pre_proposal_height = self.current_state.block_height();
+        let pre_proposals: Vec<PreProposal> =
+            self.current_state.pre_proposals().iter().cloned().collect();
 
         self.transition_future = Some(Box::pin(async move {
-            if let (
-                ConsensusState::BidAggregation(BidAggregation {
-                    block_height: pre_proposal_height,
-                    pre_proposals
-                }),
-                ConsensusState::Finalization(ref mut finalization)
-            ) = (from_state, &mut new_state)
-            {
-                let pre_proposals: Vec<PreProposal> = pre_proposals.iter().cloned().collect();
-                // TODO: maybe spawn a new thread here, since proposal building might be comp
-                // expensive
-                let solutions = build_proposal(pre_proposals.clone()).await.unwrap();
-                let proposal = signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);
+            if let ConsensusState::Finalization(finalization) = &mut new_state {
+                // someone already proposed and we are not a leader
+                if finalization.proposal.is_some() {
+                    // TODO: use this opportunity to trigger the proposal validation
+                    return new_state;
+                }
 
-                finalization.proposal = Some(proposal);
+                let (proposal_result, timer) = async_time_fn(|| async {
+                    match build_proposal(pre_proposals.clone()).await {
+                        Ok(solutions) => {
+                            let proposal =
+                                signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);
+                            Ok(proposal)
+                        }
+                        Err(err) => Err(err)
+                    }
+                })
+                .await;
+                metrics.set_proposal_build_time(pre_proposal_height, timer);
 
-                // TODO: submit the proposal/bundle to the chain
-                // Ethereum.submit(proposal).await
+                match proposal_result {
+                    Ok(proposal) => {
+                        finalization.proposal = Some(proposal.clone());
+                        // TODO: use the actual pools
+                        let pools = HashMap::new();
+                        let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
+                    }
+                    Err(err) => {
+                        // Handle the error from build_proposal
+                        tracing::error!(
+                            error = %err,
+                            block_height = pre_proposal_height,
+                            "Failed to build proposal"
+                        );
+                    }
+                }
             }
             new_state
         }));
 
-        // wake up the task to ensure poll_next is called
+        // wake up the poller
         if let Some(waker) = &self.waker {
             waker.wake_by_ref();
         }
@@ -544,19 +364,22 @@ impl Stream for RoundStateMachine {
 
         this.waker = Some(cx.waker().clone());
 
-        if let Some(ref mut future) = this.transition_future {
+        if let Some(future) = &mut this.transition_future {
             return match future.as_mut().poll(cx) {
                 Poll::Ready(new_state) => Poll::Ready(Some(new_state)),
                 Poll::Pending => Poll::Pending
             };
         }
 
-        if let Some(ref mut timer) = this.initial_state_timer {
+        if let Some(timer) = &mut this.initial_state_timer {
             if timer.as_mut().poll(cx).is_ready() {
-                // if the timer ran out and we are not in bid submission, something curious
-                // happened
-                if let ConsensusState::BidSubmission(ref bid_submission) = this.current_state {
-                    let bid_aggregation = this.generate_bid_aggregation(bid_submission.clone());
+                if let ConsensusState::BidSubmission(BidSubmission {
+                    block_height,
+                    pre_proposals
+                }) = &this.current_state
+                {
+                    let bid_aggregation =
+                        this.generate_bid_aggregation(*block_height, pre_proposals);
                     this.transition_future =
                         Some(Box::pin(async { ConsensusState::BidAggregation(bid_aggregation) }));
                     this.initial_state_timer = None;
@@ -565,5 +388,68 @@ impl Stream for RoundStateMachine {
         }
 
         Poll::Pending
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct BidSubmission {
+    pub block_height:  BlockNumber,
+    // this is used mostly for early messages
+    pub pre_proposals: HashSet<PreProposal>
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct BidAggregation {
+    pub block_height:  BlockNumber,
+    pub pre_proposals: HashSet<PreProposal>
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Finalization {
+    pub block_height:  BlockNumber,
+    pub pre_proposals: HashSet<PreProposal>,
+    pub proposal:      Option<Proposal>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ConsensusState {
+    BidSubmission(BidSubmission),
+    BidAggregation(BidAggregation),
+    Finalization(Finalization)
+}
+
+impl ConsensusState {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::BidSubmission(_) => "BidSubmission",
+            Self::BidAggregation(_) => "BidAggregation",
+            Self::Finalization(_) => "Finalization"
+        }
+    }
+}
+
+impl ConsensusState {
+    pub fn block_height(&self) -> BlockNumber {
+        match self {
+            Self::BidSubmission(state) => state.block_height,
+            Self::BidAggregation(state) => state.block_height,
+            Self::Finalization(state) => state.block_height
+        }
+    }
+
+    pub fn pre_proposals_mut(&mut self) -> &mut HashSet<PreProposal> {
+        match self {
+            Self::BidSubmission(state) => &mut state.pre_proposals,
+            Self::BidAggregation(state) => &mut state.pre_proposals,
+            Self::Finalization(state) => &mut state.pre_proposals
+        }
+    }
+
+    pub fn pre_proposals(&self) -> &HashSet<PreProposal> {
+        match self {
+            Self::BidSubmission(state) => &state.pre_proposals,
+            Self::BidAggregation(state) => &state.pre_proposals,
+            Self::Finalization(state) => &state.pre_proposals
+        }
     }
 }

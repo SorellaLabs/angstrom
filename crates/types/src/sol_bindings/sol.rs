@@ -1,3 +1,4 @@
+#[allow(non_snake_case)]
 mod private {
     use alloy::sol;
     use pade_macro::PadeEncode;

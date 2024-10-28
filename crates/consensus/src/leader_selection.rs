@@ -5,10 +5,13 @@ use std::{
     io::{self, Read, Write}
 };
 
-use alloy_primitives::BlockNumber;
+use alloy::primitives::BlockNumber;
 use angstrom_types::primitive::PeerId;
 
 const ROUND_ROBIN_CACHE: &str = "./";
+
+// https://github.com/tendermint/tendermint/pull/2785#discussion_r235038971
+const PENALTY_FACTOR: f64 = 1.125;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AngstromValidator {
@@ -27,15 +30,12 @@ impl AngstromValidator {
 pub struct WeightedRoundRobin {
     validators:                HashSet<AngstromValidator>,
     new_joiner_penalty_factor: f64,
-    block_number:              BlockNumber
+    block_number:              BlockNumber,
+    last_proposer:             Option<PeerId>
 }
 
 impl WeightedRoundRobin {
-    pub fn new(
-        validators: Vec<AngstromValidator>,
-        block_number: BlockNumber,
-        new_joiner_penalty_factor: Option<f64>
-    ) -> Self {
+    pub fn new(validators: Vec<AngstromValidator>, block_number: BlockNumber) -> Self {
         let file_path = format!("{}/state.json", ROUND_ROBIN_CACHE);
         if let Ok(mut file) = File::open(file_path) {
             let mut contents = String::new();
@@ -47,8 +47,9 @@ impl WeightedRoundRobin {
         }
         WeightedRoundRobin {
             validators: HashSet::from_iter(validators),
-            new_joiner_penalty_factor: new_joiner_penalty_factor.unwrap_or(1.125),
-            block_number
+            new_joiner_penalty_factor: PENALTY_FACTOR,
+            block_number,
+            last_proposer: None
         }
     }
 
@@ -65,18 +66,21 @@ impl WeightedRoundRobin {
         let mut proposer = self
             .validators
             .iter()
-            .max_by(|a, b| {
-                a.priority
-                    .partial_cmp(&b.priority)
-                    .unwrap_or(Ordering::Equal)
-            })
+            .max_by(Self::priority)
             .unwrap()
             .clone();
         proposer.priority -= total_voting_power as f64;
         let proposer_name = proposer.peer_id;
+
         self.validators.replace(proposer);
 
         proposer_name
+    }
+
+    fn priority(a: &&AngstromValidator, b: &&AngstromValidator) -> Ordering {
+        a.priority
+            .partial_cmp(&b.priority)
+            .unwrap_or(Ordering::Equal)
     }
 
     fn center_priorities(&mut self) {
@@ -116,13 +120,28 @@ impl WeightedRoundRobin {
         }
     }
 
+    pub fn last_proposer(&self) -> Option<PeerId> {
+        self.last_proposer
+    }
+
     pub fn choose_proposer(&mut self, block_number: BlockNumber) -> Option<PeerId> {
+        // 1. this is not ideal, since on multi-block reorgs the same proposer will be
+        //    chosen for the length of the reorg
+        // 2. reverting the block number (self.block_number = block_number) is also not
+        //    ideal, since nodes who were offline
+        // will not have seen the reorg, thus would not have executed the extra rounds
+        // after this if statement
+        if block_number <= self.block_number {
+            return self.last_proposer;
+        }
+
         let rounds_to_catchup = (block_number - self.block_number) as usize;
         let mut leader = None;
         for _ in 0..rounds_to_catchup {
             self.center_priorities();
             self.scale_priorities();
             leader = Some(self.proposer_selection());
+            self.last_proposer = leader
         }
         self.block_number = block_number;
         leader
@@ -168,6 +187,7 @@ impl std::hash::Hash for AngstromValidator {
         self.peer_id.hash(state);
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -191,7 +211,7 @@ mod tests {
             AngstromValidator::new(peers["Bob"], 200),
             AngstromValidator::new(peers["Charlie"], 300),
         ];
-        let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default(), None);
+        let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
         fn simulate_rounds(algo: &mut WeightedRoundRobin, rounds: usize) -> HashMap<PeerId, usize> {
             let mut stats = HashMap::new();
@@ -233,7 +253,7 @@ mod tests {
             AngstromValidator::new(peers["Alice"], 100),
             AngstromValidator::new(peers["Bob"], 200),
         ];
-        let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default(), None);
+        let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
         fn simulate_rounds(
             algo: &mut WeightedRoundRobin,
@@ -280,11 +300,11 @@ mod tests {
             AngstromValidator::new(peers["Bob"], 200),
             AngstromValidator::new(peers["Charlie"], 300),
         ];
-        let algo = WeightedRoundRobin::new(validators, BlockNumber::default(), None);
+        let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
         algo.save_state().unwrap();
 
-        let loaded_algo = WeightedRoundRobin::new(vec![], BlockNumber::default(), None);
+        let mut loaded_algo = WeightedRoundRobin::new(vec![], BlockNumber::default());
 
         assert_eq!(algo.validators, loaded_algo.validators);
         assert_eq!(algo.new_joiner_penalty_factor, loaded_algo.new_joiner_penalty_factor);

@@ -18,21 +18,9 @@ pub struct AssetBuilder {
     assets:       AssetArray
 }
 
-impl Default for AssetBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AssetBuilder {
     pub fn new() -> Self {
-        Self {
-            swaps:        StageTracker::new(),
-            rewards:      StageTracker::new(),
-            top_of_block: StageTracker::new(),
-            user_orders:  StageTracker::new(),
-            assets:       AssetArray::new()
-        }
+        Self::default()
     }
 
     fn get_stage(&mut self, stage: AssetBuilderStage) -> &mut StageTracker {
@@ -101,5 +89,17 @@ impl AssetBuilder {
                 asset
             })
             .collect()
+    }
+}
+
+impl Default for AssetBuilder {
+    fn default() -> Self {
+        Self {
+            swaps:        StageTracker::new(),
+            rewards:      StageTracker::new(),
+            top_of_block: StageTracker::new(),
+            user_orders:  StageTracker::new(),
+            assets:       AssetArray::new()
+        }
     }
 }

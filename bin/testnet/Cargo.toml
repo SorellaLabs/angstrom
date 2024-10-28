@@ -59,7 +59,6 @@ order-pool.workspace = true
 validation.workspace = true
 
 # Other
-blsful.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
 tokio-util.workspace = true

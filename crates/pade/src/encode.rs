@@ -121,4 +121,10 @@ mod tests {
         assert!(vec.pade_header_bits() == 24);
         assert!(vec.pade_variant_map_bits() == 0);
     }
+
+    #[test]
+    fn can_encode_empty_vec() {
+        let vec: Vec<u8> = vec![];
+        vec.pade_encode();
+    }
 }

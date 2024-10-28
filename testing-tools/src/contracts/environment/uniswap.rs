@@ -11,6 +11,7 @@ use crate::contracts::DebugTransaction;
 pub trait TestUniswapEnv: TestAnvilEnvironment {
     fn pool_manager(&self) -> Address;
     fn pool_gate(&self) -> Address;
+    #[allow(async_fn_in_trait)]
     async fn add_liquidity_position(
         &self,
         asset0: Address,

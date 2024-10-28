@@ -1,6 +1,6 @@
 use std::{collections::HashMap, pin::Pin, task::Poll};
 
-use angstrom_types::consensus::{Commit, PreProposal, Proposal};
+use angstrom_types::consensus::{PreProposal, Proposal};
 use futures::stream::Stream;
 mod strom_peer;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkEvent};
@@ -296,8 +296,7 @@ impl AngstromTestnet {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConsensusMsgTestCmp {
     PrePropose(PreProposal),
-    Propose(Proposal),
-    Commit(Commit)
+    Propose(Proposal)
 }
 
 impl TryFrom<StromMessage> for ConsensusMsgTestCmp {
@@ -305,7 +304,6 @@ impl TryFrom<StromMessage> for ConsensusMsgTestCmp {
 
     fn try_from(value: StromMessage) -> Result<Self, Self::Error> {
         match value {
-            StromMessage::Commit(c) => Ok(ConsensusMsgTestCmp::Commit(c)),
             StromMessage::PrePropose(p) => Ok(ConsensusMsgTestCmp::PrePropose(p)),
             StromMessage::Propose(p) => Ok(ConsensusMsgTestCmp::Propose(p)),
             _ => Err(0)
@@ -316,7 +314,6 @@ impl TryFrom<StromMessage> for ConsensusMsgTestCmp {
 impl From<StromConsensusEvent> for ConsensusMsgTestCmp {
     fn from(value: StromConsensusEvent) -> Self {
         match value {
-            StromConsensusEvent::Commit(_, c) => ConsensusMsgTestCmp::Commit(c),
             StromConsensusEvent::PreProposal(_, p) => ConsensusMsgTestCmp::PrePropose(p),
             StromConsensusEvent::Proposal(_, p) => ConsensusMsgTestCmp::Propose(p)
         }

@@ -17,6 +17,7 @@ use alloy::{
 use angstrom_types::{
     contract_bindings::angstrom::Angstrom::Overflow,
     contract_payloads::angstrom::AngstromBundle,
+    matching::uniswap::UniswapFlags,
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder,
@@ -41,102 +42,7 @@ use crate::BlockStateProviderFactory;
 
 /// A address we can use to deploy contracts
 const DEFAULT_FROM: Address = address!("aa250d5630b4cf539739df2c5dacb4c659f2488d");
-
 const DEFAULT_CREATE2_FACTORY: Address = address!("4e59b44847b379578588920cA78FbF26c0B4956C");
-
-pub enum UniswapFlags {
-    BeforeInitialize,
-    AfterInitialize,
-    BeforeAddLiquidity,
-    AfterAddLiquidity,
-    BeforeRemoveLiquidity,
-    AfterRemoveLiquidity,
-    BeforeSwap,
-    AfterSwap,
-    BeforeDonate,
-    AfterDonate,
-    BeforeSwapReturnsDelta,
-    AfterSwapReturnsDelta,
-    AfterAddLiquidityReturnsDelta,
-    AfterRemoveLiquidityReturnsDelta
-}
-
-impl UniswapFlags {
-    pub fn mask() -> U160 {
-        (U160::from(1_u8) << 14) - U160::from(1_u8)
-    }
-}
-
-impl From<UniswapFlags> for U160 {
-    fn from(value: UniswapFlags) -> U160 {
-        let bitshift: usize = match value {
-            UniswapFlags::BeforeInitialize => 13,
-            UniswapFlags::AfterInitialize => 12,
-            UniswapFlags::BeforeAddLiquidity => 11,
-            UniswapFlags::AfterAddLiquidity => 10,
-            UniswapFlags::BeforeRemoveLiquidity => 9,
-            UniswapFlags::AfterRemoveLiquidity => 8,
-            UniswapFlags::BeforeSwap => 7,
-            UniswapFlags::AfterSwap => 6,
-            UniswapFlags::BeforeDonate => 5,
-            UniswapFlags::AfterDonate => 4,
-            UniswapFlags::BeforeSwapReturnsDelta => 3,
-            UniswapFlags::AfterSwapReturnsDelta => 2,
-            UniswapFlags::AfterAddLiquidityReturnsDelta => 1,
-            UniswapFlags::AfterRemoveLiquidityReturnsDelta => 0
-        };
-        U160::from(1_u8) << bitshift
-    }
-}
-
-impl BitOr for UniswapFlags {
-    type Output = U160;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Into::<U160>::into(self) | Into::<U160>::into(rhs)
-    }
-}
-
-impl BitOr<UniswapFlags> for U160 {
-    type Output = U160;
-
-    fn bitor(self, rhs: UniswapFlags) -> Self::Output {
-        self | Into::<U160>::into(rhs)
-    }
-}
-
-impl BitOr<U160> for UniswapFlags {
-    type Output = U160;
-
-    fn bitor(self, rhs: U160) -> Self::Output {
-        Into::<U160>::into(self) | rhs
-    }
-}
-
-pub fn mine_address_with_factory(
-    factory: Address,
-    flags: U160,
-    mask: U160,
-    initcode: &Bytes
-) -> (Address, U256) {
-    let init_code_hash = keccak256(initcode);
-    let mut salt = U256::ZERO;
-    let mut counter: u128 = 0;
-    loop {
-        let target_address: Address = factory.create2(B256::from(salt), init_code_hash);
-        let u_address: U160 = target_address.into();
-        if (u_address & mask) == flags {
-            break
-        }
-        salt += U256::from(1_u8);
-        counter += 1;
-        if counter > 100_000 {
-            panic!("We tried this too many times!")
-        }
-    }
-    let final_address = factory.create2(B256::from(salt), init_code_hash);
-    (final_address, salt)
-}
 
 /// deals with the calculation of gas for a given type of order.
 /// user orders and tob orders take different paths and are different size and
@@ -417,21 +323,63 @@ struct OverridesForTestAngstrom {
     pub token_out:    Address
 }
 
+pub fn mine_address_with_factory(
+    factory: Address,
+    flags: U160,
+    mask: U160,
+    initcode: &Bytes
+) -> (Address, U256) {
+    let init_code_hash = keccak256(initcode);
+    let mut salt = U256::ZERO;
+    let mut counter: u128 = 0;
+    loop {
+        let target_address: Address = factory.create2(B256::from(salt), init_code_hash);
+        let u_address: U160 = target_address.into();
+        if (u_address & mask) == flags {
+            break
+        }
+        salt += U256::from(1_u8);
+        counter += 1;
+        if counter > 100_000 {
+            panic!("We tried this too many times!")
+        }
+    }
+    let final_address = factory.create2(B256::from(salt), init_code_hash);
+    (final_address, salt)
+}
+
 #[cfg(test)]
 pub mod test {
     // test to see proper gas_calculations
-    use std::path::Path;
+    use std::{
+        path::Path,
+        time::{Duration, SystemTime, UNIX_EPOCH}
+    };
 
     use alloy::{
         node_bindings::WEI_IN_ETHER,
-        primitives::{hex, U256}
+        primitives::{hex, Uint, U256},
+        signers::{local::LocalSigner, Signer, SignerSync}
     };
-    use angstrom_types::reth_db_wrapper::RethDbWrapper;
+    use angstrom_types::{
+        contract_payloads::angstrom::UserOrder,
+        orders::{OrderFillState, OrderOutcome},
+        reth_db_wrapper::RethDbWrapper,
+        sol_bindings::{
+            grouped_orders::StandingVariants,
+            rpc_orders::{ExactStandingOrder, OmitOrderMeta},
+            AngstromContract
+        }
+    };
     use eyre::eyre;
+    use rand::thread_rng;
     use revm::primitives::AccountInfo;
     use testing_tools::load_reth_db;
 
     use super::*;
+
+    const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
+    const USER_WITH_FUNDS: Address = address!("d02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
 
     #[test]
     fn ensure_creation_of_mock_works() {
@@ -444,6 +392,88 @@ pub mod test {
         }
 
         assert!(res.is_ok(), "failed to deploy angstrom structure and v4 to chain");
+    }
+
+    const ANGSTROM_DOMAIN: alloy::sol_types::Eip712Domain = alloy::sol_types::eip712_domain! {
+        name: "angstrom",
+        version: "1",
+        chain_id: 1,
+    };
+
+    fn signed_exact_order() -> (Address, ExactStandingOrder) {
+        let user = LocalSigner::random();
+        let address = user.address();
+
+        let mut default = angstrom_types::sol_bindings::rpc_orders::ExactStandingOrder {
+            exactIn:     true,
+            amount:      WEI_IN_ETHER.to(),
+            minPrice:    U256::from(1u128),
+            useInternal: false,
+            assetIn:     WETH_ADDRESS,
+            assetOut:    WETH_ADDRESS,
+            recipient:   USER_WITH_FUNDS,
+            hook:        Address::ZERO,
+            hookPayload: alloy::primitives::Bytes::new(),
+            nonce:       0,
+            deadline:    Uint::<40, 1>::from_be_slice(
+                &(SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+                    + Duration::from_secs(1000))
+                .as_secs()
+                .to_be_bytes()[3..]
+            ),
+
+            meta: Default::default()
+        };
+        let hash = default.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
+        let sig = user.sign_hash_sync(&hash).unwrap();
+
+        default.meta.isEcdsa = true;
+        default.meta.from = address;
+        default.meta.signature = sig.pade_encode().into();
+
+        (address, default)
+    }
+
+    #[test]
+    fn test_user_gas_calculations_work() {
+        let db_path = Path::new("/home/data/reth/db/");
+        let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
+
+        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)));
+
+        assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
+        let mut gas_calculations = gas_calculations.unwrap();
+
+        let (swapper, order) = signed_exact_order();
+
+        // ensure we give the proper approvals of token in as this is
+        // baseline assumed by this module
+        set_balances_and_approvals(
+            &mut gas_calculations.db,
+            gas_calculations.angstrom_address,
+            swapper,
+            WETH_ADDRESS,
+            WEI_IN_ETHER
+        );
+
+        let mut user_order = OrderWithStorageData {
+            order: GroupedVanillaOrder::Standing(StandingVariants::Exact(order)),
+            is_currently_valid: true,
+            is_bid: true,
+            ..Default::default()
+        };
+
+        let outcome =
+            OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
+        let encode = UserOrder::from_internal_order(&user_order, &outcome, 0).pade_encode();
+
+        // ensure user address has proper funds
+        let order_gas = gas_calculations
+            .gas_of_book_order(&user_order)
+            .expect("failed_to execute user order");
+
+        // have not set offsets
+        assert_eq!(order_gas, 0);
     }
 
     alloy::sol!(
@@ -469,23 +499,13 @@ pub mod test {
         let amount = U256::from(50) * WEI_IN_ETHER;
         let mut cache_db = CacheDB::new(db);
 
-        // setup account with lots of weth
-        for i in 0..10 {
-            let balance_amount_out_slot = keccak256((user_with_funds, i).abi_encode());
-            let approval_slot = keccak256(
-                (DEFAULT_FROM, keccak256((user_with_funds, i).abi_encode())).abi_encode()
-            );
-
-            cache_db
-                .insert_account_storage(weth_contract, balance_amount_out_slot.into(), amount)
-                .map_err(|_| eyre!("failed to insert account into storage"))
-                .unwrap();
-
-            cache_db
-                .insert_account_storage(weth_contract, approval_slot.into(), amount)
-                .map_err(|_| eyre!("failed to insert account into storage"))
-                .unwrap();
-        }
+        set_balances_and_approvals(
+            &mut cache_db,
+            DEFAULT_FROM,
+            user_with_funds,
+            weth_contract,
+            amount
+        );
 
         let mut offsets = std::collections::HashMap::default();
         // its important to note that the end pc needs to be +1 the wante
@@ -607,5 +627,29 @@ pub mod test {
         assert_eq!(total_gas, 26 + 21000);
 
         assert_eq!(gas_used, 14);
+    }
+
+    fn set_balances_and_approvals<DB: DatabaseRef + Unpin>(
+        cache_db: &mut CacheDB<Arc<DB>>,
+        calle_address: Address,
+        user_address: Address,
+        token: Address,
+        amount: U256
+    ) {
+        for i in 0..10 {
+            let balance_amount_out_slot = keccak256((user_address, i).abi_encode());
+            let approval_slot =
+                keccak256((calle_address, keccak256((user_address, i).abi_encode())).abi_encode());
+
+            cache_db
+                .insert_account_storage(token, balance_amount_out_slot.into(), amount)
+                .map_err(|_| eyre!("failed to insert account into storage"))
+                .unwrap();
+
+            cache_db
+                .insert_account_storage(token, approval_slot.into(), amount)
+                .map_err(|_| eyre!("failed to insert account into storage"))
+                .unwrap();
+        }
     }
 }

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{Commit, PreProposal, Proposal},
+    consensus::{PreProposal, Proposal},
     primitive::PeerId
 };
 use tokio::{
@@ -42,12 +42,6 @@ impl MockConsensusEventHandle {
         self.tx
             .send(StromConsensusEvent::Proposal(peer, proposal))
             .expect("Failed to send proposal");
-    }
-
-    pub fn commit(&self, peer: PeerId, commit: Commit) {
-        self.tx
-            .send(StromConsensusEvent::Commit(peer, commit))
-            .expect("Failed to send commit message")
     }
 
     pub async fn propose_on_next_tick(&self, peer: PeerId, proposal: Proposal) {

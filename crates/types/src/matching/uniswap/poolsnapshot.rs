@@ -10,10 +10,7 @@ use super::{
 };
 use crate::matching::SqrtPriceX96;
 
-/// Snapshot of a particular Uniswap pool and a map of its liquidity.  A pool
-/// has a Token0 and a Token1 which represent the two quantities that are being
-/// exchanged.  This snapshot contains the current price and liquidity
-/// information representing the state of a Uniswap pool at a point in time.
+/// Snapshot of a particular Uniswap pool and a map of its liquidity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PoolSnapshot {
     /// Known tick ranges and liquidity positions gleaned from the market

@@ -5,19 +5,20 @@ use std::{
 
 use alloy::primitives::{keccak256, BlockNumber};
 use bytes::Bytes;
+use reth_network_peers::PeerId;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     orders::OrderSet,
-    primitive::{PeerId, PoolId, Signature},
+    primitive::{PoolId, Signature},
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
     }
 };
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PreProposal {
     pub block_height: BlockNumber,
     pub source:       PeerId,
@@ -25,12 +26,56 @@ pub struct PreProposal {
     pub limit:        Vec<OrderWithStorageData<GroupedVanillaOrder>>,
     // TODO: this really should be another type with HashMap<PoolId, {order, tob_reward}>
     pub searcher:     Vec<OrderWithStorageData<TopOfBlockOrder>>,
-    // if the below changes from a BLS to EcDSA,
-    // i.e. deterministic to non-deterministic signature, the Hash, PartialEq, Eq should be updated
     /// The signature is over the ethereum height as well as the limit and
     /// searcher sets
     pub signature:    Signature
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreProposalContent {
+    pub block_height: BlockNumber,
+    pub source:       PeerId,
+    pub limit:        Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+    pub searcher:     Vec<OrderWithStorageData<TopOfBlockOrder>>
+}
+
+// the reason for the manual implementation is because EcDSA signatures are not
+// deterministic. EdDSA ones are, but the below allows for one less footgun
+// If the struct switches to BLS, or any type of multisig or threshold
+// signature, then the implementation should be changed to include it
+impl Hash for PreProposalContent {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.block_height.hash(state);
+        self.source.hash(state);
+        self.limit.hash(state);
+        self.searcher.hash(state);
+    }
+}
+
+impl PreProposal {
+    pub fn content(&self) -> PreProposalContent {
+        PreProposalContent {
+            block_height: self.block_height,
+            source:       self.source,
+            limit:        self.limit.clone(),
+            searcher:     self.searcher.clone()
+        }
+    }
+}
+
+impl Hash for PreProposal {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.content().hash(state);
+    }
+}
+
+impl PartialEq for PreProposal {
+    fn eq(&self, other: &Self) -> bool {
+        self.content() == other.content()
+    }
+}
+
+impl Eq for PreProposal {}
 
 impl PreProposal {
     fn sign_payload(sk: &SecretKey, payload: Vec<u8>) -> Signature {

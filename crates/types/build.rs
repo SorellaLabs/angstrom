@@ -20,7 +20,6 @@ fn main() {
 
     let binding = base_dir.clone();
     let this_dir = binding.to_str().unwrap();
-    //panic!("{this_dir}");
 
     let mut contract_dir = base_dir.clone();
     contract_dir.push(CONTRACT_LOCATION);

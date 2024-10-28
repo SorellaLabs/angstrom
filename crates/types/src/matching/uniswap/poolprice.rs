@@ -76,11 +76,6 @@ impl<'a> PoolPrice<'a> {
                 }
             }
         }
-        let bound_price = if buy {
-            SqrtPriceX96::at_tick(self.liq_range.upper_tick).ok()?
-        } else {
-            SqrtPriceX96::at_tick(self.liq_range.lower_tick).ok()?
-        };
 
         let mut new_range_idx = self.liq_range.range_idx;
         let mut pool = self.liq_range.range;

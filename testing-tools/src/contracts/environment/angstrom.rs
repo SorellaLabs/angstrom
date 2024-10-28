@@ -10,6 +10,7 @@ pub trait TestAngstromEnv: TestAnvilEnvironment {
 }
 
 pub struct AngstromEnv<E: TestUniswapEnv> {
+    #[allow(dead_code)]
     inner:    E,
     angstrom: Address
 }

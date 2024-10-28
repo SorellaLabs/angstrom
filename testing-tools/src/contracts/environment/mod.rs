@@ -19,6 +19,7 @@ pub trait TestAnvilEnvironment {
 }
 
 pub struct SpawnedAnvil {
+    #[allow(dead_code)]
     anvil:      AnvilInstance,
     provider:   AnvilWalletRpc,
     controller: Address

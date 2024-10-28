@@ -131,3 +131,34 @@ fn can_derive_on_generics() {
         Items { vector: Vec<A> }
     }
 }
+
+#[test]
+fn handles_odd_bool_counts() {
+    // Seven bools for seven brothers
+    #[derive(Default, PadeEncode)]
+    struct SevenBools {
+        one:   bool,
+        two:   bool,
+        three: bool,
+        four:  bool,
+        five:  bool,
+        six:   bool,
+        seven: bool
+    }
+    let seven_test = SevenBools::default();
+    seven_test.pade_encode();
+
+    #[derive(Default, PadeEncode)]
+    struct EightBools {
+        one:   bool,
+        two:   bool,
+        three: bool,
+        four:  bool,
+        five:  bool,
+        six:   bool,
+        seven: bool,
+        eight: bool
+    }
+    let eight_test = EightBools::default();
+    eight_test.pade_encode();
+}

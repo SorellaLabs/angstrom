@@ -6,8 +6,6 @@ use uniswap_v3_math::tick_math::{MAX_TICK, MIN_TICK};
 use super::{Direction, PoolSnapshot, Tick};
 
 /// A LiqRange describes the liquidity conditions within a specific range of
-/// ticks.  The range can be described as `[lower_tick, upper_tick)`.  The range
-/// must start and end on a tick bound, but may include an arbitrary number of
 /// ticks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiqRange {

@@ -13,6 +13,7 @@ use tokio::sync::mpsc::{
 };
 
 mod network_builder;
+use alloy::providers::{network::Ethereum, ProviderBuilder};
 use alloy_chains::Chain;
 use angstrom_eth::{
     handle::{Eth, EthCommand},
@@ -101,7 +102,8 @@ pub fn run() -> eyre::Result<()> {
             network,
             node,
             &executor
-        );
+        )
+        .await;
 
         node_exit_future.await
     })
@@ -182,8 +184,13 @@ pub fn initialize_strom_handles() -> StromHandles {
     }
 }
 
+<<<<<<< HEAD
 pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
     angstrom_address: Option<Address>,
+=======
+pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
+    angstrom_address: Address,
+>>>>>>> feat/gas-spec
     config: AngstromConfig,
     secret_key: SecretKey,
     handles: StromHandles,
@@ -247,8 +254,14 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
         AngstromValidator::new(PeerId::default(), 200),
         AngstromValidator::new(PeerId::default(), 300),
     ];
-    let _consensus_handle = ConsensusManager::spawn(
-        executor.clone(),
+
+    // I am sure there is a prettier way of doing this
+    let provider = ProviderBuilder::<_, _, Ethereum>::default()
+        .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())
+        .await
+        .unwrap();
+
+    let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
             node.provider.subscribe_to_canonical_state(),
@@ -257,8 +270,10 @@ pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<
         signer,
         validators,
         order_storage.clone(),
-        block_height
+        block_height,
+        Arc::new(provider)
     );
+    let _consensus_handle = executor.spawn_critical("consensus", Box::pin(manager));
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]

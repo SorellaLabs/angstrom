@@ -1,8 +1,10 @@
+mod flags;
 mod liqrange;
 mod poolprice;
 mod poolpricevec;
 mod poolsnapshot;
 
+pub use flags::*;
 pub use liqrange::{LiqRange, LiqRangeRef};
 pub use poolprice::PoolPrice;
 pub use poolpricevec::PoolPriceVec;
@@ -73,11 +75,10 @@ impl Direction {
     /// Returns true if the given quantity is on the input side of this
     /// direction
     pub fn is_input(&self, q: &Quantity) -> bool {
-        match (self, q) {
-            (Self::BuyingT0, Quantity::Token1(_)) => true,
-            (Self::SellingT0, Quantity::Token0(_)) => true,
-            _ => false
-        }
+        matches!(
+            (self, q),
+            (Self::BuyingT0, Quantity::Token1(_)) | (Self::SellingT0, Quantity::Token0(_))
+        )
     }
 
     /// Given our transaction direction, turns (amount_in, amount_out) into

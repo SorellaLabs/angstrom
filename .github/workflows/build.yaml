@@ -7,16 +7,14 @@ env:
 
 jobs:
   build:
-    name: 'Build'
+    name: 'Build + Fmt'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@nightly
         with:
+          components: clippy,rustfmt
           toolchain: nightly
-          profile: minimal
-          override: true
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -26,8 +24,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: Build
-        run: cargo build 
+
+      - name: "build nightly"
+        run: cargo build --workspace --all-features
+        # env:
+        #   RUSTFLAGS: -D warnings
+      - name: "cargo fmt"
+        run: cargo fmt --all --check
+
   build-tests:
     name: 'Build Tests'
     runs-on: ubuntu-latest

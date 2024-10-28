@@ -154,7 +154,6 @@ impl<'a> PoolPriceVec<'a> {
                 continue;
             }
             cur_price = target_price;
-            break;
         }
         Ok(Self {
             start_bound: start,
@@ -329,30 +328,6 @@ impl<'a> PoolPriceVec<'a> {
         }
     }
 
-    fn delta(start: PoolPrice<'a>, end: PoolPrice<'a>) -> eyre::Result<(U256, U256)> {
-        let mut cur_price = start.price;
-        let mut cur_range = start.liq_range;
-        let end_price = end.price;
-        let mut total_dt0 = U256::ZERO;
-        let mut total_dt1 = U256::ZERO;
-        while cur_price != end_price {
-            let range_bound = SqrtPriceX96::at_tick(cur_range.upper_tick)?;
-            let target_price = if range_bound < end_price {
-                cur_range = cur_range
-                    .next(Direction::BuyingT0)
-                    .ok_or_eyre("Unable to get next range")?;
-                range_bound
-            } else {
-                end_price
-            };
-            let (d_t0, d_t1) = Self::delta_to_price(cur_price, target_price, cur_range.liquidity);
-            total_dt0 += d_t0;
-            total_dt1 += d_t1;
-            cur_price = target_price;
-        }
-        Ok((total_dt0, total_dt1))
-    }
-
     // Seems to be unused
     pub fn to_price(&self, target: SqrtPriceX96) -> Option<Self> {
         let (start_in_bounds, end_in_bounds) = if self.is_buy() {
@@ -400,9 +375,7 @@ impl<'a> PoolPriceVec<'a> {
         let t: SqrtPriceX96 = Ray::from(*target_price).into();
 
         // If our target price is past our end bound, our quantity is the entire range
-        if self.is_buy() && t > self.end_bound.price {
-            return (self.d_t0, self.d_t1);
-        } else if t < self.end_bound.price {
+        if (self.is_buy() && t > self.end_bound.price) || t < self.end_bound.price {
             return (self.d_t0, self.d_t1);
         }
 

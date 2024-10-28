@@ -15,13 +15,11 @@ exclude.workspace = true
 angstrom-metrics.workspace = true
 
 bitmaps.workspace = true
-blsful.workspace = true
 tokio.workspace = true
 futures.workspace = true
 thiserror.workspace = true
 reth-primitives.workspace = true
-# reth-rpc-types.workspace = true
-alloy-rpc-types.workspace = true
+alloy.workspace = true
 reth-metrics.workspace = true
 reth-provider.workspace = true
 tracing.workspace = true
@@ -35,6 +33,7 @@ rayon.workspace = true
 alloy-rlp.workspace = true
 reth-tasks.workspace = true
 secp256k1.workspace = true
+itertools.workspace = true
 
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
@@ -43,10 +42,7 @@ order-pool.workspace = true
 matching-engine.workspace = true
 validation.workspace = true
 tokio-stream.workspace = true
-
-alloy-primitives.workspace = true   
 eyre.workspace = true
-
 
 [dev-dependencies]
 testing-tools.workspace = true

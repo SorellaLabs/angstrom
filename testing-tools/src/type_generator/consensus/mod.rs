@@ -2,12 +2,9 @@ pub mod preproposal;
 pub mod proposal;
 
 use angstrom_types::{
-    consensus::Commit,
     primitive::PoolId,
     sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
 };
-use blsful::{Bls12381G1Impl, SecretKey};
-use proposal::ProposalBuilder;
 
 use super::orders::{DistributionParameters, UserOrderBuilder};
 use crate::type_generator::orders::generate_order_distribution;
@@ -47,20 +44,8 @@ pub fn generate_limit_order_distribution(
     res
 }
 
-pub fn generate_random_commit(sk: &SecretKey<Bls12381G1Impl>) -> Commit {
-    let proposal = ProposalBuilder::new()
-        .order_count(100)
-        .for_random_pools(10)
-        .for_block(10)
-        .build();
-    Commit::from_proposal(&proposal, sk)
-}
-
 #[cfg(test)]
 mod tests {
-    use rand::thread_rng;
-
-    use super::generate_random_commit;
     use crate::type_generator::consensus::{
         preproposal::PreproposalBuilder, proposal::ProposalBuilder
     };
@@ -83,13 +68,5 @@ mod tests {
             .for_block(10)
             .build();
         assert!(proposal.is_valid(), "Proposal cannot validate itself");
-    }
-
-    #[test]
-    fn random_commit_is_valid() {
-        // We generate our secret key first
-        let sk = blsful::SecretKey::random(&mut thread_rng());
-        let commit = generate_random_commit(&sk);
-        assert!(commit.is_valid(&[sk.public_key()]));
     }
 }

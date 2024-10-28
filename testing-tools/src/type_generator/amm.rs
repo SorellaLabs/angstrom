@@ -9,7 +9,6 @@ use uniswap_v3_math::tick_math::{get_sqrt_ratio_at_tick, get_tick_at_sqrt_ratio}
 #[derive(Debug, Default)]
 pub struct AMMSnapshotBuilder {
     price: SqrtPriceX96,
-    price_tick: i32,
     lower_tick: i32,
     upper_tick: i32,
     default_position_width: Option<i32>,
@@ -22,8 +21,8 @@ impl AMMSnapshotBuilder {
     pub fn new(price: SqrtPriceX96) -> Self {
         let price_tick = get_tick_at_sqrt_ratio(price.into()).unwrap();
         let lower_tick = price_tick;
-        let upper_tick = price_tick;
-        Self { price, price_tick, lower_tick, upper_tick, ..Self::default() }
+        let upper_tick = price_tick + 1;
+        Self { price, lower_tick, upper_tick, ..Self::default() }
     }
 
     pub fn with_positions(self, positions: Vec<LiqRange>) -> Self {

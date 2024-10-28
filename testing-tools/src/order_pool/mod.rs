@@ -37,7 +37,7 @@ impl TestnetOrderPool {
         block_number: u64
     ) -> Self {
         let (tx, rx) = unbounded_channel();
-        let (sub_tx, sub_rx) = tokio::sync::broadcast::channel(100);
+        let (sub_tx, _sub_rx) = tokio::sync::broadcast::channel(100);
         let rx = UnboundedReceiverStream::<OrderCommand>::new(rx);
         let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
         let handle =

@@ -8,7 +8,7 @@ use std::{
 use alloy::primitives::BlockNumber;
 use alloy_rpc_types::Block;
 use angstrom_types::{
-    consensus::{Commit, PreProposal, Proposal},
+    consensus::{PreProposal, Proposal},
     primitive::PeerId,
     sol_bindings::ext::RawPoolOrder
 };
@@ -157,17 +157,9 @@ impl<DB: Unpin> Future for StromNetworkManager<DB> {
             if let Poll::Ready(Some(event)) = self.swarm.poll_next_unpin(cx) {
                 match event {
                     SwarmEvent::ValidMessage { peer_id, msg } => match msg {
-                        StromMessage::Commit(a) => {
-                            self.to_consensus_manager.as_ref().inspect(|tx| {
-                                tx.send(StromConsensusEvent::Commit(peer_id, a));
-                            });
-                        }
                         StromMessage::PrePropose(p) => {
                             self.to_consensus_manager.as_ref().inspect(|tx| {
-                                tx.send(StromConsensusEvent::PreProposal(
-                                    peer_id,
-                                    PreProposal::default()
-                                ));
+                                tx.send(StromConsensusEvent::PreProposal(peer_id, p));
                             });
                         }
                         StromMessage::Propose(a) => {
@@ -229,40 +221,35 @@ pub enum StromNetworkEvent {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum StromConsensusEvent {
     PreProposal(PeerId, PreProposal),
-    Proposal(PeerId, Proposal),
-    Commit(PeerId, Commit)
+    Proposal(PeerId, Proposal)
 }
 
 impl StromConsensusEvent {
     pub fn message_type(&self) -> &'static str {
         match self {
             StromConsensusEvent::PreProposal(..) => "PreProposal",
-            StromConsensusEvent::Proposal(..) => "Proposal",
-            StromConsensusEvent::Commit(..) => "Commit"
+            StromConsensusEvent::Proposal(..) => "Proposal"
         }
     }
 
     pub fn sender(&self) -> PeerId {
         match self {
             StromConsensusEvent::PreProposal(peer_id, _) => *peer_id,
-            StromConsensusEvent::Proposal(peer_id, _) => *peer_id,
-            StromConsensusEvent::Commit(peer_id, _) => *peer_id
+            StromConsensusEvent::Proposal(peer_id, _) => *peer_id
         }
     }
 
     pub fn payload_source(&self) -> PeerId {
         match self {
             StromConsensusEvent::PreProposal(_, pre_proposal) => pre_proposal.source,
-            StromConsensusEvent::Proposal(_, proposal) => proposal.source,
-            StromConsensusEvent::Commit(_, commit) => commit.source
+            StromConsensusEvent::Proposal(_, proposal) => proposal.source
         }
     }
 
     pub fn block_height(&self) -> BlockNumber {
         match self {
             StromConsensusEvent::PreProposal(_, PreProposal { block_height, .. }) => *block_height,
-            StromConsensusEvent::Proposal(_, Proposal { block_height, .. }) => *block_height,
-            StromConsensusEvent::Commit(_, Commit { block_height, .. }) => *block_height
+            StromConsensusEvent::Proposal(_, Proposal { block_height, .. }) => *block_height
         }
     }
 }
@@ -273,8 +260,7 @@ impl From<StromConsensusEvent> for StromMessage {
             StromConsensusEvent::PreProposal(_, pre_proposal) => {
                 StromMessage::PrePropose(pre_proposal)
             }
-            StromConsensusEvent::Proposal(_, proposal) => StromMessage::Propose(proposal),
-            StromConsensusEvent::Commit(_, commit) => StromMessage::Commit(commit)
+            StromConsensusEvent::Proposal(_, proposal) => StromMessage::Propose(proposal)
         }
     }
 }

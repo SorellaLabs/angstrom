@@ -3,16 +3,19 @@ use std::sync::Arc;
 use alloy::primitives::{hex, keccak256, Address, B256, U256};
 use reth_revm::DatabaseRef;
 
-use super::ANGSTROM_CONTRACT;
 use crate::order::state::{BlockStateProviderFactory, RevmLRU};
 
 /// The nonce location for quick db lookup
 const ANGSTROM_NONCE_SLOT_CONST: [u8; 4] = hex!("daa050e9");
 
 #[derive(Clone)]
-pub struct Nonces;
+pub struct Nonces(Address);
 
 impl Nonces {
+    pub fn new(angstrom_address: Address) -> Self {
+        Self(angstrom_address)
+    }
+
     pub fn get_nonce_word_slot(&self, user: Address, nonce: u64) -> B256 {
         let nonce = nonce.to_be_bytes();
         let mut arry = [0u8; 31];
@@ -30,7 +33,7 @@ impl Nonces {
     ) -> bool {
         let slot = self.get_nonce_word_slot(user, nonce);
 
-        let word = db.storage_ref(ANGSTROM_CONTRACT, slot.into()).unwrap();
+        let word = db.storage_ref(self.0, slot.into()).unwrap();
         tracing::debug!(?word);
         let mut flag = U256::from(1) << (nonce as u8);
 

@@ -12,8 +12,6 @@ use self::{approvals::Approvals, balances::Balances, nonces::Nonces};
 use super::config::DataFetcherConfig;
 use crate::common::lru_db::{BlockStateProvider, BlockStateProviderFactory, RevmLRU};
 
-pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
-
 pub trait StateFetchUtils: Clone + Send + Unpin {
     fn is_valid_nonce(&self, user: Address, nonce: u64) -> bool;
 
@@ -97,9 +95,10 @@ where
 }
 
 impl<DB: BlockStateProviderFactory> FetchUtils<DB> {
-    pub fn new(config: DataFetcherConfig, db: Arc<RevmLRU<DB>>) -> Self {
+    pub fn new(angstrom_address: Address, config: DataFetcherConfig, db: Arc<RevmLRU<DB>>) -> Self {
         Self {
             approvals: Approvals::new(
+                angstrom_address,
                 config
                     .approvals
                     .into_iter()
@@ -113,7 +112,7 @@ impl<DB: BlockStateProviderFactory> FetchUtils<DB> {
                     .map(|bal| (bal.token, bal))
                     .collect()
             ),
-            nonces: Nonces,
+            nonces: Nonces::new(angstrom_address),
             db
         }
     }

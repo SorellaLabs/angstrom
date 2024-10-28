@@ -28,6 +28,7 @@ use eyre::eyre;
 use pade::PadeEncode;
 use reth_errors::RethError;
 use reth_primitives::transaction::FillTxEnv;
+use reth_provider::BlockNumReader;
 use revm::{
     db::{CacheDB, WrapDatabaseRef},
     handler::register::{EvmHandler, HandleRegister},
@@ -62,7 +63,7 @@ pub struct OrderGasCalculations<DB> {
 
 impl<DB> OrderGasCalculations<DB>
 where
-    DB: Unpin + Clone + 'static + revm::DatabaseRef,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + BlockNumReader,
     <DB as revm::DatabaseRef>::Error: Send + Sync
 {
     pub fn new(db: Arc<DB>) -> eyre::Result<Self> {

@@ -17,7 +17,7 @@ use matching_engine::cfmm::uniswap::{
     pool_manager::UniswapPoolManager,
     pool_providers::canonical_state_adapter::CanonicalStateAdapter
 };
-use reth_provider::{CanonStateNotification, StateProviderFactory};
+use reth_provider::CanonStateNotification;
 use tokio::sync::mpsc::unbounded_channel;
 use validation::{
     order::{

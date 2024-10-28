@@ -1,7 +1,7 @@
 //! CLI definition and entrypoint to executable
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
-use alloy_primitives::Address;
+use alloy::network::EthereumWallet;
 use angstrom_metrics::{initialize_prometheus_metrics, METRICS_ENABLED};
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::reth_db_wrapper::RethDbWrapper;
@@ -13,8 +13,13 @@ use tokio::sync::mpsc::{
 };
 
 mod network_builder;
-use alloy::providers::{network::Ethereum, ProviderBuilder};
+use alloy::{
+    eips::{BlockId, BlockNumberOrTag},
+    providers::{network::Ethereum, Provider, ProviderBuilder},
+    signers::{k256::ecdsa::SigningKey, local::LocalSigner}
+};
 use alloy_chains::Chain;
+use alloy_primitives::{private::serde::Deserialize, Address};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::EthDataCleanser
@@ -25,9 +30,13 @@ use angstrom_network::{
     VerificationSidecar
 };
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
-use angstrom_types::primitive::PeerId;
+use angstrom_types::{
+    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    primitive::{PeerId, PoolKey}
+};
 use clap::Parser;
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
+use eyre::Context;
 use reth::{
     api::NodeAddOns,
     builder::{FullNodeComponents, Node},
@@ -93,16 +102,7 @@ pub fn run() -> eyre::Result<()> {
             .launch()
             .await?;
 
-        initialize_strom_components(
-            Address::ZERO,
-            args,
-            secret_key,
-            channels,
-            network,
-            node,
-            &executor
-        )
-        .await;
+        initialize_strom_components(args, secret_key, channels, network, node, &executor).await;
 
         node_exit_future.await
     })
@@ -140,8 +140,6 @@ pub struct StromHandles {
 
     pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
 
-    // pub consensus_tx:    Sender<ConsensusCommand>,
-    // pub consensus_rx:    Receiver<ConsensusCommand>,
     pub consensus_tx_op: UnboundedMeteredSender<StromConsensusEvent>,
     pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>
 }
@@ -162,7 +160,6 @@ impl StromHandles {
 pub fn initialize_strom_handles() -> StromHandles {
     let (eth_tx, eth_rx) = channel(100);
     let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
-    // let (consensus_tx, consensus_rx) = channel(100);
     let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
     let (orderpool_tx, orderpool_rx) = unbounded_channel();
     let (consensus_tx_op, consensus_rx_op) =
@@ -176,15 +173,12 @@ pub fn initialize_strom_handles() -> StromHandles {
         orderpool_tx,
         pool_manager_tx,
         orderpool_rx,
-        // consensus_tx,
-        // consensus_rx,
         consensus_tx_op,
         consensus_rx_op
     }
 }
 
 pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
-    angstrom_address: Address,
     config: AngstromConfig,
     secret_key: SecretKey,
     handles: StromHandles,
@@ -192,8 +186,9 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     node: FullNode<Node, AddOns>,
     executor: &TaskExecutor
 ) {
+    let node_config = NodeConfig::load_from_config(Some(config.node_config)).unwrap();
     let eth_handle = EthDataCleanser::spawn(
-        angstrom_address,
+        node_config.angstrom_address,
         node.provider.subscribe_to_canonical_state(),
         node.provider.clone(),
         executor.clone(),
@@ -250,10 +245,22 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 
     // I am sure there is a prettier way of doing this
     let provider = ProviderBuilder::<_, _, Ethereum>::default()
+        .with_recommended_fillers()
+        .wallet(EthereumWallet::from(
+            LocalSigner::<SigningKey>::from_bytes(&secret_key.secret_bytes().into()).unwrap()
+        ))
         .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())
         .await
         .unwrap();
-
+    let block_id = provider.get_block_number().await.unwrap();
+    let pool_config_store = AngstromPoolConfigStore::load_from_chain(
+        node_config.angstrom_address,
+        BlockId::Number(BlockNumberOrTag::Number(block_id)),
+        &provider
+    )
+    .await
+    .unwrap();
+    let pool_registry = UniswapAngstromRegistry::new(node_config.pools.into(), pool_config_store);
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
@@ -264,7 +271,8 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         validators,
         order_storage.clone(),
         block_height,
-        Arc::new(provider)
+        pool_registry,
+        provider
     );
     let _consensus_handle = executor.spawn_critical("consensus", Box::pin(manager));
 }
@@ -275,6 +283,8 @@ pub struct AngstromConfig {
     pub mev_guard:             bool,
     #[clap(long)]
     pub secret_key_location:   PathBuf,
+    #[clap(long)]
+    pub node_config:           PathBuf,
     // default is 100mb
     #[clap(long, default_value = "1000000")]
     pub validation_cache_size: usize,
@@ -285,6 +295,31 @@ pub struct AngstromConfig {
     /// Default: 6969
     #[clap(long, default_value = "6969", global = true)]
     pub metrics_port:          u16
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NodeConfig {
+    pub secret_key:       String,
+    pub angstrom_address: Address,
+    pub pools:            Vec<PoolKey>
+}
+
+impl NodeConfig {
+    pub fn load_from_config(config: Option<PathBuf>) -> Result<Self, eyre::Report> {
+        let config_path = config.ok_or_else(|| eyre::eyre!("Config path not provided"))?;
+
+        if !config_path.exists() {
+            return Err(eyre::eyre!("Config file does not exist at {:?}", config_path));
+        }
+
+        let toml_content = std::fs::read_to_string(&config_path)
+            .wrap_err_with(|| format!("Could not read config file {:?}", config_path))?;
+
+        let node_config: NodeConfig = toml::from_str(&toml_content)
+            .wrap_err_with(|| format!("Could not deserialize config file {:?}", config_path))?;
+
+        Ok(node_config)
+    }
 }
 
 async fn init_metrics(metrics_port: u16) {

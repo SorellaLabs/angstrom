@@ -62,7 +62,7 @@ where
         block_number: u64,
         completed_orders: Vec<B256>,
         revalidation_addresses: Vec<Address>
-    ) {
+    ) -> Self {
         assert!(
             !self.is_transitioning(),
             "already clearing for new block. if this gets triggered, means we have a big runtime \
@@ -70,17 +70,21 @@ where
         );
         let Self::RegularProcessing { validator, remaining_futures } = self else { unreachable!() };
 
-        // only good way to move data over
-        let rem_futures = unsafe { std::ptr::read(remaining_futures) };
+        let rem_futures = remaining_futures.into_iter().map(|fut| unsafe {
+            std::mem::transmute::<_, ValidationFuture>(Box::pin(async { fut.await })
+                as Pin<
+                    Box<dyn futures_util::Future<Output = OrderValidationResults> + Send + Sync>
+                >)
+        });
 
-        *self = Self::ClearingForNewBlock {
+        Self::ClearingForNewBlock {
             validator: validator.clone(),
             waiting_for_new_block: VecDeque::default(),
-            remaining_futures: rem_futures,
+            remaining_futures: FuturesUnordered::from_iter(rem_futures),
             completed_orders,
             revalidation_addresses,
             block_number
-        };
+        }
     }
 
     pub fn notify_validation_on_changes(

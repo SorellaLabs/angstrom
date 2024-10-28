@@ -10,8 +10,13 @@ pub mod type_generator;
 /// nuanced needs
 pub mod validation;
 
+pub mod anvil_state_provider;
+
 /// Tools for contract deployment and testing
 pub mod contracts;
+
+pub mod testnet_controllers;
+pub mod types;
 
 use std::{path::Path, sync::Arc};
 

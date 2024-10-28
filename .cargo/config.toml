@@ -1,4 +1,0 @@
-[build]
-rustflags=[
-    "-L../bls-eth-go-binary/bls/lib/darwin/arm64/"
-]

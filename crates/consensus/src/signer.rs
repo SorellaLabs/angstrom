@@ -4,7 +4,7 @@ use angstrom_types::{
     orders::PoolSolution,
     primitive::PeerId
 };
-use secp256k1::{rand::thread_rng, SecretKey};
+use secp256k1::{Secp256k1, SecretKey};
 
 /// The Signer deals with verifying external signatures as well as
 /// signing our payloads.  Pub fields for now.
@@ -16,7 +16,6 @@ pub struct Signer {
 
 impl Default for Signer {
     fn default() -> Self {
-        let rng = thread_rng();
         let key = SecretKey::new(&mut secp256k1::rand::thread_rng());
         Signer { my_id: FixedBytes::random(), key }
     }
@@ -24,7 +23,9 @@ impl Default for Signer {
 
 impl Signer {
     pub fn new(secret_key: SecretKey) -> Self {
-        Self { key: secret_key, ..Default::default() }
+        let pk = secret_key.public_key(&Secp256k1::new());
+        let my_id = PeerId::from_slice(&pk.serialize_uncompressed()[1..]);
+        Self { key: secret_key, my_id }
     }
 
     pub fn sign_proposal(

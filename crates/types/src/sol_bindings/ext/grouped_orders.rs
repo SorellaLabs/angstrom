@@ -16,10 +16,11 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+
 pub enum AllOrders {
     Standing(StandingVariants),
     Flash(FlashVariants),
-    TOB(crate::sol_bindings::rpc_orders::TopOfBlockOrder)
+    TOB(TopOfBlockOrder)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]

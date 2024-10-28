@@ -36,6 +36,8 @@ impl StromNetworkHandle {
 
     /// Send Strom message to peer
     pub fn send_message(&self, peer_id: PeerId, msg: StromMessage) {
+        tracing::debug!("sent message to peer {:?}", peer_id);
+        panic!("sent message to peer {:?}", peer_id);
         self.send_to_network_manager(StromNetworkHandleMsg::SendStromMessage { peer_id, msg })
     }
 
@@ -87,7 +89,7 @@ struct StromNetworkInner {
 }
 
 /// All events related to orders emitted by the network.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NetworkOrderEvent {
     IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> }
 }

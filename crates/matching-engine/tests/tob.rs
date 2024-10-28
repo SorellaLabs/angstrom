@@ -70,7 +70,7 @@ async fn properly_communicates_tob_to_contract() -> eyre::Result<()> {
             I24::unchecked_from(99900),
             I24::unchecked_from(100140)
         )
-        .gas(10_000_000_u128)
+        .gas(10_000_000_u64)
         .call()
         .await
         .unwrap()

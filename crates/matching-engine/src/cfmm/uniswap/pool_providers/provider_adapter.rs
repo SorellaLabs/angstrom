@@ -6,8 +6,8 @@ use alloy::{
     rpc::types::Filter,
     transports::Transport
 };
+use alloy_primitives::Log;
 use futures_util::{FutureExt, StreamExt};
-use reth_primitives::Log;
 
 use crate::cfmm::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 

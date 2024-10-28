@@ -2,6 +2,7 @@
 token = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 hash_method = "sol"
 slot_index = 4
+max_validation_per_user = 1
 
 [[approvals]]
 token = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
@@ -22,4 +23,4 @@ slot_index = 3
 [[pools]]
 token0 = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 token1 = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-pool_id = 69
+pool_id = "0xf3d07fe972c84e425ea04c19b19ca12e463d494680251f1aaac588870254d245" # some arbitrary ID

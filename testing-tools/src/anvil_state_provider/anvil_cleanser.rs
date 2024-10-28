@@ -1,11 +1,10 @@
 use std::task::{Context, Poll};
 
 use alloy::{
-    network::TransactionResponse,
     primitives::Address,
+    rpc::types::Transaction,
     sol_types::{SolCall, SolType}
 };
-use alloy_rpc_types::Transaction;
 use angstrom_eth::{
     handle::{EthCommand, EthHandle},
     manager::EthEvent
@@ -15,9 +14,10 @@ use futures::{Future, Stream, StreamExt};
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{Instrument, Span};
+use tracing::{span, Level};
 
 pub struct AnvilEthDataCleanser<S: Stream<Item = (u64, Vec<Transaction>)>> {
+    testnet_node_id:             u64,
     angstrom_contract:           Address,
     /// our command receiver
     commander:                   ReceiverStream<EthCommand>,
@@ -29,23 +29,25 @@ pub struct AnvilEthDataCleanser<S: Stream<Item = (u64, Vec<Transaction>)>> {
 
 impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
     pub async fn spawn<TP: TaskSpawner>(
+        testnet_node_id: u64,
         tp: TP,
         angstrom_contract: Address,
         tx: Sender<EthCommand>,
         rx: Receiver<EthCommand>,
         block_subscription: S,
-        block_finalization_lookback: u64,
-        span: Span
+        block_finalization_lookback: u64
     ) -> eyre::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
         let this = Self {
+            testnet_node_id,
             commander: stream,
             event_listeners: Vec::new(),
             block_subscription,
             angstrom_contract,
             block_finalization_lookback
         };
-        tp.spawn_critical("eth handle", Box::pin(this.instrument(span)));
+
+        tp.spawn_critical("eth handle", Box::pin(this));
 
         let handle = EthHandle::new(tx);
 
@@ -80,9 +82,9 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
             tracing::info!("No angstrom tx found");
             return
         };
-        let input = angstrom_tx.input();
+        let input = angstrom_tx.input;
 
-        let Ok(bytes) = TestnetHub::executeCall::abi_decode(input, false) else {
+        let Ok(bytes) = TestnetHub::executeCall::abi_decode(&input, false) else {
             tracing::warn!("found angstrom contract call thats not a bundle");
             return
         };
@@ -95,7 +97,7 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
 
         let hashes = bundle.get_filled_hashes();
         let addresses = bundle.get_addresses_touched();
-        tracing::info!("found angstrom tx with orders filled {:#?}", hashes);
+        tracing::debug!("found angstrom tx with orders filled {:#?}", hashes);
         self.send_events(EthEvent::NewBlockTransitions {
             block_number:      block.0,
             filled_orders:     hashes,
@@ -110,14 +112,19 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> Future
     type Output = ();
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let span = span!(Level::TRACE, "node", id = self.testnet_node_id);
+        let e = span.enter();
+
         while let Poll::Ready(Some(block)) = self.block_subscription.poll_next_unpin(cx) {
-            tracing::info!("received new block from anvil");
+            tracing::trace!(block_number = block.0, "received new block from anvil");
             self.on_new_block(block);
         }
         while let Poll::Ready(Some(cmd)) = self.commander.poll_next_unpin(cx) {
-            tracing::info!("received command from chan");
+            tracing::trace!("received command from channel");
             self.on_command(cmd);
         }
+
+        drop(e);
 
         Poll::Pending
     }

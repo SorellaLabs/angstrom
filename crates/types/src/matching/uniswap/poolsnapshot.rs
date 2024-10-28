@@ -11,7 +11,7 @@ use super::{
 use crate::matching::SqrtPriceX96;
 
 /// Snapshot of a particular Uniswap pool and a map of its liquidity.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct PoolSnapshot {
     /// Known tick ranges and liquidity positions gleaned from the market
     /// snapshot

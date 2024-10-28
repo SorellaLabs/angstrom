@@ -1,25 +1,26 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
-    marker::PhantomData,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker},
-    time::Duration
+    task::{Context, Poll, Waker}
 };
 
 use alloy::{
-    primitives::{BlockNumber, Bytes},
-    providers::{network::Network, Provider},
+    network::TransactionBuilder,
+    primitives::{Address, BlockNumber},
+    providers::Provider,
+    rpc::types::TransactionRequest,
     transports::Transport
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage};
 use angstrom_types::{
     consensus::{PreProposal, Proposal},
-    contract_payloads::angstrom::AngstromBundle,
+    contract_payloads::angstrom::{AngstromBundle, UniswapAngstromRegistry},
+    matching::uniswap::PoolSnapshot,
     orders::{OrderSet, PoolSolution},
-    primitive::PeerId,
+    primitive::{PeerId, PoolId},
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
@@ -29,55 +30,67 @@ use angstrom_utils::timer::async_time_fn;
 use futures::{future::BoxFuture, Future, Stream, StreamExt};
 use itertools::Itertools;
 use matching_engine::MatchingManager;
-use order_pool::order_storage::OrderStorage;
+use order_pool::order_storage::{OrderStorage, OrderStorageNotification};
+use pade::PadeEncode;
 use serde::{Deserialize, Serialize};
-use tokio::time;
+use thiserror::Error;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{AngstromValidator, Signer};
+
+#[derive(Error, Debug)]
+pub enum RoundStateMachineError {
+    #[error("Failed to build proposal: {0}")]
+    ProposalBuildError(String),
+    #[error("Transaction submission failed")]
+    TransactionError
+}
 
 async fn build_proposal(pre_proposals: Vec<PreProposal>) -> Result<Vec<PoolSolution>, String> {
     let matcher = MatchingManager {};
     matcher.build_proposal(pre_proposals).await
 }
 
-const INITIAL_STATE_DURATION: Duration = Duration::from_secs(3);
-
-pub struct RoundStateMachine {
-    current_state:          ConsensusState,
-    signer:                 Signer,
-    round_leader:           PeerId,
-    validators:             Vec<AngstromValidator>,
-    order_storage:          Arc<OrderStorage>,
-    initial_state_duration: Duration,
-    metrics:                ConsensusMetricsWrapper,
-    transition_future:      Option<BoxFuture<'static, ConsensusState>>,
-    initial_state_timer:    Option<Pin<Box<time::Sleep>>>,
-    waker:                  Option<Waker>
+pub struct RoundStateMachine<T> {
+    current_state:     ConsensusState,
+    signer:            Signer,
+    round_leader:      PeerId,
+    validators:        Vec<AngstromValidator>,
+    order_storage:     Arc<OrderStorage>,
+    order_storage_rx:  BroadcastStream<OrderStorageNotification>,
+    metrics:           ConsensusMetricsWrapper,
+    transition_future: Option<BoxFuture<'static, Result<ConsensusState, RoundStateMachineError>>>,
+    waker:             Option<Waker>,
+    pool_registry:     UniswapAngstromRegistry,
+    provider:          Arc<Pin<Box<dyn Provider<T>>>>
 }
 
-impl RoundStateMachine {
+impl<T> RoundStateMachine<T>
+where
+    T: Transport + Clone
+{
     pub fn new(
         block_height: BlockNumber,
         order_storage: Arc<OrderStorage>,
         signer: Signer,
         round_leader: PeerId,
         validators: Vec<AngstromValidator>,
-        metrics: ConsensusMetricsWrapper
+        metrics: ConsensusMetricsWrapper,
+        pool_registry: UniswapAngstromRegistry,
+        provider: impl Provider<T> + 'static
     ) -> Self {
-        let timer = Box::pin(time::sleep(INITIAL_STATE_DURATION));
         Self {
             current_state: Self::initial_state(block_height),
+            order_storage_rx: BroadcastStream::new(order_storage.subscribe_notifications()),
             round_leader,
             validators,
-            initial_state_duration: INITIAL_STATE_DURATION,
             order_storage,
+            pool_registry,
             signer,
             metrics,
             transition_future: None,
-            initial_state_timer: Some(timer),
-
-            waker: None /* provider,
-                         * _phantom: PhantomData, */
+            waker: None,
+            provider: Arc::new(Box::pin(provider))
         }
     }
 
@@ -100,12 +113,14 @@ impl RoundStateMachine {
     pub fn reset_round(&mut self, block: BlockNumber, leader: PeerId) {
         self.round_leader = leader;
         self.current_state = Self::initial_state(block);
-        self.initial_state_timer = Some(Box::pin(time::sleep(self.initial_state_duration)));
         self.transition_future = None;
     }
 
     pub fn initial_state(block_height: BlockNumber) -> ConsensusState {
-        ConsensusState::BidSubmission(BidSubmission { block_height, ..Default::default() })
+        ConsensusState::PreProposalSubmission(PreProposalSubmission {
+            block_height,
+            ..Default::default()
+        })
     }
 
     pub fn my_pre_proposal(&self, pre_proposals: &HashSet<PreProposal>) -> Option<StromMessage> {
@@ -126,12 +141,21 @@ impl RoundStateMachine {
         let i_am_leader = self.i_am_leader();
         match strom_msg {
             StromConsensusEvent::PreProposal(_, pre_proposal) => {
-                // we do not want to allow another node to push us to transition
-                if !matches!(self.current_state, ConsensusState::BidAggregation(_)) {
+                // it does not make sense to accumulate pre_proposals here, since the leader
+                // already submitted on chain
+                if matches!(self.current_state, ConsensusState::Finalization(_))
+                    || !pre_proposal.is_valid()
+                {
                     return None;
                 }
 
-                if !pre_proposal.is_valid() {
+                self.current_state
+                    .pre_proposals_mut()
+                    .insert(pre_proposal.clone());
+
+                // we do not want to allow another node to push us to transition
+                // we wait for our grace period of 3 seconds to finish
+                if !matches!(self.current_state, ConsensusState::PreProposalAggregation(_)) {
                     return None;
                 }
 
@@ -147,6 +171,7 @@ impl RoundStateMachine {
                     self.current_state
                         .pre_proposals_mut()
                         .insert(merged_pre_proposal.clone());
+
                     let pre_proposals = self.current_state.pre_proposals();
 
                     if self.have_quorum(self.all_searcher_orders(pre_proposals))
@@ -163,10 +188,8 @@ impl RoundStateMachine {
                 }
 
                 // Leader path
-                self.current_state.pre_proposals_mut().insert(pre_proposal);
                 let pre_proposals = self.current_state.pre_proposals();
                 let block_height = self.current_state.block_height();
-
                 if self.have_quorum(self.all_searcher_orders(pre_proposals))
                     && self.have_quorum(self.all_limit_orders(pre_proposals))
                 {
@@ -208,11 +231,32 @@ impl RoundStateMachine {
         None
     }
 
+    pub fn on_storage_notification(&mut self, notification: OrderStorageNotification) {
+        match notification {
+            OrderStorageNotification::FinalizationComplete(previous_block) => {
+                if !matches!(self.current_state, ConsensusState::PreProposalSubmission(_)) {
+                    return
+                };
+
+                let current_state_block = self.current_state.block_height();
+                if previous_block + 1 != current_state_block {
+                    tracing::warn!(%previous_block, %current_state_block, "got order storage finalization for unexpected block");
+                    // reorg? something else went wrong? wait for the timeout
+                    return;
+                }
+                let block_height = current_state_block;
+                let pre_proposals = self.current_state.pre_proposals();
+                let bid_aggregation = self.generate_bid_aggregation(block_height, pre_proposals);
+                self.force_transition(ConsensusState::PreProposalAggregation(bid_aggregation));
+            }
+        }
+    }
+
     fn generate_bid_aggregation(
         &self,
         block_height: BlockNumber,
         pre_proposals: &HashSet<PreProposal>
-    ) -> BidAggregation {
+    ) -> PreProposalAggregation {
         let OrderSet { limit, searcher } = self.order_storage.get_all_orders();
         let mut pre_proposals = pre_proposals.clone();
 
@@ -225,7 +269,7 @@ impl RoundStateMachine {
         );
         pre_proposals.insert(pre_proposal);
 
-        BidAggregation { block_height, pre_proposals }
+        PreProposalAggregation { block_height, pre_proposals }
     }
 
     fn generate_our_merged_pre_proposal(
@@ -281,14 +325,14 @@ impl RoundStateMachine {
             .collect()
     }
 
-    fn have_quorum<T: Hash + Eq + Clone>(&self, orders: Vec<OrderWithStorageData<T>>) -> bool {
+    fn have_quorum<O: Hash + Eq + Clone>(&self, orders: Vec<OrderWithStorageData<O>>) -> bool {
         orders.len() == self.filter_quorum_orders(orders).len()
     }
 
-    fn filter_quorum_orders<T: Hash + Eq + Clone>(
+    fn filter_quorum_orders<O: Hash + Eq + Clone>(
         &self,
-        input: Vec<OrderWithStorageData<T>>
-    ) -> Vec<OrderWithStorageData<T>> {
+        input: Vec<OrderWithStorageData<O>>
+    ) -> Vec<OrderWithStorageData<O>> {
         input
             .into_iter()
             .fold(HashMap::new(), |mut acc, order| {
@@ -301,63 +345,102 @@ impl RoundStateMachine {
             .collect()
     }
 
-    fn force_transition(&mut self, mut new_state: ConsensusState) {
-        let signer = self.signer.clone();
-        let metrics = self.metrics.clone();
-        let pre_proposal_height = self.current_state.block_height();
-        let pre_proposals: Vec<PreProposal> =
-            self.current_state.pre_proposals().iter().cloned().collect();
-
-        self.transition_future = Some(Box::pin(async move {
-            if let ConsensusState::Finalization(finalization) = &mut new_state {
-                // someone already proposed and we are not a leader
-                if finalization.proposal.is_some() {
-                    // TODO: use this opportunity to trigger the proposal validation
-                    return new_state;
-                }
-
-                let (proposal_result, timer) = async_time_fn(|| async {
-                    match build_proposal(pre_proposals.clone()).await {
-                        Ok(solutions) => {
-                            let proposal =
-                                signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);
-                            Ok(proposal)
-                        }
-                        Err(err) => Err(err)
-                    }
-                })
-                .await;
-                metrics.set_proposal_build_time(pre_proposal_height, timer);
-
-                match proposal_result {
-                    Ok(proposal) => {
-                        finalization.proposal = Some(proposal.clone());
-                        // TODO: use the actual pools
-                        let pools = HashMap::new();
-                        let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
-                    }
-                    Err(err) => {
-                        // Handle the error from build_proposal
-                        tracing::error!(
-                            error = %err,
-                            block_height = pre_proposal_height,
-                            "Failed to build proposal"
-                        );
-                    }
-                }
-            }
-            new_state
-        }));
+    fn force_transition(&mut self, new_state: ConsensusState) {
+        self.transition_future = Some(Box::pin(self.build_transition_future(new_state)));
 
         // wake up the poller
         if let Some(waker) = &self.waker {
             waker.wake_by_ref();
         }
     }
+
+    fn build_transition_future(
+        &self,
+        mut new_state: ConsensusState
+    ) -> impl Future<Output = Result<ConsensusState, RoundStateMachineError>> {
+        let signer = self.signer.clone();
+        let metrics = self.metrics.clone();
+        let pre_proposal_height = self.current_state.block_height();
+        let pre_proposals: Vec<PreProposal> =
+            self.current_state.pre_proposals().iter().cloned().collect();
+        let provider = self.provider.clone();
+        let pool_registry = self.pool_registry.clone();
+
+        async move {
+            if let ConsensusState::Finalization(finalization) = &mut new_state {
+                // someone already proposed and we are not a leader
+                if finalization.proposal.is_some() {
+                    // TODO: use this opportunity to trigger the proposal validation
+                    return Ok(new_state);
+                }
+
+                let (proposal, timer) = async_time_fn(|| async {
+                    match build_proposal(pre_proposals.clone()).await {
+                        Ok(solutions) => {
+                            let proposal =
+                                signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);
+                            Ok(proposal)
+                        }
+                        Err(err) => Err(RoundStateMachineError::ProposalBuildError(err))
+                    }
+                })
+                .await;
+                metrics.set_proposal_build_time(pre_proposal_height, timer);
+                let proposal = proposal?;
+                let pools = RoundStateMachine::<T>::build_pools_param(&proposal, pool_registry);
+                let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
+                let tx = TransactionRequest::default()
+                    .with_to(Address::default())
+                    .with_input(bundle.pade_encode());
+
+                let submitted_tx = provider
+                    .send_transaction(tx)
+                    .await
+                    .map_err(|_| RoundStateMachineError::TransactionError)?;
+                let _receipt = submitted_tx
+                    .get_receipt()
+                    .await
+                    .map_err(|_| RoundStateMachineError::TransactionError)?;
+            }
+            Ok(new_state)
+        }
+    }
+
+    fn build_pools_param(
+        proposal: &Proposal,
+        pool_registry: UniswapAngstromRegistry
+    ) -> HashMap<PoolId, (Address, Address, PoolSnapshot, u16)> {
+        proposal
+            .preproposals
+            .iter()
+            .flat_map(|p| p.limit.iter().map(|order| order.pool_id.clone()))
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .filter_map(|pool_id| {
+                pool_registry.get_uni_pool(&pool_id).and_then(|pool_key| {
+                    pool_registry.get_ang_entry(&pool_id).map(|entry| {
+                        (
+                            pool_id,
+                            (
+                                pool_key.currency0,
+                                pool_key.currency1,
+                                // TODO: will be fixed once pool manager supports v4 pools
+                                PoolSnapshot::default(),
+                                entry.store_index as u16
+                            )
+                        )
+                    })
+                })
+            })
+            .collect()
+    }
 }
 
-impl Stream for RoundStateMachine {
-    type Item = ConsensusState;
+impl<T> Stream for RoundStateMachine<T>
+where
+    T: Transport + Clone
+{
+    type Item = Result<ConsensusState, RoundStateMachineError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -366,25 +449,13 @@ impl Stream for RoundStateMachine {
 
         if let Some(future) = &mut this.transition_future {
             return match future.as_mut().poll(cx) {
-                Poll::Ready(new_state) => Poll::Ready(Some(new_state)),
+                Poll::Ready(result) => Poll::Ready(Some(result)),
                 Poll::Pending => Poll::Pending
             };
         }
 
-        if let Some(timer) = &mut this.initial_state_timer {
-            if timer.as_mut().poll(cx).is_ready() {
-                if let ConsensusState::BidSubmission(BidSubmission {
-                    block_height,
-                    pre_proposals
-                }) = &this.current_state
-                {
-                    let bid_aggregation =
-                        this.generate_bid_aggregation(*block_height, pre_proposals);
-                    this.transition_future =
-                        Some(Box::pin(async { ConsensusState::BidAggregation(bid_aggregation) }));
-                    this.initial_state_timer = None;
-                }
-            }
+        if let Poll::Ready(Some(Ok(msg))) = this.order_storage_rx.poll_next_unpin(cx) {
+            this.on_storage_notification(msg);
         }
 
         Poll::Pending
@@ -392,14 +463,14 @@ impl Stream for RoundStateMachine {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct BidSubmission {
+pub struct PreProposalSubmission {
     pub block_height:  BlockNumber,
     // this is used mostly for early messages
     pub pre_proposals: HashSet<PreProposal>
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct BidAggregation {
+pub struct PreProposalAggregation {
     pub block_height:  BlockNumber,
     pub pre_proposals: HashSet<PreProposal>
 }
@@ -413,16 +484,16 @@ pub struct Finalization {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ConsensusState {
-    BidSubmission(BidSubmission),
-    BidAggregation(BidAggregation),
+    PreProposalSubmission(PreProposalSubmission),
+    PreProposalAggregation(PreProposalAggregation),
     Finalization(Finalization)
 }
 
 impl ConsensusState {
     fn name(&self) -> &'static str {
         match self {
-            Self::BidSubmission(_) => "BidSubmission",
-            Self::BidAggregation(_) => "BidAggregation",
+            Self::PreProposalSubmission(_) => "PreProposalSubmission",
+            Self::PreProposalAggregation(_) => "PreProposalAggregation",
             Self::Finalization(_) => "Finalization"
         }
     }
@@ -431,24 +502,24 @@ impl ConsensusState {
 impl ConsensusState {
     pub fn block_height(&self) -> BlockNumber {
         match self {
-            Self::BidSubmission(state) => state.block_height,
-            Self::BidAggregation(state) => state.block_height,
+            Self::PreProposalSubmission(state) => state.block_height,
+            Self::PreProposalAggregation(state) => state.block_height,
             Self::Finalization(state) => state.block_height
         }
     }
 
     pub fn pre_proposals_mut(&mut self) -> &mut HashSet<PreProposal> {
         match self {
-            Self::BidSubmission(state) => &mut state.pre_proposals,
-            Self::BidAggregation(state) => &mut state.pre_proposals,
+            Self::PreProposalSubmission(state) => &mut state.pre_proposals,
+            Self::PreProposalAggregation(state) => &mut state.pre_proposals,
             Self::Finalization(state) => &mut state.pre_proposals
         }
     }
 
     pub fn pre_proposals(&self) -> &HashSet<PreProposal> {
         match self {
-            Self::BidSubmission(state) => &state.pre_proposals,
-            Self::BidAggregation(state) => &state.pre_proposals,
+            Self::PreProposalSubmission(state) => &state.pre_proposals,
+            Self::PreProposalAggregation(state) => &state.pre_proposals,
             Self::Finalization(state) => &state.pre_proposals
         }
     }

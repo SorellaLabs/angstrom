@@ -313,6 +313,7 @@ where
     fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
         match event {
             NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
+                tracing::debug!("recieved IncomingOrders from peer {:?}", peer_id);
                 orders.into_iter().for_each(|order| {
                     self.peer_to_info
                         .get_mut(&peer_id)

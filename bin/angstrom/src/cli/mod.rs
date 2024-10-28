@@ -184,13 +184,8 @@ pub fn initialize_strom_handles() -> StromHandles {
     }
 }
 
-<<<<<<< HEAD
 pub fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
     angstrom_address: Option<Address>,
-=======
-pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
-    angstrom_address: Address,
->>>>>>> feat/gas-spec
     config: AngstromConfig,
     secret_key: SecretKey,
     handles: StromHandles,

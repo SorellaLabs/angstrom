@@ -463,14 +463,13 @@ pub mod test {
     #[test]
     fn test_tob_gas_calculations_work() {
         let db_path = Path::new("/home/data/reth/db/");
-        let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
 
         let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)));
 
         assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
         let mut gas_calculations = gas_calculations.unwrap();
 
-        let block = db.last_block_number().unwrap() + 1;
+        let block = gas_calculations.db.last_block_number().unwrap() + 1;
         let (swapper, order) = signed_tob_order(block);
 
         // ensure we give the proper approvals of token in as this is

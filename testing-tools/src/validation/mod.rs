@@ -17,9 +17,10 @@ use matching_engine::cfmm::uniswap::{
     pool_manager::UniswapPoolManager,
     pool_providers::canonical_state_adapter::CanonicalStateAdapter
 };
-use reth_provider::CanonStateNotification;
+use reth_provider::{BlockNumReader, CanonStateNotification};
 use tokio::sync::mpsc::unbounded_channel;
 use validation::{
+    common::db::BlockStateProviderFactory,
     order::{
         order_validator::OrderValidator,
         sim::SimValidation,
@@ -39,7 +40,7 @@ type ValidatorOperation<DB, T> =
     ) -> Pin<Box<dyn Future<Output = (TestOrderValidator<DB>, T)>>>;
 
 pub struct TestOrderValidator<
-    DB: StateProviderFactory + revm::DatabaseRef + Clone + Unpin + 'static
+    DB: BlockStateProviderFactory + revm::DatabaseRef + Clone + Unpin + 'static
 > {
     /// allows us to set values to ensure
     pub db:         Arc<DB>,
@@ -48,7 +49,14 @@ pub struct TestOrderValidator<
     pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils<DB>, CanonicalStateAdapter>
 }
 
-impl<DB: StateProviderFactory + Clone + Unpin + 'static + revm::DatabaseRef> TestOrderValidator<DB>
+impl<
+        DB: BlockStateProviderFactory
+            + Clone
+            + Unpin
+            + 'static
+            + revm::DatabaseRef
+            + reth_provider::BlockNumReader
+    > TestOrderValidator<DB>
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
 {
@@ -58,7 +66,8 @@ where
         let fetch_config = load_data_fetcher_config(config_path).unwrap();
         let validation_config = load_validation_config(config_path).unwrap();
         tracing::debug!(?fetch_config, ?validation_config);
-        let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));
+        let current_block =
+            Arc::new(AtomicU64::new(BlockNumReader::best_block_number(&db).unwrap()));
         let db = Arc::new(db);
 
         let fetch = FetchUtils::new(fetch_config.clone(), db.clone());
@@ -107,7 +116,7 @@ where
 }
 
 pub struct OrderValidatorChain<
-    DB: StateProviderFactory + Clone + Unpin + 'static + revm::DatabaseRef,
+    DB: BlockStateProviderFactory + Clone + Unpin + 'static + revm::DatabaseRef,
     T: 'static
 > {
     validator:     TestOrderValidator<DB>,
@@ -116,8 +125,10 @@ pub struct OrderValidatorChain<
     poll_duration: Duration
 }
 
-impl<DB: StateProviderFactory + Clone + Unpin + 'static + revm::DatabaseRef, T: 'static>
-    OrderValidatorChain<DB, T>
+impl<
+        DB: BlockStateProviderFactory + Clone + Unpin + 'static + revm::DatabaseRef + BlockNumReader,
+        T: 'static
+    > OrderValidatorChain<DB, T>
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
 {

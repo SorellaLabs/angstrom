@@ -40,7 +40,6 @@ impl Distribution<FlashVariants> for Standard {
 impl Distribution<ExactFlashOrder> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ExactFlashOrder {
         ExactFlashOrder {
-            exactIn:       rng.gen(),
             amount:        rng.gen(),
             minPrice:      rng.gen(),
             useInternal:   rng.gen(),

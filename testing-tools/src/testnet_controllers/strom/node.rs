@@ -27,7 +27,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::strom_internals::AngstromTestnetNodeInternals;
 use crate::{
-    anvil_state_provider::RpcStateProviderFactoryWrapper,
+    anvil_state_provider::state_provider_factory::RpcStateProviderFactoryWrapper,
     network::{EthPeerPool, TestnetNodeNetwork},
     testnet_controllers::AngstromTestnetConfig
 };

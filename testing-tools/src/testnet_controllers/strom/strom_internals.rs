@@ -24,8 +24,9 @@ use secp256k1::SecretKey;
 
 use crate::{
     anvil_state_provider::{
-        utils::StromContractInstance, AnvilEthDataCleanser, RpcStateProviderFactory,
-        RpcStateProviderFactoryWrapper
+        state_provider_factory::{RpcStateProviderFactory, RpcStateProviderFactoryWrapper},
+        utils::StromContractInstance,
+        AnvilEthDataCleanser
     },
     contracts::deploy_contract_and_create_pool,
     network::TestnetConsensusFuture,

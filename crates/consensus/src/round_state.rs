@@ -107,7 +107,7 @@ where
     }
 
     pub fn has_quorum(&self, voters: usize) -> bool {
-        voters >= (self.validators.len() * 2) / 3 + 1
+        voters > (self.validators.len() * 2) / 3
     }
 
     pub fn reset_round(&mut self, block: BlockNumber, leader: PeerId) {
@@ -179,7 +179,7 @@ where
                     {
                         // send the quorum pre_proposal to the leader
                         return Some((
-                            Some(self.round_leader.clone()),
+                            Some(self.round_leader),
                             StromMessage::PrePropose(merged_pre_proposal)
                         ));
                     }
@@ -413,7 +413,7 @@ where
         proposal
             .preproposals
             .iter()
-            .flat_map(|p| p.limit.iter().map(|order| order.pool_id.clone()))
+            .flat_map(|p| p.limit.iter().map(|order| order.pool_id))
             .collect::<HashSet<_>>()
             .into_iter()
             .filter_map(|pool_id| {

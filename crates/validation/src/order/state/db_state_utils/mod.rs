@@ -2,6 +2,8 @@ pub mod approvals;
 pub mod balances;
 pub mod nonces;
 
+mod finders;
+
 use std::{collections::HashMap, sync::Arc};
 
 use alloy::primitives::{Address, U256};

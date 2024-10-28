@@ -57,7 +57,8 @@ pub fn init_validation<DB: BlockStateProviderFactory + Unpin + Clone + 'static>(
     let data_fetcher_config = load_data_fetcher_config(config_path).unwrap();
     let current_block = Arc::new(AtomicU64::new(db.best_block_number().unwrap()));
     let revm_lru = Arc::new(RevmLRU::new(cache_max_bytes, Arc::new(db), current_block.clone()));
-    let fetch = FetchUtils::new(data_fetcher_config.clone(), revm_lru.clone());
+    // TODO: this will get refactored once feat/gas-spec is merged
+    let fetch = FetchUtils::new(Address::ZERO, data_fetcher_config.clone(), revm_lru.clone());
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()

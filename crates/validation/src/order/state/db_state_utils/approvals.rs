@@ -19,7 +19,7 @@ pub struct Approvals {
 impl Approvals {
     pub fn new(
         angstrom_address: Address,
-        current_slots: HashMap<Address, TokenApprovalSlot>
+        slots: HashMap<Address, TokenApprovalSlot>
     ) -> Self {
         Self { angstrom_address, slots }
     }

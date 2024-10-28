@@ -8,6 +8,11 @@ use reth_provider::{Chain, ExecutionOutcome};
 pub struct AnvilConsensusCanonStateNotification {
     chain: Arc<RwLock<Chain>>
 }
+impl Default for AnvilConsensusCanonStateNotification {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl AnvilConsensusCanonStateNotification {
     pub fn new() -> Self {

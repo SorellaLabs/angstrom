@@ -142,11 +142,13 @@ impl WeightedRoundRobin {
         leader
     }
 
+    #[allow(dead_code)]
     fn remove_validator(&mut self, peer_id: &PeerId) {
         let validator = AngstromValidator::new(*peer_id, 0);
         self.validators.remove(&validator);
     }
 
+    #[allow(dead_code)]
     fn add_validator(&mut self, peer_id: PeerId, voting_power: u64) {
         let mut new_validator = AngstromValidator::new(peer_id, voting_power);
         let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power).sum();
@@ -285,11 +287,11 @@ mod tests {
             AngstromValidator::new(peers["Bob"], 200),
             AngstromValidator::new(peers["Charlie"], 300),
         ];
-        let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
+        let algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
         algo.save_state().unwrap();
 
-        let mut loaded_algo = WeightedRoundRobin::new(vec![], BlockNumber::default());
+        let loaded_algo = WeightedRoundRobin::new(vec![], BlockNumber::default());
 
         assert_eq!(algo.validators, loaded_algo.validators);
         assert_eq!(algo.new_joiner_penalty_factor, loaded_algo.new_joiner_penalty_factor);

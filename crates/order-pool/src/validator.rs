@@ -71,7 +71,7 @@ where
         let Self::RegularProcessing { validator, remaining_futures } = self else { unreachable!() };
 
         let rem_futures = remaining_futures.into_iter().map(|fut| unsafe {
-            std::mem::transmute::<_, ValidationFuture>(Box::pin(async { fut.await })
+            std::mem::transmute::<_, ValidationFuture>(Box::pin(fut)
                 as Pin<
                     Box<dyn futures_util::Future<Output = OrderValidationResults> + Send + Sync>
                 >)

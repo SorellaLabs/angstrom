@@ -9,7 +9,7 @@ impl<D> OwnedMap for Option<D> {
     where
         F: FnOnce() -> R
     {
-        self.inspect(|this| {
+        self.inspect(|_| {
             f();
         })
     }

@@ -8,10 +8,7 @@ use alloy::{
     transports::Transport
 };
 use alloy_primitives::{aliases::U24, Log, B256, I256};
-use angstrom_types::{
-    contract_payloads::angstrom::AngstromPoolConfigStore,
-    primitive::{PoolId as AngstromPoolId, PoolKey, UniswapPoolRegistry}
-};
+use angstrom_types::primitive::{PoolId as AngstromPoolId, PoolKey};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 

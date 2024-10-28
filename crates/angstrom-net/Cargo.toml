@@ -25,8 +25,6 @@ reth-codecs.workspace = true
 reth-tasks.workspace = true
 reth-transaction-pool.workspace = true
 reth-provider.workspace = true
-# reth-rpc-types.workspace = true
-alloy-rpc-types.workspace = true
 reth-eth-wire.workspace = true
 reth-network.workspace = true
 reth-ecies.workspace = true
@@ -41,6 +39,7 @@ reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1
 
 alloy.workspace = true
 alloy-chains.workspace = true
+alloy-rpc-types = { workspace = true, features = ["eth"] }
 
 anyhow.workspace = true
 bincode.workspace = true
@@ -71,7 +70,6 @@ metrics.workspace = true
 auto_impl = "1"
 aquamarine.workspace = true
 tracing.workspace = true
-fnv = "1.0"
 thiserror.workspace = true
 parking_lot.workspace = true
 async-trait.workspace = true

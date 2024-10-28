@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use alloy::rpc::types::eth::Filter;
-use reth_primitives::Log;
+use alloy_primitives::Log;
 
 use crate::cfmm::uniswap::pool_manager::PoolManagerError;
 pub mod canonical_state_adapter;

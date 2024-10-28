@@ -6,17 +6,12 @@ use alloy::{
     transports::TransportResult
 };
 use eyre::bail;
-use futures::Future;
+use reth_primitives::{Account, BlockNumberOrTag};
 use reth_provider::{ProviderError, ProviderResult};
 use reth_revm::primitives::Bytecode;
 use validation::common::db::{BlockStateProvider, BlockStateProviderFactory};
 
-use crate::anvil_utils::AnvilWalletRpc;
-
-fn async_to_sync<F: Future>(f: F) -> F::Output {
-    let handle = tokio::runtime::Handle::try_current().expect("No tokion runtime found");
-    tokio::task::block_in_place(|| handle.block_on(f))
-}
+use super::utils::{async_to_sync, AnvilWalletRpc};
 
 #[derive(Clone, Debug)]
 pub struct RpcStateProvider {
@@ -25,6 +20,10 @@ pub struct RpcStateProvider {
 }
 
 impl RpcStateProvider {
+    pub fn new(block: u64, provider: AnvilWalletRpc) -> Self {
+        Self { block, provider }
+    }
+
     async fn get_account(&self, address: Address) -> TransportResult<Account> {
         let (nonce, balance, bytecode) = futures::try_join!(
             self.provider.get_transaction_count(address).into_future(),
@@ -102,16 +101,16 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
     fn storage_ref(
         &self,
         address: Address,
-        index: reth_primitives::U256
-    ) -> Result<reth_primitives::U256, Self::Error> {
+        index: alloy::primitives::U256
+    ) -> Result<alloy::primitives::U256, Self::Error> {
         let acc = async_to_sync(self.provider.get_storage_at(address, index).into_future())?;
         Ok(acc)
     }
 
-    fn block_hash_ref(&self, number: u64) -> Result<reth_primitives::B256, Self::Error> {
+    fn block_hash_ref(&self, number: u64) -> Result<alloy::primitives::B256, Self::Error> {
         let acc = async_to_sync(
             self.provider
-                .get_block_by_number(reth_rpc_types::BlockNumberOrTag::Number(number), false)
+                .get_block_by_number(BlockNumberOrTag::Number(number), false)
                 .into_future()
         )?;
 
@@ -121,7 +120,7 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
 
     fn code_by_hash_ref(
         &self,
-        code_hash: reth_primitives::B256
+        code_hash: alloy::primitives::B256
     ) -> Result<reth_revm::primitives::Bytecode, Self::Error> {
         panic!("This should not be called, as the code is already loaded");
     }

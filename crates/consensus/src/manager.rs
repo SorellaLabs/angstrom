@@ -1,57 +1,40 @@
 use std::{
-    borrow::BorrowMut,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     future::Future,
-    marker::PhantomData,
     pin::Pin,
-    sync::{Arc, Mutex},
-    task::{Context, Poll},
-    thread::current
+    sync::Arc,
+    task::{Context, Poll}
 };
 
-use alloy::{
-    network::Network,
-    primitives::{bloom, BlockNumber},
-    providers::Provider,
-    transports::Transport
-};
+use alloy::{primitives::BlockNumber, providers::Provider, transports::Transport};
 use angstrom_metrics::ConsensusMetricsWrapper;
-use angstrom_network::{manager::StromConsensusEvent, Peer, StromMessage, StromNetworkHandle};
-use angstrom_types::{
-    consensus::{PreProposal, Proposal},
-    contract_payloads::angstrom::TopOfBlockOrder,
-    orders::PoolSolution,
-    primitive::PeerId
-};
-use futures::{pin_mut, FutureExt, Stream, StreamExt};
-use matching_engine::{
-    cfmm::uniswap::pool_providers::provider_adapter::ProviderAdapter, MatchingManager
-};
-use order_pool::{order_storage::OrderStorage, timer::async_time_fn};
+use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};
+use angstrom_types::contract_payloads::angstrom::UniswapAngstromRegistry;
+use futures::StreamExt;
+use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
-use reth_tasks::TaskSpawner;
-use tokio::{select, task::JoinHandle};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     leader_selection::WeightedRoundRobin,
-    round::{BidAggregation, BidSubmission, ConsensusState, Finalization, RoundStateMachine},
+    round_state::{
+        ConsensusState, Finalization, PreProposalAggregation, PreProposalSubmission,
+        RoundStateMachine
+    },
     AngstromValidator, Signer
 };
 
-pub struct ConsensusManager<P, TR, N> {
+pub struct ConsensusManager<T> {
     current_height:         BlockNumber,
     leader_selection:       WeightedRoundRobin,
-    state_transition:       RoundStateMachine,
+    state_transition:       RoundStateMachine<T>,
     canonical_block_stream: BroadcastStream<CanonStateNotification>,
     strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>,
     network:                StromNetworkHandle,
 
     /// Track broadcasted messages to avoid rebroadcasting
-    broadcasted_messages: HashSet<StromConsensusEvent>,
-    provider:             P,
-    _phantom:             PhantomData<(TR, N)>
+    broadcasted_messages: HashSet<StromConsensusEvent>
 }
 
 pub struct ManagerNetworkDeps {
@@ -70,11 +53,9 @@ impl ManagerNetworkDeps {
     }
 }
 
-impl<P, TR, N> ConsensusManager<P, TR, N>
+impl<T> ConsensusManager<T>
 where
-    P: Provider<TR, N> + Send + Sync,
-    TR: Transport + Clone + Send + Sync,
-    N: Network + Send + Sync
+    T: Transport + Clone
 {
     pub fn new(
         netdeps: ManagerNetworkDeps,
@@ -82,7 +63,8 @@ where
         validators: Vec<AngstromValidator>,
         order_storage: Arc<OrderStorage>,
         current_height: BlockNumber,
-        provider: P
+        pool_registry: UniswapAngstromRegistry,
+        provider: impl Provider<T> + 'static
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
@@ -98,13 +80,13 @@ where
                 signer,
                 leader,
                 validators.clone(),
-                ConsensusMetricsWrapper::new()
+                ConsensusMetricsWrapper::new(),
+                pool_registry,
+                provider
             ),
             network,
             canonical_block_stream: wrapped_broadcast_stream,
-            broadcasted_messages: HashSet::new(),
-            provider,
-            _phantom: PhantomData
+            broadcasted_messages: HashSet::new()
         }
     }
 
@@ -159,18 +141,21 @@ where
         match new_stat {
             // means we transitioned from commit phase to bid submission.
             // nothing much to do here. we just wait sometime to accumulate orders
-            ConsensusState::BidSubmission(BidSubmission { pre_proposals, .. }) => {}
+            ConsensusState::PreProposalSubmission(PreProposalSubmission { .. }) => {}
             // means we transitioned from bid submission to aggregation, therefore we broadcast our
             // pre-proposal to the network
-            ConsensusState::BidAggregation(BidAggregation { pre_proposals, .. }) => {
+            ConsensusState::PreProposalAggregation(PreProposalAggregation {
+                pre_proposals,
+                ..
+            }) => {
                 self.network.broadcast_message(
                     self.state_transition
                         .my_pre_proposal(&pre_proposals)
                         .unwrap()
                 );
             }
-            // TODO: maybe trigger the round verification job after it has finished, if we are not a
-            // leader
+            // TODO: maybe trigger the round verification job after it has finished,
+            // if we are not a leader
             ConsensusState::Finalization(finalization) => {
                 // tell everyone what we sent out to Ethereum
                 if self.state_transition.i_am_leader() {
@@ -183,18 +168,16 @@ where
 
     pub fn on_state_end(&mut self, old_state: ConsensusState) {
         match old_state {
-            ConsensusState::BidSubmission(BidSubmission { .. }) => {}
-            ConsensusState::BidAggregation(BidAggregation { .. }) => {}
+            ConsensusState::PreProposalSubmission(PreProposalSubmission { .. }) => {}
+            ConsensusState::PreProposalAggregation(PreProposalAggregation { .. }) => {}
             ConsensusState::Finalization(Finalization { .. }) => {}
         }
     }
 }
 
-impl<P, TR, N> Future for ConsensusManager<P, TR, N>
+impl<T> Future for ConsensusManager<T>
 where
-    P: Provider<TR, N> + Send + Sync + Unpin,
-    TR: Transport + Clone + Send + Sync + Unpin,
-    N: Network + Send + Sync + Unpin
+    T: Transport + Clone
 {
     type Output = ();
 
@@ -213,7 +196,12 @@ where
         }
 
         if let Poll::Ready(Some(new_state)) = this.state_transition.poll_next_unpin(cx) {
-            this.on_state_start(new_state);
+            match new_state {
+                Ok(new_state) => this.on_state_start(new_state),
+                Err(e) => {
+                    tracing::error!("could not transition state: {}", e)
+                }
+            };
         }
 
         Poll::Pending

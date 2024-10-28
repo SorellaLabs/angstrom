@@ -1,6 +1,6 @@
 mod leader_selection;
 mod manager;
-mod round;
+mod round_state;
 mod signer;
 
 use std::pin::Pin;
@@ -9,7 +9,7 @@ use angstrom_types::consensus::{PreProposal, Proposal};
 use futures::Stream;
 pub use leader_selection::AngstromValidator;
 pub use manager::*;
-pub use round::ConsensusState;
+pub use round_state::ConsensusState;
 pub use signer::*;
 
 #[derive(Debug, Clone)]

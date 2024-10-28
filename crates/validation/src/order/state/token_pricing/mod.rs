@@ -5,7 +5,9 @@ use std::{
 
 use alloy::primitives::{Address, FixedBytes, U256};
 use angstrom_types::{pair_with_price::PairsWithPrice, primitive::PoolId};
-use matching_engine::cfmm::uniswap::pool_manager::UniswapPoolManager;
+use matching_engine::cfmm::uniswap::{
+    pool_data_loader::PoolDataLoader, pool_manager::UniswapPoolManager
+};
 
 use crate::order::state::pools::angstrom_pools::AngstromPools;
 
@@ -15,20 +17,20 @@ use crate::order::state::pools::angstrom_pools::AngstromPools;
 /// In the case of NON direct eth pairs. we assume that any token liquid enough
 /// to trade on angstrom not with eth will always have a eth pair 1 hop away.
 /// this allows for a simple lookup.
-pub struct TokenPriceGenerator<Provider> {
+pub struct TokenPriceGenerator<Provider, Loader: PoolDataLoader<Address>> {
     /// stores the last N amount of prices. TODO: (Address, Address) -> PoolKey
     /// once plamen updates.
-    prev_prices: HashMap<FixedBytes<40>, VecDeque<PairsWithPrice>>,
-    uni:         Arc<UniswapPoolManager<Provider>>
+    prev_prices: HashMap<PoolId, VecDeque<PairsWithPrice>>,
+    uni:         Arc<UniswapPoolManager<Provider, Loader>>
 }
 
-impl<Provider> TokenPriceGenerator<Provider> {
+impl<Provider, Loader: PoolDataLoader<Address>> TokenPriceGenerator<Provider, Loader> {
     /// is a bit of a pain as we need todo a look-back in-order to grab last 5
     /// blocks.
     pub async fn new(
         current_block: u64,
         active_pairs: Vec<PoolId>,
-        uni: &UniswapPoolManager<Provider>
+        uni: &UniswapPoolManager<Provider, Loader>
     ) -> eyre::Result<Self> {
         todo!()
     }
@@ -41,11 +43,6 @@ impl<Provider> TokenPriceGenerator<Provider> {
         // sort tokens
         if token0 > token1 {
             std::mem::swap(&mut token0, &mut token1);
-        }
-        let key = AngstromPools::build_key(token0, token1);
-        let prev_prices = self.prev_prices.get(&key).unwrap();
-        if prev_prices.len() != 5 {
-            panic!("don't have proper prices");
         }
 
         todo!()

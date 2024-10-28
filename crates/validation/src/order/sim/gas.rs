@@ -28,6 +28,7 @@ use eyre::eyre;
 use pade::PadeEncode;
 use reth_errors::RethError;
 use reth_primitives::transaction::FillTxEnv;
+use reth_provider::BlockNumReader;
 use revm::{
     db::{CacheDB, WrapDatabaseRef},
     handler::register::{EvmHandler, HandleRegister},
@@ -61,7 +62,7 @@ pub struct OrderGasCalculations<DB> {
 
 impl<DB> OrderGasCalculations<DB>
 where
-    DB: Unpin + Clone + 'static + revm::DatabaseRef,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + BlockNumReader,
     <DB as revm::DatabaseRef>::Error: Send + Sync
 {
     pub fn new(db: Arc<DB>, angstrom_address: Option<Address>) -> eyre::Result<Self> {
@@ -373,6 +374,7 @@ pub mod test {
     };
     use eyre::eyre;
     use rand::thread_rng;
+    use reth_provider::{BlockNumReader, BlockReaderIdExt};
     use revm::primitives::AccountInfo;
     use testing_tools::load_reth_db;
 
@@ -399,6 +401,33 @@ pub mod test {
         version: "1",
         chain_id: 1,
     };
+
+    fn signed_tob_order(block: u64) -> (Address, TopOfBlockOrder) {
+        let user = LocalSigner::random();
+        let address = user.address();
+
+        let mut default = TopOfBlockOrder {
+            useInternal: false,
+            assetIn: WETH_ADDRESS,
+            assetOut: WETH_ADDRESS,
+            recipient: address,
+            quantityIn: WEI_IN_ETHER.to(),
+            quantityOut: WEI_IN_ETHER.to(),
+            validForBlock: block,
+            hook: Address::ZERO,
+            hookPayload: alloy::primitives::Bytes::new(),
+            ..Default::default()
+        };
+
+        let hash = default.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
+        let sig = user.sign_hash_sync(&hash).unwrap();
+
+        default.meta.isEcdsa = true;
+        default.meta.from = address;
+        default.meta.signature = sig.pade_encode().into();
+
+        (address, default)
+    }
 
     fn signed_exact_order() -> (Address, ExactStandingOrder) {
         let user = LocalSigner::random();
@@ -435,6 +464,45 @@ pub mod test {
     }
 
     #[test]
+    fn test_tob_gas_calculations_work() {
+        let db_path = Path::new("/home/data/reth/db/");
+        let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
+
+        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)));
+
+        assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
+        let mut gas_calculations = gas_calculations.unwrap();
+
+        let block = gas_calculations.db.db.last_block_number().unwrap() + 1;
+        let (swapper, order) = signed_tob_order(block);
+
+        // ensure we give the proper approvals of token in as this is
+        // baseline assumed by this module
+        set_balances_and_approvals(
+            &mut gas_calculations.db,
+            gas_calculations.angstrom_address,
+            swapper,
+            WETH_ADDRESS,
+            WEI_IN_ETHER
+        );
+
+        let mut tob_order = OrderWithStorageData {
+            order,
+            is_currently_valid: true,
+            is_bid: true,
+            ..Default::default()
+        };
+
+        // ensure user address has proper funds
+        let order_gas = gas_calculations
+            .gas_of_tob_order(&tob_order)
+            .expect("failed_to execute tob order");
+
+        // have not set offsets
+        assert_eq!(order_gas, 0);
+    }
+
+    #[test]
     fn test_user_gas_calculations_work() {
         let db_path = Path::new("/home/data/reth/db/");
         let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
@@ -462,10 +530,6 @@ pub mod test {
             is_bid: true,
             ..Default::default()
         };
-
-        let outcome =
-            OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
-        let encode = UserOrder::from_internal_order(&user_order, &outcome, 0).pade_encode();
 
         // ensure user address has proper funds
         let order_gas = gas_calculations

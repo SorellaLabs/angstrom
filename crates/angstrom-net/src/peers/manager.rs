@@ -59,7 +59,7 @@ impl PeersManager {
         }
         let mut peer = entry.remove();
 
-        trace!(target: "net::peers",  ?peer_id, "remove discovered node");
+        trace!(target: "angstrom::net::peers",  ?peer_id, "remove discovered node");
         self.queued_actions
             .push_back(PeerAction::PeerRemoved(peer_id));
     }
@@ -180,7 +180,7 @@ impl Peer {
         // we add reputation since negative reputation change decrease total reputation
         self.reputation = previous.saturating_add(reputation);
 
-        trace!(target: "net::peers", reputation=%self.reputation, banned=%self.is_banned(), "applied reputation change");
+        trace!(target: "angstrom::net::peers", reputation=%self.reputation, banned=%self.is_banned(), "applied reputation change");
 
         if self.connected && self.is_banned() {
             self.connected = false;

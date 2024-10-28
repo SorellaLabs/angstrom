@@ -100,4 +100,6 @@ tempfile.workspace = true
 
 # features
 [features]
+default = ["testnet"]
 reth-db-dep-tests = []
+testnet = []

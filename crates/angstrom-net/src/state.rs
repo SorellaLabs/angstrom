@@ -33,6 +33,10 @@ impl<DB> StromState<DB> {
         self.validators.clone()
     }
 
+    pub fn is_active_peer(&self, peer_id: PeerId) -> bool {
+        self.active_peers.contains(&peer_id)
+    }
+
     pub fn poll(&mut self, cx: &mut Context<'_>) -> Option<StateEvent> {
         self.peers_manager.poll().map(|action| match action {
             crate::PeerAction::Disconnect { peer_id, reason } => {

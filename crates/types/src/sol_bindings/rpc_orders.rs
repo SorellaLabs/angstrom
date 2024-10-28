@@ -15,7 +15,9 @@ sol! {
         bytes signature;
     }
 
+
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+
     struct PartialStandingOrder {
         uint128 minAmountIn;
         uint128 maxAmountIn;
@@ -33,6 +35,7 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+
     struct ExactStandingOrder {
         bool exactIn;
         uint128 amount;
@@ -49,6 +52,7 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+
     struct PartialFlashOrder {
         uint128 minAmountIn;
         uint128 maxAmountIn;
@@ -65,6 +69,7 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+
     struct ExactFlashOrder {
         uint128 amount;
         uint256 minPrice;
@@ -79,6 +84,7 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+
     struct TopOfBlockOrder {
         uint128 quantityIn;
         uint128 quantityOut;

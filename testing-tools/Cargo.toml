@@ -28,9 +28,10 @@ alloy-rpc-types.workspace = true
 reth-eth-wire.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
-alloy.workspace = true
-alloy-rlp.workspace = true
 
+
+alloy = { workspace = true, features = ["rpc-types-anvil"] }
+alloy-rlp.workspace = true
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 

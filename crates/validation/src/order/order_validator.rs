@@ -5,11 +5,12 @@ use std::{
 };
 
 use alloy::primitives::{Address, BlockNumber, B256};
-use angstrom_types::primitive::NewInitializedPool;
+use angstrom_types::primitive::{NewInitializedPool, PoolId};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::{Future, StreamExt};
 use matching_engine::cfmm::uniswap::{
-    pool_manager::UniswapPoolManager, pool_providers::PoolManagerProvider
+    pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
+    pool_providers::PoolManagerProvider
 };
 use tokio::runtime::Handle;
 
@@ -35,7 +36,7 @@ pub struct OrderValidator<DB, Pools, Fetch, Provider> {
 
 impl<DB, Pools, Fetch, Provider> OrderValidator<DB, Pools, Fetch, Provider>
 where
-    DB: Unpin + Clone + 'static + revm::DatabaseRef + Sync + Send,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Sync + Send,
     <DB as revm::DatabaseRef>::Error: Send + Sync,
     Pools: PoolsTracker + Sync + 'static,
     Fetch: StateFetchUtils + Sync + 'static,
@@ -46,7 +47,7 @@ where
         block_number: Arc<AtomicU64>,
         pools: Pools,
         fetch: Fetch,
-        pool_manager: UniswapPoolManager<Provider>,
+        pool_manager: UniswapPoolManager<Provider, DataLoader<PoolId>, PoolId>,
         thread_pool: KeySplitThreadpool<
             UserAddress,
             Pin<Box<dyn Future<Output = ()> + Send>>,

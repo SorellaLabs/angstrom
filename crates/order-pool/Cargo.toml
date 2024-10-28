@@ -56,7 +56,6 @@ aquamarine.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde = { workspace = true, features = ["derive", "rc"], optional = true }
-fnv = "1.0.7"
 bitflags.workspace = true
 auto_impl = "1.0"
 

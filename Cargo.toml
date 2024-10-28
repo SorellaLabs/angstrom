@@ -11,6 +11,7 @@ members = [
   "crates/rpc",
   "crates/eth/",
   "testing-tools",
+  "testing-tools/testing-tools-macros",
   "crates/matching-engine",
   "crates/pade",
   "crates/pade-macro",
@@ -60,6 +61,7 @@ angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 angstrom-metrics = { path = "./crates/metrics/" }
 testing-tools = { path = "./testing-tools/" }
+testing-tools-macros = { path = "./testing-tools/testing-tools-macros" }
 angstrom = { path = "./bin/angstrom/" }
 matching-engine = { path = "./crates/matching-engine/" }
 contract-bindings = { path = "./crates/contract-bindings/" }
@@ -75,10 +77,9 @@ futures-util = "0.3.29"
 bitmaps = "3.2.1"
 
 # revm
-revm = { version = "14.0.1", features = [
-  "std",
-  "secp256k1",
-  "blst",
+revm = { version = "14.0.3", features = [
+    "std",
+    "secp256k1",
 ], default-features = false }
 
 # reth
@@ -119,16 +120,15 @@ reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 
 # alloy
-alloy = { version = "0.3", features = [
-  "full",
+alloy = { version = "0.4.2", features = [
   "rlp",
-  "eip712",
+  "full",
+#  "eip712",
   "node-bindings",
   "rpc-types-debug",
   "rpc-types-trace",
   "json-rpc",
   "rpc-client",
-  "signer-aws",
   "signer-keystore",
   "signer-ledger",
   "signer-mnemonic",
@@ -139,9 +139,9 @@ alloy = { version = "0.3", features = [
 ] }
 alloy-chains = "0.1.32"
 alloy-primitives = "0.8.7"
-alloy-sol-macro = "0.7.2"
-alloy-dyn-abi = "0.7.2"
-alloy-sol-types = "0.7.2"
+alloy-sol-macro = "0.8.0"
+alloy-dyn-abi = "0.8.0"
+alloy-sol-types = "0.8.0"
 alloy-rlp = "0.3.4"
 alloy-rlp-derive = "0.3.8"
 alloy-trie = "0.6"
@@ -175,6 +175,8 @@ alloy-pubsub = { version = "0.4.2", default-features = false }
 alloy-json-rpc = { version = "0.4.2", default-features = false }
 alloy-rpc-client = { version = "0.4.2", default-features = false }
 
+
+
 # Uniswap math helpers
 uniswap_v3_math = { git = "https://github.com/0xKitsune/uniswap-v3-math.git" }
 
@@ -198,7 +200,7 @@ rayon = "1.7"
 itertools = "0.12.1"
 parking_lot = "0.12"
 metrics = "0.21.1"                                                           # Needed for `metrics-macro` to resolve the crate using `::metrics` notation
-anyhow = "1.0.75"
+anyhow = "1.0.85"
 url = "2.4.1"
 auto_impl = "1.1.0"
 
@@ -241,6 +243,3 @@ pprof = "0.13"
 proptest = "1.0"
 proptest-derive = "0.4"
 serial_test = "3.0.0"
-
-[patch.crates-io]
-blstrs_plus = { git = "https://github.com/JamesHinshelwood/blstrs", branch = "update-blst" }

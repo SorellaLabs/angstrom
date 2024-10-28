@@ -1,6 +1,13 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
-use alloy::primitives::{keccak256, Address, Bytes, FixedBytes, B256, U256};
+use alloy::{
+    eips::BlockId,
+    network::Network,
+    primitives::{keccak256, Address, Bytes, B256, U256},
+    providers::Provider,
+    sol_types::SolValue,
+    transports::Transport
+};
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -9,12 +16,13 @@ use super::{
     asset::builder::{AssetBuilder, AssetBuilderStage},
     rewards::PoolUpdate,
     tob::ToBOutcome,
-    Asset, Pair
+    Asset, Pair, POOL_CONFIG_STORE_ENTRY_SIZE
 };
 use crate::{
     consensus::{PreProposal, Proposal},
     matching::{uniswap::PoolSnapshot, Ray},
     orders::{OrderFillState, OrderOutcome},
+    primitive::{PoolId, PoolKey, UniswapPoolRegistry},
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder as RpcTopOfBlockOrder,
@@ -164,7 +172,7 @@ impl AngstromBundle {
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
         let pool_updates = Vec::new();
-        let pairs = Vec::new();
+        let mut pairs = Vec::new();
         let user_orders = Vec::new();
         let mut asset_builder = AssetBuilder::new();
 
@@ -185,10 +193,15 @@ impl AngstromBundle {
         let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
 
         // TODO this wasn't done when pulled from davids branch.
-        let pair_idx = pairs.len() - 1;
+        let pair = Pair {
+            index0:       t0_idx,
+            index1:       t1_idx,
+            store_index:  0,
+            price_1over0: U256::from(1)
+        };
+        pairs.push(pair);
 
-        let outcome =
-            OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
+        OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of(user_order, t0_idx, t1_idx));
 
@@ -253,7 +266,7 @@ impl AngstromBundle {
 
     pub fn from_proposal(
         proposal: &Proposal,
-        pools: &HashMap<FixedBytes<32>, (Address, Address, PoolSnapshot, u16)>
+        pools: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
         let mut pool_updates = Vec::new();
@@ -432,9 +445,129 @@ impl AngstromBundle {
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+pub struct AngstromPoolPartialKey([u8; 27]);
+
+#[derive(Copy, Clone)]
+pub struct AngPoolConfigEntry {
+    pub pool_partial_key: AngstromPoolPartialKey,
+    pub tick_spacing:     u16,
+    pub fee_in_e6:        u32,
+    pub store_index:      usize
+}
+
+#[derive(Default, Clone)]
+pub struct AngstromPoolConfigStore {
+    entries: HashMap<AngstromPoolPartialKey, AngPoolConfigEntry>
+}
+
+impl AngstromPoolConfigStore {
+    pub async fn load_from_chain<T, N, P>(
+        angstrom_contract: Address,
+        block_id: BlockId,
+        provider: &P
+    ) -> Result<AngstromPoolConfigStore, String>
+    where
+        T: Transport + Clone,
+        N: Network,
+        P: Provider<T, N>
+    {
+        let value = provider
+            .get_storage_at(angstrom_contract, U256::from(4))
+            .await
+            .map_err(|e| format!("Error getting storage: {}", e))?;
+
+        let value_bytes: [u8; 32] = value.to_be_bytes();
+        let config_store_address =
+            Address::from(<[u8; 20]>::try_from(&value_bytes[4..24]).unwrap());
+
+        let code = provider
+            .get_code_at(config_store_address)
+            .block_id(block_id)
+            .await
+            .map_err(|e| format!("Error getting code: {}", e))?;
+
+        AngstromPoolConfigStore::try_from(code.as_ref())
+            .map_err(|e| format!("Failed to deserialize code into AngstromPoolConfigStore: {}", e))
+    }
+
+    pub fn derive_store_key(asset0: Address, asset1: Address) -> AngstromPoolPartialKey {
+        let hash = keccak256((asset0, asset1).abi_encode());
+        let mut store_key = [0u8; 27];
+        store_key.copy_from_slice(&hash[5..32]);
+        AngstromPoolPartialKey(store_key)
+    }
+
+    pub fn get_entry(&self, asset0: Address, asset1: Address) -> Option<AngPoolConfigEntry> {
+        let store_key = Self::derive_store_key(asset0, asset1);
+        self.entries.get(&store_key).cloned()
+    }
+}
+
+impl TryFrom<&[u8]> for AngstromPoolConfigStore {
+    type Error = String;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.first() != Some(&0) {
+            return Err("Invalid encoded entries: must start with a safety byte of 0".to_string());
+        }
+        let adjusted_entries = &value[1..];
+        if adjusted_entries.len() % POOL_CONFIG_STORE_ENTRY_SIZE != 0 {
+            return Err(
+                "Invalid encoded entries: incorrect length after removing safety byte".to_string()
+            );
+        }
+        let entries = adjusted_entries
+            .chunks(POOL_CONFIG_STORE_ENTRY_SIZE)
+            .enumerate()
+            .map(|(index, chunk)| {
+                let pool_partial_key =
+                    AngstromPoolPartialKey(<[u8; 27]>::try_from(&chunk[0..27]).unwrap());
+                let tick_spacing = u16::from_be_bytes([chunk[27], chunk[28]]);
+                let fee_in_e6 = u32::from_be_bytes([0, chunk[29], chunk[30], chunk[31]]);
+                (
+                    pool_partial_key,
+                    AngPoolConfigEntry {
+                        pool_partial_key,
+                        tick_spacing,
+                        fee_in_e6,
+                        store_index: index
+                    }
+                )
+            })
+            .collect();
+
+        Ok(AngstromPoolConfigStore { entries })
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct UniswapAngstromRegistry {
+    uniswap_pools:         UniswapPoolRegistry,
+    angstrom_config_store: AngstromPoolConfigStore
+}
+
+impl UniswapAngstromRegistry {
+    pub fn new(
+        uniswap_pools: UniswapPoolRegistry,
+        angstrom_config_store: AngstromPoolConfigStore
+    ) -> Self {
+        UniswapAngstromRegistry { uniswap_pools, angstrom_config_store }
+    }
+
+    pub fn get_uni_pool(&self, pool_id: &PoolId) -> Option<PoolKey> {
+        self.uniswap_pools.get(pool_id).cloned()
+    }
+
+    pub fn get_ang_entry(&self, pool_id: &PoolId) -> Option<AngPoolConfigEntry> {
+        let uni_entry = self.get_uni_pool(pool_id)?;
+        self.angstrom_config_store
+            .get_entry(uni_entry.currency0, uni_entry.currency1)
+    }
+}
+
 #[cfg(test)]
 mod test {
-
     use super::AngstromBundle;
 
     #[test]

@@ -463,6 +463,7 @@ pub mod test {
     #[test]
     fn test_tob_gas_calculations_work() {
         let db_path = Path::new("/home/data/reth/db/");
+        let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
 
         let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)));
 

@@ -233,10 +233,15 @@ impl Encodable for Angstrom::OrderType {
         out.put_u8(byte)
     }
 }
+
 impl Decodable for Angstrom::OrderType {
     fn decode(buf: &mut &[u8]) -> Result<Self, Error> {
         println!("UH OH? - Decodable for Angstrom::OrderType");
-        let t = unsafe { std::mem::transmute(u8::decode(buf)) };
+        let t: Result<Angstrom::OrderType, Error> = unsafe {
+            std::mem::transmute::<Result<u8, Error>, Result<Angstrom::OrderType, Error>>(
+                u8::decode(buf)
+            )
+        };
         println!("OK!! - Decodable for Angstrom::OrderType");
         t
     }
@@ -265,12 +270,12 @@ impl Decodable for Angstrom::CurrencySettlement {
         let Header { list, payload_length } = Header::decode(buf)?;
 
         if !list {
-            return Err(Error::UnexpectedString)
+            return Err(Error::UnexpectedString);
         }
 
         let started_len = buf.len();
         if started_len < payload_length {
-            return Err(Error::InputTooShort)
+            return Err(Error::InputTooShort);
         }
 
         let currency = Address::decode(buf)?;
@@ -285,7 +290,7 @@ impl Decodable for Angstrom::CurrencySettlement {
 
         let consumed = started_len - buf.len();
         if consumed != payload_length {
-            return Err(Error::ListLengthMismatch { expected: payload_length, got: consumed })
+            return Err(Error::ListLengthMismatch { expected: payload_length, got: consumed });
         }
 
         Ok(Self { amountNet: res, currency })

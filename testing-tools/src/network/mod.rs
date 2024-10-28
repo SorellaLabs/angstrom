@@ -129,11 +129,11 @@ where
     }
 
     pub fn is_network_off(&self) -> bool {
-        self.running.load(Ordering::Relaxed) == false
+        !self.running.load(Ordering::Relaxed)
     }
 
     pub fn is_network_on(&self) -> bool {
-        self.running.load(Ordering::Relaxed) == true
+        !self.running.load(Ordering::Relaxed)
     }
 
     pub(crate) async fn initialize_connections(&mut self, connections_needed: usize) {

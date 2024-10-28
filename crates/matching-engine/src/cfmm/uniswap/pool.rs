@@ -447,13 +447,11 @@ where
 
         self.update_position(tick_lower, tick_upper, liquidity_delta);
 
-        if liquidity_delta != 0 {
-            if self.tick > tick_lower && self.tick < tick_upper {
-                self.liquidity = if liquidity_delta < 0 {
-                    self.liquidity - ((-liquidity_delta) as u128)
-                } else {
-                    self.liquidity + (liquidity_delta as u128)
-                }
+        if liquidity_delta != 0 && self.tick > tick_lower && self.tick < tick_upper {
+            self.liquidity = if liquidity_delta < 0 {
+                self.liquidity - ((-liquidity_delta) as u128)
+            } else {
+                self.liquidity + (liquidity_delta as u128)
             }
         }
 
@@ -534,7 +532,7 @@ where
     }
 
     pub fn update_tick(&mut self, tick: i32, liquidity_delta: i128, upper: bool) -> bool {
-        let info = self.ticks.entry(tick).or_insert_with(TickInfo::default);
+        let info = self.ticks.entry(tick).or_default();
 
         let liquidity_gross_before = info.liquidity_gross;
 

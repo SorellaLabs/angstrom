@@ -59,7 +59,7 @@ where
             testnet_node_id,
             strom_handles,
             network.strom_handle.network_handle().clone(),
-            network.secret_key.clone(),
+            network.secret_key,
             config,
             initial_validators
         )

@@ -67,7 +67,7 @@ where
         let keys = generate_node_keys(number_nodes);
         let initial_validators = keys
             .iter()
-            .map(|(pk, _)| AngstromValidator::new(pk2id(&pk), 100))
+            .map(|(pk, _)| AngstromValidator::new(pk2id(pk), 100))
             .collect::<Vec<_>>();
 
         for (pk, sk) in keys {
@@ -140,16 +140,16 @@ where
     }
 
     pub fn get_random_peer(&self, not_allowed_ids: Vec<u64>) -> &TestnetNode<C> {
-        assert!(self.peers.len() != 0);
+        assert!(!self.peers.is_empty());
 
         let peer_ids = self
             .peers
             .iter()
             .map(|(id, _)| *id)
-            .filter(|id| !not_allowed_ids.contains(&id))
+            .filter(|id| !not_allowed_ids.contains(id))
             .collect::<Vec<_>>();
 
-        if peer_ids.len() == 0 {
+        if peer_ids.is_empty() {
             panic!("not enough peers")
         }
 
@@ -294,7 +294,7 @@ where
 
         let peer = self.peers.get(&id).unwrap();
         let span = span!(Level::TRACE, "testnet node", ?id);
-        f(&peer).instrument(span).await
+        f(peer).instrument(span).await
     }
 
     /// runs an event that uses the consensus or orderpool channels in the
@@ -353,7 +353,6 @@ fn generate_node_keys(number_nodes: u64) -> Vec<(PublicKey, SecretKey)> {
     let mut rng = thread_rng();
 
     (0..number_nodes)
-        .into_iter()
         .map(|_| {
             let sk = SecretKey::new(&mut rng);
             let secp = Secp256k1::default();

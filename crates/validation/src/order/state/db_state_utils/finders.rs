@@ -7,8 +7,16 @@ use alloy::primitives::Address;
 
 use crate::BlockStateProviderFactory;
 
+alloy::sol!(
+function transfer(address _to, uint256 _value) public returns (bool success);
+function transferFrom(address _from, address _to, uint256 _value) public returns (bool success);
+function approve(address _spender, uint256 _value) public returns (bool success);
+);
+
 /// panics if we cannot find the slot for the given token
 fn find_slot_offset_for_balance<DB: BlockStateProviderFactory>(db: Arc<DB>) -> u64 {
+    let probe_address = Address::random();
+
     todo!()
 }
 

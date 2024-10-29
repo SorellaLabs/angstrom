@@ -297,6 +297,7 @@ pub struct AngstromConfig {
     pub secret_key_location: PathBuf,
     #[clap(long)]
     pub angstrom_addr:       Option<Address>,
+    #[clap(long)]
     pub node_config:         PathBuf,
     /// enables the metrics
     #[clap(long, default_value = "false", global = true)]

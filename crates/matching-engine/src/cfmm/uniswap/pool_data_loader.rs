@@ -85,7 +85,7 @@ impl PoolData {
     /// for internal math. this is different than just the raw conversion given
     /// that we don't do any decimal adjustments
     pub fn get_raw_price(&self) -> U256 {
-        let this = SqrtPriceX96::from(self.sqrtPrice.clone());
+        let this = SqrtPriceX96::from(self.sqrtPrice);
         let tick = this.to_tick().expect("should never fail");
         // TODO: not a fan of this given precision will be lost. could cause problems
         // down the road.

@@ -1,5 +1,3 @@
-use std::collections::{HashMap, VecDeque};
-
 use alloy::primitives::{Address, U256};
 use futures::{Stream, StreamExt};
 use pade::PadeDecode;

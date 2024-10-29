@@ -11,10 +11,7 @@ use std::{
     }
 };
 
-use alloy::{
-    network::Network, primitives::Address, providers::Provider,
-    signers::k256::elliptic_curve::rand_core::block::BlockRngCore, transports::Transport
-};
+use alloy::primitives::Address;
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use matching_engine::cfmm::uniswap::{
     pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,

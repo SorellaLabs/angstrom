@@ -5,7 +5,7 @@ use std::{
 };
 
 use alloy::{
-    primitives::{Address, FixedBytes, U256},
+    primitives::{Address, U256},
     providers::{Network, Provider},
     transports::Transport
 };

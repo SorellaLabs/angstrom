@@ -166,10 +166,7 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
         Ok(block.header.hash)
     }
 
-    fn code_by_hash_ref(
-        &self,
-        code_hash: B256
-    ) -> Result<reth_revm::primitives::Bytecode, Self::Error> {
+    fn code_by_hash_ref(&self, _: B256) -> Result<reth_revm::primitives::Bytecode, Self::Error> {
         panic!("This should not be called, as the code is already loaded");
     }
 }
@@ -178,13 +175,13 @@ impl BlockNumReader for RpcStateProviderFactory {
         panic!("never used");
     }
 
-    fn block_number(&self, hash: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
+    fn block_number(&self, _: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
         panic!("never used");
     }
 
     fn convert_number(
         &self,
-        id: alloy_rpc_types::BlockHashOrNumber
+        _: alloy_rpc_types::BlockHashOrNumber
     ) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }
@@ -199,27 +196,27 @@ impl BlockNumReader for RpcStateProviderFactory {
 
     fn convert_hash_or_number(
         &self,
-        id: alloy_rpc_types::BlockHashOrNumber
+        _: alloy_rpc_types::BlockHashOrNumber
     ) -> ProviderResult<Option<BlockNumber>> {
         panic!("never used");
     }
 }
 impl BlockHashReader for RpcStateProviderFactory {
-    fn block_hash(&self, number: BlockNumber) -> ProviderResult<Option<alloy_primitives::B256>> {
+    fn block_hash(&self, _: BlockNumber) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }
 
     fn convert_block_hash(
         &self,
-        hash_or_number: alloy_rpc_types::BlockHashOrNumber
+        _: alloy_rpc_types::BlockHashOrNumber
     ) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }
 
     fn canonical_hashes_range(
         &self,
-        start: BlockNumber,
-        end: BlockNumber
+        _: BlockNumber,
+        _: BlockNumber
     ) -> ProviderResult<Vec<alloy_primitives::B256>> {
         panic!("never used");
     }

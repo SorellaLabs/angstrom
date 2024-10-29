@@ -17,7 +17,6 @@ use angstrom_types::{
     }
 };
 use tokio::sync::broadcast::{Receiver, Sender};
-use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{
     finalization_pool::FinalizationPool,

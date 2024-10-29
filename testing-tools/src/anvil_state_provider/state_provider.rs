@@ -120,7 +120,7 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
 
     fn code_by_hash_ref(
         &self,
-        code_hash: alloy::primitives::B256
+        _: alloy::primitives::B256
     ) -> Result<reth_revm::primitives::Bytecode, Self::Error> {
         panic!("This should not be called, as the code is already loaded");
     }

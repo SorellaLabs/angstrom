@@ -18,7 +18,7 @@ static MAX_I128: Lazy<I256> =
     Lazy::new(|| I256::from_dec_str(i128::MAX.to_string().as_str()).unwrap());
 
 fn i32_to_i24(val: i32) -> Result<I24, ConversionError> {
-    if val < MIN_I24 || val > MAX_I24 {
+    if !(MIN_I24..=MAX_I24).contains(&val) {
         return Err(ConversionError::OverflowErrorI24(val));
     }
     let mut bytes = [0u8; 3];

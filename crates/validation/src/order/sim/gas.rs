@@ -1,21 +1,11 @@
-use std::{collections::HashMap, ops::BitOr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use alloy::{
-    network::{Ethereum, EthereumWallet},
-    node_bindings::{Anvil, AnvilInstance},
     primitives::{address, keccak256, Address, TxKind, B256, U160, U256},
-    providers::{
-        builder,
-        fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
-        Identity, IpcConnect, RootProvider
-    },
-    pubsub::PubSubFrontend,
     rlp::Bytes,
-    signers::local::PrivateKeySigner,
     sol_types::{SolCall, SolValue}
 };
 use angstrom_types::{
-    contract_bindings::angstrom::Angstrom::Overflow,
     contract_payloads::angstrom::AngstromBundle,
     matching::uniswap::UniswapFlags,
     sol_bindings::{
@@ -26,20 +16,15 @@ use angstrom_types::{
 };
 use eyre::eyre;
 use pade::PadeEncode;
-use reth_errors::RethError;
-use reth_primitives::transaction::FillTxEnv;
 use reth_provider::BlockNumReader;
 use revm::{
-    db::{CacheDB, WrapDatabaseRef},
-    handler::register::{EvmHandler, HandleRegister},
+    db::CacheDB,
     inspector_handle_register,
-    interpreter::Gas,
-    primitives::{AccountInfo, Bytecode, EnvWithHandlerCfg, ResultAndState, TxEnv},
-    DatabaseRef, Evm
+    primitives::{EnvWithHandlerCfg, ResultAndState, TxEnv},
+    DatabaseRef
 };
 
 use super::gas_inspector::{GasSimulationInspector, GasUsed};
-use crate::BlockStateProviderFactory;
 
 /// A address we can use to deploy contracts
 const DEFAULT_FROM: Address = address!("aa250d5630b4cf539739df2c5dacb4c659f2488d");
@@ -69,8 +54,9 @@ where
         if let Some(angstrom_address) = angstrom_address {
             Ok(Self { db: CacheDB::new(db), angstrom_address })
         } else {
-            let ConfiguredRevm { db, angstrom, .. } =
+            let ConfiguredRevm { db, angstrom } =
                 Self::setup_revm_cache_database_for_simulation(db)?;
+
             Ok(Self { db, angstrom_address: angstrom })
         }
     }
@@ -167,7 +153,7 @@ where
     /// deploys angstrom + univ4 and then sets DEFAULT_FROM address as a node in
     /// the network.
     fn setup_revm_cache_database_for_simulation(db: Arc<DB>) -> eyre::Result<ConfiguredRevm<DB>> {
-        let mut cache_db = CacheDB::new(db.clone());
+        let cache_db = CacheDB::new(db.clone());
 
         let (out, cache_db) = Self::execute_with_db(cache_db, |tx| {
             tx.transact_to = TxKind::Create;
@@ -186,7 +172,7 @@ where
         let v4_address = Address::from_slice(&keccak256((DEFAULT_FROM, 0).abi_encode())[12..]);
 
         // deploy angstrom.
-        let mut angstrom_raw_bytecode =
+        let angstrom_raw_bytecode =
             angstrom_types::contract_bindings::angstrom::Angstrom::BYTECODE.clone();
 
         // in solidity when deploying. constructor args are appended to the end of the
@@ -217,7 +203,7 @@ where
         }
 
         // enable default from to call the angstrom contract.
-        let (out, mut cache_db) = Self::execute_with_db(cache_db, |tx| {
+        let (out, cache_db) = Self::execute_with_db(cache_db, |tx| {
             tx.transact_to = TxKind::Call(angstrom_address);
             tx.caller = DEFAULT_FROM;
             tx.data = angstrom_types::contract_bindings::angstrom::Angstrom::toggleNodesCall::new(
@@ -233,7 +219,7 @@ where
             eyre::bail!("failed to set default from address as node on angstrom");
         }
 
-        Ok(ConfiguredRevm { db: cache_db, angstrom: angstrom_address, uni_swap: v4_address })
+        Ok(ConfiguredRevm { db: cache_db, angstrom: angstrom_address })
     }
 
     fn fetch_db_with_overrides(
@@ -311,7 +297,6 @@ where
 }
 
 struct ConfiguredRevm<DB> {
-    pub uni_swap: Address,
     pub angstrom: Address,
     pub db:       CacheDB<Arc<DB>>
 }
@@ -360,21 +345,18 @@ pub mod test {
     use alloy::{
         node_bindings::WEI_IN_ETHER,
         primitives::{hex, Uint, U256},
-        signers::{local::LocalSigner, Signer, SignerSync}
+        signers::{local::LocalSigner, SignerSync}
     };
     use angstrom_types::{
-        contract_payloads::angstrom::UserOrder,
-        orders::{OrderFillState, OrderOutcome},
         reth_db_wrapper::RethDbWrapper,
         sol_bindings::{
             grouped_orders::StandingVariants,
-            rpc_orders::{ExactStandingOrder, OmitOrderMeta},
-            AngstromContract
+            rpc_orders::{ExactStandingOrder, OmitOrderMeta}
         }
     };
     use eyre::eyre;
-    use rand::thread_rng;
-    use reth_provider::{BlockNumReader, BlockReaderIdExt};
+    use reth_provider::BlockNumReader;
+    use reth_revm::primitives::Bytecode;
     use revm::primitives::AccountInfo;
     use testing_tools::load_reth_db;
 
@@ -382,6 +364,12 @@ pub mod test {
 
     const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
     const USER_WITH_FUNDS: Address = address!("d02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
+
+    const ANGSTROM_DOMAIN: alloy::sol_types::Eip712Domain = alloy::sol_types::eip712_domain! {
+        name: "angstrom",
+        version: "1",
+        chain_id: 1,
+    };
 
     #[test]
     fn ensure_creation_of_mock_works() {
@@ -395,12 +383,6 @@ pub mod test {
 
         assert!(res.is_ok(), "failed to deploy angstrom structure and v4 to chain");
     }
-
-    const ANGSTROM_DOMAIN: alloy::sol_types::Eip712Domain = alloy::sol_types::eip712_domain! {
-        name: "angstrom",
-        version: "1",
-        chain_id: 1,
-    };
 
     fn signed_tob_order(block: u64) -> (Address, TopOfBlockOrder) {
         let user = LocalSigner::random();
@@ -486,7 +468,7 @@ pub mod test {
             WEI_IN_ETHER
         );
 
-        let mut tob_order = OrderWithStorageData {
+        let tob_order = OrderWithStorageData {
             order,
             is_currently_valid: true,
             is_bid: true,
@@ -524,7 +506,7 @@ pub mod test {
             WEI_IN_ETHER
         );
 
-        let mut user_order = OrderWithStorageData {
+        let user_order = OrderWithStorageData {
             order: GroupedVanillaOrder::Standing(StandingVariants::Exact(order)),
             is_currently_valid: true,
             is_bid: true,
@@ -628,7 +610,7 @@ pub mod test {
         let db_path = Path::new("/home/data/reth/db/");
         let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
         let mut cache_db = CacheDB::new(db);
-        let mut a = AccountInfo {
+        let a = AccountInfo {
             balance:   U256::ZERO,
             code:      Some(Bytecode::new_raw(alloy::primitives::Bytes::from_static(&hex!(
                 "6042604260425860005260206000F3"

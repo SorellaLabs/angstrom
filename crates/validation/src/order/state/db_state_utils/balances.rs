@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use alloy::primitives::{Address, U256};
 use reth_revm::DatabaseRef;
 
-use crate::{common::db::BlockStateProviderFactory, order::state::config::TokenBalanceSlot};
+use crate::order::state::config::TokenBalanceSlot;
 
 #[derive(Clone)]
 pub struct Balances(HashMap<Address, TokenBalanceSlot>);

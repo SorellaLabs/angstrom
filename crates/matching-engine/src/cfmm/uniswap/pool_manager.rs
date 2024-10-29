@@ -81,7 +81,7 @@ where
         &self,
         address: &A
     ) -> Option<RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>> {
-        self.pools.get(&address).map(|pool| pool.blocking_read())
+        self.pools.get(address).map(|pool| pool.blocking_read())
     }
 
     pub async fn pool_mut(

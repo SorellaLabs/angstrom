@@ -4,9 +4,7 @@ use alloy::primitives::{keccak256, Address, U256};
 use angstrom_types::primitive::PoolId;
 use eyre::eyre;
 use reth_revm::DatabaseRef;
-use serde::{ser::StdError, Deserialize};
-
-use crate::common::db::BlockStateProviderFactory;
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DataFetcherConfig {
@@ -30,10 +28,6 @@ pub enum HashMethod {
 impl HashMethod {
     const fn is_solidity(&self) -> bool {
         matches!(self, HashMethod::Solidity)
-    }
-
-    const fn is_vyper(&self) -> bool {
-        matches!(self, HashMethod::Vyper)
     }
 }
 

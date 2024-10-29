@@ -2,7 +2,7 @@ use std::{fmt::Debug, future::Future, pin::Pin};
 
 use alloy::primitives::{Address, B256};
 use angstrom_types::{
-    orders::{OrderId, OrderOrigin},
+    orders::OrderOrigin,
     sol_bindings::{
         ext::RawPoolOrder,
         grouped_orders::{
@@ -11,12 +11,10 @@ use angstrom_types::{
         rpc_orders::TopOfBlockOrder
     }
 };
-use angstrom_utils::GenericExt;
 use sim::SimValidation;
-use state::account::user::UserAddress;
 use tokio::sync::oneshot::{channel, Sender};
 
-use crate::{validator::ValidationRequest, BlockStateProviderFactory};
+use crate::validator::ValidationRequest;
 
 pub mod order_validator;
 pub mod sim;
@@ -95,7 +93,7 @@ impl OrderValidationResults {
         <DB as revm::DatabaseRef>::Error: Send + Sync
     {
         // TODO: this can be done without a clone but is super annoying
-        let mut this = self.clone();
+        let this = self.clone();
         if let Self::Valid(order) = this {
             let order_hash = order.order_hash();
             let finalized_order = if is_limit {

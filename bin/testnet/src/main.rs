@@ -17,6 +17,7 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn do_thing(network_controller: AngstromTestnet<NoopProvider>) -> eyre::Result<()> {
     loop {
         tokio::time::sleep(Duration::from_secs(11)).await;

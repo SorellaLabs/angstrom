@@ -37,6 +37,32 @@ jobs:
       - name: "cargo fmt"
         run: cargo fmt --all --check
 
+  clippy:
+    name: "clippy"
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy,rustfmt
+          toolchain: nightly
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          key: "clippy-nightly"
+
+      - name: "clippy all"
+        run: cargo clippy --all-targets
+        env: 
+          RUSTFLAGS: -D warnings
+
   build-tests:
     name: 'Build Tests'
     runs-on: ubuntu-latest

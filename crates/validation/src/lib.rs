@@ -1,9 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_mut)]
-#![allow(unused_variables)]
-#![allow(unreachable_code)]
-
 pub mod common;
 pub mod order;
 pub mod validator;
@@ -22,8 +16,6 @@ use alloy::{
     signers::k256::elliptic_curve::rand_core::block::BlockRngCore, transports::Transport
 };
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
-use common::db::BlockStateProviderFactory;
-use futures::Stream;
 use matching_engine::cfmm::uniswap::{
     pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
     pool_providers::canonical_state_adapter::CanonicalStateAdapter
@@ -33,7 +25,7 @@ use order::state::{
     db_state_utils::{FetchUtils, StateFetchUtils},
     pools::{AngstromPoolsTracker, PoolsTracker}
 };
-use reth_provider::{CanonStateNotifications, FullProvider, StateProviderFactory};
+use reth_provider::CanonStateNotifications;
 use tokio::sync::mpsc::unbounded_channel;
 use validator::Validator;
 
@@ -51,7 +43,6 @@ pub fn init_validation<
     DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync
 >(
     db: DB,
-    cache_max_bytes: usize,
     current_block: u64,
     angstrom_address: Option<Address>,
     state_notification: CanonStateNotifications
@@ -86,11 +77,13 @@ where
                 EnhancedUniswapPool::new(DataLoader::new(pool.pool_id), initial_ticks_per_side)
             })
             .collect();
-        uniswap_pools.iter_mut().for_each(|pool| {
+
+        uniswap_pools.iter_mut().for_each(|_| {
             // TODO: initialize the pool
             // pool.initialize(Some(current_block.load(Ordering::SeqCst)),
             // db.into())
         });
+
         let state_change_buffer = 100;
         let pool_manager = UniswapPoolManager::new(
             uniswap_pools,
@@ -101,7 +94,7 @@ where
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
         let sim = SimValidation::new(revm_lru.clone(), angstrom_address);
-        let pool_watcher_handle = rt
+        let _pool_watcher_handle = rt
             .block_on(async { pool_manager.watch_state_changes().await })
             .unwrap();
         let order_validator =
@@ -119,7 +112,6 @@ pub fn init_validation_tests<
     Pool: PoolsTracker + Sync + 'static
 >(
     db: DB,
-    cache_max_bytes: usize,
     state_notification: CanonStateNotifications,
     state: State,
     pool: Pool,
@@ -131,7 +123,6 @@ where
     let (tx, rx) = unbounded_channel();
     let config_path = Path::new(TOKEN_CONFIG_FILE);
     let validation_config = load_validation_config(config_path).unwrap();
-    let fetcher_config = load_data_fetcher_config(config_path).unwrap();
     let current_block = Arc::new(AtomicU64::new(block_number));
     let revm_lru = Arc::new(db);
     let task_db = revm_lru.clone();
@@ -155,7 +146,7 @@ where
                 EnhancedUniswapPool::new(DataLoader::new(pool.pool_id), initial_ticks_per_side)
             })
             .collect();
-        uniswap_pools.iter_mut().for_each(|pool| {
+        uniswap_pools.iter_mut().for_each(|_| {
             // TODO: initialize the pool
             // pool.initialize(Some(current_block.load(Ordering::SeqCst)),
             // db.into())
@@ -167,7 +158,7 @@ where
             state_change_buffer,
             Arc::new(CanonicalStateAdapter::new(state_notification))
         );
-        let pool_watcher_handle = rt
+        let _pool_watcher_handle = rt
             .block_on(async { pool_manager.watch_state_changes().await })
             .unwrap();
         let order_validator =

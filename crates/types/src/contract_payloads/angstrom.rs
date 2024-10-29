@@ -201,7 +201,6 @@ impl AngstromBundle {
         };
         pairs.push(pair);
 
-        OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of(user_order, t0_idx, t1_idx));
 
@@ -509,13 +508,13 @@ impl TryFrom<&[u8]> for AngstromPoolConfigStore {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.first() != Some(&0) {
-            return Err("Invalid encoded entries: must start with a safety byte of 0".to_string());
+            return Err("Invalid encoded entries: must start with a safety byte of 0".to_string())
         }
         let adjusted_entries = &value[1..];
         if adjusted_entries.len() % POOL_CONFIG_STORE_ENTRY_SIZE != 0 {
             return Err(
                 "Invalid encoded entries: incorrect length after removing safety byte".to_string()
-            );
+            )
         }
         let entries = adjusted_entries
             .chunks(POOL_CONFIG_STORE_ENTRY_SIZE)

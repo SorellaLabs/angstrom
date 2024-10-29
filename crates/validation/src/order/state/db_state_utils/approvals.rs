@@ -1,15 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
-use alloy::{
-    primitives::{keccak256, Address, FixedBytes, B256, U256},
-    sol
-};
-use parking_lot::RwLock;
-use reth_provider::StateProvider;
+use alloy::primitives::{Address, U256};
 use reth_revm::DatabaseRef;
 
 use super::ANGSTROM_CONTRACT;
-use crate::order::state::{config::TokenApprovalSlot, BlockStateProviderFactory};
+use crate::order::state::config::TokenApprovalSlot;
 
 #[derive(Clone)]
 pub struct Approvals(HashMap<Address, TokenApprovalSlot>);

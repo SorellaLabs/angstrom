@@ -22,10 +22,7 @@ use super::{
     },
     OrderValidationRequest
 };
-use crate::{
-    common::db::BlockStateProviderFactory,
-    order::{state::account::UserAccountProcessor, OrderValidation}
-};
+use crate::order::{state::account::UserAccountProcessor, OrderValidation};
 
 pub struct OrderValidator<DB, Pools, Fetch, Provider> {
     sim:          SimValidation<DB>,

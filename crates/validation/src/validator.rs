@@ -1,22 +1,14 @@
-use std::{
-    fmt::Debug,
-    pin::Pin,
-    sync::{atomic::AtomicU64, Arc},
-    task::Poll
-};
+use std::{fmt::Debug, task::Poll};
 
 use alloy::primitives::{Address, B256};
 use futures_util::{Future, FutureExt};
 use matching_engine::cfmm::uniswap::pool_providers::PoolManagerProvider;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::{
-    common::db::BlockStateProviderFactory,
-    order::{
-        order_validator::OrderValidator,
-        state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
-        OrderValidationRequest, OrderValidationResults
-    }
+use crate::order::{
+    order_validator::OrderValidator,
+    state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
+    OrderValidationRequest, OrderValidationResults
 };
 
 pub enum ValidationRequest {

@@ -4,7 +4,6 @@ use alloy::primitives::{hex, keccak256, Address, B256, U256};
 use reth_revm::DatabaseRef;
 
 use super::ANGSTROM_CONTRACT;
-use crate::order::state::BlockStateProviderFactory;
 
 /// The nonce location for quick db lookup
 const ANGSTROM_NONCE_SLOT_CONST: [u8; 4] = hex!("daa050e9");
@@ -35,7 +34,7 @@ impl Nonces {
 
         let word = db.storage_ref(ANGSTROM_CONTRACT, slot.into()).unwrap();
         tracing::debug!(?word);
-        let mut flag = U256::from(1) << (nonce as u8);
+        let flag = U256::from(1) << (nonce as u8);
 
         let out = (word ^ flag) & flag == flag;
         tracing::debug!(?word, %out);

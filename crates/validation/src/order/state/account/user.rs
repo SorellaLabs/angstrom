@@ -180,7 +180,7 @@ impl UserAccounts {
     ) -> Vec<B256> {
         let token = action.token_address;
         let mut entry = self.pending_actions.entry(user).or_default();
-        let mut value = entry.value_mut();
+        let value = entry.value_mut();
 
         value.push(action);
         value.sort_unstable_by_key(|k| k.respend.get_ord_for_pending_orders());
@@ -233,8 +233,8 @@ impl UserAccounts {
         respend: RespendAvoidanceMethod
     ) -> Option<LiveState> {
         let baseline = self.last_known_state.get(&user)?;
-        let mut baseline_approval = *baseline.token_approval.get(&token)?;
-        let mut baseline_balance = *baseline.token_balance.get(&token)?;
+        let baseline_approval = *baseline.token_approval.get(&token)?;
+        let baseline_balance = *baseline.token_balance.get(&token)?;
 
         // the values returned here are the negative delta compaired to baseline.
         let (pending_approvals, pending_balance) = self

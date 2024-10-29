@@ -9,7 +9,6 @@ use gas::OrderGasCalculations;
 use gas_inspector::GasUsed;
 
 use super::OrderValidationRequest;
-use crate::common::db::BlockStateProviderFactory;
 
 mod gas;
 mod gas_inspector;

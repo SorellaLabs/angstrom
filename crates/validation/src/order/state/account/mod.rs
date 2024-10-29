@@ -9,7 +9,6 @@ use thiserror::Error;
 use user::UserAccounts;
 
 use super::{db_state_utils::StateFetchUtils, pools::UserOrderPoolInfo};
-use crate::common::db::BlockStateProviderFactory;
 
 pub mod user;
 

@@ -5,12 +5,9 @@ pub mod nonces;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use alloy::primitives::{Address, U256};
-use angstrom_types::sol_bindings::ext::RawPoolOrder;
-use revm::{Database, Inspector};
 
 use self::{approvals::Approvals, balances::Balances, nonces::Nonces};
 use super::config::DataFetcherConfig;
-use crate::common::db::{BlockStateProvider, BlockStateProviderFactory};
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 

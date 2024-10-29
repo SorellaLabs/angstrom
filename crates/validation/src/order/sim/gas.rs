@@ -1,21 +1,11 @@
-use std::{collections::HashMap, ops::BitOr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use alloy::{
-    network::{Ethereum, EthereumWallet},
-    node_bindings::{Anvil, AnvilInstance},
     primitives::{address, keccak256, Address, TxKind, B256, U160, U256},
-    providers::{
-        builder,
-        fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
-        Identity, IpcConnect, RootProvider
-    },
-    pubsub::PubSubFrontend,
     rlp::Bytes,
-    signers::local::PrivateKeySigner,
     sol_types::{SolCall, SolValue}
 };
 use angstrom_types::{
-    contract_bindings::angstrom::Angstrom::Overflow,
     contract_payloads::angstrom::AngstromBundle,
     matching::uniswap::UniswapFlags,
     sol_bindings::{
@@ -26,20 +16,15 @@ use angstrom_types::{
 };
 use eyre::eyre;
 use pade::PadeEncode;
-use reth_errors::RethError;
-use reth_primitives::transaction::FillTxEnv;
 use reth_provider::BlockNumReader;
 use revm::{
-    db::{CacheDB, WrapDatabaseRef},
-    handler::register::{EvmHandler, HandleRegister},
+    db::CacheDB,
     inspector_handle_register,
-    interpreter::Gas,
-    primitives::{AccountInfo, Bytecode, EnvWithHandlerCfg, ResultAndState, TxEnv},
-    DatabaseRef, Evm
+    primitives::{EnvWithHandlerCfg, ResultAndState, TxEnv},
+    DatabaseRef
 };
 
 use super::gas_inspector::{GasSimulationInspector, GasUsed};
-use crate::BlockStateProviderFactory;
 
 /// A address we can use to deploy contracts
 const DEFAULT_FROM: Address = address!("aa250d5630b4cf539739df2c5dacb4c659f2488d");
@@ -165,7 +150,7 @@ where
     /// deploys angstrom + univ4 and then sets DEFAULT_FROM address as a node in
     /// the network.
     fn setup_revm_cache_database_for_simulation(db: Arc<DB>) -> eyre::Result<ConfiguredRevm<DB>> {
-        let mut cache_db = CacheDB::new(db.clone());
+        let cache_db = CacheDB::new(db.clone());
 
         let (out, cache_db) = Self::execute_with_db(cache_db, |tx| {
             tx.transact_to = TxKind::Create;
@@ -184,7 +169,7 @@ where
         let v4_address = Address::from_slice(&keccak256((DEFAULT_FROM, 0).abi_encode())[12..]);
 
         // deploy angstrom.
-        let mut angstrom_raw_bytecode =
+        let angstrom_raw_bytecode =
             angstrom_types::contract_bindings::angstrom::Angstrom::BYTECODE.clone();
 
         // in solidity when deploying. constructor args are appended to the end of the
@@ -215,7 +200,7 @@ where
         }
 
         // enable default from to call the angstrom contract.
-        let (out, mut cache_db) = Self::execute_with_db(cache_db, |tx| {
+        let (out, cache_db) = Self::execute_with_db(cache_db, |tx| {
             tx.transact_to = TxKind::Call(angstrom_address);
             tx.caller = DEFAULT_FROM;
             tx.data = angstrom_types::contract_bindings::angstrom::Angstrom::toggleNodesCall::new(

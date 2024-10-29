@@ -1,22 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicU64, Arc}
-};
-
 use alloy::primitives::{Address, BlockNumber, StorageKey, StorageValue};
-use parking_lot::RwLock;
-use reth_errors::{ProviderError, RethError, RethResult};
-use reth_primitives::{
-    revm_primitives::{AccountInfo, Bytecode, B256, U256},
-    Account, KECCAK_EMPTY
-};
+use reth_primitives::Account;
 use reth_provider::{
     AccountReader, BlockNumReader, ProviderResult, StateProvider, StateProviderBox,
     StateProviderFactory
 };
-use reth_revm::{Database, DatabaseRef};
-use revm::db::DbAccount;
-use schnellru::{ByMemoryUsage, LruMap};
 
 pub trait BlockStateProvider {
     fn get_basic_account(&self, address: Address) -> ProviderResult<Option<Account>>;

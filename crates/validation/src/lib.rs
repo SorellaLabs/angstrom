@@ -1,9 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_mut)]
-#![allow(unused_variables)]
-#![allow(unreachable_code)]
-
 pub mod common;
 pub mod order;
 pub mod validator;
@@ -17,13 +11,8 @@ use std::{
     }
 };
 
-use alloy::{
-    network::Network, providers::Provider,
-    signers::k256::elliptic_curve::rand_core::block::BlockRngCore, transports::Transport
-};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use common::db::BlockStateProviderFactory;
-use futures::Stream;
 use matching_engine::cfmm::uniswap::{
     pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
     pool_providers::canonical_state_adapter::CanonicalStateAdapter
@@ -33,7 +22,7 @@ use order::state::{
     db_state_utils::{FetchUtils, StateFetchUtils},
     pools::{AngstromPoolsTracker, PoolsTracker}
 };
-use reth_provider::{CanonStateNotifications, FullProvider, StateProviderFactory};
+use reth_provider::CanonStateNotifications;
 use tokio::sync::mpsc::unbounded_channel;
 use validator::Validator;
 

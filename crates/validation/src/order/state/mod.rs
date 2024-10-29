@@ -7,7 +7,7 @@ use angstrom_types::{
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
 use db_state_utils::StateFetchUtils;
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use matching_engine::cfmm::uniswap::{
     pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
     pool_providers::PoolManagerProvider, tob::calculate_reward

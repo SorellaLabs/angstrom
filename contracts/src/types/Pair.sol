@@ -11,8 +11,6 @@ import {
     ONE_E6
 } from "../libraries/PoolConfigStore.sol";
 
-import {console} from "forge-std/console.sol";
-
 type Pair is uint256;
 
 type PairArray is uint256;

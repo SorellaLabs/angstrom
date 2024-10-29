@@ -1,13 +1,12 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use account::UserAccountProcessor;
-use alloy::primitives::{Address, B256, U256};
+use alloy::primitives::{Address, B256};
 use angstrom_types::{
     primitive::{NewInitializedPool, PoolId},
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
 use db_state_utils::StateFetchUtils;
-use futures::StreamExt;
 use matching_engine::cfmm::uniswap::{
     pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
     pool_providers::PoolManagerProvider, tob::calculate_reward
@@ -16,14 +15,11 @@ use parking_lot::RwLock;
 use pools::PoolsTracker;
 
 use super::{OrderValidation, OrderValidationResults};
-use crate::common::db::BlockStateProviderFactory;
 
 pub mod account;
 pub mod config;
 pub mod db_state_utils;
 pub mod pools;
-
-type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 
 /// State validation is all validation that requires reading from the Ethereum
 /// database, these operations are:
@@ -31,7 +27,6 @@ type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 /// 2) checking token balances
 /// 3) checking token approvals
 /// 4) deals with possible pending state
-#[allow(dead_code)]
 pub struct StateValidation<Pools, Fetch, Provider> {
     /// tracks everything user related.
     user_account_tracker: Arc<UserAccountProcessor<Fetch>>,
@@ -66,12 +61,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
         }
     }
 
-    pub fn new_block(
-        &self,
-        block_number: u64,
-        completed_orders: Vec<B256>,
-        address_changes: Vec<Address>
-    ) {
+    pub fn new_block(&self, completed_orders: Vec<B256>, address_changes: Vec<Address>) {
         self.user_account_tracker
             .prepare_for_new_block(address_changes, completed_orders)
     }
@@ -79,12 +69,11 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
     pub fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(
         &self,
         order: O,
-        block: u64,
-        is_limit: bool
+        block: u64
     ) -> OrderValidationResults {
         let order_hash = order.order_hash();
         if !order.is_valid_signature() {
-            return OrderValidationResults::Invalid(order_hash);
+            return OrderValidationResults::Invalid(order_hash)
         }
 
         let Some(pool_info) = self.pool_tacker.read().fetch_pool_info_for_order(&order) else {
@@ -92,7 +81,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
         };
 
         self.user_account_tracker
-            .verify_order::<O>(order, pool_info, block, is_limit)
+            .verify_order::<O>(order, pool_info, block)
             .map(|o: _| {
                 OrderValidationResults::Valid(o.try_map_inner(|inner| Ok(inner.into())).unwrap())
             })
@@ -101,12 +90,12 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
 
     pub fn validate_state_of_regular_order(&self, order: OrderValidation, block: u64) {
         match order {
-            OrderValidation::Limit(tx, order, origin) => {
-                let results = self.handle_regular_order(order, block, true);
+            OrderValidation::Limit(tx, order, _) => {
+                let results = self.handle_regular_order(order, block);
                 let _ = tx.send(results);
             }
-            OrderValidation::Searcher(tx, order, origin) => {
-                let mut results = self.handle_regular_order(order, block, false);
+            OrderValidation::Searcher(tx, order, _) => {
+                let mut results = self.handle_regular_order(order, block);
                 if let OrderValidationResults::Valid(ref mut order_with_storage) = results {
                     let tob_order = order_with_storage
                         .clone()

@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicU64, Arc}
-};
+use std::{collections::HashMap, sync::Arc};
 
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::sol_bindings::{ext::RawPoolOrder, RespendAvoidanceMethod};
@@ -66,8 +63,6 @@ pub struct PendingUserAction {
 }
 
 pub struct UserAccounts {
-    /// lets us know what the baseline state is for a user on a given block
-    current_block:   Arc<AtomicU64>,
     /// all of a user addresses pending orders.
     pending_actions: Arc<DashMap<UserAddress, Vec<PendingUserAction>>>,
 
@@ -76,9 +71,8 @@ pub struct UserAccounts {
 }
 
 impl UserAccounts {
-    pub fn new(current_block: u64) -> Self {
+    pub fn new() -> Self {
         Self {
-            current_block:    Arc::new(AtomicU64::new(current_block)),
             pending_actions:  Arc::new(DashMap::default()),
             last_known_state: Arc::new(DashMap::default())
         }
@@ -92,7 +86,7 @@ impl UserAccounts {
         });
 
         // remove all singular orders
-        self.pending_actions.retain(|user, pending_orders| {
+        self.pending_actions.retain(|_, pending_orders| {
             pending_orders.retain(|p| !orders.contains(&p.order_hash));
             !pending_orders.is_empty()
         });

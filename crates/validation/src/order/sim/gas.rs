@@ -42,8 +42,7 @@ const DEFAULT_CREATE2_FACTORY: Address = address!("4e59b44847b379578588920cA78Fb
 pub struct OrderGasCalculations<DB> {
     db:               CacheDB<Arc<DB>>,
     // the deployed addresses in cache_db
-    angstrom_address: Address,
-    uniswap_address:  Address
+    angstrom_address: Address
 }
 
 impl<DB> OrderGasCalculations<DB>
@@ -52,10 +51,10 @@ where
     <DB as revm::DatabaseRef>::Error: Send + Sync
 {
     pub fn new(db: Arc<DB>) -> eyre::Result<Self> {
-        let ConfiguredRevm { db, uni_swap, angstrom } =
+        let ConfiguredRevm { db, angstrom, .. } =
             Self::setup_revm_cache_database_for_simulation(db)?;
 
-        Ok(Self { db, uniswap_address: uni_swap, angstrom_address: angstrom })
+        Ok(Self { db, angstrom_address: angstrom })
     }
 
     pub fn gas_of_tob_order(
@@ -216,7 +215,7 @@ where
             eyre::bail!("failed to set default from address as node on angstrom");
         }
 
-        Ok(ConfiguredRevm { db: cache_db, angstrom: angstrom_address, uni_swap: v4_address })
+        Ok(ConfiguredRevm { db: cache_db, angstrom: angstrom_address })
     }
 
     fn fetch_db_with_overrides(
@@ -294,7 +293,6 @@ where
 }
 
 struct ConfiguredRevm<DB> {
-    pub uni_swap: Address,
     pub angstrom: Address,
     pub db:       CacheDB<Arc<DB>>
 }
@@ -343,21 +341,18 @@ pub mod test {
     use alloy::{
         node_bindings::WEI_IN_ETHER,
         primitives::{hex, Uint, U256},
-        signers::{local::LocalSigner, Signer, SignerSync}
+        signers::{local::LocalSigner, SignerSync}
     };
     use angstrom_types::{
-        contract_payloads::angstrom::UserOrder,
-        orders::{OrderFillState, OrderOutcome},
         reth_db_wrapper::RethDbWrapper,
         sol_bindings::{
             grouped_orders::StandingVariants,
-            rpc_orders::{ExactStandingOrder, OmitOrderMeta},
-            AngstromContract
+            rpc_orders::{ExactStandingOrder, OmitOrderMeta}
         }
     };
     use eyre::eyre;
-    use rand::thread_rng;
-    use reth_provider::{BlockNumReader, BlockReaderIdExt};
+    use reth_provider::BlockNumReader;
+    use reth_revm::primitives::Bytecode;
     use revm::primitives::AccountInfo;
     use testing_tools::load_reth_db;
 
@@ -365,6 +360,12 @@ pub mod test {
 
     const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
     const USER_WITH_FUNDS: Address = address!("d02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
+
+    const ANGSTROM_DOMAIN: alloy::sol_types::Eip712Domain = alloy::sol_types::eip712_domain! {
+        name: "angstrom",
+        version: "1",
+        chain_id: 1,
+    };
 
     #[test]
     fn ensure_creation_of_mock_works() {
@@ -378,12 +379,6 @@ pub mod test {
 
         assert!(res.is_ok(), "failed to deploy angstrom structure and v4 to chain");
     }
-
-    const ANGSTROM_DOMAIN: alloy::sol_types::Eip712Domain = alloy::sol_types::eip712_domain! {
-        name: "angstrom",
-        version: "1",
-        chain_id: 1,
-    };
 
     fn signed_tob_order(block: u64) -> (Address, TopOfBlockOrder) {
         let user = LocalSigner::random();
@@ -469,7 +464,7 @@ pub mod test {
             WEI_IN_ETHER
         );
 
-        let mut tob_order = OrderWithStorageData {
+        let tob_order = OrderWithStorageData {
             order,
             is_currently_valid: true,
             is_bid: true,
@@ -507,7 +502,7 @@ pub mod test {
             WEI_IN_ETHER
         );
 
-        let mut user_order = OrderWithStorageData {
+        let user_order = OrderWithStorageData {
             order: GroupedVanillaOrder::Standing(StandingVariants::Exact(order)),
             is_currently_valid: true,
             is_bid: true,
@@ -611,7 +606,7 @@ pub mod test {
         let db_path = Path::new("/home/data/reth/db/");
         let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
         let mut cache_db = CacheDB::new(db);
-        let mut a = AccountInfo {
+        let a = AccountInfo {
             balance:   U256::ZERO,
             code:      Some(Bytecode::new_raw(alloy::primitives::Bytes::from_static(&hex!(
                 "6042604260425860005260206000F3"

@@ -37,11 +37,7 @@ impl<'a> GasSimulationInspector<'a> {
 }
 
 impl<DB: Database> Inspector<DB> for GasSimulationInspector<'_> {
-    fn step(
-        &mut self,
-        interp: &mut revm::interpreter::Interpreter,
-        context: &mut revm::EvmContext<DB>
-    ) {
+    fn step(&mut self, interp: &mut revm::interpreter::Interpreter, _: &mut revm::EvmContext<DB>) {
         let addr = interp.contract().bytecode_address.unwrap();
         // we only want to check against angstrom PC
         if addr != self.angstrom_address {
@@ -60,7 +56,7 @@ impl<DB: Database> Inspector<DB> for GasSimulationInspector<'_> {
     fn step_end(
         &mut self,
         interp: &mut revm::interpreter::Interpreter,
-        context: &mut revm::EvmContext<DB>
+        _: &mut revm::EvmContext<DB>
     ) {
         let addr = interp.contract().bytecode_address.unwrap();
         if self.in_flight.is_none() || addr != self.angstrom_address {

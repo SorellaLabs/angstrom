@@ -205,7 +205,6 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     let block_height = node.provider.best_block_number().unwrap();
     let validator = init_validation(
         RethDbWrapper::new(node.provider.clone()),
-        config.validation_cache_size,
         block_height,
         node.provider.subscribe_to_canonical_state()
     );
@@ -280,21 +279,18 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
     #[clap(long)]
-    pub mev_guard:             bool,
+    pub mev_guard:           bool,
     #[clap(long)]
-    pub secret_key_location:   PathBuf,
+    pub secret_key_location: PathBuf,
     #[clap(long)]
-    pub node_config:           PathBuf,
-    // default is 100mb
-    #[clap(long, default_value = "1000000")]
-    pub validation_cache_size: usize,
+    pub node_config:         PathBuf,
     /// enables the metrics
     #[clap(long, default_value = "false", global = true)]
-    pub metrics:               bool,
+    pub metrics:             bool,
     /// spawns the prometheus metrics exporter at the specified port
     /// Default: 6969
     #[clap(long, default_value = "6969", global = true)]
-    pub metrics_port:          u16
+    pub metrics_port:        u16
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -309,7 +305,7 @@ impl NodeConfig {
         let config_path = config.ok_or_else(|| eyre::eyre!("Config path not provided"))?;
 
         if !config_path.exists() {
-            return Err(eyre::eyre!("Config file does not exist at {:?}", config_path));
+            return Err(eyre::eyre!("Config file does not exist at {:?}", config_path))
         }
 
         let toml_content = std::fs::read_to_string(&config_path)

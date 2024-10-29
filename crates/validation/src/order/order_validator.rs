@@ -51,14 +51,7 @@ where
             Handle
         >
     ) -> Self {
-        let state = StateValidation::new(
-            UserAccountProcessor::new(
-                block_number.load(std::sync::atomic::Ordering::SeqCst),
-                fetch
-            ),
-            pools,
-            pool_manager
-        );
+        let state = StateValidation::new(UserAccountProcessor::new(fetch), pools, pool_manager);
         Self { state, sim, block_number, thread_pool }
     }
 
@@ -70,8 +63,7 @@ where
     ) {
         self.block_number
             .store(block_number, std::sync::atomic::Ordering::SeqCst);
-        self.state
-            .new_block(block_number, completed_orders, address_changes);
+        self.state.new_block(completed_orders, address_changes);
     }
 
     /// only checks state
@@ -86,16 +78,14 @@ where
             user,
             Box::pin(async move {
                 match order_validation {
-                    OrderValidation::Limit(tx, order, origin) => {
-                        let mut results =
-                            cloned_state.handle_regular_order(order, block_number, true);
+                    OrderValidation::Limit(tx, order, _) => {
+                        let mut results = cloned_state.handle_regular_order(order, block_number);
                         results.add_gas_cost_or_invalidate(&cloned_sim, true);
 
                         let _ = tx.send(results);
                     }
-                    OrderValidation::Searcher(tx, order, origin) => {
-                        let mut results =
-                            cloned_state.handle_regular_order(order, block_number, false);
+                    OrderValidation::Searcher(tx, order, _) => {
+                        let mut results = cloned_state.handle_regular_order(order, block_number);
                         results.add_gas_cost_or_invalidate(&cloned_sim, false);
 
                         let _ = tx.send(results);

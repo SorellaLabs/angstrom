@@ -56,7 +56,3 @@ impl PairsWithPrice {
         })
     }
 }
-
-pub struct AveragePairPriceStream {
-    prev_prices: HashMap<(Address, Address), VecDeque<PairsWithPrice>>
-}

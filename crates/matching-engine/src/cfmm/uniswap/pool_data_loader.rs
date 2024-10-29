@@ -10,6 +10,7 @@ use alloy::{
 use alloy_primitives::{aliases::U24, Log, B256, I256};
 use angstrom_types::primitive::{PoolId as AngstromPoolId, PoolKey};
 use itertools::Itertools;
+use malachite::{num::conversion::traits::RoundingInto, Natural, Rational};
 use once_cell::sync::Lazy;
 
 use crate::cfmm::uniswap::{i128_to_i256, i256_to_i128, pool::PoolError};
@@ -75,6 +76,30 @@ sol! {
     struct TicksWithBlock {
         TickData[] ticks;
         uint256 blockNumber;
+    }
+}
+use angstrom_types::matching::SqrtPriceX96;
+
+impl PoolData {
+    /// converts the loaded sqrt_price_x96 into the limit price that is used
+    /// for internal math. this is different than just the raw conversion given
+    /// that we don't do any decimal adjustments
+    pub fn get_raw_price(&self) -> U256 {
+        let this = SqrtPriceX96::from(self.sqrtPrice.clone());
+        let tick = this.to_tick().expect("should never fail");
+        // TODO: not a fan of this given precision will be lost. could cause problems
+        // down the road.
+        let normalized_price = 1.0001_f64.powi(tick);
+
+        // because this is user set values and we want to upkeep readability on the
+        // frontend, this value is not stored as a RAY and instead is a
+        // unadjusted t1/t0
+        let price = Rational::try_from(normalized_price).unwrap();
+        let (output, _): (Natural, _) =
+            price.rounding_into(malachite::rounding_modes::RoundingMode::Floor);
+        let limbs = output.to_limbs_asc();
+
+        U256::from_limbs_slice(&limbs)
     }
 }
 

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use alloy::primitives::Address;
 use angstrom_types::sol_bindings::{
     grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
     rpc_orders::TopOfBlockOrder

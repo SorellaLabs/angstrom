@@ -29,10 +29,6 @@ impl HashMethod {
     const fn is_solidity(&self) -> bool {
         matches!(self, HashMethod::Solidity)
     }
-
-    const fn is_vyper(&self) -> bool {
-        matches!(self, HashMethod::Vyper)
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -147,8 +147,6 @@ pub mod tests {
         primitive::PoolId,
         sol_bindings::{grouped_orders::GroupedVanillaOrder, RawPoolOrder}
     };
-    use rand::thread_rng;
-    use revm::primitives::bitvec::store::BitStore;
     use testing_tools::type_generator::orders::UserOrderBuilder;
 
     use super::{UserAccountProcessor, UserAccountVerificationError, UserAccounts};
@@ -179,7 +177,6 @@ pub mod tests {
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let rng = thread_rng();
         let order: GroupedVanillaOrder = UserOrderBuilder::new()
             .standing()
             .asset_in(token0)
@@ -221,7 +218,6 @@ pub mod tests {
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let rng = thread_rng();
         let order: GroupedVanillaOrder = UserOrderBuilder::new()
             .standing()
             .asset_in(token0)
@@ -274,7 +270,6 @@ pub mod tests {
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let rng = thread_rng();
         let order0: GroupedVanillaOrder = UserOrderBuilder::new()
             .standing()
             .asset_in(token0)
@@ -336,7 +331,6 @@ pub mod tests {
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let rng = thread_rng();
         let order: GroupedVanillaOrder = UserOrderBuilder::new()
             .standing()
             .asset_in(token0)

@@ -70,6 +70,12 @@ pub struct UserAccounts {
     last_known_state: Arc<DashMap<UserAddress, BaselineState>>
 }
 
+impl Default for UserAccounts {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserAccounts {
     pub fn new() -> Self {
         Self {

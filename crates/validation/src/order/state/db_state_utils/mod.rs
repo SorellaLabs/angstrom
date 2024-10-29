@@ -163,9 +163,9 @@ pub mod test_fetching {
 
         fn fetch_approval_balance_for_token_overrides(
             &self,
-            user: Address,
-            token: Address,
-            overrides: &HashMap<Address, HashMap<U256, U256>>
+            _: Address,
+            _: Address,
+            _: &HashMap<Address, HashMap<U256, U256>>
         ) -> Option<U256> {
             todo!("not implemented for mocker")
         }
@@ -178,9 +178,9 @@ pub mod test_fetching {
 
         fn fetch_balance_for_token_overrides(
             &self,
-            user: Address,
-            token: Address,
-            overrides: &HashMap<Address, HashMap<U256, U256>>
+            _: Address,
+            _: Address,
+            _: &HashMap<Address, HashMap<U256, U256>>
         ) -> Option<U256> {
             todo!("not implemented for mocker")
         }

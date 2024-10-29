@@ -10,7 +10,7 @@ use alloy::{
     transports::Transport
 };
 use angstrom_types::{pair_with_price::PairsWithPrice, primitive::PoolId};
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use matching_engine::cfmm::uniswap::{
     pool_data_loader::PoolDataLoader, pool_manager::UniswapPoolManager,
     pool_providers::PoolManagerProvider
@@ -48,20 +48,30 @@ where
         // and then convert it into the price of the underlying pool
 
         for block_number in current_block - 5..=current_block {
-            let pools = uni.pool_addresses().map(|pool_address| async {
-                let pool_data = loader
-                    .load_pool_data(Some(block_number), provider.clone())
-                    .await
-                    .expect("failed to load historical price for token price conversion");
-                let price = pool_data.get_raw_price();
+            let pools = futures::stream::iter(uni.pool_addresses().copied())
+                .map(|pool_address| {
+                    let provider = provider.clone();
+                    let loader = loader.clone();
+                    async move {
+                        let pool_data = loader
+                            .load_pool_data(Some(block_number), provider.clone())
+                            .await
+                            .expect("failed to load historical price for token price conversion");
+                        let price = pool_data.get_raw_price();
 
-                PairsWithPrice {
-                    token0:         pool_data.tokenA,
-                    token1:         pool_data.tokenB,
-                    block_num:      block_number,
-                    price_1_over_0: price
-                }
-            });
+                        (
+                            pool_address,
+                            PairsWithPrice {
+                                token0:         pool_data.tokenA,
+                                token1:         pool_data.tokenB,
+                                block_num:      block_number,
+                                price_1_over_0: price
+                            }
+                        )
+                    }
+                })
+                .collect::<Vec<_>>()
+                .await;
         }
 
         todo!()

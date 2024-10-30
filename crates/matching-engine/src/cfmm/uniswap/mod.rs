@@ -31,9 +31,7 @@ fn i128_to_i256(value: i128) -> I256 {
     let mut bytes = [0u8; I256::BYTES];
     let value_bytes = value.to_be_bytes();
     let signed_byte = if (value_bytes[0] & 0x80) == 0x80 { 0xFF } else { 0x00 };
-    for byte in &mut bytes[0..16] {
-        *byte = signed_byte;
-    }
+    bytes[..16].fill(signed_byte);
     bytes[16..].copy_from_slice(&value_bytes);
     I256::from_be_bytes(bytes)
 }

@@ -7,11 +7,9 @@ use alloy::{
     sol_types::{SolEvent, SolType},
     transports::Transport
 };
-use alloy_primitives::{aliases::U24, Log, B256, I256};
-use angstrom_types::primitive::{PoolId as AngstromPoolId, PoolKey};
+use alloy_primitives::{Log, B256, I256};
+use angstrom_types::primitive::{PoolId as AngstromPoolId, UniswapPoolRegistry};
 use itertools::Itertools;
-use malachite::{num::conversion::traits::RoundingInto, Natural, Rational};
-use once_cell::sync::Lazy;
 
 use crate::cfmm::uniswap::{i128_to_i256, i256_to_i128, pool::PoolError};
 
@@ -137,15 +135,11 @@ pub struct ModifyPositionEvent {
     pub tick_upper:      i32,
     pub liquidity_delta: i128
 }
-#[derive(Default, Clone, Debug)]
-pub struct DataLoader<A> {
-    address: A
-}
 
-impl<A> DataLoader<A> {
-    pub fn new(address: A) -> Self {
-        DataLoader { address }
-    }
+#[derive(Default, Clone)]
+pub struct DataLoader<A> {
+    address:       A,
+    pool_registry: Option<UniswapPoolRegistry>
 }
 
 pub trait PoolDataLoader<A> {
@@ -159,16 +153,16 @@ pub trait PoolDataLoader<A> {
         provider: Arc<P>
     ) -> impl Future<Output = Result<(Vec<TickData>, U256), PoolError>> + Send;
 
-    fn address(&self) -> A;
-
-    fn group_logs(logs: Vec<Log>) -> HashMap<A, Vec<Log>>;
-    fn event_signatures() -> Vec<B256>;
     fn load_pool_data<P: Provider<T, N>, T: Transport + Clone, N: Network>(
         &self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
     ) -> impl Future<Output = Result<PoolData, PoolError>> + Send;
 
+    fn address(&self) -> A;
+
+    fn group_logs(logs: Vec<Log>) -> HashMap<A, Vec<Log>>;
+    fn event_signatures() -> Vec<B256>;
     fn is_swap_event(log: &Log) -> bool;
     fn is_modify_position_event(log: &Log) -> bool;
     fn decode_swap_event(log: &Log) -> Result<SwapEvent, PoolError>;
@@ -283,24 +277,21 @@ impl PoolDataLoader<Address> for DataLoader<Address> {
     }
 }
 
+impl DataLoader<Address> {
+    pub fn new(address: Address) -> Self {
+        DataLoader { address, pool_registry: None }
+    }
+}
+
 impl DataLoader<AngstromPoolId> {
     fn pool_manager(&self) -> Address {
         address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640")
     }
-}
 
-static V4_POOL_TABLE: Lazy<HashMap<AngstromPoolId, PoolKey>> = Lazy::new(|| {
-    HashMap::from([(
-        AngstromPoolId::default(),
-        PoolKey {
-            currency0:   address!("0000000000000000000000000000000000000000"),
-            currency1:   address!("0000000000000000000000000000000000000000"),
-            fee:         U24::try_from(3000).unwrap(),
-            tickSpacing: I24::try_from(60).unwrap(),
-            hooks:       address!("0000000000000000000000000000000000000000")
-        }
-    )])
-});
+    pub fn new_with_registry(address: AngstromPoolId, registry: UniswapPoolRegistry) -> Self {
+        Self { address, pool_registry: Some(registry) }
+    }
+}
 
 impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
     async fn load_pool_data<P: Provider<T, N>, T: Transport + Clone, N: Network>(
@@ -308,7 +299,13 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
         block_number: Option<BlockNumber>,
         provider: Arc<P>
     ) -> Result<PoolData, PoolError> {
-        let pool_key = V4_POOL_TABLE.get(&self.address()).unwrap().clone();
+        let pool_key = self
+            .pool_registry
+            .as_ref()
+            .unwrap()
+            .get(&self.address())
+            .unwrap()
+            .clone();
         let deployer = IGetUniswapV4PoolDataBatchRequest::deploy_builder(
             provider,
             self.address(),

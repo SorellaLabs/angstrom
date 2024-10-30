@@ -3,13 +3,13 @@ use std::sync::Arc;
 use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256};
 use angstrom_types::{
-    primitive::{NewInitializedPool, PoolId},
+    primitive::NewInitializedPool,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
 use db_state_utils::StateFetchUtils;
 use matching_engine::cfmm::uniswap::{
-    pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
-    pool_providers::PoolManagerProvider, tob::calculate_reward
+    pool_manager::SyncedUniswapPools,
+    tob::{calculate_reward, get_market_snapshot}
 };
 use parking_lot::RwLock;
 use pools::PoolsTracker;
@@ -28,37 +28,35 @@ pub mod token_pricing;
 /// 2) checking token balances
 /// 3) checking token approvals
 /// 4) deals with possible pending state
-pub struct StateValidation<Pools, Fetch, Provider> {
+pub struct StateValidation<Pools, Fetch> {
     /// tracks everything user related.
     user_account_tracker: Arc<UserAccountProcessor<Fetch>>,
     /// tracks all info about the current angstrom pool state.
     pool_tacker:          Arc<RwLock<Pools>>,
     /// keeps up-to-date with the on-chain pool
-    pool_manager:         Arc<UniswapPoolManager<Provider, DataLoader<PoolId>, PoolId>>
+    uniswap_pools:        SyncedUniswapPools
 }
 
-impl<Pools, Fetch, Provider> Clone for StateValidation<Pools, Fetch, Provider> {
+impl<Pools, Fetch> Clone for StateValidation<Pools, Fetch> {
     fn clone(&self) -> Self {
         Self {
             user_account_tracker: Arc::clone(&self.user_account_tracker),
             pool_tacker:          Arc::clone(&self.pool_tacker),
-            pool_manager:         Arc::clone(&self.pool_manager)
+            uniswap_pools:        Arc::clone(&self.uniswap_pools)
         }
     }
 }
 
-impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider + 'static>
-    StateValidation<Pools, Fetch, Provider>
-{
+impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> {
     pub fn new(
         user_account_tracker: UserAccountProcessor<Fetch>,
         pools: Pools,
-        pool_manager: UniswapPoolManager<Provider, DataLoader<PoolId>, PoolId>
+        uniswap_pools: SyncedUniswapPools
     ) -> Self {
         Self {
-            pool_tacker:          Arc::new(RwLock::new(pools)),
+            pool_tacker: Arc::new(RwLock::new(pools)),
             user_account_tracker: Arc::new(user_account_tracker),
-            pool_manager:         Arc::new(pool_manager)
+            uniswap_pools
         }
     }
 
@@ -106,8 +104,12 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils, Provider: PoolManagerProvider 
                         })
                         .expect("should be unreachable");
                     let pool_address = order_with_storage.pool_id;
-                    let market_snapshot =
-                        self.pool_manager.get_market_snapshot(pool_address).unwrap();
+                    let pool = self
+                        .uniswap_pools
+                        .get(&pool_address)
+                        .map(|pool| pool.blocking_read())
+                        .unwrap();
+                    let market_snapshot = get_market_snapshot(pool).unwrap();
                     let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();
                     order_with_storage.tob_reward = rewards.total_reward;
                 }

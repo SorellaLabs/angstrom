@@ -6,7 +6,7 @@ use angstrom_types::{
 };
 use dashmap::DashMap;
 
-use super::config::ValidationConfig;
+use super::config::PoolConfig;
 
 pub mod angstrom_pools;
 
@@ -33,9 +33,8 @@ pub struct AngstromPoolsTracker {
 }
 
 impl AngstromPoolsTracker {
-    pub fn new(config: ValidationConfig) -> Self {
-        let pools = config
-            .pools
+    pub fn new(pools: Vec<PoolConfig>) -> Self {
+        let pools = pools
             .iter()
             .map(|pool| (AngstromPools::build_key(pool.token0, pool.token1), pool.pool_id))
             .collect::<DashMap<_, _>>();

@@ -14,12 +14,8 @@ use alloy::{
     transports::{RpcError, TransportErrorKind}
 };
 use alloy_primitives::Log;
-use angstrom_types::matching::{
-    uniswap::{LiqRange, PoolSnapshot},
-    SqrtPriceX96
-};
+use angstrom_types::primitive::PoolId;
 use arraydeque::ArrayDeque;
-use eyre::Error;
 use futures_util::{stream::BoxStream, StreamExt};
 use thiserror::Error;
 use tokio::{
@@ -32,18 +28,21 @@ use tokio::{
 
 use super::pool::PoolError;
 use crate::cfmm::uniswap::{
-    pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader,
+    pool::EnhancedUniswapPool,
+    pool_data_loader::{DataLoader, PoolDataLoader},
     pool_providers::PoolManagerProvider
 };
 
 pub type StateChangeCache<Loader, A> = HashMap<A, ArrayDeque<StateChange<Loader, A>, 150>>;
+pub type SyncedUniswapPools<A = PoolId, Loader = DataLoader<A>> =
+    Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>>;
 
 #[derive(Default)]
 pub struct UniswapPoolManager<P, Loader: PoolDataLoader<A>, A = Address>
 where
     A: Debug + Copy
 {
-    pools:               Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>>,
+    pools:               SyncedUniswapPools<A, Loader>,
     latest_synced_block: u64,
     state_change_buffer: usize,
     state_change_cache:  Arc<RwLock<StateChangeCache<Loader, A>>>,
@@ -86,6 +85,10 @@ where
         address: &A
     ) -> Option<RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>> {
         self.pools.get(address).map(|pool| pool.blocking_read())
+    }
+
+    pub fn pools(&self) -> Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>> {
+        self.pools.clone()
     }
 
     pub async fn pool_mut(
@@ -307,36 +310,6 @@ where
             StateChange::new(Some(pool_clone), block_number),
             pool.address()
         )
-    }
-
-    pub fn get_market_snapshot(&self, address: A) -> Result<PoolSnapshot, Error> {
-        let (ranges, price) = {
-            let pool_lock = self
-                .blocking_pool(&address)
-                .ok_or(Error::msg("Pool not found"))?;
-            // Grab all ticks with any change in liquidity from our underlying pool data
-            let mut tick_vec = pool_lock
-                .ticks
-                .iter()
-                .filter(|tick| tick.1.liquidity_net != 0)
-                .collect::<Vec<_>>();
-            // Sort the ticks low-to-high
-            tick_vec.sort_by_key(|x| x.0);
-            // Build our LiqRanges out of our ticks, if any
-            let ranges = tick_vec
-                .windows(2)
-                .map(|tickwindow| {
-                    let lower_tick = tickwindow[0].0;
-                    let upper_tick = tickwindow[1].0;
-                    let liquidity = tickwindow[0].1.liquidity_gross;
-                    LiqRange::new(*lower_tick, *upper_tick, liquidity)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            // Get our starting price
-            let price = SqrtPriceX96::from(pool_lock.sqrt_price);
-            (ranges, price)
-        };
-        PoolSnapshot::new(ranges, price)
     }
 }
 

@@ -22,9 +22,9 @@ async fn main() -> eyre::Result<()> {
 
     let ws_endpoint = std::env::var("ETHEREUM_WS_ENDPOINT")?;
     let ws = WsConnect::new(ws_endpoint);
-    let ws_provider: RootProvider<PubSubFrontend, Ethereum> =
+    let provider: RootProvider<PubSubFrontend, Ethereum> =
         ProviderBuilder::default().on_ws(ws).await.unwrap();
-    let ws_provider = Arc::new(ws_provider);
+    let provider = Arc::new(provider);
     let ticks_per_side = 400;
     let block_number = 20522309;
     let from_block = block_number + 1;
@@ -32,14 +32,13 @@ async fn main() -> eyre::Result<()> {
     let address = address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640");
     let mut pool = EnhancedUniswapPool::new(DataLoader::new(address), ticks_per_side);
     tracing::info!(block_number = block_number, "loading old pool");
-    pool.initialize(Some(block_number), ws_provider.clone())
+    pool.initialize(Some(block_number), provider.clone())
         .await?;
     pool.set_sim_swap_sync(true);
 
     let state_change_buffer = 1;
 
-    let mock_block_stream =
-        Arc::new(MockBlockStream::new(ws_provider.clone(), from_block, to_block));
+    let mock_block_stream = Arc::new(MockBlockStream::new(provider.clone(), from_block, to_block));
     let pools = vec![pool];
     let uniswap_pool_manager =
         UniswapPoolManager::new(pools, block_number, state_change_buffer, mock_block_stream);
@@ -57,7 +56,7 @@ async fn main() -> eyre::Result<()> {
                 if let Some((address, changes_block_number)) = state_changes {
                    let pool_guard = uniswap_pool_manager.pool(&address).await.unwrap();
                     let mut fresh_pool = EnhancedUniswapPool::new(DataLoader::new(address), ticks_per_side);
-                    fresh_pool.initialize(Some(changes_block_number), ws_provider.clone()).await?;
+                    fresh_pool.initialize(Some(changes_block_number), provider.clone()).await?;
 
                     // Compare the new pool with the old pool
                     compare_pools(&pool_guard, &fresh_pool, changes_block_number);

@@ -1,15 +1,50 @@
 use angstrom_types::{
     contract_payloads::tob::ToBOutcome,
-    matching::uniswap::PoolSnapshot,
+    matching::{
+        uniswap::{LiqRange, PoolSnapshot},
+        SqrtPriceX96
+    },
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
+use eyre::Error;
+use tokio::sync::RwLockReadGuard;
 
+use crate::cfmm::uniswap::{pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader};
 // Basically only tests in here now
 pub fn calculate_reward(
     tob: &OrderWithStorageData<TopOfBlockOrder>,
     snapshot: &PoolSnapshot
 ) -> eyre::Result<ToBOutcome> {
     ToBOutcome::from_tob_and_snapshot(tob, snapshot)
+}
+
+pub fn get_market_snapshot<Loader: PoolDataLoader<A>, A>(
+    pool_lock: RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>
+) -> Result<PoolSnapshot, Error> {
+    let (ranges, price) = {
+        // Grab all ticks with any change in liquidity from our underlying pool data
+        let mut tick_vec = pool_lock
+            .ticks
+            .iter()
+            .filter(|tick| tick.1.liquidity_net != 0)
+            .collect::<Vec<_>>();
+        // Sort the ticks low-to-high
+        tick_vec.sort_by_key(|x| x.0);
+        // Build our LiqRanges out of our ticks, if any
+        let ranges = tick_vec
+            .windows(2)
+            .map(|tickwindow| {
+                let lower_tick = tickwindow[0].0;
+                let upper_tick = tickwindow[1].0;
+                let liquidity = tickwindow[0].1.liquidity_gross;
+                LiqRange::new(*lower_tick, *upper_tick, liquidity)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // Get our starting price
+        let price = SqrtPriceX96::from(pool_lock.sqrt_price);
+        (ranges, price)
+    };
+    PoolSnapshot::new(ranges, price)
 }
 
 #[cfg(test)]

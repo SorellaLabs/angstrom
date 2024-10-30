@@ -78,11 +78,10 @@ where
     pub async fn initialize<T: Transport + Clone, N: Network>(
         &mut self,
         block_number: Option<BlockNumber>,
-        ws_provider: Arc<impl Provider<T, N>>
+        provider: Arc<impl Provider<T, N>>
     ) -> Result<(), PoolError> {
-        self.populate_data(block_number, ws_provider.clone())
-            .await?;
-        self.sync_ticks(block_number, ws_provider.clone()).await?;
+        self.populate_data(block_number, provider.clone()).await?;
+        self.sync_ticks(block_number, provider.clone()).await?;
         Ok(())
     }
 

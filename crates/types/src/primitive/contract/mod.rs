@@ -48,6 +48,10 @@ impl UniswapPoolRegistry {
     pub fn get(&self, pool_id: &PoolId) -> Option<&PoolKey> {
         self.pools.get(pool_id)
     }
+
+    pub fn pools(&self) -> HashMap<PoolId, PoolKey> {
+        self.pools.clone()
+    }
 }
 impl From<Vec<PoolKey>> for UniswapPoolRegistry {
     fn from(pools: Vec<PoolKey>) -> Self {

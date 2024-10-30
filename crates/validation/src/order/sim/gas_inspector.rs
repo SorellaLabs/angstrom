@@ -4,6 +4,7 @@ use alloy::primitives::Address;
 use revm::{Database, Inspector};
 
 pub type GasUsed = u64;
+pub type GasUsedInToken0 = U256;
 
 /// the Gas Simulation Inspector allows us to define mutually exclusive ranges
 /// based on the EVM program counter and will store the gas used for execution

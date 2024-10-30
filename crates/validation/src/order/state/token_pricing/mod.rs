@@ -137,7 +137,7 @@ impl TokenPriceGenerator {
                     .iter()
                     .map(|price| {
                         // need to flip. add 18 decimal precision then reciprocal
-                        U256::from(1) / (price.price_1_over_0 * U256::from(1e18 as u128))
+                        U256::from(1e18 as u128) / price.price_1_over_0
                     })
                     .sum::<U256>()
                     / U256::from(size)
@@ -176,7 +176,7 @@ impl TokenPriceGenerator {
                             price.price_1_over_0
                         } else {
                             // need to flip. add 18 decimal precision then reciprocal
-                            U256::from(1) / (price.price_1_over_0 * U256::from(1e18 as u128))
+                            U256::from(1e18 as u128) / price.price_1_over_0
                         }
                     })
                     .sum::<U256>()
@@ -202,7 +202,7 @@ impl TokenPriceGenerator {
                 .iter()
                 .map(|price| {
                     // need to flip. add 18 decimal precision then reciprocal
-                    U256::from(1) / (price.price_1_over_0 * U256::from(1e18 as u128))
+                    U256::from(1e18 as u128) / price.price_1_over_0
                 })
                 .sum::<U256>()
                 / U256::from(size);
@@ -224,7 +224,7 @@ impl TokenPriceGenerator {
                         price.price_1_over_0
                     } else {
                         // need to flip. add 18 decimal precision then reciprocal
-                        U256::from(1) / (price.price_1_over_0 * U256::from(1e18 as u128))
+                        U256::from(1e18 as u128) / price.price_1_over_0
                     }
                 })
                 .sum::<U256>()

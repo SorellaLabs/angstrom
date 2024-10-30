@@ -15,17 +15,19 @@ use super::{
     sim::SimValidation,
     state::{
         account::user::UserAddress, db_state_utils::StateFetchUtils, pools::PoolsTracker,
-        StateValidation
+        token_pricing::TokenPriceGenerator, StateValidation
     },
     OrderValidationRequest
 };
 use crate::order::{state::account::UserAccountProcessor, OrderValidation};
 
 pub struct OrderValidator<DB, Pools, Fetch> {
-    sim:          SimValidation<DB>,
-    state:        StateValidation<Pools, Fetch>,
-    thread_pool:  KeySplitThreadpool<UserAddress, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>,
-    block_number: Arc<AtomicU64>
+    sim:              SimValidation<DB>,
+    state:            StateValidation<Pools, Fetch>,
+    token_conversion: TokenPriceGenerator,
+    token_updates:    Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
+    thread_pool: KeySplitThreadpool<UserAddress, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>,
+    block_number:     Arc<AtomicU64>
 }
 
 impl<DB, Pools, Fetch> OrderValidator<DB, Pools, Fetch>
@@ -35,7 +37,7 @@ where
     Pools: PoolsTracker + Sync + 'static,
     Fetch: StateFetchUtils + Sync + 'static
 {
-    pub fn new(
+    pub async fn new(
         sim: SimValidation<DB>,
         block_number: Arc<AtomicU64>,
         pools: Pools,
@@ -45,10 +47,12 @@ where
             UserAddress,
             Pin<Box<dyn Future<Output = ()> + Send>>,
             Handle
-        >
+        >,
+        token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>
     ) -> Self {
         let state = StateValidation::new(UserAccountProcessor::new(fetch), pools, uniswap_pools);
-        Self { state, sim, block_number, thread_pool }
+
+        Self { state, sim, block_number, thread_pool, token_conversion, token_updates }
     }
 
     pub fn on_new_block(
@@ -69,6 +73,7 @@ where
         let user = order_validation.user();
         let cloned_state = self.state.clone();
         let cloned_sim = self.sim.clone();
+        let cloned_price = self.token_conversion.clone();
 
         self.thread_pool.add_new_task(
             user,
@@ -76,13 +81,13 @@ where
                 match order_validation {
                     OrderValidation::Limit(tx, order, _) => {
                         let mut results = cloned_state.handle_regular_order(order, block_number);
-                        results.add_gas_cost_or_invalidate(&cloned_sim, true);
+                        results.add_gas_cost_or_invalidate(&cloned_sim, &cloned_price, true);
 
                         let _ = tx.send(results);
                     }
                     OrderValidation::Searcher(tx, order, _) => {
                         let mut results = cloned_state.handle_regular_order(order, block_number);
-                        results.add_gas_cost_or_invalidate(&cloned_sim, false);
+                        results.add_gas_cost_or_invalidate(&cloned_sim, &cloned_price, false);
 
                         let _ = tx.send(results);
                     }
@@ -111,6 +116,9 @@ where
         cx: &mut std::task::Context<'_>
     ) -> std::task::Poll<Self::Output> {
         self.thread_pool.try_register_waker(|| cx.waker().clone());
+        while let Poll::Ready(Some(updates)) = self.token_updates.poll_next_unpin(cx) {
+            self.token_conversion.apply_update(updates);
+        }
 
         while let Poll::Ready(Some(_)) = self.thread_pool.poll_next_unpin(cx) {}
 

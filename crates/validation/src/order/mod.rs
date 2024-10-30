@@ -12,6 +12,7 @@ use angstrom_types::{
     }
 };
 use sim::SimValidation;
+use state::token_pricing::TokenPriceGenerator;
 use tokio::sync::oneshot::{channel, Sender};
 
 use crate::validator::ValidationRequest;
@@ -81,8 +82,12 @@ pub enum OrderValidationResults {
 }
 
 impl OrderValidationResults {
-    pub fn add_gas_cost_or_invalidate<DB>(&mut self, sim: &SimValidation<DB>, is_limit: bool)
-    where
+    pub fn add_gas_cost_or_invalidate<DB>(
+        &mut self,
+        sim: &SimValidation<DB>,
+        token_price: &TokenPriceGenerator,
+        is_limit: bool
+    ) where
         DB: Unpin
             + Clone
             + 'static
@@ -100,6 +105,7 @@ impl OrderValidationResults {
                 let res = Self::map_and_process(
                     order,
                     sim,
+                    token_price,
                     |order| match order {
                         AllOrders::Standing(s) => GroupedVanillaOrder::Standing(s),
                         AllOrders::Flash(f) => GroupedVanillaOrder::KillOrFill(f),
@@ -123,6 +129,7 @@ impl OrderValidationResults {
                 let res = Self::map_and_process(
                     order,
                     sim,
+                    token_price,
                     |order| match order {
                         AllOrders::TOB(s) => s,
                         _ => unreachable!()
@@ -147,9 +154,14 @@ impl OrderValidationResults {
     fn map_and_process<Old, New, DB>(
         order: OrderWithStorageData<Old>,
         sim: &SimValidation<DB>,
+        token_price: &TokenPriceGenerator,
         map_new: impl Fn(Old) -> New,
         map_old: impl Fn(New) -> Old,
-        calculate_function: impl Fn(&SimValidation<DB>, &OrderWithStorageData<New>) -> eyre::Result<u64>
+        calculate_function: impl Fn(
+            &SimValidation<DB>,
+            &OrderWithStorageData<New>,
+            &TokenPriceGenerator
+        ) -> eyre::Result<u64>
     ) -> eyre::Result<OrderWithStorageData<Old>>
     where
         DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
@@ -159,7 +171,7 @@ impl OrderValidationResults {
             .try_map_inner(move |order| Ok(map_new(order)))
             .unwrap();
 
-        if let Ok(gas_used) = (calculate_function)(sim, &order) {
+        if let Ok(gas_used) = (calculate_function)(sim, &order, token_price) {
             order.priority_data.gas += gas_used as u128;
         } else {
             return Err(eyre::eyre!("not able to process gas"))

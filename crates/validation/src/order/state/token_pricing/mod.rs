@@ -24,8 +24,6 @@ use matching_engine::cfmm::uniswap::{
 /// to trade on angstrom not with eth will always have a eth pair 1 hop away.
 /// this allows for a simple lookup.
 pub struct TokenPriceGenerator {
-    /// stores the last N amount of prices. TODO: (Address, Address) -> PoolKey
-    /// once plamen updates.
     prev_prices: HashMap<PoolId, VecDeque<PairsWithPrice>>,
     updates:     Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>
 }
@@ -40,7 +38,7 @@ impl TokenPriceGenerator {
         uni: SyncedUniswapPools<PoolId, Loader>
     ) -> eyre::Result<Self>
     where
-        Loader: PoolDataLoader<FixedBytes<32>> + Default + Clone + Send + Sync + 'static
+        Loader: PoolDataLoader<PoolId> + Default + Clone + Send + Sync + 'static
     {
         // for each pool, we want to load the last 5 blocks and get the sqrt_price_96
         // and then convert it into the price of the underlying pool

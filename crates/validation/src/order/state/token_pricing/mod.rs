@@ -5,14 +5,15 @@ use std::{
 };
 
 use alloy::{
-    primitives::{Address, U256},
+    primitives::{Address, FixedBytes, U256},
     providers::{Network, Provider},
     transports::Transport
 };
 use angstrom_types::{pair_with_price::PairsWithPrice, primitive::PoolId};
 use futures::{Stream, StreamExt};
 use matching_engine::cfmm::uniswap::{
-    pool_data_loader::PoolDataLoader, pool_manager::UniswapPoolManager,
+    pool_data_loader::PoolDataLoader,
+    pool_manager::{SyncedUniswapPools, UniswapPoolManager},
     pool_providers::PoolManagerProvider
 };
 
@@ -22,59 +23,54 @@ use matching_engine::cfmm::uniswap::{
 /// In the case of NON direct eth pairs. we assume that any token liquid enough
 /// to trade on angstrom not with eth will always have a eth pair 1 hop away.
 /// this allows for a simple lookup.
-pub struct TokenPriceGenerator<Pro, Loader: PoolDataLoader<Address>> {
+pub struct TokenPriceGenerator {
     /// stores the last N amount of prices. TODO: (Address, Address) -> PoolKey
     /// once plamen updates.
     prev_prices: HashMap<PoolId, VecDeque<PairsWithPrice>>,
-    updates:     Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
-    uni:         Arc<UniswapPoolManager<Pro, Loader>>
+    updates:     Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>
 }
 
-impl<Pro, Loader: PoolDataLoader<Address>> TokenPriceGenerator<Pro, Loader>
-where
-    Loader: PoolDataLoader<Address> + Default + Clone + Send + Sync + 'static,
-    Pro: PoolManagerProvider + Send + Sync + 'static
-{
+impl TokenPriceGenerator {
     /// is a bit of a pain as we need todo a look-back in-order to grab last 5
     /// blocks.
-    pub async fn new<P: Provider<T, N>, T: Transport + Clone, N: Network>(
+    pub async fn new<P: Provider<T, N>, T: Transport + Clone, N: Network, Loader>(
         provider: Arc<P>,
         current_block: u64,
-        active_pairs: Vec<PoolId>,
-        loader: Loader,
-        uni: Arc<UniswapPoolManager<Pro, Loader>>
-    ) -> eyre::Result<Self> {
+        updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
+        uni: SyncedUniswapPools<PoolId, Loader>
+    ) -> eyre::Result<Self>
+    where
+        Loader: PoolDataLoader<FixedBytes<32>> + Default + Clone + Send + Sync + 'static
+    {
         // for each pool, we want to load the last 5 blocks and get the sqrt_price_96
         // and then convert it into the price of the underlying pool
-
-        for block_number in current_block - 5..=current_block {
-            let pools = futures::stream::iter(uni.pool_addresses().copied())
-                .map(|pool_address| {
-                    let provider = provider.clone();
-                    let loader = loader.clone();
-                    async move {
-                        let pool_data = loader
-                            .load_pool_data(Some(block_number), provider.clone())
+        let pools = futures::stream::iter(uni.iter())
+            .map(|(pool_key, pool)| {
+                let provider = provider.clone();
+                async move {
+                    let mut queue = VecDeque::new();
+                    for block_number in current_block - 5..=current_block {
+                        let pool_read = pool.read().await;
+                        let pool_data = pool_read
+                            .pool_data_for_block(block_number, provider)
                             .await
                             .expect("failed to load historical price for token price conversion");
                         let price = pool_data.get_raw_price();
 
-                        (
-                            pool_address,
-                            PairsWithPrice {
-                                token0:         pool_data.tokenA,
-                                token1:         pool_data.tokenB,
-                                block_num:      block_number,
-                                price_1_over_0: price
-                            }
-                        )
+                        queue.push_back(PairsWithPrice {
+                            token0:         pool_data.tokenA,
+                            token1:         pool_data.tokenB,
+                            block_num:      block_number,
+                            price_1_over_0: price
+                        });
                     }
-                })
-                .collect::<Vec<_>>()
-                .await;
-        }
+                    (*pool_key, queue)
+                }
+            })
+            .collect::<HashMap<_, _>>()
+            .await;
 
-        todo!()
+        Self { prev_prices: pools, updates }
     }
 
     /// NOTE: assumes that the uniswap pool state transition has already

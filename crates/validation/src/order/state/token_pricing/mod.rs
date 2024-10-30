@@ -7,6 +7,7 @@ use std::{
 use alloy::{
     primitives::{Address, FixedBytes, U256},
     providers::{Network, Provider},
+    rpc::types::error,
     transports::Transport
 };
 use angstrom_types::{
@@ -86,13 +87,18 @@ impl TokenPriceGenerator {
     }
 
     pub fn get_eth_conversion_price(&self, id: &PoolId) -> Option<U256> {
+        let prices = self.prev_prices.get(id)?;
+        let size = prices.len();
+        if size != BLOCKS_TO_AVG_PRICE {
+            warn!("size of loaded blocks doesn't match the value we set");
+        }
+
         Some(
-            self.prev_prices
-                .get(id)?
+            prices
                 .iter()
                 .map(|price| price.price_1_over_0)
                 .sum::<U256>()
-                / BLOCKS_TO_AVG_PRICE
+                / U256::from(size)
         )
     }
 }

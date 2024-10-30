@@ -21,7 +21,8 @@ use validation::{
         state::{
             config::{load_data_fetcher_config, load_validation_config, ValidationConfig},
             db_state_utils::{nonces::Nonces, FetchUtils},
-            pools::AngstromPoolsTracker
+            pools::AngstromPoolsTracker,
+            token_pricing::TokenPriceGenerator
         }
     },
     validator::{ValidationClient, Validator}
@@ -49,7 +50,11 @@ impl<
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
 {
-    pub fn new(db: DB, uniswap_pools: SyncedUniswapPools) -> Self {
+    pub fn new(
+        db: DB,
+        uniswap_pools: SyncedUniswapPools,
+        token_conversion: TokenPriceGenerator
+    ) -> Self {
         let (tx, rx) = unbounded_channel();
         let config_path = Path::new("./state_config.toml");
         let fetch_config = load_data_fetcher_config(config_path).unwrap();
@@ -66,8 +71,19 @@ where
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
         let sim = SimValidation::new(db.clone(), None);
-        let order_validator =
-            OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools, thread_pool);
+
+        // fill stream
+
+        let order_validator = OrderValidator::new(
+            sim,
+            current_block,
+            pools,
+            fetch,
+            uniswap_pools,
+            thread_pool,
+            token_conversion
+        );
+
         let val = Validator::new(rx, order_validator);
         let client = ValidationClient(tx);
 

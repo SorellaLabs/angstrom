@@ -48,6 +48,7 @@ where
             Pin<Box<dyn Future<Output = ()> + Send>>,
             Handle
         >,
+        token_conversion: TokenPriceGenerator,
         token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>
     ) -> Self {
         let state = StateValidation::new(UserAccountProcessor::new(fetch), pools, uniswap_pools);

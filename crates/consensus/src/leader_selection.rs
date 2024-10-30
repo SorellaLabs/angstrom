@@ -56,7 +56,7 @@ impl WeightedRoundRobin {
     fn proposer_selection(&mut self) -> PeerId {
         let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power).sum();
 
-        let mut updated_validators = HashSet::new();
+        let mut updated_validators = HashSet::with_capacity(self.validators.len());
         for mut validator in self.validators.drain() {
             validator.priority += validator.voting_power as f64;
             updated_validators.insert(validator);
@@ -86,7 +86,7 @@ impl WeightedRoundRobin {
     fn center_priorities(&mut self) {
         let avg_priority: f64 =
             self.validators.iter().map(|v| v.priority).sum::<f64>() / self.validators.len() as f64;
-        let mut updated_validators = HashSet::new();
+        let mut updated_validators = HashSet::with_capacity(self.validators.len());
         for mut validator in self.validators.drain() {
             validator.priority -= avg_priority;
             updated_validators.insert(validator);
@@ -111,7 +111,7 @@ impl WeightedRoundRobin {
 
         if diff > threshold {
             let scale = diff / threshold;
-            let mut updated_validators = HashSet::new();
+            let mut updated_validators = HashSet::with_capacity(self.validators.len());
             for mut validator in self.validators.drain() {
                 validator.priority /= scale;
                 updated_validators.insert(validator);

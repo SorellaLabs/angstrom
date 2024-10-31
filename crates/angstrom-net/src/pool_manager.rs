@@ -9,9 +9,7 @@ use std::{
 use alloy::primitives::{Address, B256};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    orders::OrderOrigin,
-    primitive::PeerId,
-    sol_bindings::{grouped_orders::AllOrders, RawPoolOrder}
+    orders::OrderOrigin, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
 };
 use futures::{Future, FutureExt, StreamExt};
 use order_pool::{
@@ -52,11 +50,6 @@ impl PoolHandle {
     fn send(&self, cmd: OrderCommand) -> Result<(), SendError<OrderCommand>> {
         self.manager_tx.send(cmd)
     }
-
-    async fn send_request<T>(&self, rx: oneshot::Receiver<T>, cmd: OrderCommand) -> T {
-        self.send(cmd);
-        rx.await.unwrap()
-    }
 }
 
 impl OrderPoolHandle for PoolHandle {
@@ -66,7 +59,7 @@ impl OrderPoolHandle for PoolHandle {
         order: AllOrders
     ) -> impl Future<Output = bool> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        self.send(OrderCommand::NewOrder(origin, order, tx)).is_ok();
+        let _ = self.send(OrderCommand::NewOrder(origin, order, tx));
         rx.map(|result| match result {
             Ok(OrderValidationResults::Valid(_)) => true,
             Ok(OrderValidationResults::Invalid(_)) => false,
@@ -81,8 +74,7 @@ impl OrderPoolHandle for PoolHandle {
 
     fn cancel_order(&self, from: Address, order_hash: B256) -> impl Future<Output = bool> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        self.send(OrderCommand::CancelOrder(from, order_hash, tx))
-            .is_ok();
+        let _ = self.send(OrderCommand::CancelOrder(from, order_hash, tx));
         rx.map(|res| res.unwrap_or(false))
     }
 }
@@ -128,7 +120,7 @@ where
     }
 
     pub fn with_storage(mut self, order_storage: Arc<OrderStorage>) -> Self {
-        self.order_storage.insert(order_storage);
+        let _ = self.order_storage.insert(order_storage);
         self
     }
 
@@ -237,7 +229,7 @@ where
         _command_tx: UnboundedSender<OrderCommand>,
         command_rx: UnboundedReceiverStream<OrderCommand>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
+        _pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
     ) -> Self {
         Self {
             strom_network_events,
@@ -252,12 +244,12 @@ where
 
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
-            OrderCommand::NewOrder(origin, order, validation_response) => self
+            OrderCommand::NewOrder(_, order, validation_response) => self
                 .order_indexer
                 .new_rpc_order(OrderOrigin::External, order, validation_response),
             OrderCommand::CancelOrder(from, order_hash, receiver) => {
                 let res = self.order_indexer.cancel_order(from, order_hash);
-                receiver.send(res);
+                let _ = receiver.send(res);
             }
         }
     }
@@ -278,7 +270,7 @@ where
                 self.order_indexer.finalized_block(block);
             }
             EthEvent::NewPool(pool) => self.order_indexer.new_pool(pool),
-            EthEvent::NewBlock(block) => {}
+            EthEvent::NewBlock(_) => {}
         }
     }
 

@@ -6,7 +6,7 @@ use crate::sol_bindings::{
         ExactFlashOrder, ExactStandingOrder, OrderMeta, PartialFlashOrder, PartialStandingOrder,
         TopOfBlockOrder
     },
-    testnet::random::{Randomizer, RandomizerSized}
+    testnet::random::RandomizerSized
 };
 
 impl Distribution<AllOrders> for Standard {

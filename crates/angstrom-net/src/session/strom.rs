@@ -242,7 +242,7 @@ impl StromSession {
                 })
                 // if false, i.e verification failed. then we disconnect
                 .filter(|f| *f)
-                .map(|f| Poll::Pending)
+                .map(|_| Poll::Pending)
                 .unwrap_or_else(|| self.emit_disconnect(cx))
             })
             .flatten()
@@ -273,11 +273,10 @@ impl Stream for StromSession {
     type Item = BytesMut;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.pending_handle.is_some() {
-            if let Some(res) = self.poll_init_connection(cx) {
-                return Poll::Pending
-            }
+        if self.pending_handle.is_some() && self.poll_init_connection(cx).is_some() {
+            return Poll::Pending
         }
+
         if !self.verification_sidecar.is_verified() {
             return self.poll_verification(cx)
         }

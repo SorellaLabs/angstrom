@@ -75,19 +75,16 @@ where
         )
         .boxed();
 
-        let order_validator = rt.block_on(async move {
-            OrderValidator::new(
-                sim,
-                current_block,
-                pools,
-                fetch,
-                uniswap_pools,
-                thread_pool,
-                price_generator,
-                update_stream
-            )
-            .await
-        });
+        let order_validator = rt.block_on(OrderValidator::new(
+            sim,
+            current_block,
+            pools,
+            fetch,
+            uniswap_pools,
+            thread_pool,
+            price_generator,
+            update_stream
+        ));
 
         rt.block_on(async { Validator::new(validator_rx, order_validator).await })
     });
@@ -138,19 +135,16 @@ where
 
         let sim = SimValidation::new(task_db, None);
 
-        let order_validator = rt.block_on(async move {
-            OrderValidator::new(
-                sim,
-                current_block,
-                pool,
-                state,
-                uniswap_pools,
-                thread_pool,
-                price_generator,
-                update_stream
-            )
-            .await
-        });
+        let order_validator = rt.block_on(OrderValidator::new(
+            sim,
+            current_block,
+            pool,
+            state,
+            uniswap_pools,
+            thread_pool,
+            price_generator,
+            update_stream
+        ));
 
         rt.block_on(Validator::new(rx, order_validator))
     });

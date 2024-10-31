@@ -157,7 +157,7 @@ impl<DB: Unpin> Future for StromNetworkManager<DB> {
             work -= 1;
             if work == 0 {
                 cx.waker().wake_by_ref();
-                return Poll::Pending
+                break
             }
 
             match self.from_handle_rx.poll_next_unpin(cx) {
@@ -176,17 +176,18 @@ impl<DB: Unpin> Future for StromNetworkManager<DB> {
                     SwarmEvent::ValidMessage { peer_id, msg } => match msg {
                         StromMessage::PrePropose(p) => {
                             self.to_consensus_manager.as_ref().inspect(|tx| {
-                                tx.send(StromConsensusEvent::PreProposal(peer_id, p));
+                                let _ = tx.send(StromConsensusEvent::PreProposal(peer_id, p));
                             });
                         }
                         StromMessage::Propose(a) => {
                             self.to_consensus_manager.as_ref().inspect(|tx| {
-                                tx.send(StromConsensusEvent::Proposal(peer_id, a));
+                                let _ = tx.send(StromConsensusEvent::Proposal(peer_id, a));
                             });
                         }
                         StromMessage::PropagatePooledOrders(a) => {
                             self.to_pool_manager.as_ref().inspect(|tx| {
-                                tx.send(NetworkOrderEvent::IncomingOrders { peer_id, orders: a });
+                                let _ = tx
+                                    .send(NetworkOrderEvent::IncomingOrders { peer_id, orders: a });
                             });
                         }
                         _ => {}

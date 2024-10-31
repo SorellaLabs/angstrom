@@ -37,6 +37,7 @@ where
     Pools: PoolsTracker + Sync + 'static,
     Fetch: StateFetchUtils + Sync + 'static
 {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         sim: SimValidation<DB>,
         block_number: Arc<AtomicU64>,

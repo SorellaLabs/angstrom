@@ -46,7 +46,7 @@ library X128MathLib {
                     // We now know that our result doesn't overflow.
                     // Non-overflowing result: |    0   ¦    0    |  p1_1  ¦   z_0   |
                     // We compute p1_1 and z_0 and slice together.
-                    z := or(shl(128, p1), shr(128, z))
+                    z := add(shl(128, p1), shr(128, z))
                     break
                 }
 

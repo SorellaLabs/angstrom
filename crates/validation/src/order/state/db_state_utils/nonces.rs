@@ -3,7 +3,6 @@ use std::{fmt::Debug, sync::Arc};
 use alloy::primitives::{hex, keccak256, Address, B256, U256};
 use reth_revm::DatabaseRef;
 
-
 /// The nonce location for quick db lookup
 const ANGSTROM_NONCE_SLOT_CONST: [u8; 4] = hex!("daa050e9");
 

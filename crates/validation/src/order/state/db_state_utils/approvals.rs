@@ -40,7 +40,10 @@ impl Approvals {
         user: Address,
         token: Address,
         db: &DB
-    ) -> Option<U256> {
+    ) -> Option<U256>
+    where
+        <DB as DatabaseRef>::Error: Sync + Send + 'static
+    {
         self.slots.get(&token).and_then(|slot| {
             slot.load_approval_amount(user, self.angstrom_address, db)
                 .ok()

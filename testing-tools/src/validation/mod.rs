@@ -59,7 +59,7 @@ where
             Arc::new(AtomicU64::new(BlockNumReader::best_block_number(&db).unwrap()));
         let db = Arc::new(db);
 
-        let fetch = FetchUtils::new(fetch_config.clone(), db.clone());
+        let fetch = FetchUtils::new(Address::default(), fetch_config.clone(), db.clone());
         let pools = AngstromPoolsTracker::new(validation_config.pools.clone());
 
         let handle = tokio::runtime::Handle::current();
@@ -89,7 +89,9 @@ where
     }
 
     pub fn generate_nonce_slot(&self, user: Address, nonce: u64) -> U256 {
-        Nonces.get_nonce_word_slot(user, nonce).into()
+        Nonces::new(Address::default())
+            .get_nonce_word_slot(user, nonce)
+            .into()
     }
 }
 

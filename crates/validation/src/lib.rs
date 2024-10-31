@@ -8,6 +8,7 @@ use std::{
     sync::{atomic::AtomicU64, Arc}
 };
 
+use alloy::primitives::Address;
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use order::state::{

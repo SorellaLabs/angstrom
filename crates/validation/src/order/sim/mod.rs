@@ -3,13 +3,14 @@ use std::sync::Arc;
 use alloy::primitives::Address;
 use angstrom_types::sol_bindings::{
     grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
-    rpc_orders::TopOfBlockOrder
+    rpc_orders::TopOfBlockOrder,
+    RawPoolOrder
 };
 use gas::OrderGasCalculations;
-use gas_inspector::GasUsed;
 use revm::primitives::ruint::aliases::U256;
 
 use super::state::token_pricing::TokenPriceGenerator;
+use crate::order::state::token_pricing::WETH_ADDRESS;
 
 mod gas;
 mod gas_inspector;
@@ -39,17 +40,17 @@ where
     ) -> eyre::Result<GasInToken0> {
         let gas_in_wei = self.gas_calculator.gas_of_tob_order(order)?;
         // grab order tokens;
-        let (token0, token1) = if order.assetIn < order.assetOut {
-            (order.assetIn, order.assetOut)
+        let (token0, token1) = if order.asset_in < order.asset_out {
+            (order.asset_in, order.asset_out)
         } else {
-            (order.assetOut, order.assetIn)
+            (order.asset_out, order.asset_in)
         };
 
         // grab price conversion
         let conversion_factor = if token0 < token1 && token0 == WETH_ADDRESS {
             U256::from(1)
         } else {
-            let conversion = conversion.get_eth_conversion_price(token0, token1).unwrap();
+            conversion.get_eth_conversion_price(token0, token1).unwrap()
         };
         Ok(conversion_factor * U256::from(gas_in_wei))
     }
@@ -61,17 +62,17 @@ where
     ) -> eyre::Result<GasInToken0> {
         let gas_in_wei = self.gas_calculator.gas_of_book_order(order)?;
         // grab order tokens;
-        let (token0, token1) = if order.assetIn < order.assetOut {
-            (order.assetIn, order.assetOut)
+        let (token0, token1) = if order.token_in() < order.token_out() {
+            (order.token_in(), order.token_out())
         } else {
-            (order.assetOut, order.assetIn)
+            (order.token_out(), order.token_in())
         };
 
         // grab price conversion
         let conversion_factor = if token0 < token1 && token0 == WETH_ADDRESS {
             U256::from(1)
         } else {
-            let conversion = conversion.get_eth_conversion_price(token0, token1).unwrap();
+            conversion.get_eth_conversion_price(token0, token1).unwrap()
         };
         Ok(conversion_factor * U256::from(gas_in_wei))
     }

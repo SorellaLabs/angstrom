@@ -14,6 +14,7 @@ use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use order::state::{
     config::load_validation_config, db_state_utils::StateFetchUtils, pools::PoolsTracker
 };
+use reth_provider::CanonStateNotifications;
 use tokio::sync::mpsc::unbounded_channel;
 use validator::Validator;
 
@@ -63,8 +64,9 @@ where
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
         let sim = SimValidation::new(revm_lru.clone(), angstrom_address);
-        let order_validator =
-            OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools, thread_pool);
+        let order_validator = rt.block_on(async move {
+            OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools, thread_pool).await
+        });
 
         rt.block_on(async { Validator::new(validator_rx, order_validator).await })
     });
@@ -105,8 +107,10 @@ where
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
 
         let sim = SimValidation::new(task_db, None);
-        let order_validator =
-            OrderValidator::new(sim, current_block, pool, state, uniswap_pools, thread_pool);
+
+        let order_validator = rt.block_on(async move {
+            OrderValidator::new(sim, current_block, pool, state, uniswap_pools, thread_pool).await
+        });
 
         rt.block_on(Validator::new(rx, order_validator))
     });

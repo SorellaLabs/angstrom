@@ -1,5 +1,3 @@
-use alloy::primitives::Signed;
-use num_traits::ToBytes;
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
 use crate::sol_bindings::{

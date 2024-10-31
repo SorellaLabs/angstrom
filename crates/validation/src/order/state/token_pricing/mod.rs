@@ -5,7 +5,7 @@ use std::{
 };
 
 use alloy::{
-    primitives::{Address, FixedBytes, U256},
+    primitives::{address, Address, FixedBytes, U256},
     providers::{Network, Provider},
     rpc::types::error,
     transports::Transport
@@ -19,9 +19,9 @@ use matching_engine::cfmm::uniswap::{
     pool_manager::{SyncedUniswapPools, UniswapPoolManager},
     pool_providers::PoolManagerProvider
 };
-use revm::primitives::{address, ruint::aliases::U256};
+use tracing::warn;
 
-const BLOCKS_TO_AVG_PRICE: usize = 5;
+const BLOCKS_TO_AVG_PRICE: u64 = 5;
 
 pub const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
 /// The token price generator gives us the avg instantaneous price of the last 5
@@ -51,7 +51,7 @@ impl TokenPriceGenerator {
         let mut pair_to_pool = HashMap::default();
         for (key, pool) in uni.iter() {
             let pool = pool.read().await;
-            pair_to_pool.insert((pool.tokenA, pool.tokenB), key);
+            pair_to_pool.insert((pool.token_a, pool.token_b), *key);
         }
 
         // for each pool, we want to load the last 5 blocks and get the sqrt_price_96
@@ -82,10 +82,10 @@ impl TokenPriceGenerator {
                     (*pool_key, queue)
                 }
             })
-            .collect::<HashMap<_, _>>()
+            .collect()
             .await;
 
-        Self { prev_prices: pools, cur_block: current_block, pair_to_pool }
+        Ok(Self { prev_prices: pools, cur_block: current_block, pair_to_pool })
     }
 
     pub fn apply_update(&mut self, updates: Vec<PairsWithPrice>) {
@@ -126,7 +126,7 @@ impl TokenPriceGenerator {
                 .expect("got pool update that we don't have stored");
 
             let prices = self.prev_prices.get(pool_key)?;
-            let size = prices.len();
+            let size = prices.len() as u64;
 
             if size != BLOCKS_TO_AVG_PRICE {
                 warn!("size of loaded blocks doesn't match the value we set");
@@ -161,7 +161,7 @@ impl TokenPriceGenerator {
         if let Some(key) = self.pair_to_pool.get(&(token_0_hop1, token_1_hop1)) {
             // there is a hop from token_0 to weth
             let prices = self.prev_prices.get(key)?;
-            let size = prices.len();
+            let size = prices.len() as u64;
 
             if size != BLOCKS_TO_AVG_PRICE {
                 warn!("size of loaded blocks doesn't match the value we set");
@@ -191,7 +191,7 @@ impl TokenPriceGenerator {
                 .expect("got pool update that we don't have stored");
 
             let prices = self.prev_prices.get(default_pool_key)?;
-            let size = prices.len();
+            let size = prices.len() as u64;
 
             if size != BLOCKS_TO_AVG_PRICE {
                 warn!("size of loaded blocks doesn't match the value we set");
@@ -208,7 +208,7 @@ impl TokenPriceGenerator {
 
             // grab second hop
             let prices = self.prev_prices.get(key)?;
-            let size = prices.len();
+            let size = prices.len() as u64;
 
             if size != BLOCKS_TO_AVG_PRICE {
                 warn!("size of loaded blocks doesn't match the value we set");
@@ -219,7 +219,7 @@ impl TokenPriceGenerator {
                 .iter()
                 .map(|price| {
                     // means weth is token0
-                    if second_flip_flip {
+                    if second_flip {
                         price.price_1_over_0
                     } else {
                         // need to flip. add 18 decimal precision then reciprocal

@@ -6,6 +6,7 @@ use reth_provider::CanonStateNotificationStream;
 use crate::contract_payloads::angstrom::AngstromBundle;
 
 /// represents the price settled on angstrom between two tokens
+#[derive(Debug, Clone)]
 pub struct PairsWithPrice {
     pub token0:         Address,
     pub token1:         Address,

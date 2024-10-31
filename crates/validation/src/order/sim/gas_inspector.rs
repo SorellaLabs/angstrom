@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alloy::primitives::Address;
+use alloy::primitives::{Address, U256};
 use revm::{Database, Inspector};
 
 pub type GasUsed = u64;

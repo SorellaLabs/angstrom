@@ -1,11 +1,11 @@
-use std::path::Path;
+use std::{fmt::Debug, path::Path};
 
 use alloy::primitives::{keccak256, Address, U256};
 use angstrom_types::primitive::PoolId;
+use eyre::eyre;
 use reth_revm::DatabaseRef;
 use serde::Deserialize;
 
-use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 #[derive(Debug, Clone, Deserialize)]
 pub struct DataFetcherConfig {
     pub approvals: Vec<TokenApprovalSlot>,
@@ -28,10 +28,6 @@ pub enum HashMethod {
 impl HashMethod {
     const fn is_solidity(&self) -> bool {
         matches!(self, HashMethod::Solidity)
-    }
-
-    const fn is_vyper(&self) -> bool {
-        matches!(self, HashMethod::Vyper)
     }
 }
 
@@ -62,12 +58,12 @@ impl TokenBalanceSlot {
         Ok(U256::from_be_bytes(*keccak256(buf)))
     }
 
-    pub fn load_balance<DB: BlockStateProviderFactory>(
-        &self,
-        of: Address,
-        db: &RevmLRU<DB>
-    ) -> eyre::Result<U256> {
-        Ok(db.storage_ref(self.token, self.generate_slot(of)?)?)
+    pub fn load_balance<DB: revm::DatabaseRef>(&self, of: Address, db: &DB) -> eyre::Result<U256>
+    where
+        <DB as DatabaseRef>::Error: Sync + Send + 'static
+    {
+        db.storage_ref(self.token, self.generate_slot(of)?)
+            .map_err(|_| eyre!("failed to load balance slot"))
     }
 }
 
@@ -94,17 +90,21 @@ impl TokenApprovalSlot {
         Ok(U256::from_be_bytes(*keccak256(next)))
     }
 
-    pub fn load_approval_amount<DB: BlockStateProviderFactory>(
+    pub fn load_approval_amount<DB: revm::DatabaseRef>(
         &self,
         user: Address,
         contract: Address,
-        db: &RevmLRU<DB>
-    ) -> eyre::Result<U256> {
+        db: &DB
+    ) -> eyre::Result<U256>
+    where
+        <DB as DatabaseRef>::Error: Sync + Send + 'static
+    {
         if !self.hash_method.is_solidity() {
             return Err(eyre::eyre!("current type of contract hashing is not supported"))
         }
 
-        Ok(db.storage_ref(self.token, self.generate_slot(user, contract)?)?)
+        db.storage_ref(self.token, self.generate_slot(user, contract)?)
+            .map_err(|_| eyre!("failed to load approval slot"))
     }
 }
 

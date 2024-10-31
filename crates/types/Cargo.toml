@@ -7,6 +7,11 @@ edition.workspace = true
 base64 = "0.22.1"
 bitmaps.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
+reth-provider.workspace = true
+reth-trie.workspace = true
+reth-chainspec.workspace = true
+reth-storage-api.workspace = true
+# blsful.workspace = true
 bytes = "1.4"
 pade.workspace = true
 pade-macro.workspace = true
@@ -34,6 +39,7 @@ serde = { workspace = true, optional = true, default-features = false, features 
   "derive",
 ] }
 uniswap_v3_math.workspace = true
+foldhash = "0.1.3"
 
 testing-tools-macros = { workspace = true, optional = true }
 
@@ -41,6 +47,7 @@ rand = { version = "0.8.5", optional = true }
 
 [build-dependencies]
 convert_case = "0.6.0"
+itertools = "0.13.0"
 
 [dev-dependencies]
 rand.workspace = true

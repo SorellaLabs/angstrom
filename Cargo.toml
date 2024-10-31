@@ -15,7 +15,7 @@ members = [
   "crates/matching-engine",
   "crates/pade",
   "crates/pade-macro",
-  "crates/metrics"
+  "crates/metrics",
 ]
 
 
@@ -29,7 +29,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.76"
+rust-version = "1.80"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/SorellaLabs/angstrom"
 repository = "https://github.com/SorellaLabs/angstrom"
@@ -78,13 +78,16 @@ bitmaps = "3.2.1"
 
 # revm
 revm = { version = "14.0.3", features = [
-    "std",
-    "secp256k1",
+  "std",
+  "secp256k1",
 ], default-features = false }
 
 # reth
 reth = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-provider = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
@@ -120,7 +123,7 @@ reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1
 alloy = { version = "0.4.2", features = [
   "rlp",
   "full",
-#  "eip712",
+  #  "eip712",
   "node-bindings",
   "rpc-types-debug",
   "rpc-types-trace",
@@ -171,7 +174,6 @@ alloy-transport-ipc = { version = "0.4.2", default-features = false }
 alloy-pubsub = { version = "0.4.2", default-features = false }
 alloy-json-rpc = { version = "0.4.2", default-features = false }
 alloy-rpc-client = { version = "0.4.2", default-features = false }
-
 
 
 # Uniswap math helpers

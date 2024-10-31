@@ -19,33 +19,34 @@ sol! {
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
     struct PartialStandingOrder {
-        uint128 minAmountIn;
-        uint128 maxAmountIn;
-        uint256 minPrice;
-        bool useInternal;
-        address assetIn;
-        address assetOut;
+        uint32 ref_id;
+        uint128 min_amount_in;
+        uint128 max_amount_in;
+        uint128 max_extra_fee_asset0;
+        uint256 min_price;
+        bool use_internal;
+        address asset_in;
+        address asset_out;
         address recipient;
-        address hook;
-        bytes hookPayload;
+        bytes hook_data;
         uint64 nonce;
         uint40 deadline;
-        uint128 amountFilled;
         OrderMeta meta;
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
     struct ExactStandingOrder {
-        bool exactIn;
+        uint32 ref_id;
+        bool exact_in;
         uint128 amount;
-        uint256 minPrice;
-        bool useInternal;
-        address assetIn;
-        address assetOut;
+        uint128 max_extra_fee_asset0;
+        uint256 min_price;
+        bool use_internal;
+        address asset_in;
+        address asset_out;
         address recipient;
-        address hook;
-        bytes hookPayload;
+        bytes hook_data;
         uint64 nonce;
         uint40 deadline;
         OrderMeta meta;
@@ -54,48 +55,48 @@ sol! {
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
     struct PartialFlashOrder {
-        uint128 minAmountIn;
-        uint128 maxAmountIn;
-        uint256 minPrice;
-        bool useInternal;
-        address assetIn;
-        address assetOut;
+        uint32 ref_id;
+        uint128 min_amount_in;
+        uint128 max_amount_in;
+        uint128 max_extra_fee_asset0;
+        uint256 min_price;
+        bool use_internal;
+        address asset_in;
+        address asset_out;
         address recipient;
-        address hook;
-        bytes hookPayload;
-        uint64 validForBlock;
-        uint128 amountFilled;
+        bytes hook_data;
+        uint64 valid_for_block;
         OrderMeta meta;
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
     struct ExactFlashOrder {
-        bool exactIn;
+        uint32 ref_id;
+        bool exact_in;
         uint128 amount;
-        uint256 minPrice;
-        bool useInternal;
-        address assetIn;
-        address assetOut;
+        uint128 max_extra_fee_asset0;
+        uint256 min_price;
+        bool use_internal;
+        address asset_in;
+        address asset_out;
         address recipient;
-        address hook;
-        bytes hookPayload;
-        uint64 validForBlock;
+        bytes hook_data;
+        uint64 valid_for_block;
         OrderMeta meta;
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
     struct TopOfBlockOrder {
-        uint128 quantityIn;
-        uint128 quantityOut;
-        bool useInternal;
-        address assetIn;
-        address assetOut;
+        uint128 quantity_in;
+        uint128 quantity_out;
+        uint128 max_gas_asset0;
+        bool use_internal;
+        address asset_in;
+        address asset_out;
         address recipient;
-        address hook;
-        bytes hookPayload;
-        uint64 validForBlock;
+        uint64 valid_for_block;
         OrderMeta meta;
     }
 }
@@ -196,18 +197,18 @@ pub mod test {
         alloy::sol! {
             #[derive(Default)]
             struct PartialStandingOrder {
-                uint128 minAmountIn;
-                uint128 maxAmountIn;
-                uint256 minPrice;
-                bool useInternal;
-                address assetIn;
-                address assetOut;
+                uint32 ref_id;
+                uint128 min_amount_in;
+                uint128 max_amount_in;
+                uint128 max_extra_fee_asset0;
+                uint256 min_price;
+                bool use_internal;
+                address asset_in;
+                address asset_out;
                 address recipient;
-                address hook;
-                bytes hookPayload;
+                bytes hook_data;
                 uint64 nonce;
                 uint40 deadline;
-                uint128 amountFilled;
             }
         }
     }

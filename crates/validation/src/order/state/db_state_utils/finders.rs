@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use alloy::primitives::Address;
 
-use crate::BlockStateProviderFactory;
 
 alloy::sol!(
 function transfer(address _to, uint256 _value) public returns (bool success);
@@ -14,19 +13,19 @@ function approve(address _spender, uint256 _value) public returns (bool success)
 );
 
 /// panics if we cannot find the slot for the given token
-fn find_slot_offset_for_balance<DB: BlockStateProviderFactory>(db: Arc<DB>) -> u64 {
-    let probe_address = Address::random();
-
-    todo!()
-}
+// fn find_slot_offset_for_balance<DB: BlockStateProviderFactory>(db: Arc<DB>) -> u64 {
+//     let probe_address = Address::random();
+//
+//     todo!()
+// }
 
 /// panics if we cannot prove the slot for the given token
-fn find_slot_offset_for_approval<DB: BlockStateProviderFactory>(
-    db: Arc<DB>,
-    token_address: Address
-) -> u64 {
-    todo!()
-}
+// fn find_slot_offset_for_approval<DB: BlockStateProviderFactory>(
+//     db: Arc<DB>,
+//     token_address: Address
+// ) -> u64 {
+//     todo!()
+// }
 
 // fn set_balances_and_approvals<DB: DatabaseRef + Unpin>(
 //         cache_db: &mut CacheDB<Arc<DB>>,

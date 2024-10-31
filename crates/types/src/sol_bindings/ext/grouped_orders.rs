@@ -39,8 +39,8 @@ impl StandingVariants {
 
     pub fn hook_data(&self) -> &Bytes {
         match self {
-            StandingVariants::Exact(o) => &o.hookPayload,
-            StandingVariants::Partial(o) => &o.hookPayload
+            StandingVariants::Exact(o) => &o.hook_data,
+            StandingVariants::Partial(o) => &o.hook_data
         }
     }
 }
@@ -61,8 +61,8 @@ impl FlashVariants {
 
     pub fn hook_data(&self) -> &Bytes {
         match self {
-            FlashVariants::Exact(o) => &o.hookPayload,
-            FlashVariants::Partial(o) => &o.hookPayload
+            FlashVariants::Exact(o) => &o.hook_data,
+            FlashVariants::Partial(o) => &o.hook_data
         }
     }
 }
@@ -428,25 +428,39 @@ impl GroupedVanillaOrder {
         }
     }
 
-    pub fn fill(&self, filled_quantity: U256) -> Self {
+    /// Creates a new order fragment representing the current order as filled by
+    /// a specific quantity
+    pub fn fill(&self, filled_quantity: u128) -> Self {
         match self {
             Self::Standing(p) => match p {
                 StandingVariants::Partial(part) => {
                     Self::Standing(StandingVariants::Partial(PartialStandingOrder {
-                        amountFilled: filled_quantity.to(),
+                        min_amount_in: part.min_amount_in.saturating_sub(filled_quantity),
+                        max_amount_in: part.max_amount_in - filled_quantity,
                         ..part.clone()
                     }))
                 }
-                v => Self::Standing(v.clone())
+                StandingVariants::Exact(exact) => {
+                    Self::Standing(StandingVariants::Exact(ExactStandingOrder {
+                        amount: exact.amount - filled_quantity,
+                        ..exact.clone()
+                    }))
+                }
             },
             Self::KillOrFill(kof) => match kof {
                 FlashVariants::Partial(part) => {
                     Self::KillOrFill(FlashVariants::Partial(PartialFlashOrder {
-                        amountFilled: filled_quantity.to(),
+                        min_amount_in: part.min_amount_in.saturating_sub(filled_quantity),
+                        max_amount_in: part.max_amount_in - filled_quantity,
                         ..part.clone()
                     }))
                 }
-                e => Self::KillOrFill(e.clone())
+                FlashVariants::Exact(exact) => {
+                    Self::KillOrFill(FlashVariants::Exact(ExactFlashOrder {
+                        amount: exact.amount - filled_quantity,
+                        ..exact.clone()
+                    }))
+                }
             }
         }
     }
@@ -490,7 +504,7 @@ impl GroupedComposableOrder {
 
 impl RawPoolOrder for TopOfBlockOrder {
     fn flash_block(&self) -> Option<u64> {
-        Some(self.validForBlock)
+        Some(self.valid_for_block)
     }
 
     fn from(&self) -> Address {
@@ -502,7 +516,7 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        RespendAvoidanceMethod::Block(self.validForBlock)
+        RespendAvoidanceMethod::Block(self.valid_for_block)
     }
 
     fn deadline(&self) -> Option<U256> {
@@ -510,7 +524,7 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn amount_in(&self) -> u128 {
-        self.quantityIn
+        self.quantity_in
     }
 
     fn limit_price(&self) -> U256 {
@@ -518,15 +532,15 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.quantityOut
+        self.quantity_out
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn is_valid_signature(&self) -> bool {
@@ -541,6 +555,7 @@ impl RawPoolOrder for TopOfBlockOrder {
         OrderLocation::Searcher
     }
 }
+
 impl RawPoolOrder for PartialStandingOrder {
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
@@ -559,15 +574,20 @@ impl RawPoolOrder for PartialStandingOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.amountFilled
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.min_amount_in * self.min_price.to::<u128>()
+        } else {
+            self.min_amount_in / self.min_price.to::<u128>()
+        }
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_in(&self) -> u128 {
-        self.maxAmountIn
+        self.max_amount_in
     }
 
     fn deadline(&self) -> Option<U256> {
@@ -583,11 +603,11 @@ impl RawPoolOrder for PartialStandingOrder {
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_location(&self) -> OrderLocation {
@@ -613,17 +633,20 @@ impl RawPoolOrder for ExactStandingOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!();
-        // self.amount * self.minPrice.to::<u128>()
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.amount * self.min_price.to::<u128>()
+        } else {
+            self.amount / self.min_price.to::<u128>()
+        }
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_in(&self) -> u128 {
-        todo!();
-        // self.amount
+        self.amount
     }
 
     fn deadline(&self) -> Option<U256> {
@@ -639,11 +662,11 @@ impl RawPoolOrder for ExactStandingOrder {
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_location(&self) -> OrderLocation {
@@ -661,7 +684,7 @@ impl RawPoolOrder for PartialFlashOrder {
     }
 
     fn flash_block(&self) -> Option<u64> {
-        Some(self.validForBlock)
+        Some(self.valid_for_block)
     }
 
     fn order_hash(&self) -> TxHash {
@@ -677,27 +700,32 @@ impl RawPoolOrder for PartialFlashOrder {
     }
 
     fn amount_in(&self) -> u128 {
-        self.maxAmountIn
+        self.max_amount_in
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.minPrice.to::<u128>() * self.minAmountIn
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.min_amount_in * self.min_price.to::<u128>()
+        } else {
+            self.min_amount_in / self.min_price.to::<u128>()
+        }
     }
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        RespendAvoidanceMethod::Block(self.validForBlock)
+        RespendAvoidanceMethod::Block(self.valid_for_block)
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_location(&self) -> OrderLocation {
@@ -715,15 +743,15 @@ impl RawPoolOrder for ExactFlashOrder {
     }
 
     fn flash_block(&self) -> Option<u64> {
-        Some(self.validForBlock)
+        Some(self.valid_for_block)
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_hash(&self) -> TxHash {
@@ -743,15 +771,20 @@ impl RawPoolOrder for ExactFlashOrder {
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.minPrice.to::<u128>() * self.amount
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.amount * self.min_price.to::<u128>()
+        } else {
+            self.amount / self.min_price.to::<u128>()
+        }
     }
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        RespendAvoidanceMethod::Block(self.validForBlock)
+        RespendAvoidanceMethod::Block(self.valid_for_block)
     }
 
     fn order_location(&self) -> OrderLocation {

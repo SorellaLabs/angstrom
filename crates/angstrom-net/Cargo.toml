@@ -16,6 +16,10 @@ normal = [
   "aquamarine",
 ]
 
+[lints.clippy]
+large_enum_variant = "allow"
+too_long_first_doc_paragraph = "allow"
+
 [dependencies]
 # reth
 reth-errors.workspace = true
@@ -85,9 +89,7 @@ tempfile = { version = "3.3", optional = true }
 testing-tools.workspace = true
 angstrom-network.workspace = true
 # reth
-reth-discv4 = { workspace = true, features = [
-  "test-utils",
-] }
+reth-discv4 = { workspace = true, features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["test-utils"] }
 
 reth-network = { workspace = true, features = ["test-utils"] }

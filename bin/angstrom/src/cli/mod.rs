@@ -1,9 +1,10 @@
 //! CLI definition and entrypoint to executable
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
-use alloy::network::EthereumWallet;
+use alloy::network::{EthereumWallet, Network};
 use angstrom_metrics::{initialize_prometheus_metrics, METRICS_ENABLED};
 use angstrom_network::manager::StromConsensusEvent;
+use angstrom_types::{primitive::PoolId as AngstromPoolId, reth_db_wrapper::RethDbWrapper};
 use order_pool::{order_storage::OrderStorage, PoolConfig, PoolManagerUpdate};
 use reth_node_builder::{FullNode, NodeHandle};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
@@ -15,10 +16,11 @@ mod network_builder;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     providers::{network::Ethereum, Provider, ProviderBuilder},
-    signers::{k256::ecdsa::SigningKey, local::LocalSigner}
+    signers::{k256::ecdsa::SigningKey, local::LocalSigner},
+    transports::Transport
 };
 use alloy_chains::Chain;
-use alloy_primitives::{private::serde::Deserialize, Address};
+use alloy_primitives::{private::serde::Deserialize, Address, BlockNumber};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::EthDataCleanser
@@ -31,17 +33,21 @@ use angstrom_network::{
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    primitive::{PeerId, PoolKey}
+    primitive::{PeerId, PoolKey, UniswapPoolRegistry}
 };
 use clap::Parser;
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
 use eyre::Context;
+use matching_engine::cfmm::uniswap::{
+    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
+    pool_providers::canonical_state_adapter::CanonicalStateAdapter
+};
 use reth::{
     api::NodeAddOns,
     builder::{FullNodeComponents, Node},
     chainspec::EthereumChainSpecParser,
     cli::Cli,
-    providers::{BlockNumReader, CanonStateSubscriptions},
+    providers::{BlockNumReader, CanonStateNotifications, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
 use reth_cli_util::get_secret_key;
@@ -197,16 +203,55 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     )
     .unwrap();
 
+    // I am sure there is a prettier way of doing this
+    let provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
+        .with_recommended_fillers()
+        .wallet(EthereumWallet::from(
+            LocalSigner::<SigningKey>::from_bytes(&secret_key.secret_bytes().into()).unwrap()
+        ))
+        .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())
+        .await
+        .unwrap()
+        .into();
+
+    let block_id = provider.get_block_number().await.unwrap();
+    let pool_config_store = AngstromPoolConfigStore::load_from_chain(
+        node_config.angstrom_address,
+        BlockId::Number(BlockNumberOrTag::Number(block_id)),
+        &provider
+    )
+    .await
+    .unwrap();
+
+    let uniswap_registry: UniswapPoolRegistry = node_config.pools.into();
+    let uni_ang_registry =
+        UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store);
+    let uniswap_pool_manager = configure_uniswap_manager(
+        provider.clone(),
+        node.provider.subscribe_to_canonical_state(),
+        uniswap_registry,
+        block_id
+    )
+    .await;
+    let uniswap_pools = uniswap_pool_manager.pools();
+    executor.spawn(Box::pin(async move {
+        uniswap_pool_manager
+            .watch_state_changes()
+            .await
+            .expect("watch for uniswap pool changes");
+    }));
+
+    let block_height = node.provider.best_block_number().unwrap();
+    let validator = init_validation(
+        RethDbWrapper::new(node.provider.clone()),
+        block_height,
+        uniswap_pools.clone()
+    );
+
     let network_handle = network_builder
         .with_pool_manager(handles.pool_tx)
         .with_consensus_manager(handles.consensus_tx_op)
         .build_handle(executor.clone(), node.provider.clone());
-    let block_height = node.provider.best_block_number().unwrap();
-    let validator = init_validation(
-        node.provider.clone(),
-        node.provider.subscribe_to_canonical_state(),
-        config.validation_cache_size
-    );
 
     // Create our pool config
     let pool_config = PoolConfig::default();
@@ -241,24 +286,6 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         AngstromValidator::new(PeerId::default(), 300),
     ];
 
-    // I am sure there is a prettier way of doing this
-    let provider = ProviderBuilder::<_, _, Ethereum>::default()
-        .with_recommended_fillers()
-        .wallet(EthereumWallet::from(
-            LocalSigner::<SigningKey>::from_bytes(&secret_key.secret_bytes().into()).unwrap()
-        ))
-        .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())
-        .await
-        .unwrap();
-    let block_id = provider.get_block_number().await.unwrap();
-    let pool_config_store = AngstromPoolConfigStore::load_from_chain(
-        node_config.angstrom_address,
-        BlockId::Number(BlockNumberOrTag::Number(block_id)),
-        &provider
-    )
-    .await
-    .unwrap();
-    let pool_registry = UniswapAngstromRegistry::new(node_config.pools.into(), pool_config_store);
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
@@ -269,30 +296,61 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         validators,
         order_storage.clone(),
         block_height,
-        pool_registry,
+        uni_ang_registry,
+        uniswap_pools.clone(),
         provider
     );
     let _consensus_handle = executor.spawn_critical("consensus", Box::pin(manager));
 }
 
+async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
+    provider: Arc<impl Provider<T, N>>,
+    state_notification: CanonStateNotifications,
+    uniswap_pool_registry: UniswapPoolRegistry,
+    current_block: BlockNumber
+) -> UniswapPoolManager<CanonicalStateAdapter, DataLoader<AngstromPoolId>, AngstromPoolId> {
+    let mut uniswap_pools: Vec<_> = uniswap_pool_registry
+        .pools()
+        .keys()
+        .map(|pool_id| {
+            let initial_ticks_per_side = 200;
+            EnhancedUniswapPool::new(
+                DataLoader::new_with_registry(*pool_id, uniswap_pool_registry.clone()),
+                initial_ticks_per_side
+            )
+        })
+        .collect();
+
+    for pool in uniswap_pools.iter_mut() {
+        pool.initialize(Some(current_block), provider.clone())
+            .await
+            .unwrap();
+    }
+
+    let state_change_buffer = 100;
+    UniswapPoolManager::new(
+        uniswap_pools,
+        current_block,
+        state_change_buffer,
+        Arc::new(CanonicalStateAdapter::new(state_notification))
+    )
+}
+
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
     #[clap(long)]
-    pub mev_guard:             bool,
+    pub mev_guard:           bool,
     #[clap(long)]
-    pub secret_key_location:   PathBuf,
+    pub secret_key_location: PathBuf,
     #[clap(long)]
-    pub node_config:           PathBuf,
-    // default is 100mb
-    #[clap(long, default_value = "1000000")]
-    pub validation_cache_size: usize,
+    pub node_config:         PathBuf,
     /// enables the metrics
     #[clap(long, default_value = "false", global = true)]
-    pub metrics:               bool,
+    pub metrics:             bool,
     /// spawns the prometheus metrics exporter at the specified port
     /// Default: 6969
     #[clap(long, default_value = "6969", global = true)]
-    pub metrics_port:          u16
+    pub metrics_port:        u16
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -307,7 +365,7 @@ impl NodeConfig {
         let config_path = config.ok_or_else(|| eyre::eyre!("Config path not provided"))?;
 
         if !config_path.exists() {
-            return Err(eyre::eyre!("Config file does not exist at {:?}", config_path));
+            return Err(eyre::eyre!("Config file does not exist at {:?}", config_path))
         }
 
         let toml_content = std::fs::read_to_string(&config_path)

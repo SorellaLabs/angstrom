@@ -1,7 +1,3 @@
-// use angstrom_types::sol_bindings::sol::{
-//     SolMockContractMessage, SolPoolRewardsUpdate, SolRewardsUpdate
-// };
-
 mod decode;
 mod encode;
 mod primitives;

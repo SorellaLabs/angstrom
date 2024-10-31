@@ -117,11 +117,13 @@ impl<'a, 'b> OrderContainer<'a, 'b> {
             Self::AMM(_) => panic!("This should never happen"),
             Self::BookOrder(o) => {
                 let newo = (**o).clone();
-                newo.try_map_inner(|f| Ok(f.fill(filled_quantity))).unwrap()
+                newo.try_map_inner(|f| Ok(f.fill(filled_quantity.to())))
+                    .unwrap()
             }
             Self::BookOrderFragment(o) => {
                 let newo = (**o).clone();
-                newo.try_map_inner(|f| Ok(f.fill(filled_quantity))).unwrap()
+                newo.try_map_inner(|f| Ok(f.fill(filled_quantity.to())))
+                    .unwrap()
             }
         }
     }

@@ -1,5 +1,6 @@
 use std::{
     future::Future,
+    ops::Drop,
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -16,9 +17,9 @@ use tokio::task::JoinHandle;
 use tracing::{span, Level};
 
 pub(crate) struct TestnetConsensusFuture<T> {
-    consensus: Arc<Mutex<ConsensusManager<T>>>,
-    /// JoinHandle for the consensus future
-    fut:       JoinHandle<()>
+    _consensus: Arc<Mutex<ConsensusManager<T>>>,
+    /// JoinHandle for the _consensus future
+    fut:        JoinHandle<()>
 }
 
 impl<T> TestnetConsensusFuture<T>
@@ -27,33 +28,35 @@ where
 {
     pub(crate) fn new(
         testnet_node_id: u64,
-        consensus: ConsensusManager<T>,
+        _consensus: ConsensusManager<T>,
         running: Arc<AtomicBool>
     ) -> Self {
-        let consensus = Arc::new(Mutex::new(consensus));
+        let _consensus = Arc::new(Mutex::new(_consensus));
         let internal =
-            TestnetConsensusFutureInternals::new(testnet_node_id, consensus.clone(), running);
-        Self { consensus, fut: tokio::spawn(internal) }
+            TestnetConsensusFutureInternals::new(testnet_node_id, _consensus.clone(), running);
+        Self { _consensus, fut: tokio::spawn(internal) }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn consensus_manager<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&ConsensusManager<T>) -> R
     {
-        f(&self.consensus.lock())
+        f(&self._consensus.lock())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn consensus_manager_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut ConsensusManager<T>) -> R
     {
-        f(&mut self.consensus.lock())
+        f(&mut self._consensus.lock())
     }
 }
 
 struct TestnetConsensusFutureInternals<T> {
     testnet_node_id: u64,
-    consensus:       Arc<Mutex<ConsensusManager<T>>>,
+    _consensus:      Arc<Mutex<ConsensusManager<T>>>,
     running:         Arc<AtomicBool>
 }
 
@@ -63,10 +66,10 @@ where
 {
     fn new(
         testnet_node_id: u64,
-        consensus: Arc<Mutex<ConsensusManager<T>>>,
+        _consensus: Arc<Mutex<ConsensusManager<T>>>,
         running: Arc<AtomicBool>
     ) -> Self {
-        Self { testnet_node_id, consensus, running }
+        Self { testnet_node_id, _consensus, running }
     }
 }
 
@@ -84,7 +87,7 @@ where
 
         if this.running.load(Ordering::Relaxed) {
             {
-                let mut cons = this.consensus.lock_arc();
+                let mut cons = this._consensus.lock_arc();
                 if cons.poll_unpin(cx).is_ready() {
                     return Poll::Ready(())
                 }

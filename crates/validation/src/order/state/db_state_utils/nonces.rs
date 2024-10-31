@@ -1,9 +1,8 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use alloy::primitives::{hex, keccak256, Address, B256, U256};
 use reth_revm::DatabaseRef;
 
-use crate::order::state::{BlockStateProviderFactory, RevmLRU};
 
 /// The nonce location for quick db lookup
 const ANGSTROM_NONCE_SLOT_CONST: [u8; 4] = hex!("daa050e9");
@@ -25,17 +24,20 @@ impl Nonces {
         keccak256(arry)
     }
 
-    pub fn is_valid_nonce<DB: BlockStateProviderFactory>(
+    pub fn is_valid_nonce<DB: revm::DatabaseRef>(
         &self,
         user: Address,
         nonce: u64,
-        db: Arc<RevmLRU<DB>>
-    ) -> bool {
+        db: Arc<DB>
+    ) -> bool
+    where
+        <DB as DatabaseRef>::Error: Sync + Send + 'static + Debug
+    {
         let slot = self.get_nonce_word_slot(user, nonce);
 
         let word = db.storage_ref(self.0, slot.into()).unwrap();
         tracing::debug!(?word);
-        let mut flag = U256::from(1) << (nonce as u8);
+        let flag = U256::from(1) << (nonce as u8);
 
         let out = (word ^ flag) & flag == flag;
         tracing::debug!(?word, %out);

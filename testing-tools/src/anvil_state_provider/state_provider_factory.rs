@@ -1,3 +1,5 @@
+use std::future::IntoFuture;
+
 use alloy::{
     network::{Ethereum, EthereumWallet},
     node_bindings::{Anvil, AnvilInstance},
@@ -5,15 +7,17 @@ use alloy::{
     rpc::types::{anvil::MineOptions, Block},
     signers::local::PrivateKeySigner
 };
-use alloy_primitives::{BlockNumber, Bytes};
+use alloy_primitives::{Address, BlockNumber, Bytes, B256, U256};
+use eyre::bail;
 use reth_provider::{
-    CanonStateNotification, CanonStateNotifications, CanonStateSubscriptions, ProviderError,
-    ProviderResult
+    BlockHashReader, BlockNumReader, CanonStateNotification, CanonStateNotifications,
+    CanonStateSubscriptions, ProviderError, ProviderResult
 };
+use reth_revm::primitives::Bytecode;
 use tokio::sync::broadcast;
-use validation::common::lru_db::BlockStateProviderFactory;
+use validation::common::db::BlockStateProviderFactory;
 
-use super::{utils::AnvilWalletRpc, RpcStateProvider};
+use super::{state_provider::RpcStateProvider, utils::AnvilWalletRpc};
 use crate::{
     anvil_state_provider::utils::async_to_sync,
     mocks::canon_state::AnvilConsensusCanonStateNotification,
@@ -125,6 +129,96 @@ impl RpcStateProviderFactory {
             .send(CanonStateNotification::Commit { new: state })?;
 
         Ok(())
+    }
+}
+impl reth_revm::DatabaseRef for RpcStateProviderFactory {
+    type Error = eyre::Error;
+
+    fn basic_ref(
+        &self,
+        address: Address
+    ) -> Result<Option<reth_revm::primitives::AccountInfo>, Self::Error> {
+        let acc = async_to_sync(self.provider.get_account(address).latest().into_future())?;
+        let code = async_to_sync(self.provider.get_code_at(address).latest().into_future())?;
+        let code = Some(Bytecode::new_raw(code));
+
+        Ok(Some(reth_revm::primitives::AccountInfo {
+            code_hash: acc.code_hash,
+            balance: acc.balance,
+            nonce: acc.nonce,
+            code
+        }))
+    }
+
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        let acc = async_to_sync(self.provider.get_storage_at(address, index).into_future())?;
+        Ok(acc)
+    }
+
+    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
+        let acc = async_to_sync(
+            self.provider
+                .get_block_by_number(reth_primitives::BlockNumberOrTag::Number(number), false)
+                .into_future()
+        )?;
+
+        let Some(block) = acc else { bail!("failed to load block") };
+        Ok(block.header.hash)
+    }
+
+    fn code_by_hash_ref(&self, _: B256) -> Result<reth_revm::primitives::Bytecode, Self::Error> {
+        panic!("This should not be called, as the code is already loaded");
+    }
+}
+impl BlockNumReader for RpcStateProviderFactory {
+    fn chain_info(&self) -> ProviderResult<reth_chainspec::ChainInfo> {
+        panic!("never used");
+    }
+
+    fn block_number(&self, _: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
+        panic!("never used");
+    }
+
+    fn convert_number(
+        &self,
+        _: alloy_rpc_types::BlockHashOrNumber
+    ) -> ProviderResult<Option<alloy_primitives::B256>> {
+        panic!("never used");
+    }
+
+    fn best_block_number(&self) -> ProviderResult<BlockNumber> {
+        Ok(async_to_sync(self.provider.get_block_number().into_future()).unwrap())
+    }
+
+    fn last_block_number(&self) -> ProviderResult<BlockNumber> {
+        Ok(async_to_sync(self.provider.get_block_number().into_future()).unwrap())
+    }
+
+    fn convert_hash_or_number(
+        &self,
+        _: alloy_rpc_types::BlockHashOrNumber
+    ) -> ProviderResult<Option<BlockNumber>> {
+        panic!("never used");
+    }
+}
+impl BlockHashReader for RpcStateProviderFactory {
+    fn block_hash(&self, _: BlockNumber) -> ProviderResult<Option<alloy_primitives::B256>> {
+        panic!("never used");
+    }
+
+    fn convert_block_hash(
+        &self,
+        _: alloy_rpc_types::BlockHashOrNumber
+    ) -> ProviderResult<Option<alloy_primitives::B256>> {
+        panic!("never used");
+    }
+
+    fn canonical_hashes_range(
+        &self,
+        _: BlockNumber,
+        _: BlockNumber
+    ) -> ProviderResult<Vec<alloy_primitives::B256>> {
+        panic!("never used");
     }
 }
 

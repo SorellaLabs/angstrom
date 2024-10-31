@@ -37,15 +37,15 @@ impl ToBOutcome {
         snapshot: &PoolSnapshot
     ) -> eyre::Result<Self> {
         let output = match tob.is_bid {
-            true => Quantity::Token0(tob.quantityOut),
-            false => Quantity::Token1(tob.quantityOut)
+            true => Quantity::Token0(tob.quantity_out),
+            false => Quantity::Token1(tob.quantity_out)
         };
         let pricevec = (snapshot.current_price() - output)?;
         let total_cost: u128 = pricevec.input().saturating_to();
-        if total_cost > tob.quantityIn {
+        if total_cost > tob.quantity_in {
             return Err(eyre!("Not enough input to cover the transaction"));
         }
-        let leftover = tob.quantityIn - total_cost;
+        let leftover = tob.quantity_in - total_cost;
         let donation = pricevec.donation(leftover);
         let rewards = ToBOutcome {
             start_tick:      snapshot.current_price().tick(),

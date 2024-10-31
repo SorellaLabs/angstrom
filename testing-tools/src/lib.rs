@@ -37,7 +37,8 @@ pub type Provider = BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<
 
 pub fn load_reth_db(db_path: &Path) -> Provider {
     let db = Arc::new(
-        reth_db::open_db(db_path, DatabaseArguments::new(ClientVersion::default())).unwrap()
+        reth_db::open_db_read_only(db_path, DatabaseArguments::new(ClientVersion::default()))
+            .unwrap()
     );
 
     let mut static_files = db_path.to_path_buf();

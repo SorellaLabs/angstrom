@@ -16,6 +16,7 @@ angstrom-network.workspace = true
 angstrom-eth.workspace = true
 angstrom-rpc.workspace = true
 angstrom.workspace = true
+pade.workspace = true
 order-pool.workspace = true
 validation.workspace = true
 matching-engine.workspace = true
@@ -38,9 +39,10 @@ alloy-sol-types.workspace = true
 reth-node-types.workspace = true
 reth-node-ethereum.workspace = true
 reth-revm.workspace = true
-reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+revm.workspace = true
 reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
@@ -50,9 +52,7 @@ alloy-chains.workspace = true
 
 
 # reth
-reth-discv4 = { workspace = true, features = [
-  "test-utils",
-] }
+reth-discv4 = { workspace = true, features = ["test-utils"] }
 # reth-interfaces = { workspace = true, features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["test-utils"] }
 

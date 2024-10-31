@@ -27,15 +27,15 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::strom_internals::AngstromTestnetNodeInternals;
 use crate::{
-    anvil_state_provider::RpcStateProviderFactoryWrapper,
+    anvil_state_provider::state_provider_factory::RpcStateProviderFactoryWrapper,
     network::{EthPeerPool, TestnetNodeNetwork},
     testnet_controllers::AngstromTestnetConfig
 };
 
 pub struct TestnetNode<C> {
-    testnet_node_id: u64,
-    network:         TestnetNodeNetwork<C>,
-    strom:           AngstromTestnetNodeInternals
+    _testnet_node_id: u64,
+    network:          TestnetNodeNetwork<C>,
+    strom:            AngstromTestnetNodeInternals
 }
 
 impl<C> TestnetNode<C>
@@ -49,23 +49,23 @@ where
         + 'static
 {
     pub async fn new(
-        testnet_node_id: u64,
+        _testnet_node_id: u64,
         network: TestnetNodeNetwork<C>,
         strom_handles: StromHandles,
         config: AngstromTestnetConfig,
         initial_validators: Vec<AngstromValidator>
     ) -> eyre::Result<Self> {
         let strom = AngstromTestnetNodeInternals::new(
-            testnet_node_id,
+            _testnet_node_id,
             strom_handles,
             network.strom_handle.network_handle().clone(),
-            network.secret_key.clone(),
+            network.secret_key,
             config,
             initial_validators
         )
         .await?;
 
-        Ok(Self { testnet_node_id, network, strom })
+        Ok(Self { _testnet_node_id, network, strom })
     }
 
     /// General

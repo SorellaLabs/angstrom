@@ -8,7 +8,7 @@ use alloy::{
     sol_types::*
 };
 use angstrom_types::contract_bindings::mintable_mock_erc_20::MintableMockERC20::{
-    allowanceCall, allowanceReturn, balanceOfCall, balanceOfReturn
+    allowanceCall, balanceOfCall
 };
 use revm::{
     db::CacheDB,
@@ -50,9 +50,9 @@ where
             })
             .build();
 
-        let output = evm.transact().unwrap().result.output().unwrap();
-        let output_balance = balanceOfReturn::abi_decode(output, false);
-        if output_balance.balance == U256::from(123456789) {
+        let output = evm.transact().unwrap().result.output().unwrap().to_vec();
+        let return_data = balanceOfCall::abi_decode_returns(&output, false).unwrap();
+        if return_data._0 == U256::from(123456789) {
             return offset as u64
         }
     }
@@ -102,9 +102,9 @@ where
             })
             .build();
 
-        let output = evm.transact().unwrap().result.output().unwrap();
-        let output_allowance = allowanceReturn::abi_decode(output, false);
-        if output_allowance.0 == U256::from(123456789) {
+        let output = evm.transact().unwrap().result.output().unwrap().to_vec();
+        let return_data = allowanceCall::abi_decode_returns(&output, false).unwrap();
+        if return_data._0 == U256::from(123456789) {
             return offset as u64
         }
     }

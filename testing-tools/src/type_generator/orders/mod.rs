@@ -91,7 +91,7 @@ impl StoredOrderBuilder {
         let priority_data = OrderPriorityData {
             price:  self.order.price().into(),
             volume: self.order.quantity().to(),
-            gas:    0
+            gas:    U256::ZERO
         };
         let tob_reward = self.tob_reward.unwrap_or_default();
         OrderWithStorageData {
@@ -162,7 +162,7 @@ pub fn generate_top_of_block_order(
     // Could update this to be within a distribution
     let price: u128 = rng.gen();
     let volume: u128 = rng.gen();
-    let gas: u128 = rng.gen();
+    let gas: U256 = rng.gen();
     let order = ToBOrderBuilder::new()
         .quantity_in(quantity_in.unwrap_or_default())
         .quantity_out(quantity_out.unwrap_or_default())

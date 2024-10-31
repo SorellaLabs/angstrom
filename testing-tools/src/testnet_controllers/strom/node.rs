@@ -230,23 +230,4 @@ where
 
         Ok(())
     }
-
-    pub async fn execute_bundles_locally(&self) -> eyre::Result<()> {
-        let orders = ContractBundle::gen();
-        let hashes = orders.get_filled_hashes();
-        tracing::debug!("executing a angstrom bundle with hashes: {:#?}", hashes);
-
-        let tx_hash = self
-            .strom
-            .testnet_hub
-            .execute(orders.abi_encode().into())
-            .send()
-            .await?
-            .watch()
-            .await?;
-
-        tracing::debug!(?tx_hash, "tx hash with angstrom contract sent");
-
-        Ok(())
-    }
 }

@@ -47,11 +47,7 @@ where
         };
 
         // grab price conversion
-        let conversion_factor = if token0 < token1 && token0 == WETH_ADDRESS {
-            U256::from(1)
-        } else {
-            conversion.get_eth_conversion_price(token0, token1).unwrap()
-        };
+        let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
         Ok(conversion_factor * U256::from(gas_in_wei))
     }
 
@@ -69,11 +65,7 @@ where
         };
 
         // grab price conversion
-        let conversion_factor = if token0 < token1 && token0 == WETH_ADDRESS {
-            U256::from(1)
-        } else {
-            conversion.get_eth_conversion_price(token0, token1).unwrap()
-        };
+        let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
         Ok(conversion_factor * U256::from(gas_in_wei))
     }
 }

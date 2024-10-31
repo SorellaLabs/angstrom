@@ -4,6 +4,7 @@ use std::{
 };
 
 use alloy::{
+    node_bindings::WEI_IN_ETHER,
     primitives::{address, Address, U256},
     providers::{Network, Provider},
     transports::Transport
@@ -112,6 +113,9 @@ impl TokenPriceGenerator {
     /// non-weth / weth. This then allows for the simple calcuation of
     /// gas_in_wei * conversion price in order to get the used token_0
     pub fn get_eth_conversion_price(&self, token_0: Address, token_1: Address) -> Option<U256> {
+        if token_0 == WETH_ADDRESS {
+            return Some(U256::from(1))
+        }
         // should only be called if token_1 is weth or needs multi-hop as otherwise
         // conversion factor will be 1-1
         if token_1 == WETH_ADDRESS {

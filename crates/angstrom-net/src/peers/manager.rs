@@ -2,12 +2,11 @@ use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 use reth_eth_wire::DisconnectReason;
 use reth_net_banlist::BanList;
-use reth_network_peers::{NodeRecord, PeerId};
-use tokio::{sync::oneshot, time::Duration};
+use reth_network_peers::PeerId;
 use tracing::trace;
 
 pub use super::reputation::ReputationChangeWeights;
-use super::reputation::{is_banned_reputation, ReputationChangeKind, DEFAULT_REPUTATION};
+use super::reputation::{is_banned_reputation, ReputationChangeKind};
 
 /// Maintains the state of _all_ the peers known to the network.
 ///
@@ -25,9 +24,7 @@ pub struct PeersManager {
     /// How to weigh reputation changes
     reputation_weights: ReputationChangeWeights,
     /// Tracks unwanted ips/peer ids.
-    ban_list:           BanList,
-    /// How long to ban bad peers.
-    ban_duration:       Duration
+    ban_list:           BanList
 }
 
 impl Default for PeersManager {
@@ -42,8 +39,7 @@ impl PeersManager {
             peers:              HashMap::new(),
             queued_actions:     VecDeque::new(),
             reputation_weights: ReputationChangeWeights::default(),
-            ban_list:           BanList::default(),
-            ban_duration:       Duration::from_secs(60 * 60 * 24 * 365)
+            ban_list:           BanList::default()
         }
     }
 
@@ -53,7 +49,6 @@ impl PeersManager {
         if entry.get().is_trusted() {
             return
         }
-        let peer = entry.remove();
 
         trace!(target: "angstrom::net::peers",  ?peer_id, "remove discovered node");
         self.queued_actions
@@ -98,22 +93,22 @@ impl PeersManager {
     }
 }
 
-/// Commands the [`PeersManager`] listens for.
-#[derive(Debug)]
-pub(crate) enum PeerCommand {
-    /// Command for manually add
-    Add(PeerId),
-    /// Remove a peer from the set
-    ///
-    /// If currently connected this will disconnect the session
-    Remove(PeerId),
-    /// Apply a reputation change to the given peer.
-    ReputationChange(PeerId, ReputationChangeKind),
-    /// Get information about a peer
-    GetPeer(PeerId, oneshot::Sender<Option<Peer>>),
-    /// Get node information on all peers
-    GetPeers(oneshot::Sender<Vec<NodeRecord>>)
-}
+// /// Commands the [`PeersManager`] listens for.
+// #[derive(Debug)]
+// pub(crate) enum PeerCommand {
+//     /// Command for manually add
+//     Add(PeerId),
+//     /// Remove a peer from the set
+//     ///
+//     /// If currently connected this will disconnect the session
+//     Remove(PeerId),
+//     /// Apply a reputation change to the given peer.
+//     ReputationChange(PeerId, ReputationChangeKind),
+//     /// Get information about a peer
+//     GetPeer(PeerId, oneshot::Sender<Option<Peer>>),
+//     /// Get node information on all peers
+//     GetPeers(oneshot::Sender<Vec<NodeRecord>>)
+// }
 
 /// Represents the kind of peer
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
@@ -136,8 +131,6 @@ pub struct Peer {
     reputation: i32,
     /// The kind of peer
     kind:       PeerKind,
-    /// If the peer is trusted
-    trusted:    bool,
     /// if peer is connected
     connected:  bool
 }
@@ -157,17 +150,17 @@ enum ReputationChangeOutcome {
 // === impl Peer ===
 
 impl Peer {
-    fn new(kind: PeerKind, trusted: bool, connected: bool) -> Self {
-        Peer { reputation: DEFAULT_REPUTATION, kind, trusted, connected }
-    }
-
-    /// Resets the reputation of the peer to the default value. This always
-    /// returns [`ReputationChangeOutcome::None`].
-    fn reset_reputation(&mut self) -> ReputationChangeOutcome {
-        self.reputation = DEFAULT_REPUTATION;
-
-        ReputationChangeOutcome::None
-    }
+    // fn new(kind: PeerKind, trusted: bool, connected: bool) -> Self {
+    //     Peer { reputation: DEFAULT_REPUTATION, kind, trusted, connected }
+    // }
+    //
+    // /// Resets the reputation of the peer to the default value. This always
+    // /// returns [`ReputationChangeOutcome::None`].
+    // fn reset_reputation(&mut self) -> ReputationChangeOutcome {
+    //     self.reputation = DEFAULT_REPUTATION;
+    //
+    //     ReputationChangeOutcome::None
+    // }
 
     /// Applies a reputation change to the peer and returns what action should
     /// be taken.
@@ -200,11 +193,11 @@ impl Peer {
         is_banned_reputation(self.reputation)
     }
 
-    /// Unbans the peer by resetting its reputation
-    #[inline]
-    fn unban(&mut self) {
-        self.reputation = DEFAULT_REPUTATION
-    }
+    // /// Unbans the peer by resetting its reputation
+    // #[inline]
+    // fn unban(&mut self) {
+    //     self.reputation = DEFAULT_REPUTATION
+    // }
 
     /// Returns whether this peer is trusted
     #[inline]

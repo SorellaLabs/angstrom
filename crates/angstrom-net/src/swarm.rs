@@ -10,7 +10,7 @@ use crate::{
     session::StromSessionManager,
     state::{StateEvent, StromState},
     types::message::StromMessage,
-    PeerKind, SessionEvent
+    SessionEvent
 };
 
 #[derive(Debug)]
@@ -39,13 +39,14 @@ impl<DB: Unpin> Swarm<DB> {
         &mut self.sessions
     }
 
-    pub(crate) fn remove_peer(&mut self, peer_id: PeerId, kind: PeerKind) {
-        match kind {
-            PeerKind::Basic => self.state.peers_mut().remove_peer(peer_id),
-            PeerKind::MevGuard => self.state.peers_mut().remove_peer_from_trusted_set(peer_id),
-            _ => todo!()
-        }
-    }
+    // pub(crate) fn remove_peer(&mut self, peer_id: PeerId, kind: PeerKind) {
+    //     match kind {
+    //         PeerKind::Basic => self.state.peers_mut().remove_peer(peer_id),
+    //         PeerKind::MevGuard =>
+    // self.state.peers_mut().remove_peer_from_trusted_set(peer_id),
+    //         _ => todo!()
+    //     }
+    // }
 
     fn on_session_event(&mut self, event: SessionEvent) -> Option<SwarmEvent> {
         match event {
@@ -59,7 +60,7 @@ impl<DB: Unpin> Swarm<DB> {
                 Some(SwarmEvent::ValidMessage { peer_id, msg: message.message })
             }
             SessionEvent::Disconnected { peer_id } => Some(SwarmEvent::Disconnected { peer_id }),
-            SessionEvent::SessionEstablished { peer_id, direction, timeout } => {
+            SessionEvent::SessionEstablished { peer_id, .. } => {
                 Some(SwarmEvent::SessionEstablished { peer_id })
             }
             _ => None

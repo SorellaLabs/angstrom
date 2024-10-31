@@ -21,8 +21,7 @@ use reth_tasks::TaskSpawner;
 use tokio::sync::{
     broadcast,
     broadcast::Receiver,
-    mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender},
-    oneshot
+    mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender}
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::{OrderValidationResults, OrderValidatorHandle};

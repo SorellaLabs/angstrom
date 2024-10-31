@@ -133,7 +133,7 @@ impl TokenPriceGenerator {
                     .iter()
                     .map(|price| {
                         // need to flip. add 18 decimal precision then reciprocal
-                        U256::from(1e36 ) / price.price_1_over_0
+                        U256::from(1e36) / price.price_1_over_0
                     })
                     .sum::<U256>()
                     / U256::from(size)
@@ -172,7 +172,7 @@ impl TokenPriceGenerator {
                             price.price_1_over_0
                         } else {
                             // need to flip. add 18 decimal precision then reciprocal
-                            U256::from(1e36 ) / price.price_1_over_0
+                            U256::from(1e36) / price.price_1_over_0
                         }
                     })
                     .sum::<U256>()
@@ -197,7 +197,7 @@ impl TokenPriceGenerator {
                 .iter()
                 .map(|price| {
                     // need to flip. add 18 decimal precision then reciprocal
-                    U256::from(1e36 ) / price.price_1_over_0
+                    U256::from(1e36) / price.price_1_over_0
                 })
                 .sum::<U256>()
                 / U256::from(size);
@@ -219,7 +219,7 @@ impl TokenPriceGenerator {
                         price.price_1_over_0
                     } else {
                         // need to flip. add 18 decimal precision then reciprocal
-                        U256::from(1e36 ) / price.price_1_over_0
+                        U256::from(1e36) / price.price_1_over_0
                     }
                 })
                 .sum::<U256>()
@@ -330,8 +330,19 @@ pub mod test {
         let rate = token_conversion
             .get_eth_conversion_price(TOKEN2, TOKEN0)
             .unwrap();
-        let expected_rate = U256::from(1e36) / U256::from(5e18);
 
+        let expected_rate = U256::from(1e36) / U256::from(5e18);
+        assert_eq!(rate, expected_rate)
+    }
+
+    #[test]
+    fn test_multi_hop_where_token0_matches() {
+        let token_conversion = setup();
+        let rate = token_conversion
+            .get_eth_conversion_price(TOKEN2, TOKEN3)
+            .unwrap();
+
+        let expected_rate = U256::from(1e36) / U256::from(5e18);
         assert_eq!(rate, expected_rate)
     }
 }

@@ -37,8 +37,10 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         if (currentOnly) {
             uint128 amount;
             (reader, amount) = reader.readU128();
-            poolRewards_.globalGrowth +=
-                X128MathLib.flatDivX128(amount, UNI_V4.getPoolLiquidity(id));
+            unchecked {
+                poolRewards_.globalGrowth +=
+                    X128MathLib.flatDivX128(amount, UNI_V4.getPoolLiquidity(id));
+            }
 
             return (reader, amount);
         }
@@ -63,7 +65,9 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
 
         uint128 donateToCurrent;
         (newReader, donateToCurrent) = newReader.readU128();
-        cumulativeGrowth += X128MathLib.flatDivX128(donateToCurrent, endLiquidity);
+        unchecked {
+            cumulativeGrowth += X128MathLib.flatDivX128(donateToCurrent, endLiquidity);
+        }
         total += donateToCurrent;
 
         newReader.requireAtEndOf(amountsEnd);
@@ -73,7 +77,9 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
             revert WrongEndLiquidity(endLiquidity, currentLiquidity);
         }
 
-        poolRewards.globalGrowth += cumulativeGrowth;
+        unchecked {
+            poolRewards.globalGrowth += cumulativeGrowth;
+        }
 
         return (newReader, total);
     }
@@ -95,8 +101,8 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
                 (reader, amount) = reader.readU128();
 
                 total += amount;
-                cumulativeGrowth += X128MathLib.flatDivX128(amount, liquidity);
                 unchecked {
+                    cumulativeGrowth += X128MathLib.flatDivX128(amount, liquidity);
                     rewardGrowthOutside[uint24(rewardTick)] += cumulativeGrowth;
                 }
 
@@ -126,8 +132,8 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
                 (reader, amount) = reader.readU128();
 
                 total += amount;
-                cumulativeGrowth += X128MathLib.flatDivX128(amount, liquidity);
                 unchecked {
+                    cumulativeGrowth += X128MathLib.flatDivX128(amount, liquidity);
                     rewardGrowthOutside[uint24(rewardTick)] += cumulativeGrowth;
                 }
 

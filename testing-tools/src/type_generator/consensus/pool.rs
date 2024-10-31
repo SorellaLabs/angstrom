@@ -3,11 +3,12 @@ use alloy_primitives::{
     Address
 };
 use angstrom_types::{
+    contract_bindings::angstrom::Angstrom::PoolKey,
     matching::{
         uniswap::{PoolPrice, PoolSnapshot},
         SqrtPriceX96
     },
-    primitive::{PoolId, PoolKey},
+    primitive::PoolId,
     sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
 };
 

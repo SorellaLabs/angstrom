@@ -1,16 +1,15 @@
 use std::task::{Context, Poll};
 
-use alloy::{
-    primitives::Address,
-    rpc::types::Transaction,
-    sol_types::{SolCall, SolType}
-};
+use alloy::{primitives::Address, rpc::types::Transaction, sol_types::SolCall};
 use angstrom_eth::{
     handle::{EthCommand, EthHandle},
     manager::EthEvent
 };
-use angstrom_types::sol_bindings::{sol::ContractBundle, testnet::TestnetHub};
+use angstrom_types::{
+    contract_payloads::angstrom::AngstromBundle, sol_bindings::testnet::TestnetHub
+};
 use futures::{Future, Stream, StreamExt};
+use pade::PadeDecode;
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
@@ -88,15 +87,18 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
             tracing::warn!("found angstrom contract call thats not a bundle");
             return
         };
+        let bytes = bytes.data.to_vec();
+        let mut slice = bytes.as_slice();
 
         // decode call input to grab orders. Drop function sig
-        let Ok(bundle) = ContractBundle::abi_decode(&bytes.data, false) else {
+        let Ok(bundle) = AngstromBundle::pade_decode(&mut slice, None) else {
             tracing::error!("failed to decode bundle");
             return
         };
 
-        let hashes = bundle.get_filled_hashes();
-        let addresses = bundle.get_addresses_touched();
+        let hashes = bundle.get_order_hashes().collect::<Vec<_>>();
+
+        let addresses = todo!();
         tracing::debug!("found angstrom tx with orders filled {:#?}", hashes);
         self.send_events(EthEvent::NewBlockTransitions {
             block_number:      block.0,

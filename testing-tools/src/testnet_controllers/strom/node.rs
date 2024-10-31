@@ -4,7 +4,6 @@ use std::{
     sync::Arc
 };
 
-use alloy::sol_types::SolValue;
 use alloy_primitives::Address;
 use angstrom::cli::StromHandles;
 use angstrom_network::{
@@ -12,7 +11,7 @@ use angstrom_network::{
 };
 use angstrom_types::{
     primitive::PeerId,
-    sol_bindings::{grouped_orders::AllOrders, sol::ContractBundle, testnet::random::RandomValues}
+    sol_bindings::{grouped_orders::AllOrders, testnet::random::RandomValues}
 };
 use consensus::AngstromValidator;
 use parking_lot::RwLock;

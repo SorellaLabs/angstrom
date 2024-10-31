@@ -4,11 +4,11 @@ use alloy::primitives::{
 };
 use angstrom_types::{
     contract_bindings::{
+        angstrom::Angstrom::PoolKey,
         mock_rewards_manager::MockRewardsManager::MockRewardsManagerInstance,
         pool_gate::PoolGate::PoolGateInstance
     },
-    matching::{uniswap::PoolSnapshot, SqrtPriceX96},
-    primitive::PoolKey
+    matching::{uniswap::PoolSnapshot, SqrtPriceX96}
 };
 use futures::future::join_all;
 use tracing::debug;

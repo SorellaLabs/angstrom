@@ -8,8 +8,9 @@ use std::{
 };
 
 use alloy_primitives::{Address, U256};
+use angstrom_types::pair_with_price::PairsWithPrice;
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
-use futures::FutureExt;
+use futures::{FutureExt, Stream};
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use reth_provider::BlockNumReader;
 use tokio::sync::mpsc::unbounded_channel;
@@ -50,10 +51,11 @@ impl<
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
 {
-    pub fn new(
+    pub async fn new(
         db: DB,
         uniswap_pools: SyncedUniswapPools,
-        token_conversion: TokenPriceGenerator
+        token_conversion: TokenPriceGenerator,
+        token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>
     ) -> Self {
         let (tx, rx) = unbounded_channel();
         let config_path = Path::new("./state_config.toml");
@@ -81,8 +83,10 @@ where
             fetch,
             uniswap_pools,
             thread_pool,
-            token_conversion
-        );
+            token_conversion,
+            token_updates
+        )
+        .await;
 
         let val = Validator::new(rx, order_validator);
         let client = ValidationClient(tx);

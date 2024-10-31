@@ -10,6 +10,7 @@ use alloy::{
 use alloy_primitives::{Log, B256, I256};
 use angstrom_types::primitive::{PoolId as AngstromPoolId, UniswapPoolRegistry};
 use itertools::Itertools;
+use malachite::{num::conversion::traits::RoundingInto, Natural, Rational};
 
 use crate::cfmm::uniswap::{i128_to_i256, i256_to_i128, pool::PoolError};
 

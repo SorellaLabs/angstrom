@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use alloy::{dyn_abi::Eip712Domain, sol, sol_types::eip712_domain};
 
-mod angstrom;
-pub use angstrom::{Angstrom::*, *};
+use crate::contract_bindings::angstrom::Angstrom::PoolKey;
 
 sol! {
 #![sol(all_derives = true)]

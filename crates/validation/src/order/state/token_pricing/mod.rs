@@ -185,7 +185,6 @@ impl TokenPriceGenerator {
         } else if let Some(key) = self.pair_to_pool.get(&(token_0_hop2, token_1_hop2)) {
             // because we are going through token1 here and we want token zero, we need to
             // do some extra math
-
             let default_pool_key = self
                 .pair_to_pool
                 .get(&(token_0, token_1))

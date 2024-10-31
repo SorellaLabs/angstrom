@@ -21,9 +21,10 @@ use super::{
 };
 use crate::{
     consensus::{PreProposal, Proposal},
+    contract_bindings::angstrom::Angstrom::PoolKey,
     matching::{uniswap::PoolSnapshot, Ray},
     orders::{OrderFillState, OrderOutcome},
-    primitive::{PoolId, PoolKey, UniswapPoolRegistry},
+    primitive::{PoolId, UniswapPoolRegistry},
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder as RpcTopOfBlockOrder,

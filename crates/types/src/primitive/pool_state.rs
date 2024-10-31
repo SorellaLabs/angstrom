@@ -4,8 +4,9 @@ use alloy::{
 };
 use alloy_primitives::{keccak256, Address};
 
-use super::PoolKey;
-use crate::contract_bindings::pool_manager::PoolManager::Initialize;
+use crate::contract_bindings::{
+    angstrom::Angstrom::PoolKey, pool_manager::PoolManager::Initialize
+};
 
 pub type PoolId = FixedBytes<32>;
 

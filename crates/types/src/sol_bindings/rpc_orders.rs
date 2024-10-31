@@ -17,7 +17,6 @@ sol! {
 
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-
     struct PartialStandingOrder {
         uint32 ref_id;
         uint128 min_amount_in;
@@ -35,7 +34,6 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-
     struct ExactStandingOrder {
         uint32 ref_id;
         bool exact_in;
@@ -53,7 +51,6 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-
     struct PartialFlashOrder {
         uint32 ref_id;
         uint128 min_amount_in;
@@ -70,7 +67,6 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-
     struct ExactFlashOrder {
         uint32 ref_id;
         bool exact_in;
@@ -87,7 +83,6 @@ sol! {
     }
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-
     struct TopOfBlockOrder {
         uint128 quantity_in;
         uint128 quantity_out;

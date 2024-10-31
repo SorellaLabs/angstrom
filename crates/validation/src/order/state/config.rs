@@ -75,6 +75,10 @@ pub struct TokenApprovalSlot {
 }
 
 impl TokenApprovalSlot {
+    pub fn new(token: Address, slot_index: u8) -> Self {
+        Self { token, slot_index, hash_method: HashMethod::Solidity }
+    }
+
     pub fn generate_slot(&self, user: Address, contract: Address) -> eyre::Result<U256> {
         if !self.hash_method.is_solidity() {
             return Err(eyre::eyre!("current type of contract hashing is not supported"))

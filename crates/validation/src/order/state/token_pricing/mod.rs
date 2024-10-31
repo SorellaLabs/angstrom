@@ -357,12 +357,12 @@ pub mod test {
         // assumes token1 is 6 decimals and token 0 is 18 with a conversion rate of 0.2
         // gives us 200000 TOKEN1 / WETH
         //
-
         // hop 2 rate
         // token 1 is 18 decimals, token 0 is 6 with a conversion rate of 1/8
         // let pair4_rate = U256::from(1e36) / U256::from(8e6);
-
-        let expected_rate = U256::from(1e36) / U256::from(5e18);
+        //
+        // gives us 0.2 * 0.8 = 0.16;
+        let expected_rate = U256::from(1600000000000u128);
         assert_eq!(rate, expected_rate)
     }
 }

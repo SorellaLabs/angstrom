@@ -140,12 +140,17 @@ def parse_field_value(value: str, field_type: str) -> Any:
     return value
 
 
+TRACK = False
+
+
 @contextlib.contextmanager
 def track(name: str):
+    if not TRACK:
+        return
     before = time.perf_counter()
     yield
     delta = time.perf_counter() - before
-    # print(f'{name}: {delta * 1e3:.2f} ms', file=sys.stderr)
+    print(f'{name}: {delta * 1e3:.2f} ms', file=sys.stderr)
 
 
 def main():

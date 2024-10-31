@@ -1,23 +1,17 @@
 use std::{
     collections::{HashMap, VecDeque},
-    pin::Pin,
     sync::Arc
 };
 
 use alloy::{
-    primitives::{address, Address, FixedBytes, U256},
+    primitives::{address, Address, U256},
     providers::{Network, Provider},
-    rpc::types::error,
     transports::Transport
 };
-use angstrom_types::{
-    contract_payloads::rewards::PoolUpdate, pair_with_price::PairsWithPrice, primitive::PoolId
-};
-use futures::{Stream, StreamExt};
+use angstrom_types::{pair_with_price::PairsWithPrice, primitive::PoolId};
+use futures::StreamExt;
 use matching_engine::cfmm::uniswap::{
-    pool_data_loader::PoolDataLoader,
-    pool_manager::{SyncedUniswapPools, UniswapPoolManager},
-    pool_providers::PoolManagerProvider
+    pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools
 };
 use tracing::warn;
 

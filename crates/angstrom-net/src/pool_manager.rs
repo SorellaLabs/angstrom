@@ -1,63 +1,35 @@
 use std::{
-    collections::{HashMap, HashSet},
-    future::IntoFuture,
-    hash::Hash,
-    marker::PhantomData,
+    collections::HashMap,
     num::NonZeroUsize,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll}
 };
 
-use alloy::primitives::{Address, TxHash, B256};
+use alloy::primitives::{Address, B256};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    contract_bindings::pool_manager::PoolManager::{
-        syncCall, PoolManagerCalls::updateDynamicLPFee
-    },
-    orders::{OrderOrigin, OrderSet},
-    primitive::{Order, PeerId},
-    sol_bindings::{
-        grouped_orders::{
-            AllOrders, FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
-        },
-        sol::TopOfBlockOrder,
-        RawPoolOrder
-    }
+    orders::OrderOrigin,
+    primitive::PeerId,
+    sol_bindings::{grouped_orders::AllOrders, RawPoolOrder}
 };
-use futures::{
-    future::BoxFuture,
-    poll,
-    stream::{BoxStream, FuturesUnordered},
-    Future, FutureExt, Stream, StreamExt
-};
+use futures::{Future, FutureExt, StreamExt};
 use order_pool::{
     order_storage::OrderStorage, OrderIndexer, OrderPoolHandle, PoolConfig, PoolInnerEvent,
     PoolManagerUpdate
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
-use reth_network::transactions::ValidationOutcome;
 use reth_tasks::TaskSpawner;
 use tokio::sync::{
     broadcast,
-    broadcast::{Receiver, Sender},
-    mpsc,
+    broadcast::Receiver,
     mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot
 };
-use tokio_stream::wrappers::{BroadcastStream, ReceiverStream, UnboundedReceiverStream};
-use validation::{
-    order::{
-        self, order_validator::OrderValidator, OrderValidationRequest, OrderValidationResults,
-        OrderValidatorHandle, ValidationFuture
-    },
-    validator::ValidationRequest
-};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-use crate::{
-    LruCache, NetworkOrderEvent, ReputationChangeKind, StromMessage, StromNetworkEvent,
-    StromNetworkHandle
-};
+use crate::{LruCache, NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
 
 /// Cache limit of transactions to keep track of for a single peer.
 const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;

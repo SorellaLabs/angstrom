@@ -76,7 +76,7 @@ impl ConnectionHandler for StromConnectionHandler {
 
     // this occurs after the eth handshake occured
     fn into_connection(
-        mut self,
+        self,
         direction: Direction,
         peer_id: PeerId,
         conn: ProtocolConnection

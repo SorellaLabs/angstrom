@@ -6,11 +6,9 @@ use std::{
 };
 
 use alloy::primitives::BlockNumber;
-use alloy_rpc_types::Block;
 use angstrom_types::{
     consensus::{PreProposal, Proposal},
-    primitive::PeerId,
-    sol_bindings::ext::RawPoolOrder
+    primitive::PeerId
 };
 use futures::StreamExt;
 use reth_eth_wire::DisconnectReason;

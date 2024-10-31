@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use alloy_primitives::B256;
 use angstrom_types::{
-    consensus::*, primitive::Angstrom::PoolKey, sol_bindings::grouped_orders::AllOrders
+    consensus::*, contract_bindings::angstrom::Angstrom::PoolKey,
+    sol_bindings::grouped_orders::AllOrders
 };
 use serde::{Deserialize, Serialize};
 

@@ -1,6 +1,3 @@
-#![allow(unused)]
-#![allow(dead_code)]
-#![allow(unreachable_code)]
 pub mod errors;
 
 pub mod types;

@@ -3,11 +3,7 @@ use std::collections::{hash_map::Entry, HashMap, VecDeque};
 use reth_eth_wire::DisconnectReason;
 use reth_net_banlist::BanList;
 use reth_network_peers::{NodeRecord, PeerId};
-use tokio::{
-    sync::{mpsc, mpsc::UnboundedSender, oneshot},
-    time::{Duration, Instant, Interval}
-};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio::{sync::oneshot, time::Duration};
 use tracing::trace;
 
 pub use super::reputation::ReputationChangeWeights;
@@ -57,7 +53,7 @@ impl PeersManager {
         if entry.get().is_trusted() {
             return
         }
-        let mut peer = entry.remove();
+        let peer = entry.remove();
 
         trace!(target: "angstrom::net::peers",  ?peer_id, "remove discovered node");
         self.queued_actions

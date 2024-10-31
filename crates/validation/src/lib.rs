@@ -26,7 +26,7 @@ use crate::{
         sim::SimValidation,
         state::{
             config::load_data_fetcher_config, db_state_utils::FetchUtils,
-            pools::AngstromPoolsTracker
+            pools::AngstromPoolsTracker, token_pricing::TokenPriceGenerator
         }
     },
     validator::ValidationClient
@@ -41,7 +41,8 @@ pub fn init_validation<
     current_block: u64,
     angstrom_address: Option<Address>,
     state_notification: CanonStateNotificationStream,
-    uniswap_pools: SyncedUniswapPools
+    uniswap_pools: SyncedUniswapPools,
+    price_generator: TokenPriceGenerator
 ) -> ValidationClient
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
@@ -82,6 +83,7 @@ where
                 fetch,
                 uniswap_pools,
                 thread_pool,
+                price_generator,
                 update_stream
             )
             .await
@@ -103,7 +105,8 @@ pub fn init_validation_tests<
     state: State,
     pool: Pool,
     block_number: u64,
-    state_notification: CanonStateNotificationStream
+    state_notification: CanonStateNotificationStream,
+    price_generator: TokenPriceGenerator
 ) -> (ValidationClient, Arc<DB>)
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
@@ -143,6 +146,7 @@ where
                 state,
                 uniswap_pools,
                 thread_pool,
+                price_generator,
                 update_stream
             )
             .await

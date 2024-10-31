@@ -7,11 +7,10 @@ use angstrom_types::primitive::PeerId;
 use futures::{Stream, StreamExt};
 
 use crate::{
-    peers::PeersManager,
     session::StromSessionManager,
     state::{StateEvent, StromState},
-    types::message::{StromMessage, StromProtocolMessage},
-    PeerAction, PeerKind, SessionEvent
+    types::message::StromMessage,
+    PeerKind, SessionEvent
 };
 
 #[derive(Debug)]

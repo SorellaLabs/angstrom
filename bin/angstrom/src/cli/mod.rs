@@ -11,6 +11,7 @@ use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
 };
+use validation::order::state::token_pricing::TokenPriceGenerator;
 
 mod network_builder;
 use alloy::{
@@ -32,8 +33,9 @@ use angstrom_network::{
 };
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use angstrom_types::{
+    contract_bindings::angstrom::Angstrom::PoolKey,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    primitive::{PeerId, PoolKey, UniswapPoolRegistry}
+    primitive::{PeerId, UniswapPoolRegistry}
 };
 use clap::Parser;
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
@@ -252,13 +254,20 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
             .expect("watch for uniswap pool changes");
     }));
 
+    // build token_price_generator
+    let price_generator =
+        TokenPriceGenerator::new(provider.clone(), block_id, uniswap_pools.clone())
+            .await
+            .expect("failed to start token price generator");
+
     let block_height = node.provider.best_block_number().unwrap();
     let validator = init_validation(
         RethDbWrapper::new(node.provider.clone()),
         block_height,
         angstrom_address,
-        node.provider.subscribe_to_canonical_state(),
-        uniswap_pools.clone()
+        node.provider.canonical_state_stream(),
+        uniswap_pools.clone(),
+        price_generator
     );
 
     let network_handle = network_builder

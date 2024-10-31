@@ -16,6 +16,7 @@ angstrom-network.workspace = true
 angstrom-eth.workspace = true
 angstrom-rpc.workspace = true
 angstrom.workspace = true
+pade.workspace = true
 order-pool.workspace = true
 validation.workspace = true
 matching-engine.workspace = true

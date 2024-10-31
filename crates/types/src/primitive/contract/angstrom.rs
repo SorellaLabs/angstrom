@@ -319,5 +319,5 @@ impl PoolKey {
 #[allow(dead_code)]
 pub const ANGSTROM_DOMAIN: Eip712Domain = eip712_domain!(
    name: "Angstrom",
-   version: "1",
+   version: "v1",
 );

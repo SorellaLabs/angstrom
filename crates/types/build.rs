@@ -1,6 +1,7 @@
 use std::{io::Write, os::unix::process::ExitStatusExt, process::Command};
 
 use convert_case::{Case, Casing};
+use itertools::Itertools;
 
 const CONTRACT_LOCATION: &str = "contracts/";
 const OUT_DIRECTORY: &str = "contracts/out/";
@@ -53,6 +54,7 @@ fn main() {
 
             Some((raw, path.to_str()?.to_owned()))
         })
+        .sorted_unstable_by_key(|key| key.0.clone())
         .map(|(name, path_of_contracts)| {
             let path_of_contracts = path_of_contracts.replace(this_dir, "../..");
 

@@ -48,6 +48,7 @@ rand = { version = "0.8.5", optional = true }
 
 [build-dependencies]
 convert_case = "0.6.0"
+itertools = "0.13.0"
 
 [dev-dependencies]
 rand.workspace = true

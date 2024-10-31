@@ -1,158 +1,36 @@
-use alloy_primitives::{Address, FixedBytes, Uint, U256};
+use alloy::{
+    primitives::{Address, FixedBytes, U256},
+    sol_types::Eip712Domain
+};
 use angstrom_types::{
-    matching::Ray,
     orders::{OrderId, OrderPriorityData},
     primitive::PoolId,
     sol_bindings::{
         ext::RawPoolOrder,
-        grouped_orders::{
-            FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
-        },
-        rpc_orders::{
-            ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
-            TopOfBlockOrder
-        }
+        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
+        rpc_orders::TopOfBlockOrder
     }
 };
+use enr::k256::ecdsa::SigningKey;
 use rand::{rngs::ThreadRng, Rng};
-use rand_distr::{num_traits::ToPrimitive, Distribution, SkewNormal};
 
 // mod stored;
+mod distribution;
+mod tob;
+mod user;
+pub use distribution::OrderDistributionBuilder;
+pub use tob::ToBOrderBuilder;
+pub use user::UserOrderBuilder;
 
 // fn build_priority_data(order: &GroupedVanillaOrder) -> OrderPriorityData {
 //     OrderPriorityData { price: order.price().into(), volume: order.quantity()
 // as u128, gas: 10 } }
 
-#[derive(Clone, Debug, Default)]
-pub struct UserOrderBuilder {
-    /// If the order is not a Standing order, it is KillOrFill
-    is_standing: bool,
-    /// If the order is not an Exact order, it is Partial
-    is_exact:    bool,
-    block:       u64,
-    nonce:       u64,
-    recipient:   Address,
-    asset_in:    Address,
-    asset_out:   Address,
-    amount:      u128,
-    min_price:   Ray
-}
-
-impl UserOrderBuilder {
-    pub fn new() -> Self {
-        Self { ..Default::default() }
-    }
-
-    pub fn standing(self) -> Self {
-        Self { is_standing: true, ..self }
-    }
-
-    pub fn kill_or_fill(self) -> Self {
-        Self { is_standing: false, ..self }
-    }
-
-    /// Sets the order to be kill-or-fill or standing by explicit boolean
-    pub fn is_standing(self, is_standing: bool) -> Self {
-        Self { is_standing, ..self }
-    }
-
-    pub fn exact(self) -> Self {
-        Self { is_exact: true, ..self }
-    }
-
-    pub fn partial(self) -> Self {
-        Self { is_exact: false, ..self }
-    }
-
-    /// Sets the order to be exact or partial by explicit boolean
-    pub fn is_exact(self, is_exact: bool) -> Self {
-        Self { is_exact, ..self }
-    }
-
-    pub fn block(self, block: u64) -> Self {
-        Self { block, ..self }
-    }
-
-    pub fn nonce(self, nonce: u64) -> Self {
-        Self { nonce, ..self }
-    }
-
-    pub fn recipient(self, recipient: Address) -> Self {
-        Self { recipient, ..self }
-    }
-
-    pub fn asset_in(self, asset_in: Address) -> Self {
-        Self { asset_in, ..self }
-    }
-
-    pub fn asset_out(self, asset_out: Address) -> Self {
-        Self { asset_out, ..self }
-    }
-
-    pub fn amount(self, amount: u128) -> Self {
-        Self { amount, ..self }
-    }
-
-    pub fn min_price(self, min_price: Ray) -> Self {
-        Self { min_price, ..self }
-    }
-
-    pub fn build(self) -> GroupedVanillaOrder {
-        match (self.is_standing, self.is_exact) {
-            (true, true) => {
-                let order = ExactStandingOrder {
-                    assetIn: self.asset_in,
-                    assetOut: self.asset_out,
-                    amount: self.amount,
-                    minPrice: *self.min_price,
-                    recipient: self.recipient,
-                    nonce: self.nonce,
-                    ..Default::default()
-                };
-                GroupedVanillaOrder::Standing(StandingVariants::Exact(order))
-            }
-            (true, false) => {
-                let order = PartialStandingOrder {
-                    assetIn: self.asset_in,
-                    assetOut: self.asset_out,
-                    maxAmountIn: self.amount,
-                    minPrice: *self.min_price,
-                    recipient: self.recipient,
-                    ..Default::default()
-                };
-                GroupedVanillaOrder::Standing(StandingVariants::Partial(order))
-            }
-            (false, true) => {
-                let order = ExactFlashOrder {
-                    validForBlock: self.block,
-                    assetIn: self.asset_in,
-                    assetOut: self.asset_out,
-                    amount: self.amount,
-                    minPrice: *self.min_price,
-                    recipient: self.recipient,
-                    ..Default::default()
-                };
-                GroupedVanillaOrder::KillOrFill(FlashVariants::Exact(order))
-            }
-            (false, false) => {
-                let order = PartialFlashOrder {
-                    validForBlock: self.block,
-                    assetIn: self.asset_in,
-                    assetOut: self.asset_out,
-                    maxAmountIn: self.amount,
-                    minPrice: *self.min_price,
-                    recipient: self.recipient,
-                    ..Default::default()
-                };
-                GroupedVanillaOrder::KillOrFill(FlashVariants::Partial(order))
-            }
-        }
-    }
-
-    /// Lets us chain right into the storage wrapper
-    pub fn with_storage(self) -> StoredOrderBuilder {
-        StoredOrderBuilder::new(self.build())
-    }
+#[derive(Clone, Debug)]
+pub struct SigningInfo {
+    pub domain:  Eip712Domain,
+    pub address: Address,
+    pub key:     SigningKey
 }
 
 #[derive(Clone, Debug)]
@@ -285,8 +163,10 @@ pub fn generate_top_of_block_order(
     let price: u128 = rng.gen();
     let volume: u128 = rng.gen();
     let gas: u128 = rng.gen();
-    let order =
-        build_top_of_block_order(quantity_in.unwrap_or_default(), quantity_out.unwrap_or_default());
+    let order = ToBOrderBuilder::new()
+        .quantity_in(quantity_in.unwrap_or_default())
+        .quantity_out(quantity_out.unwrap_or_default())
+        .build();
 
     let priority_data = OrderPriorityData { price: U256::from(price), volume, gas };
     let order_id = OrderIdBuilder::new()
@@ -310,10 +190,6 @@ pub fn generate_top_of_block_order(
     }
 }
 
-pub fn build_top_of_block_order(quantity_in: u128, quantity_out: u128) -> TopOfBlockOrder {
-    TopOfBlockOrder { quantityIn: quantity_in, quantityOut: quantity_out, ..Default::default() }
-}
-
 #[derive(Debug, Default)]
 pub struct DistributionParameters {
     pub location: f64,
@@ -335,41 +211,4 @@ impl DistributionParameters {
 
         (bids, asks)
     }
-}
-
-pub fn generate_order_distribution(
-    is_bid: bool,
-    order_count: usize,
-    priceparams: DistributionParameters,
-    volumeparams: DistributionParameters,
-    pool_id: PoolId,
-    valid_block: u64
-) -> Result<Vec<OrderWithStorageData<GroupedVanillaOrder>>, String> {
-    let DistributionParameters { location: price_location, scale: price_scale, shape: price_shape } =
-        priceparams;
-    let DistributionParameters { location: v_location, scale: v_scale, shape: v_shape } =
-        volumeparams;
-    let mut rng = rand::thread_rng();
-    let mut rng2 = rand::thread_rng();
-    let price_gen = SkewNormal::new(price_location, price_scale, price_shape)
-        .map_err(|e| format!("Error creating price distribution: {}", e))?;
-    let volume_gen = SkewNormal::new(v_location, v_scale, v_shape)
-        .map_err(|e| format!("Error creating price distribution: {}", e))?;
-    Ok(price_gen
-        .sample_iter(&mut rng)
-        .zip(volume_gen.sample_iter(&mut rng2))
-        .map(|(p, v)| {
-            UserOrderBuilder::new()
-                .is_standing(false)
-                .block(valid_block)
-                .amount(v.to_u128().unwrap_or_default())
-                .min_price(Ray::from(Uint::from(p.to_u128().unwrap_or_default())))
-                .with_storage()
-                .pool_id(pool_id)
-                .is_bid(is_bid)
-                .valid_block(valid_block)
-                .build()
-        })
-        .take(order_count)
-        .collect())
 }

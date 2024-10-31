@@ -39,37 +39,13 @@ impl Distribution<FlashVariants> for Standard {
 
 impl Distribution<ExactFlashOrder> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ExactFlashOrder {
-        ExactFlashOrder {
-            amount:        rng.gen(),
-            minPrice:      rng.gen(),
-            useInternal:   rng.gen(),
-            assetIn:       rng.gen(),
-            assetOut:      rng.gen(),
-            recipient:     rng.gen(),
-            hook:          rng.gen(),
-            hookPayload:   rng.gen_sized::<150>(),
-            validForBlock: rng.gen(),
-            meta:          rng.gen()
-        }
+        ExactFlashOrder { hook_data: rng.gen_sized::<150>(), ..rng.gen() }
     }
 }
 
 impl Distribution<PartialFlashOrder> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> PartialFlashOrder {
-        PartialFlashOrder {
-            minPrice:      rng.gen(),
-            useInternal:   rng.gen(),
-            assetIn:       rng.gen(),
-            assetOut:      rng.gen(),
-            recipient:     rng.gen(),
-            hook:          rng.gen(),
-            hookPayload:   rng.gen_sized::<150>(),
-            validForBlock: rng.gen(),
-            meta:          rng.gen(),
-            minAmountIn:   rng.gen(),
-            maxAmountIn:   rng.gen(),
-            amountFilled:  rng.gen()
-        }
+        PartialFlashOrder { hook_data: rng.gen_sized::<150>(), ..rng.gen() }
     }
 }
 
@@ -87,57 +63,19 @@ impl Distribution<StandingVariants> for Standard {
 
 impl Distribution<ExactStandingOrder> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ExactStandingOrder {
-        ExactStandingOrder {
-            exactIn:     rng.gen(),
-            amount:      rng.gen(),
-            minPrice:    rng.gen(),
-            useInternal: rng.gen(),
-            assetIn:     rng.gen(),
-            assetOut:    rng.gen(),
-            recipient:   rng.gen(),
-            hook:        rng.gen(),
-            hookPayload: rng.gen_sized::<150>(),
-            meta:        rng.gen(),
-            nonce:       rng.gen(),
-            deadline:    rng.gen()
-        }
+        ExactStandingOrder { hook_data: rng.gen_sized::<150>(), ..rng.gen() }
     }
 }
 
 impl Distribution<PartialStandingOrder> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> PartialStandingOrder {
-        PartialStandingOrder {
-            minPrice:     rng.gen(),
-            useInternal:  rng.gen(),
-            assetIn:      rng.gen(),
-            assetOut:     rng.gen(),
-            recipient:    rng.gen(),
-            hook:         rng.gen(),
-            hookPayload:  rng.gen_sized::<150>(),
-            meta:         rng.gen(),
-            minAmountIn:  rng.gen(),
-            maxAmountIn:  rng.gen(),
-            amountFilled: rng.gen(),
-            nonce:        rng.gen(),
-            deadline:     rng.gen()
-        }
+        PartialStandingOrder { hook_data: rng.gen_sized::<150>(), ..rng.gen() }
     }
 }
 
 impl Distribution<TopOfBlockOrder> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TopOfBlockOrder {
-        TopOfBlockOrder {
-            recipient:     rng.gen(),
-            quantityIn:    rng.gen(),
-            quantityOut:   rng.gen(),
-            useInternal:   rng.gen(),
-            assetIn:       rng.gen(),
-            assetOut:      rng.gen(),
-            hook:          rng.gen(),
-            hookPayload:   rng.gen_sized::<150>(),
-            validForBlock: rng.gen(),
-            meta:          rng.gen()
-        }
+        TopOfBlockOrder { ..rng.gen() }
     }
 }
 

@@ -34,7 +34,7 @@ pub fn order_distribution(
                 angstrom_types::sol_bindings::grouped_orders::FlashVariants::Exact(
                     ExactFlashOrder {
                         amount: q.floor() as u128,
-                        minPrice: Ray::from(p).into(),
+                        min_price: Ray::from(p).into(),
                         ..Default::default()
                     }
                 )

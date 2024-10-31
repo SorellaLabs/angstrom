@@ -8,6 +8,7 @@ use alloy::{
     sol_types::SolValue,
     transports::Transport
 };
+use pade::{PadeDecode, PadeEncode};
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -16,7 +17,7 @@ use super::{
     asset::builder::{AssetBuilder, AssetBuilderStage},
     rewards::PoolUpdate,
     tob::ToBOutcome,
-    Asset, Pair, POOL_CONFIG_STORE_ENTRY_SIZE
+    Asset, Pair, Signature, POOL_CONFIG_STORE_ENTRY_SIZE
 };
 use crate::{
     consensus::{PreProposal, Proposal},
@@ -36,40 +37,42 @@ use crate::{
     PadeEncode, PadeDecode, Clone, Default, Debug, Hash, PartialEq, Eq, Serialize, Deserialize,
 )]
 pub struct TopOfBlockOrder {
-    pub use_internal:    bool,
-    pub quantity_in:     u128,
-    pub quantity_out:    u128,
-    pub asset_in_index:  u16,
-    pub asset_out_index: u16,
-    pub recipient:       Option<Address>,
-    pub hook_data:       Option<Bytes>,
-    pub signature:       Bytes
+    pub use_internal:     bool,
+    pub quantity_in:      u128,
+    pub quantity_out:     u128,
+    pub max_gas_asset_0:  u128,
+    pub gas_used_asset_0: u128,
+    pub pairs_index:      u16,
+    pub zero_for_1:       bool,
+    pub recipient:        Option<Address>,
+    pub signature:        Signature
 }
 
 impl TopOfBlockOrder {
     // eip-712 hash_struct
     pub fn order_hash(&self) -> B256 {
-        keccak256(&self.signature)
+        keccak256(self.signature.pade_encode())
     }
 
-    pub fn of(
-        internal: &OrderWithStorageData<RpcTopOfBlockOrder>,
-        asset_in_index: u16,
-        asset_out_index: u16
-    ) -> Self {
-        let quantity_in = internal.quantityIn;
-        let quantity_out = internal.quantityOut;
+    pub fn of(internal: &OrderWithStorageData<RpcTopOfBlockOrder>, pairs_index: u16) -> Self {
+        let quantity_in = internal.quantity_in;
+        let quantity_out = internal.quantity_out;
         let recipient = Some(internal.recipient);
-        let hook_data = Some(internal.hookPayload.clone());
-        let signature = internal.meta.signature.clone();
+        // Zero_for_1 is an Ask, an Ask is NOT a bid
+        let zero_for_1 = !internal.is_bid;
+        let sig_bytes = internal.meta.signature.to_vec();
+        let decoded_signature =
+            alloy::primitives::Signature::pade_decode(&mut sig_bytes.as_slice(), None).unwrap();
+        let signature = Signature::from(decoded_signature);
         Self {
             use_internal: false,
             quantity_in,
             quantity_out,
-            asset_in_index,
-            asset_out_index,
+            max_gas_asset_0: 0,
+            gas_used_asset_0: 0,
+            pairs_index,
+            zero_for_1,
             recipient,
-            hook_data,
             signature
         }
     }
@@ -91,16 +94,19 @@ pub enum OrderQuantities {
 
 #[derive(Debug, PadeEncode, PadeDecode)]
 pub struct UserOrder {
-    pub use_internal:        bool,
-    pub pair_index:          u16,
-    pub min_price:           alloy::primitives::U256,
-    pub recipient:           Option<Address>,
-    pub hook_data:           Option<Bytes>,
-    pub a_to_b:              bool,
-    pub standing_validation: Option<StandingValidation>,
-    pub order_quantities:    OrderQuantities,
-    pub exact_in:            bool,
-    pub signature:           Bytes
+    pub ref_id:               u32,
+    pub use_internal:         bool,
+    pub pair_index:           u16,
+    pub min_price:            alloy::primitives::U256,
+    pub recipient:            Option<Address>,
+    pub hook_data:            Option<Bytes>,
+    pub zero_for_one:         bool,
+    pub standing_validation:  Option<StandingValidation>,
+    pub order_quantities:     OrderQuantities,
+    pub max_extra_fee_asset0: u128,
+    pub extra_fee_asset0:     u128,
+    pub exact_in:             bool,
+    pub signature:            Bytes
 }
 
 impl UserOrder {
@@ -132,16 +138,19 @@ impl UserOrder {
             GroupedVanillaOrder::Standing(ref o) => o.hook_data().clone()
         };
         Self {
-            a_to_b: order.is_bid,
-            exact_in: false,
-            hook_data: Some(hook_data),
-            min_price: *order.price(),
-            order_quantities,
+            ref_id: 0,
+            use_internal: false,
             pair_index,
+            min_price: *order.price(),
             recipient: None,
-            signature: order.signature().clone(),
+            hook_data: Some(hook_data),
+            zero_for_one: !order.is_bid,
             standing_validation: None,
-            use_internal: false
+            order_quantities,
+            max_extra_fee_asset0: 0,
+            extra_fee_asset0: 0,
+            exact_in: false,
+            signature: order.signature().clone()
         }
     }
 }
@@ -202,7 +211,7 @@ impl AngstromBundle {
         pairs.push(pair);
 
         // Get our list of user orders, if we have any
-        top_of_block_orders.push(TopOfBlockOrder::of(user_order, t0_idx, t1_idx));
+        top_of_block_orders.push(TopOfBlockOrder::of(user_order, 0));
 
         Ok(Self::new(
             asset_builder.get_asset_array(),
@@ -278,6 +287,7 @@ impl AngstromBundle {
 
         // Walk through our solutions to add them to the structure
         for solution in proposal.solutions.iter() {
+            println!("Processing solution");
             // Get the information for the pool or skip this solution if we can't find a
             // pool for it
             let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
@@ -286,6 +296,7 @@ impl AngstromBundle {
                 warn!("Skipped a solution as we couldn't find a pool for it: {:?}", solution);
                 continue;
             };
+            println!("Processing pair {} - {}", t0, t1);
             // Make sure the involved assets are in our assets array and we have the
             // appropriate asset index for them
             let t0_idx = asset_builder.add_or_get_asset(*t0) as u16;
@@ -314,9 +325,9 @@ impl AngstromBundle {
                 .as_ref()
                 .map(|tob| {
                     let swap = if tob.is_bid {
-                        (t1_idx, t0_idx, tob.quantityIn, tob.quantityOut)
+                        (t1_idx, t0_idx, tob.quantity_in, tob.quantity_out)
                     } else {
-                        (t0_idx, t1_idx, tob.quantityIn, tob.quantityOut)
+                        (t0_idx, t1_idx, tob.quantity_in, tob.quantity_out)
                     };
                     // We swallow an error here
                     let outcome = ToBOutcome::from_tob_and_snapshot(tob, snapshot).ok();
@@ -373,10 +384,10 @@ impl AngstromBundle {
                     AssetBuilderStage::TopOfBlock,
                     asset_in,
                     asset_out,
-                    tob.quantityIn,
-                    tob.quantityOut
+                    tob.quantity_in,
+                    tob.quantity_out
                 );
-                let contract_tob = TopOfBlockOrder::of(tob, asset_in_index, asset_out_index);
+                let contract_tob = TopOfBlockOrder::of(tob, pair_idx as u16);
                 top_of_block_orders.push(contract_tob);
             }
 

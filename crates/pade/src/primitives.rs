@@ -1,5 +1,5 @@
 use alloy::{
-    primitives::{aliases::I24, Address, Bytes, Signature, U256},
+    primitives::{aliases::I24, Address, Bytes, FixedBytes, Signature, U256},
     sol_types::SolValue
 };
 
@@ -75,8 +75,8 @@ macro_rules! prim_decode {
     };
 }
 
-prim_decode!(u8, u16, u64, i32, I24, U256, u128);
-use_alloy_default!(u16, u64, i32, I24, U256, u128, Address);
+prim_decode!(u8, u16, u32, u64, i32, I24, U256, u128);
+use_alloy_default!(u16, u32, u64, i32, I24, U256, u128, Address, FixedBytes<32>);
 
 impl PadeEncode for u8 {
     fn pade_encode(&self) -> Vec<u8> {
@@ -183,6 +183,30 @@ impl PadeDecode for Signature {
         *buf = &buf[65..];
 
         Ok(Signature::new(r, s, alloy::primitives::Parity::Parity(v != 0)))
+    }
+
+    fn pade_decode_with_width(
+        _: &mut &[u8],
+        _: usize,
+        _: Option<u8>
+    ) -> Result<Self, PadeDecodeError>
+    where
+        Self: Sized
+    {
+        unreachable!()
+    }
+}
+
+impl PadeDecode for FixedBytes<32> {
+    fn pade_decode(buf: &mut &[u8], _: Option<u8>) -> Result<Self, PadeDecodeError>
+    where
+        Self: Sized
+    {
+        let res: Vec<u8> = PadeDecode::pade_decode(buf, None)?;
+        if res.len() != 32 {
+            return Err(PadeDecodeError::InvalidSize)
+        }
+        Ok(FixedBytes::from_slice(&res))
     }
 
     fn pade_decode_with_width(

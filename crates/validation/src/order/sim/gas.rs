@@ -389,15 +389,13 @@ pub mod test {
         let address = user.address();
 
         let mut default = TopOfBlockOrder {
-            useInternal: false,
-            assetIn: WETH_ADDRESS,
-            assetOut: WETH_ADDRESS,
+            use_internal: false,
+            asset_in: WETH_ADDRESS,
+            asset_out: WETH_ADDRESS,
             recipient: address,
-            quantityIn: WEI_IN_ETHER.to(),
-            quantityOut: WEI_IN_ETHER.to(),
-            validForBlock: block,
-            hook: Address::ZERO,
-            hookPayload: alloy::primitives::Bytes::new(),
+            quantity_in: WEI_IN_ETHER.to(),
+            quantity_out: WEI_IN_ETHER.to(),
+            valid_for_block: block,
             ..Default::default()
         };
 
@@ -416,17 +414,18 @@ pub mod test {
         let address = user.address();
 
         let mut default = angstrom_types::sol_bindings::rpc_orders::ExactStandingOrder {
-            exactIn:     true,
-            amount:      WEI_IN_ETHER.to(),
-            minPrice:    U256::from(1u128),
-            useInternal: false,
-            assetIn:     WETH_ADDRESS,
-            assetOut:    WETH_ADDRESS,
-            recipient:   USER_WITH_FUNDS,
-            hook:        Address::ZERO,
-            hookPayload: alloy::primitives::Bytes::new(),
-            nonce:       0,
-            deadline:    Uint::<40, 1>::from_be_slice(
+            ref_id:               0,
+            max_extra_fee_asset0: 0,
+            exact_in:             true,
+            amount:               WEI_IN_ETHER.to(),
+            min_price:            U256::from(1u128),
+            use_internal:         false,
+            asset_in:             WETH_ADDRESS,
+            asset_out:            WETH_ADDRESS,
+            recipient:            USER_WITH_FUNDS,
+            hook_data:            alloy::primitives::Bytes::new(),
+            nonce:                0,
+            deadline:             Uint::<40, 1>::from_be_slice(
                 &(SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
                     + Duration::from_secs(1000))
                 .as_secs()

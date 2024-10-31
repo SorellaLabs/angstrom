@@ -1,4 +1,5 @@
 use alloy::primitives::Address;
+use itertools::Itertools;
 
 use super::{state::StageTracker, AssetArray};
 use crate::contract_payloads::Asset;
@@ -88,6 +89,7 @@ impl AssetBuilder {
                 }
                 asset
             })
+            .sorted_by_key(|a| a.addr)
             .collect()
     }
 }

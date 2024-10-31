@@ -1,13 +1,10 @@
+pub mod pool;
 pub mod preproposal;
 pub mod proposal;
 
-use angstrom_types::{
-    primitive::PoolId,
-    sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
-};
+use angstrom_types::sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData};
 
-use super::orders::{DistributionParameters, UserOrderBuilder};
-use crate::type_generator::orders::generate_order_distribution;
+use super::orders::UserOrderBuilder;
 
 pub fn generate_limit_order_set(
     count: usize,
@@ -25,23 +22,6 @@ pub fn generate_limit_order_set(
                 .build()
         })
         .collect()
-}
-
-pub fn generate_limit_order_distribution(
-    count: usize,
-    pool_id: PoolId,
-    block: u64
-) -> Vec<OrderWithStorageData<GroupedVanillaOrder>> {
-    let mut res = Vec::with_capacity(count * 2);
-    let (bidprice, askprice) = DistributionParameters::crossed_at(100_000_000.0);
-    let (bidquant, askquant) = DistributionParameters::fixed_at(100.0);
-    res.extend(
-        generate_order_distribution(true, count, bidprice, bidquant, pool_id, block).unwrap()
-    );
-    res.extend(
-        generate_order_distribution(false, count, askprice, askquant, pool_id, block).unwrap()
-    );
-    res
 }
 
 #[cfg(test)]

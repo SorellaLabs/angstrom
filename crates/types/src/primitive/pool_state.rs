@@ -1,9 +1,19 @@
-use alloy::primitives::{FixedBytes, Log};
-use alloy_primitives::Address;
+use alloy::{
+    primitives::{FixedBytes, Log},
+    sol_types::SolValue
+};
+use alloy_primitives::{keccak256, Address};
 
+use super::PoolKey;
 use crate::contract_bindings::pool_manager::PoolManager::Initialize;
 
 pub type PoolId = FixedBytes<32>;
+
+impl From<PoolKey> for PoolId {
+    fn from(value: PoolKey) -> Self {
+        keccak256(value.abi_encode_packed())
+    }
+}
 
 pub type PoolIdWithDirection = (bool, PoolId);
 

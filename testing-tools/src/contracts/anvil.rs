@@ -7,7 +7,8 @@ use alloy::{
         Identity, IpcConnect, RootProvider
     },
     pubsub::PubSubFrontend,
-    signers::local::PrivateKeySigner
+    signers::local::PrivateKeySigner,
+    transports::http::{Client, Http}
 };
 
 pub type AnvilWalletRpc = FillProvider<
@@ -26,6 +27,28 @@ pub type AnvilWalletRpc = FillProvider<
     >,
     RootProvider<PubSubFrontend>,
     PubSubFrontend,
+    Ethereum
+>;
+
+pub type LocalAnvilRpc = alloy::providers::fillers::FillProvider<
+    alloy::providers::fillers::JoinFill<
+        alloy::providers::fillers::JoinFill<
+            alloy::providers::Identity,
+            alloy::providers::fillers::JoinFill<
+                alloy::providers::fillers::GasFiller,
+                alloy::providers::fillers::JoinFill<
+                    alloy::providers::fillers::BlobGasFiller,
+                    alloy::providers::fillers::JoinFill<
+                        alloy::providers::fillers::NonceFiller,
+                        alloy::providers::fillers::ChainIdFiller
+                    >
+                >
+            >
+        >,
+        alloy::providers::fillers::WalletFiller<EthereumWallet>
+    >,
+    RootProvider<Http<Client>>,
+    Http<Client>,
     Ethereum
 >;
 

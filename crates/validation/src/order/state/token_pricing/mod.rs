@@ -133,7 +133,7 @@ impl TokenPriceGenerator {
                     .iter()
                     .map(|price| {
                         // need to flip. add 18 decimal precision then reciprocal
-                        U256::from(1e36 as u128) / price.price_1_over_0
+                        U256::from(1e18 as u128) / price.price_1_over_0
                     })
                     .sum::<U256>()
                     / U256::from(size)
@@ -322,5 +322,16 @@ pub mod test {
         prices.insert(FixedBytes::<32>::with_last_byte(4), queue);
 
         TokenPriceGenerator { cur_block: 0, prev_prices: prices, pair_to_pool: pairs_to_key }
+    }
+
+    #[test]
+    fn test_direct_conversion() {
+        let token_conversion = setup();
+        let rate = token_conversion
+            .get_eth_conversion_price(TOKEN2, TOKEN0)
+            .unwrap();
+        let expected_rate = U256::from(1e36) / U256::from(5e18);
+
+        assert_eq!(rate, expected_rate)
     }
 }

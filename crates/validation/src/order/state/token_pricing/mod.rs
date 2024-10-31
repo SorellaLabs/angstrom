@@ -232,3 +232,95 @@ impl TokenPriceGenerator {
         }
     }
 }
+
+#[cfg(test)]
+pub mod test {
+    use std::collections::{HashMap, VecDeque};
+
+    use alloy::{
+        node_bindings::WEI_IN_ETHER,
+        primitives::{Address, FixedBytes, U256}
+    };
+    use angstrom_types::pair_with_price::PairsWithPrice;
+    use revm::primitives::address;
+
+    use super::TokenPriceGenerator;
+
+    const TOKEN0: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
+    const TOKEN1: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc3");
+    const TOKEN2: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc1");
+    const TOKEN3: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc5");
+    const TOKEN4: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc0");
+
+    /// sets up pools with prices for all scenarios
+    fn setup() -> TokenPriceGenerator {
+        let mut pairs_to_key = HashMap::default();
+        // setup pair lookup
+
+        // pair 1 direct NOTE: case is where weth is token1
+        pairs_to_key.insert((TOKEN2, TOKEN0), FixedBytes::<32>::with_last_byte(1));
+
+        // pair 2 direct NOTE: case is where weth is token0
+        pairs_to_key.insert((TOKEN0, TOKEN1), FixedBytes::<32>::with_last_byte(2));
+
+        // multi-hop where token0 matches
+        pairs_to_key.insert((TOKEN2, TOKEN3), FixedBytes::<32>::with_last_byte(3));
+
+        // multi-hop where token1 matches
+        pairs_to_key.insert((TOKEN4, TOKEN1), FixedBytes::<32>::with_last_byte(4));
+
+        // setup price conversions
+        let mut prices = HashMap::default();
+
+        // assumes both 18 decimal
+        let pair1_rate = U256::from(5) * WEI_IN_ETHER;
+        let pair = PairsWithPrice {
+            token0:         TOKEN2,
+            token1:         TOKEN0,
+            block_num:      0,
+            price_1_over_0: pair1_rate
+        };
+        let queue = VecDeque::from([pair; 5]);
+        prices.insert(FixedBytes::<32>::with_last_byte(1), queue);
+
+        // assumes token1 is 6 decimals and token 0 is 18 with a conversion rate of 0.2
+        // gives us 200000
+        let pair2_rate = U256::from(200000);
+
+        let pair = PairsWithPrice {
+            token0:         TOKEN0,
+            token1:         TOKEN1,
+            block_num:      0,
+            price_1_over_0: pair2_rate
+        };
+        let queue = VecDeque::from([pair; 5]);
+        prices.insert(FixedBytes::<32>::with_last_byte(2), queue);
+
+        // simple conversion rate of 2/1 on 18 decimals
+        let pair3_rate = U256::from(2e18);
+
+        let pair = PairsWithPrice {
+            token0:         TOKEN2,
+            token1:         TOKEN3,
+            block_num:      0,
+            price_1_over_0: pair3_rate
+        };
+        let queue = VecDeque::from([pair; 5]);
+        prices.insert(FixedBytes::<32>::with_last_byte(3), queue);
+
+        // token 1 is 18 decimals, token 0 is 6 with a conversion rate of 1/8
+        let pair4_rate = U256::from(1e36) / U256::from(8e6);
+
+        let pair = PairsWithPrice {
+            token0:         TOKEN4,
+            token1:         TOKEN1,
+            block_num:      0,
+            price_1_over_0: pair4_rate
+        };
+
+        let queue = VecDeque::from([pair; 5]);
+        prices.insert(FixedBytes::<32>::with_last_byte(4), queue);
+
+        TokenPriceGenerator { cur_block: 0, prev_prices: prices, pair_to_pool: pairs_to_key }
+    }
+}

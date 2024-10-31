@@ -146,6 +146,7 @@ TRACK = False
 @contextlib.contextmanager
 def track(name: str):
     if not TRACK:
+        yield
         return
     before = time.perf_counter()
     yield

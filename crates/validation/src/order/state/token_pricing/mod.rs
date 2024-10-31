@@ -4,7 +4,6 @@ use std::{
 };
 
 use alloy::{
-    node_bindings::WEI_IN_ETHER,
     primitives::{address, Address, U256},
     providers::{Network, Provider},
     transports::Transport

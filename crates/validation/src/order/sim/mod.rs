@@ -10,7 +10,6 @@ use gas::OrderGasCalculations;
 use revm::primitives::ruint::aliases::U256;
 
 use super::state::token_pricing::TokenPriceGenerator;
-use crate::order::state::token_pricing::WETH_ADDRESS;
 
 mod gas;
 mod gas_inspector;

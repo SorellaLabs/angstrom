@@ -345,4 +345,24 @@ pub mod test {
         let expected_rate = U256::from(1e36) / U256::from(5e18);
         assert_eq!(rate, expected_rate)
     }
+
+    #[test]
+    fn test_multi_hop_where_token1_matches() {
+        let token_conversion = setup();
+        let rate = token_conversion
+            .get_eth_conversion_price(TOKEN4, TOKEN1)
+            .unwrap();
+
+        // hop 1 rate
+        // assumes token1 is 6 decimals and token 0 is 18 with a conversion rate of 0.2
+        // gives us 200000 TOKEN1 / WETH
+        //
+
+        // hop 2 rate
+        // token 1 is 18 decimals, token 0 is 6 with a conversion rate of 1/8
+        // let pair4_rate = U256::from(1e36) / U256::from(8e6);
+
+        let expected_rate = U256::from(1e36) / U256::from(5e18);
+        assert_eq!(rate, expected_rate)
+    }
 }

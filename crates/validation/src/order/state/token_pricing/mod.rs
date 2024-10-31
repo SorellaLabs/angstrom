@@ -66,7 +66,7 @@ impl TokenPriceGenerator {
 
                     for block_number in current_block - BLOCKS_TO_AVG_PRICE..=current_block {
                         let pool_data = pool_read
-                            .pool_data_for_block(block_number, provider)
+                            .pool_data_for_block(block_number, provider.clone())
                             .await
                             .expect("failed to load historical price for token price conversion");
                         let price = pool_data.get_raw_price();
@@ -82,7 +82,11 @@ impl TokenPriceGenerator {
                     (*pool_key, queue)
                 }
             })
-            .collect()
+            .fold(HashMap::default(), |mut acc, x| async {
+                let (key, prices) = x.await;
+                acc.insert(key, prices);
+                acc
+            })
             .await;
 
         Ok(Self { prev_prices: pools, cur_block: current_block, pair_to_pool })
@@ -111,11 +115,7 @@ impl TokenPriceGenerator {
     /// returns the conversion ratio of the pair to eth, this looks like
     /// non-weth / weth. This then allows for the simple calcuation of
     /// gas_in_wei * conversion price in order to get the used token_0
-    pub fn get_eth_conversion_price(
-        &self,
-        mut token_0: Address,
-        mut token_1: Address
-    ) -> Option<U256> {
+    pub fn get_eth_conversion_price(&self, token_0: Address, token_1: Address) -> Option<U256> {
         // should only be called if token_1 is weth or needs multi-hop as otherwise
         // conversion factor will be 1-1
         if token_1 == WETH_ADDRESS {

@@ -9,12 +9,14 @@ use std::{
 };
 
 use alloy::primitives::Address;
+use angstrom_types::pair_with_price::PairsWithPrice;
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
+use futures::StreamExt;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use order::state::{
     config::load_validation_config, db_state_utils::StateFetchUtils, pools::PoolsTracker
 };
-use reth_provider::CanonStateNotifications;
+use reth_provider::CanonStateNotificationStream;
 use tokio::sync::mpsc::unbounded_channel;
 use validator::Validator;
 
@@ -38,7 +40,7 @@ pub fn init_validation<
     db: DB,
     current_block: u64,
     angstrom_address: Option<Address>,
-    state_notification: CanonStateNotifications,
+    state_notification: CanonStateNotificationStream,
     uniswap_pools: SyncedUniswapPools
 ) -> ValidationClient
 where
@@ -64,8 +66,25 @@ where
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
         let sim = SimValidation::new(revm_lru.clone(), angstrom_address);
+
+        // load price update stream;
+        let update_stream = PairsWithPrice::into_price_update_stream(
+            angstrom_address.unwrap_or_default(),
+            state_notification
+        )
+        .boxed();
+
         let order_validator = rt.block_on(async move {
-            OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools, thread_pool).await
+            OrderValidator::new(
+                sim,
+                current_block,
+                pools,
+                fetch,
+                uniswap_pools,
+                thread_pool,
+                update_stream
+            )
+            .await
         });
 
         rt.block_on(async { Validator::new(validator_rx, order_validator).await })
@@ -83,8 +102,8 @@ pub fn init_validation_tests<
     uniswap_pools: SyncedUniswapPools,
     state: State,
     pool: Pool,
-
-    block_number: u64
+    block_number: u64,
+    state_notification: CanonStateNotificationStream
 ) -> (ValidationClient, Arc<DB>)
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
@@ -95,6 +114,14 @@ where
     let current_block = Arc::new(AtomicU64::new(block_number));
     let revm_lru = Arc::new(db);
     let task_db = revm_lru.clone();
+
+    // load price update stream;
+    let update_stream = PairsWithPrice::into_price_update_stream(
+        // TODO: set later.
+        Default::default(),
+        state_notification
+    )
+    .boxed();
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -109,7 +136,16 @@ where
         let sim = SimValidation::new(task_db, None);
 
         let order_validator = rt.block_on(async move {
-            OrderValidator::new(sim, current_block, pool, state, uniswap_pools, thread_pool).await
+            OrderValidator::new(
+                sim,
+                current_block,
+                pool,
+                state,
+                uniswap_pools,
+                thread_pool,
+                update_stream
+            )
+            .await
         });
 
         rt.block_on(Validator::new(rx, order_validator))

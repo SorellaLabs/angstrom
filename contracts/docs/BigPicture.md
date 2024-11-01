@@ -53,6 +53,10 @@ own *decrease* over time.
 Ethereum L1 Mainnet or canonical testnets with identical semantics.
 - **The `_CONTROLLER` is sound:** The controller will maintain the approved set of nodes such that
 the _economic security assumption_ and _sufficiently staked assumption_ is maintained over time
+- **Integrity of state dependencies:** Running off-chain the nodes of the Angstrom network expect to
+  be tightly coupled with builders meaning roughly it can expect that *most of the time* the way it
+  sees the chain will be the state when a bundle lands. This means that we assume DoS vectors from
+  modifying state dependencies e.g. ERC20 permits, token balances or hooks will be managed well.
 
 ### Core
 

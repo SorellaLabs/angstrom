@@ -9,6 +9,7 @@ base unit.
 - can only encode up to `N` of `X` => limited count of assets, pairs and orders is intentional 
 - can only specify output for partial orders
 - can add liquidity to disabled pools
+- can only configure 1 Uniswap AMM pool at a time
 
 ## Bundle Building Footguns
 - Liquidity positions do not include the upper bound, donating to the upper bound will not credit

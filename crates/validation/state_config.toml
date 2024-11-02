@@ -1,24 +1,3 @@
-[[approvals]]
-token = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-hash_method = "sol"
-slot_index = 4
-max_validation_per_user = 1
-
-[[approvals]]
-token = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-hash_method = "sol"
-slot_index = 4
-
-[[balances]]
-token = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-hash_method = "sol"
-slot_index = 3
-
-[[balances]]
-token = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-hash_method = "sol"
-slot_index = 3
-
 # assumes token 0 is always bid
 [[pools]]
 token0 = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"

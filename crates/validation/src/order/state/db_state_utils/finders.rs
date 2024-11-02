@@ -1,7 +1,7 @@
 // Given that the gas spec when fuzzing balances runs off the assumption
 // that all tokens are ERC-20 which all are written in solidity and don't
 // pack the balance / approval slots. we align to the same assumptions here.
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 
 use alloy::{
     primitives::{keccak256, Address, U256},
@@ -16,13 +16,13 @@ use revm::{
 };
 
 /// panics if we cannot find the slot for the given token
-fn find_slot_offset_for_balance<DB: revm::DatabaseRef>(db: Arc<DB>, token_address: Address) -> u64
+pub fn find_slot_offset_for_balance<DB: revm::DatabaseRef>(db: &DB, token_address: Address) -> u64
 where
     <DB as revm::DatabaseRef>::Error: Debug
 {
     let probe_address = Address::random();
 
-    let mut db = CacheDB::new(db.clone());
+    let mut db = CacheDB::new(db);
     let evm_handler = EnvWithHandlerCfg::default();
     let mut evm = revm::Evm::builder()
         .with_ref_db(db.clone())
@@ -61,14 +61,14 @@ where
 }
 
 /// panics if we cannot prove the slot for the given token
-fn find_slot_offset_for_approval<DB: revm::DatabaseRef>(db: Arc<DB>, token_address: Address) -> u64
+pub fn find_slot_offset_for_approval<DB: revm::DatabaseRef>(db: &DB, token_address: Address) -> u64
 where
     <DB as revm::DatabaseRef>::Error: Debug
 {
     let probe_user_address = Address::random();
     let probe_contract_address = Address::random();
 
-    let mut db = CacheDB::new(db.clone());
+    let mut db = CacheDB::new(db);
     let evm_handler = EnvWithHandlerCfg::default();
     let mut evm = revm::Evm::builder()
         .with_ref_db(db.clone())

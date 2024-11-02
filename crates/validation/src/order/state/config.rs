@@ -6,12 +6,6 @@ use eyre::eyre;
 use reth_revm::DatabaseRef;
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct DataFetcherConfig {
-    pub approvals: Vec<TokenApprovalSlot>,
-    pub balances:  Vec<TokenBalanceSlot>
-}
-
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct ValidationConfig {
     pub pools:                   Vec<PoolConfig>,
@@ -46,6 +40,10 @@ pub struct TokenBalanceSlot {
 }
 
 impl TokenBalanceSlot {
+    pub fn new(token: Address, slot_index: u8) -> Self {
+        Self { token, hash_method: HashMethod::Solidity, slot_index }
+    }
+
     pub fn generate_slot(&self, of: Address) -> eyre::Result<U256> {
         if !self.hash_method.is_solidity() {
             return Err(eyre::eyre!("current type of contract hashing is not supported"))
@@ -110,17 +108,6 @@ impl TokenApprovalSlot {
         db.storage_ref(self.token, self.generate_slot(user, contract)?)
             .map_err(|_| eyre!("failed to load approval slot"))
     }
-}
-
-#[cfg(not(feature = "testnet"))]
-pub fn load_data_fetcher_config(config_path: &Path) -> eyre::Result<DataFetcherConfig> {
-    let file = std::fs::read_to_string(config_path)?;
-    Ok(toml::from_str(&file)?)
-}
-
-#[cfg(feature = "testnet")]
-pub fn load_data_fetcher_config(_config_path: &Path) -> eyre::Result<DataFetcherConfig> {
-    Ok(DataFetcherConfig { approvals: vec![], balances: vec![] })
 }
 
 #[cfg(not(feature = "testnet"))]

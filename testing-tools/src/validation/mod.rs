@@ -19,7 +19,7 @@ use validation::{
         order_validator::OrderValidator,
         sim::SimValidation,
         state::{
-            config::{load_data_fetcher_config, load_validation_config, ValidationConfig},
+            config::{load_validation_config, ValidationConfig},
             db_state_utils::{nonces::Nonces, FetchUtils},
             pools::AngstromPoolsTracker
         }
@@ -52,14 +52,14 @@ where
     pub fn new(db: DB, uniswap_pools: SyncedUniswapPools) -> Self {
         let (tx, rx) = unbounded_channel();
         let config_path = Path::new("./state_config.toml");
-        let fetch_config = load_data_fetcher_config(config_path).unwrap();
         let validation_config = load_validation_config(config_path).unwrap();
-        tracing::debug!(?fetch_config, ?validation_config);
+
+        tracing::debug!(?validation_config);
         let current_block =
             Arc::new(AtomicU64::new(BlockNumReader::best_block_number(&db).unwrap()));
         let db = Arc::new(db);
 
-        let fetch = FetchUtils::new(Address::default(), fetch_config.clone(), db.clone());
+        let fetch = FetchUtils::new(Address::default(), db.clone());
         let pools = AngstromPoolsTracker::new(validation_config.pools.clone());
 
         let handle = tokio::runtime::Handle::current();

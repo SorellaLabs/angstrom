@@ -9,7 +9,6 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use alloy::primitives::{Address, U256};
 
 use self::{approvals::Approvals, balances::Balances, nonces::Nonces};
-use super::config::DataFetcherConfig;
 
 pub trait StateFetchUtils: Clone + Send + Unpin {
     fn is_valid_nonce(&self, user: Address, nonce: u64) -> bool;
@@ -95,23 +94,10 @@ where
 }
 
 impl<DB: revm::DatabaseRef> FetchUtils<DB> {
-    pub fn new(angstrom_address: Address, config: DataFetcherConfig, db: Arc<DB>) -> Self {
+    pub fn new(angstrom_address: Address, db: Arc<DB>) -> Self {
         Self {
-            approvals: Approvals::new(
-                angstrom_address,
-                config
-                    .approvals
-                    .into_iter()
-                    .map(|app| (app.token, app))
-                    .collect()
-            ),
-            balances: Balances::new(
-                config
-                    .balances
-                    .into_iter()
-                    .map(|bal| (bal.token, bal))
-                    .collect()
-            ),
+            approvals: Approvals::new(angstrom_address),
+            balances: Balances::new(),
             nonces: Nonces::new(angstrom_address),
             db
         }

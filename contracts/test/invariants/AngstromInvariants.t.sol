@@ -40,9 +40,8 @@ contract AngstromInvariantsTest is BaseTest {
 
         vm.prank(e.owner);
         e.uniV4 = new UniV4Inspector();
-        e.angstrom = OpenAngstrom(
-            deployAngstrom(type(OpenAngstrom).creationCode, e.uniV4, e.controller, e.feeMaster)
-        );
+        e.angstrom =
+            OpenAngstrom(deployAngstrom(type(OpenAngstrom).creationCode, e.uniV4, e.controller));
         e.assets = _fillAssets(new MockERC20[](TOTAL_ASSETS));
         e.mirrors = _fillAssets(new MockERC20[](TOTAL_ASSETS));
 

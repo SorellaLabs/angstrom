@@ -12,21 +12,32 @@ abstract contract HookDeployer is Test {
         return address(new Create2Factory());
     }
 
+    struct Create2Params {
+        uint256 packedFactoryLeadByte;
+        uint256 salt;
+        bytes32 initcodeHash;
+    }
+
     function deployHook(bytes memory initcode, uint160 flags, address factory)
         internal
         returns (bool success, address addr, bytes memory retdata)
     {
-        bytes32 initcodeHash = keccak256(initcode);
+        Create2Params memory params = Create2Params(
+            (uint256(0xff) << 160) | uint256(uint160(factory)), 0, keccak256(initcode)
+        );
 
-        uint256 salt = 0;
-        while (
-            uint160(addr = computeCreate2(factory, salt, initcodeHash)) & Hooks.ALL_HOOK_MASK
-                != flags
-        ) {
-            salt++;
+        while (true) {
+            assembly ("memory-safe") {
+                addr :=
+                    and(keccak256(add(params, 11), 85), 0xffffffffffffffffffffffffffffffffffffffff)
+            }
+            if (uint160(addr) & Hooks.ALL_HOOK_MASK == flags) break;
+            unchecked {
+                params.salt++;
+            }
         }
 
-        (success, retdata) = factory.call(abi.encodePacked(salt, initcode));
+        (success, retdata) = factory.call(abi.encodePacked(params.salt, initcode));
         if (success) {
             assertEq(
                 retdata,
@@ -38,16 +49,6 @@ abstract contract HookDeployer is Test {
                 revert(add(retdata, 0x20), mload(retdata))
             }
         }
-    }
-
-    function computeCreate2(address factory, uint256 salt, bytes32 initcodeHash)
-        internal
-        pure
-        returns (address)
-    {
-        return address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), factory, salt, initcodeHash))))
-        );
     }
 }
 

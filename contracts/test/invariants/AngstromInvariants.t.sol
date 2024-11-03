@@ -58,6 +58,7 @@ contract AngstromInvariantsTest is BaseTest {
 
         selectors.push(AngstromHandler.addLiquidity.selector);
         selectors.push(AngstromHandler.rewardTicks.selector);
+        selectors.push(AngstromHandler.removeLiquidity.selector);
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
@@ -121,6 +122,7 @@ contract AngstromInvariantsTest is BaseTest {
         // Compute position totals
         for (uint256 i = 0; i < adds.length; i++) {
             LiquidityAdd memory add = adds[i];
+            if (add.claimedRewards) continue;
             uint256 endIndex = min(rewards.length, add.rewardEndIndex);
             for (uint256 j = add.rewardStartIndex; j < endIndex; j++) {
                 TickReward memory reward = rewards[j];
@@ -128,7 +130,6 @@ contract AngstromInvariantsTest is BaseTest {
                     uint256 claiming = liquidityClaiming[j];
                     _positionTotals[add.key()].inc(
                         (reward.amount * add.liquidity).fullMulDiv(1 << 128, claiming)
-                            - add.claimedRewards
                     );
                 }
             }
@@ -154,7 +155,7 @@ contract AngstromInvariantsTest is BaseTest {
                 console.log("%s:", i);
                 console.log("  add.range: (%s, %s)", add.lowerTick.toStr(), add.upperTick.toStr());
                 console.log("  add.liquidity: %s", add.liquidity);
-                console.log("  add.rewardStartIndex: %s", add.rewardStartIndex);
+                console.log("  add.rewards: (%s, %s)", add.rewardStartIndex, add.rewardEndIndex);
                 console.log("  positionRewards: %s", positionRewards);
                 console.log("  expectedRewards: %s", expectedRewards);
             }

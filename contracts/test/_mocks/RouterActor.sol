@@ -2,15 +2,17 @@
 pragma solidity ^0.8.0;
 
 import {IUniV4, IPoolManager} from "../../src/interfaces/IUniV4.sol";
-import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
+import {BalanceDelta, toBalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>
 /// @notice Likely vulnerable, NOT FOR PRODUCTION USE.
 contract RouterActor is IUnlockCallback {
+    using FormatLib for *;
     using IUniV4 for IPoolManager;
     using SafeTransferLib for address;
 
@@ -79,6 +81,10 @@ contract RouterActor is IUnlockCallback {
         }
     }
 
+    function recycle(address asset) external {
+        asset.safeTransferAll(msg.sender);
+    }
+
     function transfer(address asset, address to, uint256 amount) external {
         asset.safeTransfer(to, amount);
     }
@@ -98,7 +104,13 @@ contract RouterActor is IUnlockCallback {
     {
         (BalanceDelta callerDelta, BalanceDelta feesAccrued) =
             uniV4.modifyLiquidity(key, params, "");
+
         _settle(key, callerDelta + feesAccrued);
+        if (params.liquidityDelta <= 0) {
+            int128 rewardDelta =
+                int128(uniV4.getDelta(address(this), Currency.unwrap(key.currency0)));
+            _settle(key.currency0, rewardDelta);
+        }
         return abi.encode(callerDelta, feesAccrued);
     }
 
@@ -113,7 +125,7 @@ contract RouterActor is IUnlockCallback {
                 uniV4.sync(currency);
                 Currency.unwrap(currency).safeTransfer(address(uniV4), uint128(-amount));
                 uniV4.settle();
-            } else if (amount > 0) {
+            } else if (0 < amount) {
                 uniV4.take(currency, address(this), uint128(amount));
             }
         }

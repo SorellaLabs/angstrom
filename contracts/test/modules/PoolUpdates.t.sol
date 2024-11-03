@@ -10,7 +10,7 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {UniV4Inspector} from "test/_view-ext/UniV4Inspector.sol";
-import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
+import {OpenAngstrom} from "test/_mocks/OpenAngstrom.sol";
 import {PoolGate} from "test/_helpers/PoolGate.sol";
 import {HookDeployer} from "test/_helpers/HookDeployer.sol";
 import {Position} from "v4-core/src/libraries/Position.sol";
@@ -28,7 +28,7 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
     using FormatLib for *;
 
     UniV4Inspector public uniV4;
-    ExtAngstrom public angstrom;
+    OpenAngstrom public angstrom;
     PoolGate public gate;
     PoolId public id;
     PoolId public refId;
@@ -54,7 +54,7 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
             poolKey(address(asset0), address(asset1), TICK_SPACING), startTick.getSqrtPriceAtTick()
         );
 
-        angstrom = ExtAngstrom(deployAngstrom(type(ExtAngstrom).creationCode, uniV4, gov));
+        angstrom = OpenAngstrom(deployAngstrom(type(OpenAngstrom).creationCode, uniV4, gov));
         id = PoolIdLibrary.toId(poolKey());
 
         vm.prank(gov);
@@ -194,7 +194,7 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
         view
         returns (uint256)
     {
-        return angstrom.positionRewards(id, owner, lowerTick, upperTick, bytes32(0), liquidity);
+        return angstrom.getScaledGrowth(id, owner, lowerTick, upperTick, bytes32(0), liquidity);
     }
 
     function removeLiquidity(int24 lowerTick, int24 upperTick, uint256 liquidity)

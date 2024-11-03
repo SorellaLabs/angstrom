@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
-import {ExtAngstrom} from "test/_view-ext/ExtAngstrom.sol";
+import {OpenAngstrom} from "test/_mocks/OpenAngstrom.sol";
 import {TopLevelAuth} from "src/modules/TopLevelAuth.sol";
 import {
     PoolConfigStore,
@@ -17,7 +17,7 @@ import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract TopLevelAuthTest is BaseTest {
-    ExtAngstrom angstrom;
+    OpenAngstrom angstrom;
     address controller;
 
     uint256 constant TOTAL_ASSETS = 32;
@@ -25,8 +25,8 @@ contract TopLevelAuthTest is BaseTest {
 
     function setUp() public {
         controller = makeAddr("controller");
-        angstrom = ExtAngstrom(
-            deployAngstrom(type(ExtAngstrom).creationCode, IPoolManager(address(0)), controller)
+        angstrom = OpenAngstrom(
+            deployAngstrom(type(OpenAngstrom).creationCode, IPoolManager(address(0)), controller)
         );
 
         assets[0] = makeAddr("asset_0");

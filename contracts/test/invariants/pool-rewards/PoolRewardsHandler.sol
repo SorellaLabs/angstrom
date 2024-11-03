@@ -5,7 +5,7 @@ import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {PRNG} from "super-sol/collections/PRNG.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
-import {ExtAngstrom} from "../../_view-ext/ExtAngstrom.sol";
+import {OpenAngstrom} from "test/_mocks/OpenAngstrom.sol";
 import {UniV4Inspector} from "test/_view-ext/UniV4Inspector.sol";
 import {PoolGate} from "test/_helpers/PoolGate.sol";
 import {TickLib} from "src/libraries/TickLib.sol";
@@ -38,7 +38,7 @@ contract PoolRewardsHandler is BaseTest {
     using RewardLib for TickReward[];
 
     UniV4Inspector public immutable uniV4;
-    ExtAngstrom public immutable angstrom;
+    OpenAngstrom public immutable angstrom;
     PoolGate public immutable gate;
     PoolId public immutable id;
     PoolId public immutable refId;
@@ -56,7 +56,7 @@ contract PoolRewardsHandler is BaseTest {
 
     constructor(
         UniV4Inspector uniV4_,
-        ExtAngstrom angstrom_,
+        OpenAngstrom angstrom_,
         PoolGate gate_,
         PoolId id_,
         PoolId refId_,
@@ -304,6 +304,6 @@ contract PoolRewardsHandler is BaseTest {
         (tob.assetIn, tob.assetOut) =
             zeroForOne ? (address(asset0), address(asset1)) : (address(asset1), address(asset0));
         tob.validForBlock = u64(block.number);
-        sign(rewarder, tob.meta, angstrom.hashTyped(tob.hash()));
+        sign(rewarder, tob.meta, erc712Hash(computeDomainSeparator(address(angstrom)), tob.hash()));
     }
 }

@@ -1,4 +1,4 @@
-# Angstrom Contracts: The Big Picture
+# Overview
 
 ## Angstrom
 
@@ -87,7 +87,6 @@ Bundle processing proceeds in the following stages:
 7. Settle remaining deltas with Uniswap
 8. Emit collected fee summary event
 
-
 #### Intra Bundle Accounting
 
 To ensure the contract remains solvent the [`DeltaTracker`](../src/types/DeltaTracker.sol) keeps
@@ -101,6 +100,9 @@ The _solvency_ invariant it maintains for every asset $\alpha$ is:
 Here a visualization of how each action in a bundle is accountd for:
 
 ![](./assets/angstrom-accounting.png)
+
+A component of general solvency that the core contract does not directly guarantee is amounts
+related to limit order fees (fees accrued via `feeInE6` & `maxExtraF`).
 
 #### Pool Config Store
 

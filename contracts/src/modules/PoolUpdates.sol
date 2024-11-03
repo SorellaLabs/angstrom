@@ -31,8 +31,8 @@ import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 abstract contract PoolUpdates is
     UniConsumer,
     GrowthOutsideUpdater,
-    Settlement,
     TopLevelAuth,
+    Settlement,
     IBeforeAddLiquidityHook,
     IBeforeRemoveLiquidityHook
 {

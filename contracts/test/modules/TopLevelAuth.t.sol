@@ -16,7 +16,7 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract PoolConfigStoreTest is BaseTest {
+contract TopLevelAuthTest is BaseTest {
     ExtAngstrom angstrom;
     address controller;
 
@@ -192,6 +192,29 @@ contract PoolConfigStoreTest is BaseTest {
         vm.expectRevert(TopLevelAuth.NotController.selector);
         if (asset0 > asset1) (asset0, asset1) = (asset1, asset0);
         angstrom.configurePool(asset0, asset1, tickSpacing, feeInE6);
+    }
+
+    function test_fuzzing_prevents_nonControllerSettingController(
+        address imposterController,
+        address newController
+    ) public {
+        vm.assume(imposterController != controller);
+        vm.prank(imposterController);
+        vm.expectRevert(TopLevelAuth.NotController.selector);
+        angstrom.setController(newController);
+    }
+
+    function test_fuzzing_canChangeController(address newController) public {
+        assertEq(rawGetController(address(angstrom)), controller);
+        vm.prank(controller);
+        angstrom.setController(newController);
+        assertEq(rawGetController(address(angstrom)), newController);
+
+        if (controller != newController) {
+            vm.prank(controller);
+            vm.expectRevert(TopLevelAuth.NotController.selector);
+            angstrom.setController(controller);
+        }
     }
 
     function test_fuzzing_prevents_providingDuplicate(

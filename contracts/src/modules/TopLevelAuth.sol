@@ -8,15 +8,20 @@ import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {POOL_FEE} from "src/Constants.sol";
+import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 
 /// @author philogy <https://github.com/philogy>
 abstract contract TopLevelAuth is UniConsumer {
+    using SafeTransferLib for address;
+
     error NotController();
     error OnlyOncePerBlock();
     error NotNode();
     error IndexMayHaveChanged();
 
-    address internal immutable _CONTROLLER;
+    /// @dev Contract that manages all special privileges for contract (setting new nodes,
+    /// configuring pools, pulling fees).
+    address internal _controller;
 
     mapping(address => bool) internal _isNode;
 
@@ -24,7 +29,12 @@ abstract contract TopLevelAuth is UniConsumer {
     PoolConfigStore internal _configStore;
 
     constructor(address controller) {
-        _CONTROLLER = controller;
+        _controller = controller;
+    }
+
+    function setController(address newController) public {
+        _onlyController();
+        _controller = newController;
     }
 
     function initializePool(
@@ -49,6 +59,13 @@ abstract contract TopLevelAuth is UniConsumer {
         _configStore = store.removeIntoNew(storeIndex);
     }
 
+    /// @dev Function to allow controller to pull an arbitrary amount of tokens from the contract.
+    /// Assumed to be accrued validator fees.
+    function pullFee(address asset, uint256 amount) external {
+        _onlyController();
+        asset.safeTransfer(msg.sender, amount);
+    }
+
     /// @dev Allow controller to set parameters of a given pool.
     function configurePool(address assetA, address assetB, uint16 tickSpacing, uint24 feeInE6)
         external
@@ -66,7 +83,7 @@ abstract contract TopLevelAuth is UniConsumer {
     }
 
     function _onlyController() internal view {
-        if (msg.sender != _CONTROLLER) revert NotController();
+        if (msg.sender != _controller) revert NotController();
     }
 
     /// @dev Validates that the caller is a node and that the last call is at least 1 block old.

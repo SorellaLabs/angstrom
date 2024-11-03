@@ -15,7 +15,7 @@ import {console} from "forge-std/console.sol";
 contract ExtAngstrom is Angstrom {
     using IUniV4 for IPoolManager;
 
-    constructor(IPoolManager uniV4, address governance) Angstrom(uniV4, governance, address(0)) {}
+    constructor(IPoolManager uniV4, address controller) Angstrom(uniV4, controller) {}
 
     function lastBlockUpdated() public view returns (uint64) {
         return _lastBlockUpdated;

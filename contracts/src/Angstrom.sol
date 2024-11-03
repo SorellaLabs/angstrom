@@ -30,7 +30,6 @@ contract Angstrom is
     EIP712,
     OrderInvalidation,
     Settlement,
-    TopLevelAuth,
     PoolUpdates,
     IUnlockCallback,
     PermitSubmitterHook
@@ -38,10 +37,9 @@ contract Angstrom is
     error LimitViolated();
     error ToBGasUsedAboveMax();
 
-    constructor(IPoolManager uniV4, address controller, address feeMaster)
+    constructor(IPoolManager uniV4, address controller)
         UniConsumer(uniV4)
         TopLevelAuth(controller)
-        Settlement(feeMaster)
     {
         _checkAngstromHookFlags();
     }

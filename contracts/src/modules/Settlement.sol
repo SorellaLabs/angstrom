@@ -14,19 +14,10 @@ abstract contract Settlement is UniConsumer {
     using SafeTransferLib for address;
 
     error BundlDeltaUnresolved(address asset);
-    error NotFeeMaster();
-
-    /// @dev Address that can pull arbitrary funds from the contract, assumed to be trustless,
-    /// log proof checking contract.
-    address internal immutable FEE_MASTER;
 
     DeltaTracker internal bundleDeltas;
 
     mapping(address asset => mapping(address owner => uint256 balance)) internal _balances;
-
-    constructor(address feeMaster) {
-        FEE_MASTER = feeMaster;
-    }
 
     /// @notice Pulls tokens from the caller and credits them to the caller for trading.
     /// @dev WARN: Assumes `asset` charges 0 fees upon transfers and is not rebasing.
@@ -50,13 +41,6 @@ abstract contract Settlement is UniConsumer {
     function withdraw(address asset, address to, uint256 amount) external {
         _balances[asset][msg.sender] -= amount;
         asset.safeTransfer(to, amount);
-    }
-
-    /// @dev Function to allow `FEE_MASTER` to pull an arbitrary amount of tokens from the contract.
-    /// Assumed to be accrued validator fees.
-    function pullFee(address asset, uint256 amount) external {
-        if (msg.sender != FEE_MASTER) revert NotFeeMaster();
-        asset.safeTransfer(msg.sender, amount);
     }
 
     function _takeAssets(AssetArray assets) internal {

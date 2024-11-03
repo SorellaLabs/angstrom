@@ -24,7 +24,6 @@ contract MockRewardsManager is UniConsumer, Settlement, PoolUpdates {
     constructor(IPoolManager uniV4, address controller)
         UniConsumer(uniV4)
         TopLevelAuth(controller)
-        Settlement(address(0))
     {
         _checkAngstromHookFlags();
     }

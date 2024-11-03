@@ -23,9 +23,7 @@ import {console} from "forge-std/console.sol";
 contract OpenAngstrom is Angstrom {
     using IUniV4 for IPoolManager;
 
-    constructor(IPoolManager uniV4, address controller, address feeMaster)
-        Angstrom(uniV4, controller, feeMaster)
-    {}
+    constructor(IPoolManager uniV4, address controller) Angstrom(uniV4, controller) {}
 
     function nodeBundleLock() public {
         _nodeBundleLock();

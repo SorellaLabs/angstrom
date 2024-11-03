@@ -28,12 +28,13 @@ import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 contract BaseTest is Test, HookDeployer {
     using FormatLib for *;
 
-    bool constant DEBUG = false;
+    bool constant DEBUG = true;
 
     uint256 internal constant REAL_TIMESTAMP = 1721652639;
 
-    bytes32 internal constant ANG_BALANCES_SLOT = bytes32(uint256(0x2));
-    bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x4));
+    bytes32 internal constant ANG_CONTROLLER_SLOT = bytes32(uint256(0x1));
+    bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x3));
+    bytes32 internal constant ANG_BALANCES_SLOT = bytes32(uint256(0x5));
 
     function pm(address addr) internal pure returns (IPoolManager) {
         return IPoolManager(addr);
@@ -41,20 +42,11 @@ contract BaseTest is Test, HookDeployer {
 
     function deployAngstrom(bytes memory initcode, IPoolManager uni, address controller)
         internal
-        returns (address)
+        returns (address addr)
     {
-        return deployAngstrom(initcode, uni, controller, address(0));
-    }
-
-    function deployAngstrom(
-        bytes memory initcode,
-        IPoolManager uni,
-        address controller,
-        address feeMaster
-    ) internal returns (address addr) {
         bool success;
         (success, addr,) = deployHook(
-            bytes.concat(initcode, abi.encode(uni, controller, feeMaster)),
+            bytes.concat(initcode, abi.encode(uni, controller)),
             ANGSTROM_HOOK_FLAGS,
             CREATE2_FACTORY
         );
@@ -63,6 +55,10 @@ contract BaseTest is Test, HookDeployer {
 
     function rawGetConfigStore(address angstrom) internal view returns (address) {
         return address(bytes20(vm.load(angstrom, ANG_CONFIG_STORE_SLOT) << 32));
+    }
+
+    function rawGetController(address angstrom) internal view returns (address) {
+        return address(uint160(uint256(vm.load(angstrom, ANG_CONTROLLER_SLOT))));
     }
 
     function rawGetBalance(address angstrom, address asset, address owner)

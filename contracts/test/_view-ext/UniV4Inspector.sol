@@ -12,6 +12,8 @@ import {Slot0} from "v4-core/src/types/Slot0.sol";
 contract UniV4Inspector is PoolManager {
     using Position for mapping(bytes32 => Position.State);
 
+    constructor() PoolManager(address(0)) {}
+
     function getPool(PoolId id)
         external
         view

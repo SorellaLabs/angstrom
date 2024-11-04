@@ -34,7 +34,7 @@ contract SettlementTest is BaseTest {
     bytes32 domainSeparator;
 
     function setUp() public {
-        uniV4 = new PoolManager();
+        uniV4 = new PoolManager(address(0));
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uniV4, controller));
         domainSeparator = computeDomainSeparator(address(angstrom));
         uint256 pairs = 40;

@@ -28,7 +28,7 @@ contract UserOrderBenchmarkTest is BaseTest {
     Account user;
 
     function setUp() public {
-        uni = new PoolManager();
+        uni = new PoolManager(address(0));
         angstrom = OpenAngstrom(deployAngstrom(type(OpenAngstrom).creationCode, uni, controller));
         (asset0, asset1) = deployTokensSorted();
         vm.startPrank(controller);

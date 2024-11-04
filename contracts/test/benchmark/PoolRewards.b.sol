@@ -51,7 +51,7 @@ contract PoolRewardsTest is BaseTest {
     function setUp() public {
         searcher = makeTrader("searcher");
 
-        uni = new PoolManager();
+        uni = new PoolManager(address(0));
         gate = new PoolGate(address(uni));
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, controller));
         gate.setHook(address(angstrom));

@@ -21,7 +21,7 @@ contract TestnetSetupScript is Test, Script {
 
         vm.startBroadcast(key);
 
-        PoolManager uniV4 = new PoolManager();
+        PoolManager uniV4 = new PoolManager(address(0));
         console.log("Uniswap V4: %s", address(uniV4));
 
         PoolGate gate = new PoolGate(address(uniV4));

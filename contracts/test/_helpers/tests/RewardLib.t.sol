@@ -22,6 +22,8 @@ contract FakeUni is PoolManager {
 
     mapping(int24 => uint128) public tickLiq;
 
+    constructor() PoolManager(address(0)) {}
+
     function setCurrentTick(int24 tick) public {
         _pools[id].slot0 = _pools[id].slot0.setTick(tick);
         _pools[id].liquidity = tickLiq[tick.normalizeUnchecked(TICK_SPACING)];

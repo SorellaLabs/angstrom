@@ -8,7 +8,7 @@ import {Pool} from "v4-core/src/libraries/Pool.sol";
 import {Position} from "v4-core/src/libraries/Position.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract InvasiveV4 is PoolManager {
+contract InvasiveV4 is PoolManager(address(0)) {
     using Position for mapping(bytes32 => Position.State);
 
     function getPoolState(PoolId id)

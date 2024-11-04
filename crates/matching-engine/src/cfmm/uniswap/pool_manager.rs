@@ -46,7 +46,7 @@ where
     latest_synced_block: u64,
     state_change_buffer: usize,
     state_change_cache:  Arc<RwLock<StateChangeCache<Loader, A>>>,
-    pub provider:        Arc<P>,
+    provider:            Arc<P>,
     sync_started:        AtomicBool
 }
 

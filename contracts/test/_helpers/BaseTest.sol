@@ -269,6 +269,18 @@ contract BaseTest is Test, HookDeployer {
         targetMeta.signature = abi.encodePacked(v, r, s);
     }
 
+    function uintArray(bytes memory encoded) internal pure returns (uint256[] memory) {
+        uint256 length = encoded.length / 32;
+        return
+            abi.decode(bytes.concat(bytes32(uint256(0x20)), bytes32(length), encoded), (uint256[]));
+    }
+
+    function addressArray(bytes memory encoded) internal pure returns (address[] memory) {
+        uint256 length = encoded.length / 32;
+        return
+            abi.decode(bytes.concat(bytes32(uint256(0x20)), bytes32(length), encoded), (address[]));
+    }
+
     function erc712Hash(bytes32 domainSeparator, bytes32 structHash)
         internal
         pure

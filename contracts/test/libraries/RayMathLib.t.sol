@@ -19,43 +19,43 @@ contract RayMathLibTest is BaseTest {
     }
 
     function test_mulRay() public pure {
-        assertEq(0.mulRay(0), 0);
-        assertEq(3.mulRay(0.5e27), 1);
-        assertEq(1e18.mulRay(0.5e27), 0.5e18);
-        assertEq(1.1e18.mulRay(3.5e27), 3.85e18);
-        assertEq(6.0e4.mulRay(0.166666666666666666666666666e27), 0.9999e4);
+        assertEq(0.mulRayDown(0), 0);
+        assertEq(3.mulRayDown(0.5e27), 1);
+        assertEq(1e18.mulRayDown(0.5e27), 0.5e18);
+        assertEq(1.1e18.mulRayDown(3.5e27), 3.85e18);
+        assertEq(6.0e4.mulRayDown(0.166666666666666666666666666e27), 0.9999e4);
     }
 
     function test_fuzzing_mulRay_zero(uint256 x) public pure {
-        assertEq(0.mulRay(x), 0);
-        assertEq(x.mulRay(0), 0);
+        assertEq(0.mulRayDown(x), 0);
+        assertEq(x.mulRayDown(0), 0);
     }
 
     function test_fuzzing_invRay_divOne_equivalence(uint256 x) public pure {
         x = bound(x, 1, type(uint256).max);
-        uint256 y1 = RayMathLib.RAY.divRay(x);
+        uint256 y1 = RayMathLib.RAY.divRayDown(x);
         uint256 y2 = x.invRayUnchecked();
         assertEq(y1, y2);
     }
 
     function test_divRay() public pure {
-        assertEq(3.divRay(0.5e27), 6);
-        assertEq(3200.divRay(3.2e27), 1000);
-        assertEq(1e18.divRay(uint256(1.0e27) / 7), 7.0e18);
-        assertEq(34.287e18.divRay(1.00023879e27), 34.278814561870770878e18);
+        assertEq(3.divRayDown(0.5e27), 6);
+        assertEq(3200.divRayDown(3.2e27), 1000);
+        assertEq(1e18.divRayDown(uint256(1.0e27) / 7), 7.0e18);
+        assertEq(34.287e18.divRayDown(1.00023879e27), 34.278814561870770878e18);
     }
 
     function test_fuzzing_divRay_prevents_divide_by_zero(uint256 x) public {
         x = bound(x, 0, type(uint256).max / RayMathLib.RAY);
         vm.expectRevert(stdError.divisionError);
-        x.divRay(0);
+        x.divRayDown(0);
     }
 
     function test_fuzzing_mulRay_prevents_overflow(uint256 x, uint256 y) public {
         x = bound(x, 2, type(uint256).max);
         y = bound(y, type(uint256).max / x + 1, type(uint256).max);
         vm.expectRevert(stdError.arithmeticError);
-        x.mulRay(y);
+        x.mulRayDown(y);
     }
 
     function tryMulRay(uint256 x, uint256 y) internal view returns (bool, bytes memory, uint256) {
@@ -67,10 +67,10 @@ contract RayMathLibTest is BaseTest {
     }
 
     function _extMulRay(uint256 x, uint256 y) external pure returns (uint256) {
-        return x.mulRay(y);
+        return x.mulRayDown(y);
     }
 
     function _extDivRay(uint256 x, uint256 y) external pure returns (uint256) {
-        return x.divRay(y);
+        return x.divRayDown(y);
     }
 }

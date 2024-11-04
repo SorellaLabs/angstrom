@@ -63,12 +63,24 @@ library PriceLib {
         return AmountB.unwrap(amount);
     }
 
-    function convert(PriceAB priceAB, AmountA amountA) internal pure returns (AmountB) {
-        return AmountB.wrap(amountA.into().divRay(priceAB.into()));
+    /// @dev Convert an amount in `A` to `B` based on `priceAB`, rounding the result *down*.
+    function convertDown(PriceAB priceAB, AmountA amountA) internal pure returns (AmountB) {
+        return AmountB.wrap(amountA.into().divRayDown(priceAB.into()));
     }
 
-    function convert(PriceAB priceAB, AmountB amountB) internal pure returns (AmountA) {
-        return AmountA.wrap(amountB.into().mulRay(priceAB.into()));
+    /// @dev Convert an amount in `A` to `B` based on `priceAB`, rounding the result *up*.
+    function convertUp(PriceAB priceAB, AmountA amountA) internal pure returns (AmountB) {
+        return AmountB.wrap(amountA.into().divRayUp(priceAB.into()));
+    }
+
+    /// @dev Convert an amount in `B` to `A` based on `priceAB`, rounding the result *down*.
+    function convertDown(PriceAB priceAB, AmountB amountB) internal pure returns (AmountA) {
+        return AmountA.wrap(amountB.into().mulRayDown(priceAB.into()));
+    }
+
+    /// @dev Convert an amount in `B` to `A` based on `priceAB`, rounding the result *up*.
+    function convertUp(PriceAB priceAB, AmountB amountB) internal pure returns (AmountA) {
+        return AmountA.wrap(amountB.into().mulRayDown(priceAB.into()));
     }
 
     /// @dev Scale `price` by `(1 - feeE6)` such that `feeE6/1e6` A is received for every B.

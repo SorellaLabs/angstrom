@@ -186,18 +186,24 @@ library UserOrderBufferLib {
             self.maxExtraFeeAsset0 = maxExtraFeeAsset0;
         }
 
-        if (variant.specifyingInput()) {
-            quantityIn = AmountIn.wrap(quantity);
-            quantityOut = price.convert(quantityIn);
-        } else {
-            quantityOut = AmountOut.wrap(quantity);
-            quantityIn = price.convert(quantityOut);
-        }
-
         if (variant.zeroForOne()) {
-            quantityIn = quantityIn + AmountIn.wrap(extraFeeAsset0);
+            AmountIn fee = AmountIn.wrap(extraFeeAsset0);
+            if (variant.specifyingInput()) {
+                quantityIn = AmountIn.wrap(quantity);
+                quantityOut = price.convertDown(quantityIn - fee);
+            } else {
+                quantityOut = AmountOut.wrap(quantity);
+                quantityIn = price.convertUp(quantityOut) + fee;
+            }
         } else {
-            quantityOut = quantityOut - AmountOut.wrap(extraFeeAsset0);
+            AmountOut fee = AmountOut.wrap(extraFeeAsset0);
+            if (variant.specifyingInput()) {
+                quantityIn = AmountIn.wrap(quantity);
+                quantityOut = price.convertDown(quantityIn) - fee;
+            } else {
+                quantityOut = AmountOut.wrap(quantity);
+                quantityIn = price.convertUp(quantityOut + fee);
+            }
         }
 
         return (reader, quantityIn, quantityOut);

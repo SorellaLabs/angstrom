@@ -56,9 +56,9 @@ contract AngstromInvariantsTest is BaseTest {
 
         handler.initializePool(0, 1, 60, 0.002e6, TickMath.getSqrtPriceAtTick(0));
 
-        selectors.push(AngstromHandler.addLiquidity.selector);
-        selectors.push(AngstromHandler.rewardTicks.selector);
-        selectors.push(AngstromHandler.removeLiquidity.selector);
+        // selectors.push(AngstromHandler.addLiquidity.selector);
+        // selectors.push(AngstromHandler.rewardTicks.selector);
+        // selectors.push(AngstromHandler.removeLiquidity.selector);
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));

@@ -13,6 +13,9 @@ co-processing logic
 - use of custom `controller` auth logic instead of standard `Ownable`: standard `Ownable` typically
   tracks events as well as a redundant `renounceOwnership` function which we do not need for our use
   case.
+- while the contract guarantees a common price (not including fees) for any pair `A:B` if you have
+pairs `A:B`, `B:C` & `A:C` it **is not** guaranteed that you'll have the same price for `A:C` by
+going across `A:B x B:C` & `A:C`
 
 ## Bundle Building Footguns
 - **Can burn by donating to upper bound**

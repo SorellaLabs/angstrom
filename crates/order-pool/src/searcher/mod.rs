@@ -35,6 +35,16 @@ impl SearcherPool {
         }
     }
 
+    pub fn get_order(
+        &self,
+        pool_id: PoolId,
+        order_id: alloy::primitives::FixedBytes<32>
+    ) -> Option<OrderWithStorageData<TopOfBlockOrder>> {
+        self.searcher_orders
+            .get(&pool_id)
+            .and_then(|pool| pool.get_order(order_id))
+    }
+
     pub fn add_searcher_order(
         &mut self,
         order: OrderWithStorageData<TopOfBlockOrder>

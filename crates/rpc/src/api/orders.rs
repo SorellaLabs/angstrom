@@ -1,9 +1,12 @@
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256};
 use angstrom_types::{
     primitive::Signature,
-    sol_bindings::rpc_orders::{
-        ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
-        TopOfBlockOrder
+    sol_bindings::{
+        grouped_orders::AllOrders,
+        rpc_orders::{
+            ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
+            TopOfBlockOrder
+        }
     }
 };
 use jsonrpsee::{
@@ -39,6 +42,9 @@ pub trait OrderApi {
 
     #[method(name = "sendExactFlashOrder")]
     async fn send_exact_flash_order(&self, order: ExactFlashOrder) -> RpcResult<bool>;
+
+    #[method(name = "pendingOrders")]
+    async fn pending_orders(&self, from: Address) -> RpcResult<Vec<AllOrders>>;
 
     #[method(name = "cancelOrder")]
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool>;

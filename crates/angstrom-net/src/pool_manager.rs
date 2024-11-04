@@ -42,7 +42,8 @@ pub struct PoolHandle {
 pub enum OrderCommand {
     // new orders
     NewOrder(OrderOrigin, AllOrders, tokio::sync::oneshot::Sender<OrderValidationResults>),
-    CancelOrder(Address, B256, tokio::sync::oneshot::Sender<bool>)
+    CancelOrder(Address, B256, tokio::sync::oneshot::Sender<bool>),
+    PendingOrders(Address, tokio::sync::oneshot::Sender<Vec<AllOrders>>)
 }
 
 impl PoolHandle {
@@ -69,6 +70,12 @@ impl OrderPoolHandle for PoolHandle {
 
     fn subscribe_orders(&self) -> Receiver<PoolManagerUpdate> {
         self.pool_manager_tx.subscribe()
+    }
+
+    fn pending_orders(&self, sender: Address) -> impl Future<Output = Vec<AllOrders>> + Send {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let _ = self.send(OrderCommand::PendingOrders(sender, tx)).is_ok();
+        rx.map(|res| res.unwrap_or_default())
     }
 
     fn cancel_order(&self, from: Address, order_hash: B256) -> impl Future<Output = bool> + Send {
@@ -249,6 +256,10 @@ where
             OrderCommand::CancelOrder(from, order_hash, receiver) => {
                 let res = self.order_indexer.cancel_order(from, order_hash);
                 let _ = receiver.send(res);
+            }
+            OrderCommand::PendingOrders(from, receiver) => {
+                let res = self.order_indexer.pending_orders_for_address(from);
+                let _ = receiver.send(res.into_iter().map(|o| o.order).collect());
             }
         }
     }

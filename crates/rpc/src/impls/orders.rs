@@ -16,7 +16,7 @@ use reth_tasks::TaskSpawner;
 use crate::{
     api::{CancelOrderRequest, OrderApiServer},
     types::{OrderSubscriptionKind, OrderSubscriptionResult},
-    OrderApiError::InvalidSignature
+    OrderApiError::SignatureRecoveryError
 };
 
 pub struct OrderApi<OrderPool, Spawner> {
@@ -61,15 +61,18 @@ where
         Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
+    async fn pending_orders(&self, from: Address) -> RpcResult<Vec<AllOrders>> {
+        Ok(self.pool.pending_orders(from).await)
+    }
+
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool> {
         let sender = request
             .signature
             .recover_signer_full_public_key(request.hash)
-            .map(|s| Address::from_raw_public_key(&*s));
-        if sender.is_err() {
-            return Err(InvalidSignature.into())
-        }
-        Ok(self.pool.cancel_order(sender.unwrap(), request.hash).await)
+            .map(|s| Address::from_raw_public_key(&*s))
+            .map_err(|_| SignatureRecoveryError)?;
+
+        Ok(self.pool.cancel_order(sender, request.hash).await)
     }
 
     async fn subscribe_orders(
@@ -109,13 +112,16 @@ where
 #[derive(Debug, thiserror::Error)]
 pub enum OrderApiError {
     #[error("invalid transaction signature")]
-    InvalidSignature
+    InvalidSignature,
+    #[error("failed to recover signer from signature")]
+    SignatureRecoveryError
 }
 
 impl From<OrderApiError> for jsonrpsee::types::ErrorObjectOwned {
     fn from(error: OrderApiError) -> Self {
         match error {
-            OrderApiError::InvalidSignature => invalid_params_rpc_err(error.to_string())
+            OrderApiError::InvalidSignature => invalid_params_rpc_err(error.to_string()),
+            OrderApiError::SignatureRecoveryError => invalid_params_rpc_err(error.to_string())
         }
     }
 }
@@ -190,6 +196,7 @@ mod tests {
         ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
         TopOfBlockOrder
     };
+    use futures::FutureExt;
     use order_pool::PoolManagerUpdate;
     use reth_tasks::TokioTaskExecutor;
     use tokio::sync::{
@@ -296,6 +303,15 @@ mod tests {
                 .send(OrderCommand::CancelOrder(from, order_hash, tx))
                 .is_ok();
             future::ready(true)
+        }
+
+        fn pending_orders(&self, address: Address) -> impl Future<Output = Vec<AllOrders>> + Send {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let _ = self
+                .sender
+                .send(OrderCommand::PendingOrders(address, tx))
+                .is_ok();
+            rx.map(|res| res.unwrap_or_default())
         }
     }
 }

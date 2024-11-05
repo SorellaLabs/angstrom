@@ -1,18 +1,13 @@
 use std::{collections::HashSet, fmt::Debug, net::SocketAddr, sync::Arc};
 
+use alloy::primitives::Address;
+use angstrom_types::primitive::PeerId;
 use parking_lot::RwLock;
 use reth_metrics::common::mpsc::MeteredPollSender;
 use reth_network::protocol::ProtocolHandler;
-use reth_network_peers::PeerId;
-use reth_primitives::Address;
-use reth_provider::StateProvider;
-use secp256k1::SecretKey;
-use tokio::{sync::mpsc::UnboundedReceiver, time::Duration};
+use tokio::time::Duration;
 
-use crate::{
-    SessionsConfig, Status, StatusState, StromConnectionHandler, StromNetworkHandle,
-    StromSessionMessage, VerificationSidecar
-};
+use crate::{StromConnectionHandler, StromSessionMessage, VerificationSidecar};
 
 const SESSION_COMMAND_BUFFER: usize = 100;
 /// The protocol handler that is used to announce the strom capability upon

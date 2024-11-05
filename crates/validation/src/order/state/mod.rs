@@ -1,25 +1,26 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use account::UserAccountProcessor;
-use alloy::primitives::{Address, B256, U256};
+use alloy::primitives::{Address, B256};
 use angstrom_types::{
     primitive::NewInitializedPool,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
 use db_state_utils::StateFetchUtils;
-use futures::{Stream, StreamExt};
+use matching_engine::cfmm::uniswap::{
+    pool_manager::SyncedUniswapPools,
+    tob::{calculate_reward, get_market_snapshot}
+};
 use parking_lot::RwLock;
 use pools::PoolsTracker;
 
 use super::{OrderValidation, OrderValidationResults};
-use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
 
 pub mod account;
 pub mod config;
 pub mod db_state_utils;
 pub mod pools;
-
-type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
+pub mod token_pricing;
 
 /// State validation is all validation that requires reading from the Ethereum
 /// database, these operations are:
@@ -27,54 +28,59 @@ type HookOverrides = HashMap<Address, HashMap<U256, U256>>;
 /// 2) checking token balances
 /// 3) checking token approvals
 /// 4) deals with possible pending state
-#[allow(dead_code)]
-#[derive(Clone)]
 pub struct StateValidation<Pools, Fetch> {
     /// tracks everything user related.
     user_account_tracker: Arc<UserAccountProcessor<Fetch>>,
     /// tracks all info about the current angstrom pool state.
-    pool_tacker:          Arc<RwLock<Pools>>
+    pool_tacker:          Arc<RwLock<Pools>>,
+    /// keeps up-to-date with the on-chain pool
+    uniswap_pools:        SyncedUniswapPools
+}
+
+impl<Pools, Fetch> Clone for StateValidation<Pools, Fetch> {
+    fn clone(&self) -> Self {
+        Self {
+            user_account_tracker: Arc::clone(&self.user_account_tracker),
+            pool_tacker:          Arc::clone(&self.pool_tacker),
+            uniswap_pools:        Arc::clone(&self.uniswap_pools)
+        }
+    }
 }
 
 impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> {
-    pub fn new(user_account_tracker: UserAccountProcessor<Fetch>, pools: Pools) -> Self {
+    pub fn new(
+        user_account_tracker: UserAccountProcessor<Fetch>,
+        pools: Pools,
+        uniswap_pools: SyncedUniswapPools
+    ) -> Self {
         Self {
-            pool_tacker:          Arc::new(RwLock::new(pools)),
-            user_account_tracker: Arc::new(user_account_tracker)
+            pool_tacker: Arc::new(RwLock::new(pools)),
+            user_account_tracker: Arc::new(user_account_tracker),
+            uniswap_pools
         }
     }
 
-    pub fn new_block(
-        &self,
-        number: u64,
-        completed_orders: Vec<B256>,
-        address_changes: Vec<Address>
-    ) {
+    pub fn new_block(&self, completed_orders: Vec<B256>, address_changes: Vec<Address>) {
         self.user_account_tracker
             .prepare_for_new_block(address_changes, completed_orders)
     }
 
-    fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(
+    pub fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(
         &self,
         order: O,
-        block: u64,
-        is_limit: bool
+        block: u64
     ) -> OrderValidationResults {
         let order_hash = order.order_hash();
         if !order.is_valid_signature() {
             return OrderValidationResults::Invalid(order_hash)
         }
 
-        let Some(pool_info) = self
-            .pool_tacker
-            .read_arc()
-            .fetch_pool_info_for_order(&order)
-        else {
-            return OrderValidationResults::Invalid(order_hash)
+        let Some(pool_info) = self.pool_tacker.read().fetch_pool_info_for_order(&order) else {
+            return OrderValidationResults::Invalid(order_hash);
         };
 
         self.user_account_tracker
-            .verify_order::<O>(order, pool_info, block, is_limit)
+            .verify_order::<O>(order, pool_info, block)
             .map(|o: _| {
                 OrderValidationResults::Valid(o.try_map_inner(|inner| Ok(inner.into())).unwrap())
             })
@@ -83,12 +89,31 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
 
     pub fn validate_state_of_regular_order(&self, order: OrderValidation, block: u64) {
         match order {
-            OrderValidation::Limit(tx, order, origin) => {
-                let results = self.handle_regular_order(order, block, true);
+            OrderValidation::Limit(tx, order, _) => {
+                let results = self.handle_regular_order(order, block);
                 let _ = tx.send(results);
             }
-            OrderValidation::Searcher(tx, order, origin) => {
-                let results = self.handle_regular_order(order, block, false);
+            OrderValidation::Searcher(tx, order, _) => {
+                let mut results = self.handle_regular_order(order, block);
+                if let OrderValidationResults::Valid(ref mut order_with_storage) = results {
+                    let tob_order = order_with_storage
+                        .clone()
+                        .try_map_inner(|inner| {
+                            let AllOrders::TOB(order) = inner else { eyre::bail!("unreachable") };
+                            Ok(order)
+                        })
+                        .expect("should be unreachable");
+                    let pool_address = order_with_storage.pool_id;
+                    let pool = self
+                        .uniswap_pools
+                        .get(&pool_address)
+                        .map(|pool| pool.blocking_read())
+                        .unwrap();
+                    let market_snapshot = get_market_snapshot(pool).unwrap();
+                    let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();
+                    order_with_storage.tob_reward = rewards.total_reward;
+                }
+
                 let _ = tx.send(results);
             }
             _ => unreachable!()
@@ -96,6 +121,6 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
     }
 
     pub fn index_new_pool(&mut self, pool: NewInitializedPool) {
-        self.pool_tacker.write_arc().index_new_pool(pool);
+        self.pool_tacker.write().index_new_pool(pool);
     }
 }

@@ -1,8 +1,10 @@
 use std::time::Duration;
 
 use angstrom_network::manager::StromConsensusEvent;
-use angstrom_types::consensus::{Commit, PreProposal, Proposal};
-use reth_rpc_types::PeerId;
+use angstrom_types::{
+    consensus::{PreProposal, Proposal},
+    primitive::PeerId
+};
 use tokio::{
     sync::{
         mpsc::{unbounded_channel, UnboundedSender},
@@ -32,20 +34,14 @@ impl MockConsensusEventHandle {
 
     pub fn prepropose(&self, peer: PeerId, proposal: PreProposal) {
         self.tx
-            .send(StromConsensusEvent::PrePropose(peer, proposal))
+            .send(StromConsensusEvent::PreProposal(peer, proposal))
             .expect("Failed to send proposal");
     }
 
     pub fn propose(&self, peer: PeerId, proposal: Proposal) {
         self.tx
-            .send(StromConsensusEvent::Propose(peer, proposal))
+            .send(StromConsensusEvent::Proposal(peer, proposal))
             .expect("Failed to send proposal");
-    }
-
-    pub fn commit(&self, peer: PeerId, commit: Commit) {
-        self.tx
-            .send(StromConsensusEvent::Commit(peer, Box::new(commit)))
-            .expect("Failed to send commit message")
     }
 
     pub async fn propose_on_next_tick(&self, peer: PeerId, proposal: Proposal) {

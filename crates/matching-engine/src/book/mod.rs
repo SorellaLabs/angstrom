@@ -1,13 +1,13 @@
 //! basic book impl so we can benchmark
 use angstrom_types::{
+    matching::uniswap::PoolSnapshot,
     orders::OrderId,
     primitive::PoolId,
     sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
 };
-use order::{OrderCoordinate, OrderDirection};
+use order::OrderCoordinate;
 
 use self::sort::SortStrategy;
-use crate::cfmm::uniswap::MarketSnapshot;
 
 pub mod order;
 pub mod sort;
@@ -16,7 +16,7 @@ pub mod xpool;
 #[derive(Debug, Default)]
 pub struct OrderBook {
     id:   PoolId,
-    amm:  Option<MarketSnapshot>,
+    amm:  Option<PoolSnapshot>,
     bids: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
     asks: Vec<OrderWithStorageData<GroupedVanillaOrder>>
 }
@@ -24,7 +24,7 @@ pub struct OrderBook {
 impl OrderBook {
     pub fn new(
         id: PoolId,
-        amm: Option<MarketSnapshot>,
+        amm: Option<PoolSnapshot>,
         mut bids: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
         mut asks: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
         sort: Option<SortStrategy>
@@ -48,11 +48,11 @@ impl OrderBook {
         &self.asks
     }
 
-    pub fn amm(&self) -> Option<&MarketSnapshot> {
+    pub fn amm(&self) -> Option<&PoolSnapshot> {
         self.amm.as_ref()
     }
 
-    pub fn find_coordinate(&self, coord: &OrderCoordinate) -> Option<(OrderDirection, usize)> {
+    pub fn find_coordinate(&self, coord: &OrderCoordinate) -> Option<(bool, usize)> {
         let OrderCoordinate { book, order } = coord;
         if *book != self.id {
             return None;
@@ -62,19 +62,19 @@ impl OrderBook {
 
     /// Given an OrderID, find the order with the matching ID and return an
     /// Option, `None` if not found, otherwise we return a tuple containing the
-    /// order's direction and its index in the various order arrays
-    pub fn find_order(&self, id: OrderId) -> Option<(OrderDirection, usize)> {
+    /// order's direction (is_bid) and its index in the various order arrays
+    pub fn find_order(&self, id: OrderId) -> Option<(bool, usize)> {
         self.bids
             .iter()
             .enumerate()
             .find(|(_, b)| b.order_id == id)
-            .map(|(i, _)| (OrderDirection::Bid, i))
+            .map(|(i, _)| (true, i))
             .or_else(|| {
                 self.asks
                     .iter()
                     .enumerate()
                     .find(|(_, b)| b.order_id == id)
-                    .map(|(i, _)| (OrderDirection::Ask, i))
+                    .map(|(i, _)| (false, i))
             })
     }
 }
@@ -91,7 +91,7 @@ mod test {
         // Very basic book construction test
         let bids = vec![];
         let asks = vec![];
-        let amm = MarketSnapshot::new(vec![], SqrtPriceX96::from_float_price(0.0)).unwrap();
+        let amm = PoolSnapshot::new(vec![], SqrtPriceX96::from_float_price(0.0)).unwrap();
         OrderBook::new(FixedBytes::<32>::random(), Some(amm), bids, asks, None);
     }
 }

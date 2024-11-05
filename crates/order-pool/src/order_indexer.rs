@@ -6,10 +6,10 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
-use alloy::primitives::{B256, U256};
+use alloy::primitives::{Address, BlockNumber, B256, U256};
 use angstrom_types::{
     orders::{OrderId, OrderOrigin, OrderSet},
-    primitive::{NewInitializedPool, PoolId},
+    primitive::{NewInitializedPool, PeerId, PoolId},
     sol_bindings::{
         grouped_orders::{AllOrders, OrderWithStorageData, *},
         rpc_orders::TopOfBlockOrder,
@@ -17,8 +17,6 @@ use angstrom_types::{
     }
 };
 use futures_util::{Stream, StreamExt};
-use reth_network_peers::PeerId;
-use reth_primitives::Address;
 use tokio::sync::oneshot::Sender;
 use tracing::{error, trace};
 use validation::order::{
@@ -74,7 +72,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     pub fn new(
         validator: V,
         order_storage: Arc<OrderStorage>,
-        block_number: u64,
+        block_number: BlockNumber,
         orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
     ) -> Self {
         Self {
@@ -89,6 +87,40 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             validator: OrderValidator::new(validator),
             orders_subscriber_tx
         }
+    }
+
+    pub fn pending_orders_for_address(
+        &self,
+        address: Address
+    ) -> Vec<OrderWithStorageData<AllOrders>> {
+        let mut orders = Vec::new();
+        if let Some(order_ids) = self.address_to_orders.get(&address) {
+            for order_id in order_ids {
+                let order = match order_id.location {
+                    angstrom_types::orders::OrderLocation::Limit => self
+                        .order_storage
+                        .limit_orders
+                        .lock()
+                        .expect("lock poisoned")
+                        .get_order(order_id)
+                        .and_then(|order| order.try_map_inner(|inner| Ok(inner.into())).ok()),
+                    angstrom_types::orders::OrderLocation::Searcher => self
+                        .order_storage
+                        .searcher_orders
+                        .lock()
+                        .expect("lock poisoned")
+                        .get_order(order_id.pool_id, order_id.hash)
+                        .and_then(|order| {
+                            order.try_map_inner(|inner| Ok(AllOrders::TOB(inner))).ok()
+                        })
+                };
+
+                if let Some(order) = order {
+                    orders.push(order);
+                }
+            }
+        }
+        orders
     }
 
     fn is_missing(&self, order_hash: &B256) -> bool {
@@ -227,7 +259,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     }
 
     /// used to remove orders that expire before the next ethereum block
-    fn remove_expired_orders(&mut self, block_number: u64) -> Vec<B256> {
+    fn remove_expired_orders(&mut self, block_number: BlockNumber) -> Vec<B256> {
         self.block_number = block_number;
         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs()); // grab all expired hashes
@@ -288,8 +320,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             });
     }
 
-    pub fn finalized_block(&mut self, block: u64) {
-        self.order_storage.finalized_block(block);
+    pub fn finalized_block(&mut self, block_number: BlockNumber) {
+        self.order_storage.finalized_block(block_number);
     }
 
     pub fn reorg(&mut self, orders: Vec<B256>) {
@@ -303,7 +335,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     }
 
     /// Removes all filled orders from the pools and moves to regular pool
-    fn filled_orders(&mut self, block: u64, orders: &[B256]) {
+    fn filled_orders(&mut self, block_number: BlockNumber, orders: &[B256]) {
         if orders.is_empty() {
             return
         }
@@ -323,11 +355,12 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
         filled_orders.iter().for_each(|order| {
             self.notify_order_subscribers(PoolManagerUpdate::FilledOrder((
-                block,
+                block_number,
                 order.order.clone()
             )));
         });
-        self.order_storage.add_filled_orders(block, filled_orders);
+        self.order_storage
+            .add_filled_orders(block_number, filled_orders);
     }
 
     /// Given the nonce ordering rule. Sometimes new transactions can park old
@@ -454,27 +487,27 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     pub fn start_new_block_processing(
         &mut self,
-        block: u64,
+        block_number: BlockNumber,
         completed_orders: Vec<B256>,
         address_changes: Vec<Address>
     ) {
-        tracing::info!(%block, "starting transition to new block processing");
+        tracing::info!(%block_number, "starting transition to new block processing");
         self.validator
-            .on_new_block(block, completed_orders, address_changes);
+            .on_new_block(block_number, completed_orders, address_changes);
     }
 
     fn finish_new_block_processing(
         &mut self,
-        block: u64,
+        block_number: BlockNumber,
         mut completed_orders: Vec<B256>,
         address_changes: Vec<Address>
     ) {
         // deal with changed orders
         self.eoa_state_change(&address_changes);
         // deal with filled orders
-        self.filled_orders(block, &completed_orders);
+        self.filled_orders(block_number, &completed_orders);
         // add expired orders to completed
-        completed_orders.extend(self.remove_expired_orders(block));
+        completed_orders.extend(self.remove_expired_orders(block_number));
 
         let time_now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -482,8 +515,11 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             .as_secs();
         self.cancelled_orders
             .retain(|_, request| request.valid_until >= time_now);
-        self.validator
-            .notify_validation_on_changes(block, completed_orders, address_changes);
+        self.validator.notify_validation_on_changes(
+            block_number,
+            completed_orders,
+            address_changes
+        );
     }
 }
 

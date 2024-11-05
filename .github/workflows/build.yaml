@@ -1,5 +1,10 @@
 name: 'Build'
-on: push
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -7,21 +12,57 @@ env:
 
 jobs:
   build:
-    name: 'Build'
+    name: 'Build + Fmt'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@nightly
         with:
+          components: clippy,rustfmt
           toolchain: nightly
-          profile: minimal
-          override: true
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: Build
-        run: cargo build 
+
+      - name: "build nightly"
+        run: cargo build --workspace --all-features
+        # env:
+        #   RUSTFLAGS: -D warnings
+      - name: "cargo fmt"
+        run: cargo fmt --all --check
+
+  clippy:
+    name: "clippy"
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy,rustfmt
+          toolchain: nightly
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          key: "clippy-nightly"
+
+      - name: "clippy all"
+        run: cargo clippy --all-targets
+        env: 
+          RUSTFLAGS: -D warnings
+
   build-tests:
     name: 'Build Tests'
     runs-on: ubuntu-latest
@@ -33,11 +74,17 @@ jobs:
           toolchain: nightly
           profile: minimal
           override: true
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
       - name: Build Tests
         run: cargo build --tests
+
   contracts:
     name: 'Build, Format & Test Contracts'
     runs-on: ubuntu-latest

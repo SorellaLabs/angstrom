@@ -9,6 +9,8 @@ repository.workspace = true
 exclude.workspace = true
 
 [dev-dependencies]
+pade.workspace = true
+pade-macro.workspace = true
 testing-tools.workspace = true
 divan = "0.1.14"
 
@@ -16,10 +18,12 @@ divan = "0.1.14"
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
 alloy.workspace = true
+alloy-primitives.workspace = true
 eyre.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 uniswap_v3_math.workspace = true
+itertools.workspace = true
 malachite = "0.4.0"
 malachite-q = "0.4.0"
 pade.workspace = true
@@ -32,14 +36,14 @@ criterion.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 thiserror.workspace = true
-reth-primitives.workspace = true
 reth-provider.workspace = true
 
 arraydeque = "0.5"
+num-bigfloat = "1.7"
+once_cell = "1.20.2"
 
 # Using clap for our bookgen command-line tool
 clap = "4.5.4"
-amms = { git = "https://github.com/darkforestry/amms-rs.git", version="0.6.2"}
 
 [[bench]]
 name = "volume_solver"

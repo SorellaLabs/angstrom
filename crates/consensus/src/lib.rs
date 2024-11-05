@@ -1,20 +1,17 @@
-mod cache;
-mod contract;
-mod evidence;
-mod global;
 mod leader_selection;
 mod manager;
-mod round;
+mod round_state;
 mod signer;
 
 use std::pin::Pin;
 
-use angstrom_types::consensus::{Commit, PreProposal, Proposal};
+use angstrom_types::consensus::{PreProposal, Proposal};
 use futures::Stream;
-pub use global::*;
 pub use leader_selection::AngstromValidator;
 pub use manager::*;
+pub use round_state::ConsensusState;
 pub use signer::*;
+
 #[derive(Debug, Clone)]
 pub enum ConsensusMessage {
     /// Start/Cycle the consensus process as a new block has begun
@@ -23,9 +20,7 @@ pub enum ConsensusMessage {
     PrePropose(PreProposal),
     /// The Proposer broadcasts its signed proposal for validation.  This might
     /// be after execution-time but all nodes need to review this information
-    Proposal(Proposal),
-    /// Commit or nil vote on whether the proposal was properly executed
-    Commit(Box<Commit>)
+    Proposal(Proposal)
 }
 /// Listener for consensus data
 pub trait ConsensusListener: Send + Sync + 'static {

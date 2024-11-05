@@ -1,3 +1,4 @@
+use alloy_primitives::Address;
 use angstrom_types::{
     orders::OrderOrigin,
     sol_bindings::{
@@ -15,7 +16,7 @@ use reth_tasks::TaskSpawner;
 use crate::{
     api::{CancelOrderRequest, OrderApiServer},
     types::{OrderSubscriptionKind, OrderSubscriptionResult},
-    OrderApiError::InvalidSignature
+    OrderApiError::SignatureRecoveryError
 };
 
 pub struct OrderApi<OrderPool, Spawner> {
@@ -60,12 +61,18 @@ where
         Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
+    async fn pending_orders(&self, from: Address) -> RpcResult<Vec<AllOrders>> {
+        Ok(self.pool.pending_orders(from).await)
+    }
+
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool> {
-        let sender = request.signature.recover_signer(request.hash);
-        if sender.is_none() {
-            return Err(InvalidSignature.into());
-        }
-        Ok(self.pool.cancel_order(sender.unwrap(), request.hash).await)
+        let sender = request
+            .signature
+            .recover_signer_full_public_key(request.hash)
+            .map(|s| Address::from_raw_public_key(&*s))
+            .map_err(|_| SignatureRecoveryError)?;
+
+        Ok(self.pool.cancel_order(sender, request.hash).await)
     }
 
     async fn subscribe_orders(
@@ -79,7 +86,7 @@ where
         self.task_spawner.spawn(Box::pin(async move {
             while let Ok(order) = subscription.recv().await {
                 if sink.is_closed() {
-                    break;
+                    break
                 }
 
                 let msg = Self::return_order(&kind, order);
@@ -87,7 +94,7 @@ where
                     match SubscriptionMessage::from_json(&result) {
                         Ok(message) => {
                             if sink.send(message).await.is_err() {
-                                break;
+                                break
                             }
                         }
                         Err(e) => {
@@ -105,13 +112,16 @@ where
 #[derive(Debug, thiserror::Error)]
 pub enum OrderApiError {
     #[error("invalid transaction signature")]
-    InvalidSignature
+    InvalidSignature,
+    #[error("failed to recover signer from signature")]
+    SignatureRecoveryError
 }
 
 impl From<OrderApiError> for jsonrpsee::types::ErrorObjectOwned {
     fn from(error: OrderApiError) -> Self {
         match error {
-            OrderApiError::InvalidSignature => invalid_params_rpc_err(error.to_string())
+            OrderApiError::InvalidSignature => invalid_params_rpc_err(error.to_string()),
+            OrderApiError::SignatureRecoveryError => invalid_params_rpc_err(error.to_string())
         }
     }
 }
@@ -129,7 +139,7 @@ pub fn rpc_err(
         code,
         msg.into(),
         data.map(|data| {
-            jsonrpsee::core::to_json_raw_value(&reth_primitives::hex::encode_prefixed(data))
+            jsonrpsee::core::to_json_raw_value(&alloy_primitives::hex::encode_prefixed(data))
                 .expect("serializing String can't fail")
         })
     )
@@ -186,6 +196,7 @@ mod tests {
         ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
         TopOfBlockOrder
     };
+    use futures::FutureExt;
     use order_pool::PoolManagerUpdate;
     use reth_tasks::TokioTaskExecutor;
     use tokio::sync::{
@@ -250,12 +261,12 @@ mod tests {
         let pool_handle = MockOrderPoolHandle { sender: to_pool };
         let task_executor = TokioTaskExecutor::default();
         let api = OrderApi::new(pool_handle.clone(), task_executor);
-        let handle = OrderApiTestHandle { from_api: pool_rx };
+        let handle = OrderApiTestHandle { _from_api: pool_rx };
         (handle, api)
     }
 
     struct OrderApiTestHandle {
-        from_api: UnboundedReceiver<OrderCommand>
+        _from_api: UnboundedReceiver<OrderCommand>
     }
 
     #[derive(Clone)]
@@ -269,8 +280,8 @@ mod tests {
             origin: OrderOrigin,
             order: AllOrders
         ) -> impl Future<Output = bool> + Send {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            let res = self
+            let (tx, _) = tokio::sync::oneshot::channel();
+            let _ = self
                 .sender
                 .send(OrderCommand::NewOrder(origin, order, tx))
                 .is_ok();
@@ -286,12 +297,21 @@ mod tests {
             from: Address,
             order_hash: B256
         ) -> impl Future<Output = bool> + Send {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            let res = self
+            let (tx, _) = tokio::sync::oneshot::channel();
+            let _ = self
                 .sender
                 .send(OrderCommand::CancelOrder(from, order_hash, tx))
                 .is_ok();
             future::ready(true)
+        }
+
+        fn pending_orders(&self, address: Address) -> impl Future<Output = Vec<AllOrders>> + Send {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let _ = self
+                .sender
+                .send(OrderCommand::PendingOrders(address, tx))
+                .is_ok();
+            rx.map(|res| res.unwrap_or_default())
         }
     }
 }

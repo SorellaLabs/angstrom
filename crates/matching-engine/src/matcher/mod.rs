@@ -5,8 +5,6 @@ use angstrom_types::{
 };
 pub use volume::VolumeFillMatcher;
 
-use crate::book::order::OrderDirection;
-
 /// Preliminary implementation of a struct that captures all the information
 /// we'd want to get out of a finished match for us to use for heurestics and
 /// evaluation
@@ -19,7 +17,7 @@ pub struct Solution {
     /// Volume moved in Partial Fill orders (bids, asks)
     pub partial_volume:    (OrderVolume, OrderVolume),
     /// Which side of the book did the AMM act on
-    pub amm_side:          Option<OrderDirection>,
+    pub amm_is_bid:        Option<bool>,
     /// Volume moved via the AMM
     pub amm_volume:        OrderVolume,
     /// Final AMM price

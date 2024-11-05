@@ -1,36 +1,70 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use alloy::primitives::{Address, U256};
+use alloy::primitives::Address;
+use angstrom_types::sol_bindings::{
+    grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
+    rpc_orders::TopOfBlockOrder,
+    RawPoolOrder
+};
+use gas::OrderGasCalculations;
+use revm::primitives::ruint::aliases::U256;
 
-use super::OrderValidationRequest;
-use crate::common::lru_db::{BlockStateProviderFactory, RevmLRU};
+use super::state::token_pricing::TokenPriceGenerator;
 
-/// sims the pre and post hook assuming
+mod gas;
+mod gas_inspector;
+
+pub type GasInToken0 = U256;
+/// validation relating to simulations.
 #[derive(Clone)]
 pub struct SimValidation<DB> {
-    db: Arc<RevmLRU<DB>>
+    gas_calculator: OrderGasCalculations<DB>
 }
 
 impl<DB> SimValidation<DB>
 where
-    DB: BlockStateProviderFactory + Unpin + Clone + 'static
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Send + Sync,
+    <DB as revm::DatabaseRef>::Error: Send + Sync
 {
-    pub fn new(db: Arc<RevmLRU<DB>>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<DB>, angstrom_address: Option<Address>) -> Self {
+        let gas_calculator = OrderGasCalculations::new(db.clone(), angstrom_address)
+            .expect("failed to deploy baseline angstrom for gas calculations");
+        Self { gas_calculator }
     }
 
-    pub fn validate_hook(
+    pub fn calculate_tob_gas(
         &self,
-        order: OrderValidationRequest
-    ) -> (OrderValidationRequest, HashMap<Address, HashMap<U256, U256>>) {
-        todo!()
+        order: &OrderWithStorageData<TopOfBlockOrder>,
+        conversion: &TokenPriceGenerator
+    ) -> eyre::Result<GasInToken0> {
+        let gas_in_wei = self.gas_calculator.gas_of_tob_order(order)?;
+        // grab order tokens;
+        let (token0, token1) = if order.asset_in < order.asset_out {
+            (order.asset_in, order.asset_out)
+        } else {
+            (order.asset_out, order.asset_in)
+        };
+
+        // grab price conversion
+        let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
+        Ok(conversion_factor * U256::from(gas_in_wei))
     }
 
-    pub fn validate_post_hook(
+    pub fn calculate_user_gas(
         &self,
-        order: OrderValidationRequest,
-        overrides: HashMap<Address, HashMap<U256, U256>>
-    ) -> (OrderValidationRequest, HashMap<Address, HashMap<U256, U256>>) {
-        todo!()
+        order: &OrderWithStorageData<GroupedVanillaOrder>,
+        conversion: &TokenPriceGenerator
+    ) -> eyre::Result<GasInToken0> {
+        let gas_in_wei = self.gas_calculator.gas_of_book_order(order)?;
+        // grab order tokens;
+        let (token0, token1) = if order.token_in() < order.token_out() {
+            (order.token_in(), order.token_out())
+        } else {
+            (order.token_out(), order.token_in())
+        };
+
+        // grab price conversion
+        let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
+        Ok(conversion_factor * U256::from(gas_in_wei))
     }
 }

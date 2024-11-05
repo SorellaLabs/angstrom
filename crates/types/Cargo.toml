@@ -4,10 +4,15 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+futures.workspace = true
 base64 = "0.22.1"
 bitmaps.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
-blsful.workspace = true
+reth-provider.workspace = true
+reth-trie.workspace = true
+reth-chainspec.workspace = true
+reth-storage-api.workspace = true
+# blsful.workspace = true
 bytes = "1.4"
 pade.workspace = true
 pade-macro.workspace = true
@@ -26,6 +31,7 @@ hex-literal = "0.4.1"
 anyhow.workspace = true
 modular-bitfield = "0.11.2"
 alloy.workspace = true
+alloy-primitives.workspace = true
 alloy-rlp.workspace = true
 derive_more = "0.99.17"
 eyre.workspace = true
@@ -33,14 +39,23 @@ bincode = { workspace = true }
 serde = { workspace = true, optional = true, default-features = false, features = [
   "derive",
 ] }
+uniswap_v3_math.workspace = true
+foldhash = "0.1.3"
+
+testing-tools-macros = { workspace = true, optional = true }
 
 rand = { version = "0.8.5", optional = true }
 
+[build-dependencies]
+convert_case = "0.6.0"
+itertools = "0.13.0"
+
 [dev-dependencies]
 rand.workspace = true
+testing-tools.workspace = true
 
 [features]
-default = ["serde"]
-testnet = ["dep:rand"]
+default = ["serde", "testnet"]
+testnet = ["dep:rand", "dep:testing-tools-macros"]
 # serde = ["dep:serde", "alloy-primitives/serde"]
 serde = ["dep:serde"]

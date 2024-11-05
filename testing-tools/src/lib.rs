@@ -10,8 +10,13 @@ pub mod type_generator;
 /// nuanced needs
 pub mod validation;
 
+pub mod anvil_state_provider;
+
 /// Tools for contract deployment and testing
 pub mod contracts;
+
+pub mod testnet_controllers;
+pub mod types;
 
 use std::{path::Path, sync::Arc};
 
@@ -32,7 +37,8 @@ pub type Provider = BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<
 
 pub fn load_reth_db(db_path: &Path) -> Provider {
     let db = Arc::new(
-        reth_db::open_db(db_path, DatabaseArguments::new(ClientVersion::default())).unwrap()
+        reth_db::open_db_read_only(db_path, DatabaseArguments::new(ClientVersion::default()))
+            .unwrap()
     );
 
     let mut static_files = db_path.to_path_buf();

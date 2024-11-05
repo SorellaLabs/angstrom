@@ -19,6 +19,9 @@ normal = [
 [dependencies]
 # Alloy
 alloy-chains.workspace = true
+alloy-rpc-types.workspace = true
+alloy-primitives.workspace = true
+alloy.workspace = true
 
 # Reth
 reth.workspace = true
@@ -29,7 +32,6 @@ reth-network-peers.workspace = true
 reth-node-builder.workspace = true
 reth-node-ethereum.workspace = true
 reth-provider.workspace = true
-reth-rpc-types.workspace = true
 
 # Angstrom components
 angstrom-rpc.workspace = true
@@ -45,10 +47,12 @@ consensus.workspace = true
 # Other things
 tokio.workspace = true
 tokio-util.workspace = true
+serde.workspace = true
 secp256k1 = { workspace = true, features = ["serde"] }
 clap = "4.4.8"
 eyre = "0.6.9"
 revm-inspectors = "=0.5.5"
+toml = "0.8.19"
 
 
 [target.'cfg(unix)'.dependencies]

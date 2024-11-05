@@ -1,8 +1,8 @@
 use std::{fmt::Debug, future::Future, pin::Pin};
 
-use alloy::primitives::Address;
+use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
-    orders::{OrderId, OrderOrigin},
+    orders::OrderOrigin,
     sol_bindings::{
         ext::RawPoolOrder,
         grouped_orders::{
@@ -11,8 +11,8 @@ use angstrom_types::{
         rpc_orders::TopOfBlockOrder
     }
 };
-use reth_primitives::B256;
-use state::account::user::UserAddress;
+use sim::SimValidation;
+use state::token_pricing::TokenPriceGenerator;
 use tokio::sync::oneshot::{channel, Sender};
 
 use crate::validator::ValidationRequest;
@@ -79,6 +79,106 @@ pub enum OrderValidationResults {
     // the raw hash to be removed
     Invalid(B256),
     TransitionedToBlock
+}
+
+impl OrderValidationResults {
+    pub fn add_gas_cost_or_invalidate<DB>(
+        &mut self,
+        sim: &SimValidation<DB>,
+        token_price: &TokenPriceGenerator,
+        is_limit: bool
+    ) where
+        DB: Unpin
+            + Clone
+            + 'static
+            + revm::DatabaseRef
+            + reth_provider::BlockNumReader
+            + Send
+            + Sync,
+        <DB as revm::DatabaseRef>::Error: Send + Sync
+    {
+        // TODO: this can be done without a clone but is super annoying
+        let this = self.clone();
+        if let Self::Valid(order) = this {
+            let order_hash = order.order_hash();
+            let finalized_order = if is_limit {
+                let res = Self::map_and_process(
+                    order,
+                    sim,
+                    token_price,
+                    |order| match order {
+                        AllOrders::Standing(s) => GroupedVanillaOrder::Standing(s),
+                        AllOrders::Flash(f) => GroupedVanillaOrder::KillOrFill(f),
+                        _ => unreachable!()
+                    },
+                    |order| match order {
+                        GroupedVanillaOrder::Standing(s) => AllOrders::Standing(s),
+                        GroupedVanillaOrder::KillOrFill(s) => AllOrders::Flash(s)
+                    },
+                    SimValidation::calculate_user_gas
+                );
+
+                if res.is_err() {
+                    *self = OrderValidationResults::Invalid(order_hash);
+
+                    return
+                }
+
+                res
+            } else {
+                let res = Self::map_and_process(
+                    order,
+                    sim,
+                    token_price,
+                    |order| match order {
+                        AllOrders::TOB(s) => s,
+                        _ => unreachable!()
+                    },
+                    AllOrders::TOB,
+                    SimValidation::calculate_tob_gas
+                );
+                if res.is_err() {
+                    *self = OrderValidationResults::Invalid(order_hash);
+
+                    return
+                }
+
+                res
+            };
+
+            *self = OrderValidationResults::Valid(finalized_order.unwrap())
+        }
+    }
+
+    // hmm the structure here is probably overkill to avoid 8 extra lines of code
+    fn map_and_process<Old, New, DB>(
+        order: OrderWithStorageData<Old>,
+        sim: &SimValidation<DB>,
+        token_price: &TokenPriceGenerator,
+        map_new: impl Fn(Old) -> New,
+        map_old: impl Fn(New) -> Old,
+        calculate_function: impl Fn(
+            &SimValidation<DB>,
+            &OrderWithStorageData<New>,
+            &TokenPriceGenerator
+        ) -> eyre::Result<U256>
+    ) -> eyre::Result<OrderWithStorageData<Old>>
+    where
+        DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
+        <DB as revm::DatabaseRef>::Error: Sync + Send + 'static
+    {
+        let mut order = order
+            .try_map_inner(move |order| Ok(map_new(order)))
+            .unwrap();
+
+        if let Ok(gas_used) = (calculate_function)(sim, &order, token_price) {
+            order.priority_data.gas += gas_used;
+        } else {
+            return Err(eyre::eyre!("not able to process gas"))
+        }
+
+        order.try_map_inner(move |new_order| Ok(map_old(new_order)))
+    }
 }
 
 pub enum OrderValidation {

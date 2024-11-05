@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use alloy_primitives::B256;
 use angstrom_types::{
-    consensus::*, primitive::Angstrom::PoolKey, sol_bindings::grouped_orders::AllOrders
+    consensus::*, contract_bindings::angstrom::Angstrom::PoolKey,
+    sol_bindings::grouped_orders::AllOrders
 };
 use serde::{Deserialize, Serialize};
 
@@ -18,9 +19,7 @@ pub enum ConsensusSubscriptionKind {
     /// current best
     NewBestPreProposal,
     /// Sends the proposal upon receiving it from the proposer
-    Proposal,
-    /// Sends commits when received
-    Commits
+    Proposal
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,8 +28,7 @@ pub enum ConsensusSubscriptionKind {
 pub enum ConsensusSubscriptionResult {
     /// Preprosal
     PreProposal(Arc<PreProposal>),
-    Proposal(Arc<Proposal>),
-    Commits(Arc<Commit>)
+    Proposal(Arc<Proposal>)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

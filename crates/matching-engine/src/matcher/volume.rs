@@ -2,7 +2,7 @@ use std::{cell::Cell, cmp::Ordering};
 
 use alloy::primitives::U256;
 use angstrom_types::{
-    matching::{Ray, SqrtPriceX96},
+    matching::{uniswap::PoolPrice, Ray, SqrtPriceX96},
     orders::{NetAmmOrder, OrderFillState, OrderOutcome, PoolSolution},
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
@@ -11,12 +11,9 @@ use angstrom_types::{
 };
 
 use super::Solution;
-use crate::{
-    book::{
-        order::{OrderContainer, OrderDirection, OrderExclusion},
-        OrderBook
-    },
-    cfmm::uniswap::MarketPrice
+use crate::book::{
+    order::{OrderContainer, OrderExclusion},
+    OrderBook
 };
 
 type CrossPoolExclusions = Option<(Vec<Option<OrderExclusion>>, Vec<Option<OrderExclusion>>)>;
@@ -38,7 +35,7 @@ pub struct VolumeFillMatcher<'a> {
     ask_idx:          Cell<usize>,
     pub ask_outcomes: Vec<OrderFillState>,
     ask_xpool:        Vec<Option<OrderExclusion>>,
-    amm_price:        Option<MarketPrice<'a>>,
+    amm_price:        Option<PoolPrice<'a>>,
     amm_outcome:      Option<NetAmmOrder>,
     current_partial:  Option<OrderWithStorageData<GroupedVanillaOrder>>,
     results:          Solution,
@@ -59,7 +56,7 @@ impl<'a> VolumeFillMatcher<'a> {
             xpool.unwrap_or_else(|| (vec![None; book.bids().len()], vec![None; book.asks().len()]));
         let bid_outcomes = vec![OrderFillState::Unfilled; book.bids().len()];
         let ask_outcomes = vec![OrderFillState::Unfilled; book.asks().len()];
-        let amm_price = book.amm().map(|a| a.current_position());
+        let amm_price = book.amm().map(|a| a.current_price());
         Self {
             book,
             bid_idx: Cell::new(0),
@@ -125,43 +122,37 @@ impl<'a> VolumeFillMatcher<'a> {
 
     pub fn fill(&mut self) -> VolumeFillMatchEndReason {
         {
-            // Local temporary storage for bid and ask AMM orders since they're generated on
-            // the fly and need somewhere to live while we use them
-            let mut amm_bid_order: Option<OrderContainer>;
-            let mut amm_ask_order: Option<OrderContainer>;
             loop {
                 let bid = match self.current_partial {
                     Some(ref o) if o.is_bid => OrderContainer::BookOrderFragment(o),
                     _ => {
-                        amm_bid_order = self.try_next_order(OrderDirection::Bid);
-                        let Some(o) = amm_bid_order.or_else(|| {
-                            self.book
-                                .bids()
-                                .get(self.bid_idx.get())
-                                .map(OrderContainer::BookOrder)
-                        }) else {
-                            return VolumeFillMatchEndReason::NoMoreBids;
-                            // Break if there are no more valid bid orders to
-                            // work with
-                        };
-                        o
+                        if let Some(o) = Self::next_order_from_book(
+                            true,
+                            &self.bid_idx,
+                            self.book.bids(),
+                            &self.bid_outcomes,
+                            self.amm_price.as_ref()
+                        ) {
+                            o
+                        } else {
+                            return VolumeFillMatchEndReason::NoMoreBids
+                        }
                     }
                 };
                 let ask = match self.current_partial {
                     Some(ref o) if !o.is_bid => OrderContainer::BookOrderFragment(o),
                     _ => {
-                        amm_ask_order = self.try_next_order(OrderDirection::Ask);
-                        let Some(o) = amm_ask_order.or_else(|| {
-                            self.book
-                                .asks()
-                                .get(self.ask_idx.get())
-                                .map(OrderContainer::BookOrder)
-                        }) else {
-                            return VolumeFillMatchEndReason::NoMoreAsks;
-                            // Break if there are no more valid bid orders to
-                            // work with
-                        };
-                        o
+                        if let Some(o) = Self::next_order_from_book(
+                            false,
+                            &self.ask_idx,
+                            self.book.asks(),
+                            &self.ask_outcomes,
+                            self.amm_price.as_ref()
+                        ) {
+                            o
+                        } else {
+                            return VolumeFillMatchEndReason::NoMoreBids
+                        }
                     }
                 };
 
@@ -267,58 +258,42 @@ impl<'a> VolumeFillMatcher<'a> {
                 // We can checkpoint if we annihilated (No partial), if we completely filled an
                 // order with an AMM order (No partial) or if we have an incomplete order but
                 // it's a Partial Fill order which means this is a valid state to stop
-                let good_state = self
-                    .current_partial
-                    .as_ref()
-                    .map(|o| matches!(o.order, GroupedVanillaOrder::Standing(_)))
-                    .unwrap_or(true); // None is a good state
-                if good_state {
-                    self.save_checkpoint();
+                if let Some(ref fragment) = self.current_partial {
+                    if fragment.is_partial() {
+                        self.save_checkpoint();
+                    }
                 }
             }
         }
     }
 
-    fn try_next_order<'b>(&self, direction: OrderDirection) -> Option<OrderContainer<'a, 'b>> {
-        let (index_cell, order_book, outcomes, related) = match direction {
-            OrderDirection::Bid => {
-                (&self.bid_idx, self.book.bids(), &self.bid_outcomes, &self.bid_xpool)
-            }
-            OrderDirection::Ask => {
-                (&self.ask_idx, self.book.asks(), &self.ask_outcomes, &self.ask_xpool)
-            }
-        };
-        let mut index = index_cell.get();
-        // Find our next unfilled order
-        while index < outcomes.len() {
-            match (&outcomes[index], &related[index]) {
-                // Always skip explicitly dead orders
-                (_, Some(OrderExclusion::Dead(_))) => index += 1,
-                // Otherwise, stop at the first Unfilled order
-                (OrderFillState::Unfilled, _) => break,
-                // Any other outcome gets skipped
-                _ => index += 1
+    fn next_order_from_book<'b>(
+        is_bid: bool,
+        index: &Cell<usize>,
+        book: &'a [OrderWithStorageData<GroupedVanillaOrder>],
+        fill_state: &[OrderFillState],
+        amm: Option<&PoolPrice<'a>>
+    ) -> Option<OrderContainer<'a, 'b>> {
+        let mut cur_idx = index.get();
+        // Find the next unfilled order - we need to work with the index separately
+        while cur_idx < fill_state.len() {
+            match &fill_state[cur_idx] {
+                OrderFillState::Unfilled => break,
+                _ => cur_idx += 1
             }
         }
-
-        // See if we have an AMM order that takes precedence over our book order
-        let amm_order = self
-            .amm_price
-            .as_ref()
-            .and_then(|amm_price| {
-                let target_price = order_book
-                    .get(index)
-                    // .map(|o| SqrtPriceX96::from(OrderContainer::BookOrder(o).price()));
-                    .map(|o| SqrtPriceX96::from(Ray::from(*OrderContainer::BookOrder(o).price())));
-                amm_price.order_to_target(target_price, direction.is_ask())
-            })
-            .map(OrderContainer::AMM);
-
-        // If we have no AMM order to look at, point the index at our next order
-        if amm_order.is_none() {
-            index_cell.set(index);
-        }
-        amm_order
+        let book_order = book.get(cur_idx);
+        // See if our AMM takes precedence
+        amm.and_then(|amm_price| {
+            let target_price = book_order
+                .map(|o| SqrtPriceX96::from(Ray::from(*OrderContainer::BookOrder(o).price())));
+            amm_price.order_to_target(target_price, !is_bid)
+        })
+        .map(OrderContainer::AMM)
+        .or_else(|| {
+            index.set(cur_idx);
+            book_order.map(OrderContainer::BookOrder)
+        })
     }
 
     pub fn solution(
@@ -346,5 +321,123 @@ impl<'a> VolumeFillMatcher<'a> {
             searcher,
             limit
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use alloy::primitives::Uint;
+    use angstrom_types::{
+        matching::Ray,
+        orders::OrderFillState,
+        primitive::PoolId,
+        sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
+    };
+    use testing_tools::type_generator::orders::UserOrderBuilder;
+
+    use super::VolumeFillMatcher;
+    use crate::book::OrderBook;
+
+    #[test]
+    fn runs_cleanly_on_empty_book() {
+        let book = OrderBook::default();
+        let matcher = VolumeFillMatcher::new(&book);
+        let solution = matcher.solution(None);
+        assert!(solution.ucp == Ray::ZERO, "Empty book didn't have UCP of zero");
+    }
+
+    // Let's write tests for all the basic matching outcomes to make sure they
+    // work properly, then come up with some more complicated situations and
+    // components to check
+
+    #[test]
+    fn bid_outweighs_ask_sets_price() {
+        let pool_id = PoolId::random();
+        let high_price = Ray::from(Uint::from(1_000_000_000_u128));
+        let low_price = Ray::from(Uint::from(1_000_u128));
+        let bid_order = UserOrderBuilder::new()
+            .partial()
+            .amount(100)
+            .min_price(high_price)
+            .with_storage()
+            .bid()
+            .build();
+        let ask_order = UserOrderBuilder::new()
+            .exact()
+            .amount(10)
+            .min_price(low_price)
+            .with_storage()
+            .ask()
+            .build();
+        let book = OrderBook::new(pool_id, None, vec![bid_order.clone()], vec![ask_order], None);
+        let mut matcher = VolumeFillMatcher::new(&book);
+        let _fill_outcome = matcher.fill();
+        let solution = matcher.from_checkpoint().unwrap().solution(None);
+        assert!(
+            solution.ucp == high_price,
+            "Bid outweighed but the final price wasn't properly set"
+        );
+    }
+
+    #[test]
+    fn ask_outweighs_bid_sets_price() {
+        let pool_id = PoolId::random();
+        let high_price = Ray::from(Uint::from(1_000_000_000_u128));
+        let low_price = Ray::from(Uint::from(1_000_u128));
+        let bid_order = UserOrderBuilder::new()
+            .exact()
+            .amount(10)
+            .min_price(high_price)
+            .with_storage()
+            .bid()
+            .build();
+        let ask_order = UserOrderBuilder::new()
+            .partial()
+            .amount(100)
+            .min_price(low_price)
+            .with_storage()
+            .ask()
+            .build();
+        let book = OrderBook::new(pool_id, None, vec![bid_order.clone()], vec![ask_order], None);
+        let mut matcher = VolumeFillMatcher::new(&book);
+        let _fill_outcome = matcher.fill();
+        let solution = matcher.from_checkpoint().unwrap().solution(None);
+        assert!(
+            solution.ucp == low_price,
+            "Ask outweighed but the final price wasn't properly set"
+        );
+    }
+
+    fn basic_order_book(
+        is_bid: bool,
+        count: usize,
+        target_price: Ray,
+        price_step: usize
+    ) -> Vec<OrderWithStorageData<GroupedVanillaOrder>> {
+        (0..count)
+            .map(|i| {
+                UserOrderBuilder::new()
+                    .min_price(target_price + (i * price_step))
+                    .amount(100)
+                    .with_storage()
+                    .is_bid(is_bid)
+                    .build()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn gets_next_book_order() {
+        let is_bid = true;
+        let index = Cell::new(10);
+        let book = basic_order_book(true, 100, Ray::from(10000_usize), 10);
+        let fill_state: Vec<OrderFillState> =
+            book.iter().map(|_| OrderFillState::Unfilled).collect();
+        let amm = None;
+        let next_order =
+            VolumeFillMatcher::next_order_from_book(is_bid, &index, &book, &fill_state, amm);
+        assert!(next_order.is_none())
     }
 }

@@ -2,12 +2,12 @@ use std::collections::HashSet;
 
 use angstrom_types::{
     consensus::PreProposal,
+    matching::uniswap::PoolSnapshot,
     orders::PoolSolution,
     primitive::PoolId,
     sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
 };
 use book::OrderBook;
-use cfmm::uniswap::MarketSnapshot;
 use futures_util::future::BoxFuture;
 
 pub mod book;
@@ -28,7 +28,7 @@ pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
 
 pub fn build_book(
     id: PoolId,
-    amm: Option<MarketSnapshot>,
+    amm: Option<PoolSnapshot>,
     orders: HashSet<OrderWithStorageData<GroupedVanillaOrder>>
 ) -> OrderBook {
     let (bids, asks) = orders.into_iter().partition(|o| o.is_bid);

@@ -15,6 +15,12 @@ ignored_error_codes = [
   5574  # Contract size too large
 ]
 
+# skipping for the normal build, since there is an issue with the yul optimizer and msize(),
+# and requires optimizer=false
+skip = [
+  "src/loaders/*.sol"
+]
+
 remappings = [
   "solady/src/=lib/solady/src/",
   "v4-core/src/=lib/v4-core/src/",
@@ -44,3 +50,9 @@ depth = 100
 
 [profile.heavy-fuzz.invariant]
 runs = 200
+
+[profile.loaders]
+show_progress = false
+optimizer = false
+evm_version = "cancun"
+skip = []

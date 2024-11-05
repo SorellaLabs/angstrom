@@ -1,7 +1,7 @@
 use std::{hash::Hash, ops::Deref};
 
 use alloy::primitives::{Address, Bytes, FixedBytes, TxHash, U256};
-use reth_primitives::B256;
+use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 
 use super::{RawPoolOrder, RespendAvoidanceMethod};
@@ -16,10 +16,11 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+
 pub enum AllOrders {
     Standing(StandingVariants),
     Flash(FlashVariants),
-    TOB(crate::sol_bindings::rpc_orders::TopOfBlockOrder)
+    TOB(TopOfBlockOrder)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -38,8 +39,8 @@ impl StandingVariants {
 
     pub fn hook_data(&self) -> &Bytes {
         match self {
-            StandingVariants::Exact(o) => &o.hookPayload,
-            StandingVariants::Partial(o) => &o.hookPayload
+            StandingVariants::Exact(o) => &o.hook_data,
+            StandingVariants::Partial(o) => &o.hook_data
         }
     }
 }
@@ -60,8 +61,8 @@ impl FlashVariants {
 
     pub fn hook_data(&self) -> &Bytes {
         match self {
-            FlashVariants::Exact(o) => &o.hookPayload,
-            FlashVariants::Partial(o) => &o.hookPayload
+            FlashVariants::Exact(o) => &o.hook_data,
+            FlashVariants::Partial(o) => &o.hook_data
         }
     }
 }
@@ -120,7 +121,7 @@ impl AllOrders {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderWithStorageData<Order> {
     /// raw order
     pub order:              Order,
@@ -140,7 +141,8 @@ pub struct OrderWithStorageData<Order> {
     /// the block the order was validated for
     pub valid_block:        u64,
     /// holds expiry data
-    pub order_id:           OrderId
+    pub order_id:           OrderId,
+    pub tob_reward:         U256
 }
 
 impl<Order> Hash for OrderWithStorageData<Order> {
@@ -193,7 +195,8 @@ impl<Order> OrderWithStorageData<Order> {
             priority_data:      self.priority_data,
             is_currently_valid: self.is_currently_valid,
             is_valid:           self.is_valid,
-            order_id:           self.order_id
+            order_id:           self.order_id,
+            tob_reward:         U256::ZERO
         })
     }
 }
@@ -384,10 +387,15 @@ impl RawPoolOrder for FlashVariants {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GroupedVanillaOrder {
     Standing(StandingVariants),
     KillOrFill(FlashVariants)
+}
+impl Default for GroupedVanillaOrder {
+    fn default() -> Self {
+        GroupedVanillaOrder::Standing(StandingVariants::Exact(ExactStandingOrder::default()))
+    }
 }
 
 impl GroupedVanillaOrder {
@@ -420,25 +428,39 @@ impl GroupedVanillaOrder {
         }
     }
 
-    pub fn fill(&self, filled_quantity: U256) -> Self {
+    /// Creates a new order fragment representing the current order as filled by
+    /// a specific quantity
+    pub fn fill(&self, filled_quantity: u128) -> Self {
         match self {
             Self::Standing(p) => match p {
                 StandingVariants::Partial(part) => {
                     Self::Standing(StandingVariants::Partial(PartialStandingOrder {
-                        amountFilled: filled_quantity.to(),
+                        min_amount_in: part.min_amount_in.saturating_sub(filled_quantity),
+                        max_amount_in: part.max_amount_in - filled_quantity,
                         ..part.clone()
                     }))
                 }
-                v => Self::Standing(v.clone())
+                StandingVariants::Exact(exact) => {
+                    Self::Standing(StandingVariants::Exact(ExactStandingOrder {
+                        amount: exact.amount - filled_quantity,
+                        ..exact.clone()
+                    }))
+                }
             },
             Self::KillOrFill(kof) => match kof {
                 FlashVariants::Partial(part) => {
                     Self::KillOrFill(FlashVariants::Partial(PartialFlashOrder {
-                        amountFilled: filled_quantity.to(),
+                        min_amount_in: part.min_amount_in.saturating_sub(filled_quantity),
+                        max_amount_in: part.max_amount_in - filled_quantity,
                         ..part.clone()
                     }))
                 }
-                e => Self::KillOrFill(e.clone())
+                FlashVariants::Exact(exact) => {
+                    Self::KillOrFill(FlashVariants::Exact(ExactFlashOrder {
+                        amount: exact.amount - filled_quantity,
+                        ..exact.clone()
+                    }))
+                }
             }
         }
     }
@@ -448,6 +470,14 @@ impl GroupedVanillaOrder {
             Self::Standing(o) => o.signature(),
             Self::KillOrFill(o) => o.signature()
         }
+    }
+
+    pub fn is_partial(&self) -> bool {
+        matches!(
+            self,
+            Self::Standing(StandingVariants::Partial(_))
+                | Self::KillOrFill(FlashVariants::Partial(_))
+        )
     }
 }
 
@@ -474,7 +504,7 @@ impl GroupedComposableOrder {
 
 impl RawPoolOrder for TopOfBlockOrder {
     fn flash_block(&self) -> Option<u64> {
-        Some(self.validForBlock)
+        Some(self.valid_for_block)
     }
 
     fn from(&self) -> Address {
@@ -486,7 +516,7 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        RespendAvoidanceMethod::Block(self.validForBlock)
+        RespendAvoidanceMethod::Block(self.valid_for_block)
     }
 
     fn deadline(&self) -> Option<U256> {
@@ -494,7 +524,7 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn amount_in(&self) -> u128 {
-        self.quantityIn
+        self.quantity_in
     }
 
     fn limit_price(&self) -> U256 {
@@ -502,36 +532,37 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.quantityOut
+        self.quantity_out
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
-        sig.recover_signer(hash)
-            .filter(|recovered_addr| recovered_addr == &self.meta.from)
-            .is_some()
+        sig.recover_signer_full_public_key(hash)
+            .map(|pk| Address::from_raw_public_key(&*pk) == self.meta.from)
+            .unwrap_or_default()
     }
 
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Searcher
     }
 }
+
 impl RawPoolOrder for PartialStandingOrder {
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
-        sig.recover_signer(hash)
-            .filter(|recovered_addr| recovered_addr == &self.meta.from)
-            .is_some()
+        sig.recover_signer_full_public_key(hash)
+            .map(|pk| Address::from_raw_public_key(&*pk) == self.meta.from)
+            .unwrap_or_default()
     }
 
     fn flash_block(&self) -> Option<u64> {
@@ -543,15 +574,20 @@ impl RawPoolOrder for PartialStandingOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.amountFilled
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.min_amount_in * self.min_price.to::<u128>()
+        } else {
+            self.min_amount_in / self.min_price.to::<u128>()
+        }
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_in(&self) -> u128 {
-        self.maxAmountIn
+        self.max_amount_in
     }
 
     fn deadline(&self) -> Option<U256> {
@@ -567,11 +603,11 @@ impl RawPoolOrder for PartialStandingOrder {
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_location(&self) -> OrderLocation {
@@ -583,9 +619,9 @@ impl RawPoolOrder for ExactStandingOrder {
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
-        sig.recover_signer(hash)
-            .filter(|recovered_addr| recovered_addr == &self.meta.from)
-            .is_some()
+        sig.recover_signer_full_public_key(hash)
+            .map(|pk| Address::from_raw_public_key(&*pk) == self.meta.from)
+            .unwrap_or_default()
     }
 
     fn flash_block(&self) -> Option<u64> {
@@ -597,17 +633,20 @@ impl RawPoolOrder for ExactStandingOrder {
     }
 
     fn amount_out_min(&self) -> u128 {
-        todo!();
-        // self.amount * self.minPrice.to::<u128>()
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.amount * self.min_price.to::<u128>()
+        } else {
+            self.amount / self.min_price.to::<u128>()
+        }
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_in(&self) -> u128 {
-        todo!();
-        // self.amount
+        self.amount
     }
 
     fn deadline(&self) -> Option<U256> {
@@ -623,11 +662,11 @@ impl RawPoolOrder for ExactStandingOrder {
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_location(&self) -> OrderLocation {
@@ -639,13 +678,13 @@ impl RawPoolOrder for PartialFlashOrder {
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
-        sig.recover_signer(hash)
-            .filter(|recovered_addr| recovered_addr == &self.meta.from)
-            .is_some()
+        sig.recover_signer_full_public_key(hash)
+            .map(|pk| Address::from_raw_public_key(&*pk) == self.meta.from)
+            .unwrap_or_default()
     }
 
     fn flash_block(&self) -> Option<u64> {
-        Some(self.validForBlock)
+        Some(self.valid_for_block)
     }
 
     fn order_hash(&self) -> TxHash {
@@ -661,27 +700,32 @@ impl RawPoolOrder for PartialFlashOrder {
     }
 
     fn amount_in(&self) -> u128 {
-        self.maxAmountIn
+        self.max_amount_in
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.minPrice.to::<u128>() * self.minAmountIn
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.min_amount_in * self.min_price.to::<u128>()
+        } else {
+            self.min_amount_in / self.min_price.to::<u128>()
+        }
     }
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        RespendAvoidanceMethod::Block(self.validForBlock)
+        RespendAvoidanceMethod::Block(self.valid_for_block)
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_location(&self) -> OrderLocation {
@@ -693,21 +737,21 @@ impl RawPoolOrder for ExactFlashOrder {
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
-        sig.recover_signer(hash)
-            .filter(|recovered_addr| recovered_addr == &self.meta.from)
-            .is_some()
+        sig.recover_signer_full_public_key(hash)
+            .map(|pk| Address::from_raw_public_key(&*pk) == self.meta.from)
+            .unwrap_or_default()
     }
 
     fn flash_block(&self) -> Option<u64> {
-        Some(self.validForBlock)
+        Some(self.valid_for_block)
     }
 
     fn token_in(&self) -> Address {
-        self.assetIn
+        self.asset_in
     }
 
     fn token_out(&self) -> Address {
-        self.assetOut
+        self.asset_out
     }
 
     fn order_hash(&self) -> TxHash {
@@ -727,15 +771,20 @@ impl RawPoolOrder for ExactFlashOrder {
     }
 
     fn limit_price(&self) -> U256 {
-        self.minPrice
+        self.min_price
     }
 
     fn amount_out_min(&self) -> u128 {
-        self.minPrice.to::<u128>() * self.amount
+        // TODO: verify math on this. feels wrong
+        if self.asset_in < self.asset_out {
+            self.amount * self.min_price.to::<u128>()
+        } else {
+            self.amount / self.min_price.to::<u128>()
+        }
     }
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        RespendAvoidanceMethod::Block(self.validForBlock)
+        RespendAvoidanceMethod::Block(self.valid_for_block)
     }
 
     fn order_location(&self) -> OrderLocation {

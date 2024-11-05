@@ -34,6 +34,25 @@ impl LimitOrderPool {
         }
     }
 
+    pub fn get_order(&self, id: &OrderId) -> Option<OrderWithStorageData<GroupedUserOrder>> {
+        self.limit_orders
+            .get_order(id.pool_id, id.hash)
+            .and_then(|value| {
+                value
+                    .try_map_inner(|this| Ok(GroupedUserOrder::Vanilla(this)))
+                    .ok()
+            })
+            .or_else(|| {
+                self.composable_orders
+                    .get_order(id.pool_id, id.hash)
+                    .and_then(|value| {
+                        value
+                            .try_map_inner(|this| Ok(GroupedUserOrder::Composable(this)))
+                            .ok()
+                    })
+            })
+    }
+
     pub fn add_composable_order(
         &mut self,
         order: OrderWithStorageData<GroupedComposableOrder>

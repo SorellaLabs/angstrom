@@ -7,8 +7,8 @@ use alloy::{
     primitives::{Address, FixedBytes, U256},
     rlp::{Decodable, Encodable, Error}
 };
-use reth_network_peers::pk2id;
-use reth_primitives::Signature as ESignature;
+use alloy_primitives::{Parity, Signature as ESignature};
+use reth_network_peers::{pk2id, PeerId};
 use secp256k1::{
     ecdsa::{RecoverableSignature, RecoveryId},
     Message, SECP256K1
@@ -16,11 +16,9 @@ use secp256k1::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::PeerId;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(transparent)]
-#[derive(Default)]
+//#[derive(Default)]
 pub struct Signature(pub ESignature);
 
 impl Signature {
@@ -31,7 +29,7 @@ impl Signature {
         let r = U256::from_be_slice(&bytes[0..32]);
         let s = U256::from_be_slice(&bytes[32..64]);
         let odd_y_parity = bytes[65] != 0;
-        Ok(Self(ESignature { r, s, odd_y_parity }))
+        Ok(Self(ESignature::new(r, s, Parity::from(odd_y_parity))))
     }
 
     pub fn recover_signer_full_public_key(
@@ -39,9 +37,9 @@ impl Signature {
         message: FixedBytes<32>
     ) -> Result<PeerId, secp256k1::Error> {
         let mut bytes_sig = [0u8; 65];
-        bytes_sig[..32].copy_from_slice(&self.r.to_be_bytes::<32>());
-        bytes_sig[32..64].copy_from_slice(&self.s.to_be_bytes::<32>());
-        bytes_sig[64] = self.odd_y_parity as u8;
+        bytes_sig[..32].copy_from_slice(&self.r().to_be_bytes::<32>());
+        bytes_sig[32..64].copy_from_slice(&self.s().to_be_bytes::<32>());
+        bytes_sig[64] = self.0.v().y_parity() as u8;
 
         let sig = RecoverableSignature::from_compact(
             &bytes_sig[0..64],
@@ -66,7 +64,7 @@ impl Encodable for Signature {
     }
 
     fn length(&self) -> usize {
-        self.0.payload_len()
+        self.0.length()
     }
 }
 impl Decodable for Signature {
@@ -99,10 +97,16 @@ pub enum RecoveryError {
     MessageDoesntMatch
 }
 
+impl Default for Signature {
+    fn default() -> Self {
+        Self(ESignature::new(U256::default(), U256::default(), Parity::default()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::keccak256;
     use rand::thread_rng;
-    use reth_primitives::keccak256;
     use secp256k1::SecretKey;
 
     use super::*;

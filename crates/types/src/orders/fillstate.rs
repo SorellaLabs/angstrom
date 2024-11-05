@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::OrderVolume;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderFillState {
     /// The order has not yet been processed
     #[default]

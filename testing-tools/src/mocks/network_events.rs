@@ -1,11 +1,10 @@
 use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkHandleMsg
 };
-use angstrom_types::sol_bindings::grouped_orders::AllOrders;
+use angstrom_types::{primitive::PeerId, sol_bindings::grouped_orders::AllOrders};
 use reth_metrics::common::mpsc::{
     metered_unbounded_channel, UnboundedMeteredReceiver, UnboundedMeteredSender
 };
-use reth_rpc_types::PeerId;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 

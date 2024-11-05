@@ -7,6 +7,7 @@ use alloy::primitives::U256;
 
 mod ray;
 mod sqrtprice;
+pub mod uniswap;
 
 use malachite::{
     num::{arithmetic::traits::PowerOf2, conversion::traits::FromSciString},
@@ -25,8 +26,9 @@ fn const_2_192() -> &'static Natural {
     ONENINETWO.get_or_init(|| Natural::power_of_2(192))
 }
 
-/// MatchingPrice is the internal price representation used in the matching
-/// engine.  We'll make sure all the various price representations we work with
+/// Internal price representation used in the matching engine.
+///
+/// We'll make sure all the various price representations we work with
 /// can be converted to/from this standard so our Math is sane.  This is a Ray.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MatchingPrice(U256);

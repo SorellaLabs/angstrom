@@ -8,6 +8,7 @@ use malachite::{
     },
     Natural, Rational
 };
+use uniswap_v3_math::tick_math::{get_sqrt_ratio_at_tick, get_tick_at_sqrt_ratio};
 
 use super::{const_1e27, const_2_192, Ray};
 
@@ -31,6 +32,14 @@ impl SqrtPriceX96 {
     /// Convert a floating point price `P` into a SqrtPriceX96 `sqrt(P)`
     pub fn from_float_price(price: f64) -> Self {
         SqrtPriceX96(U160::from(price.sqrt() * (2.0_f64.pow(96))))
+    }
+
+    pub fn at_tick(tick: i32) -> eyre::Result<Self> {
+        Ok(Self::from(get_sqrt_ratio_at_tick(tick)?))
+    }
+
+    pub fn to_tick(&self) -> eyre::Result<i32> {
+        Ok(get_tick_at_sqrt_ratio(U256::from(self.0))?)
     }
 }
 

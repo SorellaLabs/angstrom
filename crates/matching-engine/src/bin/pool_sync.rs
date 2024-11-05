@@ -7,9 +7,8 @@ use alloy::{
     providers::{ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend
 };
-use amms::amm::uniswap_v3::UniswapV3Pool;
 use matching_engine::cfmm::uniswap::{
-    pool::EnhancedUniswapV3Pool, pool_manager::UniswapPoolManager,
+    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
     pool_providers::mock_block_stream::MockBlockStream
 };
 use tokio::signal::unix::{signal, SignalKind};
@@ -23,29 +22,28 @@ async fn main() -> eyre::Result<()> {
 
     let ws_endpoint = std::env::var("ETHEREUM_WS_ENDPOINT")?;
     let ws = WsConnect::new(ws_endpoint);
-    let ws_provider: RootProvider<PubSubFrontend, Ethereum> =
+    let provider: RootProvider<PubSubFrontend, Ethereum> =
         ProviderBuilder::default().on_ws(ws).await.unwrap();
-    let ws_provider = Arc::new(ws_provider);
+    let provider = Arc::new(provider);
     let ticks_per_side = 400;
     let block_number = 20522309;
     let from_block = block_number + 1;
     let to_block = block_number + 100;
     let address = address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640");
-    let mut pool = EnhancedUniswapV3Pool::new(address, ticks_per_side);
-    pool.set_sim_swap_sync(true);
+    let mut pool = EnhancedUniswapPool::new(DataLoader::new(address), ticks_per_side);
     tracing::info!(block_number = block_number, "loading old pool");
-    pool.initialize(Some(block_number), ws_provider.clone())
+    pool.initialize(Some(block_number), provider.clone())
         .await?;
-    pool.sync_ticks(Some(block_number), ws_provider.clone())
-        .await?;
+    pool.set_sim_swap_sync(true);
+
     let state_change_buffer = 1;
 
-    let mock_block_stream =
-        Arc::new(MockBlockStream::new(ws_provider.clone(), from_block, to_block));
-    let state_space_manager =
-        UniswapPoolManager::new(pool, block_number, state_change_buffer, mock_block_stream);
+    let mock_block_stream = Arc::new(MockBlockStream::new(provider.clone(), from_block, to_block));
+    let pools = vec![pool];
+    let uniswap_pool_manager =
+        UniswapPoolManager::new(pools, block_number, state_change_buffer, mock_block_stream);
 
-    let (mut rx, _join_handles) = state_space_manager.subscribe_state_changes().await?;
+    let (mut rx, _join_handles) = uniswap_pool_manager.subscribe_state_changes().await?;
 
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigint = signal(SignalKind::interrupt())?;
@@ -55,12 +53,10 @@ async fn main() -> eyre::Result<()> {
             _ = sigterm.recv() => break,
             _ = sigint.recv() => break,
             state_changes = rx.recv() => {
-                if let Some(changes) = state_changes {
-                   let pool_guard = state_space_manager.pool().await;
-                    let changes_block_number = changes.1;
-                    let mut fresh_pool = EnhancedUniswapV3Pool::new(address, ticks_per_side);
-                    fresh_pool.initialize(Some(changes_block_number), ws_provider.clone()).await?;
-                    fresh_pool.sync_ticks(Some(changes_block_number), ws_provider.clone()).await?;
+                if let Some((address, changes_block_number)) = state_changes {
+                   let pool_guard = uniswap_pool_manager.pool(&address).await.unwrap();
+                    let mut fresh_pool = EnhancedUniswapPool::new(DataLoader::new(address), ticks_per_side);
+                    fresh_pool.initialize(Some(changes_block_number), provider.clone()).await?;
 
                     // Compare the new pool with the old pool
                     compare_pools(&pool_guard, &fresh_pool, changes_block_number);
@@ -76,7 +72,7 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-fn compare_pools(old: &UniswapV3Pool, new: &EnhancedUniswapV3Pool, block_number: BlockNumber) {
+fn compare_pools(old: &EnhancedUniswapPool, new: &EnhancedUniswapPool, block_number: BlockNumber) {
     let mut differences_found = false;
     if old.liquidity != new.liquidity {
         differences_found = true;
@@ -220,8 +216,8 @@ fn compare_pools(old: &UniswapV3Pool, new: &EnhancedUniswapV3Pool, block_number:
         }
     }
     if differences_found {
-        tracing::error!(block_number=block_number, address=?old.address, "differences found between pools");
+        tracing::error!(block_number=block_number, address=?old.address(), "differences found between pools");
     } else {
-        tracing::info!(block_number=block_number, address=?old.address, "pools are the same");
+        tracing::info!(block_number=block_number, address=?old.address(), "pools are the same");
     }
 }

@@ -1,12 +1,8 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicU64, Arc}
-};
+use std::{collections::HashMap, sync::Arc};
 
-use alloy::primitives::Address;
+use alloy::primitives::{Address, B256, U256};
 use angstrom_types::sol_bindings::{ext::RawPoolOrder, RespendAvoidanceMethod};
 use dashmap::DashMap;
-use reth_primitives::{B256, U256};
 
 use crate::order::state::{db_state_utils::StateFetchUtils, pools::UserOrderPoolInfo};
 
@@ -67,8 +63,6 @@ pub struct PendingUserAction {
 }
 
 pub struct UserAccounts {
-    /// lets us know what the baseline state is for a user on a given block
-    current_block:   Arc<AtomicU64>,
     /// all of a user addresses pending orders.
     pending_actions: Arc<DashMap<UserAddress, Vec<PendingUserAction>>>,
 
@@ -76,10 +70,15 @@ pub struct UserAccounts {
     last_known_state: Arc<DashMap<UserAddress, BaselineState>>
 }
 
+impl Default for UserAccounts {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserAccounts {
-    pub fn new(current_block: u64) -> Self {
+    pub fn new() -> Self {
         Self {
-            current_block:    Arc::new(AtomicU64::new(current_block)),
             pending_actions:  Arc::new(DashMap::default()),
             last_known_state: Arc::new(DashMap::default())
         }
@@ -93,7 +92,7 @@ impl UserAccounts {
         });
 
         // remove all singular orders
-        self.pending_actions.retain(|user, pending_orders| {
+        self.pending_actions.retain(|_, pending_orders| {
             pending_orders.retain(|p| !orders.contains(&p.order_hash));
             !pending_orders.is_empty()
         });
@@ -181,7 +180,7 @@ impl UserAccounts {
     ) -> Vec<B256> {
         let token = action.token_address;
         let mut entry = self.pending_actions.entry(user).or_default();
-        let mut value = entry.value_mut();
+        let value = entry.value_mut();
 
         value.push(action);
         value.sort_unstable_by_key(|k| k.respend.get_ord_for_pending_orders());
@@ -234,8 +233,8 @@ impl UserAccounts {
         respend: RespendAvoidanceMethod
     ) -> Option<LiveState> {
         let baseline = self.last_known_state.get(&user)?;
-        let mut baseline_approval = *baseline.token_approval.get(&token)?;
-        let mut baseline_balance = *baseline.token_balance.get(&token)?;
+        let baseline_approval = *baseline.token_approval.get(&token)?;
+        let baseline_balance = *baseline.token_balance.get(&token)?;
 
         // the values returned here are the negative delta compaired to baseline.
         let (pending_approvals, pending_balance) = self

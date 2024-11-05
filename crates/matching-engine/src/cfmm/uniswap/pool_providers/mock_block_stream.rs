@@ -1,8 +1,8 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use alloy::{network::Network, providers::Provider, rpc::types::Filter, transports::Transport};
+use alloy_primitives::Log;
 use futures_util::StreamExt;
-use reth_primitives::Log;
 
 use crate::cfmm::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 

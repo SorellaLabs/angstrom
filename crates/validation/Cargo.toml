@@ -15,12 +15,14 @@ angstrom-utils.workspace = true
 angstrom-eth.workspace = true
 rayon.workspace = true
 auto_impl.workspace = true
+pade.workspace = true
 
 # anvil.workspace = true
 # anvil-core.workspace = true
 anyhow.workspace = true
 hex-literal.workspace = true
 angstrom-types.workspace = true
+matching-engine.workspace = true
 
 derive_more = "0.99.17"
 
@@ -98,4 +100,6 @@ tempfile.workspace = true
 
 # features
 [features]
+default = ["testnet"]
 reth-db-dep-tests = []
+testnet = []

@@ -9,7 +9,6 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
-blsful.workspace = true
 consensus.workspace = true
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
@@ -17,6 +16,7 @@ angstrom-network.workspace = true
 angstrom-eth.workspace = true
 angstrom-rpc.workspace = true
 angstrom.workspace = true
+pade.workspace = true
 order-pool.workspace = true
 validation.workspace = true
 matching-engine.workspace = true
@@ -24,34 +24,35 @@ matching-engine.workspace = true
 reth-network-api.workspace = true
 reth-codecs.workspace = true
 reth-tasks.workspace = true
-reth-rpc-types.workspace = true
+# reth-rpc-types.workspace = true
+alloy-rpc-types.workspace = true
 reth-eth-wire.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
-alloy.workspace = true
-alloy-rlp.workspace = true
 
+
+alloy = { workspace = true, features = ["rpc-types-anvil"] }
+alloy-rlp.workspace = true
 alloy-primitives.workspace = true
 alloy-sol-types.workspace = true
 
 reth-node-types.workspace = true
 reth-node-ethereum.workspace = true
 reth-revm.workspace = true
-reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
-reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
-reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
-reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
-reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
-reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
-reth-prune-types = { git = "https://github.com/paradigmxyz/reth", version = "1.0.7", tag = "v1.0.7" }
+revm.workspace = true
+reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-prune-types = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 alloy-chains.workspace = true
 
 
 # reth
-reth-discv4 = { workspace = true, features = [
-  "test-utils",
-] }
+reth-discv4 = { workspace = true, features = ["test-utils"] }
 # reth-interfaces = { workspace = true, features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["test-utils"] }
 

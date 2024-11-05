@@ -28,7 +28,6 @@ alloy::sol!(
 
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
-#[allow(dead_code)]
 pub struct EthDataCleanser<DB> {
     angstrom_address: Address,
     /// our command receiver
@@ -186,7 +185,7 @@ where
             .into_iter()
             .flat_map(|receipt| {
                 receipt.logs.iter().filter_map(|log| {
-                    contract_bindings::poolmanager::PoolManager::Initialize::decode_log(log, true)
+                    contract_bindings::pool_manager::PoolManager::Initialize::decode_log(log, true)
                         .map(Into::into)
                         .ok()
                 })

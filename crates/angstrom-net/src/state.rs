@@ -1,10 +1,9 @@
 use std::{collections::HashSet, sync::Arc, task::Context};
 
-use alloy::sol;
+use alloy::{primitives::Address, sol};
+use angstrom_types::primitive::PeerId;
 use parking_lot::RwLock;
 use reth_network::DisconnectReason;
-use reth_network_peers::PeerId;
-use reth_primitives::Address;
 
 use crate::PeersManager;
 
@@ -16,14 +15,14 @@ sol! {
 pub struct StromState<DB> {
     peers_manager: PeersManager,
 
-    db:           DB,
+    _db:          DB,
     active_peers: HashSet<PeerId>,
     validators:   Arc<RwLock<HashSet<Address>>>
 }
 
 impl<DB> StromState<DB> {
-    pub fn new(db: DB, validators: Arc<RwLock<HashSet<Address>>>) -> Self {
-        Self { peers_manager: PeersManager::new(), db, validators, active_peers: HashSet::new() }
+    pub fn new(_db: DB, validators: Arc<RwLock<HashSet<Address>>>) -> Self {
+        Self { peers_manager: PeersManager::new(), _db, validators, active_peers: HashSet::new() }
     }
 
     pub fn peers_mut(&mut self) -> &mut PeersManager {
@@ -34,7 +33,11 @@ impl<DB> StromState<DB> {
         self.validators.clone()
     }
 
-    pub fn poll(&mut self, cx: &mut Context<'_>) -> Option<StateEvent> {
+    pub fn is_active_peer(&self, peer_id: PeerId) -> bool {
+        self.active_peers.contains(&peer_id)
+    }
+
+    pub fn poll(&mut self, _cx: &mut Context<'_>) -> Option<StateEvent> {
         self.peers_manager.poll().map(|action| match action {
             crate::PeerAction::Disconnect { peer_id, reason } => {
                 StateEvent::Disconnect { peer_id, reason }

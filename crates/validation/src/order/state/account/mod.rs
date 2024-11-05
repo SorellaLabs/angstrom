@@ -1,6 +1,6 @@
 //! keeps track of account state for orders
 
-use alloy::primitives::{Address, B256};
+use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
     orders::OrderId,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::OrderWithStorageData}
@@ -9,7 +9,6 @@ use thiserror::Error;
 use user::UserAccounts;
 
 use super::{db_state_utils::StateFetchUtils, pools::UserOrderPoolInfo};
-use crate::common::lru_db::BlockStateProviderFactory;
 
 pub mod user;
 
@@ -24,19 +23,9 @@ pub struct UserAccountProcessor<S> {
 }
 
 impl<S: StateFetchUtils> UserAccountProcessor<S> {
-    pub fn new(current_block: u64, fetch_utils: S) -> Self {
-        let user_accounts = UserAccounts::new(current_block);
+    pub fn new(fetch_utils: S) -> Self {
+        let user_accounts = UserAccounts::new();
         Self { fetch_utils, user_accounts }
-    }
-
-    /// Fetches the state overrides that are required for the hook simulation.
-    pub fn grab_state_for_hook_simulations<O: RawPoolOrder>(
-        &self,
-        order: O,
-        pool_info: UserOrderPoolInfo,
-        block: u64
-    ) -> Result<(), UserAccountVerificationError<O>> {
-        Ok(())
     }
 
     pub fn prepare_for_new_block(&self, users: Vec<Address>, orders: Vec<B256>) {
@@ -47,8 +36,7 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
         &self,
         order: O,
         pool_info: UserOrderPoolInfo,
-        block: u64,
-        is_limit: bool
+        block: u64
     ) -> Result<OrderWithStorageData<O>, UserAccountVerificationError<O>> {
         let user = order.from();
         let order_hash = order.order_hash();
@@ -104,14 +92,7 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
         // invalidate orders with clashing nonces
         invalid_orders.extend(conflicting_orders.into_iter().map(|o| o.order_hash));
 
-        Ok(order.into_order_storage_with_data(
-            block,
-            is_cur_valid,
-            true,
-            is_limit,
-            pool_info,
-            invalid_orders
-        ))
+        Ok(order.into_order_storage_with_data(block, is_cur_valid, true, pool_info, invalid_orders))
     }
 }
 
@@ -123,7 +104,6 @@ pub trait StorageWithData: RawPoolOrder {
         block: u64,
         is_cur_valid: bool,
         is_valid: bool,
-        is_limit: bool,
         pool_info: UserOrderPoolInfo,
         invalidates: Vec<B256>
     ) -> OrderWithStorageData<Self> {
@@ -131,7 +111,7 @@ pub trait StorageWithData: RawPoolOrder {
             priority_data: angstrom_types::orders::OrderPriorityData {
                 price:  self.limit_price(),
                 volume: self.amount_in(),
-                gas:    0
+                gas:    U256::ZERO
             },
             pool_id: pool_info.pool_id,
             is_currently_valid: is_cur_valid,
@@ -140,7 +120,8 @@ pub trait StorageWithData: RawPoolOrder {
             valid_block: block,
             order_id: OrderId::from_all_orders(&self, pool_info.pool_id),
             invalidates,
-            order: self
+            order: self,
+            tob_reward: U256::ZERO
         }
     }
 }
@@ -161,15 +142,12 @@ pub enum UserAccountVerificationError<O: RawPoolOrder> {
 pub mod tests {
     use std::collections::HashSet;
 
-    use alloy::primitives::U256;
+    use alloy::primitives::{Address, U256};
     use angstrom_types::{
         primitive::PoolId,
         sol_bindings::{grouped_orders::GroupedVanillaOrder, RawPoolOrder}
     };
-    use rand::thread_rng;
-    use reth_primitives::Address;
-    use revm::primitives::bitvec::store::BitStore;
-    use testing_tools::type_generator::orders::generate_limit_order;
+    use testing_tools::type_generator::orders::UserOrderBuilder;
 
     use super::{UserAccountProcessor, UserAccountVerificationError, UserAccounts};
     use crate::order::state::{
@@ -177,42 +155,35 @@ pub mod tests {
         pools::{pool_tracker_mock::MockPoolTracker, PoolsTracker}
     };
 
-    fn setup_test_account_processor(block: u64) -> UserAccountProcessor<MockFetch> {
+    fn setup_test_account_processor() -> UserAccountProcessor<MockFetch> {
         UserAccountProcessor {
-            user_accounts: UserAccounts::new(block),
+            user_accounts: UserAccounts::new(),
             fetch_utils:   MockFetch::default()
         }
     }
 
     #[test]
     fn test_baseline_order_verification_for_single_order() {
-        let block = 420;
-        let mut processor = setup_test_account_processor(block);
+        let processor = setup_test_account_processor();
 
         let user = Address::random();
 
         let token0 = Address::random();
         let token1 = Address::random();
 
-        let mut mock_pool = MockPoolTracker::default();
+        let mock_pool = MockPoolTracker::default();
 
         let pool = PoolId::default();
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let mut rng = thread_rng();
-        let mut order: GroupedVanillaOrder = generate_limit_order(
-            &mut rng,
-            false,
-            true,
-            Some(pool),
-            None,
-            Some(token0),
-            Some(token1),
-            Some(420),
-            Some(user)
-        )
-        .order;
+        let order: GroupedVanillaOrder = UserOrderBuilder::new()
+            .standing()
+            .asset_in(token0)
+            .asset_out(token1)
+            .nonce(420)
+            .recipient(user)
+            .build();
 
         // wrap order with details
         let pool_info = mock_pool
@@ -229,38 +200,31 @@ pub mod tests {
 
         println!("verifying orders");
         processor
-            .verify_order(order, pool_info, 420, true)
+            .verify_order(order, pool_info, 420)
             .expect("order should be valid");
     }
 
     #[test]
     fn test_failure_on_duplicate_pending_nonce() {
-        let block = 420;
-        let mut processor = setup_test_account_processor(block);
+        let processor = setup_test_account_processor();
 
         let user = Address::random();
 
         let token0 = Address::random();
         let token1 = Address::random();
 
-        let mut mock_pool = MockPoolTracker::default();
+        let mock_pool = MockPoolTracker::default();
         let pool = PoolId::default();
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let mut rng = thread_rng();
-        let mut order: GroupedVanillaOrder = generate_limit_order(
-            &mut rng,
-            false,
-            true,
-            Some(pool),
-            None,
-            Some(token0),
-            Some(token1),
-            Some(420),
-            Some(user)
-        )
-        .order;
+        let order: GroupedVanillaOrder = UserOrderBuilder::new()
+            .standing()
+            .asset_in(token0)
+            .asset_out(token1)
+            .nonce(420)
+            .recipient(user)
+            .build();
 
         // wrap order with details
         let pool_info = mock_pool
@@ -281,12 +245,12 @@ pub mod tests {
         println!("finished first order config");
         // first time verifying should pass
         processor
-            .verify_order(order.clone(), pool_info.clone(), 420, true)
+            .verify_order(order.clone(), pool_info.clone(), 420)
             .expect("order should be valid");
 
         println!("first order has been set valid");
         // second time should fail
-        let Err(e) = processor.verify_order(order, pool_info, 420, true) else {
+        let Err(e) = processor.verify_order(order, pool_info, 420) else {
             panic!("verifying order should of failed")
         };
         assert!(matches!(e, UserAccountVerificationError::DuplicateNonce(..)));
@@ -294,45 +258,32 @@ pub mod tests {
 
     #[test]
     fn test_order_replacement_on_lower_nonce() {
-        let block = 420;
-        let mut processor = setup_test_account_processor(block);
+        let processor = setup_test_account_processor();
 
         let user = Address::random();
 
         let token0 = Address::random();
         let token1 = Address::random();
 
-        let mut mock_pool = MockPoolTracker::default();
+        let mock_pool = MockPoolTracker::default();
         let pool = PoolId::default();
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let mut rng = thread_rng();
-        let mut order0: GroupedVanillaOrder = generate_limit_order(
-            &mut rng,
-            false,
-            true,
-            Some(pool),
-            None,
-            Some(token0),
-            Some(token1),
-            Some(420),
-            Some(user)
-        )
-        .order;
-
-        let mut order1: GroupedVanillaOrder = generate_limit_order(
-            &mut rng,
-            false,
-            true,
-            Some(pool),
-            None,
-            Some(token0),
-            Some(token1),
-            Some(10),
-            Some(user)
-        )
-        .order;
+        let order0: GroupedVanillaOrder = UserOrderBuilder::new()
+            .standing()
+            .asset_in(token0)
+            .asset_out(token1)
+            .nonce(420)
+            .recipient(user)
+            .build();
+        let order1: GroupedVanillaOrder = UserOrderBuilder::new()
+            .standing()
+            .asset_in(token0)
+            .asset_out(token1)
+            .nonce(90)
+            .recipient(user)
+            .build();
         // wrap order with details
         let pool_info0 = mock_pool
             .fetch_pool_info_for_order(&order0)
@@ -355,45 +306,38 @@ pub mod tests {
         let order0_hash = order0.hash();
         // first time verifying should pass
         processor
-            .verify_order(order0, pool_info0, 420, true)
+            .verify_order(order0, pool_info0, 420)
             .expect("order should be valid");
 
         // very second order and that order0 hash is in the invalid_orders
         // second time should fail
         let res = processor
-            .verify_order(order1, pool_info1, 420, true)
+            .verify_order(order1, pool_info1, 420)
             .expect("should be valid");
         assert_eq!(res.invalidates, vec![order0_hash]);
     }
 
     #[test]
     fn test_nonce_rejection() {
-        let block = 420;
-        let mut processor = setup_test_account_processor(block);
+        let processor = setup_test_account_processor();
 
         let user = Address::random();
 
         let token0 = Address::random();
         let token1 = Address::random();
 
-        let mut mock_pool = MockPoolTracker::default();
+        let mock_pool = MockPoolTracker::default();
         let pool = PoolId::default();
 
         mock_pool.add_pool(token0, token1, pool);
 
-        let mut rng = thread_rng();
-        let mut order: GroupedVanillaOrder = generate_limit_order(
-            &mut rng,
-            false,
-            true,
-            Some(pool),
-            None,
-            Some(token0),
-            Some(token1),
-            Some(420),
-            Some(user)
-        )
-        .order;
+        let order: GroupedVanillaOrder = UserOrderBuilder::new()
+            .standing()
+            .asset_in(token0)
+            .asset_out(token1)
+            .nonce(420)
+            .recipient(user)
+            .build();
 
         // wrap order with details
         let pool_info = mock_pool
@@ -404,7 +348,7 @@ pub mod tests {
             .fetch_utils
             .set_used_nonces(user, HashSet::from([420]));
 
-        let Err(e) = processor.verify_order(order, pool_info, 420, true) else {
+        let Err(e) = processor.verify_order(order, pool_info, 420) else {
             panic!("verifying order should of failed")
         };
 

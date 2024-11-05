@@ -21,14 +21,14 @@ use std::{
     sync::{atomic::AtomicU64, Arc}
 };
 
+use angstrom_types::primitive::PeerId;
 pub use connection_handler::*;
 use futures::task::Poll;
 use reth_eth_wire::DisconnectReason;
 use reth_network::Direction;
-use reth_network_peers::PeerId;
 use tracing::warn;
 
-use crate::{errors::StromStreamError, PeerKind, StromMessage, StromProtocolMessage};
+use crate::{errors::StromStreamError, StromMessage, StromProtocolMessage};
 
 #[derive(Debug)]
 pub struct StromSessionManager {

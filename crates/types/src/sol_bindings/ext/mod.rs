@@ -6,9 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::orders::OrderLocation;
 
-pub mod contract_bundle_ext;
 pub mod grouped_orders;
-pub mod top_of_block_ext;
 
 /// The capability of all default orders.
 pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
@@ -50,6 +48,12 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
 pub enum RespendAvoidanceMethod {
     Nonce(u64),
     Block(u64)
+}
+
+impl Default for RespendAvoidanceMethod {
+    fn default() -> Self {
+        Self::Nonce(0)
+    }
 }
 
 impl RespendAvoidanceMethod {

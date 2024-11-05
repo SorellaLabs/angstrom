@@ -35,6 +35,16 @@ impl SearcherPool {
         }
     }
 
+    pub fn get_order(
+        &self,
+        pool_id: PoolId,
+        order_id: alloy::primitives::FixedBytes<32>
+    ) -> Option<OrderWithStorageData<TopOfBlockOrder>> {
+        self.searcher_orders
+            .get(&pool_id)
+            .and_then(|pool| pool.get_order(order_id))
+    }
+
     pub fn add_searcher_order(
         &mut self,
         order: OrderWithStorageData<TopOfBlockOrder>
@@ -60,6 +70,19 @@ impl SearcherPool {
             .get_mut(&id.pool_id)
             .and_then(|pool| pool.remove_order(id.hash))
             .owned_map(|| self.metrics.decr_all_orders(id.pool_id, 1))
+    }
+
+    pub fn get_all_pool_ids(&self) -> Vec<PoolId> {
+        self.searcher_orders.keys().cloned().collect()
+    }
+
+    pub fn get_orders_for_pool(
+        &self,
+        pool_id: &PoolId
+    ) -> Option<Vec<OrderWithStorageData<TopOfBlockOrder>>> {
+        self.searcher_orders
+            .get(pool_id)
+            .map(|pool| pool.get_all_orders())
     }
 
     pub fn get_all_orders(&self) -> Vec<OrderWithStorageData<TopOfBlockOrder>> {

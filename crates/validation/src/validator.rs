@@ -1,25 +1,13 @@
-use std::{
-    pin::Pin,
-    sync::{atomic::AtomicU64, Arc},
-    task::Poll
-};
+use std::{fmt::Debug, task::Poll};
 
 use alloy::primitives::{Address, B256};
-use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures_util::{Future, FutureExt};
-use tokio::{
-    runtime::Handle,
-    sync::mpsc::{UnboundedReceiver, UnboundedSender}
-};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::{
-    common::lru_db::BlockStateProviderFactory,
-    order::{
-        order_validator::OrderValidator,
-        sim::SimValidation,
-        state::{account::user::UserAddress, db_state_utils::StateFetchUtils, pools::PoolsTracker},
-        OrderValidationRequest, OrderValidationResults
-    }
+use crate::order::{
+    order_validator::OrderValidator,
+    state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
+    OrderValidationRequest, OrderValidationResults
 };
 
 pub enum ValidationRequest {
@@ -42,9 +30,10 @@ pub struct Validator<DB, Pools, Fetch> {
 
 impl<DB, Pools, Fetch> Validator<DB, Pools, Fetch>
 where
-    DB: BlockStateProviderFactory + Unpin + Clone + 'static,
+    DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync,
     Pools: PoolsTracker + Sync + 'static,
-    Fetch: StateFetchUtils + Sync + 'static
+    Fetch: StateFetchUtils + Sync + 'static,
+    <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
     pub fn new(
         rx: UnboundedReceiver<ValidationRequest>,
@@ -69,7 +58,8 @@ where
 
 impl<DB, Pools, Fetch> Future for Validator<DB, Pools, Fetch>
 where
-    DB: BlockStateProviderFactory + Unpin + Clone + 'static,
+    DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Send + Sync,
+    <DB as revm::DatabaseRef>::Error: Send + Sync + Debug,
     Pools: PoolsTracker + Sync + Unpin + 'static,
     Fetch: StateFetchUtils + Sync + Unpin + 'static
 {

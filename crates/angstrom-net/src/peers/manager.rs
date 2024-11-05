@@ -1,66 +1,12 @@
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
-use angstrom_types::primitive::PeerId;
 use reth_eth_wire::DisconnectReason;
 use reth_net_banlist::BanList;
-use reth_network_peers::NodeRecord;
-use tokio::{
-    sync::{mpsc, mpsc::UnboundedSender, oneshot},
-    time::{Duration, Instant, Interval}
-};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use reth_network_peers::PeerId;
 use tracing::trace;
 
 pub use super::reputation::ReputationChangeWeights;
-use super::reputation::{is_banned_reputation, ReputationChangeKind, DEFAULT_REPUTATION};
-
-// /// A communication channel to the [`PeersManager`] to apply manual changes
-// to /// the peer set.
-// #[derive(Clone, Debug)]
-// pub struct PeersHandle {
-//     /// Sender half of command channel back to the [`PeersManager`]
-//     manager_tx: mpsc::UnboundedSender<PeerCommand>
-// }
-//
-// // === impl PeersHandle ===
-//
-// impl PeersHandle {
-//     fn send(&self, cmd: PeerCommand) {
-//         let _ = self.manager_tx.send(cmd);
-//     }
-//
-//     /// Adds a peer to the set.
-//     pub fn add_peer(&self, peer_id: PeerId) {
-//         self.send(PeerCommand::Add(peer_id));
-//     }
-//
-//     /// Removes a peer from the set.
-//     pub fn remove_peer(&self, peer_id: PeerId) {
-//         self.send(PeerCommand::Remove(peer_id));
-//     }
-//
-//     /// Send a reputation change for the given peer.
-//     pub fn reputation_change(&self, peer_id: PeerId, kind:
-// ReputationChangeKind) {         self.
-// send(PeerCommand::ReputationChange(peer_id, kind));     }
-//
-//     /// Returns a peer by its [`PeerId`], or `None` if the peer is not in the
-//     /// peer set.
-//     pub async fn peer_by_id(&self, peer_id: PeerId) -> Option<Peer> {
-//         let (tx, rx) = oneshot::channel();
-//         self.send(PeerCommand::GetPeer(peer_id, tx));
-//
-//         rx.await.unwrap_or(None)
-//     }
-//
-//     /// Returns all peers in the peerset.
-//     pub async fn all_peers(&self) -> Vec<NodeRecord> {
-//         let (tx, rx) = oneshot::channel();
-//         self.send(PeerCommand::GetPeers(tx));
-//
-//         rx.await.unwrap_or_default()
-//     }
-// }
+use super::reputation::{is_banned_reputation, ReputationChangeKind};
 
 /// Maintains the state of _all_ the peers known to the network.
 ///
@@ -78,9 +24,7 @@ pub struct PeersManager {
     /// How to weigh reputation changes
     reputation_weights: ReputationChangeWeights,
     /// Tracks unwanted ips/peer ids.
-    ban_list:           BanList,
-    /// How long to ban bad peers.
-    ban_duration:       Duration
+    ban_list:           BanList
 }
 
 impl Default for PeersManager {
@@ -95,8 +39,7 @@ impl PeersManager {
             peers:              HashMap::new(),
             queued_actions:     VecDeque::new(),
             reputation_weights: ReputationChangeWeights::default(),
-            ban_list:           BanList::default(),
-            ban_duration:       Duration::from_secs(60 * 60 * 24 * 365)
+            ban_list:           BanList::default()
         }
     }
 
@@ -106,9 +49,8 @@ impl PeersManager {
         if entry.get().is_trusted() {
             return
         }
-        let mut peer = entry.remove();
 
-        trace!(target: "net::peers",  ?peer_id, "remove discovered node");
+        trace!(target: "angstrom::net::peers",  ?peer_id, "remove discovered node");
         self.queued_actions
             .push_back(PeerAction::PeerRemoved(peer_id));
     }
@@ -151,22 +93,22 @@ impl PeersManager {
     }
 }
 
-/// Commands the [`PeersManager`] listens for.
-#[derive(Debug)]
-pub(crate) enum PeerCommand {
-    /// Command for manually add
-    Add(PeerId),
-    /// Remove a peer from the set
-    ///
-    /// If currently connected this will disconnect the session
-    Remove(PeerId),
-    /// Apply a reputation change to the given peer.
-    ReputationChange(PeerId, ReputationChangeKind),
-    /// Get information about a peer
-    GetPeer(PeerId, oneshot::Sender<Option<Peer>>),
-    /// Get node information on all peers
-    GetPeers(oneshot::Sender<Vec<NodeRecord>>)
-}
+// /// Commands the [`PeersManager`] listens for.
+// #[derive(Debug)]
+// pub(crate) enum PeerCommand {
+//     /// Command for manually add
+//     Add(PeerId),
+//     /// Remove a peer from the set
+//     ///
+//     /// If currently connected this will disconnect the session
+//     Remove(PeerId),
+//     /// Apply a reputation change to the given peer.
+//     ReputationChange(PeerId, ReputationChangeKind),
+//     /// Get information about a peer
+//     GetPeer(PeerId, oneshot::Sender<Option<Peer>>),
+//     /// Get node information on all peers
+//     GetPeers(oneshot::Sender<Vec<NodeRecord>>)
+// }
 
 /// Represents the kind of peer
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
@@ -189,8 +131,6 @@ pub struct Peer {
     reputation: i32,
     /// The kind of peer
     kind:       PeerKind,
-    /// If the peer is trusted
-    trusted:    bool,
     /// if peer is connected
     connected:  bool
 }
@@ -210,17 +150,17 @@ enum ReputationChangeOutcome {
 // === impl Peer ===
 
 impl Peer {
-    fn new(kind: PeerKind, trusted: bool, connected: bool) -> Self {
-        Peer { reputation: DEFAULT_REPUTATION, kind, trusted, connected }
-    }
-
-    /// Resets the reputation of the peer to the default value. This always
-    /// returns [`ReputationChangeOutcome::None`].
-    fn reset_reputation(&mut self) -> ReputationChangeOutcome {
-        self.reputation = DEFAULT_REPUTATION;
-
-        ReputationChangeOutcome::None
-    }
+    // fn new(kind: PeerKind, trusted: bool, connected: bool) -> Self {
+    //     Peer { reputation: DEFAULT_REPUTATION, kind, trusted, connected }
+    // }
+    //
+    // /// Resets the reputation of the peer to the default value. This always
+    // /// returns [`ReputationChangeOutcome::None`].
+    // fn reset_reputation(&mut self) -> ReputationChangeOutcome {
+    //     self.reputation = DEFAULT_REPUTATION;
+    //
+    //     ReputationChangeOutcome::None
+    // }
 
     /// Applies a reputation change to the peer and returns what action should
     /// be taken.
@@ -229,7 +169,7 @@ impl Peer {
         // we add reputation since negative reputation change decrease total reputation
         self.reputation = previous.saturating_add(reputation);
 
-        trace!(target: "net::peers", reputation=%self.reputation, banned=%self.is_banned(), "applied reputation change");
+        trace!(target: "angstrom::net::peers", reputation=%self.reputation, banned=%self.is_banned(), "applied reputation change");
 
         if self.connected && self.is_banned() {
             self.connected = false;
@@ -253,11 +193,11 @@ impl Peer {
         is_banned_reputation(self.reputation)
     }
 
-    /// Unbans the peer by resetting its reputation
-    #[inline]
-    fn unban(&mut self) {
-        self.reputation = DEFAULT_REPUTATION
-    }
+    // /// Unbans the peer by resetting its reputation
+    // #[inline]
+    // fn unban(&mut self) {
+    //     self.reputation = DEFAULT_REPUTATION
+    // }
 
     /// Returns whether this peer is trusted
     #[inline]

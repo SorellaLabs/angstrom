@@ -1,24 +1,21 @@
 use angstrom_types::{
-    matching::SqrtPriceX96,
+    matching::{uniswap::PoolSnapshot, SqrtPriceX96},
     primitive::PoolId,
     sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
 };
-use matching_engine::{
-    book::{sort::SortStrategy, OrderBook},
-    cfmm::uniswap::MarketSnapshot
-};
+use matching_engine::book::{sort::SortStrategy, OrderBook};
 use uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio;
 
 use super::{
     amm::generate_single_position_amm_at_tick,
-    orders::{generate_order_distribution, DistributionParameters}
+    orders::{DistributionParameters, OrderDistributionBuilder}
 };
 
 // What are the parameters of an order builder?  A set of orders can be from
 #[derive(Default)]
 pub struct BookBuilder {
     _poolid: Option<PoolId>,
-    _amm:    Option<MarketSnapshot>,
+    _amm:    Option<PoolSnapshot>,
     _bids:   Option<Vec<OrderWithStorageData<GroupedVanillaOrder>>>,
     _asks:   Option<Vec<OrderWithStorageData<GroupedVanillaOrder>>>,
     _sort:   Option<SortStrategy>
@@ -43,7 +40,7 @@ impl BookBuilder {
         self
     }
 
-    pub fn amm(mut self, amm: Option<MarketSnapshot>) -> Self {
+    pub fn amm(mut self, amm: Option<PoolSnapshot>) -> Self {
         self._amm = amm;
         self
     }
@@ -68,12 +65,24 @@ pub fn generate_simple_cross_book(pool_id: PoolId, order_count: usize, price: f6
     let valid_block = 10;
     let (bidprice, askprice) = DistributionParameters::crossed_at(price);
     let (bidquant, askquant) = DistributionParameters::fixed_at(100.0);
-    let bids =
-        generate_order_distribution(true, order_count, bidprice, bidquant, pool_id, valid_block)
-            .unwrap();
-    let asks =
-        generate_order_distribution(false, order_count, askprice, askquant, pool_id, valid_block)
-            .unwrap();
+    let bids = OrderDistributionBuilder::new()
+        .bid()
+        .order_count(order_count)
+        .price_params(bidprice)
+        .volume_params(bidquant)
+        .pool_id(pool_id)
+        .valid_block(valid_block)
+        .build()
+        .unwrap();
+    let asks = OrderDistributionBuilder::new()
+        .ask()
+        .order_count(order_count)
+        .price_params(askprice)
+        .volume_params(askquant)
+        .pool_id(pool_id)
+        .valid_block(valid_block)
+        .build()
+        .unwrap();
     let amm_tick = get_tick_at_sqrt_ratio(SqrtPriceX96::from_float_price(price).into()).unwrap();
     let amm = generate_single_position_amm_at_tick(amm_tick, 10000, 2e18 as u128);
     BookBuilder::new()
@@ -94,7 +103,14 @@ pub fn generate_one_sided_book(
     let (bidprice, askprice) = DistributionParameters::crossed_at(price);
     let (bidquant, askquant) = DistributionParameters::fixed_at(100.0);
     let bids = if bid_side {
-        generate_order_distribution(true, order_count, bidprice, bidquant, pool_id, valid_block)
+        OrderDistributionBuilder::new()
+            .bid()
+            .order_count(order_count)
+            .price_params(bidprice)
+            .volume_params(bidquant)
+            .pool_id(pool_id)
+            .valid_block(valid_block)
+            .build()
             .unwrap()
     } else {
         Vec::new()
@@ -102,7 +118,14 @@ pub fn generate_one_sided_book(
     let asks = if bid_side {
         Vec::new()
     } else {
-        generate_order_distribution(false, order_count, askprice, askquant, pool_id, valid_block)
+        OrderDistributionBuilder::new()
+            .ask()
+            .order_count(order_count)
+            .price_params(askprice)
+            .volume_params(askquant)
+            .pool_id(pool_id)
+            .valid_block(valid_block)
+            .build()
             .unwrap()
     };
     let amm_tick = get_tick_at_sqrt_ratio(SqrtPriceX96::from_float_price(price).into()).unwrap();

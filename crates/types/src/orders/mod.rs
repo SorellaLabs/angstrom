@@ -13,8 +13,6 @@ pub type OrderID = u128;
 pub type OrderVolume = U256;
 pub type OrderPrice = MatchingPrice;
 
-// mod pooled;
-// pub use pooled::*;
 use crate::{
     matching::{MatchingPrice, Ray},
     primitive::PoolId,
@@ -27,7 +25,7 @@ pub struct OrderSet<Limit, Searcher> {
     pub searcher: Vec<OrderWithStorageData<Searcher>>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetAmmOrder {
     Buy(U256, U256),
     Sell(U256, U256)
@@ -80,7 +78,7 @@ impl NetAmmOrder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderOutcome {
     pub id:      OrderId,
     pub outcome: OrderFillState
@@ -92,7 +90,7 @@ impl OrderOutcome {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolSolution {
     /// Id of this pool
     pub id:           PoolId,

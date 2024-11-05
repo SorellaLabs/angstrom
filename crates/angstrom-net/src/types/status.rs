@@ -3,20 +3,14 @@ use std::{
     time::{SystemTime, UNIX_EPOCH}
 };
 
-use alloy::rlp::{RlpDecodable, RlpEncodable};
-use alloy_chains::{Chain, NamedChain};
-use angstrom_types::primitive::Signature;
-use reth_chainspec::ChainSpec;
-use reth_primitives::{alloy_primitives::FixedBytes, keccak256, Address, BufMut, BytesMut, Head};
-use reth_rpc_types::PeerId;
-use secp256k1::{
-    ecdsa::{RecoverableSignature, RecoveryId},
-    ffi::CPtr,
-    Message, SECP256K1
+use alloy::{
+    primitives::{keccak256, FixedBytes},
+    rlp::{BufMut, BytesMut}
 };
+use angstrom_types::primitive::{PeerId, Signature};
 use serde::{Deserialize, Serialize};
 
-use crate::{version::StromVersion, StatusBuilder};
+use crate::StatusBuilder;
 
 /// The status message is used in the strom protocol to ensure that the
 /// connecting peer is using the same protocol version and is on the same chain.

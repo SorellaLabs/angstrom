@@ -103,16 +103,6 @@ impl ReputationChangeWeights {
 #[derive(Debug, Copy, Clone, Default)]
 pub(crate) struct ReputationChange(Reputation);
 
-// === impl ReputationChange ===
-
-impl ReputationChange {
-    /// Helper type for easier conversion
-    #[inline]
-    pub(crate) fn as_i32(self) -> Reputation {
-        self.0
-    }
-}
-
 impl From<ReputationChange> for Reputation {
     fn from(value: ReputationChange) -> Self {
         value.0

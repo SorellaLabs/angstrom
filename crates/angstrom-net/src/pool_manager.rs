@@ -1,63 +1,32 @@
 use std::{
-    collections::{HashMap, HashSet},
-    future::IntoFuture,
-    hash::Hash,
-    marker::PhantomData,
+    collections::HashMap,
     num::NonZeroUsize,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll}
 };
 
+use alloy::primitives::{Address, B256};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    contract_bindings::poolmanager::PoolManager::{syncCall, PoolManagerCalls::updateDynamicLPFee},
-    orders::{OrderOrigin, OrderPriorityData, OrderSet},
-    primitive::Order,
-    sol_bindings::{
-        grouped_orders::{
-            AllOrders, FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
-        },
-        sol::TopOfBlockOrder,
-        RawPoolOrder
-    }
+    orders::OrderOrigin, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
 };
-use futures::{
-    future::BoxFuture,
-    poll,
-    stream::{BoxStream, FuturesUnordered},
-    Future, FutureExt, Stream, StreamExt
-};
+use futures::{Future, FutureExt, StreamExt};
 use order_pool::{
     order_storage::OrderStorage, OrderIndexer, OrderPoolHandle, PoolConfig, PoolInnerEvent,
     PoolManagerUpdate
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
-use reth_network::transactions::ValidationOutcome;
-use reth_network_peers::PeerId;
-use reth_primitives::{Address, TxHash, B256};
-use reth_rpc_types::txpool::TxpoolStatus;
 use reth_tasks::TaskSpawner;
 use tokio::sync::{
     broadcast,
-    broadcast::{Receiver, Sender},
-    mpsc,
-    mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender},
-    oneshot
+    broadcast::Receiver,
+    mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender}
 };
-use tokio_stream::wrappers::{BroadcastStream, ReceiverStream, UnboundedReceiverStream};
-use validation::{
-    order::{
-        self, order_validator::OrderValidator, OrderValidationRequest, OrderValidationResults,
-        OrderValidatorHandle, ValidationFuture
-    },
-    validator::ValidationRequest
-};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-use crate::{
-    LruCache, NetworkOrderEvent, ReputationChangeKind, StromMessage, StromNetworkEvent,
-    StromNetworkHandle
-};
+use crate::{LruCache, NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
 
 /// Cache limit of transactions to keep track of for a single peer.
 const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
@@ -73,17 +42,13 @@ pub struct PoolHandle {
 pub enum OrderCommand {
     // new orders
     NewOrder(OrderOrigin, AllOrders, tokio::sync::oneshot::Sender<OrderValidationResults>),
-    CancelOrder(Address, B256, tokio::sync::oneshot::Sender<bool>)
+    CancelOrder(Address, B256, tokio::sync::oneshot::Sender<bool>),
+    PendingOrders(Address, tokio::sync::oneshot::Sender<Vec<AllOrders>>)
 }
 
 impl PoolHandle {
     fn send(&self, cmd: OrderCommand) -> Result<(), SendError<OrderCommand>> {
         self.manager_tx.send(cmd)
-    }
-
-    async fn send_request<T>(&self, rx: oneshot::Receiver<T>, cmd: OrderCommand) -> T {
-        self.send(cmd);
-        rx.await.unwrap()
     }
 }
 
@@ -94,7 +59,7 @@ impl OrderPoolHandle for PoolHandle {
         order: AllOrders
     ) -> impl Future<Output = bool> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        self.send(OrderCommand::NewOrder(origin, order, tx)).is_ok();
+        let _ = self.send(OrderCommand::NewOrder(origin, order, tx));
         rx.map(|result| match result {
             Ok(OrderValidationResults::Valid(_)) => true,
             Ok(OrderValidationResults::Invalid(_)) => false,
@@ -107,10 +72,15 @@ impl OrderPoolHandle for PoolHandle {
         self.pool_manager_tx.subscribe()
     }
 
+    fn pending_orders(&self, sender: Address) -> impl Future<Output = Vec<AllOrders>> + Send {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let _ = self.send(OrderCommand::PendingOrders(sender, tx)).is_ok();
+        rx.map(|res| res.unwrap_or_default())
+    }
+
     fn cancel_order(&self, from: Address, order_hash: B256) -> impl Future<Output = bool> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        self.send(OrderCommand::CancelOrder(from, order_hash, tx))
-            .is_ok();
+        let _ = self.send(OrderCommand::CancelOrder(from, order_hash, tx));
         rx.map(|res| res.unwrap_or(false))
     }
 }
@@ -156,7 +126,7 @@ where
     }
 
     pub fn with_storage(mut self, order_storage: Arc<OrderStorage>) -> Self {
-        self.order_storage.insert(order_storage);
+        let _ = self.order_storage.insert(order_storage);
         self
     }
 
@@ -265,7 +235,7 @@ where
         _command_tx: UnboundedSender<OrderCommand>,
         command_rx: UnboundedReceiverStream<OrderCommand>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
+        _pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
     ) -> Self {
         Self {
             strom_network_events,
@@ -280,12 +250,16 @@ where
 
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
-            OrderCommand::NewOrder(origin, order, validation_response) => self
+            OrderCommand::NewOrder(_, order, validation_response) => self
                 .order_indexer
                 .new_rpc_order(OrderOrigin::External, order, validation_response),
             OrderCommand::CancelOrder(from, order_hash, receiver) => {
                 let res = self.order_indexer.cancel_order(from, order_hash);
-                receiver.send(res);
+                let _ = receiver.send(res);
+            }
+            OrderCommand::PendingOrders(from, receiver) => {
+                let res = self.order_indexer.pending_orders_for_address(from);
+                let _ = receiver.send(res.into_iter().map(|o| o.order).collect());
             }
         }
     }
@@ -306,13 +280,14 @@ where
                 self.order_indexer.finalized_block(block);
             }
             EthEvent::NewPool(pool) => self.order_indexer.new_pool(pool),
-            EthEvent::NewBlock(block) => {}
+            EthEvent::NewBlock(_) => {}
         }
     }
 
     fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
         match event {
             NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
+                tracing::debug!("recieved IncomingOrders from peer {:?}", peer_id);
                 orders.into_iter().for_each(|order| {
                     self.peer_to_info
                         .get_mut(&peer_id)

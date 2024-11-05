@@ -1,19 +1,20 @@
 use std::{collections::HashSet, net::SocketAddr, pin::Pin};
 
-use alloy::rlp::BytesMut;
+use alloy::{
+    primitives::{keccak256, Address},
+    rlp::BytesMut
+};
+use angstrom_types::primitive::PeerId;
 use futures::{stream::Empty, Stream, StreamExt};
 use reth_eth_wire::{
     capability::SharedCapabilities, multiplex::ProtocolConnection, protocol::Protocol,
-    DisconnectReason, Status
+    DisconnectReason
 };
 use reth_metrics::common::mpsc::MeteredPollSender;
 use reth_network::{
     protocol::{ConnectionHandler, OnNotSupported},
     Direction
 };
-use reth_primitives::{keccak256, Address};
-use reth_rpc_types::PeerId;
-use secp256k1::{PublicKey, SecretKey};
 use tokio::{
     sync::mpsc,
     time::{Duration, Instant}
@@ -23,10 +24,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::{
     errors::StromStreamError,
     session::handle::StromSessionHandle,
-    types::{
-        message::{StromMessage, StromProtocolMessage},
-        status::StatusState
-    },
+    types::message::{StromMessage, StromProtocolMessage},
     StromSession, VerificationSidecar
 };
 
@@ -78,7 +76,7 @@ impl ConnectionHandler for StromConnectionHandler {
 
     // this occurs after the eth handshake occured
     fn into_connection(
-        mut self,
+        self,
         direction: Direction,
         peer_id: PeerId,
         conn: ProtocolConnection

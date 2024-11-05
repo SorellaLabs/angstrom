@@ -37,8 +37,9 @@ fn build_struct_impl(name: &Ident, generics: &Generics, s: &DataStruct) -> Token
                     )
                 })
                 .unwrap_or_else(|| {
+                    let index = Index::from(idx);
                     (
-                        quote! { self.#idx },
+                        quote! { self.#index },
                         format_ident!("field_{}_encoded", idx),
                         format_ident!("field_{}_variant_map_bytes", idx)
                     )
@@ -102,7 +103,9 @@ fn build_struct_impl(name: &Ident, generics: &Generics, s: &DataStruct) -> Token
 
                     headers.force_align();
                     let mut raw = headers.into_vec();
-                    raw[0] >>= 8 - extra;
+                    if let Some(b) = raw.first_mut() {
+                        *b >>= 8 - extra
+                    }
                     raw.extend(base);
 
                     [raw, output].concat()

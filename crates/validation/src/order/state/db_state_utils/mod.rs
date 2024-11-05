@@ -2,15 +2,12 @@ pub mod approvals;
 pub mod balances;
 pub mod nonces;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use alloy::primitives::{Address, U256};
-use angstrom_types::sol_bindings::ext::RawPoolOrder;
-use revm::{Database, Inspector};
 
 use self::{approvals::Approvals, balances::Balances, nonces::Nonces};
 use super::config::DataFetcherConfig;
-use crate::common::lru_db::{BlockStateProvider, BlockStateProviderFactory, RevmLRU};
 
 pub const ANGSTROM_CONTRACT: Address = Address::new([0; 20]);
 
@@ -52,12 +49,13 @@ pub struct FetchUtils<DB> {
     pub approvals: Approvals,
     pub balances:  Balances,
     pub nonces:    Nonces,
-    pub db:        Arc<RevmLRU<DB>>
+    pub db:        Arc<DB>
 }
 
 impl<DB> StateFetchUtils for FetchUtils<DB>
 where
-    DB: BlockStateProviderFactory + Clone
+    DB: revm::DatabaseRef + Clone + Sync + Send,
+    <DB as revm::DatabaseRef>::Error: Sync + Send + 'static + Debug
 {
     fn is_valid_nonce(&self, user: Address, nonce: u64) -> bool {
         let db = self.db.clone();
@@ -96,8 +94,8 @@ where
     }
 }
 
-impl<DB: BlockStateProviderFactory> FetchUtils<DB> {
-    pub fn new(config: DataFetcherConfig, db: Arc<RevmLRU<DB>>) -> Self {
+impl<DB> FetchUtils<DB> {
+    pub fn new(config: DataFetcherConfig, db: Arc<DB>) -> Self {
         Self {
             approvals: Approvals::new(
                 config
@@ -156,7 +154,7 @@ pub mod test_fetching {
     }
 
     impl StateFetchUtils for MockFetch {
-        fn is_valid_nonce(&self, user: reth_primitives::Address, nonce: u64) -> bool {
+        fn is_valid_nonce(&self, user: alloy::primitives::Address, nonce: u64) -> bool {
             self.used_nonces
                 .get(&user)
                 .map(|v| !v.value().contains(&nonce))
@@ -165,9 +163,9 @@ pub mod test_fetching {
 
         fn fetch_approval_balance_for_token_overrides(
             &self,
-            user: Address,
-            token: Address,
-            overrides: &HashMap<Address, HashMap<U256, U256>>
+            _: Address,
+            _: Address,
+            _: &HashMap<Address, HashMap<U256, U256>>
         ) -> Option<U256> {
             todo!("not implemented for mocker")
         }
@@ -180,9 +178,9 @@ pub mod test_fetching {
 
         fn fetch_balance_for_token_overrides(
             &self,
-            user: Address,
-            token: Address,
-            overrides: &HashMap<Address, HashMap<U256, U256>>
+            _: Address,
+            _: Address,
+            _: &HashMap<Address, HashMap<U256, U256>>
         ) -> Option<U256> {
             todo!("not implemented for mocker")
         }

@@ -34,7 +34,7 @@ where
 {
     pub async fn new(inner: E) -> eyre::Result<Self> {
         debug!("Deploying pool manager...");
-        let pool_manager = *PoolManager::deploy(inner.provider())
+        let pool_manager = *PoolManager::deploy(inner.provider(), inner.controller())
             .await
             .unwrap()
             .address();

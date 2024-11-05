@@ -32,7 +32,7 @@ pub async fn deploy_angstrom_with_factory<
     pool_manager: Address,
     factory: Address,
     controller: Address,
-    feemaster: Address
+    _feemaster: Address
 ) -> Address {
     // Setup our flags and mask
     let flags = UniswapFlags::BeforeSwap
@@ -40,7 +40,7 @@ pub async fn deploy_angstrom_with_factory<
         | UniswapFlags::BeforeAddLiquidity
         | UniswapFlags::BeforeRemoveLiquidity;
 
-    let mock_builder = Angstrom::deploy_builder(&provider, pool_manager, controller, feemaster);
+    let mock_builder = Angstrom::deploy_builder(&provider, pool_manager, controller);
     let (mock_tob_address, salt) =
         mine_address(flags, UniswapFlags::mask(), mock_builder.calldata());
     let final_mock_initcode = [salt.abi_encode(), mock_builder.calldata().to_vec()].concat();

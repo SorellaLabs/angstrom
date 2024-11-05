@@ -45,7 +45,7 @@ pub fn order_distribution(
                 priority_data: OrderPriorityData {
                     price:  U256::from(p as u128),
                     volume: q as u128,
-                    gas:    0
+                    gas:    U256::ZERO
                 },
                 is_bid,
                 is_valid: true,

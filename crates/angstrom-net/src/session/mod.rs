@@ -28,7 +28,7 @@ use reth_eth_wire::DisconnectReason;
 use reth_network::Direction;
 use tracing::warn;
 
-use crate::{errors::StromStreamError, PeerKind, StromMessage, StromProtocolMessage};
+use crate::{errors::StromStreamError, StromMessage, StromProtocolMessage};
 
 #[derive(Debug)]
 pub struct StromSessionManager {

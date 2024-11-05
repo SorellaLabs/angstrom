@@ -14,6 +14,7 @@ use uniswap_v3_math::{
     tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK}
 };
 
+use super::pool_data_loader::PoolData;
 use crate::cfmm::uniswap::{
     i32_to_i24,
     pool_data_loader::{DataLoader, ModifyPositionEvent, PoolDataLoader, TickData},
@@ -45,7 +46,7 @@ pub const U256_1: U256 = U256::from_limbs([1, 0, 0, 0]);
 pub struct EnhancedUniswapPool<Loader: PoolDataLoader<A> = DataLoader<Address>, A = Address> {
     sync_swap_with_sim:     bool,
     initial_ticks_per_side: u16,
-    data_loader:            Loader,
+    pub data_loader:        Loader,
     pub token_a:            Address,
     pub token_a_decimals:   u8,
     pub token_b:            Address,
@@ -73,6 +74,16 @@ where
             data_loader,
             ..Default::default()
         }
+    }
+
+    pub async fn pool_data_for_block<T: Transport + Clone, N: Network>(
+        &self,
+        block_number: BlockNumber,
+        provider: Arc<impl Provider<T, N>>
+    ) -> Result<PoolData, PoolError> {
+        self.data_loader
+            .load_pool_data(Some(block_number), provider)
+            .await
     }
 
     pub async fn initialize<T: Transport + Clone, N: Network>(
@@ -122,7 +133,7 @@ where
         provider: Arc<P>
     ) -> Result<(), PoolError> {
         if !self.data_is_populated() {
-            return Err(PoolError::PoolAlreadyInitialized);
+            return Err(PoolError::PoolAlreadyInitialized)
         }
 
         self.ticks.clear();
@@ -155,7 +166,7 @@ where
             if let Some(last_tick) = fetched_ticks.last() {
                 start_tick = last_tick.tick.as_i32();
             } else {
-                break;
+                break
             }
         }
 
@@ -204,7 +215,7 @@ where
         sqrt_price_limit_x96: Option<U256>
     ) -> Result<SwapResult, SwapSimulationError> {
         if amount_specified.is_zero() {
-            return Err(SwapSimulationError::ZeroAmountSpecified);
+            return Err(SwapSimulationError::ZeroAmountSpecified)
         }
 
         let zero_for_one = token_in == self.token_a;
@@ -222,7 +233,7 @@ where
                 && (sqrt_price_limit_x96 <= self.sqrt_price
                     || sqrt_price_limit_x96 >= MAX_SQRT_RATIO))
         {
-            return Err(SwapSimulationError::InvalidSqrtPriceLimit);
+            return Err(SwapSimulationError::InvalidSqrtPriceLimit)
         }
 
         let mut amount_specified_remaining = amount_specified;
@@ -401,7 +412,7 @@ where
                     let (..) =
                         self.simulate_swap_mut(*token_in, *amount_in, sqrt_price_limit_x96)?;
                     simulation_failed = false;
-                    break;
+                    break
                 }
             }
         }
@@ -419,7 +430,7 @@ where
                 swap_amount1 = ?swap_event.amount1,
                 "Swap simulation failed"
             );
-            return Err(PoolError::SwapSimulationFailed);
+            return Err(PoolError::SwapSimulationFailed)
         } else {
             tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.data_loader.address(), "pool after");
         }

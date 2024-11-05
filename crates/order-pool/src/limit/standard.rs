@@ -30,6 +30,23 @@ impl LimitPool {
         }
     }
 
+    pub fn get_order(
+        &self,
+        pool_id: PoolId,
+        order_id: alloy::primitives::FixedBytes<32>
+    ) -> Option<OrderWithStorageData<GroupedVanillaOrder>> {
+        // Try to get from pending orders first
+        self.pending_orders
+            .get(&pool_id)
+            .and_then(|pool| pool.get_order(order_id))
+            .or_else(|| {
+                // If not in pending, try parked orders
+                self.parked_orders
+                    .get(&pool_id)
+                    .and_then(|pool| pool.get_order(order_id))
+            })
+    }
+
     pub fn add_order(
         &mut self,
         order: OrderWithStorageData<GroupedVanillaOrder>

@@ -25,6 +25,10 @@ impl<Order: Clone> PendingPool<Order> {
         Self { orders: HashMap::new(), bids: BTreeMap::new(), asks: BTreeMap::new() }
     }
 
+    pub fn get_order(&self, id: FixedBytes<32>) -> Option<OrderWithStorageData<Order>> {
+        self.orders.get(&id).cloned()
+    }
+
     pub fn add_order(&mut self, order: OrderWithStorageData<Order>) {
         if order.is_bid {
             self.bids

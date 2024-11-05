@@ -30,6 +30,9 @@ fn main() {
 
     let res = Command::new("forge")
         .arg("build")
+        .arg("--optimize")
+        .arg("--optimizer-runs")
+        .arg("9999999999")
         .current_dir(contract_dir)
         .spawn()
         .expect("foundry is not installed on this machine.\n https://book.getfoundry.sh/getting-started/installation go to here to install")
@@ -65,6 +68,7 @@ pub mod {mod_name} {{
     alloy::sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
+        #[derive(Debug, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         {name},
         "{path_of_contracts}"
     );

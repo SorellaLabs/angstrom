@@ -108,13 +108,14 @@ mod tests {
     use alloy_sol_types::{eip712_domain, Eip712Domain};
     use angstrom_types::{
         contract_bindings::{
-            angstrom::Angstrom::AngstromInstance, mintable_mock_erc_20::MintableMockERC20,
+            angstrom::Angstrom::{AngstromInstance, PoolKey},
+            mintable_mock_erc_20::MintableMockERC20,
             pool_gate::PoolGate::PoolGateInstance
         },
         contract_payloads::angstrom::{AngstromBundle, UserOrder},
         matching::{uniswap::LiqRange, SqrtPriceX96},
         orders::{OrderFillState, OrderOutcome},
-        primitive::{PoolKey, ANGSTROM_DOMAIN},
+        primitive::ANGSTROM_DOMAIN,
         sol_bindings::{
             grouped_orders::{GroupedVanillaOrder, OrderWithStorageData, StandingVariants},
             rpc_orders::OmitOrderMeta

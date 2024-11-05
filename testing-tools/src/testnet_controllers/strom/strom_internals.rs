@@ -3,18 +3,21 @@ use std::sync::{atomic::AtomicBool, Arc};
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     network::Network,
+    primitives::{aliases::U24, Signed},
     providers::Provider,
     pubsub::PubSubFrontend,
     transports::Transport
 };
-use alloy_primitives::BlockNumber;
+use alloy_primitives::{Address, BlockNumber};
 use angstrom::cli::StromHandles;
 use angstrom_eth::handle::Eth;
 use angstrom_network::{pool_manager::PoolHandle, PoolManagerBuilder, StromNetworkHandle};
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use angstrom_types::{
+    contract_bindings::angstrom::Angstrom::PoolKey,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    primitive::{PoolId as AngstromPoolId, PoolKey, UniswapPoolRegistry},
+    pair_with_price::PairsWithPrice,
+    primitive::{PoolId as AngstromPoolId, UniswapPoolRegistry},
     sol_bindings::testnet::TestnetHub
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
@@ -28,6 +31,7 @@ use order_pool::{order_storage::OrderStorage, PoolConfig};
 use reth_provider::{CanonStateNotifications, CanonStateSubscriptions};
 use reth_tasks::TokioTaskExecutor;
 use secp256k1::SecretKey;
+use validation::order::state::token_pricing::TokenPriceGenerator;
 
 use crate::{
     anvil_state_provider::{
@@ -74,7 +78,14 @@ impl AngstromTestnetNodeInternals {
         tracing::info!("deployed contracts to anvil");
 
         let angstrom_addr = addresses.contract;
-        let pools = vec![PoolKey::new(addresses.token0, addresses.token1, 0, 5, addresses.hooks)];
+        let pools = vec![PoolKey {
+            currency0:   addresses.token0,
+            currency1:   addresses.token1,
+            fee:         U24::from(0),
+            tickSpacing: Signed::<24, 1>::from_limbs([5]),
+            hooks:       addresses.hooks
+        }];
+
         let pool = strom_handles.get_pool_handle();
         let executor: TokioTaskExecutor = Default::default();
         let tx_strom_handles = (&strom_handles).into();
@@ -137,7 +148,26 @@ impl AngstromTestnetNodeInternals {
         let uniswap_pools = uniswap_pool_manager.pools();
         tokio::spawn(async move { uniswap_pool_manager.watch_state_changes().await });
 
-        let validator = TestOrderValidator::new(state_provider.provider(), uniswap_pools.clone());
+        let token_conversion = TokenPriceGenerator::new(
+            state_provider.provider().provider().into(),
+            block_id,
+            uniswap_pools.clone()
+        )
+        .await
+        .expect("failed to start price generator");
+
+        let token_price_update_stream = state_provider.provider().canonical_state_stream();
+        let token_price_update_stream =
+            PairsWithPrice::into_price_update_stream(Address::default(), token_price_update_stream)
+                .boxed();
+
+        let validator = TestOrderValidator::new(
+            state_provider.provider(),
+            uniswap_pools.clone(),
+            token_conversion,
+            token_price_update_stream
+        )
+        .await;
 
         let pool_config = PoolConfig::default();
         let order_storage = Arc::new(OrderStorage::new(&pool_config));

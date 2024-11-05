@@ -1,12 +1,10 @@
+use alloy_primitives::U256;
 use angstrom_types::{
     matching::uniswap::PoolPriceVec,
     orders::{OrderID, OrderId, OrderPrice, OrderVolume},
     primitive::PoolId,
-    sol_bindings::{
-        grouped_orders::{
-            FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
-        },
-        sol::{FlashOrder, StandingOrder}
+    sol_bindings::grouped_orders::{
+        FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
     }
 };
 
@@ -131,8 +129,8 @@ impl<'a, 'b> OrderContainer<'a, 'b> {
 
 #[derive(Clone, Debug)]
 pub enum Order<'a> {
-    KillOrFill(FlashOrder),
-    PartialFill(StandingOrder),
+    Flash(FlashVariants),
+    Standing(StandingVariants),
     AMM(PoolPriceVec<'a>)
 }
 
@@ -144,16 +142,16 @@ impl<'a> Order<'a> {
 
     pub fn id(&self) -> Option<OrderID> {
         match self {
-            Self::KillOrFill(_) => Some(0),
-            Self::PartialFill(_) => Some(0),
+            Self::Flash(_) => Some(0),
+            Self::Standing(_) => Some(0),
             _ => None
         }
     }
 
     pub fn related(&self) -> Option<&Vec<OrderCoordinate>> {
         match self {
-            Self::KillOrFill(_) => None,
-            Self::PartialFill(_) => None,
+            Self::Flash(_) => None,
+            Self::Standing(_) => None,
             _ => None
         }
     }
@@ -161,13 +159,19 @@ impl<'a> Order<'a> {
     /// Retrieve the quantity available within the bounds of a given order
     pub fn quantity(&self, limit_price: OrderPrice) -> OrderVolume {
         match self {
-            Self::KillOrFill(lo) => lo.max_amount_in_or_out,
-            Self::PartialFill(lo) => lo.max_amount_in_or_out,
+            Self::Flash(lo) => match lo {
+                FlashVariants::Exact(e) => U256::from(e.amount),
+                FlashVariants::Partial(p) => U256::from(p.max_amount_in)
+            },
+            Self::Standing(lo) => match lo {
+                StandingVariants::Exact(e) => U256::from(e.amount),
+                StandingVariants::Partial(p) => U256::from(p.max_amount_in)
+            },
             Self::AMM(ammo) => ammo.quantity(limit_price).0
         }
     }
 
-    /// Retrieve the price for a given order
+    // /// Retrieve the price for a given order
     // pub fn price(&self) -> OrderPrice {
     //     match self {
     //         Self::KillOrFill(lo) => lo.min_price,
@@ -176,23 +180,23 @@ impl<'a> Order<'a> {
     //     }
     // }
 
-    /// Produce a new order representing the remainder of the current order
-    /// after the fill operation has been performed
-    pub fn fill(&self, filled_quantity: OrderVolume) -> Self {
-        match self {
-            Self::KillOrFill(lo) => Self::KillOrFill(FlashOrder {
-                max_amount_in_or_out: lo.max_amount_in_or_out - filled_quantity,
-                ..lo.clone()
-            }),
-            Self::PartialFill(lo) => Self::PartialFill(StandingOrder {
-                max_amount_in_or_out: lo.max_amount_in_or_out - filled_quantity,
-                ..lo.clone()
-            }),
-            Self::AMM(r) => {
-                r.fill(filled_quantity);
-                // Return a bogus order that we never use
-                Self::PartialFill(StandingOrder::default())
-            }
-        }
-    }
+    // /// Produce a new order representing the remainder of the current order
+    // /// after the fill operation has been performed
+    // pub fn fill(&self, filled_quantity: OrderVolume) -> Self {
+    //     match self {
+    //         Self::Flash(lo) => Self::Flash(FlashOrder {
+    //             max_amount_in_or_out: lo.max_amount_in_or_out - filled_quantity,
+    //             ..lo.clone()
+    //         }),
+    //         Self::Standing(lo) => Self::PartialFill(StandingOrder {
+    //             max_amount_in_or_out: lo.max_amount_in_or_out - filled_quantity,
+    //             ..lo.clone()
+    //         }),
+    //         Self::AMM(r) => {
+    //             r.fill(filled_quantity);
+    //             // Return a bogus order that we never use
+    //             Self::PartialFill(StandingOrder::default())
+    //         }
+    //     }
+    // }
 }

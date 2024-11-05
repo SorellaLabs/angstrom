@@ -50,11 +50,15 @@ where
     DB: Unpin + Clone + 'static + revm::DatabaseRef + BlockNumReader,
     <DB as revm::DatabaseRef>::Error: Send + Sync
 {
-    pub fn new(db: Arc<DB>) -> eyre::Result<Self> {
-        let ConfiguredRevm { db, angstrom, .. } =
-            Self::setup_revm_cache_database_for_simulation(db)?;
+    pub fn new(db: Arc<DB>, angstrom_address: Option<Address>) -> eyre::Result<Self> {
+        if let Some(angstrom_address) = angstrom_address {
+            Ok(Self { db: CacheDB::new(db), angstrom_address })
+        } else {
+            let ConfiguredRevm { db, angstrom } =
+                Self::setup_revm_cache_database_for_simulation(db)?;
 
-        Ok(Self { db, angstrom_address: angstrom })
+            Ok(Self { db, angstrom_address: angstrom })
+        }
     }
 
     pub fn gas_of_tob_order(
@@ -371,7 +375,7 @@ pub mod test {
     fn ensure_creation_of_mock_works() {
         let db_path = Path::new("/home/data/reth/db/");
         let db = load_reth_db(db_path);
-        let res = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)));
+        let res = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None);
 
         if let Err(e) = res.as_ref() {
             eprintln!("{}", e);
@@ -445,7 +449,7 @@ pub mod test {
         let db_path = Path::new("/home/data/reth/db/");
         let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
 
-        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)));
+        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None);
 
         assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
         let mut gas_calculations = gas_calculations.unwrap();
@@ -484,7 +488,7 @@ pub mod test {
         let db_path = Path::new("/home/data/reth/db/");
         let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
 
-        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)));
+        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None);
 
         assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
         let mut gas_calculations = gas_calculations.unwrap();

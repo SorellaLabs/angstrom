@@ -43,7 +43,8 @@ impl OrderId {
 pub struct OrderPriorityData {
     pub price:  U256,
     pub volume: u128,
-    pub gas:    u128
+    /// gas used in the pairs token0
+    pub gas:    U256
 }
 
 impl PartialOrd for OrderPriorityData {

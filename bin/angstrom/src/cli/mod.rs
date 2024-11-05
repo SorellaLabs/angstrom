@@ -11,6 +11,7 @@ use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
 };
+use validation::order::state::token_pricing::TokenPriceGenerator;
 
 mod network_builder;
 use alloy::{
@@ -32,8 +33,9 @@ use angstrom_network::{
 };
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use angstrom_types::{
+    contract_bindings::angstrom::Angstrom::PoolKey,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    primitive::{PeerId, PoolKey, UniswapPoolRegistry}
+    primitive::{PeerId, UniswapPoolRegistry}
 };
 use clap::Parser;
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
@@ -82,6 +84,7 @@ pub fn run() -> eyre::Result<()> {
         let pool = channels.get_pool_handle();
         let executor_clone = executor.clone();
         // let consensus = channels.get_consensus_handle();
+
         let NodeHandle { node, node_exit_future } = builder
             .with_types::<EthereumNode>()
             .with_components(
@@ -107,7 +110,16 @@ pub fn run() -> eyre::Result<()> {
             .launch()
             .await?;
 
-        initialize_strom_components(args, secret_key, channels, network, node, &executor).await;
+        initialize_strom_components(
+            args.angstrom_addr,
+            args,
+            secret_key,
+            channels,
+            network,
+            node,
+            &executor
+        )
+        .await;
 
         node_exit_future.await
     })
@@ -184,6 +196,7 @@ pub fn initialize_strom_handles() -> StromHandles {
 }
 
 pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
+    angstrom_address: Option<Address>,
     config: AngstromConfig,
     secret_key: SecretKey,
     handles: StromHandles,
@@ -193,7 +206,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 ) {
     let node_config = NodeConfig::load_from_config(Some(config.node_config)).unwrap();
     let eth_handle = EthDataCleanser::spawn(
-        node_config.angstrom_address,
+        angstrom_address.unwrap_or(node_config.angstrom_address),
         node.provider.subscribe_to_canonical_state(),
         node.provider.clone(),
         executor.clone(),
@@ -241,11 +254,20 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
             .expect("watch for uniswap pool changes");
     }));
 
+    // build token_price_generator
+    let price_generator =
+        TokenPriceGenerator::new(provider.clone(), block_id, uniswap_pools.clone())
+            .await
+            .expect("failed to start token price generator");
+
     let block_height = node.provider.best_block_number().unwrap();
     let validator = init_validation(
         RethDbWrapper::new(node.provider.clone()),
         block_height,
-        uniswap_pools.clone()
+        angstrom_address,
+        node.provider.canonical_state_stream(),
+        uniswap_pools.clone(),
+        price_generator
     );
 
     let network_handle = network_builder
@@ -342,6 +364,8 @@ pub struct AngstromConfig {
     pub mev_guard:           bool,
     #[clap(long)]
     pub secret_key_location: PathBuf,
+    #[clap(long)]
+    pub angstrom_addr:       Option<Address>,
     #[clap(long)]
     pub node_config:         PathBuf,
     /// enables the metrics

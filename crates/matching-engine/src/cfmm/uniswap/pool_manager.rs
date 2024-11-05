@@ -76,6 +76,10 @@ where
         }
     }
 
+    pub fn pool_addresses(&self) -> impl Iterator<Item = &A> + '_ {
+        self.pools.keys()
+    }
+
     pub fn blocking_pool(
         &self,
         address: &A

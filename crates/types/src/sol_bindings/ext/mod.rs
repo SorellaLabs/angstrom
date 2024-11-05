@@ -6,9 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::orders::OrderLocation;
 
-pub mod contract_bundle_ext;
 pub mod grouped_orders;
-pub mod top_of_block_ext;
 
 /// The capability of all default orders.
 pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {

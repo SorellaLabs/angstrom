@@ -6,8 +6,9 @@ use alloy_primitives::{
 };
 use angstrom_types::{
     consensus::{PreProposal, Proposal},
+    contract_bindings::angstrom::Angstrom::PoolKey,
     matching::{uniswap::LiqRange, SqrtPriceX96},
-    primitive::{PoolId, PoolKey},
+    primitive::PoolId,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 use matching_engine::{

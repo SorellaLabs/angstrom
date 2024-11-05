@@ -2,7 +2,9 @@ use alloy_primitives::U256;
 use angstrom_types::{
     consensus::PreProposal,
     orders::OrderPriorityData,
-    sol_bindings::{grouped_orders::OrderWithStorageData, RawPoolOrder}
+    sol_bindings::{
+        grouped_orders::OrderWithStorageData, testnet::random::Randomizer, RawPoolOrder
+    }
 };
 use rand::{thread_rng, Rng};
 use reth_network_peers::pk2id;
@@ -116,9 +118,13 @@ impl PreproposalBuilder {
                     .pool_id(pool_id.id())
                     .order_hash(order.order_hash())
                     .build();
-                let price: u128 = rng.gen();
-                let priority_data =
-                    OrderPriorityData { price: U256::from(price), volume: 1, gas: rng.gen() };
+                let price: u128 = Rng::gen(&mut rng);
+                let priority_data = OrderPriorityData {
+                    price:     U256::from(price),
+                    volume:    1,
+                    gas:       Randomizer::gen(&mut rng),
+                    gas_units: Randomizer::gen(&mut rng)
+                };
                 OrderWithStorageData {
                     invalidates: vec![],
                     order,

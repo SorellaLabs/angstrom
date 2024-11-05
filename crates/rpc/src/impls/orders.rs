@@ -1,14 +1,6 @@
 use alloy_primitives::{Address, FixedBytes, B256};
-use angstrom_types::{
-    orders::{OrderLocation, OrderOrigin, OrderStatus},
-    sol_bindings::{
-        grouped_orders::{AllOrders, FlashVariants, StandingVariants},
-        rpc_orders::{
-            ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
-            TopOfBlockOrder
-        }
-    }
-};
+use angstrom_types::{orders::{OrderLocation,OrderOrigin,OrderStatus},
+    sol_bindings::grouped_orders::AllOrders};
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use reth_tasks::TaskSpawner;
@@ -16,7 +8,7 @@ use reth_tasks::TaskSpawner;
 use crate::{
     api::{CancelOrderRequest, OrderApiServer},
     types::{OrderSubscriptionKind, OrderSubscriptionResult},
-    OrderApiError::SignatureRecoveryError
+    OrderApiError::{GasEstimationError, SignatureRecoveryError}
 };
 
 pub struct OrderApi<OrderPool, Spawner> {
@@ -36,28 +28,7 @@ where
     OrderPool: OrderPoolHandle,
     Spawner: TaskSpawner + 'static
 {
-    async fn send_partial_standing_order(&self, order: PartialStandingOrder) -> RpcResult<bool> {
-        let order = AllOrders::Standing(StandingVariants::Partial(order));
-        Ok(self.pool.new_order(OrderOrigin::External, order).await)
-    }
-
-    async fn send_exact_standing_order(&self, order: ExactStandingOrder) -> RpcResult<bool> {
-        let order = AllOrders::Standing(StandingVariants::Exact(order));
-        Ok(self.pool.new_order(OrderOrigin::External, order).await)
-    }
-
-    async fn send_searcher_order(&self, order: TopOfBlockOrder) -> RpcResult<bool> {
-        let order = AllOrders::TOB(order);
-        Ok(self.pool.new_order(OrderOrigin::External, order).await)
-    }
-
-    async fn send_partial_flash_order(&self, order: PartialFlashOrder) -> RpcResult<bool> {
-        let order = AllOrders::Flash(FlashVariants::Partial(order));
-        Ok(self.pool.new_order(OrderOrigin::External, order).await)
-    }
-
-    async fn send_exact_flash_order(&self, order: ExactFlashOrder) -> RpcResult<bool> {
-        let order = AllOrders::Flash(FlashVariants::Exact(order));
+    async fn send_order(&self, order: AllOrders) -> RpcResult<bool> {
         Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
@@ -73,6 +44,14 @@ where
             .map_err(|_| SignatureRecoveryError)?;
 
         Ok(self.pool.cancel_order(sender, request.hash).await)
+    }
+
+    async fn estimate_gas(&self, order: AllOrders) -> RpcResult<u64> {
+        Ok(self
+            .pool
+            .estimate_gas(order)
+            .await
+            .map_err(GasEstimationError)?)
     }
 
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>> {
@@ -126,14 +105,17 @@ pub enum OrderApiError {
     #[error("invalid transaction signature")]
     InvalidSignature,
     #[error("failed to recover signer from signature")]
-    SignatureRecoveryError
+    SignatureRecoveryError,
+    #[error("failed to estimate gas: {0}")]
+    GasEstimationError(String)
 }
 
 impl From<OrderApiError> for jsonrpsee::types::ErrorObjectOwned {
     fn from(error: OrderApiError) -> Self {
         match error {
             OrderApiError::InvalidSignature => invalid_params_rpc_err(error.to_string()),
-            OrderApiError::SignatureRecoveryError => invalid_params_rpc_err(error.to_string())
+            OrderApiError::SignatureRecoveryError => invalid_params_rpc_err(error.to_string()),
+            OrderApiError::GasEstimationError(e) => invalid_params_rpc_err(e)
         }
     }
 }
@@ -204,9 +186,8 @@ mod tests {
 
     use alloy_primitives::{Address, B256};
     use angstrom_network::pool_manager::OrderCommand;
-    use angstrom_types::sol_bindings::rpc_orders::{
-        ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
-        TopOfBlockOrder
+    use angstrom_types::sol_bindings::grouped_orders::{
+        AllOrders, FlashVariants, StandingVariants
     };
     use futures::FutureExt;
     use order_pool::PoolManagerUpdate;
@@ -219,53 +200,26 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_send_partial_standing_order() {
+    async fn test_send_order() {
         let (_handle, api) = setup_order_api();
-        let order = PartialStandingOrder::default();
-        assert!(api
-            .send_partial_standing_order(order)
-            .await
-            .expect("to not throw error"));
-    }
 
-    #[tokio::test]
-    async fn test_send_exact_standing_order() {
-        let (_handle, api) = setup_order_api();
-        let order = ExactStandingOrder::default();
+        // Test standing order
+        let standing_order = AllOrders::Standing(StandingVariants::Partial(Default::default()));
         assert!(api
-            .send_exact_standing_order(order)
+            .send_order(standing_order)
             .await
             .expect("to not throw error"));
-    }
 
-    #[tokio::test]
-    async fn test_send_searcher_order() {
-        let (_handle, api) = setup_order_api();
-        let order = TopOfBlockOrder::default();
+        // Test flash order
+        let flash_order = AllOrders::Flash(FlashVariants::Exact(Default::default()));
         assert!(api
-            .send_searcher_order(order)
+            .send_order(flash_order)
             .await
             .expect("to not throw error"));
-    }
 
-    #[tokio::test]
-    async fn test_send_partial_flash_order() {
-        let (_handle, api) = setup_order_api();
-        let order = PartialFlashOrder::default();
-        assert!(api
-            .send_partial_flash_order(order)
-            .await
-            .expect("to not throw error"));
-    }
-
-    #[tokio::test]
-    async fn test_send_exact_flash_order() {
-        let (_handle, api) = setup_order_api();
-        let order = ExactFlashOrder::default();
-        assert!(api
-            .send_exact_flash_order(order)
-            .await
-            .expect("to not throw error"));
+        // Test TOB order
+        let tob_order = AllOrders::TOB(Default::default());
+        assert!(api.send_order(tob_order).await.expect("to not throw error"));
     }
 
     fn setup_order_api() -> (OrderApiTestHandle, OrderApi<MockOrderPoolHandle, TokioTaskExecutor>) {

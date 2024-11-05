@@ -1,15 +1,5 @@
-use alloy_primitives::{Address, FixedBytes, B256};
-use angstrom_types::{
-    orders::{OrderLocation, OrderStatus},
-    primitive::Signature,
-    sol_bindings::{
-        grouped_orders::AllOrders,
-        rpc_orders::{
-            ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
-            TopOfBlockOrder
-        }
-    }
-};
+use alloy_primitives::{Address, FixedBytes,B256};
+use angstrom_types::{orders::{OrderLocation, OrderStatus},primitive::Signature, sol_bindings::grouped_orders::AllOrders};
 use jsonrpsee::{
     core::{RpcResult, Serialize},
     proc_macros::rpc
@@ -28,27 +18,18 @@ pub struct CancelOrderRequest {
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "angstrom"))]
 #[async_trait::async_trait]
 pub trait OrderApi {
-    /// Users send the rlp encoded signature and order bytes
-    #[method(name = "sendPartialStandingOrder")]
-    async fn send_partial_standing_order(&self, order: PartialStandingOrder) -> RpcResult<bool>;
-
-    #[method(name = "sendExactStandingOrder")]
-    async fn send_exact_standing_order(&self, order: ExactStandingOrder) -> RpcResult<bool>;
-
-    #[method(name = "sendSearcherOrder")]
-    async fn send_searcher_order(&self, order: TopOfBlockOrder) -> RpcResult<bool>;
-
-    #[method(name = "sendPartialFlashOrder")]
-    async fn send_partial_flash_order(&self, order: PartialFlashOrder) -> RpcResult<bool>;
-
-    #[method(name = "sendExactFlashOrder")]
-    async fn send_exact_flash_order(&self, order: ExactFlashOrder) -> RpcResult<bool>;
+    /// Submit any type of order
+    #[method(name = "sendOrder")]
+    async fn send_order(&self, order: AllOrders) -> RpcResult<bool>;
 
     #[method(name = "pendingOrders")]
     async fn pending_orders(&self, from: Address) -> RpcResult<Vec<AllOrders>>;
 
     #[method(name = "cancelOrder")]
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool>;
+
+    #[method(name = "estimateGas")]
+    async fn estimate_gas(&self, order: AllOrders) -> RpcResult<u64>;
 
     #[method(name = "orderStatus")]
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>>;

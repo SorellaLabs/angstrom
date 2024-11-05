@@ -161,7 +161,7 @@ impl OrderValidationResults {
             &SimValidation<DB>,
             &OrderWithStorageData<New>,
             &TokenPriceGenerator
-        ) -> eyre::Result<U256>
+        ) -> eyre::Result<(u64, U256)>
     ) -> eyre::Result<OrderWithStorageData<Old>>
     where
         DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
@@ -171,8 +171,9 @@ impl OrderValidationResults {
             .try_map_inner(move |order| Ok(map_new(order)))
             .unwrap();
 
-        if let Ok(gas_used) = (calculate_function)(sim, &order, token_price) {
+        if let Ok((gas_units, gas_used)) = (calculate_function)(sim, &order, token_price) {
             order.priority_data.gas += gas_used;
+            order.priority_data.gas_units = gas_units;
         } else {
             return Err(eyre::eyre!("not able to process gas"))
         }

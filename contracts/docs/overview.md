@@ -56,6 +56,9 @@ have been committed to for later claiming via the fee summary events.
   be tightly coupled with builders meaning roughly it can expect that *most of the time* the way it
   sees the chain will be the state when a bundle lands. This means that we assume DoS vectors from
   modifying state dependencies e.g. ERC20 permits, token balances or hooks will be managed well.
+- **Fair Referral & Gas Fees:** The staked node will set the `gasUsedAsset0` / `extraFeeAsset0` such
+  that it fairly reflects that orders share of gas use in the bundle & any referral fee it may have
+  opted into by setting a **non-zero** `refId` 
 
 For more assumptions / known issues see [known-issues](./known-issues.md).
 
@@ -67,6 +70,16 @@ relying on the economic security guarantees provided by the off-chain set of Ang
 
 The below paragraphs give an overview of different important parts & concepts in Angstrom:
 
+### Node vs. Users
+
+Trusted, staked nodes as described above are the ones responsible for calling `execute` and
+providing some of the parameters for orders. Assets, prices, `amountFilled` for partial orders and
+`gasUsedAsset0` / `extraFeeAsset0` are all computed and supplied by the trusted node.
+
+Users supply their orders/intents in the form of `src/_reference/SignedTypes.sol`. The node performs
+order matching determining which ToB & user orders to include as well as what amount to fill for
+partial orders. The node is also responsible for computing and fairly splitting gas & referral fees
+among users.
 
 #### The `execute(bytes)` Entry Point
 

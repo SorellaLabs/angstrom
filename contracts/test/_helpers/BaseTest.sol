@@ -28,7 +28,7 @@ import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 contract BaseTest is Test, HookDeployer {
     using FormatLib for *;
 
-    bool constant DEBUG = true;
+    bool constant DEBUG = false;
 
     uint256 internal constant REAL_TIMESTAMP = 1721652639;
 

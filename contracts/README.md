@@ -27,3 +27,36 @@ function pythonRunCmd() internal pure returns (string[] memory args) {
 ++  args[0] = "python3";
 }
 ```
+
+## Benchmark Numbers
+
+**Real Bundle Cost per Exact Flash Order \w Internal Balance**
+
+Fixed Cost (including calldata + intrinsic, not including ToB & pool updates): 45.7k
+Cost per order: 19.4k
+
+|Order Count|Total amortized per order cost|
+|-----------|------------------------------|
+|2| 42.2k|
+|3| 34.6k|
+|4| 30.8k|
+|5| 28.5k|
+|10| 24.0k|
+|20| 21.7k|
+|50| 20.3k|
+
+**Real Bundle Cost per Exact Standing Order \w Liquid Tokens (Nonce non-zero)**
+
+Fixed Cost (including calldata + intrinsic, not including ToB & pool updates): 45.7k
+Fixed Cost per unique ERC20 token: 7,300
+Cost per order: 32.4k
+
+|Order Count|Total amortized per order cost|
+|-----------|------------------------------|
+|2| 62.5k|
+|3| 52.5k|
+|4| 47.5k|
+|5| 44.5k|
+|10| 38.4k|
+|20| 35.4k|
+|50| 33.6k|

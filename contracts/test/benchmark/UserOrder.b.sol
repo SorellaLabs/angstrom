@@ -5,11 +5,15 @@ import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {OpenAngstrom} from "test/_mocks/OpenAngstrom.sol";
 import {Pair, PairLib} from "test/_reference/Pair.sol";
 import {Asset, AssetLib} from "test/_reference/Asset.sol";
+import {Bundle} from "test/_reference/Bundle.sol";
 import {PoolConfigStore} from "src/libraries/PoolConfigStore.sol";
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 import {PoolManager} from "v4-core/src/PoolManager.sol";
-import {ExactFlashOrder} from "../_reference/OrderTypes.sol";
+import {ExactFlashOrder, TopOfBlockOrder} from "../_reference/OrderTypes.sol";
+import {UserOrder, UserOrderLib} from "../_reference/UserOrder.sol";
 import {PriceAB} from "src/types/Price.sol";
+
+import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract UserOrderBenchmarkTest is BaseTest {
@@ -24,8 +28,7 @@ contract UserOrderBenchmarkTest is BaseTest {
 
     address fee_master = makeAddr("fee_master");
     address controller = makeAddr("controller");
-
-    Account user;
+    address node = makeAddr("the_one");
 
     function setUp() public {
         uni = new PoolManager(address(0));
@@ -33,12 +36,13 @@ contract UserOrderBenchmarkTest is BaseTest {
         (asset0, asset1) = deployTokensSorted();
         vm.startPrank(controller);
         angstrom.configurePool(asset0, asset1, 1, 0);
+        angstrom.toggleNodes(addressArray(abi.encode(node)));
         vm.stopPrank();
-
-        user = makeAccount("user");
     }
 
     function test_benchmark_exactFlashInternal() public {
+        Account memory user = makeAccount("user");
+
         uint128 balance = 1.1e18;
         MockERC20(asset0).mint(user.addr, balance);
         uint128 other = 34_000e18;
@@ -73,12 +77,6 @@ contract UserOrderBenchmarkTest is BaseTest {
             order.encode(pair)
         );
 
-        vm.breakpoint("c");
-
         angstrom.validateAndExecuteUserOrder(payload);
     }
 }
-
-/*
-
-    */

@@ -123,16 +123,9 @@ contract Angstrom is
         (reader, buffer.quantityOut) = reader.readU128();
         (reader, buffer.maxGasAsset0) = reader.readU128();
         // Decode, validate & apply gas fee.
-        {
-            uint128 gasUsedAsset0;
-            (reader, gasUsedAsset0) = reader.readU128();
-            if (gasUsedAsset0 > buffer.maxGasAsset0) revert ToBGasUsedAboveMax();
-            if (variantMap.zeroForOne()) {
-                buffer.quantityIn += gasUsedAsset0;
-            } else {
-                buffer.quantityOut -= gasUsedAsset0;
-            }
-        }
+        uint128 gasUsedAsset0;
+        (reader, gasUsedAsset0) = reader.readU128();
+        if (gasUsedAsset0 > buffer.maxGasAsset0) revert ToBGasUsedAboveMax();
 
         {
             uint16 pairIndex;
@@ -156,6 +149,12 @@ contract Angstrom is
         address to = buffer.recipient;
         assembly ("memory-safe") {
             to := or(mul(iszero(to), from), to)
+        }
+
+        if (variantMap.zeroForOne()) {
+            buffer.quantityIn += gasUsedAsset0;
+        } else {
+            buffer.quantityOut -= gasUsedAsset0;
         }
         _settleOrderIn(from, buffer.assetIn, AmountIn.wrap(buffer.quantityIn), buffer.useInternal);
         _settleOrderOut(to, buffer.assetOut, AmountOut.wrap(buffer.quantityOut), buffer.useInternal);

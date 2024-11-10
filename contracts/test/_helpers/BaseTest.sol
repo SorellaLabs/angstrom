@@ -32,9 +32,9 @@ contract BaseTest is Test, HookDeployer {
 
     uint256 internal constant REAL_TIMESTAMP = 1721652639;
 
-    bytes32 internal constant ANG_CONTROLLER_SLOT = bytes32(uint256(0x1));
-    bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x3));
-    bytes32 internal constant ANG_BALANCES_SLOT = bytes32(uint256(0x5));
+    bytes32 internal constant ANG_CONTROLLER_SLOT = bytes32(uint256(0x0));
+    bytes32 internal constant ANG_CONFIG_STORE_SLOT = bytes32(uint256(0x2));
+    bytes32 internal constant ANG_BALANCES_SLOT = bytes32(uint256(0x4));
 
     function pm(address addr) internal pure returns (IPoolManager) {
         return IPoolManager(addr);

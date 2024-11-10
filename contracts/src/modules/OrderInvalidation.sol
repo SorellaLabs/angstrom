@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {tuint256} from "transient-goodies/TransientPrimitives.sol";
-
 /// @author philogy <https://github.com/philogy>
 abstract contract OrderInvalidation {
     error NonceReuse();
     error OrderAlreadyExecuted();
     error Expired();
-
-    mapping(bytes32 => mapping(address => tuint256)) internal alreadyExecuted;
 
     /// @dev `keccak256("angstrom-v1_0.unordered-nonces.slot")[0:4]`
     uint256 private constant UNORDERED_NONCES_SLOT = 0xdaa050e9;
@@ -43,8 +39,15 @@ abstract contract OrderInvalidation {
     }
 
     function _invalidateOrderHash(bytes32 orderHash, address from) internal {
-        tuint256 storage executed = alreadyExecuted[orderHash][from];
-        if (executed.get() != 0) revert OrderAlreadyExecuted();
-        executed.set(1);
+        assembly ("memory-safe") {
+            mstore(20, from)
+            mstore(0, orderHash)
+            let slot := keccak256(0, 52)
+            if tload(slot) {
+                mstore(0x00, 0x8a2ef116 /* OrderAlreadyExecuted() */ )
+                revert(0x1c, 0x04)
+            }
+            tstore(slot, 1)
+        }
     }
 }

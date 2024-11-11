@@ -2,13 +2,6 @@
 pragma solidity ^0.8.0;
 
 
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
-import {PoolId} from "v4-core/src/types/PoolId.sol";
-import {Slot0} from "v4-core/src/types/Slot0.sol";
-import {IUniV4} from "core/src/interfaces/IUniV4.sol";
-import {TickMath} from "v4-core/src/libraries/TickMath.sol";
-
 contract GetUniswapV4TickData {
     struct TickData {
         bool initialized;
@@ -80,8 +73,8 @@ contract GetUniswapV4TickData {
         bytes memory abiEncodedData = abi.encode(ticksWithBlock);
 
         assembly {
-            let dataStart := add(abiEncodedData, 0x20)  // Points to the start of the actual data
-            let dataSize := mload(abiEncodedData)       // The size of the actual data
+            let dataStart := add(abiEncodedData, 0x20)
+            let dataSize := mload(abiEncodedData)
             return(dataStart, dataSize)
         }
     }

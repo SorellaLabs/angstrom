@@ -18,28 +18,28 @@ sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
     IGetUniswapV3TickDataBatchRequest,
-    "src/cfmm/uniswap/GetUniswapV3TickData.json"
+    "src/cfmm/uniswap/loaders/GetUniswapV3TickData.json"
 }
 
 sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
     IGetUniswapV3PoolDataBatchRequest,
-    "src/cfmm/uniswap/GetUniswapV3PoolData.json"
+    "src/cfmm/uniswap/loaders/GetUniswapV3PoolData.json"
 }
 
 sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
     IGetUniswapV4TickDataBatchRequest,
-    "src/cfmm/uniswap/GetUniswapV4TickData.json"
+    "src/cfmm/uniswap/loaders/GetUniswapV4TickData.json"
 }
 
 sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
     IGetUniswapV4PoolDataBatchRequest,
-    "src/cfmm/uniswap/GetUniswapV4PoolData.json"
+    "src/cfmm/uniswap/loaders/GetUniswapV4PoolData.json"
 }
 
 sol! {

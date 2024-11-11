@@ -52,6 +52,15 @@ runs = 200
 
 [profile.loaders]
 show_progress = false
-optimizer = false
-evm_version = "cancun"
-skip = []
+optimizer = true
+remappings = [
+  "solady/src/=lib/solady/src/",
+  "v4-core/src/=lib/v4-core/src/",
+  "forge-std/=lib/forge-std/src",
+  "core/src/=src/",
+  "solmate/=lib/solmate/",
+]
+src = "../crates/matching-engine/src/cfmm/uniswap/loaders"
+libs = [
+  "lib"
+]

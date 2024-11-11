@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {TickMath} from "../../lib/v4-core/src/libraries/TickMath.sol";
+import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 
 /**
  * @dev This contract is not meant to be deployed. Instead, use a static call with the
@@ -79,8 +79,9 @@ contract GetUniswapV3TickData {
         assembly {
             // Return from the start of the data (discarding the original data address)
             // up to the end of the memory used
-            let dataStart := add(abiEncodedData, 0x20)
-            return(dataStart, sub(msize(), dataStart))
+            let dataStart := add(abiEncodedData, 0x20) 
+            let dataSize := mload(abiEncodedData)       
+            return(dataStart, dataSize)
         }
     }
 

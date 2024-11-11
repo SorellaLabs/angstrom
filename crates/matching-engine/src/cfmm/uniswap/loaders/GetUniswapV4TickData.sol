@@ -1,10 +1,13 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IPoolManager} from "../../lib/v4-core/src/interfaces/IPoolManager.sol";
-import {TickMath} from "../../lib/v4-core/src/libraries/TickMath.sol";
-import {PoolId} from "../../lib/v4-core/src/types/PoolId.sol";
-import {IUniV4} from "../interfaces/IUniV4.sol";
+
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {PoolId} from "v4-core/src/types/PoolId.sol";
+import {Slot0} from "v4-core/src/types/Slot0.sol";
+import {IUniV4} from "core/src/interfaces/IUniV4.sol";
+import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 
 contract GetUniswapV4TickData {
     struct TickData {
@@ -77,10 +80,9 @@ contract GetUniswapV4TickData {
         bytes memory abiEncodedData = abi.encode(ticksWithBlock);
 
         assembly {
-            // Return from the start of the data (discarding the original data address)
-            // up to the end of the memory used
-            let dataStart := add(abiEncodedData, 0x20)
-            return(dataStart, sub(msize(), dataStart))
+            let dataStart := add(abiEncodedData, 0x20)  // Points to the start of the actual data
+            let dataSize := mload(abiEncodedData)       // The size of the actual data
+            return(dataStart, dataSize)
         }
     }
 }

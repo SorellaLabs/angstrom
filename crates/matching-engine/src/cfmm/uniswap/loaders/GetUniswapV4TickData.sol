@@ -1,6 +1,10 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {PoolId} from "v4-core/src/types/PoolId.sol";
+import {IUniV4} from "core/src/interfaces/IUniV4.sol";
 
 contract GetUniswapV4TickData {
     struct TickData {

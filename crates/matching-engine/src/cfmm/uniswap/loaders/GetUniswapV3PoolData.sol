@@ -1,9 +1,6 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {TickMath} from "v4-core/src/libraries/TickMath.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-
 contract GetUniswapV3PoolData {
     struct PoolData {
         address tokenA;

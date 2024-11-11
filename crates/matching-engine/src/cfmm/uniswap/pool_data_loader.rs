@@ -241,7 +241,7 @@ impl PoolDataLoader<Address> for DataLoader<Address> {
 
     fn is_modify_position_event(log: &Log) -> bool {
         log.topics().iter().any(|t| {
-            *t == IUniswapV3Pool::Swap::SIGNATURE_HASH || *t == IUniswapV3Pool::Burn::SIGNATURE_HASH
+            *t == IUniswapV3Pool::Mint::SIGNATURE_HASH || *t == IUniswapV3Pool::Burn::SIGNATURE_HASH
         })
     }
 

@@ -5,7 +5,7 @@ import {IERC20} from "../../lib/forge-std/src/interfaces/IERC20.sol";
 import {IPoolManager} from "../../lib/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolId} from "../../lib/v4-core/src/types/PoolId.sol";
 import {Slot0} from "../../lib/v4-core/src/types/Slot0.sol";
-import {IUniV4} from "../interfaces/IUniV4.sol";
+import {IUniV4} from "src/interfaces/IUniV4.sol";
 
 contract GetUniswapV4PoolData {
     struct PoolData {

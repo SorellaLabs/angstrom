@@ -17,7 +17,7 @@ ignored_error_codes = [
 # skipping for the normal build, since there is an issue with the yul optimizer and msize(),
 # and requires optimizer=false
 skip = [
-  "src/loaders/*.sol"
+  "test/_loaders/*.sol"
 ]
 
 remappings = [

@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {IPoolManager} from "../../lib/v4-core/src/interfaces/IPoolManager.sol";
 import {TickMath} from "../../lib/v4-core/src/libraries/TickMath.sol";
 import {PoolId} from "../../lib/v4-core/src/types/PoolId.sol";
-import {IUniV4} from "../interfaces/IUniV4.sol";
+import {IUniV4} from "src/interfaces/IUniV4.sol";
 
 contract GetUniswapV4TickData {
     struct TickData {

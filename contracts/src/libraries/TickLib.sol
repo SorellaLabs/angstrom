@@ -57,9 +57,9 @@ library TickLib {
     }
 
     function position(int24 compressed) internal pure returns (int16 wordPos, uint8 bitPos) {
-        unchecked {
-            wordPos = int16(compressed >> 8);
-            bitPos = uint8(int8(compressed));
+        assembly ("memory-safe") {
+            wordPos := sar(8, compressed)
+            bitPos := and(compressed, 0xff)
         }
     }
 

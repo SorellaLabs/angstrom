@@ -23,7 +23,7 @@ use tokio_stream::wrappers::BroadcastStream;
 #[derive(Debug, Clone)]
 pub enum PoolManagerUpdate {
     NewOrder(OrderWithStorageData<AllOrders>),
-    FilledOrder((u64, OrderWithStorageData<AllOrders>)),
+    FilledOrder(u64, OrderWithStorageData<AllOrders>),
     UnfilledOrders(OrderWithStorageData<AllOrders>),
     CancelledOrder(OrderWithStorageData<AllOrders>)
 }

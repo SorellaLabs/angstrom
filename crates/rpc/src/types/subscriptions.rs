@@ -63,7 +63,7 @@ pub enum OrderSubscriptionFilter {
 #[serde(rename_all = "camelCase")]
 pub enum OrderSubscriptionResult {
     NewOrder(AllOrders),
-    FilledOrder((u64, AllOrders)),
+    FilledOrder(u64, AllOrders),
     UnfilledOrder(AllOrders),
     CancelledOrder(B256)
 }

@@ -13,19 +13,19 @@ use std::future::Future;
 use alloy::primitives::{Address, FixedBytes, B256};
 use angstrom_types::{
     orders::{OrderLocation, OrderOrigin, OrderStatus},
-    sol_bindings::grouped_orders::AllOrders
+    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 pub use angstrom_utils::*;
 pub use config::PoolConfig;
 pub use order_indexer::*;
-use tokio::sync::broadcast::Receiver;
+use tokio_stream::wrappers::BroadcastStream;
 
 #[derive(Debug, Clone)]
 pub enum PoolManagerUpdate {
-    NewOrder(AllOrders),
-    FilledOrder((u64, AllOrders)),
-    UnfilledOrders(AllOrders),
-    CancelledOrder(B256)
+    NewOrder(OrderWithStorageData<AllOrders>),
+    FilledOrder((u64, OrderWithStorageData<AllOrders>)),
+    UnfilledOrders(OrderWithStorageData<AllOrders>),
+    CancelledOrder(OrderWithStorageData<AllOrders>)
 }
 
 /// The OrderPool Trait is how other processes can interact with the orderpool
@@ -35,7 +35,7 @@ pub trait OrderPoolHandle: Send + Sync + Clone + Unpin + 'static {
     fn new_order(&self, origin: OrderOrigin, order: AllOrders)
         -> impl Future<Output = bool> + Send;
 
-    fn subscribe_orders(&self) -> Receiver<PoolManagerUpdate>;
+    fn subscribe_orders(&self) -> BroadcastStream<PoolManagerUpdate>;
 
     fn pending_orders(&self, sender: Address) -> impl Future<Output = Vec<AllOrders>> + Send;
 

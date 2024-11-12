@@ -25,7 +25,7 @@ use tokio::sync::{
     broadcast::Receiver,
     mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender}
 };
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
 use crate::{LruCache, NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
@@ -72,8 +72,8 @@ impl OrderPoolHandle for PoolHandle {
         })
     }
 
-    fn subscribe_orders(&self) -> Receiver<PoolManagerUpdate> {
-        self.pool_manager_tx.subscribe()
+    fn subscribe_orders(&self) -> BroadcastStream<PoolManagerUpdate> {
+        BroadcastStream::new(self.pool_manager_tx.subscribe())
     }
 
     fn fetch_orders_from_pool(

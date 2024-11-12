@@ -9,13 +9,14 @@ use angstrom_types::{
         }
     }
 };
+use futures::StreamExt;
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use reth_tasks::TaskSpawner;
 
 use crate::{
     api::{CancelOrderRequest, OrderApiServer},
-    types::{OrderSubscriptionKind, OrderSubscriptionResult},
+    types::{OrderSubscriptionFilter, OrderSubscriptionKind, OrderSubscriptionResult},
     OrderApiError::SignatureRecoveryError
 };
 
@@ -90,10 +91,14 @@ where
     async fn subscribe_orders(
         &self,
         pending: PendingSubscriptionSink,
-        kind: OrderSubscriptionKind
+        kind: OrderSubscriptionKind,
+        filter: OrderSubscriptionFilter
     ) -> jsonrpsee::core::SubscriptionResult {
         let sink = pending.accept().await?;
-        let mut subscription = self.pool.subscribe_orders();
+        let mut subscription = self
+            .pool
+            .subscribe_orders()
+            .filter_map(|update| update.map(|value| {}));
 
         self.task_spawner.spawn(Box::pin(async move {
             while let Ok(order) = subscription.recv().await {
@@ -155,6 +160,49 @@ pub fn rpc_err(
                 .expect("serializing String can't fail")
         })
     )
+}
+
+trait OrderFilterMatching {
+    fn filter_out_order(
+        self,
+        kind: OrderSubscriptionKind,
+        filter: OrderSubscriptionFilter
+    ) -> Option<OrderSubscriptionResult>;
+}
+
+impl OrderFilterMatching for PoolManagerUpdate {
+    fn filter_out_order(
+        self,
+        kind: &OrderSubscriptionKind,
+        filter: OrderSubscriptionFilter
+    ) -> Option<OrderSubscriptionResult> {
+        if let PoolManagerUpdate::NewOrder(order) = self && kind == OrderSubscriptionKind::NewOrders {
+            match OrderSubscriptionFilter {
+                OrderSubscriptionFilter::None => return Some(OrderSubscriptionResult::NewOrder(order.order)),
+                OrderSubscriptionFilter::ByPair(pair)=>  {
+                    if order.pool_id == pair {
+                        return Some(OrderSubscriptionResult::NewOrder(order.order))
+                    }
+                    return None
+                }
+
+            }
+        }
+
+        if matches!(Self, PoolManagerUpdate::FilledOrder(_))
+            && kind == OrderSubscriptionKind::FilledOrders
+        {}
+
+        if matches!(Self, PoolManagerUpdate::UnfilledOrders(_))
+            && kind == OrderSubscriptionKind::UnfilleOrders
+        {}
+
+        if matches!(Self, PoolManagerUpdate::CancelledOrder(_))
+            && kind == OrderSubscriptionKind::CancelledOrders
+        {}
+
+        None
+    }
 }
 
 impl<OrderPool, Spawner> OrderApi<OrderPool, Spawner>

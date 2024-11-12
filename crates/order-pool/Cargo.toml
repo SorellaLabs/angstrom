@@ -63,6 +63,7 @@ auto_impl = "1.0"
 rand = { workspace = true, optional = true }
 paste = { version = "1.0", optional = true }
 proptest = { workspace = true, optional = true }
+dashmap = "6.1.0"
 
 
 [dev-dependencies]

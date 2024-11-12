@@ -16,11 +16,13 @@ use angstrom_types::{
         RawPoolOrder
     }
 };
+use dashmap::DashMap;
 use futures_util::{Stream, StreamExt};
 use tokio::sync::oneshot::Sender;
 use tracing::{error, trace};
 use validation::order::{
-    state::account::user::UserAddress, OrderValidationResults, OrderValidatorHandle
+    state::{account::user::UserAddress, pools::angstrom_pools::AngstromPools},
+    OrderValidationResults, OrderValidatorHandle
 };
 
 use crate::{
@@ -62,6 +64,8 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     cancelled_orders:       HashMap<B256, CancelOrderRequest>,
     /// Order Validator
     validator:              OrderValidator<V>,
+    /// a mapping of tokens to pool_id
+    pool_id_map:            AngstromPools,
     /// List of subscribers for order validation result
     order_validation_subs:  HashMap<B256, Vec<Sender<OrderValidationResults>>>,
     /// List of subscribers for order state change notifications
@@ -82,6 +86,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             order_hash_to_order_id: HashMap::new(),
             order_hash_to_peer_id: HashMap::new(),
             seen_invalid_orders: HashSet::with_capacity(SEEN_INVALID_ORDERS_CAPACITY),
+            pool_id_map: AngstromPools::new(DashMap::new()),
             cancelled_orders: HashMap::new(),
             order_validation_subs: HashMap::new(),
             validator: OrderValidator::new(validator),
@@ -198,7 +203,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 .as_secs()
                 + MAX_NEW_ORDER_DELAY_PROPAGATION * ETH_BLOCK_TIME.as_secs();
             self.insert_cancel_request_with_deadline(from, &order_hash, Some(U256::from(deadline)));
-            self.notify_order_subscribers(PoolManagerUpdate::CancelledOrder(order_hash));
+
             return true
         }
 
@@ -214,7 +219,12 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             self.order_hash_to_order_id.remove(&order_hash);
             self.order_hash_to_peer_id.remove(&order_hash);
             self.insert_cancel_request_with_deadline(from, &order_hash, order.deadline());
-            self.notify_order_subscribers(PoolManagerUpdate::CancelledOrder(order_hash));
+
+            self.notify_order_subscribers(PoolManagerUpdate::CancelledOrder {
+                order_hash: order.order_hash(),
+                user:       order.from(),
+                pool_id:    order.pool_id
+            });
         }
 
         removed_from_storage
@@ -260,6 +270,17 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         if self.is_duplicate(&hash) || is_valid_cancel_request {
             if is_valid_cancel_request {
                 self.insert_cancel_request_with_deadline(order.from(), &hash, order.deadline());
+
+                if let Some(pool_id) = self
+                    .pool_id_map
+                    .get_poolid(order.token_in(), order.token_out())
+                {
+                    self.notify_order_subscribers(PoolManagerUpdate::CancelledOrder {
+                        order_hash: order.order_hash(),
+                        pool_id,
+                        user: order.from()
+                    });
+                }
                 self.order_storage.log_cancel_order(&order);
             }
             self.notify_validation_subscribers(&hash, OrderValidationResults::Invalid(hash));
@@ -355,7 +376,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             .into_iter()
             .for_each(|order| {
                 self.notify_order_subscribers(PoolManagerUpdate::UnfilledOrders(order.clone()));
-                self.validator.validate_order(OrderOrigin::Local, order)
+                self.validator
+                    .validate_order(OrderOrigin::Local, order.order)
             });
     }
 
@@ -379,10 +401,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             .collect::<Vec<OrderWithStorageData<AllOrders>>>();
 
         filled_orders.iter().for_each(|order| {
-            self.notify_order_subscribers(PoolManagerUpdate::FilledOrder((
+            self.notify_order_subscribers(PoolManagerUpdate::FilledOrder(
                 block_number,
-                order.order.clone()
-            )));
+                order.clone()
+            ));
         });
         self.order_storage
             .add_filled_orders(block_number, filled_orders);
@@ -418,7 +440,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                     return Ok(PoolInnerEvent::BadOrderMessages(peers))
                 }
 
-                self.notify_order_subscribers(PoolManagerUpdate::NewOrder(valid.order.clone()));
+                self.notify_order_subscribers(PoolManagerUpdate::NewOrder(valid.clone()));
                 self.notify_validation_subscribers(
                     &hash,
                     OrderValidationResults::Valid(valid.clone())

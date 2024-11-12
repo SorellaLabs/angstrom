@@ -286,7 +286,7 @@ impl OrderStorage {
         }
     }
 
-    pub fn reorg(&self, order_hashes: Vec<FixedBytes<32>>) -> Vec<AllOrders> {
+    pub fn reorg(&self, order_hashes: Vec<FixedBytes<32>>) -> Vec<OrderWithStorageData<AllOrders>> {
         let orders = self
             .pending_finalization_orders
             .lock()

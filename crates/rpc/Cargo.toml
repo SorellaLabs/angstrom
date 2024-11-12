@@ -20,6 +20,7 @@ angstrom-network.workspace = true
 consensus.workspace = true
 order-pool.workspace = true
 validation.workspace = true
+tokio-stream.workspace = true
 
 reth-primitives.workspace = true
 reth-tasks.workspace = true

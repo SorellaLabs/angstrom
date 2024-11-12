@@ -99,16 +99,15 @@ where
         let mut subscription = self
             .pool
             .subscribe_orders()
-            .filter_map(|update| update.map(|value| value.filter_out_order(&kind, &filter)));
+            .map(move |update| update.map(move |value| value.filter_out_order(kind, filter)));
 
         self.task_spawner.spawn(Box::pin(async move {
-            while let Ok(order) = subscription.next().await {
+            while let Some(Ok(order)) = subscription.next().await {
                 if sink.is_closed() {
                     break
                 }
 
-                let msg = Self::return_order(&kind, order);
-                if let Some(result) = msg {
+                if let Some(result) = order {
                     match SubscriptionMessage::from_json(&result) {
                         Ok(message) => {
                             if sink.send(message).await.is_err() {
@@ -167,15 +166,15 @@ trait OrderFilterMatching {
     fn filter_out_order(
         self,
         kind: OrderSubscriptionKind,
-        filter: &OrderSubscriptionFilter
+        filter: OrderSubscriptionFilter
     ) -> Option<OrderSubscriptionResult>;
 }
 
 impl OrderFilterMatching for PoolManagerUpdate {
     fn filter_out_order(
         self,
-        kind: &OrderSubscriptionKind,
-        filter: &OrderSubscriptionFilter
+        kind: OrderSubscriptionKind,
+        filter: OrderSubscriptionFilter
     ) -> Option<OrderSubscriptionResult> {
         match self {
             PoolManagerUpdate::NewOrder(order) if kind == OrderSubscriptionKind::NewOrders => {
@@ -221,19 +220,19 @@ impl OrderFilterMatching for PoolManagerUpdate {
                         .map(|o| OrderSubscriptionResult::UnfilledOrder(o.order))
                 }
             }
-            PoolManagerUpdate::CancelledOrder(order)
+            PoolManagerUpdate::CancelledOrder { order_hash, user, pool_id }
                 if kind == OrderSubscriptionKind::CancelledOrders =>
             {
                 match filter {
                     OrderSubscriptionFilter::None => {
-                        Some(OrderSubscriptionResult::CancelledOrder(order.order_hash()))
+                        Some(OrderSubscriptionResult::CancelledOrder(order_hash))
                     }
-                    OrderSubscriptionFilter::ByPair(pair) => Some(order)
-                        .filter(|order| order.pool_id == pair)
-                        .map(|o| OrderSubscriptionResult::UnfilledOrder(o.order_hash())),
-                    OrderSubscriptionFilter::ByAddress(address) => Some(order)
-                        .filter(|o| o.from() == address)
-                        .map(|o| OrderSubscriptionResult::UnfilledOrder(o.order_hash()))
+                    OrderSubscriptionFilter::ByPair(pair) => Some(order_hash)
+                        .filter(|_| pool_id == pair)
+                        .map(OrderSubscriptionResult::CancelledOrder),
+                    OrderSubscriptionFilter::ByAddress(address) => Some(order_hash)
+                        .filter(|_| user == address)
+                        .map(OrderSubscriptionResult::CancelledOrder)
                 }
             }
             _ => None
@@ -254,10 +253,8 @@ mod tests {
     use futures::FutureExt;
     use order_pool::PoolManagerUpdate;
     use reth_tasks::TokioTaskExecutor;
-    use tokio::sync::{
-        broadcast::Receiver,
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}
-    };
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+    use tokio_stream::wrappers::BroadcastStream;
 
     use super::*;
 
@@ -351,7 +348,7 @@ mod tests {
             future::ready(true)
         }
 
-        fn subscribe_orders(&self) -> Receiver<PoolManagerUpdate> {
+        fn subscribe_orders(&self) -> BroadcastStream<PoolManagerUpdate> {
             unimplemented!("Not needed for this test")
         }
 

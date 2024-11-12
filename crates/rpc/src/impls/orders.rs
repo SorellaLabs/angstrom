@@ -1,6 +1,6 @@
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, FixedBytes, B256};
 use angstrom_types::{
-    orders::{OrderOrigin, OrderStatus},
+    orders::{OrderLocation, OrderOrigin, OrderStatus},
     sol_bindings::{
         grouped_orders::{AllOrders, FlashVariants, StandingVariants},
         rpc_orders::{
@@ -77,6 +77,14 @@ where
 
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>> {
         Ok(self.pool.fetch_order_status(order_hash).await)
+    }
+
+    async fn orders_by_pair(
+        &self,
+        pair: FixedBytes<32>,
+        location: OrderLocation
+    ) -> RpcResult<Vec<AllOrders>> {
+        Ok(self.pool.fetch_orders_from_pool(pair, location).await)
     }
 
     async fn subscribe_orders(
@@ -279,6 +287,14 @@ mod tests {
     }
 
     impl OrderPoolHandle for MockOrderPoolHandle {
+        fn fetch_orders_from_pool(
+            &self,
+            _: FixedBytes<32>,
+            _: OrderLocation
+        ) -> impl Future<Output = Vec<AllOrders>> + Send {
+            future::ready(vec![])
+        }
+
         fn new_order(
             &self,
             origin: OrderOrigin,

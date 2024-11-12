@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alloy::primitives::B256;
+use alloy::primitives::{FixedBytes, B256};
 use angstrom_metrics::SearcherOrderPoolMetricsWrapper;
 use angstrom_types::{
     orders::OrderId,
@@ -10,7 +10,7 @@ use angstrom_types::{
 use angstrom_utils::map::OwnedMap;
 use pending::PendingPool;
 
-use crate::common::SizeTracker;
+use crate::{common::SizeTracker, AllOrders};
 
 mod pending;
 
@@ -34,6 +34,18 @@ impl SearcherPool {
             size: SizeTracker { max: max_size, current: 0 },
             metrics: SearcherOrderPoolMetricsWrapper::default()
         }
+    }
+
+    pub fn get_all_orders_from_pool(&self, pool: FixedBytes<32>) -> Vec<AllOrders> {
+        self.searcher_orders
+            .get(&pool)
+            .map(|pool| {
+                pool.get_all_orders()
+                    .into_iter()
+                    .map(|p| p.order.into())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
     }
 
     pub fn has_order(&self, order_hash: B256) -> bool {

@@ -6,10 +6,10 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy::primitives::{Address, B256};
+use alloy::primitives::{Address, FixedBytes, B256};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    orders::{OrderOrigin, OrderStatus},
+    orders::{OrderLocation, OrderOrigin, OrderStatus},
     primitive::PeerId,
     sol_bindings::grouped_orders::AllOrders
 };
@@ -46,6 +46,7 @@ pub enum OrderCommand {
     NewOrder(OrderOrigin, AllOrders, tokio::sync::oneshot::Sender<OrderValidationResults>),
     CancelOrder(Address, B256, tokio::sync::oneshot::Sender<bool>),
     PendingOrders(Address, tokio::sync::oneshot::Sender<Vec<AllOrders>>),
+    OrdersByPool(FixedBytes<32>, OrderLocation, tokio::sync::oneshot::Sender<Vec<AllOrders>>),
     OrderStatus(B256, tokio::sync::oneshot::Sender<Option<OrderStatus>>)
 }
 
@@ -73,6 +74,20 @@ impl OrderPoolHandle for PoolHandle {
 
     fn subscribe_orders(&self) -> Receiver<PoolManagerUpdate> {
         self.pool_manager_tx.subscribe()
+    }
+
+    fn fetch_orders_from_pool(
+        &self,
+        pool_id: FixedBytes<32>,
+        location: OrderLocation
+    ) -> impl Future<Output = Vec<AllOrders>> + Send {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let _ = self
+            .manager_tx
+            .send(OrderCommand::OrdersByPool(pool_id, location, tx));
+
+        rx.map(|v| v.unwrap_or_default())
     }
 
     fn fetch_order_status(
@@ -278,6 +293,11 @@ where
             }
             OrderCommand::OrderStatus(order_hash, tx) => {
                 let res = self.order_indexer.order_status(order_hash);
+                let _ = tx.send(res);
+            }
+
+            OrderCommand::OrdersByPool(pool_id, location, tx) => {
+                let res = self.order_indexer.orders_by_pool(pool_id, location);
                 let _ = tx.send(res);
             }
         }

@@ -1,6 +1,6 @@
-use alloy_primitives::{Address, B256};
+use alloy_primitives::{Address, FixedBytes, B256};
 use angstrom_types::{
-    orders::OrderStatus,
+    orders::{OrderLocation, OrderStatus},
     primitive::Signature,
     sol_bindings::{
         grouped_orders::AllOrders,
@@ -52,6 +52,13 @@ pub trait OrderApi {
 
     #[method(name = "orderStatus")]
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>>;
+
+    #[method(name = "ordersByPair")]
+    async fn orders_by_pair(
+        &self,
+        pair: FixedBytes<32>,
+        location: OrderLocation
+    ) -> RpcResult<Vec<AllOrders>>;
 
     #[subscription(
         name = "subscribeOrders",

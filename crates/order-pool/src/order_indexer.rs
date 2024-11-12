@@ -6,9 +6,9 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
-use alloy::primitives::{Address, BlockNumber, B256, U256};
+use alloy::primitives::{Address, BlockNumber, FixedBytes, B256, U256};
 use angstrom_types::{
-    orders::{OrderId, OrderOrigin, OrderSet, OrderStatus},
+    orders::{OrderId, OrderLocation, OrderOrigin, OrderSet, OrderStatus},
     primitive::{NewInitializedPool, PeerId, PoolId},
     sol_bindings::{
         grouped_orders::{AllOrders, OrderWithStorageData, *},
@@ -121,6 +121,27 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             }
         }
         orders
+    }
+
+    pub fn orders_by_pool(
+        &self,
+        pool_id: FixedBytes<32>,
+        order_location: OrderLocation
+    ) -> Vec<AllOrders> {
+        match order_location {
+            OrderLocation::Limit => self
+                .order_storage
+                .limit_orders
+                .lock()
+                .expect("poisoned")
+                .get_all_orders_from_pool(pool_id),
+            OrderLocation::Searcher => self
+                .order_storage
+                .searcher_orders
+                .lock()
+                .expect("poisoned")
+                .get_all_orders_from_pool(pool_id)
+        }
     }
 
     pub fn order_status(&self, order_hash: B256) -> Option<OrderStatus> {

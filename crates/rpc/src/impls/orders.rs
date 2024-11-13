@@ -6,7 +6,7 @@ use angstrom_types::{
         rpc_orders::{
             ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
             TopOfBlockOrder
-        },
+        }
     }
 };
 use futures::StreamExt;

@@ -1,30 +1,21 @@
-use alloy_primitives::U256;
-use angstrom_types::contract_bindings::angstrom::Angstrom::PoolKey;
+use alloy_primitives::{FixedBytes, U256};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct BBO {
-    pub pool:   PoolKey,
-    pub bid:    U256,
-    pub bid_am: U256,
-    pub ask:    U256,
-    pub ask_am: U256
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct GasEstimateUpdate {
+    timestamp:        u128,
+    pair:             FixedBytes<32>,
+    estimate_wei:     u64,
+    old_estimate_erc: U256,
+    new_estimate_erc: U256
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct Depth5 {
-    pub pool:   PoolKey,
-    pub bids:   [U256; 5],
-    pub bid_am: [U256; 5],
-    pub ask:    [U256; 5],
-    pub ask_am: [U256; 5]
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct Depth25 {
-    pub pool:   PoolKey,
-    pub bids:   [U256; 25],
-    pub bid_am: [U256; 25],
-    pub ask:    [U256; 25],
-    pub ask_am: [U256; 25]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
+)]
+pub enum GasEstimateFilter {
+    /// will give updates for all pools
+    #[default]
+    None,
+    Pair(FixedBytes<32>)
 }

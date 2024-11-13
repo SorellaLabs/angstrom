@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use alloy_primitives::{Address, U256};
-use jsonrpsee::{core::RpcResult, PendingSubscriptionSink};
+use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
 
 use crate::{
     api::QuotingApiServer,
@@ -15,22 +17,11 @@ impl<OrderPool> QuotingApiServer for QuotesApi<OrderPool>
 where
     OrderPool: Send + Sync + 'static
 {
-    async fn quote_transaction(
+    async fn subscribe_gas_estimates(
         &self,
-        _token_in: Address,
-        _token_out: Address,
-        _amount_in: U256,
-        _amount_out: U256
-    ) -> RpcResult<U256> {
-        todo!()
-    }
-
-    async fn subscribe_quotes(
-        &self,
-        _pending: PendingSubscriptionSink,
-        _kind: QuotingSubscriptionKind,
-        _params: Option<QuotingSubscriptionParam>
+        pending: PendingSubscriptionSink,
+        filters: HashSet<GasEstimateFilter>
     ) -> jsonrpsee::core::SubscriptionResult {
-        todo!()
+        Ok(())
     }
 }

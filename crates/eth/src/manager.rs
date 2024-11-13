@@ -320,7 +320,7 @@ pub mod test {
             angstrom_tokens:   HashSet::default(),
             angstrom_address:  angstrom_address.unwrap_or_default(),
             canonical_updates: BroadcastStream::new(cannon_rx),
-            pool_store:        Default::default()
+            _pool_store:        Default::default()
         }
     }
 

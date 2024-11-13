@@ -4,6 +4,7 @@ use angstrom_types::{orders::{OrderLocation,OrderOrigin,OrderStatus},
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use reth_tasks::TaskSpawner;
+use validation::order::OrderValidatorHandle;
 
 use crate::{
     api::{CancelOrderRequest, OrderApiServer},
@@ -11,22 +12,24 @@ use crate::{
     OrderApiError::{GasEstimationError, SignatureRecoveryError}
 };
 
-pub struct OrderApi<OrderPool, Spawner> {
+pub struct OrderApi<OrderPool, Spawner, Validator> {
     pool:         OrderPool,
-    task_spawner: Spawner
+    task_spawner: Spawner,
+    validator:    Validator
 }
 
-impl<OrderPool, Spawner> OrderApi<OrderPool, Spawner> {
-    pub fn new(pool: OrderPool, task_spawner: Spawner) -> Self {
-        Self { pool, task_spawner }
+impl<OrderPool, Spawner, Validator> OrderApi<OrderPool, Spawner, Validator> {
+    pub fn new(pool: OrderPool, task_spawner: Spawner, validator: Validator) -> Self {
+        Self { pool, task_spawner, validator }
     }
 }
 
 #[async_trait::async_trait]
-impl<OrderPool, Spawner> OrderApiServer for OrderApi<OrderPool, Spawner>
+impl<OrderPool, Spawner, Validator> OrderApiServer for OrderApi<OrderPool, Spawner, Validator>
 where
     OrderPool: OrderPoolHandle,
-    Spawner: TaskSpawner + 'static
+    Spawner: TaskSpawner + 'static,
+    Validator: OrderValidatorHandle
 {
     async fn send_order(&self, order: AllOrders) -> RpcResult<bool> {
         Ok(self.pool.new_order(OrderOrigin::External, order).await)
@@ -48,7 +51,7 @@ where
 
     async fn estimate_gas(&self, order: AllOrders) -> RpcResult<u64> {
         Ok(self
-            .pool
+            .validator
             .estimate_gas(order)
             .await
             .map_err(GasEstimationError)?)
@@ -139,9 +142,10 @@ pub fn rpc_err(
     )
 }
 
-impl<OrderPool, Spawner> OrderApi<OrderPool, Spawner>
+impl<OrderPool, Spawner, Validator> OrderApi<OrderPool, Spawner, Validator>
 where
     OrderPool: OrderPoolHandle,
+    Validator: OrderValidatorHandle,
     Spawner: 'static + TaskSpawner
 {
     fn return_order(

@@ -29,6 +29,9 @@ pub type ValidationFuture<'a> =
 pub type ValidationsFuture<'a> =
     Pin<Box<dyn Future<Output = Vec<OrderValidationResults>> + Send + Sync + 'a>>;
 
+pub type GasEstimationFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<u64, String>> + Send + Sync + 'a>>;
+
 pub enum OrderValidationRequest {
     ValidateOrder(Sender<OrderValidationResults>, AllOrders, OrderOrigin)
 }
@@ -222,6 +225,9 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
         completed_orders: Vec<B256>,
         addresses: Vec<Address>
     ) -> ValidationFuture;
+
+    /// estimates gas usage for order
+    fn estimate_gas(&self, order: AllOrders) -> GasEstimationFuture;
 }
 
 impl OrderValidatorHandle for ValidationClient {
@@ -258,6 +264,18 @@ impl OrderValidatorHandle for ValidationClient {
                 )));
 
             rx.await.unwrap()
+        })
+    }
+
+    fn estimate_gas(&self, order: AllOrders) -> GasEstimationFuture {
+        Box::pin(async move {
+            match self.validate_order(OrderOrigin::External, order).await {
+                OrderValidationResults::Valid(o) => Ok(o.priority_data.gas_units),
+                OrderValidationResults::Invalid(e) => Err(format!("Invalid order: {}", e)),
+                OrderValidationResults::TransitionedToBlock => {
+                    Err("Order transitioned to block".to_string())
+                }
+            }
         })
     }
 }

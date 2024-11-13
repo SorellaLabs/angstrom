@@ -89,19 +89,6 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         }
     }
 
-    pub fn estimate_gas(
-        &mut self,
-        order: AllOrders,
-        validation_tx: Sender<OrderValidationResults>
-    ) {
-        let hash = order.order_hash();
-        self.order_validation_subs
-            .entry(hash)
-            .or_default()
-            .push(validation_tx);
-        self.validator.validate_order(OrderOrigin::External, order);
-    }
-
     pub fn pending_orders_for_address(
         &self,
         address: Address

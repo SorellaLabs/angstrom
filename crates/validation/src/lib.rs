@@ -15,7 +15,7 @@ use futures::StreamExt;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use order::state::{db_state_utils::StateFetchUtils, pools::PoolsTracker};
 use reth_provider::CanonStateNotificationStream;
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use validator::Validator;
 
 use crate::{
@@ -27,7 +27,7 @@ use crate::{
             pools::AngstromPoolsTracker, token_pricing::TokenPriceGenerator
         }
     },
-    validator::ValidationClient
+    validator::{ValidationClient, ValidationRequest}
 };
 
 pub const POOL_CONFIG: &str = "crates/validation/src/state_config.toml";
@@ -40,12 +40,11 @@ pub fn init_validation<
     angstrom_address: Option<Address>,
     state_notification: CanonStateNotificationStream,
     uniswap_pools: SyncedUniswapPools,
-    price_generator: TokenPriceGenerator
-) -> ValidationClient
-where
+    price_generator: TokenPriceGenerator,
+    validator_rx: UnboundedReceiver<ValidationRequest>
+) where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
-    let (validator_tx, validator_rx) = unbounded_channel();
     let config_path = Path::new(POOL_CONFIG);
     let validation_config = load_validation_config(config_path).unwrap();
     let current_block = Arc::new(AtomicU64::new(current_block));
@@ -85,8 +84,6 @@ where
 
         rt.block_on(async { Validator::new(validator_rx, order_validator).await })
     });
-
-    ValidationClient(validator_tx)
 }
 
 pub fn init_validation_tests<

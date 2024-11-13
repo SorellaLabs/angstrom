@@ -31,7 +31,7 @@ use order_pool::{order_storage::OrderStorage, PoolConfig};
 use reth_provider::{CanonStateNotifications, CanonStateSubscriptions};
 use reth_tasks::TokioTaskExecutor;
 use secp256k1::SecretKey;
-use validation::order::state::token_pricing::TokenPriceGenerator;
+use validation::{order::state::token_pricing::TokenPriceGenerator, validator::ValidationClient};
 
 use crate::{
     anvil_state_provider::{
@@ -115,7 +115,11 @@ impl AngstromTestnetNodeInternals {
             })
             .buffer_unordered(10);
 
-        let order_api = OrderApi::new(pool.clone(), executor.clone());
+        let order_api = OrderApi::new(
+            pool.clone(),
+            executor.clone(),
+            ValidationClient(strom_handles.validator_tx)
+        );
 
         let eth_handle = AnvilEthDataCleanser::spawn(
             testnet_node_id,

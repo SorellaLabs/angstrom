@@ -188,7 +188,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, future, future::Future, sync::Arc};
+    use std::{future, future::Future};
 
     use alloy_primitives::{Address, B256};
     use angstrom_network::pool_manager::OrderCommand;
@@ -201,8 +201,7 @@ mod tests {
     use reth_tasks::TokioTaskExecutor;
     use tokio::sync::{
         broadcast::Receiver,
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-        Mutex
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}
     };
     use validation::order::{GasEstimationFuture, ValidationFuture};
 
@@ -249,8 +248,7 @@ mod tests {
         let (to_pool, pool_rx) = unbounded_channel();
         let pool_handle = MockOrderPoolHandle::new(to_pool);
         let task_executor = TokioTaskExecutor::default();
-        let validator = MockValidator::new(HashMap::new());
-        let api = OrderApi::new(pool_handle.clone(), task_executor, validator);
+        let api = OrderApi::new(pool_handle.clone(), task_executor, MockValidator);
         let handle = OrderApiTestHandle { _from_api: pool_rx };
         (handle, api)
     }
@@ -261,13 +259,12 @@ mod tests {
 
     #[derive(Clone)]
     struct MockOrderPoolHandle {
-        sender: UnboundedSender<OrderCommand>,
-        orders: Arc<Mutex<HashMap<Address, Vec<AllOrders>>>>
+        sender: UnboundedSender<OrderCommand>
     }
 
     impl MockOrderPoolHandle {
         fn new(sender: UnboundedSender<OrderCommand>) -> Self {
-            Self { sender, orders: Arc::new(Mutex::new(HashMap::new())) }
+            Self { sender }
         }
     }
 
@@ -325,15 +322,7 @@ mod tests {
     }
 
     #[derive(Debug, Clone)]
-    struct MockValidator {
-        orders: HashMap<B256, AllOrders>
-    }
-
-    impl MockValidator {
-        fn new(orders: HashMap<B256, AllOrders>) -> Self {
-            Self { orders }
-        }
-    }
+    struct MockValidator;
 
     impl OrderValidatorHandle for MockValidator {
         type Order = AllOrders;

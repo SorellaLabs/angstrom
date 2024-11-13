@@ -160,7 +160,7 @@ pub async fn manager_thread<TP: TaskSpawner + 'static>(
     while let Some(c) = input.recv().await {
         match c {
             MatcherCommand::BuildProposal(p, r) => {
-                r.send(manager.build_proposal(p).await).unwrap();
+                r.send(MatchingManager::build_proposal(p).await).unwrap();
             }
             MatcherCommand::EstimateGasPerPool { limit, searcher, tx } => {}
         }

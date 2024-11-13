@@ -41,7 +41,11 @@ pub struct EthDataCleanser {
     /// Notifications for Canonical Block updates
     canonical_updates: BroadcastStream<CanonStateNotification>,
     angstrom_tokens:   HashSet<Address>,
-    pool_store:        Arc<AngstromPoolConfigStore>
+
+    /// TODO: Once the periphery contracts are finished. we will add a watcher
+    /// on the contract that every time a new pair is added, we update the
+    /// pool store globally.
+    _pool_store: Arc<AngstromPoolConfigStore>
 }
 
 impl EthDataCleanser {
@@ -62,7 +66,7 @@ impl EthDataCleanser {
             commander: stream,
             event_listeners: Vec::new(),
             angstrom_tokens,
-            pool_store
+            _pool_store: pool_store
         };
         tp.spawn_critical("eth handle", this.boxed());
 

@@ -10,7 +10,6 @@ use angstrom_types::{
     sol_bindings::ext::RawPoolOrder
 };
 
-
 pub trait PoolsTracker: Send + Unpin {
     /// Returns None if no pool is found
     fn fetch_pool_info_for_order<O: RawPoolOrder>(&self, order: &O) -> Option<UserOrderPoolInfo>;

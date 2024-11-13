@@ -98,15 +98,7 @@ pub fn run() -> eyre::Result<()> {
             .with_add_ons::<EthereumAddOns>(Default::default())
             .extend_rpc_modules(move |rpc_context| {
                 let order_api = OrderApi::new(pool.clone(), executor_clone, validation_client);
-                // let quotes_api = QuotesApi { pool: pool.clone() };
-                // let consensus_api = ConsensusApi { consensus: consensus.clone() };
                 rpc_context.modules.merge_configured(order_api.into_rpc())?;
-                // rpc_context
-                //     .modules
-                //     .merge_configured(quotes_api.into_rpc())?;
-                // rpc_context
-                //     .modules
-                //     .merge_configured(consensus_api.into_rpc())?;
 
                 Ok(())
             })
@@ -280,7 +272,6 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
     // created
-    //
     let eth_handle = EthDataCleanser::spawn(
         angstrom_address.unwrap_or(node_config.angstrom_address),
         node.provider.subscribe_to_canonical_state(),

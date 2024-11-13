@@ -1,11 +1,14 @@
-use alloy::primitives::Address;
-use angstrom_pools::AngstromPools;
+use std::sync::Arc;
+
+use alloy::primitives::{
+    aliases::{I24, U24},
+    Address
+};
 use angstrom_types::{
-    contract_payloads::angstrom::AngstromPoolConfigStore,
-    primitive::{NewInitializedPool, PoolId},
+    contract_bindings::angstrom::Angstrom::PoolKey,
+    contract_payloads::angstrom::AngstromPoolConfigStore, primitive::PoolId,
     sol_bindings::ext::RawPoolOrder
 };
-use dashmap::DashMap;
 
 use super::config::PoolConfig;
 
@@ -23,13 +26,14 @@ pub struct UserOrderPoolInfo {
 }
 
 /// keeps track of all valid pools and the mappings of asset id to pool id
+#[derive(Debug, Clone)]
 pub struct AngstromPoolsTracker {
     angstrom_address: Address,
-    pool_store:       AngstromPoolConfigStore
+    pool_store:       Arc<AngstromPoolConfigStore>
 }
 
 impl AngstromPoolsTracker {
-    pub fn new(angstrom_address: Address, pool_store: AngstromPoolConfigStore) -> Self {
+    pub fn new(angstrom_address: Address, pool_store: Arc<AngstromPoolConfigStore>) -> Self {
         Self { angstrom_address, pool_store }
     }
 
@@ -42,9 +46,9 @@ impl AngstromPoolsTracker {
         Some(PoolId::from(PoolKey {
             currency0:   addr1,
             currency1:   addr2,
-            tickSpacing: store.tick_spacing,
+            tickSpacing: I24::from_limbs([store.tick_spacing as u64]),
             hooks:       self.angstrom_address,
-            fee:         store.fee_in_e6
+            fee:         U24::from_limbs([store.fee_in_e6 as u64])
         }))
     }
 
@@ -67,7 +71,7 @@ impl AngstromPoolsTracker {
 impl PoolsTracker for AngstromPoolsTracker {
     /// None if no pool was found
     fn fetch_pool_info_for_order<O: RawPoolOrder>(&self, order: &O) -> Option<UserOrderPoolInfo> {
-        let (is_bid, pool_id) = self.pools.order_info(order.token_in(), order.token_out())?;
+        let (is_bid, pool_id) = self.order_info(order.token_in(), order.token_out())?;
 
         let user_info = UserOrderPoolInfo { pool_id, is_bid, token: order.token_in() };
 

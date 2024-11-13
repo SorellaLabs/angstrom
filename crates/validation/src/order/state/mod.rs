@@ -119,8 +119,4 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
             _ => unreachable!()
         }
     }
-
-    pub fn index_new_pool(&mut self, pool: NewInitializedPool) {
-        self.pool_tacker.write().index_new_pool(pool);
-    }
 }

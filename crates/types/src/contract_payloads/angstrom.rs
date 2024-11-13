@@ -1,13 +1,14 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use alloy::{
     eips::BlockId,
     network::Network,
     primitives::{aliases::U40, keccak256, Address, Bytes, B256, U256},
     providers::Provider,
-    sol_types::{sol_data::FixedBytes, SolValue},
+    sol_types::SolValue,
     transports::Transport
 };
+use dashmap::DashMap;
 use pade::PadeDecode;
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
@@ -21,7 +22,7 @@ use super::{
 };
 use crate::{
     consensus::{PreProposal, Proposal},
-    contract_bindings::mock_rewards_manager::MockRewardsManager::{PoolId, PoolKey},
+    contract_bindings::angstrom::Angstrom::PoolKey,
     matching::{uniswap::PoolSnapshot, Ray},
     orders::{OrderFillState, OrderOutcome},
     primitive::{PoolId, UniswapPoolRegistry},
@@ -592,10 +593,10 @@ impl AngstromBundle {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
 pub struct AngstromPoolPartialKey([u8; 27]);
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct AngPoolConfigEntry {
     pub pool_partial_key: AngstromPoolPartialKey,
     pub tick_spacing:     u16,
@@ -603,9 +604,9 @@ pub struct AngPoolConfigEntry {
     pub store_index:      usize
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct AngstromPoolConfigStore {
-    entries: HashMap<AngstromPoolPartialKey, AngPoolConfigEntry>
+    entries: DashMap<AngstromPoolPartialKey, AngPoolConfigEntry>
 }
 
 impl AngstromPoolConfigStore {
@@ -647,7 +648,7 @@ impl AngstromPoolConfigStore {
 
     pub fn get_entry(&self, asset0: Address, asset1: Address) -> Option<AngPoolConfigEntry> {
         let store_key = Self::derive_store_key(asset0, asset1);
-        self.entries.get(&store_key).cloned()
+        self.entries.get(&store_key).map(|i| *i)
     }
 }
 
@@ -691,13 +692,13 @@ impl TryFrom<&[u8]> for AngstromPoolConfigStore {
 #[derive(Default, Clone)]
 pub struct UniswapAngstromRegistry {
     uniswap_pools:         UniswapPoolRegistry,
-    angstrom_config_store: AngstromPoolConfigStore
+    angstrom_config_store: Arc<AngstromPoolConfigStore>
 }
 
 impl UniswapAngstromRegistry {
     pub fn new(
         uniswap_pools: UniswapPoolRegistry,
-        angstrom_config_store: AngstromPoolConfigStore
+        angstrom_config_store: Arc<AngstromPoolConfigStore>
     ) -> Self {
         UniswapAngstromRegistry { uniswap_pools, angstrom_config_store }
     }

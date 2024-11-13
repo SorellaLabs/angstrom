@@ -16,15 +16,11 @@ use angstrom_types::{
         RawPoolOrder
     }
 };
-use dashmap::DashMap;
 use futures_util::{Stream, StreamExt};
 use tokio::sync::oneshot::Sender;
 use tracing::{error, trace};
 use validation::order::{
-    state::{
-        account::user::UserAddress,
-        pools::{angstrom_pools::AngstromPools, AngstromPoolsTracker}
-    },
+    state::{account::user::UserAddress, pools::AngstromPoolsTracker},
     OrderValidationResults, OrderValidatorHandle
 };
 
@@ -81,7 +77,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         order_storage: Arc<OrderStorage>,
         block_number: BlockNumber,
         orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
-        angstrom_pools: AngstromPools
+        angstrom_pools: AngstromPoolsTracker
     ) -> Self {
         Self {
             order_storage,

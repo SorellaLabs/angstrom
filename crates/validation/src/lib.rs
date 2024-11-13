@@ -9,7 +9,9 @@ use std::{
 };
 
 use alloy::primitives::Address;
-use angstrom_types::pair_with_price::PairsWithPrice;
+use angstrom_types::{
+    contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice
+};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::StreamExt;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
@@ -40,7 +42,8 @@ pub fn init_validation<
     angstrom_address: Option<Address>,
     state_notification: CanonStateNotificationStream,
     uniswap_pools: SyncedUniswapPools,
-    price_generator: TokenPriceGenerator
+    price_generator: TokenPriceGenerator,
+    pool_store: Arc<AngstromPoolConfigStore>
 ) -> ValidationClient
 where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
@@ -59,7 +62,7 @@ where
             .build()
             .unwrap();
         let handle = rt.handle().clone();
-        let pools = AngstromPoolsTracker::new(validation_config.pools.clone());
+        let pools = AngstromPoolsTracker::new(angstrom_address.unwrap_or_default(), pool_store);
         // load storage slot state + pools
         let thread_pool =
             KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);

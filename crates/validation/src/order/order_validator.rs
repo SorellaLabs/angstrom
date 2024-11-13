@@ -98,10 +98,6 @@ where
             })
         );
     }
-
-    pub fn index_new_pool(&mut self, pool: NewInitializedPool) {
-        self.state.index_new_pool(pool);
-    }
 }
 
 impl<DB, Pools, Fetch> Future for OrderValidator<DB, Pools, Fetch>

@@ -1542,6 +1542,7 @@ dependencies = [
  "bitmaps",
  "bytes",
  "convert_case 0.6.0",
+ "dashmap 6.1.0",
  "derive_more 0.99.18",
  "eyre",
  "foldhash",

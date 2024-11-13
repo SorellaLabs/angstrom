@@ -56,7 +56,7 @@ use reth_cli_util::get_secret_key;
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_network_peers::pk2id;
 use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
-use validation::init_validation;
+use validation::{init_validation, order::state::pools::AngstromPoolsTracker};
 
 use crate::cli::network_builder::AngstromNetworkBuilder;
 
@@ -227,17 +227,19 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         .into();
 
     let block_id = provider.get_block_number().await.unwrap();
-    let pool_config_store = AngstromPoolConfigStore::load_from_chain(
-        node_config.angstrom_address,
-        BlockId::Number(BlockNumberOrTag::Number(block_id)),
-        &provider
-    )
-    .await
-    .unwrap();
+    let pool_config_store = Arc::new(
+        AngstromPoolConfigStore::load_from_chain(
+            node_config.angstrom_address,
+            BlockId::Number(BlockNumberOrTag::Number(block_id)),
+            &provider
+        )
+        .await
+        .unwrap()
+    );
 
     let uniswap_registry: UniswapPoolRegistry = node_config.pools.into();
     let uni_ang_registry =
-        UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store);
+        UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
     let uniswap_pool_manager = configure_uniswap_manager(
         provider.clone(),
         node.provider.subscribe_to_canonical_state(),
@@ -260,13 +262,15 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
             .expect("failed to start token price generator");
 
     let block_height = node.provider.best_block_number().unwrap();
+
     let validator = init_validation(
         RethDbWrapper::new(node.provider.clone()),
         block_height,
         angstrom_address,
         node.provider.canonical_state_stream(),
         uniswap_pools.clone(),
-        price_generator
+        price_generator,
+        pool_config_store.clone()
     );
 
     let network_handle = network_builder
@@ -279,9 +283,12 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 
     // Create order storage based on that config
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
+    let angstrom_pool_tracker =
+        AngstromPoolTracker::new(node_config.angstrom_address, pool_config_store.clone());
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
     // created
+    //
     let _pool_handle = PoolManagerBuilder::new(
         validator.clone(),
         Some(order_storage.clone()),
@@ -294,7 +301,8 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         executor.clone(),
         handles.orderpool_tx,
         handles.orderpool_rx,
-        handles.pool_manager_tx
+        handles.pool_manager_tx,
+        angstrom_pool_tracker
     );
 
     let signer = Signer::new(secret_key);

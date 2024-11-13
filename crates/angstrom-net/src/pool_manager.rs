@@ -26,7 +26,7 @@ use tokio::sync::{
 };
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{
-    state::pools::angstrom_pools::AngstromPools, OrderValidationResults, OrderValidatorHandle
+    state::pools::AngstromPoolsTracker, OrderValidationResults, OrderValidatorHandle
 };
 
 use crate::{LruCache, NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
@@ -166,7 +166,7 @@ where
         task_spawner: TP,
         tx: UnboundedSender<OrderCommand>,
         rx: UnboundedReceiver<OrderCommand>,
-        pool_storage: AngstromPools,
+        pool_storage: AngstromPoolsTracker,
         pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
     ) -> PoolHandle {
         let rx = UnboundedReceiverStream::new(rx);
@@ -201,7 +201,7 @@ where
 
     pub fn build<TP: TaskSpawner>(
         self,
-        pool_storage: AngstromPools,
+        pool_storage: AngstromPoolsTracker,
         task_spawner: TP
     ) -> PoolHandle {
         let (tx, rx) = unbounded_channel();

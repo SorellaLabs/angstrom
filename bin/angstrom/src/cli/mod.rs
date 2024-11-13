@@ -205,15 +205,6 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     executor: &TaskExecutor
 ) {
     let node_config = NodeConfig::load_from_config(Some(config.node_config)).unwrap();
-    let eth_handle = EthDataCleanser::spawn(
-        angstrom_address.unwrap_or(node_config.angstrom_address),
-        node.provider.subscribe_to_canonical_state(),
-        executor.clone(),
-        handles.eth_tx,
-        handles.eth_rx,
-        HashSet::new()
-    )
-    .unwrap();
 
     // I am sure there is a prettier way of doing this
     let provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
@@ -284,11 +275,22 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     // Create order storage based on that config
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
     let angstrom_pool_tracker =
-        AngstromPoolTracker::new(node_config.angstrom_address, pool_config_store.clone());
+        AngstromPoolsTracker::new(node_config.angstrom_address, pool_config_store.clone());
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
     // created
     //
+    let eth_handle = EthDataCleanser::spawn(
+        angstrom_address.unwrap_or(node_config.angstrom_address),
+        node.provider.subscribe_to_canonical_state(),
+        executor.clone(),
+        handles.eth_tx,
+        handles.eth_rx,
+        HashSet::new(),
+        pool_config_store.clone()
+    )
+    .unwrap();
+
     let _pool_handle = PoolManagerBuilder::new(
         validator.clone(),
         Some(order_storage.clone()),
@@ -301,8 +303,8 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         executor.clone(),
         handles.orderpool_tx,
         handles.orderpool_rx,
-        handles.pool_manager_tx,
-        angstrom_pool_tracker
+        angstrom_pool_tracker,
+        handles.pool_manager_tx
     );
 
     let signer = Signer::new(secret_key);

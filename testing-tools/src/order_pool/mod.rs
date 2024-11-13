@@ -11,6 +11,7 @@ use order_pool::{order_storage::OrderStorage, OrderIndexer, PoolConfig};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use validation::order::state::pools::AngstromPoolsTracker;
 
 use crate::mocks::validator::MockValidator;
 
@@ -27,6 +28,7 @@ pub struct TestnetOrderPool {
 }
 
 impl TestnetOrderPool {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_full_mock(
         validator: MockValidator,
         config: PoolConfig,
@@ -34,7 +36,8 @@ impl TestnetOrderPool {
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
-        block_number: u64
+        block_number: u64,
+        pool_tracker: AngstromPoolsTracker
     ) -> Self {
         let (tx, rx) = unbounded_channel();
         let (sub_tx, _sub_rx) = tokio::sync::broadcast::channel(100);
@@ -43,7 +46,8 @@ impl TestnetOrderPool {
         let handle =
             PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
         let order_storage = Arc::new(OrderStorage::new(&config));
-        let inner = OrderIndexer::new(validator, order_storage.clone(), block_number, sub_tx);
+        let inner =
+            OrderIndexer::new(validator, order_storage.clone(), block_number, sub_tx, pool_tracker);
 
         Self {
             pool_manager: PoolManager::new(

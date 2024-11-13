@@ -10,7 +10,6 @@ use angstrom_types::{
     sol_bindings::ext::RawPoolOrder
 };
 
-use super::config::PoolConfig;
 
 pub trait PoolsTracker: Send + Unpin {
     /// Returns None if no pool is found

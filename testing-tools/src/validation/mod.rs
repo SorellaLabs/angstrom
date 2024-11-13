@@ -8,7 +8,9 @@ use std::{
 };
 
 use alloy_primitives::{Address, U256};
-use angstrom_types::pair_with_price::PairsWithPrice;
+use angstrom_types::{
+    contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice
+};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::{FutureExt, Stream};
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
@@ -53,9 +55,11 @@ where
 {
     pub async fn new(
         db: DB,
+        angstrom_address: Address,
         uniswap_pools: SyncedUniswapPools,
         token_conversion: TokenPriceGenerator,
-        token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>
+        token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
+        pool_store: Arc<AngstromPoolConfigStore>
     ) -> Self {
         let (tx, rx) = unbounded_channel();
         let config_path = Path::new("./state_config.toml");
@@ -67,7 +71,7 @@ where
         let db = Arc::new(db);
 
         let fetch = FetchUtils::new(Address::default(), db.clone());
-        let pools = AngstromPoolsTracker::new(validation_config.pools.clone());
+        let pools = AngstromPoolsTracker::new(angstrom_address, pool_store);
 
         let handle = tokio::runtime::Handle::current();
         let thread_pool =

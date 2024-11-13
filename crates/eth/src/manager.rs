@@ -9,7 +9,9 @@ use alloy::{
     sol_types::SolEvent
 };
 use angstrom_types::{
-    contract_bindings, contract_payloads::angstrom::AngstromBundle, primitive::NewInitializedPool
+    contract_bindings,
+    contract_payloads::angstrom::{AngstromBundle, AngstromPoolConfigStore},
+    primitive::NewInitializedPool
 };
 use futures::Future;
 use futures_util::{FutureExt, StreamExt};
@@ -38,7 +40,8 @@ pub struct EthDataCleanser {
 
     /// Notifications for Canonical Block updates
     canonical_updates: BroadcastStream<CanonStateNotification>,
-    angstrom_tokens:   HashSet<Address>
+    angstrom_tokens:   HashSet<Address>,
+    pool_store:        Arc<AngstromPoolConfigStore>
 }
 
 impl EthDataCleanser {
@@ -48,7 +51,8 @@ impl EthDataCleanser {
         tp: TP,
         tx: Sender<EthCommand>,
         rx: Receiver<EthCommand>,
-        angstrom_tokens: HashSet<Address>
+        angstrom_tokens: HashSet<Address>,
+        pool_store: Arc<AngstromPoolConfigStore>
     ) -> anyhow::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
 
@@ -57,7 +61,8 @@ impl EthDataCleanser {
             canonical_updates: BroadcastStream::new(canonical_updates),
             commander: stream,
             event_listeners: Vec::new(),
-            angstrom_tokens
+            angstrom_tokens,
+            pool_store
         };
         tp.spawn_critical("eth handle", this.boxed());
 
@@ -310,7 +315,8 @@ pub mod test {
             event_listeners:   vec![],
             angstrom_tokens:   HashSet::default(),
             angstrom_address:  angstrom_address.unwrap_or_default(),
-            canonical_updates: BroadcastStream::new(cannon_rx)
+            canonical_updates: BroadcastStream::new(cannon_rx),
+            pool_store:        Default::default()
         }
     }
 

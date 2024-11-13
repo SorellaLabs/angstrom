@@ -32,8 +32,8 @@ pub trait OrderApi {
     #[method(name = "sendOrder")]
     async fn send_order(&self, order: AllOrders) -> RpcResult<bool>;
 
-    #[method(name = "pendingOrders")]
-    async fn pending_orders(&self, from: Address) -> RpcResult<Vec<AllOrders>>;
+    #[method(name = "pendingOrder")]
+    async fn pending_order(&self, from: Address) -> RpcResult<Vec<AllOrders>>;
 
     #[method(name = "cancelOrder")]
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool>;
@@ -61,4 +61,29 @@ pub trait OrderApi {
         kind: OrderSubscriptionKind,
         filters: OrderSubscriptionFilter
     ) -> jsonrpsee::core::SubscriptionResult;
+
+    // MULTI CALL
+    #[method(name = "sendOrders")]
+    async fn send_orders(&self, order: Vec<AllOrders>) -> RpcResult<Vec<bool>>;
+
+    #[method(name = "pendingOrders")]
+    async fn pending_orders(&self, from: Vec<Address>) -> RpcResult<Vec<AllOrders>>;
+
+    #[method(name = "cancelOrders")]
+    async fn cancel_orders(&self, request: Vec<CancelOrderRequest>) -> RpcResult<Vec<bool>>;
+
+    #[method(name = "estimateGasOfOrders")]
+    async fn estimate_gas_of_orders(
+        &self,
+        order: Vec<AllOrders>
+    ) -> RpcResult<Vec<GasEstimateResponse>>;
+
+    #[method(name = "orderStatuses")]
+    async fn status_of_orders(&self, order_hash: Vec<B256>) -> RpcResult<Vec<Option<OrderStatus>>>;
+
+    #[method(name = "ordersByPairs")]
+    async fn orders_by_pairs(
+        &self,
+        pair_with_location: Vec<(FixedBytes<32>, OrderLocation)>
+    ) -> RpcResult<Vec<AllOrders>>;
 }

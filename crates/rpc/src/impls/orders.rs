@@ -108,36 +108,6 @@ where
 
         Ok(())
     }
-
-    async fn send_orders(&self, order: Vec<AllOrders>) -> RpcResult<Vec<bool>> {
-        todo!()
-    }
-
-    async fn pending_orders(&self, from: Vec<Address>) -> RpcResult<Vec<AllOrders>> {
-        todo!()
-    }
-
-    async fn cancel_orders(&self, request: Vec<CancelOrderRequest>) -> RpcResult<Vec<bool>> {
-        todo!()
-    }
-
-    async fn estimate_gas_of_orders(
-        &self,
-        order: Vec<AllOrders>
-    ) -> RpcResult<Vec<GasEstimateResponse>> {
-        todo!()
-    }
-
-    async fn status_of_orders(&self, order_hash: Vec<B256>) -> RpcResult<Vec<Option<OrderStatus>>> {
-        todo!()
-    }
-
-    async fn orders_by_pairs(
-        &self,
-        pair_with_location: Vec<(FixedBytes<32>, OrderLocation)>
-    ) -> RpcResult<Vec<AllOrders>> {
-        todo!()
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

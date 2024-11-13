@@ -20,7 +20,7 @@ pub struct CancelOrderRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GasEstimateResponse {
-    pub gas_limit: u64,
+    pub gas_units: u64,
     pub gas:       U256
 }
 

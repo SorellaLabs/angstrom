@@ -57,7 +57,7 @@ where
             .estimate_gas(order)
             .await
             .map_err(GasEstimationError)?;
-        Ok(GasEstimateResponse { gas, gas_limit })
+        Ok(GasEstimateResponse { gas, gas_units: gas_limit })
     }
 
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>> {

@@ -1,7 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    sync::Arc
+};
 
 use angstrom_types::{
     consensus::PreProposal,
+    matching::match_estimate_response::BundleEstimate,
     orders::PoolSolution,
     primitive::PoolId,
     sol_bindings::{
@@ -9,6 +14,7 @@ use angstrom_types::{
         rpc_orders::TopOfBlockOrder
     }
 };
+use futures::{stream::FuturesUnordered, Future};
 use futures_util::FutureExt;
 use reth_tasks::TaskSpawner;
 use tokio::{
@@ -27,7 +33,12 @@ use crate::{
 };
 
 pub enum MatcherCommand {
-    BuildProposal(Vec<PreProposal>, oneshot::Sender<Result<Vec<PoolSolution>, String>>)
+    BuildProposal(Vec<PreProposal>, oneshot::Sender<Result<Vec<PoolSolution>, String>>),
+    EstimateGasPerPool {
+        limit:    Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
+        tx:       oneshot::Sender<BundleEstimate>
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -59,13 +70,17 @@ impl MatchingEngineHandle for MatcherHandle {
     }
 }
 
-pub struct MatchingManager {}
+pub struct MatchingManager<TP: TaskSpawner> {
+    futures: FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Sync + Send + 'static>>>,
+    tp:      Arc<TP>
+}
 
-impl MatchingManager {
-    pub fn spawn<TP: TaskSpawner>(tp: TP) -> MatcherHandle {
+impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
+    pub fn spawn(tp: TP) -> MatcherHandle {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let tp = Arc::new(tp);
 
-        let fut = manager_thread(rx).boxed();
+        let fut = manager_thread(rx, tp.clone()).boxed();
         tp.spawn_critical("matching_engine", fut);
 
         MatcherHandle { sender: tx }
@@ -99,7 +114,6 @@ impl MatchingManager {
     }
 
     pub async fn build_proposal(
-        &self,
         preproposals: Vec<PreProposal>
     ) -> Result<Vec<PoolSolution>, String> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
@@ -137,14 +151,18 @@ impl MatchingManager {
     }
 }
 
-pub async fn manager_thread(mut input: Receiver<MatcherCommand>) {
-    let manager = MatchingManager {};
+pub async fn manager_thread<TP: TaskSpawner + 'static>(
+    mut input: Receiver<MatcherCommand>,
+    tp: Arc<TP>
+) {
+    let manager = MatchingManager { futures: FuturesUnordered::default(), tp };
 
     while let Some(c) = input.recv().await {
         match c {
             MatcherCommand::BuildProposal(p, r) => {
                 r.send(manager.build_proposal(p).await).unwrap();
             }
+            MatcherCommand::EstimateGasPerPool { limit, searcher, tx } => {}
         }
     }
 }
@@ -155,20 +173,24 @@ mod tests {
 
     use alloy::primitives::FixedBytes;
     use angstrom_types::consensus::PreProposal;
+    use futures::stream::FuturesUnordered;
+    use reth_tasks::TokioTaskExecutor;
     use testing_tools::type_generator::consensus::preproposal::PreproposalBuilder;
 
     use super::MatchingManager;
 
     #[tokio::test]
     async fn can_build_proposal() {
-        let manager = MatchingManager {};
+        let manager =
+            MatchingManager { futures: FuturesUnordered::default(), tp: TokioTaskExecutor };
         let preproposals = vec![];
         let _ = manager.build_proposal(preproposals).await.unwrap();
     }
 
     #[tokio::test]
     async fn will_combine_preproposals() {
-        let manager = MatchingManager {};
+        let manager =
+            MatchingManager { futures: FuturesUnordered::default(), tp: TokioTaskExecutor };
         let preproposals: Vec<PreProposal> = (0..3)
             .map(|_| {
                 PreproposalBuilder::new()

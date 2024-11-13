@@ -2,20 +2,23 @@ use std::collections::HashSet;
 
 use alloy_primitives::{Address, U256};
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
+use reth_tasks::TaskSpawner;
 
 use crate::{
     api::QuotingApiServer,
-    types::{QuotingSubscriptionKind, QuotingSubscriptionParam}
+    types::{GasEstimateFilter, QuotingSubscriptionKind, QuotingSubscriptionParam}
 };
 
-pub struct QuotesApi<OrderPool> {
-    pub pool: OrderPool
+pub struct QuotesApi<OrderPool, Spawner> {
+    pool:         OrderPool,
+    task_spawner: Spawner
 }
 
 #[async_trait::async_trait]
-impl<OrderPool> QuotingApiServer for QuotesApi<OrderPool>
+impl<OrderPool, Spawner> QuotingApiServer for QuotesApi<OrderPool, Spawner>
 where
-    OrderPool: Send + Sync + 'static
+    OrderPool: Send + Sync + 'static,
+    Spawner: TaskSpawner + 'static
 {
     async fn subscribe_gas_estimates(
         &self,

@@ -50,8 +50,7 @@ pub enum RoundStateMachineError {
 }
 
 async fn build_proposal(pre_proposals: Vec<PreProposal>) -> Result<Vec<PoolSolution>, String> {
-    let matcher = MatchingManager {};
-    matcher.build_proposal(pre_proposals).await
+    MatchingManager::build_proposal(pre_proposals).await
 }
 
 pub struct RoundStateMachine<T> {
@@ -153,7 +152,7 @@ where
                 if matches!(self.current_state, ConsensusState::Finalization(_))
                     || !pre_proposal.is_valid()
                 {
-                    return None;
+                    return None
                 }
 
                 self.current_state
@@ -163,7 +162,7 @@ where
                 // we do not want to allow another node to push us to transition
                 // we wait for our grace period of 3 seconds to finish
                 if !matches!(self.current_state, ConsensusState::PreProposalAggregation(_)) {
-                    return None;
+                    return None
                 }
 
                 if !i_am_leader {
@@ -188,10 +187,10 @@ where
                         return Some((
                             Some(self.round_leader),
                             StromMessage::PrePropose(merged_pre_proposal)
-                        ));
+                        ))
                     }
 
-                    return Some((None, StromMessage::PrePropose(merged_pre_proposal)));
+                    return Some((None, StromMessage::PrePropose(merged_pre_proposal)))
                 }
 
                 // Leader path
@@ -205,7 +204,7 @@ where
                         proposal: None,
                         pre_proposals: pre_proposals.clone()
                     }));
-                    return None;
+                    return None
                 }
             }
             StromConsensusEvent::Proposal(msg_sender, proposal) => {
@@ -249,7 +248,7 @@ where
                 if previous_block + 1 != current_state_block {
                     tracing::warn!(%previous_block, %current_state_block, "got order storage finalization for unexpected block");
                     // reorg? something else went wrong? wait for the timeout
-                    return;
+                    return
                 }
                 let block_height = current_state_block;
                 let pre_proposals = self.current_state.pre_proposals();
@@ -379,7 +378,7 @@ where
                 // someone already proposed and we are not a leader
                 if finalization.proposal.is_some() {
                     // TODO: use this opportunity to trigger the proposal validation
-                    return Ok(new_state);
+                    return Ok(new_state)
                 }
 
                 let (proposal, timer) = async_time_fn(|| async {
@@ -472,7 +471,7 @@ where
             return match future.as_mut().poll(cx) {
                 Poll::Ready(result) => Poll::Ready(Some(result)),
                 Poll::Pending => Poll::Pending
-            };
+            }
         }
 
         if let Poll::Ready(Some(Ok(msg))) = this.order_storage_rx.poll_next_unpin(cx) {

@@ -188,51 +188,69 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{future, future::Future};
+    use std::{collections::HashMap, future, future::Future, sync::Arc};
 
     use alloy_primitives::{Address, B256};
     use angstrom_network::pool_manager::OrderCommand;
-    use angstrom_types::sol_bindings::grouped_orders::{
-        AllOrders, FlashVariants, StandingVariants
+    use angstrom_types::{
+        orders::{OrderOrigin, OrderStatus},
+        sol_bindings::grouped_orders::{AllOrders, FlashVariants, StandingVariants}
     };
     use futures::FutureExt;
     use order_pool::PoolManagerUpdate;
     use reth_tasks::TokioTaskExecutor;
     use tokio::sync::{
         broadcast::Receiver,
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender}
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        Mutex
     };
+    use validation::order::{GasEstimationFuture, ValidationFuture};
 
     use super::*;
+
+    // Test fixtures
+    fn create_standing_order() -> AllOrders {
+        AllOrders::Standing(StandingVariants::Partial(Default::default()))
+    }
+
+    fn create_flash_order() -> AllOrders {
+        AllOrders::Flash(FlashVariants::Exact(Default::default()))
+    }
+
+    fn create_tob_order() -> AllOrders {
+        AllOrders::TOB(Default::default())
+    }
 
     #[tokio::test]
     async fn test_send_order() {
         let (_handle, api) = setup_order_api();
 
         // Test standing order
-        let standing_order = AllOrders::Standing(StandingVariants::Partial(Default::default()));
+        let standing_order = create_standing_order();
         assert!(api
             .send_order(standing_order)
             .await
             .expect("to not throw error"));
 
         // Test flash order
-        let flash_order = AllOrders::Flash(FlashVariants::Exact(Default::default()));
+        let flash_order = create_flash_order();
         assert!(api
             .send_order(flash_order)
             .await
             .expect("to not throw error"));
 
         // Test TOB order
-        let tob_order = AllOrders::TOB(Default::default());
+        let tob_order = create_tob_order();
         assert!(api.send_order(tob_order).await.expect("to not throw error"));
     }
 
-    fn setup_order_api() -> (OrderApiTestHandle, OrderApi<MockOrderPoolHandle, TokioTaskExecutor>) {
+    fn setup_order_api(
+    ) -> (OrderApiTestHandle, OrderApi<MockOrderPoolHandle, TokioTaskExecutor, MockValidator>) {
         let (to_pool, pool_rx) = unbounded_channel();
-        let pool_handle = MockOrderPoolHandle { sender: to_pool };
+        let pool_handle = MockOrderPoolHandle::new(to_pool);
         let task_executor = TokioTaskExecutor::default();
-        let api = OrderApi::new(pool_handle.clone(), task_executor);
+        let validator = MockValidator::new(HashMap::new());
+        let api = OrderApi::new(pool_handle.clone(), task_executor, validator);
         let handle = OrderApiTestHandle { _from_api: pool_rx };
         (handle, api)
     }
@@ -243,7 +261,14 @@ mod tests {
 
     #[derive(Clone)]
     struct MockOrderPoolHandle {
-        sender: UnboundedSender<OrderCommand>
+        sender: UnboundedSender<OrderCommand>,
+        orders: Arc<Mutex<HashMap<Address, Vec<AllOrders>>>>
+    }
+
+    impl MockOrderPoolHandle {
+        fn new(sender: UnboundedSender<OrderCommand>) -> Self {
+            Self { sender, orders: Arc::new(Mutex::new(HashMap::new())) }
+        }
     }
 
     impl OrderPoolHandle for MockOrderPoolHandle {
@@ -296,6 +321,38 @@ mod tests {
 
         fn fetch_order_status(&self, _: B256) -> impl Future<Output = Option<OrderStatus>> + Send {
             future::ready(None)
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct MockValidator {
+        orders: HashMap<B256, AllOrders>
+    }
+
+    impl MockValidator {
+        fn new(orders: HashMap<B256, AllOrders>) -> Self {
+            Self { orders }
+        }
+    }
+
+    impl OrderValidatorHandle for MockValidator {
+        type Order = AllOrders;
+
+        fn validate_order(&self, _origin: OrderOrigin, _order: Self::Order) -> ValidationFuture {
+            unimplemented!("order validation is complicated")
+        }
+
+        fn new_block(
+            &self,
+            _block_number: u64,
+            _completed_orders: Vec<B256>,
+            _addresses: Vec<Address>
+        ) -> ValidationFuture {
+            unimplemented!("no new block")
+        }
+
+        fn estimate_gas(&self, _order: AllOrders) -> GasEstimationFuture {
+            Box::pin(future::ready(Ok(100_000)))
         }
     }
 }

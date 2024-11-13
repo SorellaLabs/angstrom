@@ -1,6 +1,7 @@
 use alloy::primitives::Address;
 use angstrom_pools::AngstromPools;
 use angstrom_types::{
+    contract_payloads::angstrom::AngstromPoolConfigStore,
     primitive::{NewInitializedPool, PoolId},
     sol_bindings::ext::RawPoolOrder
 };
@@ -8,14 +9,9 @@ use dashmap::DashMap;
 
 use super::config::PoolConfig;
 
-pub mod angstrom_pools;
-
 pub trait PoolsTracker: Send + Unpin {
     /// Returns None if no pool is found
     fn fetch_pool_info_for_order<O: RawPoolOrder>(&self, order: &O) -> Option<UserOrderPoolInfo>;
-
-    /// indexes a new pool into the tracker
-    fn index_new_pool(&mut self, pool: NewInitializedPool);
 }
 
 #[derive(Debug, Clone)]
@@ -28,26 +24,43 @@ pub struct UserOrderPoolInfo {
 
 /// keeps track of all valid pools and the mappings of asset id to pool id
 pub struct AngstromPoolsTracker {
-    /// TODO: we can most likely flatten this but will circle back
-    pub pools: AngstromPools
+    angstrom_address: Address,
+    pool_store:       AngstromPoolConfigStore
 }
 
 impl AngstromPoolsTracker {
-    pub fn new(pools: Vec<PoolConfig>) -> Self {
-        let pools = pools
-            .iter()
-            .map(|pool| (AngstromPools::build_key(pool.token0, pool.token1), pool.pool_id))
-            .collect::<DashMap<_, _>>();
-        let angstrom_pools = AngstromPools::new(pools);
-
-        Self { pools: angstrom_pools }
+    pub fn new(angstrom_address: Address, pool_store: AngstromPoolConfigStore) -> Self {
+        Self { angstrom_address, pool_store }
     }
 
-    /// Get the token addresses for a pool specified by Uniswap PoolId.  By
-    /// Uniswap convention, these token addresses will be sorted, therefore the
-    /// return from this method is `Option<(t0, t1)>`
-    pub fn get_pool_addresses(&self, poolid: PoolId) -> Option<(Address, Address)> {
-        self.pools.get_addresses(poolid)
+    pub fn get_poolid(&self, mut addr1: Address, mut addr2: Address) -> Option<PoolId> {
+        let store = self.pool_store.get_entry(addr1, addr2)?;
+        if addr2 < addr1 {
+            std::mem::swap(&mut addr1, &mut addr2)
+        };
+
+        Some(PoolId::from(PoolKey {
+            currency0:   addr1,
+            currency1:   addr2,
+            tickSpacing: store.tick_spacing,
+            hooks:       self.angstrom_address,
+            fee:         store.fee_in_e6
+        }))
+    }
+
+    pub fn order_info(
+        &self,
+        currency_in: Address,
+        currency_out: Address
+    ) -> Option<(bool, PoolId)> {
+        // Uniswap pools are priced as t1/t0 - the order is a bid if it's offering t1 to
+        // get t0.   Uniswap standard has the token addresses sorted and t0 is the
+        // lower of the two, therefore if the currency_in is the higher of the two we
+        // know it's t1 and therefore this order is a bid.
+        let is_bid = currency_in > currency_out;
+        let key = self.get_poolid(currency_in, currency_out)?;
+
+        Some((is_bid, key))
     }
 }
 
@@ -59,10 +72,6 @@ impl PoolsTracker for AngstromPoolsTracker {
         let user_info = UserOrderPoolInfo { pool_id, is_bid, token: order.token_in() };
 
         Some(user_info)
-    }
-
-    fn index_new_pool(&mut self, pool: NewInitializedPool) {
-        self.pools.new_pool(pool);
     }
 }
 
@@ -100,11 +109,6 @@ pub mod pool_tracker_mock {
             };
 
             Some(user_info)
-        }
-
-        fn index_new_pool(&mut self, pool: NewInitializedPool) {
-            self.pools
-                .insert((pool.currency_in, pool.currency_out), pool.id);
         }
     }
 }

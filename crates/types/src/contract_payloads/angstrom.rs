@@ -5,7 +5,7 @@ use alloy::{
     network::Network,
     primitives::{aliases::U40, keccak256, Address, Bytes, B256, U256},
     providers::Provider,
-    sol_types::SolValue,
+    sol_types::{sol_data::FixedBytes, SolValue},
     transports::Transport
 };
 use pade::PadeDecode;
@@ -21,7 +21,7 @@ use super::{
 };
 use crate::{
     consensus::{PreProposal, Proposal},
-    contract_bindings::angstrom::Angstrom::PoolKey,
+    contract_bindings::mock_rewards_manager::MockRewardsManager::{PoolId, PoolKey},
     matching::{uniswap::PoolSnapshot, Ray},
     orders::{OrderFillState, OrderOutcome},
     primitive::{PoolId, UniswapPoolRegistry},

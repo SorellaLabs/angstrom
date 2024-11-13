@@ -21,7 +21,10 @@ use futures_util::{Stream, StreamExt};
 use tokio::sync::oneshot::Sender;
 use tracing::{error, trace};
 use validation::order::{
-    state::{account::user::UserAddress, pools::angstrom_pools::AngstromPools},
+    state::{
+        account::user::UserAddress,
+        pools::{angstrom_pools::AngstromPools, AngstromPoolsTracker}
+    },
     OrderValidationResults, OrderValidatorHandle
 };
 
@@ -65,7 +68,7 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     /// Order Validator
     validator:              OrderValidator<V>,
     /// a mapping of tokens to pool_id
-    pool_id_map:            AngstromPools,
+    pool_id_map:            AngstromPoolsTracker,
     /// List of subscribers for order validation result
     order_validation_subs:  HashMap<B256, Vec<Sender<OrderValidationResults>>>,
     /// List of subscribers for order state change notifications
@@ -77,7 +80,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         validator: V,
         order_storage: Arc<OrderStorage>,
         block_number: BlockNumber,
-        orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
+        orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
+        angstrom_pools: AngstromPools
     ) -> Self {
         Self {
             order_storage,
@@ -86,7 +90,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             order_hash_to_order_id: HashMap::new(),
             order_hash_to_peer_id: HashMap::new(),
             seen_invalid_orders: HashSet::with_capacity(SEEN_INVALID_ORDERS_CAPACITY),
-            pool_id_map: AngstromPools::new(DashMap::new()),
+            pool_id_map: angstrom_pools,
             cancelled_orders: HashMap::new(),
             order_validation_subs: HashMap::new(),
             validator: OrderValidator::new(validator),

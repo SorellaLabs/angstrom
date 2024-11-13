@@ -184,7 +184,8 @@ impl AngstromTestnetNodeInternals {
             executor.clone(),
             strom_handles.orderpool_tx,
             strom_handles.orderpool_rx,
-            strom_handles.pool_manager_tx
+            strom_handles.pool_manager_tx,
+            Default::default()
         );
 
         let rpc_port = config.rpc_port_with_node_id(testnet_node_id);

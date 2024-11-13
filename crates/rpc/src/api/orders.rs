@@ -1,5 +1,9 @@
-use alloy_primitives::{Address, FixedBytes,B256};
-use angstrom_types::{orders::{OrderLocation, OrderStatus},primitive::Signature, sol_bindings::grouped_orders::AllOrders};
+use alloy_primitives::{Address, FixedBytes, B256};
+use angstrom_types::{
+    orders::{OrderLocation, OrderStatus},
+    primitive::Signature,
+    sol_bindings::grouped_orders::AllOrders
+};
 use jsonrpsee::{
     core::{RpcResult, Serialize},
     proc_macros::rpc

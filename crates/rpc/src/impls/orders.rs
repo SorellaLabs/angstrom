@@ -1,6 +1,8 @@
 use alloy_primitives::{Address, FixedBytes, B256};
-use angstrom_types::{orders::{OrderLocation,OrderOrigin,OrderStatus},
-    sol_bindings::grouped_orders::AllOrders};
+use angstrom_types::{
+    orders::{OrderLocation, OrderOrigin, OrderStatus},
+    sol_bindings::grouped_orders::AllOrders
+};
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use reth_tasks::TaskSpawner;

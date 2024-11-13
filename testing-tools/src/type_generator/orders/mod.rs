@@ -89,9 +89,10 @@ impl StoredOrderBuilder {
             .or(self.order.flash_block())
             .unwrap_or_default();
         let priority_data = OrderPriorityData {
-            price:  self.order.price().into(),
-            volume: self.order.quantity().to(),
-            gas:    U256::ZERO
+            price:     self.order.price().into(),
+            volume:    self.order.quantity().to(),
+            gas:       U256::ZERO,
+            gas_units: 0
         };
         let tob_reward = self.tob_reward.unwrap_or_default();
         OrderWithStorageData {
@@ -163,12 +164,13 @@ pub fn generate_top_of_block_order(
     let price: u128 = rng.gen();
     let volume: u128 = rng.gen();
     let gas: U256 = rng.gen();
+    let gas_units: u64 = rng.gen();
     let order = ToBOrderBuilder::new()
         .quantity_in(quantity_in.unwrap_or_default())
         .quantity_out(quantity_out.unwrap_or_default())
         .build();
 
-    let priority_data = OrderPriorityData { price: U256::from(price), volume, gas };
+    let priority_data = OrderPriorityData { price: U256::from(price), volume, gas, gas_units };
     let order_id = OrderIdBuilder::new()
         .pool_id(pool_id)
         .order_hash(order.order_hash())

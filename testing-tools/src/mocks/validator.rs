@@ -3,10 +3,11 @@ use std::{collections::HashMap, sync::Arc};
 use alloy_primitives::Address;
 use angstrom_types::{
     self,
+    orders::OrderOrigin,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
 use parking_lot::Mutex;
-use validation::order::{OrderValidationResults, OrderValidatorHandle};
+use validation::order::{GasEstimationFuture, OrderValidationResults, OrderValidatorHandle};
 
 // all keys are the signer of the order
 #[derive(Debug, Clone, Default)]
@@ -57,5 +58,19 @@ impl OrderValidatorHandle for MockValidator {
             .remove(&address)
             .expect("not in mock");
         Box::pin(async move { res })
+    }
+
+    fn estimate_gas(&self, order: AllOrders) -> GasEstimationFuture {
+        Box::pin(async move {
+            match self.validate_order(OrderOrigin::External, order).await {
+                OrderValidationResults::Valid(o) => {
+                    Ok((o.priority_data.gas_units, o.priority_data.gas))
+                }
+                OrderValidationResults::Invalid(e) => Err(format!("Invalid order: {}", e)),
+                OrderValidationResults::TransitionedToBlock => {
+                    Err("Order transitioned to block".to_string())
+                }
+            }
+        })
     }
 }

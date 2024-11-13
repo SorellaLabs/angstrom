@@ -26,7 +26,7 @@ pub const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c75
 /// In the case of NON direct eth pairs. we assume that any token liquid enough
 /// to trade on angstrom not with eth will always have a eth pair 1 hop away.
 /// this allows for a simple lookup.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct TokenPriceGenerator {
     prev_prices:  HashMap<PoolId, VecDeque<PairsWithPrice>>,
     pair_to_pool: HashMap<(Address, Address), PoolId>,

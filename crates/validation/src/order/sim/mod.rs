@@ -10,6 +10,7 @@ use gas::OrderGasCalculations;
 use revm::primitives::ruint::aliases::U256;
 
 use super::state::token_pricing::TokenPriceGenerator;
+use crate::order::sim::gas_inspector::GasUsed;
 
 mod gas;
 mod gas_inspector;
@@ -36,7 +37,7 @@ where
         &self,
         order: &OrderWithStorageData<TopOfBlockOrder>,
         conversion: &TokenPriceGenerator
-    ) -> eyre::Result<GasInToken0> {
+    ) -> eyre::Result<(GasUsed, GasInToken0)> {
         let gas_in_wei = self.gas_calculator.gas_of_tob_order(order)?;
         // grab order tokens;
         let (token0, token1) = if order.asset_in < order.asset_out {
@@ -47,14 +48,14 @@ where
 
         // grab price conversion
         let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
-        Ok(conversion_factor * U256::from(gas_in_wei))
+        Ok((gas_in_wei, conversion_factor * U256::from(gas_in_wei)))
     }
 
     pub fn calculate_user_gas(
         &self,
         order: &OrderWithStorageData<GroupedVanillaOrder>,
         conversion: &TokenPriceGenerator
-    ) -> eyre::Result<GasInToken0> {
+    ) -> eyre::Result<(GasUsed, GasInToken0)> {
         let gas_in_wei = self.gas_calculator.gas_of_book_order(order)?;
         // grab order tokens;
         let (token0, token1) = if order.token_in() < order.token_out() {
@@ -65,6 +66,6 @@ where
 
         // grab price conversion
         let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
-        Ok(conversion_factor * U256::from(gas_in_wei))
+        Ok((gas_in_wei, conversion_factor * U256::from(gas_in_wei)))
     }
 }

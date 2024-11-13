@@ -1,6 +1,5 @@
 use std::{
     future::{poll_fn, Future},
-    path::Path,
     pin::Pin,
     sync::{atomic::AtomicU64, Arc},
     task::Poll,
@@ -22,7 +21,6 @@ use validation::{
         order_validator::OrderValidator,
         sim::SimValidation,
         state::{
-            config::{load_validation_config, ValidationConfig},
             db_state_utils::{nonces::Nonces, FetchUtils},
             pools::AngstromPoolsTracker,
             token_pricing::TokenPriceGenerator
@@ -42,7 +40,6 @@ pub struct TestOrderValidator<
 > {
     /// allows us to set values to ensure
     pub db:         Arc<DB>,
-    pub config:     ValidationConfig,
     pub client:     ValidationClient,
     pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils<DB>>
 }
@@ -62,10 +59,7 @@ where
         pool_store: Arc<AngstromPoolConfigStore>
     ) -> Self {
         let (tx, rx) = unbounded_channel();
-        let config_path = Path::new("./state_config.toml");
-        let validation_config = load_validation_config(config_path).unwrap();
 
-        tracing::debug!(?validation_config);
         let current_block =
             Arc::new(AtomicU64::new(BlockNumReader::best_block_number(&db).unwrap()));
         let db = Arc::new(db);
@@ -74,8 +68,7 @@ where
         let pools = AngstromPoolsTracker::new(angstrom_address, pool_store);
 
         let handle = tokio::runtime::Handle::current();
-        let thread_pool =
-            KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
+        let thread_pool = KeySplitThreadpool::new(handle, 3);
         let sim = SimValidation::new(db.clone(), None);
 
         // fill stream
@@ -95,7 +88,7 @@ where
         let val = Validator::new(rx, order_validator);
         let client = ValidationClient(tx);
 
-        Self { db, client, underlying: val, config: validation_config }
+        Self { db, client, underlying: val }
     }
 
     pub async fn poll_for(&mut self, duration: Duration) {

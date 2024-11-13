@@ -4,7 +4,6 @@ pub mod validator;
 
 use std::{
     fmt::Debug,
-    path::Path,
     sync::{atomic::AtomicU64, Arc}
 };
 
@@ -17,7 +16,7 @@ use futures::StreamExt;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use order::state::{db_state_utils::StateFetchUtils, pools::PoolsTracker};
 use reth_provider::CanonStateNotificationStream;
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use validator::Validator;
 
 use crate::{
@@ -25,14 +24,14 @@ use crate::{
         order_validator::OrderValidator,
         sim::SimValidation,
         state::{
-            config::load_validation_config, db_state_utils::FetchUtils,
-            pools::AngstromPoolsTracker, token_pricing::TokenPriceGenerator
+            db_state_utils::FetchUtils, pools::AngstromPoolsTracker,
+            token_pricing::TokenPriceGenerator
         }
     },
-    validator::ValidationClient
+    validator::{ValidationClient, ValidationRequest}
 };
 
-pub const POOL_CONFIG: &str = "crates/validation/src/state_config.toml";
+const MAX_VALIDATION_PER_ADDR: usize = 2;
 
 pub fn init_validation<
     DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync
@@ -43,14 +42,11 @@ pub fn init_validation<
     state_notification: CanonStateNotificationStream,
     uniswap_pools: SyncedUniswapPools,
     price_generator: TokenPriceGenerator,
-    pool_store: Arc<AngstromPoolConfigStore>
-) -> ValidationClient
-where
+    pool_store: Arc<AngstromPoolConfigStore>,
+    validator_rx: UnboundedReceiver<ValidationRequest>
+) where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
-    let (validator_tx, validator_rx) = unbounded_channel();
-    let config_path = Path::new(POOL_CONFIG);
-    let validation_config = load_validation_config(config_path).unwrap();
     let current_block = Arc::new(AtomicU64::new(current_block));
     let revm_lru = Arc::new(db);
     let fetch = FetchUtils::new(Address::default(), revm_lru.clone());
@@ -64,8 +60,7 @@ where
         let handle = rt.handle().clone();
         let pools = AngstromPoolsTracker::new(angstrom_address.unwrap_or_default(), pool_store);
         // load storage slot state + pools
-        let thread_pool =
-            KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
+        let thread_pool = KeySplitThreadpool::new(handle, MAX_VALIDATION_PER_ADDR);
         let sim = SimValidation::new(revm_lru.clone(), angstrom_address);
 
         // load price update stream;
@@ -88,8 +83,6 @@ where
 
         rt.block_on(async { Validator::new(validator_rx, order_validator).await })
     });
-
-    ValidationClient(validator_tx)
 }
 
 pub fn init_validation_tests<
@@ -109,8 +102,6 @@ where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
     let (tx, rx) = unbounded_channel();
-    let config_path = Path::new(POOL_CONFIG);
-    let validation_config = load_validation_config(config_path).unwrap();
     let current_block = Arc::new(AtomicU64::new(block_number));
     let revm_lru = Arc::new(db);
     let task_db = revm_lru.clone();
@@ -130,8 +121,7 @@ where
             .build()
             .unwrap();
         let handle = rt.handle().clone();
-        let thread_pool =
-            KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
+        let thread_pool = KeySplitThreadpool::new(handle, MAX_VALIDATION_PER_ADDR);
 
         let sim = SimValidation::new(task_db, None);
 

@@ -63,7 +63,9 @@ impl OrderValidatorHandle for MockValidator {
     fn estimate_gas(&self, order: AllOrders) -> GasEstimationFuture {
         Box::pin(async move {
             match self.validate_order(OrderOrigin::External, order).await {
-                OrderValidationResults::Valid(o) => Ok(o.priority_data.gas_units),
+                OrderValidationResults::Valid(o) => {
+                    Ok((o.priority_data.gas_units, o.priority_data.gas))
+                }
                 OrderValidationResults::Invalid(e) => Err(format!("Invalid order: {}", e)),
                 OrderValidationResults::TransitionedToBlock => {
                     Err("Order transitioned to block".to_string())

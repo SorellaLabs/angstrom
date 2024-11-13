@@ -9,7 +9,7 @@ use reth_tasks::TaskSpawner;
 use validation::order::OrderValidatorHandle;
 
 use crate::{
-    api::{CancelOrderRequest, OrderApiServer},
+    api::{CancelOrderRequest, GasEstimateResponse, OrderApiServer},
     types::{OrderSubscriptionKind, OrderSubscriptionResult},
     OrderApiError::{GasEstimationError, SignatureRecoveryError}
 };
@@ -51,12 +51,13 @@ where
         Ok(self.pool.cancel_order(sender, request.hash).await)
     }
 
-    async fn estimate_gas(&self, order: AllOrders) -> RpcResult<u64> {
-        Ok(self
+    async fn estimate_gas(&self, order: AllOrders) -> RpcResult<GasEstimateResponse> {
+        let (gas_limit, gas) = self
             .validator
             .estimate_gas(order)
             .await
-            .map_err(GasEstimationError)?)
+            .map_err(GasEstimationError)?;
+        Ok(GasEstimateResponse { gas, gas_limit })
     }
 
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>> {
@@ -190,7 +191,7 @@ where
 mod tests {
     use std::{future, future::Future};
 
-    use alloy_primitives::{Address, B256};
+    use alloy_primitives::{Address, B256, U256};
     use angstrom_network::pool_manager::OrderCommand;
     use angstrom_types::{
         orders::{OrderOrigin, OrderStatus},
@@ -341,7 +342,7 @@ mod tests {
         }
 
         fn estimate_gas(&self, _order: AllOrders) -> GasEstimationFuture {
-            Box::pin(future::ready(Ok(100_000)))
+            Box::pin(future::ready(Ok((21_000u64, U256::from(250_000u64)))))
         }
     }
 }

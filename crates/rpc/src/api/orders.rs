@@ -1,4 +1,4 @@
-use alloy_primitives::{Address, FixedBytes, B256};
+use alloy_primitives::{Address, FixedBytes, B256, U256};
 use angstrom_types::{
     orders::{OrderLocation, OrderStatus},
     primitive::Signature,
@@ -18,6 +18,12 @@ pub struct CancelOrderRequest {
     pub hash:      B256
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GasEstimateResponse {
+    pub gas_limit: u64,
+    pub gas:       U256
+}
+
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "angstrom"))]
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "angstrom"))]
 #[async_trait::async_trait]
@@ -33,7 +39,7 @@ pub trait OrderApi {
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool>;
 
     #[method(name = "estimateGas")]
-    async fn estimate_gas(&self, order: AllOrders) -> RpcResult<u64>;
+    async fn estimate_gas(&self, order: AllOrders) -> RpcResult<GasEstimateResponse>;
 
     #[method(name = "orderStatus")]
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>>;

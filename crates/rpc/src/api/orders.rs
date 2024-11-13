@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use alloy_primitives::{Address, FixedBytes, B256, U256};
 use angstrom_types::{
     orders::{OrderLocation, OrderStatus},
@@ -59,8 +61,8 @@ pub trait OrderApi {
     )]
     async fn subscribe_orders(
         &self,
-        kind: OrderSubscriptionKind,
-        filters: OrderSubscriptionFilter
+        kind: HashSet<OrderSubscriptionKind>,
+        filters: HashSet<OrderSubscriptionFilter>
     ) -> jsonrpsee::core::SubscriptionResult;
 
     // MULTI CALL

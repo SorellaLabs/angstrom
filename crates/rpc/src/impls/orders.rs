@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use alloy_primitives::{Address, FixedBytes, B256};
 use angstrom_types::{
     orders::{OrderLocation, OrderOrigin, OrderStatus},
@@ -76,14 +78,14 @@ where
     async fn subscribe_orders(
         &self,
         pending: PendingSubscriptionSink,
-        kind: OrderSubscriptionKind,
-        filter: OrderSubscriptionFilter
+        kind: HashSet<OrderSubscriptionKind>,
+        filter: HashSet<OrderSubscriptionFilter>
     ) -> jsonrpsee::core::SubscriptionResult {
         let sink = pending.accept().await?;
         let mut subscription = self
             .pool
             .subscribe_orders()
-            .map(move |update| update.map(move |value| value.filter_out_order(kind, filter)));
+            .map(move |update| update.map(|value| value.filter_out_order(&kind, &filter)));
 
         self.task_spawner.spawn(Box::pin(async move {
             while let Some(Ok(order)) = subscription.next().await {
@@ -152,75 +154,49 @@ pub fn rpc_err(
 trait OrderFilterMatching {
     fn filter_out_order(
         self,
-        kind: OrderSubscriptionKind,
-        filter: OrderSubscriptionFilter
+        kind: &HashSet<OrderSubscriptionKind>,
+        filter: &HashSet<OrderSubscriptionFilter>
     ) -> Option<OrderSubscriptionResult>;
 }
 
 impl OrderFilterMatching for PoolManagerUpdate {
     fn filter_out_order(
         self,
-        kind: OrderSubscriptionKind,
-        filter: OrderSubscriptionFilter
+        kind: &HashSet<OrderSubscriptionKind>,
+        filter: &HashSet<OrderSubscriptionFilter>
     ) -> Option<OrderSubscriptionResult> {
         match self {
-            PoolManagerUpdate::NewOrder(order) if kind == OrderSubscriptionKind::NewOrders => {
-                match filter {
-                    OrderSubscriptionFilter::None => {
-                        Some(OrderSubscriptionResult::NewOrder(order.order))
-                    }
-                    OrderSubscriptionFilter::ByPair(pair) => Some(order)
-                        .filter(|order| order.pool_id == pair)
-                        .map(|o| OrderSubscriptionResult::NewOrder(o.order)),
-                    OrderSubscriptionFilter::ByAddress(address) => Some(order)
-                        .filter(|o| o.from() == address)
-                        .map(|o| OrderSubscriptionResult::NewOrder(o.order))
-                }
+            PoolManagerUpdate::NewOrder(order)
+                if kind.contains(&OrderSubscriptionKind::NewOrders)
+                    && (filter.contains(&OrderSubscriptionFilter::ByPair(order.pool_id))
+                        || filter.contains(&OrderSubscriptionFilter::ByAddress(order.from()))
+                        || filter.contains(&OrderSubscriptionFilter::None)) =>
+            {
+                Some(OrderSubscriptionResult::NewOrder(order.order))
             }
             PoolManagerUpdate::FilledOrder(block, order)
-                if kind == OrderSubscriptionKind::FilledOrders =>
+                if kind.contains(&OrderSubscriptionKind::FilledOrders)
+                    && (filter.contains(&OrderSubscriptionFilter::ByPair(order.pool_id))
+                        || filter.contains(&OrderSubscriptionFilter::ByAddress(order.from()))
+                        || filter.contains(&OrderSubscriptionFilter::None)) =>
             {
-                match filter {
-                    OrderSubscriptionFilter::None => {
-                        Some(OrderSubscriptionResult::FilledOrder(block, order.order))
-                    }
-                    OrderSubscriptionFilter::ByPair(pair) => Some(order)
-                        .filter(|order| order.pool_id == pair)
-                        .map(|o| OrderSubscriptionResult::FilledOrder(block, o.order)),
-                    OrderSubscriptionFilter::ByAddress(address) => Some(order)
-                        .filter(|o| o.from() == address)
-                        .map(|o| OrderSubscriptionResult::FilledOrder(block, o.order))
-                }
+                Some(OrderSubscriptionResult::FilledOrder(block, order.order))
             }
             PoolManagerUpdate::UnfilledOrders(order)
-                if kind == OrderSubscriptionKind::UnfilleOrders =>
+                if kind.contains(&OrderSubscriptionKind::UnfilleOrders)
+                    && (filter.contains(&OrderSubscriptionFilter::ByPair(order.pool_id))
+                        || filter.contains(&OrderSubscriptionFilter::ByAddress(order.from()))
+                        || filter.contains(&OrderSubscriptionFilter::None)) =>
             {
-                match filter {
-                    OrderSubscriptionFilter::None => {
-                        Some(OrderSubscriptionResult::UnfilledOrder(order.order))
-                    }
-                    OrderSubscriptionFilter::ByPair(pair) => Some(order)
-                        .filter(|order| order.pool_id == pair)
-                        .map(|o| OrderSubscriptionResult::UnfilledOrder(o.order)),
-                    OrderSubscriptionFilter::ByAddress(address) => Some(order)
-                        .filter(|o| o.from() == address)
-                        .map(|o| OrderSubscriptionResult::UnfilledOrder(o.order))
-                }
+                Some(OrderSubscriptionResult::UnfilledOrder(order.order))
             }
             PoolManagerUpdate::CancelledOrder { order_hash, user, pool_id }
-                if kind == OrderSubscriptionKind::CancelledOrders =>
+                if kind.contains(&OrderSubscriptionKind::CancelledOrders)
+                    && (filter.contains(&OrderSubscriptionFilter::ByPair(pool_id))
+                        || filter.contains(&OrderSubscriptionFilter::ByAddress(user))
+                        || filter.contains(&OrderSubscriptionFilter::None)) =>
             {
-                match filter {
-                    OrderSubscriptionFilter::None => {
-                        Some(OrderSubscriptionResult::CancelledOrder(order_hash))
-                    }
-                    OrderSubscriptionFilter::ByPair(pair) => Some(order_hash)
-                        .filter(|_| pool_id == pair)
-                        .map(OrderSubscriptionResult::CancelledOrder),
-                    OrderSubscriptionFilter::ByAddress(address) => Some(order_hash)
-                        .filter(|_| user == address)
-                        .map(OrderSubscriptionResult::CancelledOrder)
-                }
+                Some(OrderSubscriptionResult::CancelledOrder(order_hash))
             }
             _ => None
         }

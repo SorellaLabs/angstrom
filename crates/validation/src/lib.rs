@@ -33,6 +33,7 @@ use crate::{
 
 const MAX_VALIDATION_PER_ADDR: usize = 2;
 
+#[allow(clippy::too_many_arguments)]
 pub fn init_validation<
     DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync
 >(

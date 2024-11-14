@@ -13,5 +13,5 @@ pub struct BundleEstimate {
 pub struct PoolEstimate {
     pub orders:        u64,
     pub gas_in_wei:    u64,
-    pub gas_in_token0: U256
+    pub gas_in_token0: Option<U256>
 }

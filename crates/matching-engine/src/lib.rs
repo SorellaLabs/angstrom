@@ -1,5 +1,5 @@
 #![feature(iter_map_windows)]
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use angstrom_types::{
     consensus::PreProposal,
@@ -23,7 +23,8 @@ pub use manager::MatchingManager;
 pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
     fn solve_pools(
         &self,
-        preproposals: Vec<PreProposal>
+        preproposals: Vec<PreProposal>,
+        pools: HashMap<PoolId, PoolSnapshot>
     ) -> BoxFuture<Result<Vec<PoolSolution>, String>>;
 }
 

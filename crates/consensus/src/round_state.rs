@@ -50,8 +50,11 @@ pub enum RoundStateMachineError {
     TransactionError
 }
 
-async fn build_proposal(pre_proposals: Vec<PreProposal>) -> Result<Vec<PoolSolution>, String> {
-    MatchingManager::<TokioTaskExecutor>::build_proposal(pre_proposals).await
+async fn build_proposal(
+    pre_proposals: Vec<PreProposal>,
+    pool_snapshot: HashMap<PoolId, PoolSnapshot>
+) -> Result<Vec<PoolSolution>, String> {
+    MatchingManager::<TokioTaskExecutor>::build_proposal(pre_proposals, pool_snapshot).await
 }
 
 pub struct RoundStateMachine<T> {
@@ -383,7 +386,15 @@ where
                 }
 
                 let (proposal, timer) = async_time_fn(|| async {
-                    match build_proposal(pre_proposals.clone()).await {
+                    let pool_snapshots = self
+                        .uniswap_pools
+                        .iter()
+                        .filter_map(|(key, pool)| {
+                            Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?))
+                        })
+                        .collect();
+
+                    match build_proposal(pre_proposals.clone(), pool_snapshots).await {
                         Ok(solutions) => {
                             let proposal =
                                 signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);

@@ -2,7 +2,7 @@ use std::{cell::Cell, cmp::Ordering};
 
 use alloy::primitives::U256;
 use angstrom_types::{
-    matching::{uniswap::PoolPrice, Ray, SqrtPriceX96},
+    matching::{match_estimate_response::PoolEstimate, uniswap::PoolPrice, Ray, SqrtPriceX96},
     orders::{NetAmmOrder, OrderFillState, OrderOutcome, PoolSolution},
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
@@ -294,6 +294,31 @@ impl<'a> VolumeFillMatcher<'a> {
             index.set(cur_idx);
             book_order.map(OrderContainer::BookOrder)
         })
+    }
+
+    pub fn estimate(
+        &self,
+        searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
+    ) -> PoolEstimate {
+        let limit = self
+            .bid_outcomes
+            .iter()
+            .enumerate()
+            .map(|(idx, outcome)| (self.book.bids()[idx].order_id, outcome))
+            .chain(
+                self.ask_outcomes
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, outcome)| (self.book.asks()[idx].order_id, outcome))
+            )
+            .map(|(id, outcome)| OrderOutcome { id, outcome: outcome.clone() })
+            .collect();
+        PoolEstimate {
+            orders: self.bid_outcomes.len() as u64,
+            gas_in_wei
+        }
+
+        todo!()
     }
 
     pub fn solution(

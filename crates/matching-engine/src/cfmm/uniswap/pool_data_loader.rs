@@ -143,7 +143,7 @@ pub struct DataLoader<A> {
     pool_registry: Option<UniswapPoolRegistry>
 }
 
-pub trait PoolDataLoader<A> {
+pub trait PoolDataLoader<A>: Clone {
     fn load_tick_data<P: Provider<T, N>, T: Transport + Clone, N: Network>(
         &self,
         current_tick: I24,

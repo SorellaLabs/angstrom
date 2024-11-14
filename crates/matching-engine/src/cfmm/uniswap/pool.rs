@@ -78,6 +78,10 @@ where
         }
     }
 
+    pub fn data_loader(&self) -> Loader {
+        self.data_loader.clone()
+    }
+
     pub async fn pool_data_for_block<T: Transport + Clone, N: Network>(
         &self,
         block_number: BlockNumber,

@@ -59,12 +59,15 @@ impl TokenPriceGenerator {
                 async move {
                     let mut queue = VecDeque::new();
                     let pool_read = pool.read().unwrap();
+                    let data_loader = pool_read.data_loader();
+                    drop(pool_read);
 
                     for block_number in current_block - BLOCKS_TO_AVG_PRICE..=current_block {
-                        let pool_data = pool_read
-                            .pool_data_for_block(block_number, provider.clone())
+                        let pool_data = data_loader
+                            .load_pool_data(Some(block_number), provider.clone())
                             .await
                             .expect("failed to load historical price for token price conversion");
+
                         let price = pool_data.get_raw_price();
 
                         queue.push_back(PairsWithPrice {

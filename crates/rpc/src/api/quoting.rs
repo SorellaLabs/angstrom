@@ -3,10 +3,7 @@ use std::collections::HashSet;
 use alloy_primitives::{Address, U256};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
-use crate::types::{
-    subscriptions::{QuotingSubscriptionKind, QuotingSubscriptionParam},
-    GasEstimateFilter
-};
+use crate::types::GasEstimateFilter;
 
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "quoting"))]
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "quoting"))]

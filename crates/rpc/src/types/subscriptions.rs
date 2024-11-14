@@ -7,8 +7,6 @@ use angstrom_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::quoting::{Depth25, Depth5, BBO};
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
@@ -68,33 +66,4 @@ pub enum OrderSubscriptionResult {
     FilledOrder(u64, AllOrders),
     UnfilledOrder(AllOrders),
     CancelledOrder(B256)
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
-#[serde(deny_unknown_fields)]
-pub enum QuotingSubscriptionParam {
-    #[default]
-    None,
-    Pool(PoolKey)
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-pub enum QuotingSubscriptionKind {
-    /// The BBO of a given pool
-    BBO,
-    /// A 5 tick depth on a given pool
-    Depth5,
-    /// A 25 Tick depth on a given pool
-    Depth25
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-pub enum QuotingSubscriptionResult {
-    BBO(Arc<BBO>),
-    Depth5(Arc<Depth5>),
-    Depth25(Arc<Depth25>)
 }

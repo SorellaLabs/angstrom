@@ -13,6 +13,8 @@ pub struct GasEstimateUpdate {
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
 )]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub enum GasEstimateFilter {
     /// will give updates for all pools
     #[default]

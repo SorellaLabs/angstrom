@@ -155,12 +155,13 @@ pub async fn manager_thread<TP: TaskSpawner + 'static>(
     mut input: Receiver<MatcherCommand>,
     tp: Arc<TP>
 ) {
-    let manager = MatchingManager { futures: FuturesUnordered::default(), tp };
+    let _manager = MatchingManager { futures: FuturesUnordered::default(), tp };
 
     while let Some(c) = input.recv().await {
         match c {
             MatcherCommand::BuildProposal(p, r) => {
-                r.send(MatchingManager::build_proposal(p).await).unwrap();
+                r.send(MatchingManager::<TP>::build_proposal(p).await)
+                    .unwrap();
             }
             MatcherCommand::EstimateGasPerPool { limit, searcher, tx } => {}
         }

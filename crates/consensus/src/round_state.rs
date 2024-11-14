@@ -35,6 +35,7 @@ use matching_engine::{
 };
 use order_pool::order_storage::{OrderStorage, OrderStorageNotification};
 use pade::PadeEncode;
+use reth_tasks::TokioTaskExecutor;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::wrappers::BroadcastStream;
@@ -50,7 +51,7 @@ pub enum RoundStateMachineError {
 }
 
 async fn build_proposal(pre_proposals: Vec<PreProposal>) -> Result<Vec<PoolSolution>, String> {
-    MatchingManager::build_proposal(pre_proposals).await
+    MatchingManager::<TokioTaskExecutor>::build_proposal(pre_proposals).await
 }
 
 pub struct RoundStateMachine<T> {

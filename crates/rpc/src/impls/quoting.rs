@@ -4,10 +4,7 @@ use alloy_primitives::{Address, U256};
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
 use reth_tasks::TaskSpawner;
 
-use crate::{
-    api::QuotingApiServer,
-    types::{GasEstimateFilter, QuotingSubscriptionKind, QuotingSubscriptionParam}
-};
+use crate::{api::QuotingApiServer, types::GasEstimateFilter};
 
 pub struct QuotesApi<OrderPool, Spawner> {
     pool:         OrderPool,

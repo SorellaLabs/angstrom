@@ -54,10 +54,10 @@ async fn main() -> eyre::Result<()> {
             _ = sigint.recv() => break,
             state_changes = rx.recv() => {
                 if let Some((address, changes_block_number)) = state_changes {
-                   let pool_guard = uniswap_pool_manager.pool(&address).await.unwrap();
                     let mut fresh_pool = EnhancedUniswapPool::new(DataLoader::new(address), ticks_per_side);
                     fresh_pool.initialize(Some(changes_block_number), provider.clone()).await?;
 
+                   let pool_guard = uniswap_pool_manager.pool(&address).unwrap();
                     // Compare the new pool with the old pool
                     compare_pools(&pool_guard, &fresh_pool, changes_block_number);
                 } else {

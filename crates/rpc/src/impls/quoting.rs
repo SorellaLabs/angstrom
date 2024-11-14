@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
-use alloy_primitives::{Address, U256};
-use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
+use jsonrpsee::PendingSubscriptionSink;
 use reth_tasks::TaskSpawner;
 
 use crate::{api::QuotingApiServer, types::GasEstimateFilter};

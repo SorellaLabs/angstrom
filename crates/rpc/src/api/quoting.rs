@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
-use alloy_primitives::{Address, U256};
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use jsonrpsee::proc_macros::rpc;
 
 use crate::types::GasEstimateFilter;
 

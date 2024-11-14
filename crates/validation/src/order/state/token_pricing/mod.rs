@@ -46,7 +46,7 @@ impl TokenPriceGenerator {
     {
         let mut pair_to_pool = HashMap::default();
         for (key, pool) in uni.iter() {
-            let pool = pool.read().await;
+            let pool = pool.read().unwrap();
             pair_to_pool.insert((pool.token_a, pool.token_b), *key);
         }
 
@@ -58,7 +58,7 @@ impl TokenPriceGenerator {
 
                 async move {
                     let mut queue = VecDeque::new();
-                    let pool_read = pool.read().await;
+                    let pool_read = pool.read().unwrap();
 
                     for block_number in current_block - BLOCKS_TO_AVG_PRICE..=current_block {
                         let pool_data = pool_read

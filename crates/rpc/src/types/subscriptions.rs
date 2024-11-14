@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use alloy_primitives::{Address, FixedBytes, B256};
-use angstrom_types::{
-    consensus::*, contract_bindings::angstrom::Angstrom::PoolKey,
-    sol_bindings::grouped_orders::AllOrders
-};
+use angstrom_types::{consensus::*, sol_bindings::grouped_orders::AllOrders};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Deserialize, Serialize)]

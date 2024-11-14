@@ -1,3 +1,4 @@
+#![feature(iter_map_windows)]
 use std::collections::HashSet;
 
 use angstrom_types::{

@@ -104,7 +104,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
                     let pool = self
                         .uniswap_pools
                         .get(&pool_address)
-                        .map(|pool| pool.blocking_read())
+                        .map(|pool| pool.read().unwrap())
                         .unwrap();
                     let market_snapshot = get_market_snapshot(pool).unwrap();
                     let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();

@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc
+        Arc, RwLock, RwLockReadGuard
     }
 };
 
@@ -14,15 +14,12 @@ use alloy::{
     transports::{RpcError, TransportErrorKind}
 };
 use alloy_primitives::Log;
-use angstrom_types::primitive::PoolId;
+use angstrom_types::{matching::uniswap::PoolSnapshot, primitive::PoolId};
 use arraydeque::ArrayDeque;
 use futures_util::{stream::BoxStream, StreamExt};
 use thiserror::Error;
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        RwLock, RwLockReadGuard, RwLockWriteGuard
-    },
+    sync::mpsc::{Receiver, Sender},
     task::JoinHandle
 };
 
@@ -76,41 +73,32 @@ where
         }
     }
 
-    pub fn pool_addresses(&self) -> impl Iterator<Item = &A> + '_ {
-        self.pools.keys()
+    pub fn fetch_pool_snapshots(&self) -> HashMap<A, PoolSnapshot> {
+        self.pools
+            .iter()
+            .filter_map(|(key, pool)| {
+                Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?))
+            })
+            .collect()
     }
 
-    pub fn blocking_pool(
-        &self,
-        address: &A
-    ) -> Option<RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>> {
-        self.pools.get(address).map(|pool| pool.blocking_read())
+    pub fn pool_addresses(&self) -> impl Iterator<Item = &A> + '_ {
+        self.pools.keys()
     }
 
     pub fn pools(&self) -> Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>> {
         self.pools.clone()
     }
 
-    pub async fn pool_mut(
-        &self,
-        address: &A
-    ) -> Option<RwLockWriteGuard<'_, EnhancedUniswapPool<Loader, A>>> {
+    pub fn pool(&self, address: &A) -> Option<RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>> {
         let pool = self.pools.get(address)?;
-        Some(pool.write().await)
+        Some(pool.read().unwrap())
     }
 
-    pub async fn pool(
-        &self,
-        address: &A
-    ) -> Option<RwLockReadGuard<'_, EnhancedUniswapPool<Loader, A>>> {
-        let pool = self.pools.get(address)?;
-        Some(pool.read().await)
-    }
-
-    pub async fn filter(&self) -> Filter {
+    pub fn filter(&self) -> Filter {
         // it should crash given that no pools makes no sense
         let pool = self.pools.values().next().unwrap();
-        let pool = pool.read().await;
+        let pool = pool.read().unwrap();
         Filter::new().event_signature(pool.event_signatures())
     }
 
@@ -163,7 +151,7 @@ where
 
         let pools = self.pools.clone();
         let provider = Arc::clone(&self.provider);
-        let filter = self.filter().await;
+        let filter = self.filter();
         let state_change_cache = Arc::clone(&self.state_change_cache);
         let updated_pool_handle = tokio::spawn(async move {
             let mut block_stream: BoxStream<Option<u64>> = provider.subscribe_blocks();
@@ -179,14 +167,17 @@ where
                         "reorg detected, unwinding state changes"
                     );
 
-                    let mut state_change_cache = state_change_cache.write().await;
-                    for pool in pools.values() {
-                        let mut pool_guard = pool.write().await;
-                        Self::unwind_state_changes(
-                            &mut pool_guard,
-                            &mut state_change_cache,
-                            chain_head_block_number
-                        )?;
+                    // scope for locks
+                    {
+                        let mut state_change_cache = state_change_cache.write().unwrap();
+                        for pool in pools.values() {
+                            let mut pool_guard = pool.write().unwrap();
+                            Self::unwind_state_changes(
+                                &mut pool_guard,
+                                &mut state_change_cache,
+                                chain_head_block_number
+                            )?;
+                        }
                     }
 
                     // set the last synced block to the head block number
@@ -214,17 +205,21 @@ where
                         continue;
                     };
 
-                    let mut pool_guard = pool.write().await;
-                    let mut state_change_cache = state_change_cache.write().await;
-                    Self::handle_state_changes_from_logs(
-                        &mut pool_guard,
-                        &mut state_change_cache,
-                        logs,
-                        chain_head_block_number
-                    )?;
+                    // scope for locks
+                    let address = {
+                        let mut pool_guard = pool.write().unwrap();
+                        let mut state_change_cache = state_change_cache.write().unwrap();
+                        Self::handle_state_changes_from_logs(
+                            &mut pool_guard,
+                            &mut state_change_cache,
+                            logs,
+                            chain_head_block_number
+                        )?;
+                        pool_guard.address()
+                    };
 
                     if let Some(tx) = &pool_updated_tx {
-                        tx.send((pool_guard.address(), chain_head_block_number))
+                        tx.send((address, chain_head_block_number))
                             .await
                             .map_err(|e| tracing::error!("Failed to send pool update: {}", e))
                             .ok();

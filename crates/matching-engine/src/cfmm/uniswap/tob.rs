@@ -1,3 +1,5 @@
+use std::sync::RwLockReadGuard;
+
 use angstrom_types::{
     contract_payloads::tob::ToBOutcome,
     matching::{
@@ -7,7 +9,6 @@ use angstrom_types::{
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 use eyre::Error;
-use tokio::sync::RwLockReadGuard;
 
 use crate::cfmm::uniswap::{pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader};
 // Basically only tests in here now

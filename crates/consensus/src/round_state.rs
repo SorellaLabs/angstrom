@@ -399,8 +399,8 @@ where
                     &proposal,
                     pool_registry,
                     uniswap_pools
-                )
-                .await;
+                );
+
                 let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
                 let tx = TransactionRequest::default()
                     .with_to(Address::default())
@@ -419,7 +419,7 @@ where
         }
     }
 
-    async fn build_pools_param(
+    fn build_pools_param(
         proposal: &Proposal,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools
@@ -435,7 +435,7 @@ where
             if let Some(pool_key) = pool_registry.get_uni_pool(&pool_id) {
                 if let Some(entry) = pool_registry.get_ang_entry(&pool_id) {
                     if let Some(pool_lock) = uniswap_pools.get(&pool_id) {
-                        let pool = pool_lock.read().await;
+                        let pool = pool_lock.read().unwrap();
                         let pool_snapshot =
                             get_market_snapshot(pool).expect("should not break now");
 

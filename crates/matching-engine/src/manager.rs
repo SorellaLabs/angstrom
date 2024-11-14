@@ -76,6 +76,10 @@ pub struct MatchingManager<TP: TaskSpawner> {
 }
 
 impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
+    pub fn new(tp: TP) -> Self {
+        Self { tp: tp.into(), futures: FuturesUnordered::default() }
+    }
+
     pub fn spawn(tp: TP) -> MatcherHandle {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         let tp = Arc::new(tp);
@@ -97,6 +101,14 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
                 acc.entry(order.pool_id).or_default().insert(order);
                 acc
             })
+    }
+
+    pub fn build_non_proposal_books(
+        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>
+    ) -> Vec<OrderBook> {
+        let book_sources = Self::orders_sorted_by_pool_id(limit);
+        vec![]
     }
 
     pub fn build_books(preproposals: &[PreProposal]) -> Vec<OrderBook> {
@@ -149,13 +161,26 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
 
         Ok(solutions)
     }
+
+    pub fn orders_sorted_by_pool_id(
+        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>
+    ) -> HashMap<PoolId, HashSet<OrderWithStorageData<GroupedVanillaOrder>>> {
+        limit.into_iter().fold(HashMap::new(), |mut acc, order| {
+            acc.entry(order.pool_id).or_default().insert(order);
+            acc
+        })
+    }
+
+    async fn estimate_current_fills(&self) -> BundleEstimate {
+        todo!()
+    }
 }
 
 pub async fn manager_thread<TP: TaskSpawner + 'static>(
     mut input: Receiver<MatcherCommand>,
     tp: Arc<TP>
 ) {
-    let _manager = MatchingManager { futures: FuturesUnordered::default(), tp };
+    let manager = MatchingManager { futures: FuturesUnordered::default(), tp };
 
     while let Some(c) = input.recv().await {
         match c {
@@ -174,7 +199,6 @@ mod tests {
 
     use alloy::primitives::FixedBytes;
     use angstrom_types::consensus::PreProposal;
-    use futures::stream::FuturesUnordered;
     use reth_tasks::TokioTaskExecutor;
     use testing_tools::type_generator::consensus::preproposal::PreproposalBuilder;
 
@@ -182,16 +206,16 @@ mod tests {
 
     #[tokio::test]
     async fn can_build_proposal() {
-        let manager =
-            MatchingManager { futures: FuturesUnordered::default(), tp: TokioTaskExecutor };
         let preproposals = vec![];
-        let _ = manager.build_proposal(preproposals).await.unwrap();
+        let _ = MatchingManager::<TokioTaskExecutor>::build_proposal(preproposals)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn will_combine_preproposals() {
-        let manager =
-            MatchingManager { futures: FuturesUnordered::default(), tp: TokioTaskExecutor };
+        let task = TokioTaskExecutor::default();
+        let manager = MatchingManager::new(task);
         let preproposals: Vec<PreProposal> = (0..3)
             .map(|_| {
                 PreproposalBuilder::new()
@@ -205,7 +229,10 @@ mod tests {
             .iter()
             .flat_map(|p| p.limit.iter().map(|o| o.order_id.hash))
             .collect();
-        let res = manager.build_proposal(preproposals).await.unwrap();
+
+        let res = MatchingManager::<TokioTaskExecutor>::build_proposal(preproposals)
+            .await
+            .unwrap();
         let orders_in_solution: HashSet<FixedBytes<32>> = res
             .iter()
             .flat_map(|p| p.limit.iter().map(|o| o.id.hash))

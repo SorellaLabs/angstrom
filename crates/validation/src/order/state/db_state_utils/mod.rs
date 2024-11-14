@@ -30,6 +30,8 @@ pub trait StateFetchUtils: Clone + Send + Unpin {
     ) -> Option<U256>;
 
     fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256;
+
+    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256;
 }
 
 #[derive(Debug)]
@@ -77,6 +79,11 @@ where
             .fetch_approval_balance_for_token(user, token, &self.db)
     }
 
+    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256 {
+        self.balances
+            .fetch_balance_in_angstrom(user, token, &self.db)
+    }
+
     fn fetch_balance_for_token_overrides(
         &self,
         user: Address,
@@ -116,6 +123,7 @@ pub mod test_fetching {
     #[derive(Debug, Clone, Default)]
     pub struct MockFetch {
         balance_values:  DashMap<Address, HashMap<Address, U256>>,
+        angstrom_values: DashMap<Address, HashMap<Address, U256>>,
         approval_values: DashMap<Address, HashMap<Address, U256>>,
         used_nonces:     DashMap<Address, HashSet<u64>>
     }
@@ -174,6 +182,13 @@ pub mod test_fetching {
 
         fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256 {
             self.balance_values
+                .get(&user)
+                .and_then(|inner| inner.value().get(&token).cloned())
+                .unwrap_or_default()
+        }
+
+        fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256 {
+            self.angstrom_values
                 .get(&user)
                 .and_then(|inner| inner.value().get(&token).cloned())
                 .unwrap_or_default()

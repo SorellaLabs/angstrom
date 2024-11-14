@@ -61,9 +61,7 @@ impl Balances {
     where
         <DB as DatabaseRef>::Error: Debug + Sync + Send + 'static
     {
-        // Fetch balance from the token contract
-        let token_balance = self
-            .tokens
+        self.tokens
             .get(&token)
             .or_else(|| {
                 let slot = find_slot_offset_for_balance(db, token);
@@ -72,13 +70,10 @@ impl Balances {
                 self.tokens.get(&token)
             })
             .and_then(|slot| slot.load_balance(user, db).ok())
-            .unwrap_or_default();
-
-        let angstrom_balance = self.get_angstrom_balance(token, user, db);
-        token_balance + angstrom_balance
+            .unwrap_or_default()
     }
 
-    fn get_angstrom_balance<DB: revm::DatabaseRef>(
+    pub fn fetch_balance_in_angstrom<DB: revm::DatabaseRef>(
         &self,
         token: Address,
         account: Address,

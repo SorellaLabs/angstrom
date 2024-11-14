@@ -42,6 +42,9 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
     fn is_valid_signature(&self) -> bool;
 
     fn order_location(&self) -> OrderLocation;
+
+    /// whether to use angstrom balances or not
+    fn use_internal(&self) -> bool;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash, Copy)]

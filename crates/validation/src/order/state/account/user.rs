@@ -151,6 +151,7 @@ impl UserAccounts {
             })
     }
 
+    // TODO: Things should be done here
     fn load_state_for<S: StateFetchUtils>(
         &self,
         user: UserAddress,
@@ -160,9 +161,7 @@ impl UserAccounts {
         let approvals = utils
             .fetch_approval_balance_for_token(user, token)
             .unwrap_or_default();
-        let balances = utils
-            .fetch_balance_for_token(user, token)
-            .unwrap_or_default();
+        let balances = utils.fetch_balance_for_token(user, token);
 
         let mut entry = self.last_known_state.entry(user).or_default();
         // override as fresh query

@@ -3,10 +3,14 @@
 
 from ethereum.ercs import IERC20
 from snekmate.auth import ownable
+from snekmate.auth import ownable_2step
 
 initializes: ownable
+initializes: ownable_2step[ownable := ownable]
+
 exports: (
-    ownable.transfer_ownership,
+    ownable_2step.transfer_ownership,
+    ownable_2step.accept_ownership,
     ownable.owner,
 )
 
@@ -68,7 +72,8 @@ _node_index: HashMap[address, uint256]
 def __init__(angstrom: IAngstromAuth, initial_owner: address):
     ANGSTROM = angstrom
     ownable.__init__()
-    ownable.owner = initial_owner
+    ownable_2step.__init__()
+    ownable._transfer_ownership(initial_owner)
 
 @external
 def schedule_new_controller(new_controller: address):

@@ -7,6 +7,7 @@ interface IControllerV1 {
     event NewControllerScheduled(address indexed new_controller, uint256 confirmable_at);
     event NodeAdded(address indexed node);
     event NodeRemoved(address indexed node);
+    event OwnershipTransferStarted(address indexed previous_owner, address indexed new_owner);
     event OwnershipTransferred(address indexed previous_owner, address indexed new_owner);
     event PoolConfigured(
         address indexed asset_a, address indexed asset_b, uint16 tick_spacing, uint24 fee_in_e6
@@ -15,6 +16,7 @@ interface IControllerV1 {
 
     function ANGSTROM() external view returns (address);
     function SCHEDULE_TO_CONFIRM_DELAY() external view returns (uint256);
+    function accept_ownership() external;
     function add_node(address node) external;
     function cancel_pending_controller() external;
     function configure_pool(address asset_a, address asset_b, uint16 tick_spacing, uint24 fee_in_e6)

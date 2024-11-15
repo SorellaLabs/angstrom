@@ -39,6 +39,8 @@ contract ControllerV1Test is BaseTest {
 
         vm.prank(controller_owner);
         controller.transfer_ownership(newOwner);
+        vm.prank(newOwner);
+        controller.accept_ownership();
 
         assertEq(controller.owner(), newOwner);
 
@@ -103,6 +105,7 @@ contract ControllerV1Test is BaseTest {
             controller.remove_node(addrs[ai]);
             removed[ai] = true;
             assertEq(controller.total_nodes(), _TOTAL_NODES - i - 1);
+
             for (uint256 j = 0; j < addrs.length; j++) {
                 uint256 totalNodes = controller.total_nodes();
                 bool found = false;

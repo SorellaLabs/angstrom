@@ -60,9 +60,11 @@ where
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
-            ValidationRequest::Order(order) => self
-                .order_validator
-                .validate_order(order, self.utils.token_pricing_snapshot()),
+            ValidationRequest::Order(order) => self.order_validator.validate_order(
+                order,
+                self.utils.token_pricing_snapshot(),
+                self.utils.thread_pool_mut()
+            ),
             ValidationRequest::Bundle { sender, bundle } => {
                 todo!()
             }
@@ -94,6 +96,6 @@ where
             self.on_new_validation_request(req);
         }
 
-        self.order_validator.poll_unpin(cx)
+        self.utils.poll_unpin(cx)
     }
 }

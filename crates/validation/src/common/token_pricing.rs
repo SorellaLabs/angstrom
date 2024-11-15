@@ -91,6 +91,21 @@ impl TokenPriceGenerator {
         Ok(Self { prev_prices: pools, cur_block: current_block, pair_to_pool })
     }
 
+    pub fn generate_lookup_map(&self) -> HashMap<(Address, Address), U256> {
+        self.pair_to_pool
+            .keys()
+            .filter_map(|(mut token0, mut token1)| {
+                if token1 < token0 {
+                    std::mem::swap(&mut token0, &mut token1)
+                };
+
+                let price = self.get_eth_conversion_price(token0, token1)?;
+
+                Some(((token0, token1), price))
+            })
+            .collect()
+    }
+
     pub fn apply_update(&mut self, updates: Vec<PairsWithPrice>) {
         for pool_update in updates {
             // make sure we aren't replaying

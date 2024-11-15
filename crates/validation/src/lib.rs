@@ -77,7 +77,7 @@ pub fn init_validation<
         let order_validator =
             rt.block_on(OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools));
 
-        let bundle_validator = BundleValidator::new(db.clone());
+        let bundle_validator = BundleValidator::new(revm_lru.clone());
         let shared_utils = SharedTools::new(price_generator, update_stream, thread_pool);
 
         rt.block_on(async {
@@ -115,6 +115,7 @@ where
     )
     .boxed();
 
+    let revm = revm_lru.clone();
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -129,11 +130,11 @@ where
         let order_validator =
             rt.block_on(OrderValidator::new(sim, current_block, pool, state, uniswap_pools));
 
-        let bundle_validator = BundleValidator::new(db.clone());
-        let shared_utils = SharedTools::new(token_pricing, update_stream, thread_pool);
+        let bundle_validator = BundleValidator::new(revm_lru.clone());
+        let shared_utils = SharedTools::new(price_generator, update_stream, thread_pool);
 
         rt.block_on(Validator::new(rx, order_validator, bundle_validator, shared_utils))
     });
 
-    (ValidationClient(tx), revm_lru)
+    (ValidationClient(tx), revm)
 }

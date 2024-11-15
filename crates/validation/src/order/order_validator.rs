@@ -1,12 +1,11 @@
 use std::{
     pin::Pin,
-    sync::{atomic::AtomicU64, Arc},
-    task::Poll
+    sync::{atomic::AtomicU64, Arc}
 };
 
 use alloy::primitives::{Address, BlockNumber, B256};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
-use futures::{Future, StreamExt};
+use futures::Future;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use tokio::runtime::Handle;
 
@@ -36,7 +35,6 @@ where
     Pools: PoolsTracker + Sync + 'static,
     Fetch: StateFetchUtils + Sync + 'static
 {
-    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         sim: SimValidation<DB>,
         block_number: Arc<AtomicU64>,

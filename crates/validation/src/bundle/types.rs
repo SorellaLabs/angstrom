@@ -9,3 +9,12 @@ pub struct BundleResponse {
     token_price_per_wei: HashMap<(Address, Address), U256>,
     total_gas_cost_wei:  u64
 }
+
+impl BundleResponse {
+    pub fn new(
+        token_price_per_wei: HashMap<(Address, Address), U256>,
+        total_gas_cost_wei: u64
+    ) -> Self {
+        Self { token_price_per_wei, total_gas_cost_wei }
+    }
+}

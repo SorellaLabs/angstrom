@@ -12,10 +12,9 @@ use angstrom_types::{
     }
 };
 use sim::SimValidation;
-use state::token_pricing::TokenPriceGenerator;
 use tokio::sync::oneshot::{channel, Sender};
 
-use crate::validator::ValidationRequest;
+use crate::{common::TokenPriceGenerator, validator::ValidationRequest};
 
 pub mod order_validator;
 pub mod sim;

@@ -10,6 +10,7 @@ use angstrom_types::{
 };
 use book::OrderBook;
 use futures_util::future::BoxFuture;
+use validation::bundle::BundleResponse;
 
 pub mod book;
 pub mod manager;
@@ -24,7 +25,7 @@ pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
         &self,
         preproposals: Vec<PreProposal>,
         pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
-    ) -> BoxFuture<Result<Vec<PoolSolution>, String>>;
+    ) -> BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleResponse)>>;
 }
 
 pub fn build_book(

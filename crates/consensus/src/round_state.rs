@@ -53,7 +53,7 @@ pub enum RoundStateMachineError {
 async fn build_proposal(
     pre_proposals: Vec<PreProposal>,
     pool_snapshot: HashMap<PoolId, PoolSnapshot>
-) -> Result<Vec<PoolSolution>, String> {
+) -> eyre::Result<Vec<PoolSolution>> {
     MatchingManager::<TokioTaskExecutor>::build_proposal(pre_proposals, pool_snapshot).await
 }
 

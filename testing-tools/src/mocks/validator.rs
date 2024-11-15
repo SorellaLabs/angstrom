@@ -1,18 +1,24 @@
 use std::{collections::HashMap, sync::Arc};
 
-use alloy_primitives::Address;
+use alloy_primitives::{keccak256, Address, FixedBytes};
 use angstrom_types::{
     self,
+    contract_payloads::angstrom::AngstromBundle,
     orders::OrderOrigin,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
+use pade::PadeEncode;
 use parking_lot::Mutex;
-use validation::order::{GasEstimationFuture, OrderValidationResults, OrderValidatorHandle};
+use validation::{
+    bundle::{BundleResponse, BundleValidatorHandle},
+    order::{GasEstimationFuture, OrderValidationResults, OrderValidatorHandle}
+};
 
 // all keys are the signer of the order
 #[derive(Debug, Clone, Default)]
 pub struct MockValidator {
-    pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationResults>>>
+    pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationResults>>>,
+    pub bundle_res:   Arc<Mutex<HashMap<FixedBytes<32>, BundleResponse>>>
 }
 
 macro_rules! inserts {
@@ -72,5 +78,13 @@ impl OrderValidatorHandle for MockValidator {
                 }
             }
         })
+    }
+}
+
+impl BundleValidatorHandle for MockValidator {
+    async fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> eyre::Result<BundleResponse> {
+        let e = bundle.pade_encode();
+        let hash = keccak256(e);
+        self.bundle_res.lock().unwrap().remove(&hash)
     }
 }

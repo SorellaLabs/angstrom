@@ -107,6 +107,8 @@ jobs:
         run: uv venv .venv --python 3.12
       - name: Sync python dependencies
         run: uv pip install -r requirements.txt
+      - name: Install vyper
+        run: uv tool install vyper==0.4.0
       - name: Show Forge version
         run: forge --version
       - name: Run Forge fmt

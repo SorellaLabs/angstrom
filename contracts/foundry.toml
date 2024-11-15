@@ -7,6 +7,10 @@ verbosity      = 3
 fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
 ast = true
 evm_version    = "cancun"
+libs = [
+    "lib",
+    ".venv/lib/python3.12/site-packages/"
+]
 
 ignored_error_codes = [
   2394, # Transient storage warning

@@ -46,8 +46,9 @@ use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
 };
 use validation::{
+    common::TokenPriceGenerator,
     init_validation,
-    order::state::{pools::AngstromPoolsTracker, token_pricing::TokenPriceGenerator},
+    order::state::pools::AngstromPoolsTracker,
     validator::{ValidationClient, ValidationRequest}
 };
 
@@ -134,12 +135,13 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 ) {
     let node_config = NodeConfig::load_from_config(Some(config.node_config)).unwrap();
 
+    let signer = LocalSigner::<SigningKey>::from_bytes(&secret_key.secret_bytes().into()).unwrap();
+    let node_address = signer.address();
+
     // I am sure there is a prettier way of doing this
     let provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
         .with_recommended_fillers()
-        .wallet(EthereumWallet::from(
-            LocalSigner::<SigningKey>::from_bytes(&secret_key.secret_bytes().into()).unwrap()
-        ))
+        .wallet(EthereumWallet::from(signer))
         .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())
         .await
         .unwrap()
@@ -180,10 +182,12 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
             .expect("failed to start token price generator");
 
     let block_height = node.provider.best_block_number().unwrap();
+
     init_validation(
         RethDbWrapper::new(node.provider.clone()),
         block_height,
         angstrom_address,
+        node_address,
         node.provider.canonical_state_stream(),
         uniswap_pools.clone(),
         price_generator,

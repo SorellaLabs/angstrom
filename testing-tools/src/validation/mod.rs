@@ -16,14 +16,14 @@ use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use reth_provider::BlockNumReader;
 use tokio::sync::mpsc::unbounded_channel;
 use validation::{
-    common::db::BlockStateProviderFactory,
+    bundle::BundleValidator,
+    common::{db::BlockStateProviderFactory, SharedTools, TokenPriceGenerator},
     order::{
         order_validator::OrderValidator,
         sim::SimValidation,
         state::{
             db_state_utils::{nonces::Nonces, FetchUtils},
-            pools::AngstromPoolsTracker,
-            token_pricing::TokenPriceGenerator
+            pools::AngstromPoolsTracker
         }
     },
     validator::{ValidationClient, Validator}
@@ -53,6 +53,7 @@ where
     pub async fn new(
         db: DB,
         angstrom_address: Address,
+        node_address: Address,
         uniswap_pools: SyncedUniswapPools,
         token_conversion: TokenPriceGenerator,
         token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
@@ -71,21 +72,13 @@ where
         let thread_pool = KeySplitThreadpool::new(handle, 3);
         let sim = SimValidation::new(db.clone(), None);
 
-        // fill stream
+        let order_validator =
+            OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools).await;
 
-        let order_validator = OrderValidator::new(
-            sim,
-            current_block,
-            pools,
-            fetch,
-            uniswap_pools,
-            thread_pool,
-            token_conversion,
-            token_updates
-        )
-        .await;
+        let bundle_validator = BundleValidator::new(db.clone(), angstrom_address, node_address);
+        let shared_utils = SharedTools::new(token_conversion, token_updates, thread_pool);
 
-        let val = Validator::new(rx, order_validator);
+        let val = Validator::new(rx, order_validator, bundle_validator, shared_utils);
         let client = ValidationClient(tx);
 
         Self { db, client, underlying: val }

@@ -32,7 +32,7 @@ use reth_provider::{CanonStateNotifications, CanonStateSubscriptions};
 use reth_tasks::TokioTaskExecutor;
 use secp256k1::SecretKey;
 use validation::{
-    order::state::{pools::AngstromPoolsTracker, token_pricing::TokenPriceGenerator},
+    common::TokenPriceGenerator, order::state::pools::AngstromPoolsTracker,
     validator::ValidationClient
 };
 
@@ -177,10 +177,13 @@ impl AngstromTestnetNodeInternals {
             .await
             .unwrap()
         );
+        let signer = Signer::new(secret_key);
+        let node_address = Address::from_slice(&signer.my_id[44..]);
 
         let validator = TestOrderValidator::new(
             state_provider.provider(),
             angstrom_addr,
+            node_address,
             uniswap_pools.clone(),
             token_conversion,
             token_price_update_stream,
@@ -230,7 +233,7 @@ impl AngstromTestnetNodeInternals {
                 state_provider.provider().subscribe_to_canonical_state(),
                 strom_handles.consensus_rx_op
             ),
-            Signer::new(secret_key),
+            signer,
             initial_validators,
             order_storage.clone(),
             state_provider

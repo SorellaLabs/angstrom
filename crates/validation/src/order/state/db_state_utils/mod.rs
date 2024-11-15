@@ -29,7 +29,9 @@ pub trait StateFetchUtils: Clone + Send + Unpin {
         overrides: &HashMap<Address, HashMap<U256, U256>>
     ) -> Option<U256>;
 
-    fn fetch_balance_for_token(&self, user: Address, token: Address) -> Option<U256>;
+    fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256;
+
+    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256;
 }
 
 #[derive(Debug)]
@@ -77,6 +79,11 @@ where
             .fetch_approval_balance_for_token(user, token, &self.db)
     }
 
+    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256 {
+        self.balances
+            .fetch_balance_in_angstrom(user, token, &self.db)
+    }
+
     fn fetch_balance_for_token_overrides(
         &self,
         user: Address,
@@ -88,7 +95,7 @@ where
             .fetch_balance_for_token_overrides(user, token, db, overrides)
     }
 
-    fn fetch_balance_for_token(&self, user: Address, token: Address) -> Option<U256> {
+    fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256 {
         self.balances.fetch_balance_for_token(user, token, &self.db)
     }
 }
@@ -97,7 +104,7 @@ impl<DB: revm::DatabaseRef> FetchUtils<DB> {
     pub fn new(angstrom_address: Address, db: Arc<DB>) -> Self {
         Self {
             approvals: Approvals::new(angstrom_address),
-            balances: Balances::new(),
+            balances: Balances::new(angstrom_address),
             nonces: Nonces::new(angstrom_address),
             db
         }
@@ -116,6 +123,7 @@ pub mod test_fetching {
     #[derive(Debug, Clone, Default)]
     pub struct MockFetch {
         balance_values:  DashMap<Address, HashMap<Address, U256>>,
+        angstrom_values: DashMap<Address, HashMap<Address, U256>>,
         approval_values: DashMap<Address, HashMap<Address, U256>>,
         used_nonces:     DashMap<Address, HashSet<u64>>
     }
@@ -172,10 +180,18 @@ pub mod test_fetching {
             todo!("not implemented for mocker")
         }
 
-        fn fetch_balance_for_token(&self, user: Address, token: Address) -> Option<U256> {
+        fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256 {
             self.balance_values
                 .get(&user)
                 .and_then(|inner| inner.value().get(&token).cloned())
+                .unwrap_or_default()
+        }
+
+        fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256 {
+            self.angstrom_values
+                .get(&user)
+                .and_then(|inner| inner.value().get(&token).cloned())
+                .unwrap_or_default()
         }
     }
 }

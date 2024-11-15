@@ -302,6 +302,13 @@ impl RawPoolOrder for StandingVariants {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
     }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            StandingVariants::Exact(e) => e.use_internal(),
+            StandingVariants::Partial(p) => p.use_internal()
+        }
+    }
 }
 
 impl RawPoolOrder for FlashVariants {
@@ -384,6 +391,13 @@ impl RawPoolOrder for FlashVariants {
 
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
+    }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            FlashVariants::Exact(e) => e.use_internal(),
+            FlashVariants::Partial(p) => p.use_internal()
+        }
     }
 }
 
@@ -554,6 +568,10 @@ impl RawPoolOrder for TopOfBlockOrder {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Searcher
     }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
+    }
 }
 
 impl RawPoolOrder for PartialStandingOrder {
@@ -612,6 +630,10 @@ impl RawPoolOrder for PartialStandingOrder {
 
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
+    }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
     }
 }
 
@@ -672,6 +694,10 @@ impl RawPoolOrder for ExactStandingOrder {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
     }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
+    }
 }
 
 impl RawPoolOrder for PartialFlashOrder {
@@ -731,6 +757,10 @@ impl RawPoolOrder for PartialFlashOrder {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
     }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
+    }
 }
 
 impl RawPoolOrder for ExactFlashOrder {
@@ -789,6 +819,10 @@ impl RawPoolOrder for ExactFlashOrder {
 
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
+    }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
     }
 }
 
@@ -888,6 +922,14 @@ impl RawPoolOrder for AllOrders {
             AllOrders::TOB(_) => OrderLocation::Searcher
         }
     }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            AllOrders::Standing(p) => p.use_internal(),
+            AllOrders::Flash(kof) => kof.use_internal(),
+            AllOrders::TOB(tob) => tob.use_internal()
+        }
+    }
 }
 
 impl RawPoolOrder for GroupedVanillaOrder {
@@ -974,6 +1016,13 @@ impl RawPoolOrder for GroupedVanillaOrder {
             GroupedVanillaOrder::KillOrFill(_) => OrderLocation::Limit
         }
     }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            GroupedVanillaOrder::Standing(p) => p.use_internal(),
+            GroupedVanillaOrder::KillOrFill(kof) => kof.use_internal()
+        }
+    }
 }
 
 impl RawPoolOrder for GroupedComposableOrder {
@@ -1058,6 +1107,13 @@ impl RawPoolOrder for GroupedComposableOrder {
         match &self {
             GroupedComposableOrder::Partial(_) => OrderLocation::Limit,
             GroupedComposableOrder::KillOrFill(_) => OrderLocation::Limit
+        }
+    }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            GroupedComposableOrder::Partial(p) => p.use_internal(),
+            GroupedComposableOrder::KillOrFill(kof) => kof.use_internal()
         }
     }
 }

@@ -1,6 +1,6 @@
 use std::{pin::Pin, sync::Arc, task::Poll, time::Duration};
 
-use angstrom::cli::DefaultPoolHandle;
+use angstrom::components::DefaultPoolHandle;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{
     pool_manager::{OrderCommand, PoolHandle, PoolManager},

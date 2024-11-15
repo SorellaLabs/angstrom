@@ -1,3 +1,4 @@
+pub mod bundle;
 pub mod common;
 pub mod order;
 pub mod validator;
@@ -58,6 +59,7 @@ pub fn init_validation<
             .worker_threads(4)
             .build()
             .unwrap();
+
         let handle = rt.handle().clone();
         let pools = AngstromPoolsTracker::new(angstrom_address.unwrap_or_default(), pool_store);
         // load storage slot state + pools

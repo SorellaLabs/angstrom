@@ -1,17 +1,28 @@
 use std::{fmt::Debug, task::Poll};
 
 use alloy::primitives::{Address, B256};
+use angstrom_types::contract_payloads::angstrom::AngstromBundle;
 use futures_util::{Future, FutureExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::order::{
-    order_validator::OrderValidator,
-    state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
-    OrderValidationRequest, OrderValidationResults
+use crate::{
+    bundle::BundleResponse,
+    order::{
+        order_validator::OrderValidator,
+        state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
+        OrderValidationRequest, OrderValidationResults
+    }
 };
 
 pub enum ValidationRequest {
     Order(OrderValidationRequest),
+    /// does two sims, One to fetch total gas used. Second is once
+    /// gas cost has be delegated to each user order. ensures we won't have a
+    /// failure.
+    Bundle {
+        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleResponse>>,
+        bundle: AngstromBundle
+    },
     NewBlock {
         sender:       tokio::sync::oneshot::Sender<OrderValidationResults>,
         block_number: u64,

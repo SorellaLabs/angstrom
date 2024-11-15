@@ -178,12 +178,6 @@ def remove_node(node: address):
 def total_nodes() -> uint256:
     return len(self.nodes)
 
-@view
-def _config_store() -> address:
-    slot2: bytes32 = staticcall ANGSTROM.extsload(convert(2, bytes32))
-    bits: uint256 = convert(slot2, uint256)
-    return convert((bits << 32) >> 64, address)
-
 @pure
 def _compute_partial_key(asset_a: address, asset_b: address) -> bytes27:
     hash: bytes32 = keccak256(abi_encode(asset_a, asset_b))

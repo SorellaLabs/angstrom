@@ -386,8 +386,7 @@ where
                 }
 
                 let (proposal, timer) = async_time_fn(|| async {
-                    let pool_snapshots = self
-                        .uniswap_pools
+                    let pool_snapshots = uniswap_pools
                         .iter()
                         .filter_map(|(key, pool)| {
                             Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?))

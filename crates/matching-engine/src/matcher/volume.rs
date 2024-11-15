@@ -300,23 +300,25 @@ impl<'a> VolumeFillMatcher<'a> {
         &self,
         searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
     ) -> PoolEstimate {
-        let limit = self
-            .bid_outcomes
-            .iter()
-            .enumerate()
-            .map(|(idx, outcome)| (self.book.bids()[idx].order_id, outcome))
-            .chain(
-                self.ask_outcomes
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, outcome)| (self.book.asks()[idx].order_id, outcome))
-            )
-            .map(|(id, outcome)| OrderOutcome { id, outcome: outcome.clone() })
-            .collect();
-        PoolEstimate {
-            orders: self.bid_outcomes.len() as u64,
-            gas_in_wei
-        }
+        // let limit = self
+        //     .bid_outcomes
+        //     .iter()
+        //     .enumerate()
+        //     .map(|(idx, outcome)| (self.book.bids()[idx].order_id, outcome))
+        //     .chain(
+        //         self.ask_outcomes
+        //             .iter()
+        //             .enumerate()
+        //             .map(|(idx, outcome)| (self.book.asks()[idx].order_id, outcome))
+        //     )
+        //     .map(|(id, outcome)| OrderOutcome { id, outcome: outcome.clone() })
+        //     .collect();
+        //
+        // let a = PoolEstimate {
+        //     orders:        self.bid_outcomes.len() as u64,
+        //     gas_in_wei:    0,
+        //     gas_in_token0: None
+        // };
 
         todo!()
     }

@@ -116,7 +116,8 @@ impl ProposalBuilder {
                 })
                 .collect::<Vec<_>>()
         });
-        let books = MatchingManager::<TokioTaskExecutor>::build_books(&preproposals);
+        let books =
+            MatchingManager::<TokioTaskExecutor>::build_books(&preproposals, HashMap::default());
         let searcher_orders: HashMap<PoolId, OrderWithStorageData<TopOfBlockOrder>> = preproposals
             .iter()
             .flat_map(|p| p.searcher.iter())

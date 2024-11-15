@@ -3,7 +3,7 @@ use std::{
     future::Future
 };
 
-use angstrom::cli::initialize_strom_handles;
+use angstrom::components::initialize_strom_handles;
 use angstrom_network::{
     manager::StromConsensusEvent, NetworkOrderEvent, StromMessage, StromNetworkManager
 };

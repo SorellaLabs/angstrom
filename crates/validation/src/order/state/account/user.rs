@@ -12,14 +12,16 @@ pub type Amount = U256;
 
 #[derive(Debug, Default)]
 pub struct BaselineState {
-    token_approval: HashMap<TokenAddress, Amount>,
-    token_balance:  HashMap<TokenAddress, Amount>
+    token_approval:   HashMap<TokenAddress, Amount>,
+    token_balance:    HashMap<TokenAddress, Amount>,
+    angstrom_balance: HashMap<TokenAddress, Amount>
 }
 
 pub struct LiveState {
-    pub token:    TokenAddress,
-    pub approval: Amount,
-    pub balance:  Amount
+    pub token:            TokenAddress,
+    pub approval:         Amount,
+    pub balance:          Amount,
+    pub angstrom_balance: Amount
 }
 
 impl LiveState {
@@ -30,17 +32,27 @@ impl LiveState {
     ) -> Option<PendingUserAction> {
         assert_eq!(order.token_in(), self.token, "incorrect lives state for order");
         let amount_in = U256::from(order.amount_in());
-        if self.approval < amount_in || self.balance < amount_in {
-            return None
-        }
+
+        let (angstrom_delta, token_delta) = if order.use_internal() {
+            if self.angstrom_balance < amount_in {
+                return None;
+            }
+            (amount_in, U256::ZERO)
+        } else {
+            if self.approval < amount_in && self.balance < amount_in {
+                return None;
+            }
+            (U256::ZERO, amount_in)
+        };
 
         Some(PendingUserAction {
-            order_hash:     order.order_hash(),
-            respend:        order.respend_avoidance_strategy(),
-            token_address:  pool_info.token,
-            token_delta:    amount_in,
+            order_hash: order.order_hash(),
+            respend: order.respend_avoidance_strategy(),
+            token_address: pool_info.token,
+            token_delta,
+            angstrom_delta,
             token_approval: amount_in,
-            pool_info:      pool_info.clone()
+            pool_info: pool_info.clone()
         })
     }
 }
@@ -58,6 +70,8 @@ pub struct PendingUserAction {
     // all tokens are required before execution.
     pub token_delta:    Amount,
     pub token_approval: Amount,
+    // balance spent from angstrom
+    pub angstrom_delta: Amount,
 
     pub pool_info: UserOrderPoolInfo
 }
@@ -160,14 +174,13 @@ impl UserAccounts {
         let approvals = utils
             .fetch_approval_balance_for_token(user, token)
             .unwrap_or_default();
-        let balances = utils
-            .fetch_balance_for_token(user, token)
-            .unwrap_or_default();
+        let balances = utils.fetch_balance_for_token(user, token);
 
         let mut entry = self.last_known_state.entry(user).or_default();
         // override as fresh query
         entry.token_balance.insert(token, balances);
         entry.token_approval.insert(token, approvals);
+        entry.angstrom_balance.insert(token, balances);
     }
 
     /// inserts the user action and returns all pending user action hashes that
@@ -195,6 +208,7 @@ impl UserAccounts {
         let baseline = self.last_known_state.get(&user).unwrap();
         let mut baseline_approval = *baseline.token_approval.get(&token).unwrap();
         let mut baseline_balance = *baseline.token_balance.get(&token).unwrap();
+        let mut baseline_angstrom_balance = *baseline.angstrom_balance.get(&token).unwrap();
         let mut has_overflowed = false;
 
         let mut bad = vec![];
@@ -214,6 +228,11 @@ impl UserAccounts {
                 baseline_balance.overflowing_sub(pending_state.token_delta);
             has_overflowed |= overflowed;
             baseline_balance = baseline;
+
+            let (baseline, overflowed) =
+                baseline_angstrom_balance.overflowing_sub(pending_state.angstrom_delta);
+            has_overflowed |= overflowed;
+            baseline_angstrom_balance = baseline;
 
             // mark for removal
             if has_overflowed {
@@ -235,9 +254,10 @@ impl UserAccounts {
         let baseline = self.last_known_state.get(&user)?;
         let baseline_approval = *baseline.token_approval.get(&token)?;
         let baseline_balance = *baseline.token_balance.get(&token)?;
+        let baseline_angstrom_balance = *baseline.angstrom_balance.get(&token)?;
 
         // the values returned here are the negative delta compaired to baseline.
-        let (pending_approvals, pending_balance) = self
+        let (pending_approvals_spend, pending_balance_spend, pending_angstrom_balance_spend) = self
             .pending_actions
             .get(&user)
             .map(|val| {
@@ -247,17 +267,28 @@ impl UserAccounts {
                         state.respend.get_ord_for_pending_orders()
                             <= respend.get_ord_for_pending_orders()
                     })
-                    .fold((Amount::default(), Amount::default()), |(mut approvals, mut bal), x| {
-                        approvals += x.token_approval;
-                        bal += x.token_delta;
-                        (approvals, bal)
-                    })
+                    .fold(
+                        (Amount::default(), Amount::default(), Amount::default()),
+                        |(mut approvals_spend, mut balance_spend, mut angstrom_spend), x| {
+                            approvals_spend += x.token_approval;
+                            balance_spend += x.token_delta;
+                            angstrom_spend += x.angstrom_delta;
+                            (approvals_spend, balance_spend, angstrom_spend)
+                        }
+                    )
             })
             .unwrap_or_default();
 
-        let live_approval = baseline_approval.saturating_sub(pending_approvals);
-        let live_balance = baseline_balance.saturating_sub(pending_balance);
+        let live_approval = baseline_approval.saturating_sub(pending_approvals_spend);
+        let live_balance = baseline_balance.saturating_sub(pending_balance_spend);
+        let live_angstrom_balance =
+            baseline_angstrom_balance.saturating_sub(pending_angstrom_balance_spend);
 
-        Some(LiveState { token, balance: live_balance, approval: live_approval })
+        Some(LiveState {
+            token,
+            balance: live_balance,
+            approval: live_approval,
+            angstrom_balance: live_angstrom_balance
+        })
     }
 }

@@ -9,7 +9,7 @@ use alloy::{
     transports::Transport
 };
 use alloy_primitives::{Address, BlockNumber};
-use angstrom::cli::StromHandles;
+use angstrom::components::StromHandles;
 use angstrom_eth::handle::Eth;
 use angstrom_network::{pool_manager::PoolHandle, PoolManagerBuilder, StromNetworkHandle};
 use angstrom_rpc::{api::OrderApiServer, OrderApi};

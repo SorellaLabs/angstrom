@@ -5,7 +5,7 @@ use std::{
 };
 
 use alloy_primitives::Address;
-use angstrom::cli::StromHandles;
+use angstrom::components::StromHandles;
 use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager
 };

@@ -18,7 +18,7 @@ use super::{
     asset::builder::{AssetBuilder, AssetBuilderStage},
     rewards::PoolUpdate,
     tob::ToBOutcome,
-    Asset, Pair, Signature, POOL_CONFIG_STORE_ENTRY_SIZE
+    Asset, Pair, Signature, CONFIG_STORE_SLOT, POOL_CONFIG_STORE_ENTRY_SIZE
 };
 use crate::{
     consensus::{PreProposal, Proposal},
@@ -621,7 +621,7 @@ impl AngstromPoolConfigStore {
         P: Provider<T, N>
     {
         let value = provider
-            .get_storage_at(angstrom_contract, U256::from(4))
+            .get_storage_at(angstrom_contract, U256::from(CONFIG_STORE_SLOT))
             .await
             .map_err(|e| format!("Error getting storage: {}", e))?;
 

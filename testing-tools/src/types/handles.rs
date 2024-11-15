@@ -1,4 +1,4 @@
-use angstrom::cli::{DefaultPoolHandle, StromHandles};
+use angstrom::components::{DefaultPoolHandle, StromHandles};
 use angstrom_eth::handle::EthCommand;
 use angstrom_network::{
     manager::StromConsensusEvent,

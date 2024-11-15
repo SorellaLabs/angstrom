@@ -247,7 +247,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
 
         let proposal = Proposal { solutions, preproposals: vec![pre], ..Default::default() };
         let bundle = AngstromBundle::from_proposal(&proposal, &pool_snapshots)?;
-        let gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
+        let _gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
 
         todo!()
     }
@@ -288,8 +288,8 @@ mod tests {
     #[tokio::test]
     async fn can_build_proposal() {
         let preproposals = vec![];
-        let manager = MatchingManager::new(TokioTaskExecutor, MockValidator::default());
-        let _ = manger
+        let manager = MatchingManager::new(TokioTaskExecutor::default(), MockValidator::default());
+        let _ = manager
             .build_proposal(preproposals, HashMap::default())
             .await
             .unwrap();
@@ -297,9 +297,7 @@ mod tests {
 
     #[tokio::test]
     async fn will_combine_preproposals() {
-        let task = TokioTaskExecutor::default();
-        let preproposals = vec![];
-        let manager = MatchingManager::new(TokioTaskExecutor, MockValidator::default());
+        let manager = MatchingManager::new(TokioTaskExecutor::default(), MockValidator::default());
         let preproposals: Vec<PreProposal> = (0..3)
             .map(|_| {
                 PreproposalBuilder::new()
@@ -314,11 +312,12 @@ mod tests {
             .flat_map(|p| p.limit.iter().map(|o| o.order_id.hash))
             .collect();
 
-        let res = manger
+        let res = manager
             .build_proposal(preproposals, HashMap::default())
             .await
             .unwrap();
         let orders_in_solution: HashSet<FixedBytes<32>> = res
+            .0
             .iter()
             .flat_map(|p| p.limit.iter().map(|o| o.id.hash))
             .collect();

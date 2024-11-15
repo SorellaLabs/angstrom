@@ -21,7 +21,10 @@ use reth_tasks::TokioTaskExecutor;
 use secp256k1::{Secp256k1, SecretKey as Secp256SecretKey};
 
 use super::{pool::Pool, preproposal::PreproposalBuilder};
-use crate::type_generator::{amm::AMMSnapshotBuilder, orders::SigningInfo};
+use crate::{
+    mocks::validator::MockValidator,
+    type_generator::{amm::AMMSnapshotBuilder, orders::SigningInfo}
+};
 
 #[derive(Debug, Default)]
 pub struct ProposalBuilder {
@@ -116,8 +119,10 @@ impl ProposalBuilder {
                 })
                 .collect::<Vec<_>>()
         });
-        let books =
-            MatchingManager::<TokioTaskExecutor>::build_books(&preproposals, HashMap::default());
+        let books = MatchingManager::<TokioTaskExecutor, MockValidator>::build_books(
+            &preproposals,
+            &HashMap::default()
+        );
         let searcher_orders: HashMap<PoolId, OrderWithStorageData<TopOfBlockOrder>> = preproposals
             .iter()
             .flat_map(|p| p.searcher.iter())

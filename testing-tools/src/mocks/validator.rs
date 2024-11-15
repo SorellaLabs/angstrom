@@ -39,8 +39,6 @@ impl MockValidator {
     }
 }
 
-//TODO: validate can be shortened using a macro
-
 impl OrderValidatorHandle for MockValidator {
     type Order = AllOrders;
 

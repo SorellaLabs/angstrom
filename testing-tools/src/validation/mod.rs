@@ -12,9 +12,9 @@ use angstrom_types::{
 };
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::{FutureExt, Stream};
-use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use reth_provider::BlockNumReader;
 use tokio::sync::mpsc::unbounded_channel;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validation::{
     bundle::BundleValidator,
     common::{db::BlockStateProviderFactory, SharedTools, TokenPriceGenerator},

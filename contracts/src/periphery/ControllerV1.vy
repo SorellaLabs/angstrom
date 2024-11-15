@@ -74,7 +74,7 @@ def __init__(angstrom: IAngstromAuth, initial_owner: address):
 def schedule_new_controller(new_controller: address):
     ownable._check_owner()
 
-    assert new_controller != CONTROLLER_NOT_PENDING, "Can't be sentinel value"
+    assert new_controller != CONTROLLER_NOT_PENDING, "Can\'t be sentinel value"
 
     self.pending_controller = new_controller
     self.scheduled_at = block.timestamp

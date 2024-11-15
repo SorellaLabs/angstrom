@@ -13,6 +13,7 @@ exclude.workspace = true
 [dependencies]
 # angstrom
 angstrom-metrics.workspace = true
+uniswap-v4.workspace =true
 
 bitmaps.workspace = true
 tokio.workspace = true

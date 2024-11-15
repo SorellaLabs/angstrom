@@ -29,16 +29,14 @@ use angstrom_types::{
 use angstrom_utils::timer::async_time_fn;
 use futures::{future::BoxFuture, Future, Stream, StreamExt};
 use itertools::Itertools;
-use matching_engine::{
-    cfmm::uniswap::{pool_manager::SyncedUniswapPools, tob::get_market_snapshot},
-    MatchingManager
-};
+use matching_engine::{MatchingEngineHandle, MatchingManager};
 use order_pool::order_storage::{OrderStorage, OrderStorageNotification};
 use pade::PadeEncode;
 use reth_tasks::TokioTaskExecutor;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::wrappers::BroadcastStream;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{AngstromValidator, Signer};
 
@@ -50,15 +48,9 @@ pub enum RoundStateMachineError {
     TransactionError
 }
 
-async fn build_proposal(
-    pre_proposals: Vec<PreProposal>,
-    pool_snapshot: HashMap<PoolId, PoolSnapshot>
-) -> eyre::Result<Vec<PoolSolution>> {
-    MatchingManager::<TokioTaskExecutor>::build_proposal(pre_proposals, pool_snapshot).await
-}
-
-pub struct RoundStateMachine<T> {
+pub struct RoundStateMachine<T, Matching> {
     current_state:     ConsensusState,
+    matching_engine:   Matching,
     signer:            Signer,
     round_leader:      PeerId,
     validators:        Vec<AngstromValidator>,
@@ -72,9 +64,10 @@ pub struct RoundStateMachine<T> {
     provider:          Arc<Pin<Box<dyn Provider<T>>>>
 }
 
-impl<T> RoundStateMachine<T>
+impl<T, Matching> RoundStateMachine<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -86,7 +79,8 @@ where
         metrics: ConsensusMetricsWrapper,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: impl Provider<T> + 'static
+        provider: impl Provider<T> + 'static,
+        matching_engine: Matching
     ) -> Self {
         Self {
             current_state: Self::initial_state(block_height),
@@ -100,6 +94,7 @@ where
             metrics,
             transition_future: None,
             waker: None,
+            matching_engine,
             provider: Arc::new(Box::pin(provider))
         }
     }
@@ -385,16 +380,24 @@ where
                     return Ok(new_state)
                 }
 
-                let (proposal, timer) = async_time_fn(|| async {
-                    let pool_snapshots = uniswap_pools
-                        .iter()
-                        .filter_map(|(key, pool)| {
-                            Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?))
-                        })
-                        .collect();
+                let pool_snapshots = uniswap_pools
+                    .iter()
+                    .filter_map(|(key, pool)| {
+                        let (token_a, token_b, snapshot) =
+                            pool.read().unwrap().fetch_pool_snapshot().ok()?;
+                        let entry = pool_registry.get_ang_entry(key)?;
 
-                    match build_proposal(pre_proposals.clone(), pool_snapshots).await {
-                        Ok(solutions) => {
+                        Some((*key, (token_a, token_b, snapshot, entry.store_index as u16)))
+                    })
+                    .collect();
+
+                let (proposal, timer) = async_time_fn(|| async {
+                    match self
+                        .matching_engine
+                        .solve_pools(pre_proposals.clone(), pool_snapshots)
+                        .await
+                    {
+                        Ok((solutions, gas_info)) => {
                             let proposal =
                                 signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);
                             Ok(proposal)
@@ -405,11 +408,6 @@ where
                 .await;
                 metrics.set_proposal_build_time(pre_proposal_height, timer);
                 let proposal = proposal?;
-                let pools = RoundStateMachine::<T>::build_pools_param(
-                    &proposal,
-                    pool_registry,
-                    uniswap_pools
-                );
 
                 let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
                 let tx = TransactionRequest::default()
@@ -428,48 +426,12 @@ where
             Ok(new_state)
         }
     }
-
-    fn build_pools_param(
-        proposal: &Proposal,
-        pool_registry: UniswapAngstromRegistry,
-        uniswap_pools: SyncedUniswapPools
-    ) -> HashMap<PoolId, (Address, Address, PoolSnapshot, u16)> {
-        let mut result = HashMap::new();
-
-        for pool_id in proposal
-            .preproposals
-            .iter()
-            .flat_map(|p| p.limit.iter().map(|order| order.pool_id))
-            .collect::<HashSet<_>>()
-        {
-            if let Some(pool_key) = pool_registry.get_uni_pool(&pool_id) {
-                if let Some(entry) = pool_registry.get_ang_entry(&pool_id) {
-                    if let Some(pool_lock) = uniswap_pools.get(&pool_id) {
-                        let pool = pool_lock.read().unwrap();
-                        let pool_snapshot =
-                            get_market_snapshot(pool).expect("should not break now");
-
-                        result.insert(
-                            pool_id,
-                            (
-                                pool_key.currency0,
-                                pool_key.currency1,
-                                pool_snapshot,
-                                entry.store_index as u16
-                            )
-                        );
-                    }
-                }
-            }
-        }
-
-        result
-    }
 }
 
-impl<T> Stream for RoundStateMachine<T>
+impl<T, Matching> Stream for RoundStateMachine<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     type Item = Result<ConsensusState, RoundStateMachineError>;
 

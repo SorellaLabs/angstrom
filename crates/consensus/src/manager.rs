@@ -11,11 +11,12 @@ use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};
 use angstrom_types::contract_payloads::angstrom::UniswapAngstromRegistry;
 use futures::StreamExt;
-use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
+use matching_engine::MatchingEngineHandle;
 use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
 use tokio_stream::wrappers::BroadcastStream;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{
     leader_selection::WeightedRoundRobin,
@@ -26,10 +27,10 @@ use crate::{
     AngstromValidator, Signer
 };
 
-pub struct ConsensusManager<T> {
+pub struct ConsensusManager<T, Matching> {
     current_height:         BlockNumber,
     leader_selection:       WeightedRoundRobin,
-    state_transition:       RoundStateMachine<T>,
+    state_transition:       RoundStateMachine<T, Matching>,
     canonical_block_stream: BroadcastStream<CanonStateNotification>,
     strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>,
     network:                StromNetworkHandle,
@@ -54,9 +55,10 @@ impl ManagerNetworkDeps {
     }
 }
 
-impl<T> ConsensusManager<T>
+impl<T, Matching> ConsensusManager<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -67,7 +69,8 @@ where
         current_height: BlockNumber,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: impl Provider<T> + 'static
+        provider: impl Provider<T> + 'static,
+        matching_engine: Matching
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
@@ -86,7 +89,8 @@ where
                 ConsensusMetricsWrapper::new(),
                 pool_registry,
                 uniswap_pools,
-                provider
+                provider,
+                matching_engine
             ),
             network,
             canonical_block_stream: wrapped_broadcast_stream,

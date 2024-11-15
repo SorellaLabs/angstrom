@@ -2706,6 +2706,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "uniswap-v4",
  "url",
  "validation",
 ]

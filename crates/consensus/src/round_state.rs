@@ -18,21 +18,20 @@ use angstrom_network::{manager::StromConsensusEvent, StromMessage};
 use angstrom_types::{
     consensus::{PreProposal, Proposal},
     contract_payloads::angstrom::{AngstromBundle, UniswapAngstromRegistry},
-    matching::uniswap::PoolSnapshot,
-    orders::{OrderSet, PoolSolution},
-    primitive::{PeerId, PoolId},
+    orders::OrderSet,
+    primitive::PeerId,
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
     }
 };
 use angstrom_utils::timer::async_time_fn;
+use eyre::Report;
 use futures::{future::BoxFuture, Future, Stream, StreamExt};
 use itertools::Itertools;
-use matching_engine::{MatchingEngineHandle, MatchingManager};
+use matching_engine::MatchingEngineHandle;
 use order_pool::order_storage::{OrderStorage, OrderStorageNotification};
 use pade::PadeEncode;
-use reth_tasks::TokioTaskExecutor;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::wrappers::BroadcastStream;
@@ -43,7 +42,7 @@ use crate::{AngstromValidator, Signer};
 #[derive(Error, Debug)]
 pub enum RoundStateMachineError {
     #[error("Failed to build proposal: {0}")]
-    ProposalBuildError(String),
+    ProposalBuildError(Report),
     #[error("Transaction submission failed")]
     TransactionError
 }
@@ -371,6 +370,7 @@ where
         let provider = self.provider.clone();
         let pool_registry = self.pool_registry.clone();
         let uniswap_pools = self.uniswap_pools.clone();
+        let matching = self.matching_engine.clone();
 
         async move {
             if let ConsensusState::Finalization(finalization) = &mut new_state {
@@ -389,27 +389,26 @@ where
 
                         Some((*key, (token_a, token_b, snapshot, entry.store_index as u16)))
                     })
-                    .collect();
+                    .collect::<HashMap<_, _>>();
 
                 let (proposal, timer) = async_time_fn(|| async {
-                    match self
-                        .matching_engine
-                        .solve_pools(pre_proposals.clone(), pool_snapshots)
+                    match matching
+                        .solve_pools(pre_proposals.clone(), pool_snapshots.clone())
                         .await
                     {
                         Ok((solutions, gas_info)) => {
                             let proposal =
                                 signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);
-                            Ok(proposal)
+                            Ok((proposal, gas_info))
                         }
                         Err(err) => Err(RoundStateMachineError::ProposalBuildError(err))
                     }
                 })
                 .await;
                 metrics.set_proposal_build_time(pre_proposal_height, timer);
-                let proposal = proposal?;
+                let (proposal, _gas_info) = proposal?;
 
-                let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
+                let bundle = AngstromBundle::from_proposal(&proposal, &pool_snapshots).unwrap();
                 let tx = TransactionRequest::default()
                     .with_to(Address::default())
                     .with_input(bundle.pade_encode());

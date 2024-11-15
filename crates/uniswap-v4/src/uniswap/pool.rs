@@ -109,11 +109,7 @@ where
             })
             .collect::<Vec<_>>();
 
-        Ok((
-            self.token_a,
-            self.token_b,
-            PoolSnapshot::new(liq_ranges, self.sqrt_price.into()).map_err(Into::into)
-        ))
+        Ok((self.token_a, self.token_b, PoolSnapshot::new(liq_ranges, self.sqrt_price.into())?))
     }
 
     pub async fn initialize<T: Transport + Clone, N: Network>(

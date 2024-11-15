@@ -1390,6 +1390,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml",
+ "uniswap-v4",
  "validation",
 ]
 

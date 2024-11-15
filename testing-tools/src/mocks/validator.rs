@@ -7,6 +7,7 @@ use angstrom_types::{
     orders::OrderOrigin,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
+use eyre::OptionExt;
 use pade::PadeEncode;
 use parking_lot::Mutex;
 use validation::{
@@ -85,6 +86,10 @@ impl BundleValidatorHandle for MockValidator {
     async fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> eyre::Result<BundleResponse> {
         let e = bundle.pade_encode();
         let hash = keccak256(e);
-        self.bundle_res.lock().unwrap().remove(&hash)
+
+        self.bundle_res
+            .lock()
+            .remove(&hash)
+            .ok_or_eyre("mock validator could't find bundle")
     }
 }

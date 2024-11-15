@@ -27,10 +27,7 @@ use angstrom_types::{
     reth_db_wrapper::RethDbWrapper
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
-use matching_engine::cfmm::uniswap::{
-    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
-    pool_providers::canonical_state_adapter::CanonicalStateAdapter
-};
+use matching_engine::{manager::MatcherCommand, MatchingManager};
 use order_pool::{order_storage::OrderStorage, PoolConfig, PoolManagerUpdate};
 use reth::{
     api::NodeAddOns,
@@ -44,6 +41,10 @@ use reth_node_builder::FullNode;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
+};
+use uniswap_v4::uniswap::{
+    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
+    pool_providers::canonical_state_adapter::CanonicalStateAdapter
 };
 use validation::{
     common::TokenPriceGenerator,
@@ -88,7 +89,10 @@ pub struct StromHandles {
     pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
 
     pub consensus_tx_op: UnboundedMeteredSender<StromConsensusEvent>,
-    pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>
+    pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>,
+
+    pub matching_tx: Sender<MatcherCommand>,
+    pub matching_rx: Receiver<MatcherCommand>
 }
 
 impl StromHandles {
@@ -102,6 +106,7 @@ impl StromHandles {
 
 pub fn initialize_strom_handles() -> StromHandles {
     let (eth_tx, eth_rx) = channel(100);
+    let (matching_tx, matching_rx) = channel(100);
     let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
     let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
     let (orderpool_tx, orderpool_rx) = unbounded_channel();
@@ -120,7 +125,9 @@ pub fn initialize_strom_handles() -> StromHandles {
         validator_rx,
         pool_manager_tx,
         consensus_tx_op,
-        consensus_rx_op
+        consensus_rx_op,
+        matching_tx,
+        matching_rx
     }
 }
 
@@ -195,6 +202,8 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         handles.validator_rx
     );
 
+    let validation_handle = ValidationClient(handles.validator_tx.clone());
+
     let network_handle = network_builder
         .with_pool_manager(handles.pool_tx)
         .with_consensus_manager(handles.consensus_tx_op)
@@ -219,7 +228,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     .unwrap();
 
     let _pool_handle = PoolManagerBuilder::new(
-        ValidationClient(handles.validator_tx.clone()),
+        validation_handle.clone(),
         Some(order_storage.clone()),
         network_handle.clone(),
         eth_handle.subscribe_network(),
@@ -243,6 +252,9 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         AngstromValidator::new(PeerId::default(), 300),
     ];
 
+    // spinup matching engine
+    let matching_handle = MatchingManager::spawn(executor.clone(), validation_handle.clone());
+
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
@@ -255,8 +267,10 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         block_height,
         uni_ang_registry,
         uniswap_pools.clone(),
-        provider
+        provider,
+        matching_handle
     );
+
     let _consensus_handle = executor.spawn_critical("consensus", Box::pin(manager));
 }
 

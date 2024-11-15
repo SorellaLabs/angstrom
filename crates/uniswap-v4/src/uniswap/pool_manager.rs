@@ -77,7 +77,7 @@ where
         self.pools
             .iter()
             .filter_map(|(key, pool)| {
-                Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?))
+                Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?.2))
             })
             .collect()
     }

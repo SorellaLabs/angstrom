@@ -183,9 +183,10 @@ where
     }
 }
 
-impl<T> Future for ConsensusManager<T>
+impl<T, Matching> Future for ConsensusManager<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     type Output = ();
 

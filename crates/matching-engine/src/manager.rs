@@ -81,17 +81,17 @@ impl MatchingEngineHandle for MatcherHandle {
 }
 
 pub struct MatchingManager<TP: TaskSpawner, V> {
-    futures:           FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Sync + Send + 'static>>>,
+    _futures:          FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Sync + Send + 'static>>>,
     validation_handle: V,
-    tp:                Arc<TP>
+    _tp:               Arc<TP>
 }
 
 impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V> {
     pub fn new(tp: TP, validation: V) -> Self {
         Self {
-            futures:           FuturesUnordered::default(),
+            _futures:          FuturesUnordered::default(),
             validation_handle: validation,
-            tp:                tp.into()
+            _tp:               tp.into()
         }
     }
 
@@ -210,7 +210,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         })
     }
 
-    async fn estimate_current_fills(
+    async fn _estimate_current_fills(
         &self,
         limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
@@ -257,7 +257,8 @@ pub async fn manager_thread<TP: TaskSpawner + 'static, V: BundleValidatorHandle>
     tp: Arc<TP>,
     validation_handle: V
 ) {
-    let manager = MatchingManager { futures: FuturesUnordered::default(), tp, validation_handle };
+    let manager =
+        MatchingManager { _futures: FuturesUnordered::default(), _tp: tp, validation_handle };
 
     while let Some(c) = input.recv().await {
         match c {

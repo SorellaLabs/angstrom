@@ -15,9 +15,9 @@ pub use token_pricing::*;
 /// Tools that are shared between both order and bundle validation. Also keeps
 /// it so all async future state is polled and up-kept in a single spot
 pub struct SharedTools {
-    token_pricing:       TokenPriceGenerator,
+    pub token_pricing:   TokenPriceGenerator,
     token_price_updater: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
-    thread_pool: KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>
+    pub thread_pool: KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>
 }
 
 impl SharedTools {
@@ -27,6 +27,10 @@ impl SharedTools {
         thread_pool: KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>
     ) -> Self {
         Self { token_price_updater, token_pricing, thread_pool }
+    }
+
+    pub fn token_pricing_ref(&self) -> &TokenPriceGenerator {
+        &self.token_pricing
     }
 
     pub fn thread_pool_mut(

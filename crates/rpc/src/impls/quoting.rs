@@ -6,8 +6,8 @@ use reth_tasks::TaskSpawner;
 use crate::{api::QuotingApiServer, types::GasEstimateFilter};
 
 pub struct QuotesApi<OrderPool, Spawner> {
-    pool:         OrderPool,
-    task_spawner: Spawner
+    _pool:         OrderPool,
+    _task_spawner: Spawner
 }
 
 #[async_trait::async_trait]
@@ -18,8 +18,8 @@ where
 {
     async fn subscribe_gas_estimates(
         &self,
-        pending: PendingSubscriptionSink,
-        filters: HashSet<GasEstimateFilter>
+        _pending: PendingSubscriptionSink,
+        _filters: HashSet<GasEstimateFilter>
     ) -> jsonrpsee::core::SubscriptionResult {
         Ok(())
     }

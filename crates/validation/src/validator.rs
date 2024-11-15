@@ -66,7 +66,12 @@ where
                 self.utils.thread_pool_mut()
             ),
             ValidationRequest::Bundle { sender, bundle } => {
-                todo!()
+                self.bundle_validator.simulate_bundle(
+                    sender,
+                    bundle,
+                    &self.utils.token_pricing,
+                    &mut self.utils.thread_pool
+                );
             }
             ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
                 self.order_validator

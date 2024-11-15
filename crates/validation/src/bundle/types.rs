@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use alloy::primitives::{Address, U256};
+use angstrom_types::contract_payloads::angstrom::AngstromBundle;
 
 #[derive(Debug, Clone)]
 pub struct BundleResponse {

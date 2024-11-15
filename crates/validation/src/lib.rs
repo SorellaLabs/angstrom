@@ -10,9 +10,11 @@ use std::{
 
 use alloy::primitives::Address;
 use angstrom_types::{
-    contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice
+    contract_payloads::angstrom::{AngstromBundle, AngstromPoolConfigStore},
+    pair_with_price::PairsWithPrice
 };
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
+use bundle::BundleResponse;
 use futures::StreamExt;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use order::state::{db_state_utils::StateFetchUtils, pools::PoolsTracker};
@@ -145,6 +147,8 @@ where
     (ValidationClient(tx), revm_lru)
 }
 
-pub trait BundleValidator: Send + Sync + Clone + Unpin + 'static {}
+pub trait BundleValidator: Send + Sync + Clone + Unpin + 'static {
+    fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> BundleResponse {}
+}
 
 impl BundleValidator for ValidationClient {}

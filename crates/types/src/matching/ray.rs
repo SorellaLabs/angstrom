@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Deref, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Deref, Mul, Sub, SubAssign};
 
 use alloy::primitives::{aliases::U320, Uint, U256, U512};
 use malachite::{
@@ -57,6 +57,19 @@ impl Add<usize> for Ray {
 impl AddAssign for Ray {
     fn add_assign(&mut self, rhs: Self) {
         *self = Self(self.0 + rhs.0);
+    }
+}
+impl Mul for Ray {
+    type Output = Ray;
+
+    #[allow(clippy::suspicious_arithmetic_impl)]
+    fn mul(self, rhs: Self) -> Self::Output {
+        let mult: U512 = self.widening_mul(rhs.0);
+        // div by 1e27
+        let out = (mult / U512::from(1e27)).into_limbs();
+
+        let buf = [out[4], out[5], out[6], out[7]];
+        Ray::from(U256::from_limbs(buf))
     }
 }
 

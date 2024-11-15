@@ -406,9 +406,11 @@ where
                 })
                 .await;
                 metrics.set_proposal_build_time(pre_proposal_height, timer);
-                let (proposal, _gas_info) = proposal?;
+                let (proposal, gas_info) = proposal?;
 
-                let bundle = AngstromBundle::from_proposal(&proposal, &pool_snapshots).unwrap();
+                let bundle =
+                    AngstromBundle::from_proposal(&proposal, gas_info, &pool_snapshots).unwrap();
+
                 let tx = TransactionRequest::default()
                     .with_to(Address::default())
                     .with_input(bundle.pade_encode());

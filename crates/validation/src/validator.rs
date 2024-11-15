@@ -1,12 +1,12 @@
 use std::{fmt::Debug, task::Poll};
 
 use alloy::primitives::{Address, B256};
-use angstrom_types::contract_payloads::angstrom::AngstromBundle;
+use angstrom_types::contract_payloads::angstrom::{AngstromBundle, BundleGasDetails};
 use futures_util::{Future, FutureExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    bundle::{BundleResponse, BundleValidator},
+    bundle::BundleValidator,
     common::SharedTools,
     order::{
         order_validator::OrderValidator,
@@ -21,7 +21,7 @@ pub enum ValidationRequest {
     /// gas cost has be delegated to each user order. ensures we won't have a
     /// failure.
     Bundle {
-        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleResponse>>,
+        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleGasDetails>>,
         bundle: AngstromBundle
     },
     NewBlock {

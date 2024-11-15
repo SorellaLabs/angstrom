@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use alloy::primitives::Address;
 use angstrom_types::{
     consensus::PreProposal,
+    contract_payloads::angstrom::BundleGasDetails,
     matching::uniswap::PoolSnapshot,
     orders::PoolSolution,
     primitive::PoolId,
@@ -10,7 +11,6 @@ use angstrom_types::{
 };
 use book::OrderBook;
 use futures_util::future::BoxFuture;
-use validation::bundle::BundleResponse;
 
 pub mod book;
 pub mod manager;
@@ -25,7 +25,7 @@ pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
         &self,
         preproposals: Vec<PreProposal>,
         pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
-    ) -> BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleResponse)>>;
+    ) -> BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>;
 }
 
 pub fn build_book(

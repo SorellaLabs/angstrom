@@ -6,8 +6,8 @@ use std::{
 
 use alloy_primitives::Address;
 use angstrom_types::{
-    consensus::{PreProposal, Proposal},
-    contract_payloads::angstrom::AngstromBundle,
+    consensus::PreProposal,
+    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     matching::{match_estimate_response::BundleEstimate, uniswap::PoolSnapshot},
     orders::PoolSolution,
     primitive::PoolId,
@@ -18,6 +18,7 @@ use angstrom_types::{
 };
 use futures::{stream::FuturesUnordered, Future};
 use futures_util::FutureExt;
+use itertools::Itertools;
 use reth_tasks::TaskSpawner;
 use tokio::{
     sync::{
@@ -26,7 +27,7 @@ use tokio::{
     },
     task::JoinSet
 };
-use validation::bundle::{BundleResponse, BundleValidatorHandle};
+use validation::bundle::BundleValidatorHandle;
 
 use crate::{
     book::OrderBook,
@@ -39,7 +40,7 @@ pub enum MatcherCommand {
     BuildProposal(
         Vec<PreProposal>,
         HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>,
-        oneshot::Sender<eyre::Result<(Vec<PoolSolution>, BundleResponse)>>
+        oneshot::Sender<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>
     ),
     EstimateGasPerPool {
         limit:    Vec<OrderWithStorageData<GroupedVanillaOrder>>,
@@ -70,7 +71,7 @@ impl MatchingEngineHandle for MatcherHandle {
         &self,
         preproposals: Vec<PreProposal>,
         pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
-    ) -> futures_util::future::BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleResponse)>> {
+    ) -> futures_util::future::BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> {
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
             self.send_request(rx, MatcherCommand::BuildProposal(preproposals, pools, tx))
@@ -153,7 +154,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         &self,
         preproposals: Vec<PreProposal>,
         pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
-    ) -> eyre::Result<(Vec<PoolSolution>, BundleResponse)> {
+    ) -> eyre::Result<(Vec<PoolSolution>, BundleGasDetails)> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
         let books = Self::build_books(&preproposals, &pool_snapshots);
@@ -186,9 +187,14 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         }
 
         // generate bundle without final gas known.
-        let proposal =
-            Proposal { solutions: solutions.clone(), preproposals, ..Default::default() };
-        let bundle = AngstromBundle::from_proposal(&proposal, &pool_snapshots)?;
+        let bundle = AngstromBundle::for_gas_finalization(
+            preproposals
+                .iter()
+                .flat_map(|pre| pre.limit.clone())
+                .collect_vec(),
+            solutions.clone(),
+            &pool_snapshots
+        )?;
 
         let gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
 
@@ -238,15 +244,8 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
             }
         }
 
-        // generate dummy preproposal
-        let pre = PreProposal {
-            searcher: searcher_orders.values().cloned().collect(),
-            limit,
-            ..Default::default()
-        };
-
-        let proposal = Proposal { solutions, preproposals: vec![pre], ..Default::default() };
-        let bundle = AngstromBundle::from_proposal(&proposal, &pool_snapshots)?;
+        let bundle =
+            AngstromBundle::for_gas_finalization(limit, solutions.clone(), &pool_snapshots)?;
         let _gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
 
         todo!()

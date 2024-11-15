@@ -56,9 +56,13 @@ impl TokenPriceGenerator {
 
                 async move {
                     let mut queue = VecDeque::new();
-                    let pool_read = pool.read().unwrap();
-                    let data_loader = pool_read.data_loader();
-                    drop(pool_read);
+                    // scoping
+                    let data_loader = {
+                        let pool_read = pool.read().unwrap();
+                        let data_loader = pool_read.data_loader();
+                        drop(pool_read);
+                        data_loader
+                    };
 
                     for block_number in current_block - BLOCKS_TO_AVG_PRICE..=current_block {
                         let pool_data = data_loader

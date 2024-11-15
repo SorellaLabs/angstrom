@@ -1,7 +1,7 @@
 use std::{fmt::Debug, pin::Pin, sync::Arc};
 
-use alloy::sol_types::SolCall;
-use angstrom_types::contract_payloads::angstrom::AngstromBundle;
+use alloy::{primitives::Address, sol_types::SolCall};
+use angstrom_types::contract_payloads::angstrom::{AngstromBundle, BundleGasDetails};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use eyre::eyre;
 use futures::{Future, FutureExt};
@@ -10,10 +10,6 @@ use revm::primitives::{EnvWithHandlerCfg, TxKind};
 use tokio::runtime::Handle;
 
 use crate::common::TokenPriceGenerator;
-
-pub mod types;
-use alloy::primitives::Address;
-pub use types::*;
 
 pub mod validator;
 pub use validator::*;
@@ -37,7 +33,7 @@ where
 
     pub fn simulate_bundle(
         &self,
-        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleResponse>>,
+        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleGasDetails>>,
         bundle: AngstromBundle,
         price_gen: &TokenPriceGenerator,
         thread_pool: &mut KeySplitThreadpool<
@@ -85,7 +81,7 @@ where
                         return
                     }
 
-                    let res = BundleResponse::new(conversion_lookup, result.result.gas_used());
+                    let res = BundleGasDetails::new(conversion_lookup, result.result.gas_used());
                     let _ = sender.send(Ok(res));
                 }
             }

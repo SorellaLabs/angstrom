@@ -10,7 +10,7 @@ use angstrom_types::{
 };
 use eyre::Error;
 
-use crate::cfmm::uniswap::{pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader};
+use crate::uniswap::{pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader};
 // Basically only tests in here now
 pub fn calculate_reward(
     tob: &OrderWithStorageData<TopOfBlockOrder>,

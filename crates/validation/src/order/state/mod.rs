@@ -4,12 +4,12 @@ use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256};
 use angstrom_types::sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders};
 use db_state_utils::StateFetchUtils;
-use matching_engine::cfmm::uniswap::{
+use parking_lot::RwLock;
+use pools::PoolsTracker;
+use uniswap_v4::uniswap::{
     pool_manager::SyncedUniswapPools,
     tob::{calculate_reward, get_market_snapshot}
 };
-use parking_lot::RwLock;
-use pools::PoolsTracker;
 
 use super::{OrderValidation, OrderValidationResults};
 

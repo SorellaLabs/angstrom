@@ -6,8 +6,8 @@ use std::{
 use alloy::primitives::{Address, BlockNumber, B256};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::Future;
-use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use tokio::runtime::Handle;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use super::{
     sim::SimValidation,

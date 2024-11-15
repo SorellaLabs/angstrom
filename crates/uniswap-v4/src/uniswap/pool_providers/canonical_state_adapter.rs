@@ -9,7 +9,7 @@ use futures_util::StreamExt;
 use reth_provider::CanonStateNotification;
 use tokio::sync::{broadcast, RwLock};
 
-use crate::cfmm::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
+use crate::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 
 pub struct CanonicalStateAdapter {
     canon_state_notifications: broadcast::Receiver<CanonStateNotification>,

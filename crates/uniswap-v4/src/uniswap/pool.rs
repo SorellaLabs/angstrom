@@ -17,7 +17,7 @@ use uniswap_v3_math::{
 };
 
 use super::pool_data_loader::PoolData;
-use crate::cfmm::uniswap::{
+use crate::uniswap::{
     i32_to_i24,
     pool_data_loader::{DataLoader, ModifyPositionEvent, PoolDataLoader, TickData},
     ConversionError

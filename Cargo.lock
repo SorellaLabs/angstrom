@@ -11364,6 +11364,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
+name = "uniswap-v4"
+version = "0.1.0"
+dependencies = [
+ "alloy 0.4.2",
+ "alloy-primitives 0.8.9",
+ "angstrom-types",
+ "angstrom-utils",
+ "arraydeque",
+ "clap",
+ "criterion",
+ "divan",
+ "eyre",
+ "futures",
+ "futures-util",
+ "itertools 0.12.1",
+ "malachite",
+ "malachite-q",
+ "num-bigfloat",
+ "once_cell",
+ "pade",
+ "pade-macro",
+ "rand",
+ "rand_distr",
+ "reth-provider",
+ "reth-tasks",
+ "testing-tools",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uniswap_v3_math",
+]
+
+[[package]]
 name = "uniswap_v3_math"
 version = "0.5.2"
 source = "git+https://github.com/0xKitsune/uniswap-v3-math.git#2711e1619421956e5d0bbdaeae115b325258669e"
@@ -11469,7 +11503,6 @@ dependencies = [
  "futures",
  "futures-util",
  "hex-literal",
- "matching-engine",
  "pade",
  "parking_lot 0.12.3",
  "pin-project",
@@ -11498,6 +11531,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "uniswap-v4",
 ]
 
 [[package]]

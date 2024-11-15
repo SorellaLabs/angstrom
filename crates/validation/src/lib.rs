@@ -10,16 +10,15 @@ use std::{
 
 use alloy::primitives::Address;
 use angstrom_types::{
-    contract_payloads::angstrom::AngstromPoolConfigStore,
-    pair_with_price::PairsWithPrice
+    contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice
 };
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use bundle::BundleValidator;
 use common::SharedTools;
 use futures::StreamExt;
-use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use reth_provider::CanonStateNotificationStream;
 use tokio::sync::mpsc::UnboundedReceiver;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validator::Validator;
 
 use crate::{

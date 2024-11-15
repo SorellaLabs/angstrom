@@ -24,7 +24,7 @@ use tokio::{
 };
 
 use super::pool::PoolError;
-use crate::cfmm::uniswap::{
+use crate::uniswap::{
     pool::EnhancedUniswapPool,
     pool_data_loader::{DataLoader, PoolDataLoader},
     pool_providers::PoolManagerProvider

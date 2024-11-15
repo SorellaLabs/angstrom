@@ -17,7 +17,6 @@ pub mod account;
 pub mod config;
 pub mod db_state_utils;
 pub mod pools;
-pub mod token_pricing;
 
 /// State validation is all validation that requires reading from the Ethereum
 /// database, these operations are:

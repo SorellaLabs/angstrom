@@ -14,7 +14,8 @@ use angstrom_types::{
     pair_with_price::PairsWithPrice
 };
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
-use bundle::BundleResponse;
+use bundle::{BundleResponse, BundleValidator};
+use common::{token_pricing, SharedTools};
 use futures::StreamExt;
 use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use order::state::{db_state_utils::StateFetchUtils, pools::PoolsTracker};
@@ -23,13 +24,11 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use validator::Validator;
 
 use crate::{
+    common::TokenPriceGenerator,
     order::{
         order_validator::OrderValidator,
         sim::SimValidation,
-        state::{
-            db_state_utils::FetchUtils, pools::AngstromPoolsTracker,
-            token_pricing::TokenPriceGenerator
-        }
+        state::{db_state_utils::FetchUtils, pools::AngstromPoolsTracker}
     },
     validator::{ValidationClient, ValidationRequest}
 };
@@ -75,18 +74,15 @@ pub fn init_validation<
         )
         .boxed();
 
-        let order_validator = rt.block_on(OrderValidator::new(
-            sim,
-            current_block,
-            pools,
-            fetch,
-            uniswap_pools,
-            thread_pool,
-            price_generator,
-            update_stream
-        ));
+        let order_validator =
+            rt.block_on(OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools));
 
-        rt.block_on(async { Validator::new(validator_rx, order_validator).await })
+        let bundle_validator = BundleValidator::new(db.clone());
+        let shared_utils = SharedTools::new(price_generator, update_stream, thread_pool);
+
+        rt.block_on(async {
+            Validator::new(validator_rx, order_validator, bundle_validator, shared_utils).await
+        })
     });
 }
 
@@ -130,25 +126,14 @@ where
 
         let sim = SimValidation::new(task_db, None);
 
-        let order_validator = rt.block_on(OrderValidator::new(
-            sim,
-            current_block,
-            pool,
-            state,
-            uniswap_pools,
-            thread_pool,
-            price_generator,
-            update_stream
-        ));
+        let order_validator =
+            rt.block_on(OrderValidator::new(sim, current_block, pool, state, uniswap_pools));
 
-        rt.block_on(Validator::new(rx, order_validator))
+        let bundle_validator = BundleValidator::new(db.clone());
+        let shared_utils = SharedTools::new(token_pricing, update_stream, thread_pool);
+
+        rt.block_on(Validator::new(rx, order_validator, bundle_validator, shared_utils))
     });
 
     (ValidationClient(tx), revm_lru)
 }
-
-pub trait BundleValidator: Send + Sync + Clone + Unpin + 'static {
-    fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> BundleResponse {}
-}
-
-impl BundleValidator for ValidationClient {}

@@ -6,7 +6,8 @@ use futures_util::{Future, FutureExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    bundle::BundleResponse,
+    bundle::{BundleResponse, BundleValidator},
+    common::SharedTools,
     order::{
         order_validator::OrderValidator,
         state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
@@ -35,8 +36,10 @@ pub enum ValidationRequest {
 pub struct ValidationClient(pub UnboundedSender<ValidationRequest>);
 
 pub struct Validator<DB, Pools, Fetch> {
-    rx:              UnboundedReceiver<ValidationRequest>,
-    order_validator: OrderValidator<DB, Pools, Fetch>
+    rx:               UnboundedReceiver<ValidationRequest>,
+    order_validator:  OrderValidator<DB, Pools, Fetch>,
+    bundle_validator: BundleValidator<DB>,
+    utils:            SharedTools
 }
 
 impl<DB, Pools, Fetch> Validator<DB, Pools, Fetch>
@@ -48,14 +51,18 @@ where
 {
     pub fn new(
         rx: UnboundedReceiver<ValidationRequest>,
-        order_validator: OrderValidator<DB, Pools, Fetch>
+        order_validator: OrderValidator<DB, Pools, Fetch>,
+        bundle_validator: BundleValidator<DB>,
+        utils: SharedTools
     ) -> Self {
-        Self { order_validator, rx }
+        Self { order_validator, rx, utils, bundle_validator }
     }
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
-            ValidationRequest::Order(order) => self.order_validator.validate_order(order),
+            ValidationRequest::Order(order) => self
+                .order_validator
+                .validate_order(order, self.utils.token_pricing_snapshot()),
             ValidationRequest::Bundle { sender, bundle } => {
                 todo!()
             }

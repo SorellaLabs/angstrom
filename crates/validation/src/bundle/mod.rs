@@ -15,7 +15,7 @@ where
     DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync,
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
-    fn new(db: DB) -> Self {
+    pub fn new(db: DB) -> Self {
         Self { db }
     }
 }

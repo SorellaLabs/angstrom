@@ -364,8 +364,8 @@ pub mod test {
         let pair = vec![pair];
         let assets = vec![asset0, asset1];
 
-        let finalized_user_order = UserOrder::from_internal_order(&user_order, &outcome, 0);
-        let finalized_tob = TopOfBlockOrder::of(&t, 0);
+        let finalized_user_order = UserOrder::from_internal_order_max_gas(&user_order, &outcome, 0);
+        let finalized_tob = TopOfBlockOrder::of_max_gas(&t, 0);
 
         let order_hashes = vec![
             finalized_user_order.order_hash(&pair, &assets, 0),

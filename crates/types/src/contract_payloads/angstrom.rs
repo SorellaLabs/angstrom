@@ -934,7 +934,7 @@ impl AngstromBundle {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct BundleGasDetails {
     /// a map (sorted tokens) of how much of token0 in gas is needed per unit of
     /// gas

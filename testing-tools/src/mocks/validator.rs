@@ -7,6 +7,7 @@ use angstrom_types::{
     orders::OrderOrigin,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
+use eyre::OptionExt;
 use pade::PadeEncode;
 use parking_lot::Mutex;
 use validation::{

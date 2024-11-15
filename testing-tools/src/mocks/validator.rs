@@ -3,15 +3,14 @@ use std::{collections::HashMap, sync::Arc};
 use alloy_primitives::{keccak256, Address, FixedBytes};
 use angstrom_types::{
     self,
-    contract_payloads::angstrom::AngstromBundle,
+    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::OrderOrigin,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
-use eyre::OptionExt;
 use pade::PadeEncode;
 use parking_lot::Mutex;
 use validation::{
-    bundle::{BundleResponse, BundleValidatorHandle},
+    bundle::BundleValidatorHandle,
     order::{GasEstimationFuture, OrderValidationResults, OrderValidatorHandle}
 };
 
@@ -19,7 +18,7 @@ use validation::{
 #[derive(Debug, Clone, Default)]
 pub struct MockValidator {
     pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationResults>>>,
-    pub bundle_res:   Arc<Mutex<HashMap<FixedBytes<32>, BundleResponse>>>
+    pub bundle_res:   Arc<Mutex<HashMap<FixedBytes<32>, BundleGasDetails>>>
 }
 
 macro_rules! inserts {
@@ -81,7 +80,7 @@ impl OrderValidatorHandle for MockValidator {
 }
 
 impl BundleValidatorHandle for MockValidator {
-    async fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> eyre::Result<BundleResponse> {
+    async fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> eyre::Result<BundleGasDetails> {
         let e = bundle.pade_encode();
         let hash = keccak256(e);
 

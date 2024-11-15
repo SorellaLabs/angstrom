@@ -10,6 +10,7 @@ pub mod grouped_orders;
 
 /// The capability of all default orders.
 pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
+    fn max_gas_token_0(&self) -> u128;
     /// defines  
     /// Hash of the order
     fn order_hash(&self) -> TxHash;

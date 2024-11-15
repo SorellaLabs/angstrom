@@ -12,6 +12,7 @@ exclude.workspace = true
 consensus.workspace = true
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
+uniswap-v4.workspace =true
 angstrom-network.workspace = true
 angstrom-eth.workspace = true
 angstrom-rpc.workspace = true

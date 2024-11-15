@@ -9,7 +9,7 @@ use alloy::{
 use alloy_primitives::Log;
 use futures_util::{FutureExt, StreamExt};
 
-use crate::cfmm::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
+use crate::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 
 pub struct ProviderAdapter<P, T, N>
 where

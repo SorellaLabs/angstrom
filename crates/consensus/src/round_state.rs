@@ -18,47 +18,38 @@ use angstrom_network::{manager::StromConsensusEvent, StromMessage};
 use angstrom_types::{
     consensus::{PreProposal, Proposal},
     contract_payloads::angstrom::{AngstromBundle, UniswapAngstromRegistry},
-    matching::uniswap::PoolSnapshot,
-    orders::{OrderSet, PoolSolution},
-    primitive::{PeerId, PoolId},
+    orders::OrderSet,
+    primitive::PeerId,
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
     }
 };
 use angstrom_utils::timer::async_time_fn;
+use eyre::Report;
 use futures::{future::BoxFuture, Future, Stream, StreamExt};
 use itertools::Itertools;
-use matching_engine::{
-    cfmm::uniswap::{pool_manager::SyncedUniswapPools, tob::get_market_snapshot},
-    MatchingManager
-};
+use matching_engine::MatchingEngineHandle;
 use order_pool::order_storage::{OrderStorage, OrderStorageNotification};
 use pade::PadeEncode;
-use reth_tasks::TokioTaskExecutor;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::wrappers::BroadcastStream;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{AngstromValidator, Signer};
 
 #[derive(Error, Debug)]
 pub enum RoundStateMachineError {
     #[error("Failed to build proposal: {0}")]
-    ProposalBuildError(String),
+    ProposalBuildError(Report),
     #[error("Transaction submission failed")]
     TransactionError
 }
 
-async fn build_proposal(
-    pre_proposals: Vec<PreProposal>,
-    pool_snapshot: HashMap<PoolId, PoolSnapshot>
-) -> Result<Vec<PoolSolution>, String> {
-    MatchingManager::<TokioTaskExecutor>::build_proposal(pre_proposals, pool_snapshot).await
-}
-
-pub struct RoundStateMachine<T> {
+pub struct RoundStateMachine<T, Matching> {
     current_state:     ConsensusState,
+    matching_engine:   Matching,
     signer:            Signer,
     round_leader:      PeerId,
     validators:        Vec<AngstromValidator>,
@@ -72,9 +63,10 @@ pub struct RoundStateMachine<T> {
     provider:          Arc<Pin<Box<dyn Provider<T>>>>
 }
 
-impl<T> RoundStateMachine<T>
+impl<T, Matching> RoundStateMachine<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -86,7 +78,8 @@ where
         metrics: ConsensusMetricsWrapper,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: impl Provider<T> + 'static
+        provider: impl Provider<T> + 'static,
+        matching_engine: Matching
     ) -> Self {
         Self {
             current_state: Self::initial_state(block_height),
@@ -100,6 +93,7 @@ where
             metrics,
             transition_future: None,
             waker: None,
+            matching_engine,
             provider: Arc::new(Box::pin(provider))
         }
     }
@@ -376,6 +370,7 @@ where
         let provider = self.provider.clone();
         let pool_registry = self.pool_registry.clone();
         let uniswap_pools = self.uniswap_pools.clone();
+        let matching = self.matching_engine.clone();
 
         async move {
             if let ConsensusState::Finalization(finalization) = &mut new_state {
@@ -385,33 +380,37 @@ where
                     return Ok(new_state)
                 }
 
-                let (proposal, timer) = async_time_fn(|| async {
-                    let pool_snapshots = uniswap_pools
-                        .iter()
-                        .filter_map(|(key, pool)| {
-                            Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?))
-                        })
-                        .collect();
+                let pool_snapshots = uniswap_pools
+                    .iter()
+                    .filter_map(|(key, pool)| {
+                        let (token_a, token_b, snapshot) =
+                            pool.read().unwrap().fetch_pool_snapshot().ok()?;
+                        let entry = pool_registry.get_ang_entry(key)?;
 
-                    match build_proposal(pre_proposals.clone(), pool_snapshots).await {
-                        Ok(solutions) => {
+                        Some((*key, (token_a, token_b, snapshot, entry.store_index as u16)))
+                    })
+                    .collect::<HashMap<_, _>>();
+
+                let (proposal, timer) = async_time_fn(|| async {
+                    match matching
+                        .solve_pools(pre_proposals.clone(), pool_snapshots.clone())
+                        .await
+                    {
+                        Ok((solutions, gas_info)) => {
                             let proposal =
                                 signer.sign_proposal(pre_proposal_height, pre_proposals, solutions);
-                            Ok(proposal)
+                            Ok((proposal, gas_info))
                         }
                         Err(err) => Err(RoundStateMachineError::ProposalBuildError(err))
                     }
                 })
                 .await;
                 metrics.set_proposal_build_time(pre_proposal_height, timer);
-                let proposal = proposal?;
-                let pools = RoundStateMachine::<T>::build_pools_param(
-                    &proposal,
-                    pool_registry,
-                    uniswap_pools
-                );
+                let (proposal, gas_info) = proposal?;
 
-                let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
+                let bundle =
+                    AngstromBundle::from_proposal(&proposal, gas_info, &pool_snapshots).unwrap();
+
                 let tx = TransactionRequest::default()
                     .with_to(Address::default())
                     .with_input(bundle.pade_encode());
@@ -428,48 +427,12 @@ where
             Ok(new_state)
         }
     }
-
-    fn build_pools_param(
-        proposal: &Proposal,
-        pool_registry: UniswapAngstromRegistry,
-        uniswap_pools: SyncedUniswapPools
-    ) -> HashMap<PoolId, (Address, Address, PoolSnapshot, u16)> {
-        let mut result = HashMap::new();
-
-        for pool_id in proposal
-            .preproposals
-            .iter()
-            .flat_map(|p| p.limit.iter().map(|order| order.pool_id))
-            .collect::<HashSet<_>>()
-        {
-            if let Some(pool_key) = pool_registry.get_uni_pool(&pool_id) {
-                if let Some(entry) = pool_registry.get_ang_entry(&pool_id) {
-                    if let Some(pool_lock) = uniswap_pools.get(&pool_id) {
-                        let pool = pool_lock.read().unwrap();
-                        let pool_snapshot =
-                            get_market_snapshot(pool).expect("should not break now");
-
-                        result.insert(
-                            pool_id,
-                            (
-                                pool_key.currency0,
-                                pool_key.currency1,
-                                pool_snapshot,
-                                entry.store_index as u16
-                            )
-                        );
-                    }
-                }
-            }
-        }
-
-        result
-    }
 }
 
-impl<T> Stream for RoundStateMachine<T>
+impl<T, Matching> Stream for RoundStateMachine<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     type Item = Result<ConsensusState, RoundStateMachineError>;
 

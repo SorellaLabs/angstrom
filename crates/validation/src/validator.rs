@@ -1,17 +1,29 @@
 use std::{fmt::Debug, task::Poll};
 
 use alloy::primitives::{Address, B256};
+use angstrom_types::contract_payloads::angstrom::{AngstromBundle, BundleGasDetails};
 use futures_util::{Future, FutureExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::order::{
-    order_validator::OrderValidator,
-    state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
-    OrderValidationRequest, OrderValidationResults
+use crate::{
+    bundle::BundleValidator,
+    common::SharedTools,
+    order::{
+        order_validator::OrderValidator,
+        state::{db_state_utils::StateFetchUtils, pools::PoolsTracker},
+        OrderValidationRequest, OrderValidationResults
+    }
 };
 
 pub enum ValidationRequest {
     Order(OrderValidationRequest),
+    /// does two sims, One to fetch total gas used. Second is once
+    /// gas cost has be delegated to each user order. ensures we won't have a
+    /// failure.
+    Bundle {
+        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleGasDetails>>,
+        bundle: AngstromBundle
+    },
     NewBlock {
         sender:       tokio::sync::oneshot::Sender<OrderValidationResults>,
         block_number: u64,
@@ -24,8 +36,10 @@ pub enum ValidationRequest {
 pub struct ValidationClient(pub UnboundedSender<ValidationRequest>);
 
 pub struct Validator<DB, Pools, Fetch> {
-    rx:              UnboundedReceiver<ValidationRequest>,
-    order_validator: OrderValidator<DB, Pools, Fetch>
+    rx:               UnboundedReceiver<ValidationRequest>,
+    order_validator:  OrderValidator<DB, Pools, Fetch>,
+    bundle_validator: BundleValidator<DB>,
+    utils:            SharedTools
 }
 
 impl<DB, Pools, Fetch> Validator<DB, Pools, Fetch>
@@ -37,14 +51,23 @@ where
 {
     pub fn new(
         rx: UnboundedReceiver<ValidationRequest>,
-        order_validator: OrderValidator<DB, Pools, Fetch>
+        order_validator: OrderValidator<DB, Pools, Fetch>,
+        bundle_validator: BundleValidator<DB>,
+        utils: SharedTools
     ) -> Self {
-        Self { order_validator, rx }
+        Self { order_validator, rx, utils, bundle_validator }
     }
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
-            ValidationRequest::Order(order) => self.order_validator.validate_order(order),
+            ValidationRequest::Order(order) => self.order_validator.validate_order(
+                order,
+                self.utils.token_pricing_snapshot(),
+                self.utils.thread_pool_mut()
+            ),
+            ValidationRequest::Bundle { sender, bundle } => {
+                todo!()
+            }
             ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
                 self.order_validator
                     .on_new_block(block_number, orders, addresses);
@@ -73,6 +96,6 @@ where
             self.on_new_validation_request(req);
         }
 
-        self.order_validator.poll_unpin(cx)
+        self.utils.poll_unpin(cx)
     }
 }

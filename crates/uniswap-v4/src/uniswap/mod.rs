@@ -58,7 +58,7 @@ pub enum ConversionError {
 mod tests {
     use alloy_primitives::{aliases::I24, I256};
 
-    use crate::cfmm::uniswap::{i128_to_i256, i256_to_i128, i32_to_i24, MAX_I24, MIN_I24};
+    use crate::uniswap::{i128_to_i256, i256_to_i128, i32_to_i24, MAX_I24, MIN_I24};
 
     #[test]
     fn test_i256_to_i128_overflow() {

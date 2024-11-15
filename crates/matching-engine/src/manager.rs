@@ -4,8 +4,10 @@ use std::{
     sync::Arc
 };
 
+use alloy_primitives::Address;
 use angstrom_types::{
     consensus::PreProposal,
+    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     matching::{match_estimate_response::BundleEstimate, uniswap::PoolSnapshot},
     orders::PoolSolution,
     primitive::PoolId,
@@ -16,6 +18,7 @@ use angstrom_types::{
 };
 use futures::{stream::FuturesUnordered, Future};
 use futures_util::FutureExt;
+use itertools::Itertools;
 use reth_tasks::TaskSpawner;
 use tokio::{
     sync::{
@@ -24,6 +27,7 @@ use tokio::{
     },
     task::JoinSet
 };
+use validation::bundle::BundleValidatorHandle;
 
 use crate::{
     book::OrderBook,
@@ -35,13 +39,14 @@ use crate::{
 pub enum MatcherCommand {
     BuildProposal(
         Vec<PreProposal>,
-        HashMap<PoolId, PoolSnapshot>,
-        oneshot::Sender<Result<Vec<PoolSolution>, String>>
+        HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>,
+        oneshot::Sender<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>
     ),
     EstimateGasPerPool {
         limit:    Vec<OrderWithStorageData<GroupedVanillaOrder>>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        tx:       oneshot::Sender<BundleEstimate>
+        pools:    HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>,
+        tx:       oneshot::Sender<eyre::Result<BundleEstimate>>
     }
 }
 
@@ -65,8 +70,8 @@ impl MatchingEngineHandle for MatcherHandle {
     fn solve_pools(
         &self,
         preproposals: Vec<PreProposal>,
-        pools: HashMap<PoolId, PoolSnapshot>
-    ) -> futures_util::future::BoxFuture<Result<Vec<PoolSolution>, String>> {
+        pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+    ) -> futures_util::future::BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> {
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
             self.send_request(rx, MatcherCommand::BuildProposal(preproposals, pools, tx))
@@ -75,21 +80,26 @@ impl MatchingEngineHandle for MatcherHandle {
     }
 }
 
-pub struct MatchingManager<TP: TaskSpawner> {
-    futures: FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Sync + Send + 'static>>>,
-    tp:      Arc<TP>
+pub struct MatchingManager<TP: TaskSpawner, V> {
+    futures:           FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Sync + Send + 'static>>>,
+    validation_handle: V,
+    tp:                Arc<TP>
 }
 
-impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
-    pub fn new(tp: TP) -> Self {
-        Self { tp: tp.into(), futures: FuturesUnordered::default() }
+impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V> {
+    pub fn new(tp: TP, validation: V) -> Self {
+        Self {
+            futures:           FuturesUnordered::default(),
+            validation_handle: validation,
+            tp:                tp.into()
+        }
     }
 
-    pub fn spawn(tp: TP) -> MatcherHandle {
+    pub fn spawn(tp: TP, validation: V) -> MatcherHandle {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         let tp = Arc::new(tp);
 
-        let fut = manager_thread(rx, tp.clone()).boxed();
+        let fut = manager_thread(rx, tp.clone(), validation).boxed();
         tp.spawn_critical("matching_engine", fut);
 
         MatcherHandle { sender: tx }
@@ -110,14 +120,14 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
 
     pub fn build_non_proposal_books(
         limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
-        mut pool_snapshots: HashMap<PoolId, PoolSnapshot>
+        pool_snapshots: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> Vec<OrderBook> {
         let book_sources = Self::orders_sorted_by_pool_id(limit);
 
         book_sources
             .into_iter()
             .map(|(id, orders)| {
-                let amm = pool_snapshots.remove(&id);
+                let amm = pool_snapshots.get(&id).map(|value| value.2.clone());
                 build_book(id, amm, orders)
             })
             .collect()
@@ -125,7 +135,7 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
 
     pub fn build_books(
         preproposals: &[PreProposal],
-        mut pool_snapshots: HashMap<PoolId, PoolSnapshot>
+        pool_snapshots: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> Vec<OrderBook> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
@@ -134,19 +144,20 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
         book_sources
             .into_iter()
             .map(|(id, orders)| {
-                let amm = pool_snapshots.remove(&id);
+                let amm = pool_snapshots.get(&id).map(|v| v.2.clone());
                 build_book(id, amm, orders)
             })
             .collect()
     }
 
     pub async fn build_proposal(
+        &self,
         preproposals: Vec<PreProposal>,
-        pool_snapshots: HashMap<PoolId, PoolSnapshot>
-    ) -> Result<Vec<PoolSolution>, String> {
+        pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+    ) -> eyre::Result<(Vec<PoolSolution>, BundleGasDetails)> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
-        let books = Self::build_books(&preproposals, pool_snapshots);
+        let books = Self::build_books(&preproposals, &pool_snapshots);
 
         let searcher_orders: HashMap<PoolId, OrderWithStorageData<TopOfBlockOrder>> = preproposals
             .iter()
@@ -175,7 +186,19 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
             }
         }
 
-        Ok(solutions)
+        // generate bundle without final gas known.
+        let bundle = AngstromBundle::for_gas_finalization(
+            preproposals
+                .iter()
+                .flat_map(|pre| pre.limit.clone())
+                .collect_vec(),
+            solutions.clone(),
+            &pool_snapshots
+        )?;
+
+        let gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
+
+        Ok((solutions, gas_response))
     }
 
     pub fn orders_sorted_by_pool_id(
@@ -191,9 +214,9 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
         &self,
         limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pool_snapshots: HashMap<PoolId, PoolSnapshot>
-    ) -> BundleEstimate {
-        let books = Self::build_non_proposal_books(limit, pool_snapshots);
+        pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+    ) -> eyre::Result<BundleEstimate> {
+        let books = Self::build_non_proposal_books(limit.clone(), &pool_snapshots);
 
         let searcher_orders: HashMap<PoolId, OrderWithStorageData<TopOfBlockOrder>> =
             searcher.into_iter().fold(HashMap::new(), |mut acc, order| {
@@ -213,6 +236,7 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
                 SimpleCheckpointStrategy::run(&b).map(|s| s.solution(searcher))
             });
         });
+
         let mut solutions = Vec::new();
         while let Some(res) = solution_set.join_next().await {
             if let Ok(Some(r)) = res {
@@ -220,24 +244,29 @@ impl<TP: TaskSpawner + 'static> MatchingManager<TP> {
             }
         }
 
+        let bundle =
+            AngstromBundle::for_gas_finalization(limit, solutions.clone(), &pool_snapshots)?;
+        let _gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
+
         todo!()
-        // Ok(solutions)
     }
 }
 
-pub async fn manager_thread<TP: TaskSpawner + 'static>(
+pub async fn manager_thread<TP: TaskSpawner + 'static, V: BundleValidatorHandle>(
     mut input: Receiver<MatcherCommand>,
-    tp: Arc<TP>
+    tp: Arc<TP>,
+    validation_handle: V
 ) {
-    let manager = MatchingManager { futures: FuturesUnordered::default(), tp };
+    let manager = MatchingManager { futures: FuturesUnordered::default(), tp, validation_handle };
 
     while let Some(c) = input.recv().await {
         match c {
             MatcherCommand::BuildProposal(p, snapshot, r) => {
-                r.send(MatchingManager::<TP>::build_proposal(p, snapshot).await)
-                    .unwrap();
+                r.send(manager.build_proposal(p, snapshot).await).unwrap();
             }
-            MatcherCommand::EstimateGasPerPool { limit, searcher, tx } => {}
+            MatcherCommand::EstimateGasPerPool { .. } => {
+                todo!()
+            }
         }
     }
 }
@@ -249,23 +278,25 @@ mod tests {
     use alloy::primitives::FixedBytes;
     use angstrom_types::consensus::PreProposal;
     use reth_tasks::TokioTaskExecutor;
-    use testing_tools::type_generator::consensus::preproposal::PreproposalBuilder;
+    use testing_tools::{
+        mocks::validator::MockValidator, type_generator::consensus::preproposal::PreproposalBuilder
+    };
 
     use super::MatchingManager;
 
     #[tokio::test]
     async fn can_build_proposal() {
         let preproposals = vec![];
-        let _ =
-            MatchingManager::<TokioTaskExecutor>::build_proposal(preproposals, HashMap::default())
-                .await
-                .unwrap();
+        let manager = MatchingManager::new(TokioTaskExecutor::default(), MockValidator::default());
+        let _ = manager
+            .build_proposal(preproposals, HashMap::default())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn will_combine_preproposals() {
-        let task = TokioTaskExecutor::default();
-        let manager = MatchingManager::new(task);
+        let manager = MatchingManager::new(TokioTaskExecutor::default(), MockValidator::default());
         let preproposals: Vec<PreProposal> = (0..3)
             .map(|_| {
                 PreproposalBuilder::new()
@@ -280,11 +311,12 @@ mod tests {
             .flat_map(|p| p.limit.iter().map(|o| o.order_id.hash))
             .collect();
 
-        let res =
-            MatchingManager::<TokioTaskExecutor>::build_proposal(preproposals, HashMap::default())
-                .await
-                .unwrap();
+        let res = manager
+            .build_proposal(preproposals, HashMap::default())
+            .await
+            .unwrap();
         let orders_in_solution: HashSet<FixedBytes<32>> = res
+            .0
             .iter()
             .flat_map(|p| p.limit.iter().map(|o| o.id.hash))
             .collect();

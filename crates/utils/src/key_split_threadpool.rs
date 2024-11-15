@@ -39,6 +39,15 @@ where
         }
     }
 
+    pub fn spawn_raw(&mut self, fut: F) {
+        let tp_cloned = self.tp.clone();
+        let fut = Box::pin(async move { tp_cloned.spawn(fut).await }) as PendingFut<F>;
+
+        self.pending_results.push(fut);
+        // if a waker is scheduled. insure we pool
+        self.waker.as_ref().inspect(|i| i.wake_by_ref());
+    }
+
     pub fn add_new_task(&mut self, key: K, fut: F) {
         // grab semaphore
         let permit = self

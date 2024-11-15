@@ -1,8 +1,9 @@
-#![feature(iter_map_windows)]
 use std::collections::{HashMap, HashSet};
 
+use alloy::primitives::Address;
 use angstrom_types::{
     consensus::PreProposal,
+    contract_payloads::angstrom::BundleGasDetails,
     matching::uniswap::PoolSnapshot,
     orders::PoolSolution,
     primitive::PoolId,
@@ -12,7 +13,6 @@ use book::OrderBook;
 use futures_util::future::BoxFuture;
 
 pub mod book;
-pub mod cfmm;
 pub mod manager;
 pub mod matcher;
 pub mod simulation;
@@ -24,8 +24,8 @@ pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
     fn solve_pools(
         &self,
         preproposals: Vec<PreProposal>,
-        pools: HashMap<PoolId, PoolSnapshot>
-    ) -> BoxFuture<Result<Vec<PoolSolution>, String>>;
+        pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+    ) -> BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>;
 }
 
 pub fn build_book(

@@ -4,12 +4,9 @@ use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256};
 use angstrom_types::sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders};
 use db_state_utils::StateFetchUtils;
-use matching_engine::cfmm::uniswap::{
-    pool_manager::SyncedUniswapPools,
-    tob::{calculate_reward, get_market_snapshot}
-};
 use parking_lot::RwLock;
 use pools::PoolsTracker;
+use uniswap_v4::uniswap::{pool_manager::SyncedUniswapPools, tob::calculate_reward};
 
 use super::{OrderValidation, OrderValidationResults};
 
@@ -17,7 +14,6 @@ pub mod account;
 pub mod config;
 pub mod db_state_utils;
 pub mod pools;
-pub mod token_pricing;
 
 /// State validation is all validation that requires reading from the Ethereum
 /// database, these operations are:
@@ -106,8 +102,9 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
                         .get(&pool_address)
                         .map(|pool| pool.read().unwrap())
                         .unwrap();
-                    let market_snapshot = get_market_snapshot(pool).unwrap();
+                    let market_snapshot = pool.fetch_pool_snapshot().map(|v| v.2).unwrap();
                     let rewards = calculate_reward(&tob_order, &market_snapshot).unwrap();
+
                     order_with_storage.tob_reward = rewards.total_reward;
                 }
 

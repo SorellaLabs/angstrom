@@ -43,6 +43,7 @@ matching-engine.workspace = true
 angstrom-network.workspace = true
 validation.workspace = true
 consensus.workspace = true
+uniswap-v4.workspace = true
 
 # Other things
 tokio.workspace = true

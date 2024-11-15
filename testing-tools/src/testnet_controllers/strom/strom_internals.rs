@@ -23,16 +23,17 @@ use angstrom_types::{
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
 use futures::StreamExt;
 use jsonrpsee::server::ServerBuilder;
-use matching_engine::cfmm::uniswap::{
-    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
-    pool_providers::canonical_state_adapter::CanonicalStateAdapter
-};
+use matching_engine::{manager::MatcherHandle, MatchingManager};
 use order_pool::{order_storage::OrderStorage, PoolConfig};
 use reth_provider::{CanonStateNotifications, CanonStateSubscriptions};
 use reth_tasks::TokioTaskExecutor;
 use secp256k1::SecretKey;
+use uniswap_v4::uniswap::{
+    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
+    pool_providers::canonical_state_adapter::CanonicalStateAdapter
+};
 use validation::{
-    order::state::{pools::AngstromPoolsTracker, token_pricing::TokenPriceGenerator},
+    common::TokenPriceGenerator, order::state::pools::AngstromPoolsTracker,
     validator::ValidationClient
 };
 
@@ -57,7 +58,8 @@ pub struct AngstromTestnetNodeInternals {
     pub tx_strom_handles: SendingStromHandles,
     pub testnet_hub:      StromContractInstance,
     pub validator:        TestOrderValidator<RpcStateProviderFactory>,
-    _consensus:           TestnetConsensusFuture<PubSubFrontend>,
+    pub matching_handle:  MatcherHandle,
+    _consensus:           TestnetConsensusFuture<PubSubFrontend, MatcherHandle>,
     _consensus_running:   Arc<AtomicBool>
 }
 
@@ -177,10 +179,13 @@ impl AngstromTestnetNodeInternals {
             .await
             .unwrap()
         );
+        let signer = Signer::new(secret_key);
+        let node_address = Address::from_slice(&signer.my_id[44..]);
 
         let validator = TestOrderValidator::new(
             state_provider.provider(),
             angstrom_addr,
+            node_address,
             uniswap_pools.clone(),
             token_conversion,
             token_price_update_stream,
@@ -224,13 +229,16 @@ impl AngstromTestnetNodeInternals {
 
         let pool_registry = UniswapAngstromRegistry::new(uniswap_registry, pool_config_store);
 
+        // spinup matching engine
+        let matching_handle = MatchingManager::spawn(executor.clone(), validator.client.clone());
+
         let consensus_handle = ConsensusManager::new(
             ManagerNetworkDeps::new(
                 strom_network_handle.clone(),
                 state_provider.provider().subscribe_to_canonical_state(),
                 strom_handles.consensus_rx_op
             ),
-            Signer::new(secret_key),
+            signer,
             initial_validators,
             order_storage.clone(),
             state_provider
@@ -240,7 +248,8 @@ impl AngstromTestnetNodeInternals {
                 .await?,
             pool_registry,
             uniswap_pools.clone(),
-            state_provider.provider().provider()
+            state_provider.provider().provider(),
+            matching_handle.clone()
         );
 
         let _consensus_running = Arc::new(AtomicBool::new(true));
@@ -258,6 +267,7 @@ impl AngstromTestnetNodeInternals {
             pool_handle,
             tx_strom_handles,
             testnet_hub,
+            matching_handle,
             validator,
             _consensus,
             _consensus_running

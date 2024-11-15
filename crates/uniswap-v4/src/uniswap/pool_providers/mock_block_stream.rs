@@ -4,7 +4,7 @@ use alloy::{network::Network, providers::Provider, rpc::types::Filter, transport
 use alloy_primitives::Log;
 use futures_util::StreamExt;
 
-use crate::cfmm::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
+use crate::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 
 #[derive(Debug, Clone)]
 pub struct MockBlockStream<P, T, N> {

@@ -24,7 +24,7 @@ use tokio::{
 };
 
 use super::pool::PoolError;
-use crate::cfmm::uniswap::{
+use crate::uniswap::{
     pool::EnhancedUniswapPool,
     pool_data_loader::{DataLoader, PoolDataLoader},
     pool_providers::PoolManagerProvider
@@ -77,7 +77,7 @@ where
         self.pools
             .iter()
             .filter_map(|(key, pool)| {
-                Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?))
+                Some((*key, pool.read().unwrap().fetch_pool_snapshot().ok()?.2))
             })
             .collect()
     }

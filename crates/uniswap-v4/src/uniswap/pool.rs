@@ -17,7 +17,7 @@ use uniswap_v3_math::{
 };
 
 use super::pool_data_loader::PoolData;
-use crate::cfmm::uniswap::{
+use crate::uniswap::{
     i32_to_i24,
     pool_data_loader::{DataLoader, ModifyPositionEvent, PoolDataLoader, TickData},
     ConversionError
@@ -92,7 +92,7 @@ where
             .await
     }
 
-    pub fn fetch_pool_snapshot(&self) -> Result<PoolSnapshot, PoolError> {
+    pub fn fetch_pool_snapshot(&self) -> Result<(Address, Address, PoolSnapshot), PoolError> {
         if !self.data_is_populated() {
             return Err(PoolError::PoolNotInitialized)
         }
@@ -109,7 +109,7 @@ where
             })
             .collect::<Vec<_>>();
 
-        PoolSnapshot::new(liq_ranges, self.sqrt_price.into()).map_err(Into::into)
+        Ok((self.token_a, self.token_b, PoolSnapshot::new(liq_ranges, self.sqrt_price.into())?))
     }
 
     pub async fn initialize<T: Transport + Clone, N: Network>(

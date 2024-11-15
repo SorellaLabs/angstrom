@@ -9,8 +9,7 @@ use angstrom_types::sol_bindings::{
 use gas::OrderGasCalculations;
 use revm::primitives::ruint::aliases::U256;
 
-use super::state::token_pricing::TokenPriceGenerator;
-use crate::order::sim::gas_inspector::GasUsed;
+use crate::{common::TokenPriceGenerator, order::sim::gas_inspector::GasUsed};
 
 mod gas;
 mod gas_inspector;

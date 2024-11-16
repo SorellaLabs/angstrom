@@ -160,26 +160,14 @@ where
                     block_number.ok_or(PoolManagerError::EmptyBlockNumberFromStream)?;
                 // If there is a reorg, unwind state changes from last_synced block to the
                 // chain head block number
+                let mut reorg = false;
                 if chain_head_block_number <= last_synced_block {
                     tracing::trace!(
                         chain_head_block_number,
                         last_synced_block,
                         "reorg detected, unwinding state changes"
                     );
-
-                    // scope for locks
-                    {
-                        let mut state_change_cache = state_change_cache.write().unwrap();
-                        for pool in pools.values() {
-                            let mut pool_guard = pool.write().unwrap();
-                            Self::unwind_state_changes(
-                                &mut pool_guard,
-                                &mut state_change_cache,
-                                chain_head_block_number
-                            )?;
-                        }
-                    }
-
+                    reorg = true;
                     // set the last synced block to the head block number
                     last_synced_block = chain_head_block_number - 1;
                 }
@@ -193,6 +181,19 @@ where
                             .to_block(chain_head_block_number)
                     )
                     .await?;
+
+                if reorg {
+                    // scope for locks
+                    let mut state_change_cache = state_change_cache.write().unwrap();
+                    for pool in pools.values() {
+                        let mut pool_guard = pool.write().unwrap();
+                        Self::unwind_state_changes(
+                            &mut pool_guard,
+                            &mut state_change_cache,
+                            chain_head_block_number
+                        )?;
+                    }
+                }
 
                 let logs_by_address = Loader::group_logs(logs);
 

@@ -52,38 +52,36 @@ where
             async move {
                 let bundle = bundle.pade_encode();
 
-                {
-                    let mut evm = revm::Evm::builder()
-                        .with_ref_db(db.clone())
-                        .with_env_with_handler_cfg(EnvWithHandlerCfg::default())
-                        .modify_env(|env| {
-                            env.cfg.disable_balance_check = true;
-                        })
-                        .modify_tx_env(|tx| {
-                            tx.caller = node_address;
-                            tx.transact_to = TxKind::Call(angstrom_address);
-                            tx.data =
+                let mut evm = revm::Evm::builder()
+                    .with_ref_db(db.clone())
+                    .with_env_with_handler_cfg(EnvWithHandlerCfg::default())
+                    .modify_env(|env| {
+                        env.cfg.disable_balance_check = true;
+                    })
+                    .modify_tx_env(|tx| {
+                        tx.caller = node_address;
+                        tx.transact_to = TxKind::Call(angstrom_address);
+                        tx.data =
                         angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new((
                             bundle.into(),
                         ))
                         .abi_encode()
                         .into();
-                        })
-                        .build();
+                    })
+                    .build();
 
-                    let result = evm
-                        .transact()
-                        .map_err(|_| eyre!("failed to transact with revm"))
-                        .unwrap();
+                let result = evm
+                    .transact()
+                    .map_err(|_| eyre!("failed to transact with revm"))
+                    .unwrap();
 
-                    if !result.result.is_success() {
-                        let _ = sender.send(Err(eyre!("transaction simulation failed")));
-                        return
-                    }
-
-                    let res = BundleGasDetails::new(conversion_lookup, result.result.gas_used());
-                    let _ = sender.send(Ok(res));
+                if !result.result.is_success() {
+                    let _ = sender.send(Err(eyre!("transaction simulation failed")));
+                    return
                 }
+
+                let res = BundleGasDetails::new(conversion_lookup, result.result.gas_used());
+                let _ = sender.send(Ok(res));
             }
             .boxed()
         )

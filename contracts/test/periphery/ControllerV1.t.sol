@@ -60,6 +60,10 @@ contract ControllerV1Test is BaseTest {
 
     function test_controllerMigration() public {
         address next_controller = makeAddr("next_controller");
+        vm.expectEmit(true, true, true, true);
+        emit IControllerV1.NewControllerScheduled(
+            next_controller, block.timestamp + controller.SCHEDULE_TO_CONFIRM_DELAY()
+        );
         vm.prank(controller_owner);
         controller.schedule_new_controller(next_controller);
         assertEq(controller.pending_controller(), next_controller);
@@ -68,6 +72,15 @@ contract ControllerV1Test is BaseTest {
 
         vm.expectRevert("New controller still pending");
         controller.confirm_pending_controller();
+
+        skip(controller.SCHEDULE_TO_CONFIRM_DELAY());
+
+        vm.expectEmit(true, true, true, true);
+        emit IControllerV1.NewControllerConfirmed(next_controller);
+        controller.confirm_pending_controller();
+
+        assertEq(rawGetController(address(angstrom)), next_controller);
+
     }
 
     uint256 constant _TOTAL_NODES = 5;
@@ -80,10 +93,14 @@ contract ControllerV1Test is BaseTest {
             makeAddr("addr_4"),
             makeAddr("addr_5")
         ];
+        assertEq(controller.total_nodes(), 0);
         for (uint256 i = 0; i < addrs.length; i++) {
+            vm.expectEmit(true, true, true, true);
+            emit IControllerV1.NodeAdded(addrs[i]);
             vm.prank(controller_owner);
             controller.add_node(addrs[i]);
             assertTrue(_isNode(addrs[i]), "expected to be node after add");
+            assertEq(controller.total_nodes(), i + 1);
             for (uint256 j = 0; j < i; j++) {
                 uint256 totalNodes = controller.total_nodes();
                 bool found = false;
@@ -101,6 +118,9 @@ contract ControllerV1Test is BaseTest {
         bool[_TOTAL_NODES] memory removed;
         for (uint256 i = 0; i < removeMap.length; i++) {
             uint256 ai = removeMap[i];
+
+            vm.expectEmit(true, true, true, true);
+            emit IControllerV1.NodeRemoved(addrs[ai]);
             vm.prank(controller_owner);
             controller.remove_node(addrs[ai]);
             removed[ai] = true;

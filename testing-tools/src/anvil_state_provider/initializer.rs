@@ -39,7 +39,7 @@ pub struct AnvilInitializer {
     angstrom:      AngstromInstance<PubSubFrontend, WalletProviderRpc>,
     pool_gate:     PoolGateInstance<PubSubFrontend, WalletProviderRpc>,
     pending_state: PendingDeployedPools,
-    _instance:     AnvilInstance
+    // _instance:     AnvilInstance
 }
 
 impl AnvilInitializer {
@@ -68,7 +68,7 @@ impl AnvilInitializer {
             angstrom,
             pool_gate,
             pending_state,
-            _instance: anvil.unwrap()
+            // _instance
         })
     }
 

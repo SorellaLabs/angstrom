@@ -77,17 +77,18 @@ impl TestingConfig for DevnetConfig {
         &self,
         id: impl Display + Clone
     ) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
-        let anvil = self.configure_anvil(id.clone()).try_spawn()?;
+        // let anvil = self.configure_anvil(id.clone()).try_spawn()?;
 
         let endpoint = self.anvil_endpoint(id);
         tracing::info!(?endpoint);
         let ipc = alloy::providers::IpcConnect::new(endpoint);
         // TODO: Revert after things are working
-        // let sk: PrivateKeySigner = "4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356".parse().unwrap();
-        // let controller_address = "0x14dc79964da2c08b23698b3d3cc7ca32193d9955".parse().unwrap();
-        let sk: PrivateKeySigner = anvil.keys()[self.anvil_key].clone().into();
-        let controller_address = anvil.addresses()[self.anvil_key];
+        let sk: PrivateKeySigner = "4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356".parse().unwrap();
+        let controller_address = "0x14dc79964da2c08b23698b3d3cc7ca32193d9955".parse().unwrap();
+        // let sk: PrivateKeySigner = anvil.keys()[self.anvil_key].clone().into();
+        // let controller_address = anvil.addresses()[self.anvil_key];
 
+        tracing::info!("ipc {:?}", ipc);
         let wallet = EthereumWallet::new(sk.clone());
         let rpc = builder::<Ethereum>()
             .with_recommended_fillers()
@@ -97,7 +98,7 @@ impl TestingConfig for DevnetConfig {
 
         tracing::info!("connected to anvil");
 
-        Ok((WalletProvider::new(rpc, controller_address, sk),Some(anvil)))
+        Ok((WalletProvider::new(rpc, controller_address, sk),None))
     }
 
     fn rpc_port(&self, node_id: Option<u64>) -> u64 {

@@ -36,7 +36,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 thiserror.workspace = true
 reth-provider.workspace = true
-uniswap-v4.workspace = true
 
 arraydeque = "0.5"
 num-bigfloat = "1.7"

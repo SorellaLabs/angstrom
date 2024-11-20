@@ -43,6 +43,7 @@ matching-engine.workspace = true
 angstrom-network.workspace = true
 validation.workspace = true
 consensus.workspace = true
+uniswap-v4.workspace = true
 
 # Other things
 tokio.workspace = true
@@ -53,6 +54,7 @@ clap = "4.4.8"
 eyre = "0.6.9"
 revm-inspectors = "=0.5.5"
 toml = "0.8.19"
+tracing.workspace = true
 
 
 [target.'cfg(unix)'.dependencies]

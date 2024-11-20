@@ -60,7 +60,8 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
 
     fn on_command(&mut self, command: EthCommand) {
         match command {
-            EthCommand::SubscribeEthNetworkEvents(tx) => self.event_listeners.push(tx)
+            EthCommand::SubscribeEthNetworkEvents(tx) => self.event_listeners.push(tx),
+            EthCommand::SubscribeCannon(_) => panic!("should never be called")
         }
     }
 
@@ -96,7 +97,7 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
             return
         };
 
-        let hashes = bundle.get_order_hashes().collect::<Vec<_>>();
+        let hashes = bundle.get_order_hashes(bn).collect::<Vec<_>>();
 
         let addresses = vec![];
         tracing::debug!("found angstrom tx with orders filled {:#?}", hashes);

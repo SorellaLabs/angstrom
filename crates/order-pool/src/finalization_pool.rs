@@ -6,7 +6,7 @@ use angstrom_types::sol_bindings::grouped_orders::{AllOrders, OrderWithStorageDa
 use angstrom_utils::map::OwnedMap;
 
 pub struct FinalizationPool {
-    id_to_orders: HashMap<FixedBytes<32>, AllOrders>,
+    id_to_orders: HashMap<FixedBytes<32>, OrderWithStorageData<AllOrders>>,
     block_to_ids: HashMap<u64, Vec<FixedBytes<32>>>,
     metrics:      FinalizationOrderPoolMetricsWrapper
 }
@@ -31,7 +31,7 @@ impl FinalizationPool {
             .into_iter()
             .map(|order| {
                 let id = order.order_hash();
-                self.id_to_orders.insert(id, order.order);
+                self.id_to_orders.insert(id, order);
 
                 self.metrics.incr_total_orders();
 
@@ -44,11 +44,14 @@ impl FinalizationPool {
         self.metrics.incr_blocks_tracked();
     }
 
-    pub fn has_order(&mut self, order: &FixedBytes<32>) -> bool {
+    pub fn has_order(&self, order: &FixedBytes<32>) -> bool {
         self.id_to_orders.contains_key(order)
     }
 
-    pub fn reorg(&mut self, orders: Vec<FixedBytes<32>>) -> impl Iterator<Item = AllOrders> + '_ {
+    pub fn reorg(
+        &mut self,
+        orders: Vec<FixedBytes<32>>
+    ) -> impl Iterator<Item = OrderWithStorageData<AllOrders>> + '_ {
         orders.into_iter().filter_map(|id| {
             self.id_to_orders
                 .remove(&id)
@@ -56,7 +59,7 @@ impl FinalizationPool {
         })
     }
 
-    pub fn finalized(&mut self, block: u64) -> Vec<AllOrders> {
+    pub fn finalized(&mut self, block: u64) -> Vec<OrderWithStorageData<AllOrders>> {
         self.block_to_ids
             .remove(&block)
             .map(|ids| {

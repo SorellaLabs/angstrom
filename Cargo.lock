@@ -1390,6 +1390,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml",
+ "tracing",
+ "uniswap-v4",
  "validation",
 ]
 
@@ -1401,11 +1403,15 @@ dependencies = [
  "angstrom-types",
  "angstrom-utils",
  "anyhow",
+ "auto_impl",
  "futures",
  "futures-util",
  "pade",
+ "rand",
+ "reth-primitives",
  "reth-provider",
  "reth-tasks",
+ "testing-tools",
  "tokio",
  "tokio-stream",
 ]
@@ -1518,6 +1524,7 @@ dependencies = [
  "strum",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tower 0.4.13",
  "tower-http",
  "tracing",
@@ -1537,6 +1544,7 @@ dependencies = [
  "bitmaps",
  "bytes",
  "convert_case 0.6.0",
+ "dashmap 6.1.0",
  "derive_more 0.99.18",
  "eyre",
  "foldhash",
@@ -1989,7 +1997,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -2700,6 +2708,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "uniswap-v4",
  "url",
  "validation",
 ]
@@ -4184,7 +4193,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -4985,7 +4994,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -5263,6 +5272,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uniswap_v3_math",
+ "validation",
 ]
 
 [[package]]
@@ -5986,6 +5996,7 @@ dependencies = [
  "async-trait",
  "auto_impl",
  "bitflags 2.6.0",
+ "dashmap 6.1.0",
  "eyre",
  "futures",
  "futures-util",
@@ -6058,6 +6069,7 @@ dependencies = [
 [[package]]
 name = "pade"
 version = "0.1.0"
+source = "git+https://github.com/SorellaLabs/pade#df806f73c7ce01f0c6f9b35a993c72fac4b3af61"
 dependencies = [
  "alloy 0.4.2",
  "bitvec",
@@ -6069,10 +6081,9 @@ dependencies = [
 [[package]]
 name = "pade-macro"
 version = "0.1.0"
+source = "git+https://github.com/SorellaLabs/pade#df806f73c7ce01f0c6f9b35a993c72fac4b3af61"
 dependencies = [
- "alloy 0.4.2",
  "itertools 0.13.0",
- "pade",
  "proc-macro2",
  "quote",
  "syn 2.0.85",
@@ -10603,6 +10614,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uniswap-v4",
  "uniswap_v3_math",
  "validation",
 ]
@@ -11357,6 +11369,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
+name = "uniswap-v4"
+version = "0.1.0"
+dependencies = [
+ "alloy 0.4.2",
+ "alloy-primitives 0.8.9",
+ "angstrom-types",
+ "angstrom-utils",
+ "arraydeque",
+ "clap",
+ "criterion",
+ "divan",
+ "eyre",
+ "futures",
+ "futures-util",
+ "itertools 0.12.1",
+ "malachite",
+ "malachite-q",
+ "num-bigfloat",
+ "once_cell",
+ "pade",
+ "pade-macro",
+ "rand",
+ "rand_distr",
+ "reth-provider",
+ "reth-tasks",
+ "testing-tools",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uniswap_v3_math",
+]
+
+[[package]]
 name = "uniswap_v3_math"
 version = "0.5.2"
 source = "git+https://github.com/0xKitsune/uniswap-v3-math.git#2711e1619421956e5d0bbdaeae115b325258669e"
@@ -11462,7 +11508,6 @@ dependencies = [
  "futures",
  "futures-util",
  "hex-literal",
- "matching-engine",
  "pade",
  "parking_lot 0.12.3",
  "pin-project",
@@ -11491,6 +11536,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "uniswap-v4",
 ]
 
 [[package]]
@@ -11687,7 +11733,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

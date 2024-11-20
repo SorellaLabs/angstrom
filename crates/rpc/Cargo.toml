@@ -19,14 +19,15 @@ angstrom-utils.workspace = true
 angstrom-network.workspace = true
 consensus.workspace = true
 order-pool.workspace = true
-validation.workspace =  true
+validation.workspace = true
+tokio-stream.workspace = true
 
 reth-primitives.workspace = true
 reth-tasks.workspace = true
 reth-metrics = { workspace = true, features = ["common"] }
 
 strum = { workspace = true, features = ["derive"] }
-bincode = { workspace = true  }
+bincode = { workspace = true }
 
 # misc
 jsonrpsee = { workspace = true, features = ["server", "macros"] }

@@ -14,6 +14,7 @@ angstrom-types.workspace = true
 angstrom-utils.workspace = true
 pade.workspace = true
 
+reth-primitives.workspace = true
 tokio.workspace = true
 futures.workspace = true
 tokio-stream.workspace = true
@@ -29,3 +30,8 @@ alloy.workspace = true
 
 # misc
 anyhow.workspace = true
+auto_impl.workspace = true
+
+[dev-dependencies]
+testing-tools.workspace = true
+rand.workspace = true

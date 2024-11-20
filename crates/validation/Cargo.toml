@@ -22,7 +22,7 @@ pade.workspace = true
 anyhow.workspace = true
 hex-literal.workspace = true
 angstrom-types.workspace = true
-matching-engine.workspace = true
+uniswap-v4.workspace = true
 
 derive_more = "0.99.17"
 
@@ -75,9 +75,7 @@ dashmap = "6.0.1"
 testing-tools.workspace = true
 angstrom-network.workspace = true
 # reth
-reth-discv4 = { workspace = true, features = [
-  "test-utils",
-] }
+reth-discv4 = { workspace = true, features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["test-utils"] }
 
 # we need to enable the test-utils feature in our own crate to use utils in

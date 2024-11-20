@@ -3,19 +3,22 @@ use std::{
     future::Future,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll}
+    task::{Context, Poll, Waker}
 };
 
 use alloy::{primitives::BlockNumber, providers::Provider, transports::Transport};
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};
-use angstrom_types::contract_payloads::angstrom::UniswapAngstromRegistry;
+use angstrom_types::{
+    block_sync::BlockSyncConsumer, contract_payloads::angstrom::UniswapAngstromRegistry
+};
 use futures::StreamExt;
-use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
+use matching_engine::MatchingEngineHandle;
 use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
 use tokio_stream::wrappers::BroadcastStream;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{
     leader_selection::WeightedRoundRobin,
@@ -26,37 +29,26 @@ use crate::{
     AngstromValidator, Signer
 };
 
-pub struct ConsensusManager<T> {
+const MODULE_NAME: &str = "Consensus";
+
+pub struct ConsensusManager<T, Matching, BlockSync> {
     current_height:         BlockNumber,
     leader_selection:       WeightedRoundRobin,
-    state_transition:       RoundStateMachine<T>,
+    state_transition:       RoundStateMachine<T, Matching>,
     canonical_block_stream: BroadcastStream<CanonStateNotification>,
     strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>,
     network:                StromNetworkHandle,
+    block_sync:             BlockSync,
 
     /// Track broadcasted messages to avoid rebroadcasting
     broadcasted_messages: HashSet<StromConsensusEvent>
 }
 
-pub struct ManagerNetworkDeps {
-    network:                StromNetworkHandle,
-    canonical_block_stream: CanonStateNotifications,
-    strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>
-}
-
-impl ManagerNetworkDeps {
-    pub fn new(
-        network: StromNetworkHandle,
-        canonical_block_stream: CanonStateNotifications,
-        strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>
-    ) -> Self {
-        Self { network, canonical_block_stream, strom_consensus_event }
-    }
-}
-
-impl<T> ConsensusManager<T>
+impl<T, Matching, BlockSync> ConsensusManager<T, Matching, BlockSync>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    BlockSync: BlockSyncConsumer,
+    Matching: MatchingEngineHandle
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -67,7 +59,9 @@ where
         current_height: BlockNumber,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: impl Provider<T> + 'static
+        provider: impl Provider<T> + 'static,
+        matching_engine: Matching,
+        block_sync: BlockSync
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
@@ -86,15 +80,17 @@ where
                 ConsensusMetricsWrapper::new(),
                 pool_registry,
                 uniswap_pools,
-                provider
+                provider,
+                matching_engine
             ),
+            block_sync,
             network,
             canonical_block_stream: wrapped_broadcast_stream,
             broadcasted_messages: HashSet::new()
         }
     }
 
-    fn on_blockchain_state(&mut self, notification: CanonStateNotification) {
+    fn on_blockchain_state(&mut self, notification: CanonStateNotification, waker: Waker) {
         let new_block = notification.tip();
         self.current_height = new_block.block.number;
         let round_leader = self
@@ -104,6 +100,9 @@ where
         self.state_transition
             .reset_round(self.current_height, round_leader);
         self.broadcasted_messages.clear();
+
+        self.block_sync
+            .sign_off_on_block(MODULE_NAME, self.current_height, Some(waker));
     }
 
     fn on_network_event(&mut self, event: StromConsensusEvent) {
@@ -179,9 +178,11 @@ where
     }
 }
 
-impl<T> Future for ConsensusManager<T>
+impl<T, Matching, BlockSync> Future for ConsensusManager<T, Matching, BlockSync>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle,
+    BlockSync: BlockSyncConsumer
 {
     type Output = ();
 
@@ -190,24 +191,42 @@ where
 
         if let Poll::Ready(Some(msg)) = this.canonical_block_stream.poll_next_unpin(cx) {
             match msg {
-                Ok(notification) => this.on_blockchain_state(notification),
+                Ok(notification) => this.on_blockchain_state(notification, cx.waker().clone()),
                 Err(e) => tracing::error!("Error receiving chain state notification: {}", e)
             };
         }
 
-        if let Poll::Ready(Some(msg)) = this.strom_consensus_event.poll_next_unpin(cx) {
-            this.on_network_event(msg);
-        }
+        if this.block_sync.can_operate() {
+            if let Poll::Ready(Some(msg)) = this.strom_consensus_event.poll_next_unpin(cx) {
+                this.on_network_event(msg);
+            }
 
-        if let Poll::Ready(Some(new_state)) = this.state_transition.poll_next_unpin(cx) {
-            match new_state {
-                Ok(new_state) => this.on_state_start(new_state),
-                Err(e) => {
-                    tracing::error!("could not transition state: {}", e)
-                }
-            };
+            if let Poll::Ready(Some(new_state)) = this.state_transition.poll_next_unpin(cx) {
+                match new_state {
+                    Ok(new_state) => this.on_state_start(new_state),
+                    Err(e) => {
+                        tracing::error!("could not transition state: {}", e)
+                    }
+                };
+            }
         }
 
         Poll::Pending
+    }
+}
+
+pub struct ManagerNetworkDeps {
+    network:                StromNetworkHandle,
+    canonical_block_stream: CanonStateNotifications,
+    strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>
+}
+
+impl ManagerNetworkDeps {
+    pub fn new(
+        network: StromNetworkHandle,
+        canonical_block_stream: CanonStateNotifications,
+        strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>
+    ) -> Self {
+        Self { network, canonical_block_stream, strom_consensus_event }
     }
 }

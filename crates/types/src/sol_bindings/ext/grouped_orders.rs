@@ -225,6 +225,13 @@ impl GroupedUserOrder {
 }
 
 impl RawPoolOrder for StandingVariants {
+    fn max_gas_token_0(&self) -> u128 {
+        match self {
+            StandingVariants::Exact(e) => e.max_gas_token_0(),
+            StandingVariants::Partial(p) => p.max_gas_token_0()
+        }
+    }
+
     fn token_out(&self) -> Address {
         match self {
             StandingVariants::Exact(e) => e.token_out(),
@@ -302,9 +309,23 @@ impl RawPoolOrder for StandingVariants {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
     }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            StandingVariants::Exact(e) => e.use_internal(),
+            StandingVariants::Partial(p) => p.use_internal()
+        }
+    }
 }
 
 impl RawPoolOrder for FlashVariants {
+    fn max_gas_token_0(&self) -> u128 {
+        match self {
+            FlashVariants::Exact(e) => e.max_extra_fee_asset0,
+            FlashVariants::Partial(p) => p.max_extra_fee_asset0
+        }
+    }
+
     fn is_valid_signature(&self) -> bool {
         match self {
             FlashVariants::Exact(e) => e.is_valid_signature(),
@@ -384,6 +405,13 @@ impl RawPoolOrder for FlashVariants {
 
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
+    }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            FlashVariants::Exact(e) => e.use_internal(),
+            FlashVariants::Partial(p) => p.use_internal()
+        }
     }
 }
 
@@ -503,6 +531,10 @@ impl GroupedComposableOrder {
 }
 
 impl RawPoolOrder for TopOfBlockOrder {
+    fn max_gas_token_0(&self) -> u128 {
+        self.max_gas_asset0
+    }
+
     fn flash_block(&self) -> Option<u64> {
         Some(self.valid_for_block)
     }
@@ -554,9 +586,17 @@ impl RawPoolOrder for TopOfBlockOrder {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Searcher
     }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
+    }
 }
 
 impl RawPoolOrder for PartialStandingOrder {
+    fn max_gas_token_0(&self) -> u128 {
+        self.max_extra_fee_asset0
+    }
+
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
@@ -612,10 +652,18 @@ impl RawPoolOrder for PartialStandingOrder {
 
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
+    }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
     }
 }
 
 impl RawPoolOrder for ExactStandingOrder {
+    fn max_gas_token_0(&self) -> u128 {
+        self.max_extra_fee_asset0
+    }
+
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
@@ -672,9 +720,17 @@ impl RawPoolOrder for ExactStandingOrder {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
     }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
+    }
 }
 
 impl RawPoolOrder for PartialFlashOrder {
+    fn max_gas_token_0(&self) -> u128 {
+        self.max_extra_fee_asset0
+    }
+
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
@@ -731,9 +787,17 @@ impl RawPoolOrder for PartialFlashOrder {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
     }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
+    }
 }
 
 impl RawPoolOrder for ExactFlashOrder {
+    fn max_gas_token_0(&self) -> u128 {
+        self.max_extra_fee_asset0
+    }
+
     fn is_valid_signature(&self) -> bool {
         let Ok(sig) = Signature::new_from_bytes(&self.meta.signature) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
@@ -790,9 +854,21 @@ impl RawPoolOrder for ExactFlashOrder {
     fn order_location(&self) -> OrderLocation {
         OrderLocation::Limit
     }
+
+    fn use_internal(&self) -> bool {
+        self.use_internal
+    }
 }
 
 impl RawPoolOrder for AllOrders {
+    fn max_gas_token_0(&self) -> u128 {
+        match self {
+            AllOrders::Standing(p) => p.max_gas_token_0(),
+            AllOrders::Flash(kof) => kof.max_gas_token_0(),
+            AllOrders::TOB(tob) => tob.max_gas_token_0()
+        }
+    }
+
     fn is_valid_signature(&self) -> bool {
         match self {
             AllOrders::Standing(p) => p.is_valid_signature(),
@@ -888,9 +964,24 @@ impl RawPoolOrder for AllOrders {
             AllOrders::TOB(_) => OrderLocation::Searcher
         }
     }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            AllOrders::Standing(p) => p.use_internal(),
+            AllOrders::Flash(kof) => kof.use_internal(),
+            AllOrders::TOB(tob) => tob.use_internal()
+        }
+    }
 }
 
 impl RawPoolOrder for GroupedVanillaOrder {
+    fn max_gas_token_0(&self) -> u128 {
+        match self {
+            GroupedVanillaOrder::Standing(p) => p.max_gas_token_0(),
+            GroupedVanillaOrder::KillOrFill(kof) => kof.max_gas_token_0()
+        }
+    }
+
     fn is_valid_signature(&self) -> bool {
         match self {
             GroupedVanillaOrder::Standing(p) => p.is_valid_signature(),
@@ -974,9 +1065,23 @@ impl RawPoolOrder for GroupedVanillaOrder {
             GroupedVanillaOrder::KillOrFill(_) => OrderLocation::Limit
         }
     }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            GroupedVanillaOrder::Standing(p) => p.use_internal(),
+            GroupedVanillaOrder::KillOrFill(kof) => kof.use_internal()
+        }
+    }
 }
 
 impl RawPoolOrder for GroupedComposableOrder {
+    fn max_gas_token_0(&self) -> u128 {
+        match self {
+            GroupedComposableOrder::Partial(p) => p.max_gas_token_0(),
+            GroupedComposableOrder::KillOrFill(kof) => kof.max_gas_token_0()
+        }
+    }
+
     fn flash_block(&self) -> Option<u64> {
         match self {
             GroupedComposableOrder::Partial(_) => None,
@@ -1058,6 +1163,13 @@ impl RawPoolOrder for GroupedComposableOrder {
         match &self {
             GroupedComposableOrder::Partial(_) => OrderLocation::Limit,
             GroupedComposableOrder::KillOrFill(_) => OrderLocation::Limit
+        }
+    }
+
+    fn use_internal(&self) -> bool {
+        match self {
+            GroupedComposableOrder::Partial(p) => p.use_internal(),
+            GroupedComposableOrder::KillOrFill(kof) => kof.use_internal()
         }
     }
 }

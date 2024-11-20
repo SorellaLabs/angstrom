@@ -1,14 +1,19 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    sync::Arc
+};
 
 use alloy::{
     eips::BlockId,
     network::Network,
-    primitives::{keccak256, Address, Bytes, B256, U256},
+    primitives::{aliases::U40, keccak256, Address, Bytes, FixedBytes, B256, U256},
     providers::Provider,
     sol_types::SolValue,
     transports::Transport
 };
-use pade::{PadeDecode, PadeEncode};
+use dashmap::DashMap;
+use pade::PadeDecode;
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -17,17 +22,20 @@ use super::{
     asset::builder::{AssetBuilder, AssetBuilderStage},
     rewards::PoolUpdate,
     tob::ToBOutcome,
-    Asset, Pair, Signature, POOL_CONFIG_STORE_ENTRY_SIZE
+    Asset, Pair, Signature, CONFIG_STORE_SLOT, POOL_CONFIG_STORE_ENTRY_SIZE
 };
 use crate::{
     consensus::{PreProposal, Proposal},
     contract_bindings::angstrom::Angstrom::PoolKey,
     matching::{uniswap::PoolSnapshot, Ray},
-    orders::{OrderFillState, OrderOutcome},
+    orders::{OrderFillState, OrderOutcome, PoolSolution},
     primitive::{PoolId, UniswapPoolRegistry},
     sol_bindings::{
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
-        rpc_orders::TopOfBlockOrder as RpcTopOfBlockOrder,
+        rpc_orders::{
+            ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
+            TopOfBlockOrder as RpcTopOfBlockOrder
+        },
         RawPoolOrder
     }
 };
@@ -50,12 +58,35 @@ pub struct TopOfBlockOrder {
 }
 
 impl TopOfBlockOrder {
-    // eip-712 hash_struct
-    pub fn order_hash(&self) -> B256 {
-        keccak256(self.signature.pade_encode())
+    // eip-712 hash_struct. is a pain since we need to reconstruct values.
+    pub fn order_hash(&self, pair: &[Pair], asset: &[Asset], block: u64) -> B256 {
+        let pair = &pair[self.pairs_index as usize];
+        RpcTopOfBlockOrder {
+            quantity_in:     self.quantity_in,
+            recipient:       self.recipient.unwrap_or_default(),
+            quantity_out:    self.quantity_out,
+            asset_in:        if self.zero_for_1 {
+                asset[pair.index0 as usize].addr
+            } else {
+                asset[pair.index1 as usize].addr
+            },
+            asset_out:       if !self.zero_for_1 {
+                asset[pair.index0 as usize].addr
+            } else {
+                asset[pair.index1 as usize].addr
+            },
+            use_internal:    self.use_internal,
+            max_gas_asset0:  self.max_gas_asset_0,
+            valid_for_block: block,
+            meta:            Default::default()
+        }
+        .order_hash()
     }
 
-    pub fn of(internal: &OrderWithStorageData<RpcTopOfBlockOrder>, pairs_index: u16) -> Self {
+    pub fn of_max_gas(
+        internal: &OrderWithStorageData<RpcTopOfBlockOrder>,
+        pairs_index: u16
+    ) -> Self {
         let quantity_in = internal.quantity_in;
         let quantity_out = internal.quantity_out;
         let recipient = Some(internal.recipient);
@@ -69,13 +100,48 @@ impl TopOfBlockOrder {
             use_internal: false,
             quantity_in,
             quantity_out,
-            max_gas_asset_0: 0,
-            gas_used_asset_0: 0,
+            max_gas_asset_0: internal.max_gas_asset0,
+            // set as max so we can use the sim to verify values.
+            gas_used_asset_0: internal.max_gas_asset0,
             pairs_index,
             zero_for_1,
             recipient,
             signature
         }
+    }
+
+    pub fn of(
+        internal: &OrderWithStorageData<RpcTopOfBlockOrder>,
+        shared_gas: U256,
+        pairs_index: u16
+    ) -> eyre::Result<Self> {
+        let quantity_in = internal.quantity_in;
+        let quantity_out = internal.quantity_out;
+        let recipient = Some(internal.recipient);
+        // Zero_for_1 is an Ask, an Ask is NOT a bid
+        let zero_for_1 = !internal.is_bid;
+        let sig_bytes = internal.meta.signature.to_vec();
+        let decoded_signature =
+            alloy::primitives::Signature::pade_decode(&mut sig_bytes.as_slice(), None).unwrap();
+        let signature = Signature::from(decoded_signature);
+        let used_gas: u128 = (internal.priority_data.gas + shared_gas).to();
+
+        if used_gas > internal.max_gas_asset0 {
+            return Err(eyre::eyre!("order went over gas limit"))
+        }
+
+        Ok(Self {
+            use_internal: false,
+            quantity_in,
+            quantity_out,
+            max_gas_asset_0: internal.max_gas_asset0,
+            // set as max so we can use the sim to verify values.
+            gas_used_asset_0: used_gas,
+            pairs_index,
+            zero_for_1,
+            recipient,
+            signature
+        })
     }
 }
 
@@ -111,11 +177,165 @@ pub struct UserOrder {
 }
 
 impl UserOrder {
-    pub fn order_hash(&self) -> B256 {
-        keccak256(&self.signature)
+    pub fn order_hash(&self, pair: &[Pair], asset: &[Asset], block: u64) -> B256 {
+        let pair = &pair[self.pair_index as usize];
+        match self.order_quantities {
+            OrderQuantities::Exact { quantity } => {
+                if let Some(validation) = &self.standing_validation {
+                    // exact standing
+                    ExactStandingOrder {
+                        ref_id: self.ref_id,
+                        exact_in: true,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        nonce: validation.nonce,
+                        deadline: U40::from_limbs([validation.deadline]),
+                        amount: quantity,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    }
+                    .order_hash()
+                } else {
+                    // exact flash
+                    ExactFlashOrder {
+                        ref_id: self.ref_id,
+                        exact_in: true,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        valid_for_block: block,
+                        amount: quantity,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    }
+                    .order_hash()
+                }
+            }
+            OrderQuantities::Partial { min_quantity_in, max_quantity_in, .. } => {
+                if let Some(validation) = &self.standing_validation {
+                    PartialStandingOrder {
+                        ref_id: self.ref_id,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        deadline: U40::from_limbs([validation.deadline]),
+                        nonce: validation.nonce,
+                        min_amount_in: min_quantity_in,
+                        max_amount_in: max_quantity_in,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    }
+                    .order_hash()
+                } else {
+                    PartialFlashOrder {
+                        ref_id: self.ref_id,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        valid_for_block: block,
+                        max_amount_in: max_quantity_in,
+                        min_amount_in: min_quantity_in,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    }
+                    .order_hash()
+                }
+            }
+        }
     }
 
     pub fn from_internal_order(
+        order: &OrderWithStorageData<GroupedVanillaOrder>,
+        outcome: &OrderOutcome,
+        shared_gas: U256,
+        pair_index: u16
+    ) -> eyre::Result<Self> {
+        let order_quantities = match order.order {
+            GroupedVanillaOrder::KillOrFill(_) => {
+                OrderQuantities::Exact { quantity: order.quantity().to() }
+            }
+            GroupedVanillaOrder::Standing(_) => {
+                let max_quantity_in: u128 = order.quantity().to();
+                let filled_quantity = match outcome.outcome {
+                    OrderFillState::CompleteFill => max_quantity_in,
+                    OrderFillState::PartialFill(fill) => fill.to(),
+                    _ => 0
+                };
+                OrderQuantities::Partial { min_quantity_in: 0, max_quantity_in, filled_quantity }
+            }
+        };
+        let hook_data = match order.order {
+            GroupedVanillaOrder::KillOrFill(ref o) => o.hook_data().clone(),
+            GroupedVanillaOrder::Standing(ref o) => o.hook_data().clone()
+        };
+        let gas_used: u128 = (order.priority_data.gas + shared_gas).to();
+        if gas_used > order.max_gas_token_0() {
+            return Err(eyre::eyre!("order used more gas than allocated"))
+        }
+
+        Ok(Self {
+            ref_id: 0,
+            use_internal: false,
+            pair_index,
+            min_price: *order.price(),
+            recipient: None,
+            hook_data: Some(hook_data),
+            zero_for_one: !order.is_bid,
+            standing_validation: None,
+            order_quantities,
+            max_extra_fee_asset0: order.max_gas_token_0(),
+            extra_fee_asset0: gas_used,
+            exact_in: false,
+            signature: order.signature().clone()
+        })
+    }
+
+    pub fn from_internal_order_max_gas(
         order: &OrderWithStorageData<GroupedVanillaOrder>,
         outcome: &OrderOutcome,
         pair_index: u16
@@ -148,8 +368,8 @@ impl UserOrder {
             zero_for_one: !order.is_bid,
             standing_validation: None,
             order_quantities,
-            max_extra_fee_asset0: 0,
-            extra_fee_asset0: 0,
+            max_extra_fee_asset0: order.max_gas_token_0(),
+            extra_fee_asset0: order.max_gas_token_0(),
             exact_in: false,
             signature: order.signature().clone()
         }
@@ -170,11 +390,16 @@ impl AngstromBundle {
         &self.pairs
     }
 
-    pub fn get_order_hashes(&self) -> impl Iterator<Item = B256> + '_ {
+    /// the block number is the block that this bundle was executed at.
+    pub fn get_order_hashes(&self, block_number: u64) -> impl Iterator<Item = B256> + '_ {
         self.top_of_block_orders
             .iter()
-            .map(|order| order.order_hash())
-            .chain(self.user_orders.iter().map(|order| order.order_hash()))
+            .map(move |order| order.order_hash(&self.pairs, &self.assets, block_number))
+            .chain(
+                self.user_orders
+                    .iter()
+                    .map(move |order| order.order_hash(&self.pairs, &self.assets, block_number))
+            )
     }
 
     pub fn build_dummy_for_tob_gas(
@@ -212,7 +437,7 @@ impl AngstromBundle {
         pairs.push(pair);
 
         // Get our list of user orders, if we have any
-        top_of_block_orders.push(TopOfBlockOrder::of(user_order, 0));
+        top_of_block_orders.push(TopOfBlockOrder::of_max_gas(user_order, 0));
 
         Ok(Self::new(
             asset_builder.get_asset_array(),
@@ -262,7 +487,11 @@ impl AngstromBundle {
         let outcome =
             OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
         // Get our list of user orders, if we have any
-        user_orders.push(UserOrder::from_internal_order(user_order, &outcome, pair_idx as u16));
+        user_orders.push(UserOrder::from_internal_order_max_gas(
+            user_order,
+            &outcome,
+            pair_idx as u16
+        ));
 
         Ok(Self::new(
             asset_builder.get_asset_array(),
@@ -273,8 +502,12 @@ impl AngstromBundle {
         ))
     }
 
-    pub fn from_proposal(
-        proposal: &Proposal,
+    // builds a bundle where orders are set to max allocated gas to ensure a fully
+    // passing env. with the gas details from the response, can properly
+    // allocate order gas amounts.
+    pub fn for_gas_finalization(
+        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        solutions: Vec<PoolSolution>,
         pools: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
@@ -283,11 +516,18 @@ impl AngstromBundle {
         let mut user_orders = Vec::new();
         let mut asset_builder = AssetBuilder::new();
 
+        let orders_by_pool: HashMap<
+            alloy_primitives::FixedBytes<32>,
+            Vec<OrderWithStorageData<GroupedVanillaOrder>>
+        > = limit.iter().fold(HashMap::new(), |mut acc, x| {
+            acc.entry(x.pool_id).or_default().push(x.clone());
+            acc
+        });
+
         // Break out our input orders into lists of orders by pool
-        let orders_by_pool = PreProposal::orders_by_pool_id(&proposal.preproposals);
 
         // Walk through our solutions to add them to the structure
-        for solution in proposal.solutions.iter() {
+        for solution in solutions.iter() {
             println!("Processing solution");
             // Get the information for the pool or skip this solution if we can't find a
             // pool for it
@@ -388,7 +628,7 @@ impl AngstromBundle {
                     tob.quantity_in,
                     tob.quantity_out
                 );
-                let contract_tob = TopOfBlockOrder::of(tob, pair_idx as u16);
+                let contract_tob = TopOfBlockOrder::of_max_gas(tob, pair_idx as u16);
                 top_of_block_orders.push(contract_tob);
             }
 
@@ -431,7 +671,11 @@ impl AngstromBundle {
                     quantity_in.to(),
                     quantity_out.to()
                 );
-                user_orders.push(UserOrder::from_internal_order(order, outcome, pair_idx as u16));
+                user_orders.push(UserOrder::from_internal_order_max_gas(
+                    order,
+                    outcome,
+                    pair_idx as u16
+                ));
             }
         }
         Ok(Self::new(
@@ -441,6 +685,270 @@ impl AngstromBundle {
             top_of_block_orders,
             user_orders
         ))
+    }
+
+    fn fetch_total_orders_and_gas_delegated_to_orders(
+        orders_by_pool: &HashMap<
+            FixedBytes<32>,
+            HashSet<OrderWithStorageData<GroupedVanillaOrder>>
+        >,
+        solutions: &[PoolSolution]
+    ) -> (u64, u64) {
+        solutions
+            .iter()
+            .map(|s| (s, orders_by_pool.get(&s.id).cloned()))
+            .filter_map(|(solution, order_list)| {
+                let mut order_list = order_list?.into_iter().collect::<Vec<_>>();
+                // Sort the user order list so we can properly associate it with our
+                // OrderOutcomes.  First bids by price then asks by price.
+                order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
+                    (true, true) => b.priority_data.cmp(&a.priority_data),
+                    (false, false) => a.priority_data.cmp(&b.priority_data),
+                    (..) => b.is_bid.cmp(&a.is_bid)
+                });
+                let mut cnt = 0;
+                let mut total_gas = 0;
+                for (_, order) in solution
+                    .limit
+                    .iter()
+                    .zip(order_list.iter())
+                    .filter(|(outcome, _)| outcome.is_filled())
+                {
+                    cnt += 1;
+                    total_gas += order.priority_data.gas_units;
+                }
+
+                solution.searcher.as_ref().inspect(|searcher| {
+                    cnt += 1;
+                    total_gas += searcher.priority_data.gas_units;
+                });
+
+                Some((cnt, total_gas))
+            })
+            .fold((0u64, 0u64), |(mut cnt, mut tg), x| {
+                cnt += x.0;
+                tg += x.1;
+                (cnt, tg)
+            })
+    }
+
+    pub fn from_proposal(
+        proposal: &Proposal,
+        gas_details: BundleGasDetails,
+        pools: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+    ) -> eyre::Result<Self> {
+        let mut top_of_block_orders = Vec::new();
+        let mut pool_updates = Vec::new();
+        let mut pairs = Vec::new();
+        let mut user_orders = Vec::new();
+        let mut asset_builder = AssetBuilder::new();
+
+        // Break out our input orders into lists of orders by pool
+        let orders_by_pool = PreProposal::orders_by_pool_id(&proposal.preproposals);
+
+        // fetch the accumulated amount of gas delegated to the users
+        let (total_swaps, total_gas) = Self::fetch_total_orders_and_gas_delegated_to_orders(
+            &orders_by_pool,
+            &proposal.solutions
+        );
+
+        // this should never underflow. if it does. means that there is underlying
+        // problem with the gas delegation module
+        assert!(gas_details.total_gas_cost_wei > total_gas);
+        let shared_gas_in_wei = (gas_details.total_gas_cost_wei - total_gas) / total_swaps;
+
+        // fetch gas used
+        // Walk through our solutions to add them to the structure
+        for solution in proposal.solutions.iter() {
+            println!("Processing solution");
+            // Get the information for the pool or skip this solution if we can't find a
+            // pool for it
+            let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!("Skipped a solution as we couldn't find a pool for it: {:?}", solution);
+                continue;
+            };
+            println!("Processing pair {} - {}", t0, t1);
+
+            let conversion_rate_to_token0 =
+                gas_details.token_price_per_wei.get(&(*t0, *t1)).expect(
+                    "don't have price for a critical pair. should be unreachable since no orders \
+                     would get validated. this would always be skipped"
+                );
+
+            // Make sure the involved assets are in our assets array and we have the
+            // appropriate asset index for them
+            let t0_idx = asset_builder.add_or_get_asset(*t0) as u16;
+            let t1_idx = asset_builder.add_or_get_asset(*t1) as u16;
+
+            // Build our Pair featuring our uniform clearing price
+            // This price is in Ray format as requested.
+            let ucp: U256 = *solution.ucp;
+            let pair = Pair {
+                index0:       t0_idx,
+                index1:       t1_idx,
+                store_index:  *store_index,
+                price_1over0: ucp
+            };
+            pairs.push(pair);
+            let pair_idx = pairs.len() - 1;
+
+            // Pull out our net AMM order
+            let net_amm_order = solution
+                .amm_quantity
+                .as_ref()
+                .map(|amm_o| amm_o.to_order_tuple(t0_idx, t1_idx));
+            // Pull out our TOB swap and TOB reward
+            let (tob_swap, tob_rewards) = solution
+                .searcher
+                .as_ref()
+                .map(|tob| {
+                    let swap = if tob.is_bid {
+                        (t1_idx, t0_idx, tob.quantity_in, tob.quantity_out)
+                    } else {
+                        (t0_idx, t1_idx, tob.quantity_in, tob.quantity_out)
+                    };
+                    // We swallow an error here
+                    let outcome = ToBOutcome::from_tob_and_snapshot(tob, snapshot).ok();
+                    (Some(swap), outcome)
+                })
+                .unwrap_or_default();
+            // Merge our net AMM order with the TOB swap
+            let merged_amm_swap = match (net_amm_order, tob_swap) {
+                (Some(amm), Some(tob)) => {
+                    if amm.0 == tob.0 {
+                        // If they're in the same direction we just sum them
+                        Some((amm.0, amm.1, (amm.2 + tob.2), (amm.3 + tob.3)))
+                    } else {
+                        // If they're in opposite directions then we see if we have to flip them
+                        if tob.2 > amm.3 {
+                            Some((tob.0, tob.1, tob.2 - amm.2, tob.3 - amm.3))
+                        } else {
+                            Some((amm.0, amm.1, amm.2 - tob.3, amm.3 - tob.2))
+                        }
+                    }
+                }
+                (net_amm_order, tob_swap) => net_amm_order.or(tob_swap)
+            };
+            // Unwrap our merged amm order or provide a zero default
+            let (asset_in_index, asset_out_index, quantity_in, quantity_out) =
+                merged_amm_swap.unwrap_or((t0_idx, t1_idx, 0_u128, 0_u128));
+            // If we don't have a rewards update, we insert a default "empty" struct
+            let tob_outcome = tob_rewards.unwrap_or_default();
+
+            // Account for our net AMM Order
+            asset_builder.uniswap_swap(
+                AssetBuilderStage::Swap,
+                asset_in_index as usize,
+                asset_out_index as usize,
+                quantity_in,
+                quantity_out
+            );
+            // Account for our reward
+            asset_builder.allocate(AssetBuilderStage::Reward, *t0, tob_outcome.total_reward.to());
+            let rewards_update = tob_outcome.to_rewards_update();
+            // Push the pool update
+            pool_updates.push(PoolUpdate {
+                zero_for_one: false,
+                pair_index: pair_idx as u16,
+                swap_in_quantity: quantity_in,
+                rewards_update
+            });
+            // calculate the shared amount of gas in token 0 to share over this pool
+            let delegated_amount_in_token_0: U256 =
+                *(Ray::from(*conversion_rate_to_token0) * Ray::from(U256::from(shared_gas_in_wei)));
+
+            // Add the ToB order to our tob order list - This is currently converting
+            // between two ToB order formats
+            if let Some(tob) = solution.searcher.as_ref() {
+                // Account for our ToB order
+                let (asset_in, asset_out) = if tob.is_bid { (*t1, *t0) } else { (*t0, *t1) };
+
+                asset_builder.external_swap(
+                    AssetBuilderStage::TopOfBlock,
+                    asset_in,
+                    asset_out,
+                    tob.quantity_in,
+                    tob.quantity_out
+                );
+                let contract_tob =
+                    TopOfBlockOrder::of(tob, delegated_amount_in_token_0, pair_idx as u16)?;
+                top_of_block_orders.push(contract_tob);
+            }
+
+            // Get our list of user orders, if we have any
+            let mut order_list: Vec<&OrderWithStorageData<GroupedVanillaOrder>> = orders_by_pool
+                .get(&solution.id)
+                .map(|order_set| order_set.iter().collect())
+                .unwrap_or_default();
+            // Sort the user order list so we can properly associate it with our
+            // OrderOutcomes.  First bids by price then asks by price.
+            order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
+                (true, true) => b.priority_data.cmp(&a.priority_data),
+                (false, false) => a.priority_data.cmp(&b.priority_data),
+                (..) => b.is_bid.cmp(&a.is_bid)
+            });
+            // Loop through our filled user orders, do accounting, and add them to our user
+            // order list
+            for (outcome, order) in solution
+                .limit
+                .iter()
+                .zip(order_list.iter())
+                .filter(|(outcome, _)| outcome.is_filled())
+            {
+                let quantity_out = match outcome.outcome {
+                    OrderFillState::PartialFill(p) => p,
+                    _ => order.quantity()
+                };
+                // Calculate the price of this order given the amount filled and the UCP
+                let quantity_in = if order.is_bid {
+                    Ray::from(ucp).mul_quantity(quantity_out)
+                } else {
+                    Ray::from(ucp).inverse_quantity(quantity_out)
+                };
+                // Account for our user order
+                let (asset_in, asset_out) = if order.is_bid { (*t1, *t0) } else { (*t0, *t1) };
+                asset_builder.external_swap(
+                    AssetBuilderStage::UserOrder,
+                    asset_in,
+                    asset_out,
+                    quantity_in.to(),
+                    quantity_out.to()
+                );
+                user_orders.push(UserOrder::from_internal_order(
+                    order,
+                    outcome,
+                    delegated_amount_in_token_0,
+                    pair_idx as u16
+                )?);
+            }
+        }
+        Ok(Self::new(
+            asset_builder.get_asset_array(),
+            pairs,
+            pool_updates,
+            top_of_block_orders,
+            user_orders
+        ))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct BundleGasDetails {
+    /// a map (sorted tokens) of how much of token0 in gas is needed per unit of
+    /// gas
+    token_price_per_wei: HashMap<(Address, Address), U256>,
+    /// total gas to execute the bundle on angstrom
+    total_gas_cost_wei:  u64
+}
+
+impl BundleGasDetails {
+    pub fn new(
+        token_price_per_wei: HashMap<(Address, Address), U256>,
+        total_gas_cost_wei: u64
+    ) -> Self {
+        Self { token_price_per_wei, total_gas_cost_wei }
     }
 }
 
@@ -456,10 +964,10 @@ impl AngstromBundle {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
 pub struct AngstromPoolPartialKey([u8; 27]);
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct AngPoolConfigEntry {
     pub pool_partial_key: AngstromPoolPartialKey,
     pub tick_spacing:     u16,
@@ -467,9 +975,9 @@ pub struct AngPoolConfigEntry {
     pub store_index:      usize
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct AngstromPoolConfigStore {
-    entries: HashMap<AngstromPoolPartialKey, AngPoolConfigEntry>
+    entries: DashMap<AngstromPoolPartialKey, AngPoolConfigEntry>
 }
 
 impl AngstromPoolConfigStore {
@@ -484,7 +992,7 @@ impl AngstromPoolConfigStore {
         P: Provider<T, N>
     {
         let value = provider
-            .get_storage_at(angstrom_contract, U256::from(4))
+            .get_storage_at(angstrom_contract, U256::from(CONFIG_STORE_SLOT))
             .await
             .map_err(|e| format!("Error getting storage: {}", e))?;
 
@@ -511,7 +1019,7 @@ impl AngstromPoolConfigStore {
 
     pub fn get_entry(&self, asset0: Address, asset1: Address) -> Option<AngPoolConfigEntry> {
         let store_key = Self::derive_store_key(asset0, asset1);
-        self.entries.get(&store_key).cloned()
+        self.entries.get(&store_key).map(|i| *i)
     }
 }
 
@@ -555,13 +1063,13 @@ impl TryFrom<&[u8]> for AngstromPoolConfigStore {
 #[derive(Default, Clone)]
 pub struct UniswapAngstromRegistry {
     uniswap_pools:         UniswapPoolRegistry,
-    angstrom_config_store: AngstromPoolConfigStore
+    angstrom_config_store: Arc<AngstromPoolConfigStore>
 }
 
 impl UniswapAngstromRegistry {
     pub fn new(
         uniswap_pools: UniswapPoolRegistry,
-        angstrom_config_store: AngstromPoolConfigStore
+        angstrom_config_store: Arc<AngstromPoolConfigStore>
     ) -> Self {
         UniswapAngstromRegistry { uniswap_pools, angstrom_config_store }
     }

@@ -10,10 +10,11 @@ pub mod asset;
 pub mod rewards;
 pub mod tob;
 
+pub const CONFIG_STORE_SLOT: u32 = 2;
 pub const POOL_CONFIG_STORE_ENTRY_SIZE: usize = 32;
 
 sol! {
-    #[derive(Debug, PadeEncode, PadeDecode)]
+    #[derive(Debug, Default, PadeEncode, PadeDecode)]
     struct Asset {
         address addr;
         uint128 borrow;
@@ -21,7 +22,7 @@ sol! {
         uint128 settle;
     }
 
-    #[derive(Debug, PadeEncode, PadeDecode)]
+    #[derive(Debug,Default, PadeEncode, PadeDecode)]
     struct Pair {
         uint16 index0;
         uint16 index1;

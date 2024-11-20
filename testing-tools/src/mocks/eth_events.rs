@@ -39,7 +39,7 @@ impl MockEthEventHandle {
 
     pub fn reorged_orders(&self, orders: Vec<B256>) {
         self.tx
-            .send(EthEvent::ReorgedOrders(orders))
+            .send(EthEvent::ReorgedOrders(orders, 0..=0))
             .expect("state changes")
     }
 }

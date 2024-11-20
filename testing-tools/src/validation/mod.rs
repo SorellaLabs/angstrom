@@ -1,6 +1,5 @@
 use std::{
     future::{poll_fn, Future},
-    path::Path,
     pin::Pin,
     sync::{atomic::AtomicU64, Arc},
     task::Poll,
@@ -8,22 +7,23 @@ use std::{
 };
 
 use alloy_primitives::{Address, U256};
-use angstrom_types::pair_with_price::PairsWithPrice;
+use angstrom_types::{
+    contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice
+};
 use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::{FutureExt, Stream};
-use matching_engine::cfmm::uniswap::pool_manager::SyncedUniswapPools;
 use reth_provider::BlockNumReader;
 use tokio::sync::mpsc::unbounded_channel;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validation::{
-    common::db::BlockStateProviderFactory,
+    bundle::BundleValidator,
+    common::{db::BlockStateProviderFactory, SharedTools, TokenPriceGenerator},
     order::{
         order_validator::OrderValidator,
         sim::SimValidation,
         state::{
-            config::{load_validation_config, ValidationConfig},
             db_state_utils::{nonces::Nonces, FetchUtils},
-            pools::AngstromPoolsTracker,
-            token_pricing::TokenPriceGenerator
+            pools::AngstromPoolsTracker
         }
     },
     validator::{ValidationClient, Validator}
@@ -40,7 +40,6 @@ pub struct TestOrderValidator<
 > {
     /// allows us to set values to ensure
     pub db:         Arc<DB>,
-    pub config:     ValidationConfig,
     pub client:     ValidationClient,
     pub underlying: Validator<DB, AngstromPoolsTracker, FetchUtils<DB>>
 }
@@ -53,45 +52,36 @@ where
 {
     pub async fn new(
         db: DB,
+        angstrom_address: Address,
+        node_address: Address,
         uniswap_pools: SyncedUniswapPools,
         token_conversion: TokenPriceGenerator,
-        token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>
+        token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
+        pool_store: Arc<AngstromPoolConfigStore>
     ) -> Self {
         let (tx, rx) = unbounded_channel();
-        let config_path = Path::new("./state_config.toml");
-        let validation_config = load_validation_config(config_path).unwrap();
 
-        tracing::debug!(?validation_config);
         let current_block =
             Arc::new(AtomicU64::new(BlockNumReader::best_block_number(&db).unwrap()));
         let db = Arc::new(db);
 
         let fetch = FetchUtils::new(Address::default(), db.clone());
-        let pools = AngstromPoolsTracker::new(validation_config.pools.clone());
+        let pools = AngstromPoolsTracker::new(angstrom_address, pool_store);
 
         let handle = tokio::runtime::Handle::current();
-        let thread_pool =
-            KeySplitThreadpool::new(handle, validation_config.max_validation_per_user);
+        let thread_pool = KeySplitThreadpool::new(handle, 3);
         let sim = SimValidation::new(db.clone(), None);
 
-        // fill stream
+        let order_validator =
+            OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools).await;
 
-        let order_validator = OrderValidator::new(
-            sim,
-            current_block,
-            pools,
-            fetch,
-            uniswap_pools,
-            thread_pool,
-            token_conversion,
-            token_updates
-        )
-        .await;
+        let bundle_validator = BundleValidator::new(db.clone(), angstrom_address, node_address);
+        let shared_utils = SharedTools::new(token_conversion, token_updates, thread_pool);
 
-        let val = Validator::new(rx, order_validator);
+        let val = Validator::new(rx, order_validator, bundle_validator, shared_utils);
         let client = ValidationClient(tx);
 
-        Self { db, client, underlying: val, config: validation_config }
+        Self { db, client, underlying: val }
     }
 
     pub async fn poll_for(&mut self, duration: Duration) {

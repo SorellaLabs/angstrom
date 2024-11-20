@@ -1,10 +1,12 @@
 use std::fmt::Debug;
 
+use alloy::primitives::{FixedBytes, B256};
 use angstrom_types::{
-    orders::OrderId,
+    orders::{OrderId, OrderStatus},
     primitive::{NewInitializedPool, PoolId},
     sol_bindings::grouped_orders::{
-        GroupedComposableOrder, GroupedUserOrder, GroupedVanillaOrder, OrderWithStorageData
+        AllOrders, GroupedComposableOrder, GroupedUserOrder, GroupedVanillaOrder,
+        OrderWithStorageData
     }
 };
 
@@ -53,6 +55,10 @@ impl LimitOrderPool {
             })
     }
 
+    pub fn get_order_status(&self, order_hash: B256) -> Option<OrderStatus> {
+        self.limit_orders.get_order_status(order_hash)
+    }
+
     pub fn add_composable_order(
         &mut self,
         order: OrderWithStorageData<GroupedComposableOrder>
@@ -98,6 +104,19 @@ impl LimitOrderPool {
 
     pub fn get_all_orders(&self) -> Vec<OrderWithStorageData<GroupedVanillaOrder>> {
         self.limit_orders.get_all_orders()
+    }
+
+    pub fn get_all_orders_from_pool(&self, pool: FixedBytes<32>) -> Vec<AllOrders> {
+        self.limit_orders
+            .pending_orders
+            .get(&pool)
+            .map(|pool| {
+                pool.get_all_orders()
+                    .into_iter()
+                    .map(|p| p.order.into())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
     }
 
     pub fn park_order(&mut self, id: &OrderId) {

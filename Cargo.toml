@@ -13,9 +13,8 @@ members = [
   "testing-tools",
   "testing-tools/testing-tools-macros",
   "crates/matching-engine",
-  "crates/pade",
-  "crates/pade-macro",
   "crates/metrics",
+  "crates/uniswap-v4",
 ]
 
 
@@ -51,8 +50,7 @@ incremental = false
 [workspace.dependencies]
 consensus = { path = "./crates/consensus/" }
 angstrom-types = { path = "./crates/types/" }
-pade = { path = "./crates/pade" }
-pade-macro = { path = "./crates/pade-macro" }
+uniswap-v4 = { path = "./crates/uniswap-v4/" }
 angstrom-utils = { path = "./crates/utils/" }
 validation = { path = "./crates/validation/" }
 order-pool = { path = "./crates/order-pool/" }
@@ -66,6 +64,10 @@ angstrom = { path = "./bin/angstrom/" }
 matching-engine = { path = "./crates/matching-engine/" }
 contract-bindings = { path = "./crates/contract-bindings/" }
 eyre = "0.6.12"
+
+# pade
+pade = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
+pade-macro = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
 
 ## async
 async-trait = "0.1.68"
@@ -81,6 +83,7 @@ revm = { version = "14.0.3", features = [
   "std",
   "secp256k1",
 ], default-features = false }
+
 
 # reth
 reth = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }

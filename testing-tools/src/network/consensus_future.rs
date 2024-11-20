@@ -12,23 +12,27 @@ use std::{
 use alloy::transports::Transport;
 use consensus::ConsensusManager;
 use futures::FutureExt;
+use matching_engine::MatchingEngineHandle;
 use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 use tracing::{span, Level};
 
-pub(crate) struct TestnetConsensusFuture<T> {
-    _consensus: Arc<Mutex<ConsensusManager<T>>>,
+use crate::types::MockBlockSync;
+
+pub(crate) struct TestnetConsensusFuture<T, Matching> {
+    _consensus: Arc<Mutex<ConsensusManager<T, Matching, MockBlockSync>>>,
     /// JoinHandle for the _consensus future
     fut:        JoinHandle<()>
 }
 
-impl<T> TestnetConsensusFuture<T>
+impl<T, Matching> TestnetConsensusFuture<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     pub(crate) fn new(
         testnet_node_id: u64,
-        _consensus: ConsensusManager<T>,
+        _consensus: ConsensusManager<T, Matching, MockBlockSync>,
         running: Arc<AtomicBool>
     ) -> Self {
         let _consensus = Arc::new(Mutex::new(_consensus));
@@ -40,7 +44,7 @@ where
     #[allow(dead_code)]
     pub(crate) fn consensus_manager<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&ConsensusManager<T>) -> R
+        F: FnOnce(&ConsensusManager<T, Matching, MockBlockSync>) -> R
     {
         f(&self._consensus.lock())
     }
@@ -48,34 +52,36 @@ where
     #[allow(dead_code)]
     pub(crate) fn consensus_manager_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&mut ConsensusManager<T>) -> R
+        F: FnOnce(&mut ConsensusManager<T, Matching, MockBlockSync>) -> R
     {
         f(&mut self._consensus.lock())
     }
 }
 
-struct TestnetConsensusFutureInternals<T> {
+struct TestnetConsensusFutureInternals<T, Matching> {
     testnet_node_id: u64,
-    _consensus:      Arc<Mutex<ConsensusManager<T>>>,
+    _consensus:      Arc<Mutex<ConsensusManager<T, Matching, MockBlockSync>>>,
     running:         Arc<AtomicBool>
 }
 
-impl<T> TestnetConsensusFutureInternals<T>
+impl<T, Matching> TestnetConsensusFutureInternals<T, Matching>
 where
-    T: Transport
+    T: Transport,
+    Matching: MatchingEngineHandle
 {
     fn new(
         testnet_node_id: u64,
-        _consensus: Arc<Mutex<ConsensusManager<T>>>,
+        _consensus: Arc<Mutex<ConsensusManager<T, Matching, MockBlockSync>>>,
         running: Arc<AtomicBool>
     ) -> Self {
         Self { testnet_node_id, _consensus, running }
     }
 }
 
-impl<T> Future for TestnetConsensusFutureInternals<T>
+impl<T, Matching> Future for TestnetConsensusFutureInternals<T, Matching>
 where
-    T: Transport + Clone
+    T: Transport + Clone,
+    Matching: MatchingEngineHandle
 {
     type Output = ();
 
@@ -101,7 +107,7 @@ where
     }
 }
 
-impl<T> Drop for TestnetConsensusFuture<T> {
+impl<T, Matching> Drop for TestnetConsensusFuture<T, Matching> {
     fn drop(&mut self) {
         self.fut.abort();
     }

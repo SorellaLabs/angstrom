@@ -109,9 +109,10 @@ pub trait StorageWithData: RawPoolOrder {
     ) -> OrderWithStorageData<Self> {
         OrderWithStorageData {
             priority_data: angstrom_types::orders::OrderPriorityData {
-                price:  self.limit_price(),
-                volume: self.amount_in(),
-                gas:    U256::ZERO
+                price:     self.limit_price(),
+                volume:    self.amount_in(),
+                gas:       U256::ZERO,
+                gas_units: 0
             },
             pool_id: pool_info.pool_id,
             is_currently_valid: is_cur_valid,

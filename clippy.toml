@@ -1,1 +1,2 @@
 msrv = "1.80"
+too-many-arguments-threshold = 14

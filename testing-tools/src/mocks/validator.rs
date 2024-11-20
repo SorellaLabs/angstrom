@@ -1,17 +1,25 @@
 use std::{collections::HashMap, sync::Arc};
 
-use alloy_primitives::Address;
+use alloy_primitives::{keccak256, Address, FixedBytes};
 use angstrom_types::{
     self,
+    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
+    orders::OrderOrigin,
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders}
 };
+use eyre::OptionExt;
+use pade::PadeEncode;
 use parking_lot::Mutex;
-use validation::order::{OrderValidationResults, OrderValidatorHandle};
+use validation::{
+    bundle::BundleValidatorHandle,
+    order::{GasEstimationFuture, OrderValidationResults, OrderValidatorHandle}
+};
 
 // all keys are the signer of the order
 #[derive(Debug, Clone, Default)]
 pub struct MockValidator {
-    pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationResults>>>
+    pub limit_orders: Arc<Mutex<HashMap<Address, OrderValidationResults>>>,
+    pub bundle_res:   Arc<Mutex<HashMap<FixedBytes<32>, BundleGasDetails>>>
 }
 
 macro_rules! inserts {
@@ -30,8 +38,6 @@ impl MockValidator {
         inserts!(self, limit_orders, signer, order)
     }
 }
-
-//TODO: validate can be shortened using a macro
 
 impl OrderValidatorHandle for MockValidator {
     type Order = AllOrders;
@@ -57,5 +63,31 @@ impl OrderValidatorHandle for MockValidator {
             .remove(&address)
             .expect("not in mock");
         Box::pin(async move { res })
+    }
+
+    fn estimate_gas(&self, order: AllOrders) -> GasEstimationFuture {
+        Box::pin(async move {
+            match self.validate_order(OrderOrigin::External, order).await {
+                OrderValidationResults::Valid(o) => {
+                    Ok((o.priority_data.gas_units, o.priority_data.gas))
+                }
+                OrderValidationResults::Invalid(e) => Err(format!("Invalid order: {}", e)),
+                OrderValidationResults::TransitionedToBlock => {
+                    Err("Order transitioned to block".to_string())
+                }
+            }
+        })
+    }
+}
+
+impl BundleValidatorHandle for MockValidator {
+    async fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> eyre::Result<BundleGasDetails> {
+        let e = bundle.pade_encode();
+        let hash = keccak256(e);
+
+        self.bundle_res
+            .lock()
+            .remove(&hash)
+            .ok_or_eyre("mock validator could't find bundle")
     }
 }

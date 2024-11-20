@@ -9,6 +9,13 @@ use crate::{
     sol_bindings::{ext::RespendAvoidanceMethod, RawPoolOrder}
 };
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OrderStatus {
+    Filled,
+    Pending,
+    Blocked
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OrderId {
     pub address:         Address,
@@ -41,10 +48,12 @@ impl OrderId {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderPriorityData {
-    pub price:  U256,
-    pub volume: u128,
+    pub price:     U256,
+    pub volume:    u128,
     /// gas used in the pairs token0
-    pub gas:    U256
+    pub gas:       U256,
+    /// gas units used
+    pub gas_units: u64
 }
 
 impl PartialOrd for OrderPriorityData {
@@ -59,6 +68,7 @@ impl Ord for OrderPriorityData {
             .cmp(&other.price)
             .then_with(|| self.volume.cmp(&other.volume))
             .then_with(|| self.gas.cmp(&other.gas))
+            .then_with(|| self.gas_units.cmp(&other.gas_units))
     }
 }
 

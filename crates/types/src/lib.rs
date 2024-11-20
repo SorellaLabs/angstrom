@@ -1,5 +1,6 @@
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 
+pub mod block_sync;
 pub mod consensus;
 pub mod contract_bindings;
 pub mod contract_payloads;

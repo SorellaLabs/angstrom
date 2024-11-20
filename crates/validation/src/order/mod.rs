@@ -12,10 +12,9 @@ use angstrom_types::{
     }
 };
 use sim::SimValidation;
-use state::token_pricing::TokenPriceGenerator;
 use tokio::sync::oneshot::{channel, Sender};
 
-use crate::validator::ValidationRequest;
+use crate::{common::TokenPriceGenerator, validator::ValidationRequest};
 
 pub mod order_validator;
 pub mod sim;
@@ -28,6 +27,9 @@ pub type ValidationFuture<'a> =
 
 pub type ValidationsFuture<'a> =
     Pin<Box<dyn Future<Output = Vec<OrderValidationResults>> + Send + Sync + 'a>>;
+
+pub type GasEstimationFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<(u64, U256), String>> + Send + Sync + 'a>>;
 
 pub enum OrderValidationRequest {
     ValidateOrder(Sender<OrderValidationResults>, AllOrders, OrderOrigin)
@@ -161,7 +163,7 @@ impl OrderValidationResults {
             &SimValidation<DB>,
             &OrderWithStorageData<New>,
             &TokenPriceGenerator
-        ) -> eyre::Result<U256>
+        ) -> eyre::Result<(u64, U256)>
     ) -> eyre::Result<OrderWithStorageData<Old>>
     where
         DB: Unpin + Clone + 'static + revm::DatabaseRef + Send + Sync,
@@ -171,8 +173,9 @@ impl OrderValidationResults {
             .try_map_inner(move |order| Ok(map_new(order)))
             .unwrap();
 
-        if let Ok(gas_used) = (calculate_function)(sim, &order, token_price) {
+        if let Ok((gas_units, gas_used)) = (calculate_function)(sim, &order, token_price) {
             order.priority_data.gas += gas_used;
+            order.priority_data.gas_units = gas_units;
         } else {
             return Err(eyre::eyre!("not able to process gas"))
         }
@@ -221,6 +224,9 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
         completed_orders: Vec<B256>,
         addresses: Vec<Address>
     ) -> ValidationFuture;
+
+    /// estimates gas usage for order
+    fn estimate_gas(&self, order: AllOrders) -> GasEstimationFuture;
 }
 
 impl OrderValidatorHandle for ValidationClient {
@@ -257,6 +263,20 @@ impl OrderValidatorHandle for ValidationClient {
                 )));
 
             rx.await.unwrap()
+        })
+    }
+
+    fn estimate_gas(&self, order: AllOrders) -> GasEstimationFuture {
+        Box::pin(async move {
+            match self.validate_order(OrderOrigin::External, order).await {
+                OrderValidationResults::Valid(o) => {
+                    Ok((o.priority_data.gas_units, o.priority_data.gas))
+                }
+                OrderValidationResults::Invalid(e) => Err(format!("Invalid order: {}", e)),
+                OrderValidationResults::TransitionedToBlock => {
+                    Err("Order transitioned to block".to_string())
+                }
+            }
         })
     }
 }

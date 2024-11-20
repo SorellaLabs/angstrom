@@ -1,21 +1,19 @@
-use alloy_primitives::{Address, B256};
+use std::collections::HashSet;
+
+use alloy_primitives::{Address, FixedBytes, B256, U256};
 use angstrom_types::{
+    orders::{OrderLocation, OrderStatus},
     primitive::Signature,
-    sol_bindings::{
-        grouped_orders::AllOrders,
-        rpc_orders::{
-            ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
-            TopOfBlockOrder
-        }
-    }
+    sol_bindings::grouped_orders::AllOrders
 };
+use futures::StreamExt;
 use jsonrpsee::{
     core::{RpcResult, Serialize},
     proc_macros::rpc
 };
 use serde::Deserialize;
 
-use crate::types::OrderSubscriptionKind;
+use crate::types::{OrderSubscriptionFilter, OrderSubscriptionKind};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CancelOrderRequest {
@@ -23,31 +21,38 @@ pub struct CancelOrderRequest {
     pub hash:      B256
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GasEstimateResponse {
+    pub gas_units: u64,
+    pub gas:       U256
+}
+
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "angstrom"))]
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "angstrom"))]
 #[async_trait::async_trait]
 pub trait OrderApi {
-    /// Users send the rlp encoded signature and order bytes
-    #[method(name = "sendPartialStandingOrder")]
-    async fn send_partial_standing_order(&self, order: PartialStandingOrder) -> RpcResult<bool>;
+    /// Submit any type of order
+    #[method(name = "sendOrder")]
+    async fn send_order(&self, order: AllOrders) -> RpcResult<bool>;
 
-    #[method(name = "sendExactStandingOrder")]
-    async fn send_exact_standing_order(&self, order: ExactStandingOrder) -> RpcResult<bool>;
-
-    #[method(name = "sendSearcherOrder")]
-    async fn send_searcher_order(&self, order: TopOfBlockOrder) -> RpcResult<bool>;
-
-    #[method(name = "sendPartialFlashOrder")]
-    async fn send_partial_flash_order(&self, order: PartialFlashOrder) -> RpcResult<bool>;
-
-    #[method(name = "sendExactFlashOrder")]
-    async fn send_exact_flash_order(&self, order: ExactFlashOrder) -> RpcResult<bool>;
-
-    #[method(name = "pendingOrders")]
-    async fn pending_orders(&self, from: Address) -> RpcResult<Vec<AllOrders>>;
+    #[method(name = "pendingOrder")]
+    async fn pending_order(&self, from: Address) -> RpcResult<Vec<AllOrders>>;
 
     #[method(name = "cancelOrder")]
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool>;
+
+    #[method(name = "estimateGas")]
+    async fn estimate_gas(&self, order: AllOrders) -> RpcResult<GasEstimateResponse>;
+
+    #[method(name = "orderStatus")]
+    async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>>;
+
+    #[method(name = "ordersByPair")]
+    async fn orders_by_pair(
+        &self,
+        pair: FixedBytes<32>,
+        location: OrderLocation
+    ) -> RpcResult<Vec<AllOrders>>;
 
     #[subscription(
         name = "subscribeOrders",
@@ -56,6 +61,89 @@ pub trait OrderApi {
     )]
     async fn subscribe_orders(
         &self,
-        kind: OrderSubscriptionKind
+        kind: HashSet<OrderSubscriptionKind>,
+        filters: HashSet<OrderSubscriptionFilter>
     ) -> jsonrpsee::core::SubscriptionResult;
+
+    // MULTI CALL
+    #[method(name = "sendOrders")]
+    async fn send_orders(&self, orders: Vec<AllOrders>) -> RpcResult<Vec<bool>> {
+        futures::stream::iter(orders.into_iter())
+            .map(|order| async { self.send_order(order).await })
+            .buffered(3)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<RpcResult<Vec<_>>>()
+    }
+
+    #[method(name = "pendingOrders")]
+    async fn pending_orders(&self, from: Vec<Address>) -> RpcResult<Vec<AllOrders>> {
+        Ok(futures::stream::iter(from.into_iter())
+            .map(|order| async move { self.pending_order(order).await })
+            .buffered(3)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<RpcResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect())
+    }
+
+    #[method(name = "cancelOrders")]
+    async fn cancel_orders(&self, request: Vec<CancelOrderRequest>) -> RpcResult<Vec<bool>> {
+        futures::stream::iter(request.into_iter())
+            .map(|order| async { self.cancel_order(order).await })
+            .buffered(3)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<RpcResult<Vec<_>>>()
+    }
+
+    #[method(name = "estimateGasOfOrders")]
+    async fn estimate_gas_of_orders(
+        &self,
+        orders: Vec<AllOrders>
+    ) -> RpcResult<Vec<GasEstimateResponse>> {
+        futures::stream::iter(orders.into_iter())
+            .map(|order| async { self.estimate_gas(order).await })
+            .buffered(3)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<RpcResult<Vec<_>>>()
+    }
+
+    #[method(name = "orderStatuses")]
+    async fn status_of_orders(
+        &self,
+        order_hashes: Vec<B256>
+    ) -> RpcResult<Vec<Option<OrderStatus>>> {
+        futures::stream::iter(order_hashes.into_iter())
+            .map(|order| async move { self.order_status(order).await })
+            .buffered(3)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<RpcResult<Vec<_>>>()
+    }
+
+    #[method(name = "ordersByPairs")]
+    async fn orders_by_pairs(
+        &self,
+        pair_with_location: Vec<(FixedBytes<32>, OrderLocation)>
+    ) -> RpcResult<Vec<AllOrders>> {
+        Ok(futures::stream::iter(pair_with_location.into_iter())
+            .map(|(pair, location)| async move { self.orders_by_pair(pair, location).await })
+            .buffered(3)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<RpcResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect())
+    }
 }

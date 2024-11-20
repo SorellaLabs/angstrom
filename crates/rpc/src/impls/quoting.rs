@@ -1,36 +1,26 @@
-use alloy_primitives::{Address, U256};
-use jsonrpsee::{core::RpcResult, PendingSubscriptionSink};
+use std::collections::HashSet;
 
-use crate::{
-    api::QuotingApiServer,
-    types::{QuotingSubscriptionKind, QuotingSubscriptionParam}
-};
+use jsonrpsee::PendingSubscriptionSink;
+use reth_tasks::TaskSpawner;
 
-pub struct QuotesApi<OrderPool> {
-    pub pool: OrderPool
+use crate::{api::QuotingApiServer, types::GasEstimateFilter};
+
+pub struct QuotesApi<OrderPool, Spawner> {
+    _pool:         OrderPool,
+    _task_spawner: Spawner
 }
 
 #[async_trait::async_trait]
-impl<OrderPool> QuotingApiServer for QuotesApi<OrderPool>
+impl<OrderPool, Spawner> QuotingApiServer for QuotesApi<OrderPool, Spawner>
 where
-    OrderPool: Send + Sync + 'static
+    OrderPool: Send + Sync + 'static,
+    Spawner: TaskSpawner + 'static
 {
-    async fn quote_transaction(
-        &self,
-        _token_in: Address,
-        _token_out: Address,
-        _amount_in: U256,
-        _amount_out: U256
-    ) -> RpcResult<U256> {
-        todo!()
-    }
-
-    async fn subscribe_quotes(
+    async fn subscribe_gas_estimates(
         &self,
         _pending: PendingSubscriptionSink,
-        _kind: QuotingSubscriptionKind,
-        _params: Option<QuotingSubscriptionParam>
+        _filters: HashSet<GasEstimateFilter>
     ) -> jsonrpsee::core::SubscriptionResult {
-        todo!()
+        Ok(())
     }
 }

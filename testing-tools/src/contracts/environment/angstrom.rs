@@ -112,7 +112,7 @@ mod tests {
             mintable_mock_erc_20::MintableMockERC20,
             pool_gate::PoolGate::PoolGateInstance
         },
-        contract_payloads::angstrom::{AngstromBundle, UserOrder},
+        contract_payloads::angstrom::{AngstromBundle, BundleGasDetails, UserOrder},
         matching::{uniswap::LiqRange, SqrtPriceX96},
         orders::{OrderFillState, OrderOutcome},
         primitive::ANGSTROM_DOMAIN,
@@ -183,7 +183,8 @@ mod tests {
         };
         let outcome =
             OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
-        let _encode = UserOrder::from_internal_order(&user_order, &outcome, 0).pade_encode();
+        let _encode =
+            UserOrder::from_internal_order_max_gas(&user_order, &outcome, 0).pade_encode();
     }
 
     #[tokio::test]
@@ -294,7 +295,8 @@ mod tests {
             .build();
         println!("Proposal solutions:\n{:?}", proposal.solutions);
         let pools = HashMap::from([(pool.id(), (pool.token0(), pool.token1(), amm, 0))]);
-        let bundle = AngstromBundle::from_proposal(&proposal, &pools).unwrap();
+        let bundle =
+            AngstromBundle::from_proposal(&proposal, BundleGasDetails::default(), &pools).unwrap();
         println!("Bundle: {:?}", bundle);
         let encoded = bundle.pade_encode();
 

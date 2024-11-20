@@ -18,7 +18,7 @@ pub const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c75
 
 // crazy that this is a thing
 #[allow(clippy::too_long_first_doc_paragraph)]
-/// The token price generator gives us the avg instantaneous price of the last N
+/// The token price generator gives us the avg instantaneous price of the last 5
 /// blocks of the underlying V4 pool. This is then used in order to convert the
 /// gas used from eth to token0 of the pool the user is swapping over.
 /// In the case of NON direct eth pairs. we assume that any token liquid enough
@@ -33,7 +33,7 @@ pub struct TokenPriceGenerator {
 }
 
 impl TokenPriceGenerator {
-    /// is a bit of a pain as we need todo a look-back in-order to grab last N
+    /// is a bit of a pain as we need todo a look-back in-order to grab last 5
     /// blocks.
     pub async fn new<P: Provider<T, N>, T: Transport + Clone, N: Network, Loader>(
         provider: Arc<P>,

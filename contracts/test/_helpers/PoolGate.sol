@@ -30,7 +30,7 @@ contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
     IPoolManager internal immutable UNI_V4;
     address public hook;
 
-    int24 internal _tickSpacing = 60;
+    int24 internal _tickSpacing = -1;
 
     constructor(address uniV4) {
         UNI_V4 = IPoolManager(uniV4);
@@ -210,6 +210,7 @@ contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
     }
 
     function poolKey(address asset0, address asset1) internal view returns (PoolKey memory) {
+        require(_tickSpacing > 0, "Must set _tickSpacing via call to tickSpacing(...) first");
         return poolKey(Angstrom(hook), asset0, asset1, _tickSpacing);
     }
 }

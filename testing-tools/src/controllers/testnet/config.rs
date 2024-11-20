@@ -14,17 +14,17 @@ use crate::{anvil_state_provider::WalletProvider, types::TestingConfig};
 
 #[derive(Debug, Clone)]
 pub struct TestnetConfig {
-    pub anvil_key:        usize,
-    pub node_count:       u64,
-    pub leader_ws_url:    String,
-    pub controller_address:          Address,
-    pub pk:               PublicKey,
-    pub signing_key:      PrivateKeySigner,
-    pub secret_key:       SecretKey,
-    pub pool_keys:        Vec<PoolKey>,
-    pub angstrom_address: Address,
+    pub anvil_key:            usize,
+    pub node_count:           u64,
+    pub leader_ws_url:        String,
+    pub controller_address:   Address,
+    pub pk:                   PublicKey,
+    pub signing_key:          PrivateKeySigner,
+    pub secret_key:           SecretKey,
+    pub pool_keys:            Vec<PoolKey>,
+    pub angstrom_address:     Address,
     pub pool_manager_address: Address,
-    pub leader_config:    Option<TestnetLeaderConfig>
+    pub leader_config:        Option<TestnetLeaderConfig>
 }
 
 impl TestnetConfig {

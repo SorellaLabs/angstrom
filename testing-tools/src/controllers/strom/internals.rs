@@ -109,7 +109,8 @@ impl AngstromDevnetNodeInternals {
                 .subscribe_to_canonical_state(),
             uniswap_registry.clone(),
             block_id,
-            block_sync.clone()
+            block_sync.clone(),
+            inital_angstrom_state.pool_manager_addr
         )
         .await;
 
@@ -119,7 +120,8 @@ impl AngstromDevnetNodeInternals {
         let token_conversion = TokenPriceGenerator::new(
             state_provider.state_provider().provider().into(),
             block_id,
-            uniswap_pools.clone()
+            uniswap_pools.clone(),
+            None
         )
         .await
         .expect("failed to start price generator");
@@ -143,6 +145,7 @@ impl AngstromDevnetNodeInternals {
         let validator = TestOrderValidator::new(
             state_provider.state_provider(),
             inital_angstrom_state.angstrom_addr,
+            inital_angstrom_state.pool_manager_addr,
             Address::default(),
             uniswap_pools.clone(),
             token_conversion,

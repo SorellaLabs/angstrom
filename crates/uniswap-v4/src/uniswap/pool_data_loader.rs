@@ -1,6 +1,12 @@
 use std::{collections::HashMap, future::Future, sync::Arc};
 
-use alloy::{primitives::{aliases::I24, Address, BlockNumber, U256}, providers::{Network, Provider}, sol, sol_types::{SolEvent, SolType}, transports::Transport};
+use alloy::{
+    primitives::{aliases::I24, Address, BlockNumber, U256},
+    providers::{Network, Provider},
+    sol,
+    sol_types::{SolEvent, SolType},
+    transports::Transport
+};
 use alloy_primitives::{Log, B256, I256};
 use angstrom_types::primitive::{PoolId as AngstromPoolId, UniswapPoolRegistry};
 use itertools::Itertools;
@@ -135,7 +141,7 @@ pub struct ModifyPositionEvent {
 pub struct DataLoader<A> {
     address:       A,
     pool_registry: Option<UniswapPoolRegistry>,
-    pool_manager:  Option<Address>,
+    pool_manager:  Option<Address>
 }
 
 pub trait PoolDataLoader<A>: Clone {
@@ -281,19 +287,16 @@ impl DataLoader<Address> {
 
 impl DataLoader<AngstromPoolId> {
     fn pool_manager(&self) -> Address {
-        self.pool_manager.expect("pool_manager must be set for V4 pools")
+        self.pool_manager
+            .expect("pool_manager must be set for V4 pools")
     }
 
     pub fn new_with_registry(
         address: AngstromPoolId,
         registry: UniswapPoolRegistry,
-        pool_manager: Address,
+        pool_manager: Address
     ) -> Self {
-        Self {
-            address,
-            pool_registry: Some(registry),
-            pool_manager: Some(pool_manager),
-        }
+        Self { address, pool_registry: Some(registry), pool_manager: Some(pool_manager) }
     }
 }
 

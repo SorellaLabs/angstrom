@@ -25,10 +25,10 @@ pub const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c75
 /// this allows for a simple lookup.
 #[derive(Debug, Default, Clone)]
 pub struct TokenPriceGenerator {
-    prev_prices: HashMap<PoolId, VecDeque<PairsWithPrice>>,
-    pair_to_pool: HashMap<(Address, Address), PoolId>,
-    cur_block: u64,
-    blocks_to_avg_price: Option<u64>,
+    prev_prices:         HashMap<PoolId, VecDeque<PairsWithPrice>>,
+    pair_to_pool:        HashMap<(Address, Address), PoolId>,
+    cur_block:           u64,
+    blocks_to_avg_price: Option<u64>
 }
 
 impl TokenPriceGenerator {
@@ -38,7 +38,7 @@ impl TokenPriceGenerator {
         provider: Arc<P>,
         current_block: u64,
         uni: SyncedUniswapPools<PoolId, Loader>,
-        blocks_to_avg_price: Option<u64>,
+        blocks_to_avg_price: Option<u64>
     ) -> eyre::Result<Self>
     where
         Loader: PoolDataLoader<PoolId> + Default + Clone + Send + Sync + 'static
@@ -66,7 +66,8 @@ impl TokenPriceGenerator {
                         data_loader
                     };
 
-                    for block_number in current_block.saturating_sub(blocks_to_avg)..=current_block {
+                    for block_number in current_block.saturating_sub(blocks_to_avg)..=current_block
+                    {
                         let pool_data = data_loader
                             .load_pool_data(Some(block_number), provider.clone())
                             .await
@@ -75,9 +76,9 @@ impl TokenPriceGenerator {
                         let price = pool_data.get_raw_price();
 
                         queue.push_back(PairsWithPrice {
-                            token0: pool_data.tokenA,
-                            token1: pool_data.tokenB,
-                            block_num: block_number,
+                            token0:         pool_data.tokenA,
+                            token1:         pool_data.tokenB,
+                            block_num:      block_number,
                             price_1_over_0: price
                         });
                     }
@@ -92,12 +93,7 @@ impl TokenPriceGenerator {
             })
             .await;
 
-        Ok(Self { 
-            prev_prices: pools, 
-            cur_block: current_block, 
-            pair_to_pool,
-            blocks_to_avg_price,
-        })
+        Ok(Self { prev_prices: pools, cur_block: current_block, pair_to_pool, blocks_to_avg_price })
     }
 
     pub fn generate_lookup_map(&self) -> HashMap<(Address, Address), U256> {
@@ -309,9 +305,9 @@ pub mod test {
         // assumes both 18 decimal
         let pair1_rate = U256::from(5) * WEI_IN_ETHER;
         let pair = PairsWithPrice {
-            token0: TOKEN2,
-            token1: TOKEN0,
-            block_num: 0,
+            token0:         TOKEN2,
+            token1:         TOKEN0,
+            block_num:      0,
             price_1_over_0: pair1_rate
         };
         let queue = VecDeque::from([pair; 5]);
@@ -322,9 +318,9 @@ pub mod test {
         let pair2_rate = U256::from(200000);
 
         let pair = PairsWithPrice {
-            token0: TOKEN0,
-            token1: TOKEN1,
-            block_num: 0,
+            token0:         TOKEN0,
+            token1:         TOKEN1,
+            block_num:      0,
             price_1_over_0: pair2_rate
         };
         let queue = VecDeque::from([pair; 5]);
@@ -334,9 +330,9 @@ pub mod test {
         let pair3_rate = U256::from(2e18);
 
         let pair = PairsWithPrice {
-            token0: TOKEN2,
-            token1: TOKEN3,
-            block_num: 0,
+            token0:         TOKEN2,
+            token1:         TOKEN3,
+            block_num:      0,
             price_1_over_0: pair3_rate
         };
         let queue = VecDeque::from([pair; 5]);
@@ -346,20 +342,20 @@ pub mod test {
         let pair4_rate = U256::from(1e36) / U256::from(8e6);
 
         let pair = PairsWithPrice {
-            token0: TOKEN4,
-            token1: TOKEN1,
-            block_num: 0,
+            token0:         TOKEN4,
+            token1:         TOKEN1,
+            block_num:      0,
             price_1_over_0: pair4_rate
         };
 
         let queue = VecDeque::from([pair; 5]);
         prices.insert(FixedBytes::<32>::with_last_byte(4), queue);
 
-        TokenPriceGenerator { 
-            cur_block: 0, 
-            prev_prices: prices, 
-            pair_to_pool: pairs_to_key,
-            blocks_to_avg_price: Some(5),
+        TokenPriceGenerator {
+            cur_block:           0,
+            prev_prices:         prices,
+            pair_to_pool:        pairs_to_key,
+            blocks_to_avg_price: Some(5)
         }
     }
 

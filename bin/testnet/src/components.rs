@@ -135,7 +135,7 @@ pub fn initialize_strom_handles() -> StromHandles {
 //     let provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
 //         .with_recommended_fillers()
 //         .wallet(EthereumWallet::from(
-//             
+//
 // LocalSigner::<SigningKey>::from_bytes(&secret_key.secret_bytes().into()).
 // unwrap()         ))
 //         .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())

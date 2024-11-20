@@ -47,8 +47,12 @@ where
 
             (Some(initializer), init_state)
         } else {
-            let init_state =
-                InitialTestnetState::new(config.angstrom_address, config.pool_manager_address, None, config.pool_keys.clone());
+            let init_state = InitialTestnetState::new(
+                config.angstrom_address,
+                config.pool_manager_address,
+                None,
+                config.pool_keys.clone()
+            );
             (None, init_state)
         };
 

@@ -51,7 +51,7 @@ impl TokenPriceGenerator {
         }
 
         let blocks_to_avg = block_to_price_override.unwrap_or(BLOCKS_TO_AVG_PRICE);
-        // for each pool, we want to load the last N blocks and get the sqrt_price_96
+        // for each pool, we want to load the last 5 blocks and get the sqrt_price_96
         // and then convert it into the price of the underlying pool
         let pools = futures::stream::iter(uni.iter())
             .map(|(pool_key, pool)| {
@@ -361,7 +361,7 @@ pub mod test {
             cur_block:               0,
             prev_prices:             prices,
             pair_to_pool:            pairs_to_key,
-            block_to_price_override: Some(5)
+            block_to_price_override: None
         }
     }
 

@@ -26,10 +26,10 @@ pub const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c75
 /// this allows for a simple lookup.
 #[derive(Debug, Default, Clone)]
 pub struct TokenPriceGenerator {
-    prev_prices:             HashMap<PoolId, VecDeque<PairsWithPrice>>,
-    pair_to_pool:            HashMap<(Address, Address), PoolId>,
-    cur_block:               u64,
-    block_to_price_override: Option<u64>
+    prev_prices:              HashMap<PoolId, VecDeque<PairsWithPrice>>,
+    pair_to_pool:             HashMap<(Address, Address), PoolId>,
+    cur_block:                u64,
+    blocks_to_price_override: Option<u64>
 }
 
 impl TokenPriceGenerator {
@@ -39,7 +39,7 @@ impl TokenPriceGenerator {
         provider: Arc<P>,
         current_block: u64,
         uni: SyncedUniswapPools<PoolId, Loader>,
-        block_to_price_override: Option<u64>
+        blocks_to_price_override: Option<u64>
     ) -> eyre::Result<Self>
     where
         Loader: PoolDataLoader<PoolId> + Default + Clone + Send + Sync + 'static
@@ -50,7 +50,7 @@ impl TokenPriceGenerator {
             pair_to_pool.insert((pool.token_a, pool.token_b), *key);
         }
 
-        let blocks_to_avg = block_to_price_override.unwrap_or(BLOCKS_TO_AVG_PRICE);
+        let blocks_to_avg = blocks_to_price_override.unwrap_or(BLOCKS_TO_AVG_PRICE);
         // for each pool, we want to load the last 5 blocks and get the sqrt_price_96
         // and then convert it into the price of the underlying pool
         let pools = futures::stream::iter(uni.iter())
@@ -98,7 +98,7 @@ impl TokenPriceGenerator {
             prev_prices: pools,
             cur_block: current_block,
             pair_to_pool,
-            block_to_price_override
+            blocks_to_price_override
         })
     }
 
@@ -156,7 +156,7 @@ impl TokenPriceGenerator {
             let prices = self.prev_prices.get(pool_key)?;
             let size = prices.len() as u64;
 
-            let blocks_to_avg = self.block_to_price_override.unwrap_or(0);
+            let blocks_to_avg = self.blocks_to_price_override.unwrap_or(0);
             if blocks_to_avg > 0 && size != blocks_to_avg {
                 warn!("size of loaded blocks doesn't match the value we set");
             }
@@ -192,7 +192,7 @@ impl TokenPriceGenerator {
             let prices = self.prev_prices.get(key)?;
             let size = prices.len() as u64;
 
-            let blocks_to_avg = self.block_to_price_override.unwrap_or(0);
+            let blocks_to_avg = self.blocks_to_price_override.unwrap_or(0);
             if blocks_to_avg > 0 && size != blocks_to_avg {
                 warn!("size of loaded blocks doesn't match the value we set");
             }
@@ -223,7 +223,7 @@ impl TokenPriceGenerator {
             let prices = self.prev_prices.get(default_pool_key)?;
             let size = prices.len() as u64;
 
-            let blocks_to_avg = self.block_to_price_override.unwrap_or(0);
+            let blocks_to_avg = self.blocks_to_price_override.unwrap_or(0);
             if blocks_to_avg > 0 && size != blocks_to_avg {
                 warn!("size of loaded blocks doesn't match the value we set");
             }
@@ -358,10 +358,10 @@ pub mod test {
         prices.insert(FixedBytes::<32>::with_last_byte(4), queue);
 
         TokenPriceGenerator {
-            cur_block:               0,
-            prev_prices:             prices,
-            pair_to_pool:            pairs_to_key,
-            block_to_price_override: None
+            cur_block:                0,
+            prev_prices:              prices,
+            pair_to_pool:             pairs_to_key,
+            blocks_to_price_override: None
         }
     }
 

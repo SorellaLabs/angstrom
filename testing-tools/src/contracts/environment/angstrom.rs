@@ -67,7 +67,7 @@ where
         lower_tick: alloy_primitives::aliases::I24,
         upper_tick: alloy_primitives::aliases::I24,
         liquidity: alloy_primitives::U256
-    ) -> eyre::Result<TxHash> {
+    ) -> eyre::Result<TxHash>{
         self.inner
             .add_liquidity_position(asset0, asset1, lower_tick, upper_tick, liquidity)
             .await

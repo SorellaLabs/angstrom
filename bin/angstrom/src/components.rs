@@ -323,8 +323,7 @@ async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
             EnhancedUniswapPool::new(
                 DataLoader::new_with_registry(
                     *pool_id,
-                    uniswap_pool_registry.clone(),
-                    pool_manager
+                    uniswap_pool_registry.clone(), pool_manager
                 ),
                 initial_ticks_per_side
             )

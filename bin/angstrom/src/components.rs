@@ -218,10 +218,15 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
             .await
             .expect("watch for uniswap pool changes");
     }));
-    let price_generator =
-        TokenPriceGenerator::new(provider.clone(), block_id, uniswap_pools.clone(), None)
-            .await
-            .expect("failed to start token price generator");
+
+    let price_generator = TokenPriceGenerator::new(
+        provider.clone(),
+        block_id,
+        uniswap_pools.clone(),
+        None)
+
+    .await
+    .expect("failed to start token price generator");
 
     let block_height = node.provider.best_block_number().unwrap();
 
@@ -323,7 +328,8 @@ async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
             EnhancedUniswapPool::new(
                 DataLoader::new_with_registry(
                     *pool_id,
-                    uniswap_pool_registry.clone(), pool_manager
+                    uniswap_pool_registry.clone(),
+                    pool_manager
                 ),
                 initial_ticks_per_side
             )

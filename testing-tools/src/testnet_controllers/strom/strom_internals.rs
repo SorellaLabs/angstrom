@@ -160,11 +160,12 @@ impl AngstromTestnetNodeInternals {
         let uniswap_pools = uniswap_pool_manager.pools();
         tokio::spawn(async move { uniswap_pool_manager.watch_state_changes().await });
 
+        let blocks_to_average_price = 5;
         let token_conversion = TokenPriceGenerator::new(
             state_provider.provider().provider().into(),
             block_id,
             uniswap_pools.clone(),
-            None
+            Some(blocks_to_average_price)
         )
         .await
         .expect("failed to start price generator");

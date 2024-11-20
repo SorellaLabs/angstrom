@@ -62,15 +62,7 @@ pub fn run() -> eyre::Result<()> {
             .launch()
             .await?;
 
-        initialize_strom_components(
-            args,
-            secret_key,
-            channels,
-            network,
-            node,
-            &executor
-        )
-        .await;
+        initialize_strom_components(args, secret_key, channels, network, node, &executor).await;
 
         node_exit_future.await
     })

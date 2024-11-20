@@ -72,10 +72,11 @@ fn get_or_set_signer(my_address: Address) -> Address {
 }
 
 pub struct AngstromTestnetAddresses {
-    pub contract: Address,
-    pub token0:   Address,
-    pub token1:   Address,
-    pub hooks:    Address
+    pub contract:     Address,
+    pub pool_manager: Address,
+    pub token0:       Address,
+    pub token1:       Address,
+    pub hooks:        Address
 }
 /// deploys the angstrom testhub contract along with two tokens, under the
 /// secret key
@@ -150,6 +151,7 @@ pub async fn deploy_contract_and_create_pool(
 
     Ok(AngstromTestnetAddresses {
         contract: angstrom_address,
+        pool_manager: v4_address,
         token0,
         token1,
         hooks: Address::default()

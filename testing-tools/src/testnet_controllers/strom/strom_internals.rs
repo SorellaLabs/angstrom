@@ -152,7 +152,8 @@ impl AngstromTestnetNodeInternals {
             state_provider.provider().subscribe_to_canonical_state(),
             uniswap_registry.clone(),
             block_id,
-            block_sync
+            block_sync,
+            addresses.pool_manager
         )
         .await;
 
@@ -162,7 +163,8 @@ impl AngstromTestnetNodeInternals {
         let token_conversion = TokenPriceGenerator::new(
             state_provider.provider().provider().into(),
             block_id,
-            uniswap_pools.clone()
+            uniswap_pools.clone(),
+            None
         )
         .await
         .expect("failed to start price generator");
@@ -187,6 +189,7 @@ impl AngstromTestnetNodeInternals {
         let validator = TestOrderValidator::new(
             state_provider.provider(),
             angstrom_addr,
+            addresses.pool_manager,
             node_address,
             uniswap_pools.clone(),
             token_conversion,
@@ -284,7 +287,8 @@ async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
     state_notification: CanonStateNotifications,
     uniswap_pool_registry: UniswapPoolRegistry,
     current_block: BlockNumber,
-    block_sync: MockBlockSync
+    block_sync: MockBlockSync,
+    pool_manager: Address
 ) -> UniswapPoolManager<
     CanonicalStateAdapter,
     MockBlockSync,
@@ -297,7 +301,11 @@ async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
         .map(|pool_id| {
             let initial_ticks_per_side = 200;
             EnhancedUniswapPool::new(
-                DataLoader::new_with_registry(*pool_id, uniswap_pool_registry.clone()),
+                DataLoader::new_with_registry(
+                    *pool_id,
+                    uniswap_pool_registry.clone(),
+                    pool_manager
+                ),
                 initial_ticks_per_side
             )
         })

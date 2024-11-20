@@ -51,6 +51,26 @@ contract ControllerV1Test is BaseTest {
         }
     }
 
+    function test_can_cancelNewController() public {
+        address bad_controller = makeAddr("bad_controller");
+        uint256 unlockTime = block.timestamp + controller.SCHEDULE_TO_CONFIRM_DELAY();
+        vm.expectEmit(true, true, true, true);
+        emit IControllerV1.NewControllerScheduled(bad_controller, unlockTime);
+        vm.prank(controller_owner);
+        controller.schedule_new_controller(bad_controller);
+
+        skip(1 days);
+
+        vm.expectEmit(true, true, true, true);
+        emit IControllerV1.NewControllerCancelled();
+        vm.prank(controller_owner);
+        controller.cancel_pending_controller();
+
+        vm.warp(unlockTime);
+        vm.expectRevert("Controller not pending");
+        controller.confirm_pending_controller();
+    }
+
     function test_fuzzing_preventsNonOwnerTransfer(address nonOwner, address newOwner) public {
         vm.assume(nonOwner != controller_owner);
         vm.prank(nonOwner);
@@ -80,7 +100,6 @@ contract ControllerV1Test is BaseTest {
         controller.confirm_pending_controller();
 
         assertEq(rawGetController(address(angstrom)), next_controller);
-
     }
 
     uint256 constant _TOTAL_NODES = 5;

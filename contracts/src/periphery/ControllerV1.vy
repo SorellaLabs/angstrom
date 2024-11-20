@@ -19,7 +19,6 @@ interface IAngstromAuth:
     def removePool(expected_store: address, store_index: uint256): nonpayable
     def configurePool(asset_a: address, asset_b: address, tick_spacing: uint16, fee_in_e6: uint24): nonpayable
     def toggleNodes(nodes: DynArray[address, 1]): nonpayable
-    def extsload(slot: bytes32) -> bytes32: view
     # `pullFee` ommitted to prevent contract from actually pulling for now
 
 event NewControllerScheduled:

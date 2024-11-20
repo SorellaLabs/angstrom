@@ -13,7 +13,7 @@ use futures::StreamExt;
 use tracing::warn;
 use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools};
 
-pub const BLOCKS_TO_AVG_PRICE: u64 = 5;
+const BLOCKS_TO_AVG_PRICE: u64 = 5;
 pub const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
 
 // crazy that this is a thing

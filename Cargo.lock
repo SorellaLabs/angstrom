@@ -5358,7 +5358,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uniswap-v4",
  "uniswap_v3_math",
  "validation",
 ]

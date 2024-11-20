@@ -34,8 +34,8 @@ contract GetUniswapV4TickData {
 
         while (counter < numTicks) {
             (bool initialized, int24 nextTick) = zeroForOne
-                ? IUniV4.getNextTickLt(IPoolManager(poolManager), poolId, tickSpacing, currentTick)
-                : IUniV4.getNextTickGt(IPoolManager(poolManager), poolId, tickSpacing, currentTick);
+                ? IUniV4.getNextTickLt(IPoolManager(poolManager), poolId, currentTick, tickSpacing)
+                : IUniV4.getNextTickGt(IPoolManager(poolManager), poolId, currentTick, tickSpacing);
 
             (uint128 liquidityGross, int128 liquidityNet) =
                 IUniV4.getTickLiquidity(IPoolManager(poolManager), poolId, nextTick);

@@ -38,7 +38,7 @@ pub fn init_validation<
 >(
     db: DB,
     current_block: u64,
-    angstrom_address: Option<Address>,
+    angstrom_address: Address,
     node_address: Address,
     state_notification: CanonStateNotificationStream,
     uniswap_pools: SyncedUniswapPools,
@@ -60,14 +60,14 @@ pub fn init_validation<
             .unwrap();
 
         let handle = rt.handle().clone();
-        let pools = AngstromPoolsTracker::new(angstrom_address.unwrap_or_default(), pool_store);
+        let pools = AngstromPoolsTracker::new(angstrom_address, pool_store);
         // load storage slot state + pools
         let thread_pool = KeySplitThreadpool::new(handle, MAX_VALIDATION_PER_ADDR);
         let sim = SimValidation::new(revm_lru.clone(), angstrom_address);
 
         // load price update stream;
         let update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
-            angstrom_address.unwrap_or_default(),
+            angstrom_address,
             state_notification
         ));
 
@@ -75,7 +75,7 @@ pub fn init_validation<
             rt.block_on(OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools));
 
         let bundle_validator =
-            BundleValidator::new(revm_lru.clone(), angstrom_address.unwrap(), node_address);
+            BundleValidator::new(revm_lru.clone(), angstrom_address, node_address);
         let shared_utils = SharedTools::new(price_generator, update_stream, thread_pool);
 
         rt.block_on(async {

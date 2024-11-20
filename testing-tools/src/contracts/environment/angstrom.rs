@@ -1,4 +1,5 @@
 use alloy::primitives::Address;
+use alloy_primitives::TxHash;
 use angstrom_types::contract_bindings::pool_gate::PoolGate::PoolGateInstance;
 use tracing::debug;
 
@@ -66,7 +67,7 @@ where
         lower_tick: alloy_primitives::aliases::I24,
         upper_tick: alloy_primitives::aliases::I24,
         liquidity: alloy_primitives::U256
-    ) -> eyre::Result<()> {
+    ) -> eyre::Result<TxHash>{
         self.inner
             .add_liquidity_position(asset0, asset1, lower_tick, upper_tick, liquidity)
             .await

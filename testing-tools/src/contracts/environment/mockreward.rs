@@ -2,6 +2,7 @@ use alloy::primitives::{
     aliases::{I24, U24},
     Address, U256
 };
+use alloy_primitives::TxHash;
 use angstrom_types::{
     contract_bindings::{
         angstrom::Angstrom::PoolKey,
@@ -175,7 +176,7 @@ where
         lower_tick: I24,
         upper_tick: I24,
         liquidity: U256
-    ) -> eyre::Result<()> {
+    ) -> eyre::Result<TxHash> {
         self.inner
             .add_liquidity_position(asset0, asset1, lower_tick, upper_tick, liquidity)
             .await
@@ -193,7 +194,6 @@ where
 
 #[cfg(test)]
 mod tests {
-
     use super::MockRewardEnv;
     use crate::{
         anvil_state_provider::AnvilStateProviderWrapper,

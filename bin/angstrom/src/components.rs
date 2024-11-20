@@ -135,7 +135,6 @@ pub fn initialize_strom_handles() -> StromHandles {
 }
 
 pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
-    angstrom_address: Option<Address>,
     config: AngstromConfig,
     secret_key: SecretKey,
     handles: StromHandles,
@@ -191,7 +190,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
     // created
     let eth_handle = EthDataCleanser::spawn(
-        angstrom_address.unwrap_or(node_config.angstrom_address),
+        node_config.angstrom_address,
         node.provider.subscribe_to_canonical_state(),
         executor.clone(),
         handles.eth_tx,
@@ -201,12 +200,14 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         global_block_sync.clone()
     )
     .unwrap();
+
     let uniswap_pool_manager = configure_uniswap_manager(
         provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,
         block_id,
-        global_block_sync.clone()
+        global_block_sync.clone(),
+        node_config.pool_manager_address,
     )
     .await;
 
@@ -217,9 +218,9 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
             .await
             .expect("watch for uniswap pool changes");
     }));
-
+    let blocks_to_average_price = 5;
     let price_generator =
-        TokenPriceGenerator::new(provider.clone(), block_id, uniswap_pools.clone())
+        TokenPriceGenerator::new(provider.clone(), block_id, uniswap_pools.clone(), Some(blocks_to_average_price))
             .await
             .expect("failed to start token price generator");
 
@@ -228,7 +229,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     init_validation(
         RethDbWrapper::new(node.provider.clone()),
         block_height,
-        angstrom_address,
+        node_config.angstrom_address,
         node_address,
         // Because this is incapsulated under the orderpool syncer. this is the only case
         // we can use the raw stream.
@@ -307,7 +308,8 @@ async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
     state_notification: CanonStateNotifications,
     uniswap_pool_registry: UniswapPoolRegistry,
     current_block: BlockNumber,
-    block_sync: GlobalBlockSync
+    block_sync: GlobalBlockSync,
+    pool_manager: Address,
 ) -> UniswapPoolManager<
     CanonicalStateAdapter,
     GlobalBlockSync,
@@ -320,7 +322,7 @@ async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
         .map(|pool_id| {
             let initial_ticks_per_side = 200;
             EnhancedUniswapPool::new(
-                DataLoader::new_with_registry(*pool_id, uniswap_pool_registry.clone()),
+                DataLoader::new_with_registry(*pool_id, uniswap_pool_registry.clone(), pool_manager),
                 initial_ticks_per_side
             )
         })

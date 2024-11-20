@@ -1,4 +1,5 @@
 use alloy::primitives::{aliases::I24, Address, FixedBytes, U256};
+use alloy_primitives::TxHash;
 use angstrom_types::contract_bindings::{
     pool_gate::PoolGate::{self, PoolGateInstance},
     pool_manager::PoolManager
@@ -19,7 +20,7 @@ pub trait TestUniswapEnv: TestAnvilEnvironment {
         lower_tick: I24,
         upper_tick: I24,
         liquidity: U256
-    ) -> eyre::Result<()>;
+    ) -> eyre::Result<TxHash>;
 }
 
 pub struct UniswapEnv<E: TestAnvilEnvironment> {
@@ -94,7 +95,7 @@ where
         lower_tick: I24,
         upper_tick: I24,
         liquidity: U256
-    ) -> eyre::Result<()> {
+    ) -> eyre::Result<TxHash> {
         self.pool_gate()
             .addLiquidity(asset0, asset1, lower_tick, upper_tick, liquidity, FixedBytes::default())
             .run_safe()

@@ -17,12 +17,13 @@ pub struct TestnetConfig {
     pub anvil_key:        usize,
     pub node_count:       u64,
     pub leader_ws_url:    String,
-    pub address:          Address,
+    pub controller_address:          Address,
     pub pk:               PublicKey,
     pub signing_key:      PrivateKeySigner,
     pub secret_key:       SecretKey,
     pub pool_keys:        Vec<PoolKey>,
     pub angstrom_address: Address,
+    pub pool_manager_address: Address,
     pub leader_config:    Option<TestnetLeaderConfig>
 }
 
@@ -31,7 +32,8 @@ impl TestnetConfig {
         anvil_key: usize,
         node_count: u64,
         leader_ws_url: impl ToString,
-        address: Address,
+        controller_address: Address,
+        pool_manager_address: Address,
         pk: PublicKey,
         signing_key: PrivateKeySigner,
         secret_key: SecretKey,
@@ -41,7 +43,8 @@ impl TestnetConfig {
     ) -> Self {
         Self {
             anvil_key,
-            address,
+            controller_address,
+            pool_manager_address,
             pk,
             signing_key,
             secret_key,
@@ -96,7 +99,7 @@ impl TestingConfig for TestnetConfig {
 
             tracing::info!("connected to anvil");
 
-            Ok((WalletProvider::new(rpc, self.address, sk), Some(anvil)))
+            Ok((WalletProvider::new(rpc, self.controller_address, sk), Some(anvil)))
         } else {
             let rpc = builder::<Ethereum>()
                 .with_recommended_fillers()
@@ -104,7 +107,7 @@ impl TestingConfig for TestnetConfig {
                 .on_ws(WsConnect::new(self.leader_ws_url.clone()))
                 .await?;
 
-            Ok((WalletProvider::new(rpc, self.address, sk), None))
+            Ok((WalletProvider::new(rpc, self.controller_address, sk), None))
         }
     }
 

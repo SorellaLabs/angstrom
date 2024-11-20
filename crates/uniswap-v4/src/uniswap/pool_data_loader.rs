@@ -1,6 +1,6 @@
 use std::{collections::HashMap, future::Future, sync::Arc};
 
-use alloy::{primitives::{address, aliases::I24, Address, BlockNumber, U256}, providers::{Network, Provider}, sol, sol_types::{SolEvent, SolType}, transports::Transport};
+use alloy::{primitives::{aliases::I24, Address, BlockNumber, U256}, providers::{Network, Provider}, sol, sol_types::{SolEvent, SolType}, transports::Transport};
 use alloy_primitives::{Log, B256, I256};
 use angstrom_types::primitive::{PoolId as AngstromPoolId, UniswapPoolRegistry};
 use itertools::Itertools;
@@ -134,7 +134,8 @@ pub struct ModifyPositionEvent {
 #[derive(Default, Clone)]
 pub struct DataLoader<A> {
     address:       A,
-    pool_registry: Option<UniswapPoolRegistry>
+    pool_registry: Option<UniswapPoolRegistry>,
+    pool_manager:  Option<Address>,
 }
 
 pub trait PoolDataLoader<A>: Clone {
@@ -274,18 +275,25 @@ impl PoolDataLoader<Address> for DataLoader<Address> {
 
 impl DataLoader<Address> {
     pub fn new(address: Address) -> Self {
-        DataLoader { address, pool_registry: None }
+        DataLoader { address, pool_registry: None, pool_manager: None }
     }
 }
 
 impl DataLoader<AngstromPoolId> {
     fn pool_manager(&self) -> Address {
-        // TODO: this needs to be configurable
-        address!("ef11D1c2aA48826D4c41e54ab82D1Ff5Ad8A64Ca")
+        self.pool_manager.expect("pool_manager must be set for V4 pools")
     }
 
-    pub fn new_with_registry(address: AngstromPoolId, registry: UniswapPoolRegistry) -> Self {
-        Self { address, pool_registry: Some(registry) }
+    pub fn new_with_registry(
+        address: AngstromPoolId,
+        registry: UniswapPoolRegistry,
+        pool_manager: Address,
+    ) -> Self {
+        Self {
+            address,
+            pool_registry: Some(registry),
+            pool_manager: Some(pool_manager),
+        }
     }
 }
 
@@ -303,12 +311,6 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             .unwrap()
             .clone();
 
-        
-        // TODO: remove the print
-        tracing::info!("currency0 {}", pool_key.currency0);
-        // TODO: remove the print
-        tracing::info!("currency1 {}", pool_key.currency1);
-
         let deployer = IGetUniswapV4PoolDataBatchRequest::deploy_builder(
             provider,
             self.address(),
@@ -317,12 +319,10 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             pool_key.currency1
         );
 
-        tracing::info!("call_data {}", deployer.calldata());
         let data = match block_number {
             Some(number) => deployer.block(number.into()).call_raw().await?,
             None => deployer.call_raw().await?
         };
-
         let pool_data_v4 = PoolDataV4::abi_decode(&data, true)?;
 
         Ok(PoolData {
@@ -358,7 +358,6 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             tick_spacing
         );
 
-        tracing::info!("call_data {}", deployer.calldata());
         let data = match block_number {
             Some(number) => deployer.block(number.into()).call_raw().await?,
             None => deployer.call_raw().await?

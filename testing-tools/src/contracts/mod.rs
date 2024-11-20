@@ -12,6 +12,7 @@ use alloy::{
         GethDefaultTracingOptions
     }
 };
+use alloy_primitives::TxHash;
 use angstrom_types::sol_bindings::testnet::{MockERC20, PoolManagerDeployer, TestnetHub};
 use eyre::eyre;
 use futures::Future;
@@ -27,7 +28,7 @@ pub mod environment;
 /// for our local contract runs.
 pub trait DebugTransaction {
     #[allow(async_fn_in_trait)] // OK because this is not for public consumption
-    async fn run_safe(self) -> eyre::Result<()>;
+    async fn run_safe(self) -> eyre::Result<TxHash>;
 }
 
 impl<T, P, D> DebugTransaction for CallBuilder<T, P, D>
@@ -36,11 +37,11 @@ where
     P: alloy::providers::Provider<T> + Clone,
     D: alloy::contract::CallDecoder
 {
-    async fn run_safe(self) -> eyre::Result<()> {
+    async fn run_safe(self) -> eyre::Result<TxHash> {
         let provider = self.provider.clone();
         let receipt = self.gas(50_000_000_u64).send().await?.get_receipt().await?;
         if receipt.inner.status() {
-            Ok(())
+            Ok(receipt.transaction_hash)
         } else {
             let default_options = GethDebugTracingOptions::default();
             let _call_options = GethDebugTracingOptions {

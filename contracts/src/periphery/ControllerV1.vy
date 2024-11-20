@@ -48,8 +48,8 @@ event NodeRemoved:
     node: indexed(address)
 
 struct Pool:
-    tick_spacing: uint16
-    fee_in_e6: uint24
+    asset0: address
+    asset1: address
 
 ANGSTROM: public(immutable(IAngstromAuth))
 SCHEDULE_TO_CONFIRM_DELAY: public(constant(uint256)) = 2 * 7 * 24 * 60 * 60
@@ -124,7 +124,7 @@ def configure_pool(
     ownable._check_owner()
 
     key: bytes27 = self._compute_partial_key(asset_a, asset_b)
-    self.pools[key] = Pool(tick_spacing=tick_spacing, fee_in_e6=fee_in_e6)
+    self.pools[key] = Pool(asset0=asset_a, asset1=asset_b)
 
     log PoolConfigured(asset_a, asset_b, tick_spacing, fee_in_e6)
 
@@ -139,8 +139,7 @@ def remove_pool(
 ):
     ownable._check_owner()
 
-    assert convert(asset_a, uint256) < convert(asset_b, uint256), "Assets not sorted or unique"
-
+    self._check_sorted(asset_a, asset_b)
     log PoolRemoved(asset_a, asset_b)
 
     extcall ANGSTROM.removePool(expected_store, 0)
@@ -184,5 +183,11 @@ def total_nodes() -> uint256:
 
 @pure
 def _compute_partial_key(asset_a: address, asset_b: address) -> bytes27:
+    self._check_sorted(asset_a, asset_b)
     hash: bytes32 = keccak256(abi_encode(asset_a, asset_b))
-    return convert(hash, bytes27)
+    cleared: bytes32 = convert(convert(hash, uint256) << STORE_KEY_SHIFT, bytes32)
+    return convert(cleared, bytes27)
+
+@pure
+def _check_sorted(asset_a: address, asset_b: address):
+    assert convert(asset_a, uint256) < convert(asset_b, uint256), "Assets not sorted or unique"

@@ -25,7 +25,7 @@ interface IControllerV1 {
     function nodes(uint256 arg0) external view returns (address);
     function owner() external view returns (address);
     function pending_controller() external view returns (address);
-    function pools(bytes27 arg0) external view returns (uint16, uint24);
+    function pools(bytes27 arg0) external view returns (address, address);
     function remove_node(address node) external;
     function remove_pool(address expected_store, address asset_a, address asset_b) external;
     function schedule_new_controller(address new_controller) external;

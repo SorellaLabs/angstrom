@@ -6,6 +6,10 @@ import {Angstrom} from "src/Angstrom.sol";
 import {PoolManager} from "v4-core/src/PoolManager.sol";
 import {IControllerV1} from "test/_helpers/IControllerV1.sol";
 import {TopLevelAuth} from "src/modules/TopLevelAuth.sol";
+import {LibSort} from "solady/src/utils/LibSort.sol";
+import {
+    PoolConfigStoreLib, PoolConfigStore, StoreKey
+} from "../../src/libraries/PoolConfigStore.sol";
 
 import {console} from "forge-std/console.sol";
 
@@ -69,6 +73,27 @@ contract ControllerV1Test is BaseTest {
         vm.warp(unlockTime);
         vm.expectRevert("Controller not pending");
         controller.confirm_pending_controller();
+    }
+
+    function test_configurePools() public {
+        address[] memory assets =
+            addrs(abi.encode(makeAddr("asset_1"), makeAddr("asset_2"), makeAddr("asset_3")));
+        LibSort.sort(assets);
+
+        vm.expectEmit(true, true, true, true);
+        emit IControllerV1.PoolConfigured(assets[0], assets[2], 100, 0);
+        vm.breakpoint("c");
+        vm.prank(controller_owner);
+        controller.configure_pool(assets[0], assets[2], 100, 0);
+
+        PoolConfigStore store = PoolConfigStore.wrap(rawGetConfigStore(address(angstrom)));
+        StoreKey key = skey(assets[0], assets[2]);
+        (int24 tickSpacing, uint24 feeInE6) = store.get(key, 0);
+        assertEq(tickSpacing, 100);
+        assertEq(feeInE6, 0);
+        (address asset0, address asset1) = controller.pools(StoreKey.unwrap(key));
+        assertEq(asset0, assets[0]);
+        assertEq(asset1, assets[2]);
     }
 
     function test_fuzzing_preventsNonOwnerTransfer(address nonOwner, address newOwner) public {

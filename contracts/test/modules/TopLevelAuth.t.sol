@@ -8,8 +8,7 @@ import {
     PoolConfigStore,
     MAX_FEE,
     STORE_HEADER_SIZE,
-    PoolConfigStoreLib,
-    StoreKey
+    PoolConfigStoreLib
 } from "src/libraries/PoolConfigStore.sol";
 import {ENTRY_SIZE} from "src/types/ConfigEntry.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
@@ -263,10 +262,5 @@ contract TopLevelAuthTest is BaseTest {
             let hash := keccak256(0x00, 0x20)
             next := add(prev, shr(120, hash))
         }
-    }
-
-    function skey(address asset0, address asset1) internal pure returns (StoreKey key) {
-        assertTrue(asset0 < asset1, "Building key with out of order assets");
-        key = PoolConfigStoreLib.keyFromAssetsUnchecked(asset0, asset1);
     }
 }

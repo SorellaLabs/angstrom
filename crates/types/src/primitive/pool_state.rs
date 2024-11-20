@@ -12,7 +12,7 @@ pub type PoolId = FixedBytes<32>;
 
 impl From<PoolKey> for PoolId {
     fn from(value: PoolKey) -> Self {
-        keccak256(value.abi_encode_packed())
+        keccak256(value.abi_encode())
     }
 }
 

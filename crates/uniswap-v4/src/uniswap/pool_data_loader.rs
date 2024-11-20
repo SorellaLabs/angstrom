@@ -1,7 +1,7 @@
 use std::{collections::HashMap, future::Future, sync::Arc};
 
 use alloy::{
-    primitives::{address, aliases::I24, Address, BlockNumber, U256},
+    primitives::{aliases::I24, Address, BlockNumber, U256},
     providers::{Network, Provider},
     sol,
     sol_types::{SolEvent, SolType},
@@ -140,7 +140,8 @@ pub struct ModifyPositionEvent {
 #[derive(Default, Clone)]
 pub struct DataLoader<A> {
     address:       A,
-    pool_registry: Option<UniswapPoolRegistry>
+    pool_registry: Option<UniswapPoolRegistry>,
+    pool_manager:  Option<Address>,
 }
 
 pub trait PoolDataLoader<A>: Clone {
@@ -280,17 +281,25 @@ impl PoolDataLoader<Address> for DataLoader<Address> {
 
 impl DataLoader<Address> {
     pub fn new(address: Address) -> Self {
-        DataLoader { address, pool_registry: None }
+        DataLoader { address, pool_registry: None, pool_manager: None }
     }
 }
 
 impl DataLoader<AngstromPoolId> {
     fn pool_manager(&self) -> Address {
-        address!("88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640")
+        self.pool_manager.expect("pool_manager must be set for V4 pools")
     }
 
-    pub fn new_with_registry(address: AngstromPoolId, registry: UniswapPoolRegistry) -> Self {
-        Self { address, pool_registry: Some(registry) }
+    pub fn new_with_registry(
+        address: AngstromPoolId,
+        registry: UniswapPoolRegistry,
+        pool_manager: Address,
+    ) -> Self {
+        Self {
+            address,
+            pool_registry: Some(registry),
+            pool_manager: Some(pool_manager),
+        }
     }
 }
 
@@ -307,6 +316,7 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             .get(&self.address())
             .unwrap()
             .clone();
+
         let deployer = IGetUniswapV4PoolDataBatchRequest::deploy_builder(
             provider,
             self.address(),
@@ -314,13 +324,12 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             pool_key.currency0,
             pool_key.currency1
         );
-        let res = if let Some(block_number) = block_number {
-            deployer.block(block_number.into()).call_raw().await?
-        } else {
-            deployer.call_raw().await?
-        };
 
-        let pool_data_v4 = PoolDataV4::abi_decode(&res, true)?;
+        let data = match block_number {
+            Some(number) => deployer.block(number.into()).call_raw().await?,
+            None => deployer.call_raw().await?
+        };
+        let pool_data_v4 = PoolDataV4::abi_decode(&data, true)?;
 
         Ok(PoolData {
             tokenA:         pool_key.currency0,

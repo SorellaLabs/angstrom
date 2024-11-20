@@ -63,7 +63,6 @@ pub fn run() -> eyre::Result<()> {
             .await?;
 
         initialize_strom_components(
-            args.angstrom_addr,
             args,
             secret_key,
             channels,

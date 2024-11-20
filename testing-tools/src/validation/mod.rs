@@ -53,6 +53,7 @@ where
     pub async fn new(
         db: DB,
         angstrom_address: Address,
+        pool_manager_address: Address,
         node_address: Address,
         uniswap_pools: SyncedUniswapPools,
         token_conversion: TokenPriceGenerator,
@@ -70,7 +71,7 @@ where
 
         let handle = tokio::runtime::Handle::current();
         let thread_pool = KeySplitThreadpool::new(handle, 3);
-        let sim = SimValidation::new(db.clone(), None);
+        let sim = SimValidation::new(db.clone(), pool_manager_address);
 
         let order_validator =
             OrderValidator::new(sim, current_block, pools, fetch, uniswap_pools).await;

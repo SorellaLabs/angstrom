@@ -26,8 +26,8 @@ where
     DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Send + Sync,
     <DB as revm::DatabaseRef>::Error: Send + Sync
 {
-    pub fn new(db: Arc<DB>, angstrom_address: Option<Address>) -> Self {
-        let gas_calculator = OrderGasCalculations::new(db.clone(), angstrom_address)
+    pub fn new(db: Arc<DB>, angstrom_address: Address) -> Self {
+        let gas_calculator = OrderGasCalculations::new(db.clone(), Some(angstrom_address))
             .expect("failed to deploy baseline angstrom for gas calculations");
         Self { gas_calculator }
     }

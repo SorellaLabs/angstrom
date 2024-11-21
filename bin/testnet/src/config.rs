@@ -95,6 +95,7 @@ impl TryFrom<FullTestnetNodeConfigInner> for FullTestnetNodeConfig {
                 .map(TryInto::try_into)
                 .collect::<Result<Vec<_>, _>>()?,
             pools_keys:       value.pools_keys.unwrap_or_default(),
+            pool_manager_address: Address::from_str(&value.pool_manager_address)?,
             angstrom_address: Address::from_str(&value.angstrom_address)?
         })
     }
@@ -136,7 +137,8 @@ impl Into<AngstromValidator> for TestnetNodeConfig {
 struct FullTestnetNodeConfigInner {
     nodes:            Vec<TestnetNodeConfigInner>,
     pools_keys:       Option<Vec<PoolKey>>,
-    angstrom_address: String
+    angstrom_address: String,
+    pool_manager_address: String
 }
 
 impl FullTestnetNodeConfigInner {

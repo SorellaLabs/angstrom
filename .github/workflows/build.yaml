@@ -30,9 +30,14 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "0.4.18"
-
       - name: Install vyper
         run: uv tool install vyper==0.4.0
+      - name: Setup python virtual environment
+        working-directory: ./contracts
+        run: uv venv .venv --python 3.12
+      - name: Sync python dependencies
+        working-directory: ./contracts
+        run: uv pip install -r requirements.txt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -60,12 +65,19 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
-          version: "0.4.18" 
+          version: "0.4.18"
       - name: Install vyper
         run: uv tool install vyper==0.4.0
+      - name: Setup python virtual environment
+        working-directory: ./contracts
+        run: uv venv .venv --python 3.12
+      - name: Sync python dependencies
+        working-directory: ./contracts
+        run: uv pip install -r requirements.txt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -92,12 +104,20 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
-          version: "0.4.18" 
+          version: "0.4.18"
       - name: Install vyper
         run: uv tool install vyper==0.4.0
+      - name: Setup python virtual environment
+        working-directory: ./contracts
+        run: uv venv .venv --python 3.12
+      - name: Sync python dependencies
+        working-directory: ./contracts
+        run: uv pip install -r requirements.txt
+
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
@@ -136,5 +156,3 @@ jobs:
       - name: Run Forge tests
         run: forge test -vvv --ffi
         id: test
-
-

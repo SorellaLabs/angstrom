@@ -8,15 +8,12 @@ fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
 ast = true
 evm_version    = "cancun"
 skip = [
-    # Skip to prevent foundry from attempting to compile modules on their own
-    "**/lib/*/site-packages/**",
     # skipping for the normal build, since there is an issue with the yul optimizer and msize(),
     # and requires optimizer=false
     "test/_loaders/*.sol"
 ]
 libs = [
-    "lib",
-    ".venv/lib/python3.12/site-packages/"
+    "lib"
 ]
 
 ignored_error_codes = [

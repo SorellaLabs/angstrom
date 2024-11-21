@@ -361,7 +361,6 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             tick_spacing
         );
 
-        tracing::info!("call_data {}", deployer.calldata());
         let data = match block_number {
             Some(number) => deployer.block(number.into()).call_raw().await?,
             None => deployer.call_raw().await?

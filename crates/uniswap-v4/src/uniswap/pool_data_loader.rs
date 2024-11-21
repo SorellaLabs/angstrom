@@ -314,6 +314,14 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             .unwrap()
             .clone();
 
+        tracing::debug!(
+            "Loading pool data for pool_id={:?}, pool_manager={:?}, token0={:?}, token1={:?}",
+            self.address(),
+            self.pool_manager(),
+            pool_key.currency0,
+            pool_key.currency1
+        );
+
         let deployer = IGetUniswapV4PoolDataBatchRequest::deploy_builder(
             provider,
             self.address(),
@@ -322,10 +330,14 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
             pool_key.currency1
         );
 
+        tracing::debug!("Pool data request calldata: {:?}", deployer.calldata());
+
         let data = match block_number {
             Some(number) => deployer.block(number.into()).call_raw().await?,
             None => deployer.call_raw().await?
         };
+        tracing::debug!("Pool data response: {:?}", data);
+
         let pool_data_v4 = PoolDataV4::abi_decode(&data, true)?;
 
         Ok(PoolData {

@@ -16,6 +16,8 @@ pub fn run() -> eyre::Result<()> {
 async fn execute(executor: TaskExecutor) -> eyre::Result<()> {
     let cli = AngstromTestnetCli::parse();
     executor.spawn_critical("metrics", cli.clone().init_metrics());
+    // TODO: revert after testing finished
+    tracing_subscriber::fmt::init();
 
     let testnet_config = cli.load_config()?;
     let my_node_config = testnet_config.my_node_config()?;

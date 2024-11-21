@@ -69,7 +69,9 @@ impl TestingConfig for TestnetConfig {
 
         Anvil::new()
             .chain_id(1)
-            .fork(self.eth_ws_url.as_ref().unwrap())
+            .port(8545u16)
+            // TODO: revert when testing is done
+            // .fork(self.eth_ws_url.as_ref().unwrap())
             .arg("--ipc")
             .arg(self.anvil_endpoint(id))
             .arg("--code-size-limit")
@@ -85,7 +87,8 @@ impl TestingConfig for TestnetConfig {
         let wallet = EthereumWallet::new(sk.clone());
 
         if self.is_leader {
-            let anvil = self.configure_anvil(id.clone()).try_spawn()?;
+            // TODO: revert after the test is done
+            // let anvil = self.configure_anvil(id.clone()).try_spawn()?;
 
             let endpoint = self.anvil_endpoint(id);
             tracing::info!(?endpoint);
@@ -98,7 +101,9 @@ impl TestingConfig for TestnetConfig {
 
             tracing::info!("connected to anvil");
 
-            Ok((WalletProvider::new(rpc, self.controller_address, sk), Some(anvil)))
+            // TODO: revert after testing
+            // Ok((WalletProvider::new(rpc, self.controller_address, sk), Some(anvil)))
+            Ok((WalletProvider::new(rpc, self.controller_address, sk), None))
         } else {
             let rpc = builder::<Ethereum>()
                 .with_recommended_fillers()

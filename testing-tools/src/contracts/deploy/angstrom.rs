@@ -46,7 +46,7 @@ pub async fn deploy_angstrom_with_factory<
     let final_mock_initcode = [salt.abi_encode(), mock_builder.calldata().to_vec()].concat();
     RawCallBuilder::new_raw(&provider, final_mock_initcode.into())
         .to(factory)
-        .gas(50e6 as u64)
+        .gas(10e6 as u64)
         .send()
         .await
         .unwrap()

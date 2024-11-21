@@ -6,6 +6,7 @@ use alloy::{
     providers::builder,
     signers::local::PrivateKeySigner
 };
+use alloy_primitives::Address;
 
 use crate::{anvil_state_provider::WalletProvider, types::TestingConfig};
 

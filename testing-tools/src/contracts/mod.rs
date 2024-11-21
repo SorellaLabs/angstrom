@@ -39,7 +39,7 @@ where
 {
     async fn run_safe(self) -> eyre::Result<TxHash> {
         let provider = self.provider.clone();
-        let receipt = self.gas(50_000_000_u64).send().await?.get_receipt().await?;
+        let receipt = self.gas(10_000_000u64).send().await?.get_receipt().await?;
         if receipt.inner.status() {
             Ok(receipt.transaction_hash)
         } else {

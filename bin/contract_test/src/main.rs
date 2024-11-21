@@ -96,7 +96,7 @@ async fn main() -> eyre::Result<()> {
             I24::unchecked_from(99900),
             I24::unchecked_from(100140)
         )
-        .gas(50e6 as u64)
+        .gas(10_000_000_u128)
         .call()
         .await?
         ._0;

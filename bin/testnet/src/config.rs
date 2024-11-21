@@ -89,14 +89,14 @@ impl TryFrom<FullTestnetNodeConfigInner> for FullTestnetNodeConfig {
 
     fn try_from(value: FullTestnetNodeConfigInner) -> Result<Self, Self::Error> {
         Ok(FullTestnetNodeConfig {
-            nodes:            value
+            nodes:                value
                 .nodes
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<Vec<_>, _>>()?,
-            pools_keys:       value.pools_keys.unwrap_or_default(),
+            pools_keys:           value.pools_keys.unwrap_or_default(),
             pool_manager_address: Address::from_str(&value.pool_manager_address)?,
-            angstrom_address: Address::from_str(&value.angstrom_address)?
+            angstrom_address:     Address::from_str(&value.angstrom_address)?
         })
     }
 }
@@ -135,9 +135,9 @@ impl Into<AngstromValidator> for TestnetNodeConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 struct FullTestnetNodeConfigInner {
-    nodes:            Vec<TestnetNodeConfigInner>,
-    pools_keys:       Option<Vec<PoolKey>>,
-    angstrom_address: String,
+    nodes:                Vec<TestnetNodeConfigInner>,
+    pools_keys:           Option<Vec<PoolKey>>,
+    angstrom_address:     String,
     pool_manager_address: String
 }
 

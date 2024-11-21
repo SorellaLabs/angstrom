@@ -103,7 +103,7 @@ where
     N: Network
 {
     async fn deploy_pending(self) -> eyre::Result<PendingTransaction> {
-        Ok(self.gas(50e6 as u64).send().await?.register().await?)
+        Ok(self.gas(50_000_000_u64).send().await?.register().await?)
     }
 
     async fn deploy_pending_creation(
@@ -130,7 +130,7 @@ where
     N: Network
 {
     async fn deploy_pending(self) -> eyre::Result<PendingTransaction> {
-        Ok(self.gas(50e6 as u64).send().await?.register().await?)
+        Ok(self.gas(50_000_000_u64).send().await?.register().await?)
     }
 
     async fn deploy_pending_creation(

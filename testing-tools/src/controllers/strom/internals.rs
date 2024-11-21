@@ -119,11 +119,13 @@ impl AngstromDevnetNodeInternals {
         let uniswap_pools = uniswap_pool_manager.pools();
         tokio::spawn(async move { uniswap_pool_manager.watch_state_changes().await });
 
+        // latest block
+        let block_to_price_override = 0;
         let token_conversion = TokenPriceGenerator::new(
             state_provider.state_provider().provider().into(),
-            block_number,
+            block_id,
             uniswap_pools.clone(),
-            None
+            Some(block_to_price_override)
         )
         .await
         .expect("failed to start price generator");

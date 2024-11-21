@@ -312,13 +312,5 @@ mod tests {
             .run_safe()
             .await
             .unwrap();
-        // angstrom.execute(encoded)
     }
 }
-
-/*
-
-initial pool there are
-
-
-*/

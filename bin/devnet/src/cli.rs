@@ -62,10 +62,10 @@ impl Cli {
         };
 
         let filter = EnvFilter::builder()
-            // .with_default_directive(format!("testnet={level}").parse().unwrap())
-            .from_env_lossy();
-        // .add_directive(format!("angstrom={level}").parse().unwrap())
-        // .add_directive(format!("testing_tools={level}").parse().unwrap());
+            .with_default_directive(format!("testnet={level}").parse().unwrap())
+            .from_env_lossy()
+            .add_directive(format!("angstrom={level}").parse().unwrap())
+            .add_directive(format!("testing_tools={level}").parse().unwrap());
 
         let layer = tracing_subscriber::fmt::layer()
             .with_ansi(true)

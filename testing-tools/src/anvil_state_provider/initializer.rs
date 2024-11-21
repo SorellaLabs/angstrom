@@ -38,8 +38,9 @@ pub struct AnvilInitializer {
     angstrom_env:  AngstromEnv<UniswapEnv<WalletProvider>>,
     angstrom:      AngstromInstance<PubSubFrontend, WalletProviderRpc>,
     pool_gate:     PoolGateInstance<PubSubFrontend, WalletProviderRpc>,
-    pending_state: PendingDeployedPools,
-    _instance:     AnvilInstance
+    pending_state: PendingDeployedPools
+    // TODO: revert after testing finished
+    // _instance:     AnvilInstance
 }
 
 impl AnvilInitializer {
@@ -67,8 +68,8 @@ impl AnvilInitializer {
             angstrom_env,
             angstrom,
             pool_gate,
-            pending_state,
-            _instance: anvil.unwrap()
+            pending_state /* TODO: revert after testing finished
+                           * _instance: anvil.unwrap() */
         })
     }
 
@@ -105,7 +106,7 @@ impl AnvilInitializer {
             currency1,
             fee,
             tickSpacing: I24::unchecked_from(10),
-            hooks: Address::default()
+            hooks: *self.angstrom.address()
         };
         self.pending_state.add_pool_key(pool.clone());
 

@@ -43,11 +43,10 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
     function setUp() public {
         (asset0, asset1) = deployTokensSorted();
 
-        gate.tickSpacing(60);
-
         vm.prank(uniOwner);
         uniV4 = new UniV4Inspector();
         gate = new PoolGate(address(uniV4));
+        gate.tickSpacing(60);
 
         int24 startTick = 0;
         refId = PoolIdLibrary.toId(poolKey(asset0, asset1, TICK_SPACING));

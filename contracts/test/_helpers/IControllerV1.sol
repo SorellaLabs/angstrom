@@ -27,7 +27,7 @@ interface IControllerV1 {
     function pending_controller() external view returns (address);
     function pools(bytes27 arg0) external view returns (address, address);
     function remove_node(address node) external;
-    function remove_pool(address expected_store, address asset_a, address asset_b) external;
+    function remove_pool(address asset_a, address asset_b) external;
     function schedule_new_controller(address new_controller) external;
     function scheduled_at() external view returns (uint256);
     function total_nodes() external view returns (uint256);

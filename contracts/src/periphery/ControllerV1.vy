@@ -19,6 +19,7 @@ interface IAngstromAuth:
     def removePool(expected_store: address, store_index: uint256): nonpayable
     def configurePool(asset_a: address, asset_b: address, tick_spacing: uint16, fee_in_e6: uint24): nonpayable
     def toggleNodes(nodes: DynArray[address, 1]): nonpayable
+    def extsload(key: bytes32) -> bytes32: view
     # `pullFee` ommitted to prevent contract from actually pulling for now
 
 event NewControllerScheduled:
@@ -54,9 +55,12 @@ struct Pool:
 ANGSTROM: public(immutable(IAngstromAuth))
 SCHEDULE_TO_CONFIRM_DELAY: public(constant(uint256)) = 2 * 7 * 24 * 60 * 60
 CONTROLLER_NOT_PENDING: constant(address) = empty(address)
-MAX_POOLS: constant(uint256) = 767
 MAX_NODES: constant(uint256) = 100
+
+MAX_POOLS: constant(uint256) = 767
 STORE_KEY_SHIFT: constant(uint256) = 40
+STORE_ANG_SLOT: constant(uint256) = 2
+STORE_OFFSET: constant(uint256) = 64
 
 
 # New Controller Timelock State
@@ -133,16 +137,23 @@ def configure_pool(
 
 @external
 def remove_pool(
-    expected_store: address,
     asset_a: address,
     asset_b: address
 ):
     ownable._check_owner()
 
+    store: address = self._get_store()
+    key: bytes27 = self._compute_partial_key(asset_a, asset_b)
+    entry_index: uint256 = MAX_POOLS
+    for i: uint256 in range(0, MAX_POOLS):
+        if self._get_key_at_index(store, i) == key:
+            entry_index = i
+            break
+
     self._check_sorted(asset_a, asset_b)
     log PoolRemoved(asset_a, asset_b)
 
-    extcall ANGSTROM.removePool(expected_store, 0)
+    extcall ANGSTROM.removePool(store, entry_index)
 
 @external
 def add_node(node: address):
@@ -191,3 +202,14 @@ def _compute_partial_key(asset_a: address, asset_b: address) -> bytes27:
 @pure
 def _check_sorted(asset_a: address, asset_b: address):
     assert convert(asset_a, uint256) < convert(asset_b, uint256), "Assets not sorted or unique"
+
+@view
+def _get_store() -> address:
+    slot: bytes32 = convert(STORE_ANG_SLOT, bytes32)
+    full_slot_value: uint256 = convert(staticcall ANGSTROM.extsload(slot), uint256)
+    return convert(full_slot_value >> STORE_OFFSET, address)
+
+@view
+def _get_key_at_index(store: address, index: uint256) -> bytes27:
+    raw_key: Bytes[27] = slice(store.code, 32 * index + 1, 27)
+    return convert(raw_key, bytes27)

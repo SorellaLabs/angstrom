@@ -82,11 +82,11 @@ contract ControllerV1Test is BaseTest {
 
         vm.expectEmit(true, true, true, true);
         emit IControllerV1.PoolConfigured(assets[0], assets[2], 100, 0);
-        vm.breakpoint("c");
         vm.prank(controller_owner);
         controller.configure_pool(assets[0], assets[2], 100, 0);
 
         PoolConfigStore store = PoolConfigStore.wrap(rawGetConfigStore(address(angstrom)));
+        assertEq(store.totalEntries(), 1);
         StoreKey key = skey(assets[0], assets[2]);
         (int24 tickSpacing, uint24 feeInE6) = store.get(key, 0);
         assertEq(tickSpacing, 100);
@@ -94,6 +94,11 @@ contract ControllerV1Test is BaseTest {
         (address asset0, address asset1) = controller.pools(StoreKey.unwrap(key));
         assertEq(asset0, assets[0]);
         assertEq(asset1, assets[2]);
+
+        vm.expectEmit(true, true, true, true);
+        emit IControllerV1.PoolRemoved(assets[0], assets[2]);
+        vm.prank(controller_owner);
+        controller.remove_pool(assets[0], assets[2]);
     }
 
     function test_fuzzing_preventsNonOwnerTransfer(address nonOwner, address newOwner) public {

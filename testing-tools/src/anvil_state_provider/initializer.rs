@@ -18,12 +18,14 @@ use angstrom_types::{
 };
 
 use super::{utils::WalletProviderRpc, WalletProvider};
-use crate::contracts::DebugTransaction;
 use crate::{
-    contracts::environment::{
-        angstrom::AngstromEnv,
-        uniswap::{TestUniswapEnv, UniswapEnv},
-        TestAnvilEnvironment
+    contracts::{
+        environment::{
+            angstrom::AngstromEnv,
+            uniswap::{TestUniswapEnv, UniswapEnv},
+            TestAnvilEnvironment
+        },
+        DebugTransaction
     },
     types::{initial_state::PendingDeployedPools, TestingConfig}
 };
@@ -35,9 +37,8 @@ pub struct AnvilInitializer {
     angstrom_env:  AngstromEnv<UniswapEnv<WalletProvider>>,
     angstrom:      AngstromInstance<PubSubFrontend, WalletProviderRpc>,
     pool_gate:     PoolGateInstance<PubSubFrontend, WalletProviderRpc>,
-    pending_state: PendingDeployedPools
-    // TODO: revert after testing finished
-    // _instance:     AnvilInstance
+    pending_state: PendingDeployedPools /* TODO: revert after testing finished
+                                         * _instance:     AnvilInstance */
 }
 
 impl AnvilInitializer {
@@ -98,7 +99,7 @@ impl AnvilInitializer {
             .from(self.provider.controller_address)
             .run_safe()
             .await?;
-        
+
         self.angstrom
             .initializePool(pool.currency0, pool.currency1, U256::ZERO, *price)
             .from(self.provider.controller_address)

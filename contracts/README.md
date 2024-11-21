@@ -30,6 +30,24 @@ function pythonRunCmd() internal pure returns (string[] memory args) {
 
 ## Benchmark Numbers
 
+### Total Cost
+
+Cost of `N` orders including the fixed cost.
+
+- EFI = Exact Flash Order \w Internal Balances
+- ESLn = Exact Standing Order \w Liquid Tokens (Nonce non-zero)
+
+|Order Count|EFI (\w AMM)|EFI (No AMM)|ESLn (\w AMM)|ESLn (No AMM)|
+|-----------|------------|------------|-------------|-------------|
+| 1|  137.2k |   65.1k |  150.2k |   92.7k |
+| 2|   78.3k |   42.2k |   91.3k |   62.6k |
+| 3|   58.7k |   34.6k |   71.7k |   52.5k |
+| 4|   48.8k |   30.8k |   61.9k |   47.5k |
+| 5|   43.0k |   28.5k |   56.0k |   44.5k |
+|10|   31.2k |   24.0k |   44.2k |   38.4k |
+|20|   25.3k |   21.7k |   38.3k |   35.4k |
+|50|   21.8k |   20.3k |   34.8k |   33.6k |
+
 **Real Bundle Cost per Exact Flash Order \w Internal Balance**
 
 Fixed Cost (including calldata + intrinsic, not including ToB & pool updates): 45.7k
@@ -53,10 +71,10 @@ Cost per order: 32.4k
 
 |Order Count|Total amortized per order cost|
 |-----------|------------------------------|
-|2| 62.5k|
-|3| 52.5k|
-|4| 47.5k|
-|5| 44.5k|
+|2|  62.5k|
+|3|  52.5k|
+|4|  47.5k|
+|5|  44.5k|
 |10| 38.4k|
 |20| 35.4k|
 |50| 33.6k|

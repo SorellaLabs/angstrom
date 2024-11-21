@@ -100,12 +100,11 @@ impl AnvilInitializer {
         };
 
         let fee = U24::ZERO;
-        let tick_spacing = 10;
         let pool = PoolKey {
             currency0,
             currency1,
             fee,
-            tickSpacing: I24::unchecked_from(tick_spacing),
+            tickSpacing: I24::unchecked_from(10),
             hooks: Address::default()
         };
         self.pending_state.add_pool_key(pool.clone());
@@ -121,6 +120,23 @@ impl AnvilInitializer {
             .await?;
         self.pending_state.add_pending_tx(init_pool);
 
+        let config_pool = self
+            .angstrom
+            .configurePool(pool.currency0, pool.currency1, 10, U24::ZERO)
+            .nonce(nonce + 3)
+            .deploy_pending()
+            .await?;
+        self.pending_state.add_pending_tx(config_pool);
+
+        let set_tick_spacing = self
+            .pool_gate
+            .tickSpacing(pool.tickSpacing)
+            .from(self.provider.controller_address)
+            .nonce(nonce + 4)
+            .deploy_pending()
+            .await?;
+        self.pending_state.add_pending_tx(set_tick_spacing);
+
         let add_liq = self
             .pool_gate
             .addLiquidity(
@@ -132,10 +148,9 @@ impl AnvilInitializer {
                 FixedBytes::<32>::default()
             )
             .from(self.provider.controller_address)
-            .nonce(nonce + 3)
+            .nonce(nonce + 5)
             .deploy_pending()
             .await?;
-
         self.pending_state.add_pending_tx(add_liq);
 
         Ok(())
@@ -143,11 +158,13 @@ impl AnvilInitializer {
 
     pub async fn initialize_state(&mut self) -> eyre::Result<InitialTestnetState> {
         let (pool_keys, txs) = self.pending_state.finalize_pending_txs().await?;
-        for tx in  txs {
-            println!("tx {:?}", tx);
-        }
         let state_bytes = self.provider.provider_ref().anvil_dump_state().await?;
-        Ok(InitialTestnetState::new(self.angstrom_env.angstrom(), Some(state_bytes), pool_keys))
+        Ok(InitialTestnetState::new(
+            self.angstrom_env.angstrom(),
+            self.angstrom_env.pool_manager(),
+            Some(state_bytes),
+            pool_keys
+        ))
     }
 }
 

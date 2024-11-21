@@ -228,9 +228,8 @@ pub enum StromNetworkEvent {
     /// Established a new session with the given peer.
     SessionEstablished {
         /// The identifier of the peer to which a session was established.
-        peer_id: PeerId
-        // #[cfg(feature = "testnet")]
-        // initial_state: Option<angstrom_types::testnet::InitialTestnetState>
+        peer_id: PeerId /* #[cfg(feature = "testnet")]
+                         * initial_state: Option<angstrom_types::testnet::InitialTestnetState> */
     },
     /// Event emitted when a new peer is added
     PeerAdded(PeerId),

@@ -35,6 +35,7 @@ async fn execute(executor: TaskExecutor) -> eyre::Result<()> {
         my_node_config.secret_key,
         testnet_config.pools_keys,
         testnet_config.angstrom_address,
+        testnet_config.pool_manager_address,
         iam_leader.then_some("ws://35.245.117.24:8546"),
         iam_leader
     );

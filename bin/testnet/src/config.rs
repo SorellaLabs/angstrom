@@ -50,9 +50,10 @@ impl AngstromTestnetCli {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FullTestnetNodeConfig {
-    pub nodes:            Vec<TestnetNodeConfig>,
-    pub angstrom_address: Address,
-    pub pools_keys:       Vec<PoolKey>
+    pub nodes:                Vec<TestnetNodeConfig>,
+    pub angstrom_address:     Address,
+    pub pool_manager_address: Address,
+    pub pools_keys:           Vec<PoolKey>
 }
 
 impl FullTestnetNodeConfig {

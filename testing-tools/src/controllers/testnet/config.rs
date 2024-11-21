@@ -14,18 +14,19 @@ use crate::{anvil_state_provider::WalletProvider, types::TestingConfig};
 
 #[derive(Debug, Clone)]
 pub struct TestnetConfig {
-    pub anvil_key:        usize,
-    pub node_count:       u64,
-    pub leader_ws_url:    String,
-    pub address:          Address,
-    pub pk:               PublicKey,
-    pub signing_key:      PrivateKeySigner,
-    pub secret_key:       SecretKey,
-    pub pool_keys:        Vec<PoolKey>,
-    pub angstrom_address: Address,
+    pub anvil_key:            usize,
+    pub node_count:           u64,
+    pub leader_ws_url:        String,
+    pub controller_address:   Address,
+    pub pk:                   PublicKey,
+    pub signing_key:          PrivateKeySigner,
+    pub secret_key:           SecretKey,
+    pub pool_keys:            Vec<PoolKey>,
+    pub angstrom_address:     Address,
+    pub pool_manager_address: Address,
     /// only the leader can have this
-    pub eth_ws_url:       Option<String>,
-    pub is_leader:        bool
+    pub eth_ws_url:           Option<String>,
+    pub is_leader:            bool
 }
 
 impl TestnetConfig {
@@ -33,24 +34,26 @@ impl TestnetConfig {
         anvil_key: usize,
         node_count: u64,
         leader_ws_url: impl ToString,
-        address: Address,
+        controller_address: Address,
         pk: PublicKey,
         signing_key: PrivateKeySigner,
         secret_key: SecretKey,
         pool_keys: Vec<PoolKey>,
         angstrom_address: Address,
+        pool_manager_address: Address,
         eth_ws_url: Option<impl ToString>,
         is_leader: bool
     ) -> Self {
         Self {
             anvil_key,
-            address,
+            controller_address,
             pk,
             signing_key,
             secret_key,
             node_count,
             leader_ws_url: leader_ws_url.to_string(),
             angstrom_address,
+            pool_manager_address,
             pool_keys,
             eth_ws_url: eth_ws_url.map(|w| w.to_string()),
             is_leader
@@ -95,7 +98,7 @@ impl TestingConfig for TestnetConfig {
 
             tracing::info!("connected to anvil");
 
-            Ok((WalletProvider::new(rpc, self.address, sk), Some(anvil)))
+            Ok((WalletProvider::new(rpc, self.controller_address, sk), Some(anvil)))
         } else {
             let rpc = builder::<Ethereum>()
                 .with_recommended_fillers()
@@ -103,7 +106,7 @@ impl TestingConfig for TestnetConfig {
                 .on_ws(WsConnect::new(self.leader_ws_url.clone()))
                 .await?;
 
-            Ok((WalletProvider::new(rpc, self.address, sk), None))
+            Ok((WalletProvider::new(rpc, self.controller_address, sk), None))
         }
     }
 

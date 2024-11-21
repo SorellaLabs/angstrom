@@ -78,8 +78,12 @@ where
         initial_validators: Vec<AngstromValidator>
     ) -> eyre::Result<Self> {
         let block_provider = TestnetBlockProvider::new();
-        let inital_angstrom_state =
-            InitialTestnetState::new(config.angstrom_address, None, config.pool_keys.clone());
+        let inital_angstrom_state = InitialTestnetState::new(
+            config.angstrom_address,
+            config.pool_manager_address,
+            None,
+            config.pool_keys.clone()
+        );
 
         let mut node = initialize_new_node(
             c,

@@ -1,19 +1,11 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-<<<<<<<< HEAD:contracts/test/_loaders/GetUniswapV4PoolData.sol
-import {IERC20} from "../../lib/forge-std/src/interfaces/IERC20.sol";
-import {IPoolManager} from "../../lib/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolId} from "../../lib/v4-core/src/types/PoolId.sol";
-import {Slot0} from "../../lib/v4-core/src/types/Slot0.sol";
-import {IUniV4} from "src/interfaces/IUniV4.sol";
-========
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {Slot0} from "v4-core/src/types/Slot0.sol";
 import {IUniV4} from "core/src/interfaces/IUniV4.sol";
->>>>>>>> main:crates/uniswap-v4/src/uniswap/loaders/GetUniswapV4PoolData.sol
 
 contract GetUniswapV4PoolData {
     struct PoolData {

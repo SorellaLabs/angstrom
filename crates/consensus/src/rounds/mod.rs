@@ -9,8 +9,7 @@ use std::{
 
 use alloy::{
     primitives::{Address, BlockNumber, FixedBytes},
-    providers::Provider,
-    rpc::types::TransactionRequest
+    providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::manager::StromConsensusEvent;

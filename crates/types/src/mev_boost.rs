@@ -1,4 +1,4 @@
-use std::{ops::Deref, pin::Pin, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use alloy::{
     eips::eip2718::Encodable2718,

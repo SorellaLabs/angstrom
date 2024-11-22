@@ -26,8 +26,8 @@ use crate::{
 
 #[derive(Debug)]
 pub struct RpcStateProviderFactoryWrapper {
-    provider:  RpcStateProviderFactory,
-    _instance: AnvilInstance
+    provider:     RpcStateProviderFactory,
+    pub instance: AnvilInstance
 }
 impl RpcStateProviderFactoryWrapper {
     pub async fn spawn_new(config: AngstromTestnetConfig, id: u64) -> eyre::Result<Self> {
@@ -50,14 +50,13 @@ impl RpcStateProviderFactoryWrapper {
 
         let endpoint = format!("/tmp/anvil_{id}.ipc");
         tracing::info!(?endpoint);
-        let ipc = alloy::providers::IpcConnect::new(endpoint.to_string());
         let sk: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let wallet = EthereumWallet::new(sk);
         let rpc = builder::<Ethereum>()
             .with_recommended_fillers()
             .wallet(wallet)
-            .on_ipc(ipc)
+            .on_builtin(&endpoint)
             .await?;
 
         tracing::info!("connected to anvil");
@@ -65,12 +64,12 @@ impl RpcStateProviderFactoryWrapper {
         let (tx, _) = broadcast::channel(1000);
 
         Ok(Self {
-            provider:  RpcStateProviderFactory {
+            provider: RpcStateProviderFactory {
                 provider:       rpc,
                 canon_state_tx: tx,
                 canon_state:    AnvilConsensusCanonStateNotification::new()
             },
-            _instance: anvil
+            instance: anvil
         })
     }
 
@@ -208,7 +207,7 @@ impl BlockHashReader for RpcStateProviderFactory {
 
     fn convert_block_hash(
         &self,
-        _: alloy::eips::eip1898::BlockHashOrNumber
+        _: alloy::eips::BlockHashOrNumber
     ) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }

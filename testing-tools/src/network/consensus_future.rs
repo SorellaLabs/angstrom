@@ -9,7 +9,7 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy::transports::Transport;
+use alloy::providers::Provider;
 use consensus::ConsensusManager;
 use futures::FutureExt;
 use matching_engine::MatchingEngineHandle;
@@ -27,7 +27,7 @@ pub(crate) struct TestnetConsensusFuture<T, Matching> {
 
 impl<T, Matching> TestnetConsensusFuture<T, Matching>
 where
-    T: Transport + Clone,
+    T: Provider + 'static,
     Matching: MatchingEngineHandle
 {
     pub(crate) fn new(
@@ -66,7 +66,7 @@ struct TestnetConsensusFutureInternals<T, Matching> {
 
 impl<T, Matching> TestnetConsensusFutureInternals<T, Matching>
 where
-    T: Transport,
+    T: Provider + 'static,
     Matching: MatchingEngineHandle
 {
     fn new(
@@ -80,7 +80,7 @@ where
 
 impl<T, Matching> Future for TestnetConsensusFutureInternals<T, Matching>
 where
-    T: Transport + Clone,
+    T: Provider + 'static,
     Matching: MatchingEngineHandle
 {
     type Output = ();

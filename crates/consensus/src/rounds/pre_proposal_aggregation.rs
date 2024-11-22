@@ -3,7 +3,7 @@ use std::{
     task::{Context, Poll, Waker}
 };
 
-use alloy::{providers::Provider, transports::Transport};
+use alloy::providers::Provider;
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::consensus::{PreProposal, PreProposalAggregation, Proposal};
 use matching_engine::MatchingEngineHandle;

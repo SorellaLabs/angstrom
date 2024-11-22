@@ -7,7 +7,6 @@ use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     network::Network,
     providers::{network::Ethereum, Provider, ProviderBuilder},
-    rpc::client::RpcClient,
     transports::Transport
 };
 use alloy_chains::Chain;

@@ -9,8 +9,7 @@ use std::{
 
 use alloy::{
     primitives::{Address, BlockNumber},
-    providers::Provider,
-    transports::Transport
+    providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};

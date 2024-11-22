@@ -1,19 +1,15 @@
-use std::time::Duration;
-
 use alloy::primitives::I256;
-use alloy_primitives::{BigIntConversionError, ParseSignedError, U256};
-use angstrom_types::sol_bindings::sol::TopOfBlockOrder;
-use futures::{stream::BoxStream, StreamExt};
-use matching_engine::cfmm::uniswap::{
-    pool::{EnhancedUniswapV3Pool, PoolError},
-    pool_manager::UniswapPoolManager,
-    pool_providers::PoolManagerProvider
-};
-use num_bigfloat::BigFloat;
+use alloy_primitives::{Address, BigIntConversionError, ParseSignedError, U256};
+use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::rpc_orders::TopOfBlockOrder};
 use rand::Rng;
 use rand_distr::{Distribution, Exp, Normal};
 use thiserror::Error;
-use tokio_stream::wrappers::ReceiverStream;
+use uniswap_v4::uniswap::{
+    pool::{EnhancedUniswapPool, PoolError, SwapSimulationError},
+    pool_data_loader::PoolDataLoader,
+    pool_manager::UniswapPoolManager,
+    pool_providers::PoolManagerProvider
+};
 
 pub struct OrderGeneratorConfig {
     min_amount:     f64,
@@ -47,21 +43,27 @@ impl Distribution<f64> for PriceDistribution {
     }
 }
 
-pub struct UserOrderGenerator<P> {
-    pool_manager:             UniswapPoolManager<P>,
-    symbol:                   String,
+#[allow(dead_code)]
+pub struct UserOrderGenerator<P, BlockSync, Loader>
+where
+    Loader: PoolDataLoader<Address> + Default
+{
+    pool_manager:             UniswapPoolManager<P, BlockSync, Loader, Address>,
     config:                   OrderGeneratorConfig,
     price_distribution:       PriceDistribution,
-    order_count_distribution: Normal<f64>
+    order_count_distribution: Normal<f64>,
+    pool_address:             Address
 }
 
-impl<P> UserOrderGenerator<P>
+impl<P, BlockSync, Loader> UserOrderGenerator<P, BlockSync, Loader>
 where
-    P: PoolManagerProvider + Send + Sync + 'static
+    P: PoolManagerProvider + Send + Sync + 'static,
+    BlockSync: BlockSyncConsumer + Send + Sync + 'static,
+    Loader: PoolDataLoader<Address> + Default + Send + Sync + 'static
 {
     pub fn new(
-        pool_manager: UniswapPoolManager<P>,
-        symbol: String,
+        pool_address: Address,
+        pool_manager: UniswapPoolManager<P, BlockSync, Loader, Address>,
         config: Option<OrderGeneratorConfig>
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let config = config.unwrap_or_default();
@@ -69,7 +71,13 @@ where
         let price_distribution = PriceDistribution::new(0.8, config.min_amount, config.max_amount)?;
 
         let order_count_distribution = Normal::new(0.0, config.std_dev_orders)?;
-        Ok(Self { pool_manager, symbol, config, price_distribution, order_count_distribution })
+        Ok(Self {
+            pool_address,
+            pool_manager,
+            config,
+            price_distribution,
+            order_count_distribution
+        })
     }
 
     pub async fn monitor(&self) {
@@ -83,25 +91,26 @@ where
             };
 
         loop {
-            if let Some((_address, _block_number)) = pool_update_rx.recv().await {
-                let pool = self.pool_manager.pool().await;
-                let _ = self.generate_orders(&pool);
+            if let Some((address, _)) = pool_update_rx.recv().await {
+                if let Some(pool) = self.pool_manager.pool(&address) {
+                    let _ = self.generate_orders(&*pool);
+                }
             }
         }
     }
 
-    pub async fn order_stream(&self) -> BoxStream<TopOfBlockOrder> {
-        let (pool_update_rx, _) = self.pool_manager.subscribe_state_changes().await.unwrap();
-        ReceiverStream::new(pool_update_rx)
-            .then(|_| async {
-                let pool = self.pool_manager.pool().await;
-                self.generate_orders(&pool)
-            })
-            .flat_map(futures::stream::iter)
-            .boxed()
+    pub async fn next_orders(&self) -> Vec<TopOfBlockOrder> {
+        let (mut pool_update_rx, _) = self.pool_manager.subscribe_state_changes().await.unwrap();
+
+        if let Some((address, _)) = pool_update_rx.recv().await {
+            if let Some(pool) = self.pool_manager.pool(&address) {
+                return self.generate_orders(&*pool);
+            }
+        }
+        Vec::new()
     }
 
-    fn generate_orders(&self, pool: &EnhancedUniswapV3Pool) -> Vec<TopOfBlockOrder> {
+    fn generate_orders(&self, pool: &EnhancedUniswapPool<Loader>) -> Vec<TopOfBlockOrder> {
         let mut rng = rand::thread_rng();
         let raw_sample = self.order_count_distribution.sample(&mut rng);
         let shifted_sample = raw_sample.abs(); // Make positive
@@ -115,7 +124,7 @@ where
 
     fn generate_order(
         &self,
-        pool: &EnhancedUniswapV3Pool,
+        pool: &EnhancedUniswapPool<Loader>,
         rng: &mut impl Rng
     ) -> Result<TopOfBlockOrder, UserOrderError> {
         let amount = self.price_distribution.sample(rng);
@@ -129,12 +138,12 @@ where
             let amount_in_usdc = amount * pool_price;
 
             // Convert amount to token A (USDC) decimals
-            let amount = amount_in_usdc * 10f64.powi(pool.token_a_decimals as i32);
-            I256::from_dec_str(&amount.to_string().split('.').next().unwrap())?
+            let amount = amount_in_usdc * 10_f64.powi(pool.token_a_decimals as i32);
+            I256::from_dec_str(amount.to_string().split('.').next().unwrap())?
         } else {
             // Convert amount to token B (ETH) decimals
-            let amount = amount * 10f64.powi(pool.token_b_decimals as i32);
-            I256::from_dec_str(&amount.to_string().split('.').next().unwrap())?
+            let amount = amount * 10_f64.powi(pool.token_b_decimals as i32);
+            I256::from_dec_str(amount.to_string().split('.').next().unwrap())?
         };
 
         let (swap_amount_in, swap_amount_out) = pool.simulate_swap(token_in, amount_in, None)?;
@@ -142,16 +151,15 @@ where
         let amount_in = U256::try_from(swap_amount_in.abs())?;
         let amount_out = U256::try_from(swap_amount_out.abs())?;
 
-        Ok(self.create_order(zero_for_one, amount_in, amount_out))
+        Ok(self.create_order(amount_in, amount_out))
     }
 
-    fn create_order(
-        &self,
-        zero_for_one: bool,
-        amount_in: U256,
-        amount_out: U256
-    ) -> TopOfBlockOrder {
-        TopOfBlockOrder { amountIn: amount_in, amountOut: amount_out, ..TopOfBlockOrder::default() }
+    fn create_order(&self, amount_in: U256, amount_out: U256) -> TopOfBlockOrder {
+        TopOfBlockOrder {
+            quantity_in: u128::try_from(amount_in).unwrap(),
+            quantity_out: u128::try_from(amount_out).unwrap(),
+            ..TopOfBlockOrder::default()
+        }
     }
 }
 
@@ -162,7 +170,9 @@ pub enum UserOrderError {
     #[error(transparent)]
     BigIntConversionError(#[from] BigIntConversionError),
     #[error(transparent)]
-    ParseSignedError(#[from] ParseSignedError)
+    ParseSignedError(#[from] ParseSignedError),
+    #[error(transparent)]
+    SwapSimulationError(#[from] SwapSimulationError)
 }
 
 #[cfg(test)]
@@ -192,7 +202,7 @@ mod tests {
         assert!(mean > 10.0 && mean < 20.0, "Mean {} is not correctly skewed", mean);
 
         // Check that we have a good distribution of values across the range
-        let mut binned_samples = vec![0; 10];
+        let mut binned_samples = [0; 10];
         for sample in samples {
             let bin = ((sample - 0.1) / (100.0 - 0.1) * 10.0).floor() as usize;
             let bin = bin.min(9); // Ensure we don't go out of bounds

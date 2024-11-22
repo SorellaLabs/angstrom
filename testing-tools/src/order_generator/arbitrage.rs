@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use alloy::primitives::I256;
-use alloy_primitives::U256;
-use angstrom_types::sol_bindings::rpc_orders::TopOfBlockOrder};
+use alloy_primitives::Address;
+use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::rpc_orders::TopOfBlockOrder};
 use cex_exchanges::{
     binance::ws::{channels::BinanceBookTicker, BinanceWsMessage},
     clients::ws::MutliWsStream,
@@ -13,12 +13,15 @@ use cex_exchanges::{
     CexExchange
 };
 use futures::{stream::BoxStream, StreamExt};
+use rust_decimal::{
+    prelude::{FromPrimitive, ToPrimitive},
+    Decimal, MathematicalOps
+};
+use tokio_stream::wrappers::ReceiverStream;
 use uniswap_v4::uniswap::{
-    pool::EnhancedUniswapV3Pool, pool_manager::UniswapPoolManager,
+    pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader, pool_manager::UniswapPoolManager,
     pool_providers::PoolManagerProvider
 };
-use rand_distr::num_traits::Float;
-use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Clone, Debug)]
 pub struct PriceLevel {
@@ -26,17 +29,27 @@ pub struct PriceLevel {
     pub quantity: f64
 }
 
-pub struct ArbitrageGenerator<P> {
-    pool_manager: UniswapPoolManager<P>,
-    symbol:       String
+pub struct ArbitrageGenerator<P, BlockSync, Loader>
+where
+    Loader: PoolDataLoader<Address> + Default
+{
+    pool_manager: UniswapPoolManager<P, BlockSync, Loader, Address>,
+    symbol:       String,
+    pool_address: Address
 }
 
-impl<P> ArbitrageGenerator<P>
+impl<P, BlockSync, Loader> ArbitrageGenerator<P, BlockSync, Loader>
 where
-    P: PoolManagerProvider + Send + Sync + 'static
+    P: PoolManagerProvider + Send + Sync + 'static,
+    BlockSync: BlockSyncConsumer + Send + Sync + 'static,
+    Loader: PoolDataLoader<Address> + Default + Send + Sync + 'static
 {
-    pub fn new(pool_manager: UniswapPoolManager<P>, symbol: String) -> Self {
-        Self { pool_manager, symbol }
+    pub fn new(
+        pool_address: Address,
+        pool_manager: UniswapPoolManager<P, BlockSync, Loader, Address>,
+        symbol: String
+    ) -> Self {
+        Self { pool_address, pool_manager, symbol }
     }
 
     fn create_price_feed_stream(&self) -> MutliWsStream {
@@ -68,16 +81,18 @@ where
         let mut last_check = tokio::time::Instant::now();
         loop {
             tokio::select! {
-                Some((_address, _block_number)) = pool_update_rx.recv() => {
-                    let pool = self.pool_manager.pool().await;
-                    let _ = self.check_arbitrage(&pool, price_update.clone());
+                Some((address, _block_number)) = pool_update_rx.recv() => {
+                    if let Some(pool) = self.pool_manager.pool(&address) {
+                        let _ = self.check_arbitrage(&*pool, price_update.clone());
+                    }
                 }
                 Some(feed_update) = price_feed.next() => {
-                    let pool = self.pool_manager.pool().await;
-                    price_update = feed_update;
-                    if last_check.elapsed() >= Duration::from_secs(1) {
-                        let _ = self.check_arbitrage(&pool, price_update.clone());
-                        last_check = tokio::time::Instant::now();
+                    if let Some(pool) = self.pool_manager.pool(&self.pool_address) {
+                        price_update = feed_update;
+                        if last_check.elapsed() >= Duration::from_secs(1) {
+                            let _ = self.check_arbitrage(&*pool, price_update.clone());
+                            last_check = tokio::time::Instant::now();
+                        }
                     }
                 }
             }
@@ -99,8 +114,11 @@ where
                 futures::future::ready(price_cache.clone())
             })
             .then(|price_update| async {
-                let pool = self.pool_manager.pool().await;
-                self.check_arbitrage(&pool, Some(price_update))
+                if let Some(pool) = self.pool_manager.pool(&self.pool_address) {
+                    self.check_arbitrage(&*pool, Some(price_update))
+                } else {
+                    None
+                }
             })
             .boxed()
     }
@@ -121,7 +139,7 @@ where
 
     fn check_arbitrage(
         &self,
-        pool: &EnhancedUniswapV3Pool,
+        pool: &EnhancedUniswapPool<Loader>,
         price_update: Option<BinanceBookTicker>
     ) -> Option<TopOfBlockOrder> {
         let price_update = price_update?;
@@ -206,26 +224,22 @@ where
 
     fn create_order(zero_for_one: bool, amount: I256) -> TopOfBlockOrder {
         TopOfBlockOrder {
-            amountIn: if zero_for_one { U256::try_from(amount.abs()).unwrap() } else { U256::ZERO },
-            amountOut: if zero_for_one {
-                U256::ZERO
-            } else {
-                U256::try_from(amount.abs()).unwrap()
-            },
+            quantity_in: if zero_for_one { amount.abs().try_into().unwrap() } else { 0u128 },
+            quantity_out: if zero_for_one { 0u128 } else { amount.abs().try_into().unwrap() },
             ..TopOfBlockOrder::default()
         }
     }
 
     fn try_sell_on_uniswap(
         &self,
-        pool: &EnhancedUniswapV3Pool,
+        pool: &EnhancedUniswapPool<Loader>,
         best_ask: &PriceLevel
     ) -> (f64, f64, f64, I256) {
         let eth = pool.token_b;
-        let ask_amount = best_ask.quantity * 10_f64.powi(pool.token_b_decimals as i32);
+        let ask_amount = Decimal::from_f64(best_ask.quantity).unwrap()
+            * Decimal::from(10i64).powu(pool.token_b_decimals.into());
         let ask_amount_in =
             I256::from_dec_str(ask_amount.to_string().split('.').next().unwrap()).unwrap();
-
 
         let (ask_swap_amount_in, ask_swap_amount_out) =
             pool.simulate_swap(eth, ask_amount_in, None).unwrap();
@@ -233,24 +247,25 @@ where
         let ask_uniswap_fill_price =
             self.calculate_uniswap_fill_price(pool, ask_swap_amount_in, ask_swap_amount_out);
 
-        let token_b_scale = BigFloat::from(10).powi(pool.token_b_decimals as i32);
+        let token_b_scale = Decimal::from(10i64).powu(pool.token_b_decimals.into());
         let ask_binance_amount = best_ask.quantity;
         let ask_uniswap_amount =
-            BigFloat::from(u128::try_from(ask_swap_amount_out.abs()).unwrap()).div(&token_b_scale);
+            Decimal::from(u128::try_from(ask_swap_amount_out.abs()).unwrap()) / token_b_scale;
 
-        let ask_profit = (ask_uniswap_fill_price.to_f64() * ask_binance_amount)
-            - (best_ask.price * ask_uniswap_amount.to_f64());
+        let ask_profit = (ask_uniswap_fill_price.to_f64().unwrap() * ask_binance_amount)
+            - (best_ask.price * ask_uniswap_amount.to_f64().unwrap());
 
-        (ask_profit, ask_binance_amount, ask_uniswap_fill_price.to_f64(), ask_amount_in)
+        (ask_profit, ask_binance_amount, ask_uniswap_fill_price.to_f64().unwrap(), ask_amount_in)
     }
 
     fn try_buy_on_uniswap(
         &self,
-        pool: &EnhancedUniswapV3Pool,
+        pool: &EnhancedUniswapPool<Loader>,
         best_bid: &PriceLevel
     ) -> (f64, f64, f64, I256) {
-        let bid_amount =
-            best_bid.quantity * best_bid.price * 10_f64.powi(pool.token_a_decimals as i32);
+        let bid_amount = Decimal::from_f64(best_bid.quantity).unwrap()
+            * Decimal::from_f64(best_bid.price).unwrap()
+            * Decimal::from(10i64).powu(pool.token_a_decimals.into());
         let bid_amount_in =
             I256::from_dec_str(bid_amount.to_string().split('.').next().unwrap()).unwrap();
         let usdc = pool.token_a;
@@ -261,28 +276,32 @@ where
         let bid_uniswap_fill_price =
             self.calculate_uniswap_fill_price(pool, bid_swap_amount_in, bid_swap_amount_out);
 
-        let token_b_scale = BigFloat::from(10).powi(pool.token_b_decimals as i32);
-        let bid_binance_amount =  BigFloat::from(bid_amount).div(&token_b_scale).to_f64();
+        let token_b_scale = Decimal::from(10i64).powu(pool.token_b_decimals.into());
+        let bid_binance_amount = bid_amount / token_b_scale;
         let bid_uniswap_amount =
-            BigFloat::from_u128(u128::try_from(bid_swap_amount_out.abs()).unwrap())
-                .div(&token_b_scale);
+            Decimal::from(u128::try_from(bid_swap_amount_out.abs()).unwrap()) / token_b_scale;
 
-        let bid_profit = (best_bid.price * bid_binance_amount)
-            - (bid_uniswap_fill_price.to_f64() * bid_uniswap_amount.to_f64());
+        let bid_profit = (best_bid.price * bid_binance_amount.to_f64().unwrap())
+            - (bid_uniswap_fill_price.to_f64().unwrap() * bid_uniswap_amount.to_f64().unwrap());
 
-        (bid_profit, bid_binance_amount, bid_uniswap_fill_price.to_f64(), bid_amount_in)
+        (
+            bid_profit,
+            bid_binance_amount.to_f64().unwrap(),
+            bid_uniswap_fill_price.to_f64().unwrap(),
+            bid_amount_in
+        )
     }
 
     fn calculate_uniswap_fill_price(
         &self,
-        pool: &EnhancedUniswapV3Pool,
+        pool: &EnhancedUniswapPool<Loader>,
         swap_amount_in: I256,
         swap_amount_out: I256
-    ) -> BigFloat {
-        let amount_in = BigFloat::from_u128(u128::try_from(swap_amount_in.abs()).unwrap());
-        let amount_out = BigFloat::from_u128(u128::try_from(swap_amount_out.abs()).unwrap());
-        let decimal_adjustment = BigFloat::from(10)
-            .pow(&BigFloat::from_u8(pool.token_b_decimals - pool.token_a_decimals));
+    ) -> Decimal {
+        let amount_in = Decimal::from(u128::try_from(swap_amount_in.abs()).unwrap());
+        let amount_out = Decimal::from(u128::try_from(swap_amount_out.abs()).unwrap());
+        let decimal_adjustment =
+            Decimal::from(10i64).powu((pool.token_b_decimals - pool.token_a_decimals).into());
 
         (amount_in / amount_out) * decimal_adjustment
     }

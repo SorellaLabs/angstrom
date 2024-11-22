@@ -123,6 +123,6 @@ impl TestingConfig for TestnetConfig {
     }
 
     fn anvil_endpoint(&self, _: impl Display) -> String {
-        format!("/tmp/anvil.ipc")
+        "/tmp/anvil.ipc".to_string()
     }
 }

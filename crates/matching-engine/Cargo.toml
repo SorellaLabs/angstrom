@@ -14,8 +14,6 @@ harness = false
 
 [dependencies]
 angstrom-types.workspace = true
-angstrom-utils.workspace = true
-uniswap-v4.workspace = true
 validation.workspace = true
 alloy.workspace = true
 alloy-primitives.workspace = true
@@ -24,23 +22,12 @@ futures.workspace = true
 futures-util.workspace = true
 uniswap_v3_math.workspace = true
 itertools.workspace = true
-malachite = "0.4.0"
-malachite-q = "0.4.0"
 pade.workspace = true
-pade-macro.workspace = true
 rand.workspace = true
 rand_distr.workspace = true
 tokio.workspace = true
 reth-tasks.workspace = true
-criterion.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-thiserror.workspace = true
 reth-provider.workspace = true
-
-arraydeque = "0.5"
-num-bigfloat = "1.7"
-once_cell = "1.20.2"
 
 # Using clap for our bookgen command-line tool
 clap = "4.5.4"

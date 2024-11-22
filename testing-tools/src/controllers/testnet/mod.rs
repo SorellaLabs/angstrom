@@ -12,6 +12,7 @@ use crate::{
     controllers::strom::TestnetNode
 };
 
+#[allow(dead_code)]
 pub struct AngstromTestnet<C> {
     block_provider: TestnetBlockProvider,
     node:           TestnetNode<C>,
@@ -56,7 +57,7 @@ where
             c,
             None,
             config.pk,
-            config.secret_key.clone(),
+            config.secret_key,
             initial_validators,
             inital_angstrom_state,
             config.clone(),
@@ -89,7 +90,7 @@ where
             c,
             None,
             config.pk,
-            config.secret_key.clone(),
+            config.secret_key,
             initial_validators,
             inital_angstrom_state,
             config.clone(),

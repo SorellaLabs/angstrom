@@ -43,7 +43,7 @@ where
     )
     .await;
 
-    Ok(TestnetNode::new(
+    TestnetNode::new(
         node_id,
         strom_network,
         strom_network_manager,
@@ -54,5 +54,5 @@ where
         block_provider,
         inital_angstrom_state
     )
-    .await?)
+    .await
 }

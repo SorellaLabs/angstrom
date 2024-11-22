@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use alloy::{
     eips::eip2718::Encodable2718, network::TransactionBuilder, primitives::TxHash,
     providers::Provider, rpc::types::TransactionRequest
@@ -6,14 +8,17 @@ use futures::StreamExt;
 
 use crate::primitive::AngstromSigner;
 
-pub struct MevBoostSender<P> {
-    providers: Vec<P>
+pub struct MevBoostSender<P, P2> {
+    mev_boost_providers: Vec<Arc<P>>,
+    node_provider:       Arc<P2>
 }
 
-impl<P> MevBoostSender<P>
+impl<P, P2> MevBoostSender<P, P2>
 where
-    P: Provider
+    P: Provider,
+    P2: Provider
 {
+    /// sends to all mev_boost_providers
     pub async fn sign_and_send(
         &self,
         signer: &AngstromSigner,

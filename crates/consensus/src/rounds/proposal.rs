@@ -92,14 +92,21 @@ impl ProposalState {
             return false
         };
 
-        let tx = TransactionRequest::default()
+        let mut tx = TransactionRequest::default()
             .with_to(handles.angstrom_address)
             .with_from(handles.signer.address())
             .with_input(bundle.pade_encode());
+
         let provider = handles.provider.clone();
+        let signer = handles.signer.clone();
 
         let submission_future = async move {
-            let submitted_tx = provider.send_transaction(tx).await.unwrap();
+            provider.populate_gas_nonce_chain_id(signer.address(), &mut tx);
+            let (hash, success) = provider.sign_and_send(&signer, tx).await;
+            if !success {
+                return false
+            }
+
             // wait for next block. then see if transaction landed
             provider
                 .watch_blocks()
@@ -110,7 +117,6 @@ impl ProposalState {
                 .next()
                 .await;
 
-            let hash = submitted_tx.tx_hash();
             provider
                 .get_transaction_by_hash(*hash)
                 .await

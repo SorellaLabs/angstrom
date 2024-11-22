@@ -16,7 +16,7 @@ use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer, contract_payloads::angstrom::UniswapAngstromRegistry,
-    primitive::AngstromSigner
+    mev_boost::MevBoostProvider, primitive::AngstromSigner
 };
 use futures::StreamExt;
 use matching_engine::MatchingEngineHandle;
@@ -63,7 +63,7 @@ where
         angstrom_address: Address,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: impl Provider<T> + 'static,
+        provider: MevBoostProvider<Box<dyn Provider<T> + 'static>>,
         matching_engine: Matching,
         block_sync: BlockSync
     ) -> Self {

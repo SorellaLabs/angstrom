@@ -18,6 +18,7 @@ use angstrom_types::{
     consensus::{PreProposal, PreProposalAggregation, Proposal},
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
     matching::uniswap::PoolSnapshot,
+    mev_boost::MevBoostProvider,
     orders::PoolSolution,
     primitive::{AngstromSigner, PeerId},
     sol_bindings::grouped_orders::OrderWithStorageData
@@ -131,7 +132,7 @@ pub struct SharedRoundState<T, Matching> {
     _metrics:         ConsensusMetricsWrapper,
     pool_registry:    UniswapAngstromRegistry,
     uniswap_pools:    SyncedUniswapPools,
-    provider:         Arc<Pin<Box<dyn Provider<T>>>>,
+    provider:         Arc<Pin<Box<MevBoostProvider<Box<dyn Provider<T> + 'static>>>>>,
     messages:         VecDeque<ConsensusMessage>
 }
 
@@ -152,7 +153,7 @@ where
         metrics: ConsensusMetricsWrapper,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: impl Provider<T> + 'static,
+        provider: MevBoostProvider<Box<dyn Provider<T> + 'static>>,
         matching_engine: Matching
     ) -> Self {
         Self {

@@ -25,6 +25,7 @@ use angstrom_network::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    mev_boost::MevBoostProvider,
     primitive::{AngstromSigner, PeerId, PoolId as AngstromPoolId, UniswapPoolRegistry},
     reth_db_wrapper::RethDbWrapper
 };
@@ -157,11 +158,8 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         .unwrap()
         .into();
 
-    let mev_boost_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
-        .on_http(config.mev_boost_endpoints)
-        .await
-        .unwrap()
-        .into();
+    let mev_boost_provider =
+        MevBoostProvider::new_from_urls(querying_provider.clone(), &config.mev_boost_endpoints);
 
     tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
         this is done to ensure all modules start on the same state and we don't hit the rare  \

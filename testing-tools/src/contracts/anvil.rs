@@ -86,6 +86,7 @@ pub async fn spawn_anvil(anvil_key: usize) -> eyre::Result<(AnvilInstance, Walle
     Ok((anvil, rpc))
 }
 
+#[allow(dead_code)]
 pub(crate) trait SafeDeployPending {
     fn deploy_pending(self) -> impl Future<Output = eyre::Result<PendingTransaction>> + Send;
 

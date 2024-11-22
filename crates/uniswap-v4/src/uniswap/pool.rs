@@ -1,5 +1,3 @@
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
-
 use alloy::{
     hex,
     network::Network,
@@ -10,6 +8,8 @@ use alloy::{
 use alloy_primitives::Log;
 use angstrom_types::matching::uniswap::{LiqRange, PoolSnapshot};
 use itertools::Itertools;
+use std::cmp::Ordering;
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 use thiserror::Error;
 use uniswap_v3_math::{
     error::UniswapV3MathError,
@@ -391,6 +391,23 @@ where
         Ok((swap_result.amount0, swap_result.amount1))
     }
 
+    pub fn exchange_price(&self, quoted_asset: Option<Address>) -> Result<f64, PoolError> {
+        let tick = uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(self.sqrt_price)?;
+        let shift = self.token_a_decimals as i8 - self.token_b_decimals as i8;
+
+        let price = match shift.cmp(&0) {
+            Ordering::Less => 1.0001_f64.powi(tick) / 10_f64.powi(-shift as i32),
+            Ordering::Greater => 1.0001_f64.powi(tick) * 10_f64.powi(shift as i32),
+            Ordering::Equal => 1.0001_f64.powi(tick)
+        };
+
+        if quoted_asset.is_none() || quoted_asset.unwrap() == self.token_b {
+            Ok(1.0 / price)
+        } else {
+            Ok(price)
+        }
+    }
+
     pub fn simulate_swap_mut(
         &mut self,
         token_in: Address,
@@ -642,6 +659,8 @@ pub enum PoolError {
     PoolAlreadyInitialized,
     #[error("Pool is not initialized")]
     PoolNotInitialized,
+    #[error(transparent)]
+    UniswapV3MathError(#[from] UniswapV3MathError),
     #[error(transparent)]
     SwapSimulationError(#[from] SwapSimulationError),
     #[error(transparent)]

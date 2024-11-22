@@ -84,6 +84,7 @@ serial_test.workspace = true
 tempfile.workspace = true
 
 parking_lot.workspace = true
-clap = { version = "4.5.4", features = ["derive"] }
 eyre = "0.6.12"
 uniswap_v3_math.workspace = true
+thiserror = "1.0.69"
+rust_decimal = { version = "1.36.0", features = ["maths"] }

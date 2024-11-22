@@ -17,7 +17,7 @@ import {TickLib} from "src/libraries/TickLib.sol";
 import {HookDeployer} from "./HookDeployer.sol";
 import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
 import {TypedDataHasherLib} from "src/types/TypedDataHasher.sol";
-import {PoolConfigStore, PoolConfigStoreLib} from "src/libraries/PoolConfigStore.sol";
+import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "src/libraries/PoolConfigStore.sol";
 import {PairLib} from "test/_reference/Pair.sol";
 
 import {MockERC20} from "super-sol/mocks/MockERC20.sol";
@@ -338,5 +338,10 @@ contract BaseTest is Test, HookDeployer {
             PoolConfigStoreLib.keyFromAssetsUnchecked(asset0, asset1), storeIndex
         );
         return poolKey(angstrom, asset0, asset1, tickSpacing).toId();
+    }
+
+    function skey(address asset0, address asset1) internal pure returns (StoreKey key) {
+        assertTrue(asset0 < asset1, "Building key with out of order assets");
+        key = PoolConfigStoreLib.keyFromAssetsUnchecked(asset0, asset1);
     }
 }

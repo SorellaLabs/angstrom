@@ -7,6 +7,7 @@ verbosity      = 3
 fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
 ast = true
 evm_version    = "cancun"
+libs = ["lib"]
 
 ignored_error_codes = [
   2394, # Transient storage warning
@@ -14,11 +15,6 @@ ignored_error_codes = [
   5574  # Contract size too large
 ]
 
-# skipping for the normal build, since there is an issue with the yul optimizer and msize(),
-# and requires optimizer=false
-skip = [
-  "src/loaders/*.sol"
-]
 
 remappings = [
   "solady/src/=lib/solady/src/",

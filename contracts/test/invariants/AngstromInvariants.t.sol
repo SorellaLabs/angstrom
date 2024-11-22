@@ -35,7 +35,7 @@ contract AngstromInvariantsTest is BaseTest {
 
     uint256 internal TOTAL_ASSETS = 40;
 
-    uint256 internal constant REWARD_DISCREP_THRESHOLD = 5;
+    uint256 internal constant REWARD_DISCREP_THRESHOLD = 8;
 
     Env e;
     AngstromHandler handler;

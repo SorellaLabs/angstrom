@@ -160,6 +160,7 @@ library IUniV4 {
         }
     }
 
+    /// @dev WARNING: Expects `owner` & `asset` to not have dirty bytes.
     function getDelta(IPoolManager self, address owner, address asset)
         internal
         view

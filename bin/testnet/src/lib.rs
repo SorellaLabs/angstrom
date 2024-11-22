@@ -30,6 +30,7 @@ async fn execute(executor: TaskExecutor) -> eyre::Result<()> {
     let config = TestnetConfig::new(
         7,
         2,
+        my_node_config.port,
         testnet_config.leader_ws_url()?,
         my_node_config.address,
         pub_key,

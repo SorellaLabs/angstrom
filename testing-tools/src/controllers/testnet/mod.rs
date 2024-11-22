@@ -9,8 +9,7 @@ use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
 use super::strom::initialize_new_node;
 use crate::{
     anvil_state_provider::{AnvilInitializer, TestnetBlockProvider},
-    controllers::strom::TestnetNode,
-    types::TestingConfig
+    controllers::strom::TestnetNode
 };
 
 pub struct AngstromTestnet<C> {

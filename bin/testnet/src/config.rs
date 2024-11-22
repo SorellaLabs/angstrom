@@ -63,7 +63,6 @@ impl FullTestnetNodeConfig {
 
     pub fn my_node_config(&self) -> eyre::Result<TestnetNodeConfig> {
         let my_ip = local_ip_address::local_ip()?;
-
         self.nodes
             .iter()
             .find(|node| node.ip == my_ip)
@@ -105,6 +104,7 @@ impl TryFrom<FullTestnetNodeConfigInner> for FullTestnetNodeConfig {
 pub(crate) struct TestnetNodeConfig {
     pub address:     Address,
     pub ip:          IpAddr,
+    pub port:        u16,
     pub is_leader:   bool,
     pub signing_key: PrivateKeySigner,
     pub secret_key:  SecretKey
@@ -121,7 +121,14 @@ impl TryFrom<TestnetNodeConfigInner> for TestnetNodeConfig {
 
         let address = signing_key.address();
 
-        Ok(TestnetNodeConfig { address, ip, is_leader: value.is_leader, signing_key, secret_key })
+        Ok(TestnetNodeConfig {
+            address,
+            ip,
+            port: value.port.unwrap_or(4200),
+            is_leader: value.is_leader,
+            signing_key,
+            secret_key
+        })
     }
 }
 
@@ -160,6 +167,7 @@ impl FullTestnetNodeConfigInner {
 #[derive(Debug, Clone, Deserialize)]
 struct TestnetNodeConfigInner {
     ip:         String,
+    port:       Option<u16>,
     is_leader:  bool,
     secret_key: String
 }

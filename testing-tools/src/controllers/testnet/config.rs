@@ -19,6 +19,7 @@ pub struct TestnetConfig {
     pub leader_ws_url:        String,
     pub controller_address:   Address,
     pub pk:                   PublicKey,
+    pub rpc_port:             u16,
     pub signing_key:          PrivateKeySigner,
     pub secret_key:           SecretKey,
     pub pool_keys:            Vec<PoolKey>,
@@ -33,6 +34,7 @@ impl TestnetConfig {
     pub fn new(
         anvil_key: usize,
         node_count: u64,
+        rpc_port: u16,
         leader_ws_url: impl ToString,
         controller_address: Address,
         pk: PublicKey,
@@ -51,6 +53,7 @@ impl TestnetConfig {
             signing_key,
             secret_key,
             node_count,
+            rpc_port,
             leader_ws_url: leader_ws_url.to_string(),
             angstrom_address,
             pool_manager_address,
@@ -115,8 +118,8 @@ impl TestingConfig for TestnetConfig {
         }
     }
 
-    fn rpc_port(&self, _: Option<u64>) -> u64 {
-        4200
+    fn rpc_port(&self, _: Option<u64>) -> u16 {
+        self.rpc_port
     }
 
     fn anvil_endpoint(&self, _: impl Display) -> String {

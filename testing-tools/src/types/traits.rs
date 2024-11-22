@@ -14,5 +14,5 @@ pub trait TestingConfig: Clone {
 
     fn anvil_endpoint(&self, id: impl Display) -> String;
 
-    fn rpc_port(&self, node_id: Option<u64>) -> u64;
+    fn rpc_port(&self, node_id: Option<u64>) -> u16;
 }

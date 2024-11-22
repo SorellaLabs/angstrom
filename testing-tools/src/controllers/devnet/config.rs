@@ -6,7 +6,6 @@ use alloy::{
     providers::builder,
     signers::local::PrivateKeySigner
 };
-use alloy_primitives::Address;
 
 use crate::{anvil_state_provider::WalletProvider, types::TestingConfig};
 
@@ -108,8 +107,8 @@ impl TestingConfig for DevnetConfig {
         Ok((WalletProvider::new(rpc, controller_address, sk), Some(anvil)))
     }
 
-    fn rpc_port(&self, node_id: Option<u64>) -> u64 {
-        self.initial_rpc_port as u64 + node_id.expect("node id must be set")
+    fn rpc_port(&self, node_id: Option<u64>) -> u16 {
+        self.initial_rpc_port + node_id.expect("node id must be set") as u16
     }
 
     fn anvil_endpoint(&self, id: impl Display) -> String {

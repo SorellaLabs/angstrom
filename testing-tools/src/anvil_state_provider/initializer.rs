@@ -1,11 +1,7 @@
-use alloy::{
-    node_bindings::AnvilInstance,
-    providers::{ext::AnvilApi, Provider},
-    pubsub::PubSubFrontend
-};
+use alloy::{providers::ext::AnvilApi, pubsub::PubSubFrontend};
 use alloy_primitives::{
     aliases::{I24, U24},
-    Address, FixedBytes, U256
+    FixedBytes, U256
 };
 use angstrom_types::{
     contract_bindings::{
@@ -106,15 +102,13 @@ impl AnvilInitializer {
             .run_safe()
             .await?;
 
-        let set_tick_spacing = self
-            .pool_gate
+        self.pool_gate
             .tickSpacing(pool.tickSpacing)
             .from(self.provider.controller_address)
             .run_safe()
             .await?;
 
-        let add_liq = self
-            .pool_gate
+        self.pool_gate
             .addLiquidity(
                 pool.currency0,
                 pool.currency1,

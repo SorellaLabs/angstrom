@@ -5,9 +5,11 @@ pool_manager_address = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 ip = "10.150.0.7"
 is_leader = true
 secret_key = "0xcb0f95a93ab44b1ad143a5206afa10ae0726148d50600b91dcbfb4cb358fdb8b"
+port = 4200
 
 [[nodes]]
 ip = "10.150.0.9"
 is_leader = false
 secret_key = "0xb77df7b92f8c66594189c945c6556395b5c3c3155b761d9cc56e3d2c7076103e"
+port = 4201
 

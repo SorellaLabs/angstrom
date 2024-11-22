@@ -39,7 +39,7 @@ use crate::{
 };
 
 pub struct AngstromDevnetNodeInternals {
-    pub rpc_port:         u64,
+    pub rpc_port:         u16,
     pub state_provider:   AnvilStateProviderWrapper,
     pub order_storage:    Arc<OrderStorage>,
     pub pool_handle:      PoolHandle,
@@ -112,7 +112,7 @@ impl AngstromDevnetNodeInternals {
             uniswap_registry.clone(),
             block_number,
             block_sync.clone(),
-            Address::random()
+            inital_angstrom_state.pool_manager_addr
         )
         .await;
 
@@ -123,7 +123,7 @@ impl AngstromDevnetNodeInternals {
         let block_to_price_override = 0;
         let token_conversion = TokenPriceGenerator::new(
             state_provider.state_provider().provider().into(),
-            block_id,
+            block_number,
             uniswap_pools.clone(),
             Some(block_to_price_override)
         )

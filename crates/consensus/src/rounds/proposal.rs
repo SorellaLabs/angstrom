@@ -4,10 +4,7 @@ use std::{
     time::Duration
 };
 
-use alloy::{
-    network::TransactionBuilder, providers::Provider, rpc::types::TransactionRequest,
-    transports::Transport
-};
+use alloy::{network::TransactionBuilder, providers::Provider, rpc::types::TransactionRequest};
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
     consensus::{PreProposalAggregation, Proposal},

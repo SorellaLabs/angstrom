@@ -50,7 +50,7 @@ pub struct AngstromDevnetNodeInternals {
 
 impl AngstromDevnetNodeInternals {
     pub async fn new(
-        testnet_node_id: Option<u64>,
+        testnet_node_id: u64,
         strom_handles: StromHandles,
         strom_network_handle: StromNetworkHandle,
         secret_key: SecretKey,
@@ -63,11 +63,8 @@ impl AngstromDevnetNodeInternals {
         Option<ConsensusManager<PubSubFrontend, MatcherHandle, GlobalBlockSync>>
     )> {
         tracing::debug!("connecting to state provider");
-        let state_provider = AnvilStateProviderWrapper::spawn_new(
-            config.clone(),
-            testnet_node_id.unwrap_or_default()
-        )
-        .await?;
+        let state_provider =
+            AnvilStateProviderWrapper::spawn_new(config.clone(), testnet_node_id).await?;
 
         if let Some(state) = inital_angstrom_state.state {
             state_provider.set_state(state).await?;
@@ -79,10 +76,9 @@ impl AngstromDevnetNodeInternals {
         let executor: TokioTaskExecutor = Default::default();
         let tx_strom_handles = (&strom_handles).into();
 
-        let validation_client = ValidationClient(strom_handles.validator_tx);
-        let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
-
-        let order_api = OrderApi::new(pool.clone(), executor.clone(), validation_client);
+        // let validation_client = ValidationClient(strom_handles.validator_tx);
+        // let matching_handle = MatchingManager::spawn(executor.clone(),
+        // validation_client.clone());
 
         let eth_handle = AnvilEthDataCleanser::spawn(
             testnet_node_id,
@@ -156,6 +152,9 @@ impl AngstromDevnetNodeInternals {
         )
         .await;
 
+        let order_api = OrderApi::new(pool.clone(), executor.clone(), validator.client.clone());
+        let matching_handle = MatchingManager::spawn(executor.clone(), validator.client.clone());
+
         let pool_config = PoolConfig::default();
         let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
@@ -179,7 +178,7 @@ impl AngstromDevnetNodeInternals {
             strom_handles.pool_manager_tx
         );
 
-        let rpc_port = config.rpc_port(testnet_node_id);
+        let rpc_port = config.rpc_port(Some(testnet_node_id));
         let server = ServerBuilder::default()
             .build(format!("127.0.0.1:{}", rpc_port))
             .await?;

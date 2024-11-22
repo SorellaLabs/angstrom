@@ -28,7 +28,7 @@ pub struct AnvilEthDataCleanser<S: Stream<Item = (u64, Vec<Transaction>)>> {
 
 impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEthDataCleanser<S> {
     pub async fn spawn<TP: TaskSpawner>(
-        testnet_node_id: Option<u64>,
+        testnet_node_id: u64,
         tp: TP,
         angstrom_contract: Address,
         tx: Sender<EthCommand>,

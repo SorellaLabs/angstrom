@@ -123,7 +123,7 @@ reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 
 # alloy
-alloy = { version = "0.4.2", features = [
+alloy = { version = "0.5.4", features = [
   "rlp",
   "full",
   #  "eip712",
@@ -148,35 +148,35 @@ alloy-sol-types = "0.8.0"
 alloy-rlp = "0.3.4"
 alloy-rlp-derive = "0.3.8"
 alloy-trie = "0.6"
-alloy-rpc-types = { version = "0.4.2", default-features = false, features = [
+alloy-rpc-types = { version = "0.5.4", default-features = false, features = [
   "eth",
 ] }
-alloy-rpc-types-anvil = { version = "0.4.2", default-features = false }
-alloy-rpc-types-beacon = { version = "0.4.2", default-features = false }
-alloy-rpc-types-admin = { version = "0.4.2", default-features = false }
-alloy-rpc-types-txpool = { version = "0.4.2", default-features = false }
-alloy-serde = { version = "0.4.2", default-features = false }
-alloy-rpc-types-engine = { version = "0.4.2", default-features = false }
-alloy-rpc-types-eth = { version = "0.4.2", default-features = false }
-alloy-genesis = { version = "0.4.2", default-features = false }
-alloy-node-bindings = { version = "0.4.2", default-features = false }
-alloy-provider = { version = "0.4.2", default-features = false, features = [
+alloy-rpc-types-anvil = { version = "0.5.4", default-features = false }
+alloy-rpc-types-beacon = { version = "0.5.4", default-features = false }
+alloy-rpc-types-admin = { version = "0.5.4", default-features = false }
+alloy-rpc-types-txpool = { version = "0.5.4", default-features = false }
+alloy-serde = { version = "0.5.4", default-features = false }
+alloy-rpc-types-engine = { version = "0.5.4", default-features = false }
+alloy-rpc-types-eth = { version = "0.5.4", default-features = false }
+alloy-genesis = { version = "0.5.4", default-features = false }
+alloy-node-bindings = { version = "0.5.4", default-features = false }
+alloy-provider = { version = "0.5.4", default-features = false, features = [
   "reqwest",
 ] }
-alloy-eips = { version = "0.4.2", default-features = false }
-alloy-signer = { version = "0.4.2", default-features = false }
-alloy-signer-local = { version = "0.4.2", default-features = false }
-alloy-network = { version = "0.4.2", default-features = false }
-alloy-consensus = { version = "0.4.2", default-features = false }
-alloy-transport = { version = "0.4.2" }
-alloy-transport-http = { version = "0.4.2", features = [
+alloy-eips = { version = "0.5.4", default-features = false }
+alloy-signer = { version = "0.5.4", default-features = false }
+alloy-signer-local = { version = "0.5.4", default-features = false }
+alloy-network = { version = "0.5.4", default-features = false }
+alloy-consensus = { version = "0.5.4", default-features = false }
+alloy-transport = { version = "0.5.4" }
+alloy-transport-http = { version = "0.5.4", features = [
   "reqwest-rustls-tls",
 ], default-features = false }
-alloy-transport-ws = { version = "0.4.2", default-features = false }
-alloy-transport-ipc = { version = "0.4.2", default-features = false }
-alloy-pubsub = { version = "0.4.2", default-features = false }
-alloy-json-rpc = { version = "0.4.2", default-features = false }
-alloy-rpc-client = { version = "0.4.2", default-features = false }
+alloy-transport-ws = { version = "0.5.4", default-features = false }
+alloy-transport-ipc = { version = "0.5.4", default-features = false }
+alloy-pubsub = { version = "0.5.4", default-features = false }
+alloy-json-rpc = { version = "0.5.4", default-features = false }
+alloy-rpc-client = { version = "0.5.4", default-features = false }
 
 
 # Uniswap math helpers

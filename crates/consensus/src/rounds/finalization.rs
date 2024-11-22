@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll, Waker}
 };
 
-use alloy::transports::Transport;
+use alloy::{providers::Provider, transports::Transport};
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::consensus::Proposal;
 use futures::{Future, FutureExt};
@@ -25,13 +25,13 @@ pub struct FinalizationState {
 }
 
 impl FinalizationState {
-    pub fn new<T, Matching>(
+    pub fn new<P, Matching>(
         proposal: Proposal,
-        handles: &mut SharedRoundState<T, Matching>,
+        handles: &mut SharedRoundState<P, Matching>,
         waker: Waker
     ) -> Self
     where
-        T: Transport + Clone,
+        P: Provider + 'static,
         Matching: MatchingEngineHandle
     {
         let preproposal = proposal
@@ -72,14 +72,14 @@ impl FinalizationState {
     }
 }
 
-impl<T, Matching> ConsensusState<T, Matching> for FinalizationState
+impl<P, Matching> ConsensusState<P, Matching> for FinalizationState
 where
-    T: Transport + Clone,
+    P: Provider + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(
         &mut self,
-        _: &mut SharedRoundState<T, Matching>,
+        _: &mut SharedRoundState<P, Matching>,
         _: StromConsensusEvent
     ) {
         // no messages consensus related matter at this point. is just waiting
@@ -88,9 +88,9 @@ where
 
     fn poll_transition(
         &mut self,
-        _: &mut SharedRoundState<T, Matching>,
+        _: &mut SharedRoundState<P, Matching>,
         cx: &mut Context<'_>
-    ) -> Poll<Option<Box<dyn ConsensusState<T, Matching>>>> {
+    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>> {
         if self.completed {
             return Poll::Ready(None)
         }

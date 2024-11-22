@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc};
+use std::{ops::Deref, pin::Pin, sync::Arc};
 
 use alloy::{
     eips::eip2718::Encodable2718,
@@ -8,25 +8,24 @@ use alloy::{
     rpc::types::TransactionRequest,
     transports::http::{reqwest::Url, ReqwestTransport}
 };
-use futures::StreamExt;
 
 use crate::primitive::AngstromSigner;
 
 pub struct MevBoostProvider<P> {
-    mev_boost_providers: Vec<Box<dyn Provider<ReqwestTransport>>>,
+    mev_boost_providers: Vec<Arc<Box<dyn Provider<ReqwestTransport>>>>,
     node_provider:       Arc<P>
 }
 
 impl<P> MevBoostProvider<P>
 where
-    P: Provider
+    P: Provider + 'static
 {
     pub fn new_from_urls(node_provider: Arc<P>, urls: &[Url]) -> Self {
         let mev_boost_providers = urls
             .iter()
             .map(|url| {
-                Box::new(ProviderBuilder::<_, _, _>::default().on_http(url.clone()))
-                    as Box<dyn Provider<ReqwestTransport>>
+                Arc::new(Box::new(ProviderBuilder::<_, _, _>::default().on_http(url.clone()))
+                    as Box<dyn Provider<ReqwestTransport>>)
             })
             .collect::<Vec<_>>();
 
@@ -52,21 +51,20 @@ where
         tx.set_chain_id(1);
     }
 
-    /// sends to all mev_boost_providers
+    // has as consumption here due to weird to general error
     pub async fn sign_and_send(
         &self,
-        signer: &AngstromSigner,
+        signer: AngstromSigner,
         tx: TransactionRequest
     ) -> (TxHash, bool) {
-        let tx = tx.build(signer).await.unwrap();
+        let tx = tx.build(&signer).await.unwrap();
         let hash = *tx.tx_hash();
         let encoded = tx.encoded_2718();
 
-        let submitted = futures::stream::iter(self.mev_boost_providers.iter())
-            .map(|provider| async { provider.send_raw_transaction(&encoded).await.is_ok() })
-            .buffer_unordered(self.mev_boost_providers.len())
-            .all(|res| async move { res })
-            .await;
+        let mut submitted = true;
+        for provider in self.mev_boost_providers.clone() {
+            submitted &= provider.send_raw_transaction(&encoded).await.is_ok();
+        }
 
         (hash, submitted)
     }

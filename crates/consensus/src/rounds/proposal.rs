@@ -4,7 +4,10 @@ use std::{
     time::Duration
 };
 
-use alloy::{network::TransactionBuilder, rpc::types::TransactionRequest, transports::Transport};
+use alloy::{
+    network::TransactionBuilder, providers::Provider, rpc::types::TransactionRequest,
+    transports::Transport
+};
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
     consensus::{PreProposalAggregation, Proposal},
@@ -36,13 +39,13 @@ pub struct ProposalState {
 }
 
 impl ProposalState {
-    pub fn new<T, Matching>(
+    pub fn new<P, Matching>(
         pre_proposal_aggregation: HashSet<PreProposalAggregation>,
-        handles: &mut SharedRoundState<T, Matching>,
+        handles: &mut SharedRoundState<P, Matching>,
         waker: Waker
     ) -> Self
     where
-        T: Transport + Clone,
+        P: Provider + 'static,
         Matching: MatchingEngineHandle
     {
         // queue building future
@@ -59,13 +62,13 @@ impl ProposalState {
         }
     }
 
-    fn try_build_proposal<T, Matching>(
+    fn try_build_proposal<P, Matching>(
         &mut self,
         result: eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>,
-        handles: &mut SharedRoundState<T, Matching>
+        handles: &mut SharedRoundState<P, Matching>
     ) -> bool
     where
-        T: Transport + Clone,
+        P: Provider + 'static,
         Matching: MatchingEngineHandle
     {
         let Ok((pool_solution, gas_info)) = result else {
@@ -101,8 +104,11 @@ impl ProposalState {
         let signer = handles.signer.clone();
 
         let submission_future = async move {
-            provider.populate_gas_nonce_chain_id(signer.address(), &mut tx);
-            let (hash, success) = provider.sign_and_send(&signer, tx).await;
+            provider
+                .populate_gas_nonce_chain_id(signer.address(), &mut tx)
+                .await;
+
+            let (hash, success) = provider.sign_and_send(signer, tx).await;
             if !success {
                 return false
             }
@@ -118,7 +124,7 @@ impl ProposalState {
                 .await;
 
             provider
-                .get_transaction_by_hash(*hash)
+                .get_transaction_by_hash(hash)
                 .await
                 .unwrap()
                 .is_some()
@@ -132,14 +138,14 @@ impl ProposalState {
     }
 }
 
-impl<T, Matching> ConsensusState<T, Matching> for ProposalState
+impl<P, Matching> ConsensusState<P, Matching> for ProposalState
 where
-    T: Transport + Clone,
+    P: Provider + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(
         &mut self,
-        _: &mut SharedRoundState<T, Matching>,
+        _: &mut SharedRoundState<P, Matching>,
         _: StromConsensusEvent
     ) {
         // No messages at this point can effect the consensus round and thus are
@@ -148,9 +154,9 @@ where
 
     fn poll_transition(
         &mut self,
-        handles: &mut SharedRoundState<T, Matching>,
+        handles: &mut SharedRoundState<P, Matching>,
         cx: &mut Context<'_>
-    ) -> Poll<Option<Box<dyn ConsensusState<T, Matching>>>> {
+    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>> {
         if let Some(mut b_fut) = self.matching_engine_future.take() {
             match b_fut.poll_unpin(cx) {
                 Poll::Ready(state) => {

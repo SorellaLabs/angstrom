@@ -158,7 +158,7 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
     fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
         let acc = async_to_sync(
             self.provider
-                .get_block_by_number(reth_primitives::BlockNumberOrTag::Number(number), false)
+                .get_block_by_number(alloy::eips::BlockNumberOrTag::Number(number), false)
                 .into_future()
         )?;
 
@@ -181,7 +181,7 @@ impl BlockNumReader for RpcStateProviderFactory {
 
     fn convert_number(
         &self,
-        _: alloy_rpc_types::BlockHashOrNumber
+        _: alloy::eips::eip1898::BlockHashOrNumber
     ) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }
@@ -196,7 +196,7 @@ impl BlockNumReader for RpcStateProviderFactory {
 
     fn convert_hash_or_number(
         &self,
-        _: alloy_rpc_types::BlockHashOrNumber
+        _: alloy::eips::eip1898::BlockHashOrNumber
     ) -> ProviderResult<Option<BlockNumber>> {
         panic!("never used");
     }
@@ -208,7 +208,7 @@ impl BlockHashReader for RpcStateProviderFactory {
 
     fn convert_block_hash(
         &self,
-        _: alloy_rpc_types::BlockHashOrNumber
+        _: alloy::eips::eip1898::BlockHashOrNumber
     ) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }

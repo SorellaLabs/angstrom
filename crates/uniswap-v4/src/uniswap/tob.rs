@@ -15,13 +15,58 @@ pub fn calculate_reward(
 #[cfg(test)]
 mod test {
     use alloy::primitives::Uint;
+    use alloy_primitives::U256;
     use angstrom_types::matching::{
         uniswap::{LiqRange, PoolSnapshot},
         SqrtPriceX96
     };
-    use rand::thread_rng;
-    use testing_tools::type_generator::orders::generate_top_of_block_order;
+    use angstrom_types::orders::{OrderId, OrderPriorityData};
+    use angstrom_types::primitive::PoolId;
+    use angstrom_types::sol_bindings::grouped_orders::OrderWithStorageData;
+    use angstrom_types::sol_bindings::rpc_orders::TopOfBlockOrder;
+    use angstrom_types::sol_bindings::RawPoolOrder;
+    use rand::rngs::ThreadRng;
+    use rand::{thread_rng, Rng};
     use uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick;
+
+    pub fn generate_top_of_block_order(
+        rng: &mut ThreadRng,
+        is_bid: bool,
+        pool_id: Option<PoolId>,
+        valid_block: Option<u64>,
+        quantity_in: Option<u128>,
+        quantity_out: Option<u128>
+    ) -> OrderWithStorageData<TopOfBlockOrder> {
+        let pool_id = pool_id.unwrap_or_default();
+        let valid_block = valid_block.unwrap_or_default();
+        let price: u128 = rng.gen();
+        let volume: u128 = rng.gen();
+        let gas: U256 = rng.gen();
+        let gas_units: u64 = rng.gen();
+        let order = TopOfBlockOrder {
+            quantity_in: quantity_in.unwrap_or_default(),
+            quantity_out: quantity_out.unwrap_or_default(),
+            ..TopOfBlockOrder::default()
+        };
+
+        let priority_data = OrderPriorityData { price: U256::from(price), volume, gas, gas_units };
+        let order_id = OrderId {
+            pool_id,
+            hash: order.order_hash(),
+            ..OrderId::default()
+        };
+        OrderWithStorageData {
+            order,
+            priority_data,
+            is_bid,
+            is_currently_valid: true,
+            is_valid: true,
+            order_id,
+            pool_id,
+            valid_block,
+            ..OrderWithStorageData::default()
+        }
+    }
 
     use super::calculate_reward;
 

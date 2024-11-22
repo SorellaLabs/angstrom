@@ -63,7 +63,6 @@ testing-tools = { path = "./testing-tools/" }
 testing-tools-macros = { path = "./testing-tools/testing-tools-macros" }
 angstrom = { path = "./bin/angstrom/" }
 matching-engine = { path = "./crates/matching-engine/" }
-contract-bindings = { path = "./crates/contract-bindings/" }
 eyre = "0.6.12"
 
 # pade
@@ -95,9 +94,6 @@ reth-storage-api = { git = "https://github.com/paradigmxyz/reth", version = "1.1
 reth-provider = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-rlp = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0", features = [
-  "alloc",
-] }
 reth-errors = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
@@ -105,20 +101,15 @@ reth-node-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.
 reth-node-types = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-codecs = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-#reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-rpc-types-compat = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-metrics = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-revm = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-payload-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-tasks = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-network = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-network-api = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
@@ -127,7 +118,6 @@ reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1
 alloy = { version = "0.4.2", features = [
   "rlp",
   "full",
-  #  "eip712",
   "node-bindings",
   "rpc-types-debug",
   "rpc-types-trace",
@@ -143,41 +133,13 @@ alloy = { version = "0.4.2", features = [
 ] }
 alloy-chains = "0.1.32"
 alloy-primitives = "0.8.7"
-alloy-sol-macro = "0.8.0"
-alloy-dyn-abi = "0.8.0"
 alloy-sol-types = "0.8.0"
 alloy-rlp = "0.3.4"
-alloy-rlp-derive = "0.3.8"
-alloy-trie = "0.6"
 alloy-rpc-types = { version = "0.4.2", default-features = false, features = [
   "eth",
 ] }
-alloy-rpc-types-anvil = { version = "0.4.2", default-features = false }
-alloy-rpc-types-beacon = { version = "0.4.2", default-features = false }
-alloy-rpc-types-admin = { version = "0.4.2", default-features = false }
-alloy-rpc-types-txpool = { version = "0.4.2", default-features = false }
-alloy-serde = { version = "0.4.2", default-features = false }
-alloy-rpc-types-engine = { version = "0.4.2", default-features = false }
-alloy-rpc-types-eth = { version = "0.4.2", default-features = false }
-alloy-genesis = { version = "0.4.2", default-features = false }
-alloy-node-bindings = { version = "0.4.2", default-features = false }
-alloy-provider = { version = "0.4.2", default-features = false, features = [
-  "reqwest",
-] }
-alloy-eips = { version = "0.4.2", default-features = false }
 alloy-signer = { version = "0.4.2", default-features = false }
 alloy-signer-local = { version = "0.4.2", default-features = false }
-alloy-network = { version = "0.4.2", default-features = false }
-alloy-consensus = { version = "0.4.2", default-features = false }
-alloy-transport = { version = "0.4.2" }
-alloy-transport-http = { version = "0.4.2", features = [
-  "reqwest-rustls-tls",
-], default-features = false }
-alloy-transport-ws = { version = "0.4.2", default-features = false }
-alloy-transport-ipc = { version = "0.4.2", default-features = false }
-alloy-pubsub = { version = "0.4.2", default-features = false }
-alloy-json-rpc = { version = "0.4.2", default-features = false }
-alloy-rpc-client = { version = "0.4.2", default-features = false }
 
 
 # Uniswap math helpers
@@ -190,7 +152,6 @@ bytes = "1.4"
 bincode = "1.3.3"
 bitflags = "2.3"
 tracing = "0.1.0"
-tracing-appender = "0.2"
 tracing-subscriber = "0.3.18"
 thiserror = "1.0"
 serde_json = "1.0.94"
@@ -223,9 +184,6 @@ tokio-util = { version = "0.7.4", features = ["codec"] }
 
 ## json
 jsonrpsee = "0.24"
-jsonrpsee-core = "0.24"
-jsonrpsee-http-client = "0.24"
-jsonrpsee-types = "0.24"
 
 ## crypto
 secp256k1 = { version = "0.29.0", default-features = false, features = [
@@ -239,11 +197,6 @@ enr = { version = "=0.10.0", default-features = false, features = ["k256"] }
 aquamarine = "0.5.0"
 
 # misc-testing
-arbitrary = "1.1"
-assert_matches = "1.5.0"
 tempfile = "3.8"
-criterion = "0.5"
-pprof = "0.13"
 proptest = "1.0"
-proptest-derive = "0.4"
 serial_test = "3.0.0"

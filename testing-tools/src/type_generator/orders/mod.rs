@@ -7,12 +7,10 @@ use angstrom_types::{
     primitive::PoolId,
     sol_bindings::{
         ext::RawPoolOrder,
-        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
-        rpc_orders::TopOfBlockOrder
+        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
     }
 };
 use enr::k256::ecdsa::SigningKey;
-use rand::{rngs::ThreadRng, Rng};
 
 // mod stored;
 mod distribution;
@@ -21,10 +19,6 @@ mod user;
 pub use distribution::OrderDistributionBuilder;
 pub use tob::ToBOrderBuilder;
 pub use user::UserOrderBuilder;
-
-// fn build_priority_data(order: &GroupedVanillaOrder) -> OrderPriorityData {
-//     OrderPriorityData { price: order.price().into(), volume: order.quantity()
-// as u128, gas: 10 } }
 
 #[derive(Clone, Debug)]
 pub struct SigningInfo {
@@ -147,48 +141,6 @@ impl OrderIdBuilder {
             deadline: None,
             reuse_avoidance: angstrom_types::sol_bindings::RespendAvoidanceMethod::Block(0)
         }
-    }
-}
-
-pub fn generate_top_of_block_order(
-    rng: &mut ThreadRng,
-    is_bid: bool,
-    pool_id: Option<PoolId>,
-    valid_block: Option<u64>,
-    quantity_in: Option<u128>,
-    quantity_out: Option<u128>
-) -> OrderWithStorageData<TopOfBlockOrder> {
-    let pool_id = pool_id.unwrap_or_default();
-    let valid_block = valid_block.unwrap_or_default();
-    // Could update this to be within a distribution
-    let price: u128 = rng.gen();
-    let volume: u128 = rng.gen();
-    let gas: U256 = rng.gen();
-    let gas_units: u64 = rng.gen();
-    let order = ToBOrderBuilder::new()
-        .quantity_in(quantity_in.unwrap_or_default())
-        .quantity_out(quantity_out.unwrap_or_default())
-        .build();
-
-    let priority_data = OrderPriorityData { price: U256::from(price), volume, gas, gas_units };
-    let order_id = OrderIdBuilder::new()
-        .pool_id(pool_id)
-        .order_hash(order.order_hash())
-        .build();
-    // Todo: Sign It, make this overall better
-    // StoredOrderBuilder::new(order).is_bid(is_bid).valid_block(valid_block).
-    // pool_id(pool_id).build();
-    OrderWithStorageData {
-        invalidates: vec![],
-        order,
-        priority_data,
-        is_bid,
-        is_currently_valid: true,
-        is_valid: true,
-        order_id,
-        pool_id,
-        valid_block,
-        tob_reward: U256::ZERO
     }
 }
 

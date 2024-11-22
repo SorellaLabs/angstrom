@@ -129,6 +129,15 @@ where
                 CombinedWsMessage::Binance(BinanceWsMessage::BookTicker(book_ticker)) => {
                     Some(book_ticker)
                 }
+                CombinedWsMessage::Disconnect { exchange, message, raw_message, bad_pair: _ } => {
+                    tracing::warn!(
+                        "Disconnected from {}: {} (raw: {})",
+                        exchange,
+                        message,
+                        raw_message,
+                    );
+                    None
+                }
                 e => {
                     tracing::error!("unhandled message {:?}", e);
                     None

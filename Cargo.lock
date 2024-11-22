@@ -1916,9 +1916,9 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "backon"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4fa97bb310c33c811334143cf64c5bb2b7b3c06e453db6b095d7061eff8f113"
+checksum = "ba5289ec98f68f28dd809fd601059e6aa908bb8f6108620930828283d4ee23d7"
 dependencies = [
  "fastrand",
  "tokio",
@@ -2464,7 +2464,7 @@ checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 [[package]]
 name = "cex-exchanges"
 version = "0.1.0"
-source = "git+https://github.com/SorellaLabs/cex-exchanges?branch=main#efc169a503de6bd38dc031618286dd93a99de045"
+source = "git+https://github.com/SorellaLabs/cex-exchanges?rev=1e36805#1e368056d41cbdde579f3b003b57f5ee32008500"
 dependencies = [
  "chrono",
  "clap",
@@ -2860,9 +2860,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.2.15"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ca741a962e1b0bff6d724a1a0958b686406e853bb14061f218562e1896f95e6"
+checksum = "16b80225097f2e5ae4e7179dd2266824648f3e2f49d9134d584b76389d31c4c3"
 dependencies = [
  "libc",
 ]
@@ -9854,9 +9854,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.17"
+version = "0.23.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f1a745511c54ba6d4465e8d5dfbd81b45791756de28d4981af70d6dca128f1e"
+checksum = "9c9cc1d47e243d655ace55ed38201c19ae02c148ae56412ab8750e8f0166ab7f"
 dependencies = [
  "log",
  "once_cell",
@@ -10824,7 +10824,7 @@ dependencies = [
  "revm 14.0.3",
  "rust_decimal",
  "secp256k1 0.29.1",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "tokio",
  "tokio-stream",
  "tokio-util",

@@ -5,6 +5,7 @@ use angstrom_metrics::initialize_prometheus_metrics;
 use angstrom_types::contract_bindings::angstrom::Angstrom::PoolKey;
 use eyre::Context;
 use serde::Deserialize;
+use url::Url;
 
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
@@ -24,7 +25,9 @@ pub struct AngstromConfig {
     /// spawns the prometheus metrics exporter at the specified port
     /// Default: 6969
     #[clap(long, default_value = "6969", global = true)]
-    pub metrics_port:        u16
+    pub metrics_port:        u16,
+    #[clap(short, long, default_value = "https://rpc.flashbots.net")]
+    pub mev_boost_endpoints: Vec<Url>
 }
 
 #[derive(Debug, Clone, Deserialize)]

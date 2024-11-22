@@ -7,6 +7,7 @@ use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     network::Network,
     providers::{network::Ethereum, Provider, ProviderBuilder},
+    rpc::client::RpcClient,
     transports::Transport
 };
 use alloy_chains::Chain;
@@ -144,11 +145,20 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 
     let node_address = signer.address();
 
-    // I am sure there is a prettier way of doing this
-    let provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
+    // NOTE:
+    // no key is installed and this is strictly for internal usage. Realsically, we
+    // should build a alloy provider impl that just uses the raw underlying db
+    // so it will be quicker than rpc + won't be bounded by the rpc threadpool.
+
+    let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
         .with_recommended_fillers()
-        .wallet(signer.clone())
         .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())
+        .await
+        .unwrap()
+        .into();
+
+    let mev_boost_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
+        .on_http(config.mev_boost_endpoints)
         .await
         .unwrap()
         .into();
@@ -166,7 +176,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 
     tracing::info!(target: "angstrom::startup-sequence", "new block detected. initializing all modules");
 
-    let block_id = provider.get_block_number().await.unwrap();
+    let block_id = querying_provider.get_block_number().await.unwrap();
 
     let global_block_sync = GlobalBlockSync::new(block_id);
 
@@ -174,7 +184,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         AngstromPoolConfigStore::load_from_chain(
             node_config.angstrom_address,
             BlockId::Number(BlockNumberOrTag::Number(block_id)),
-            &provider
+            &querying_provider
         )
         .await
         .unwrap()
@@ -199,7 +209,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     .unwrap();
 
     let uniswap_pool_manager = configure_uniswap_manager(
-        provider.clone(),
+        querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,
         block_id,
@@ -216,7 +226,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
             .expect("watch for uniswap pool changes");
     }));
     let price_generator =
-        TokenPriceGenerator::new(provider.clone(), block_id, uniswap_pools.clone(), None)
+        TokenPriceGenerator::new(querying_provider.clone(), block_id, uniswap_pools.clone(), None)
             .await
             .expect("failed to start token price generator");
 
@@ -288,7 +298,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
         node_config.angstrom_address,
         uni_ang_registry,
         uniswap_pools.clone(),
-        provider,
+        mev_boost_provider,
         matching_handle,
         global_block_sync.clone()
     );

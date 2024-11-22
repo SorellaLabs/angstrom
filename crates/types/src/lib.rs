@@ -5,6 +5,8 @@ pub mod consensus;
 pub mod contract_bindings;
 pub mod contract_payloads;
 pub mod matching;
+pub mod mev_boost;
+pub mod mev_boost;
 pub mod orders;
 pub mod pair_with_price;
 pub mod primitive;

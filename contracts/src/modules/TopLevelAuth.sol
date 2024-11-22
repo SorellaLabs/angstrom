@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+import {IAngstromAuth} from "../interfaces/IAngstromAuth.sol";
 import {UniConsumer} from "./UniConsumer.sol";
 
 import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "../libraries/PoolConfigStore.sol";
@@ -11,7 +12,7 @@ import {POOL_FEE} from "src/Constants.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 
 /// @author philogy <https://github.com/philogy>
-abstract contract TopLevelAuth is UniConsumer {
+abstract contract TopLevelAuth is UniConsumer, IAngstromAuth {
     using SafeTransferLib for address;
 
     error NotController();

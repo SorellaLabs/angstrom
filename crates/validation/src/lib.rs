@@ -12,7 +12,6 @@ use alloy::primitives::Address;
 use angstrom_types::{
     contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice
 };
-use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use bundle::BundleValidator;
 use common::SharedTools;
 use reth_provider::CanonStateNotificationStream;
@@ -21,7 +20,7 @@ use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validator::Validator;
 
 use crate::{
-    common::TokenPriceGenerator,
+    common::{key_split_threadpool::KeySplitThreadpool, TokenPriceGenerator},
     order::{
         order_validator::OrderValidator,
         sim::SimValidation,

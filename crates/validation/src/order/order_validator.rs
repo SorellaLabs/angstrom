@@ -4,7 +4,6 @@ use std::{
 };
 
 use alloy::primitives::{Address, BlockNumber, B256};
-use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::Future;
 use tokio::runtime::Handle;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
@@ -18,7 +17,7 @@ use super::{
     OrderValidationRequest
 };
 use crate::{
-    common::TokenPriceGenerator,
+    common::{key_split_threadpool::KeySplitThreadpool, TokenPriceGenerator},
     order::{state::account::UserAccountProcessor, OrderValidation}
 };
 

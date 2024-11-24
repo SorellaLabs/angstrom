@@ -11509,6 +11509,7 @@ version = "0.1.0"
 dependencies = [
  "alloy 0.4.2",
  "angstrom-eth",
+ "angstrom-metrics",
  "angstrom-network",
  "angstrom-types",
  "angstrom-utils",

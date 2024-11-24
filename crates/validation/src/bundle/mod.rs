@@ -2,14 +2,13 @@ use std::{fmt::Debug, pin::Pin, sync::Arc};
 
 use alloy::{primitives::Address, sol_types::SolCall};
 use angstrom_types::contract_payloads::angstrom::{AngstromBundle, BundleGasDetails};
-use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use eyre::eyre;
 use futures::{Future, FutureExt};
 use pade::PadeEncode;
 use revm::primitives::{EnvWithHandlerCfg, TxKind};
 use tokio::runtime::Handle;
 
-use crate::common::TokenPriceGenerator;
+use crate::common::{key_split_threadpool::KeySplitThreadpool, TokenPriceGenerator};
 
 pub mod validator;
 pub use validator::*;

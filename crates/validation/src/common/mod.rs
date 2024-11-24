@@ -2,9 +2,11 @@ use std::{pin::Pin, task::Poll};
 
 use alloy::primitives::Address;
 use angstrom_types::pair_with_price::PairsWithPrice;
-use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::{Future, Stream, StreamExt};
 use tokio::runtime::Handle;
+
+pub mod key_split_threadpool;
+use key_split_threadpool::KeySplitThreadpool;
 
 pub mod db;
 pub use db::*;

@@ -7,10 +7,10 @@ use std::{
     task::{Poll, Waker}
 };
 
-use futures::{stream::FuturesUnordered, Stream, StreamExt};
+use angstrom_metrics::validation::ValidationMetrics;
+use angstrom_utils::{sync_pipeline::ThreadPool, PollExt};
+use futures::{stream::FuturesUnordered, FutureExt, Stream, StreamExt};
 use tokio::sync::Semaphore;
-
-use crate::{sync_pipeline::ThreadPool, PollExt};
 
 type PendingFut<F> = Pin<Box<dyn Future<Output = <F as Future>::Output> + Send>>;
 
@@ -19,7 +19,8 @@ pub struct KeySplitThreadpool<K: PartialEq + Eq + Hash + Clone, F: Future, TP: T
     pending_results: FuturesUnordered<PendingFut<F>>,
     permit_size:     usize,
     pending:         HashMap<K, Arc<Semaphore>>,
-    waker:           Option<Waker>
+    waker:           Option<Waker>,
+    metrics:         ValidationMetrics
 }
 
 impl<K: PartialEq + Eq + Hash + Clone, F: Future, TP: ThreadPool> KeySplitThreadpool<K, F, TP>
@@ -35,6 +36,7 @@ where
             permit_size,
             pending: HashMap::default(),
             pending_results: FuturesUnordered::default(),
+            metrics: ValidationMetrics::new(),
             waker: None
         }
     }
@@ -56,9 +58,15 @@ where
             .or_insert_with(|| Arc::new(Semaphore::new(self.permit_size)));
         let permit_cloned = permit.clone();
         let tp_cloned = self.tp.clone();
+        let metrics = self.metrics.clone();
 
         let fut = Box::pin(async move {
-            let permit = permit_cloned.acquire().await.expect("never");
+            let permit = metrics
+                .measure_wait_time(|| {
+                    async { permit_cloned.acquire().await.expect("never") }.boxed()
+                })
+                .await;
+
             let res = tp_cloned.spawn(fut).await;
             drop(permit);
 

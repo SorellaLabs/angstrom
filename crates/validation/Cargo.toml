@@ -16,6 +16,7 @@ angstrom-eth.workspace = true
 rayon.workspace = true
 auto_impl.workspace = true
 pade.workspace = true
+angstrom-metrics.workspace = true
 
 # anvil.workspace = true
 # anvil-core.workspace = true

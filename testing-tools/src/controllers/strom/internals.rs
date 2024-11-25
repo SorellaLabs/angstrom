@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use alloy::{providers::Provider, pubsub::PubSubFrontend};
-use alloy_primitives::Address;
 use alloy_rpc_types::{BlockId, Transaction};
 use angstrom::components::StromHandles;
 use angstrom_eth::handle::Eth;
@@ -102,8 +101,7 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
             uniswap_registry.clone(),
             block_number,
             block_sync.clone(),
-            inital_angstrom_state.pool_manager_addr,
-            false
+            inital_angstrom_state.pool_manager_addr
         )
         .await;
 

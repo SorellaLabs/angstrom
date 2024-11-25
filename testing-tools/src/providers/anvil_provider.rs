@@ -10,7 +10,7 @@ use alloy::{
 use alloy_primitives::Bytes;
 
 use super::{utils::WalletProviderRpc, AnvilStateProvider, WalletProvider};
-use crate::types::{config::TestingNodeConfig, GlobalTestingConfig, WithWalletProvider};
+use crate::types::WithWalletProvider;
 
 #[derive(Debug)]
 pub struct AnvilProvider<P> {

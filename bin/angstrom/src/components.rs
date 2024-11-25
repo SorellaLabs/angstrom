@@ -10,7 +10,6 @@ use alloy::{
     transports::Transport
 };
 use alloy_chains::Chain;
-use alloy_primitives::{Address, BlockNumber};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::EthDataCleanser
@@ -24,7 +23,7 @@ use angstrom_network::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    primitive::{PeerId, PoolId as AngstromPoolId, UniswapPoolRegistry},
+    primitive::{PeerId, UniswapPoolRegistry},
     reth_db_wrapper::RethDbWrapper
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps, Signer};
@@ -33,7 +32,7 @@ use order_pool::{order_storage::OrderStorage, PoolConfig, PoolManagerUpdate};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
-    providers::{BlockNumReader, CanonStateNotifications, CanonStateSubscriptions},
+    providers::{BlockNumReader, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
@@ -42,10 +41,6 @@ use reth_node_builder::FullNode;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
-};
-use uniswap_v4::uniswap::{
-    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
-    pool_providers::canonical_state_adapter::CanonicalStateAdapter
 };
 use validation::{
     common::TokenPriceGenerator,
@@ -201,7 +196,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     )
     .unwrap();
 
-    let uniswap_pool_manager = configure_uniswap_manager(
+    let uniswap_pool_manager = uniswap_v4::configure_uniswap_manager(
         provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,
@@ -300,49 +295,4 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
     let _consensus_handle = executor.spawn_critical("consensus", Box::pin(manager));
     // ensure no more modules can be added to block sync.
     global_block_sync.finalize_modules();
-}
-
-async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
-    provider: Arc<impl Provider<T, N>>,
-    state_notification: CanonStateNotifications,
-    uniswap_pool_registry: UniswapPoolRegistry,
-    current_block: BlockNumber,
-    block_sync: GlobalBlockSync,
-    pool_manager: Address
-) -> UniswapPoolManager<
-    CanonicalStateAdapter,
-    GlobalBlockSync,
-    DataLoader<AngstromPoolId>,
-    AngstromPoolId
-> {
-    let mut uniswap_pools: Vec<_> = uniswap_pool_registry
-        .pools()
-        .keys()
-        .map(|pool_id| {
-            let initial_ticks_per_side = 200;
-            EnhancedUniswapPool::new(
-                DataLoader::new_with_registry(
-                    *pool_id,
-                    uniswap_pool_registry.clone(),
-                    pool_manager
-                ),
-                initial_ticks_per_side
-            )
-        })
-        .collect();
-
-    for pool in uniswap_pools.iter_mut() {
-        pool.initialize(Some(current_block), provider.clone())
-            .await
-            .unwrap();
-    }
-
-    let state_change_buffer = 100;
-    UniswapPoolManager::new(
-        uniswap_pools,
-        current_block,
-        state_change_buffer,
-        Arc::new(CanonicalStateAdapter::new(state_notification)),
-        block_sync
-    )
 }

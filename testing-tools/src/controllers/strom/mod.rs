@@ -1,21 +1,8 @@
 mod node;
 use angstrom::components::initialize_strom_handles;
-use angstrom_types::testnet::InitialTestnetState;
-use consensus::AngstromValidator;
 pub use node::*;
 mod internals;
 pub use internals::*;
-use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
-use secp256k1::{PublicKey, SecretKey};
-use tokio_stream::wrappers::BroadcastStream;
-use tracing::instrument;
-
-use crate::{
-    network::TestnetNodeNetwork,
-    providers::AnvilProvider,
-    types::{config::TestingNodeConfig, GlobalTestingConfig, WithWalletProvider}
-};
 
 // #[instrument(name = "node", skip(node_config, c, state_provider, pk, sk,
 // initial_validators, inital_angstrom_state, block_provider), fields(id =

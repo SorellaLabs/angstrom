@@ -17,16 +17,14 @@ use angstrom_types::{
 };
 use pade::PadeEncode;
 use testing_tools::{
-    providers::AnvilProvider,
-    contracts::{environment::mockreward::MockRewardEnv, DebugTransaction}
+    contracts::{environment::mockreward::MockRewardEnv, DebugTransaction},
+    providers::AnvilProvider
 };
 use uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick;
 
 #[tokio::test]
 async fn properly_communicates_tob_to_contract() -> eyre::Result<()> {
-    let anvil = AnvilProvider::spawn_new_isolated()
-        .await
-        .unwrap();
+    let anvil = AnvilProvider::spawn_new_isolated().await.unwrap();
     let env = MockRewardEnv::with_anvil(anvil.wallet_provider())
         .await
         .unwrap();

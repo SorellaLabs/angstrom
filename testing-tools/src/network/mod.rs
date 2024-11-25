@@ -14,7 +14,7 @@ use reth_metrics::common::mpsc::{MeteredPollSender, UnboundedMeteredSender};
 use reth_network::test_utils::{Peer, PeerConfig};
 use reth_network_peers::{pk2id, PeerId};
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
-use secp256k1::{PublicKey, SecretKey};
+use secp256k1::SecretKey;
 pub use strom_peer::*;
 use tokio_util::sync::PollSender;
 

@@ -1,8 +1,6 @@
-use std::{fmt::Debug, future::Future};
+use std::fmt::Debug;
 
-use alloy::node_bindings::AnvilInstance;
-
-use super::config::{TestingConfigKind, TestingNodeConfig};
+use super::config::TestingConfigKind;
 use crate::providers::{utils::WalletProviderRpc, WalletProvider};
 
 pub trait WithWalletProvider: Send + Sync {

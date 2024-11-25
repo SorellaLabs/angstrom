@@ -1,3 +1,5 @@
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
+
 use alloy::{
     hex,
     network::Network,
@@ -8,8 +10,6 @@ use alloy::{
 use alloy_primitives::Log;
 use angstrom_types::matching::uniswap::{LiqRange, PoolSnapshot};
 use itertools::Itertools;
-use std::cmp::Ordering;
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 use thiserror::Error;
 use uniswap_v3_math::{
     error::UniswapV3MathError,

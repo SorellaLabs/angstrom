@@ -4,9 +4,6 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::{
-    manager::StromConsensusEvent, NetworkOrderEvent, StromMessage, StromNetworkManager
-};
 use angstrom_types::sol_bindings::grouped_orders::AllOrders;
 use futures::{StreamExt, TryFutureExt};
 use rand::Rng;

@@ -7,8 +7,6 @@ use std::{
 
 use alloy::pubsub::PubSubFrontend;
 use alloy_primitives::Address;
-use alloy_rpc_types::Transaction;
-use angstrom::components::StromHandles;
 use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager
 };

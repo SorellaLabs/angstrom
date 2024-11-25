@@ -206,16 +206,6 @@ impl ValidationMetrics {
         f().await
     }
 
-    pub fn new_block(&self, f: impl FnOnce()) {
-        if let Some(inner) = self.0.as_ref() {
-            inner.eth_transition_updates(f);
-
-            return
-        }
-
-        f()
-    }
-
     pub fn new_order(&self, is_searcher: bool, f: impl FnOnce()) {
         if let Some(inner) = self.0.as_ref() {
             inner.new_order(is_searcher, f);

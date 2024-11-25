@@ -63,8 +63,8 @@ where
             ValidationRequest::Order(order) => self.order_validator.validate_order(
                 order,
                 self.utils.token_pricing_snapshot(),
-                &mut self.utils.thread_pool,
-                &self.utils.metrics
+                self.utils.thread_pool_mut(),
+                self.utils.metrics.clone()
             ),
             ValidationRequest::Bundle { sender, bundle } => {
                 self.bundle_validator.simulate_bundle(
@@ -75,7 +75,7 @@ where
                 );
             }
             ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
-                self.utils.metrics.new_block(|| {
+                self.utils.metrics.eth_transition_updates(|| {
                     self.order_validator
                         .on_new_block(block_number, orders, addresses);
                 });

@@ -68,7 +68,7 @@ where
             Pin<Box<dyn Future<Output = ()> + Send>>,
             Handle
         >,
-        metrics: &ValidationMetrics
+        metrics: ValidationMetrics
     ) {
         let block_number = self.block_number.load(std::sync::atomic::Ordering::SeqCst);
         let order_validation: OrderValidation = order.into();

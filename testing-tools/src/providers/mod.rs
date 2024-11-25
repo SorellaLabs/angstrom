@@ -47,6 +47,10 @@ impl WalletProvider {
         &self.provider
     }
 
+    pub fn controller_address(&self) -> Address {
+        self.controller_secret_key.address()
+    }
+
     pub fn provider(&self) -> WalletProviderRpc {
         self.provider.clone()
     }

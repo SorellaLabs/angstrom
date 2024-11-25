@@ -4,10 +4,9 @@ use std::{collections::HashSet, sync::Arc};
 
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    network::{EthereumWallet, Network},
+    network::EthereumWallet,
     providers::{network::Ethereum, Provider, ProviderBuilder},
-    signers::{k256::ecdsa::SigningKey, local::LocalSigner},
-    transports::Transport
+    signers::{k256::ecdsa::SigningKey, local::LocalSigner}
 };
 use alloy_chains::Chain;
 use angstrom_eth::{

@@ -1,11 +1,7 @@
-use alloy::{
-    node_bindings::AnvilInstance,
-    providers::{ext::AnvilApi, Provider},
-    pubsub::PubSubFrontend
-};
+use alloy::{node_bindings::AnvilInstance, providers::ext::AnvilApi, pubsub::PubSubFrontend};
 use alloy_primitives::{
     aliases::{I24, U24},
-    Address, FixedBytes, U256
+    FixedBytes, U256
 };
 use angstrom_types::{
     contract_bindings::{
@@ -20,12 +16,12 @@ use angstrom_types::{
 use super::{utils::WalletProviderRpc, WalletProvider};
 use crate::{
     contracts::{
-        anvil::SafeDeployPending,
         environment::{
             angstrom::AngstromEnv,
             uniswap::{TestUniswapEnv, UniswapEnv},
             TestAnvilEnvironment
-        }
+        },
+        DebugTransaction
     },
     types::{
         config::TestingNodeConfig, initial_state::PendingDeployedPools, GlobalTestingConfig,
@@ -72,55 +68,47 @@ impl AnvilInitializer {
 
     /// deploys tokens, a uniV4 pool, angstrom pool
     pub async fn deploy_pool_full(&mut self) -> eyre::Result<()> {
-        let nonce = self
-            .provider
-            .provider
-            .get_account(self.provider.controller())
-            .await?
-            .nonce;
+        let first_token = MintableMockERC20::deploy(self.provider.provider_ref()).await?;
+        let second_token = MintableMockERC20::deploy(self.provider.provider_ref()).await?;
 
-        let (first_token_tx, first_token) =
-            MintableMockERC20::deploy_builder(self.provider.provider_ref())
-                .deploy_pending_creation(nonce, self.provider.controller())
-                .await?;
-        self.pending_state.add_pending_tx(first_token_tx);
-
-        let (second_token_tx, second_token) =
-            MintableMockERC20::deploy_builder(self.provider.provider_ref())
-                .deploy_pending_creation(nonce + 1, self.provider.controller())
-                .await?;
-        self.pending_state.add_pending_tx(second_token_tx);
-
-        let (currency0, currency1) = if first_token < second_token {
-            (first_token, second_token)
+        let (currency0, currency1) = if *first_token.address() < *second_token.address() {
+            (*first_token.address(), *second_token.address())
         } else {
-            (second_token, first_token)
+            (*second_token.address(), *first_token.address())
         };
 
         let fee = U24::ZERO;
-        let tick_spacing = 10;
         let pool = PoolKey {
             currency0,
             currency1,
             fee,
-            tickSpacing: I24::unchecked_from(tick_spacing),
-            hooks: Address::default()
+            tickSpacing: I24::unchecked_from(10),
+            hooks: *self.angstrom.address()
         };
         self.pending_state.add_pool_key(pool.clone());
 
         let liquidity = 1_000_000_000_000_000_u128;
         let price = SqrtPriceX96::at_tick(100000)?;
 
-        let init_pool = self
-            .angstrom
-            .initializePool(pool.currency0, pool.currency1, U256::ZERO, *price)
-            .nonce(nonce + 2)
-            .deploy_pending()
+        self.angstrom
+            .configurePool(pool.currency0, pool.currency1, 10, U24::ZERO)
+            .from(self.provider.controller_address())
+            .run_safe()
             .await?;
-        self.pending_state.add_pending_tx(init_pool);
 
-        let add_liq = self
-            .pool_gate
+        self.angstrom
+            .initializePool(pool.currency0, pool.currency1, U256::ZERO, *price)
+            .from(self.provider.controller_address())
+            .run_safe()
+            .await?;
+
+        self.pool_gate
+            .tickSpacing(pool.tickSpacing)
+            .from(self.provider.controller_address())
+            .run_safe()
+            .await?;
+
+        self.pool_gate
             .addLiquidity(
                 pool.currency0,
                 pool.currency1,
@@ -129,21 +117,15 @@ impl AnvilInitializer {
                 U256::from(liquidity),
                 FixedBytes::<32>::default()
             )
-            .from(self.provider.controller())
-            .nonce(nonce + 3)
-            .deploy_pending()
+            .from(self.provider.controller_address())
+            .run_safe()
             .await?;
-
-        self.pending_state.add_pending_tx(add_liq);
 
         Ok(())
     }
 
     pub async fn initialize_state(&mut self) -> eyre::Result<InitialTestnetState> {
         let (pool_keys, txs) = self.pending_state.finalize_pending_txs().await?;
-        for tx in txs {
-            println!("tx {:?}", tx);
-        }
         let state_bytes = self.provider.provider_ref().anvil_dump_state().await?;
         Ok(InitialTestnetState::new(
             self.angstrom_env.angstrom(),

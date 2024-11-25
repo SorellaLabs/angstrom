@@ -13,5 +13,3 @@ exclude.workspace = true
 [dependencies]
 tokio.workspace = true
 futures.workspace = true
-pin-project.workspace = true
-serde.workspace = true

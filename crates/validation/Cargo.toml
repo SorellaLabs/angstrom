@@ -12,19 +12,10 @@ exclude.workspace = true
 
 [dependencies]
 angstrom-utils.workspace = true
-angstrom-eth.workspace = true
-rayon.workspace = true
-auto_impl.workspace = true
 pade.workspace = true
 
-# anvil.workspace = true
-# anvil-core.workspace = true
-anyhow.workspace = true
-hex-literal.workspace = true
 angstrom-types.workspace = true
 uniswap-v4.workspace = true
-
-derive_more = "0.99.17"
 
 # revm
 revm.workspace = true
@@ -34,67 +25,38 @@ reth-primitives = { workspace = true, features = ["std"] }
 
 reth-provider.workspace = true
 reth-revm.workspace = true
-reth-db = { workspace = true, features = ["mdbx"] }
-reth-errors.workspace = true
 
 # async/futures
 tokio.workspace = true
 futures = "0.3.26"
-pin-project = "1.0.12"
 futures-util.workspace = true
-async-trait = "0.1.68"
 parking_lot = "0.12.1"
 
 # misc
 eyre = "0.6.8"
-secp256k1 = { version = "0.27.0", default-features = false, features = [
-  "global-context",
-  "rand-std",
-  "recovery",
-] }
-
-byteorder = "1.4.3"
 
 # error
 thiserror = "1.0.34"
 
-# cache
-schnellru = "0.2"
-
 # serde
 serde.workspace = true
-serde_json = { workspace = true, features = ["arbitrary_precision"] }
 
 # alloy
 alloy.workspace = true
-toml = "0.8.12"
 tracing.workspace = true
 dashmap = "6.0.1"
 
 [dev-dependencies]
 testing-tools.workspace = true
-angstrom-network.workspace = true
-# reth
-reth-discv4 = { workspace = true, features = ["test-utils"] }
 reth-primitives = { workspace = true, features = ["test-utils"] }
-
-# we need to enable the test-utils feature in our own crate to use utils in
-# integration tests
-reth-network = { workspace = true, features = ["test-utils"] }
-reth-metrics.workspace = true
 
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
-reth-transaction-pool = { workspace = true, features = ["test-utils"] }
 
-
-rand.workspace = true
-secp256k1.workspace = true
 futures.workspace = true
 
 # misc
 serial_test.workspace = true
-tempfile.workspace = true
 
 # features
 [features]

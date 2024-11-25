@@ -18,6 +18,8 @@ pub mod contracts;
 pub mod testnet_controllers;
 pub mod types;
 
+pub mod order_generator;
+
 use std::{path::Path, sync::Arc};
 
 use reth_beacon_consensus::EthBeaconConsensus;

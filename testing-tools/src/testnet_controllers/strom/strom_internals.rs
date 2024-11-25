@@ -2,12 +2,10 @@ use std::sync::{atomic::AtomicBool, Arc};
 
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    network::Network,
     primitives::{aliases::U24, Signed},
-    providers::Provider,
-    transports::Transport
+    providers::Provider
 };
-use alloy_primitives::{Address, BlockNumber};
+use alloy_primitives::Address;
 use angstrom::components::StromHandles;
 use angstrom_eth::handle::Eth;
 use angstrom_network::{pool_manager::PoolHandle, PoolManagerBuilder, StromNetworkHandle};
@@ -17,7 +15,7 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     mev_boost::MevBoostProvider,
     pair_with_price::PairsWithPrice,
-    primitive::{AngstromSigner, PoolId as AngstromPoolId, UniswapPoolRegistry},
+    primitive::{AngstromSigner, UniswapPoolRegistry},
     sol_bindings::testnet::TestnetHub
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
@@ -25,12 +23,9 @@ use futures::StreamExt;
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::{manager::MatcherHandle, MatchingManager};
 use order_pool::{order_storage::OrderStorage, PoolConfig};
-use reth_provider::{CanonStateNotifications, CanonStateSubscriptions};
+use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TokioTaskExecutor;
-use uniswap_v4::uniswap::{
-    pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::UniswapPoolManager,
-    pool_providers::canonical_state_adapter::CanonicalStateAdapter
-};
+use uniswap_v4::configure_uniswap_manager;
 use validation::{
     common::TokenPriceGenerator, order::state::pools::AngstromPoolsTracker,
     validator::ValidationClient
@@ -281,49 +276,4 @@ impl AngstromTestnetNodeInternals {
             _consensus_running
         })
     }
-}
-
-async fn configure_uniswap_manager<T: Transport + Clone, N: Network>(
-    provider: Arc<impl Provider<T, N>>,
-    state_notification: CanonStateNotifications,
-    uniswap_pool_registry: UniswapPoolRegistry,
-    current_block: BlockNumber,
-    block_sync: MockBlockSync,
-    pool_manager: Address
-) -> UniswapPoolManager<
-    CanonicalStateAdapter,
-    MockBlockSync,
-    DataLoader<AngstromPoolId>,
-    AngstromPoolId
-> {
-    let mut uniswap_pools: Vec<_> = uniswap_pool_registry
-        .pools()
-        .keys()
-        .map(|pool_id| {
-            let initial_ticks_per_side = 200;
-            EnhancedUniswapPool::new(
-                DataLoader::new_with_registry(
-                    *pool_id,
-                    uniswap_pool_registry.clone(),
-                    pool_manager
-                ),
-                initial_ticks_per_side
-            )
-        })
-        .collect();
-
-    for pool in uniswap_pools.iter_mut() {
-        pool.initialize(Some(current_block), provider.clone())
-            .await
-            .unwrap();
-    }
-
-    let state_change_buffer = 100;
-    UniswapPoolManager::new(
-        uniswap_pools,
-        current_block,
-        state_change_buffer,
-        Arc::new(CanonicalStateAdapter::new(state_notification)),
-        block_sync
-    )
 }

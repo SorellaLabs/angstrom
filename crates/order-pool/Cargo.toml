@@ -21,75 +21,22 @@ normal = [
 angstrom-types.workspace = true
 angstrom-metrics.workspace = true
 validation.workspace = true
-angstrom-eth.workspace = true
 angstrom-utils.workspace = true
 eyre.workspace = true
 
-
-# reth
-reth-primitives.workspace = true
-reth-provider.workspace = true
-reth-network-peers.workspace = true
-reth-tasks.workspace = true
-reth-network.workspace = true
-
-# revm
-revm.workspace = true
-
-# alloy 
+# alloy
 alloy.workspace = true
 
-
 # async/futures
-async-trait.workspace = true
 futures-util.workspace = true
-parking_lot.workspace = true
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-stream.workspace = true
 
-# metrics
-reth-metrics.workspace = true
-metrics.workspace = true
-
 # misc
-aquamarine.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-serde = { workspace = true, features = ["derive", "rc"], optional = true }
-bitflags.workspace = true
-auto_impl = "1.0"
 
 # testing
-rand = { workspace = true, optional = true }
-paste = { version = "1.0", optional = true }
-proptest = { workspace = true, optional = true }
-dashmap = "6.1.0"
-
 
 [dev-dependencies]
-testing-tools.workspace = true
-angstrom-network.workspace = true
-# reth
-reth-discv4 = { workspace = true, features = [
-  "test-utils",
-] }
-# reth-interfaces = { workspace = true, features = ["test-utils"] }
-reth-primitives = { workspace = true, features = ["test-utils"] }
 
-# we need to enable the test-utils feature in our own crate to use utils in
-# integration tests
-reth-network = { workspace = true, features = ["test-utils"] }
-reth-metrics.workspace = true
-
-reth-provider = { workspace = true, features = ["test-utils"] }
-reth-tracing.workspace = true
-reth-transaction-pool = { workspace = true, features = ["test-utils"] }
-
-
-rand.workspace = true
-secp256k1.workspace = true
-futures.workspace = true
-
-# misc
-serial_test.workspace = true
-tempfile.workspace = true

@@ -10,14 +10,16 @@ use alloy_primitives::{Address, U256};
 use angstrom_types::{
     contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice
 };
-use angstrom_utils::key_split_threadpool::KeySplitThreadpool;
 use futures::{FutureExt, Stream};
 use reth_provider::BlockNumReader;
 use tokio::sync::mpsc::unbounded_channel;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validation::{
     bundle::BundleValidator,
-    common::{db::BlockStateProviderFactory, SharedTools, TokenPriceGenerator},
+    common::{
+        db::BlockStateProviderFactory, key_split_threadpool::KeySplitThreadpool, SharedTools,
+        TokenPriceGenerator
+    },
     order::{
         order_validator::OrderValidator,
         sim::SimValidation,

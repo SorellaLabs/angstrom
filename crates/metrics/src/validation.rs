@@ -14,7 +14,7 @@ struct ValidationMetricsInner {
     processing_time:            HistogramVec,
     // simulation
     simulate_bundle:            Histogram,
-    fetch_gas_for_user:         Histogram,
+    fetch_gas_for_user:         HistogramVec,
     // state
     loading_balances:           Histogram,
     loading_approvals:          Histogram,
@@ -60,9 +60,10 @@ impl Default for ValidationMetricsInner {
         )
         .unwrap();
 
-        let fetch_gas_for_user = prometheus::register_histogram!(
+        let fetch_gas_for_user = prometheus::register_histogram_vec!(
             "fetch_user_gas_speed",
             "time to calculate how much gas a user needs to pay",
+            &["order_type"],
             buckets.clone()
         )
         .unwrap();
@@ -104,11 +105,13 @@ impl Default for ValidationMetricsInner {
 macro_rules! default_time_metric {
     ($($name:ident),*) => (
         $(
-            fn $name(&self, f: impl FnOnce()) {
+            fn $name<T>(&self, f: impl FnOnce() ->T) -> T {
                 let start = Instant::now();
-                f();
+                let r = f();
                 let elapsed = start.elapsed().as_nanos() as f64;
                 self.$name.observe(elapsed);
+
+                r
             }
         )*
     )
@@ -117,7 +120,6 @@ macro_rules! default_time_metric {
 impl ValidationMetricsInner {
     default_time_metric!(
         eth_transition_updates,
-        fetch_gas_for_user,
         simulate_bundle,
         loading_approvals,
         loading_balances,
@@ -146,6 +148,17 @@ impl ValidationMetricsInner {
         r
     }
 
+    fn fetch_gas_for_user<T>(&self, is_searcher: bool, f: impl FnOnce() -> T) -> T {
+        let start = Instant::now();
+        let r = f();
+        let elapsed = start.elapsed().as_nanos() as f64;
+        self.fetch_gas_for_user
+            .with_label_values(&[if is_searcher { "searcher" } else { "limit" }])
+            .observe(elapsed);
+
+        r
+    }
+
     fn new_order(&self, is_searcher: bool, f: impl FnOnce()) {
         let start = Instant::now();
         f();
@@ -162,23 +175,28 @@ pub struct ValidationMetrics(Option<ValidationMetricsInner>);
 macro_rules! delegate_metric {
     ($($name:ident),*) => {
         $(
-            pub fn $name(&self, f: impl FnOnce()) {
+            pub fn $name<T> (&self, f: impl FnOnce()->T ) -> T {
                 if let Some(inner) = self.0.as_ref() {
-                    inner.$name(f);
+                    let res = inner.$name(f);
 
-                    return
+                    return res
                 }
 
-                f();
+                f()
             }
         )*
     };
 }
 
+impl Default for ValidationMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ValidationMetrics {
     delegate_metric!(
         eth_transition_updates,
-        fetch_gas_for_user,
         simulate_bundle,
         loading_approvals,
         loading_balances,
@@ -211,6 +229,14 @@ impl ValidationMetrics {
             inner.new_order(is_searcher, f);
 
             return
+        }
+
+        f()
+    }
+
+    pub fn fetch_gas_for_user<T>(&self, is_searcher: bool, f: impl FnOnce() -> T) -> T {
+        if let Some(inner) = self.0.as_ref() {
+            return inner.fetch_gas_for_user(is_searcher, f)
         }
 
         f()

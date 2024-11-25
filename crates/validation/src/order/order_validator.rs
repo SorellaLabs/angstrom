@@ -82,8 +82,11 @@ where
                 match order_validation {
                     OrderValidation::Limit(tx, order, _) => {
                         metrics.new_order(false, || {
-                            let mut results =
-                                cloned_state.handle_regular_order(order, block_number);
+                            let mut results = cloned_state.handle_regular_order(
+                                order,
+                                block_number,
+                                metrics.clone()
+                            );
                             results.add_gas_cost_or_invalidate(
                                 &cloned_sim,
                                 &token_conversion,
@@ -95,8 +98,11 @@ where
                     }
                     OrderValidation::Searcher(tx, order, _) => {
                         metrics.new_order(true, || {
-                            let mut results =
-                                cloned_state.handle_regular_order(order, block_number);
+                            let mut results = cloned_state.handle_regular_order(
+                                order,
+                                block_number,
+                                metrics.clone()
+                            );
                             results.add_gas_cost_or_invalidate(
                                 &cloned_sim,
                                 &token_conversion,

@@ -1,6 +1,7 @@
 use std::{pin::Pin, task::Poll};
 
 use alloy::primitives::Address;
+use angstrom_metrics::validation::ValidationMetrics;
 use angstrom_types::pair_with_price::PairsWithPrice;
 use futures::{Future, Stream, StreamExt};
 use tokio::runtime::Handle;
@@ -19,7 +20,8 @@ pub use token_pricing::*;
 pub struct SharedTools {
     pub token_pricing:   TokenPriceGenerator,
     token_price_updater: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
-    pub thread_pool: KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>
+    pub thread_pool: KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>,
+    pub metrics:         ValidationMetrics
 }
 
 impl SharedTools {
@@ -28,7 +30,7 @@ impl SharedTools {
         token_price_updater: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + 'static>>,
         thread_pool: KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send>>, Handle>
     ) -> Self {
-        Self { token_price_updater, token_pricing, thread_pool }
+        Self { token_price_updater, token_pricing, thread_pool, metrics: ValidationMetrics::new() }
     }
 
     pub fn token_pricing_ref(&self) -> &TokenPriceGenerator {

@@ -4,6 +4,7 @@ use std::{
 };
 
 use alloy::primitives::{Address, BlockNumber, B256};
+use angstrom_metrics::validation::ValidationMetrics;
 use futures::Future;
 use tokio::runtime::Handle;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
@@ -66,7 +67,8 @@ where
             UserAddress,
             Pin<Box<dyn Future<Output = ()> + Send>>,
             Handle
-        >
+        >,
+        metrics: &ValidationMetrics
     ) {
         let block_number = self.block_number.load(std::sync::atomic::Ordering::SeqCst);
         let order_validation: OrderValidation = order.into();
@@ -79,16 +81,30 @@ where
             Box::pin(async move {
                 match order_validation {
                     OrderValidation::Limit(tx, order, _) => {
-                        let mut results = cloned_state.handle_regular_order(order, block_number);
-                        results.add_gas_cost_or_invalidate(&cloned_sim, &token_conversion, true);
+                        metrics.new_order(false, || {
+                            let mut results =
+                                cloned_state.handle_regular_order(order, block_number);
+                            results.add_gas_cost_or_invalidate(
+                                &cloned_sim,
+                                &token_conversion,
+                                true
+                            );
 
-                        let _ = tx.send(results);
+                            let _ = tx.send(results);
+                        });
                     }
                     OrderValidation::Searcher(tx, order, _) => {
-                        let mut results = cloned_state.handle_regular_order(order, block_number);
-                        results.add_gas_cost_or_invalidate(&cloned_sim, &token_conversion, false);
+                        metrics.new_order(true, || {
+                            let mut results =
+                                cloned_state.handle_regular_order(order, block_number);
+                            results.add_gas_cost_or_invalidate(
+                                &cloned_sim,
+                                &token_conversion,
+                                false
+                            );
 
-                        let _ = tx.send(results);
+                            let _ = tx.send(results);
+                        });
                     }
                     _ => unreachable!()
                 }

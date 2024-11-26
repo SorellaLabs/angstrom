@@ -1,7 +1,6 @@
 //! Builder structs for messages.
 
 use std::{collections::HashSet, sync::Arc};
-
 use alloy::{primitives::Address, signers::SignerSync};
 use alloy_chains::Chain;
 use angstrom_types::primitive::{AngstromSigner, PeerId};

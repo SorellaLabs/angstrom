@@ -1,21 +1,21 @@
 use std::{collections::HashMap, time::Instant};
 
-use prometheus::{IntGauge, IntGaugeVec};
+use prometheus::{Histogram, HistogramVec, IntGauge};
 
 use crate::METRICS_ENABLED;
 
 #[derive(Clone)]
 struct ConsensusMetrics {
-    // current block height
+    /// current block height
     block_height: IntGauge,
-    // time (ms) it takes a round of consensus to complete per block
-    completion_time_per_block: IntGaugeVec,
-    // time (ms) it takes to build a proposal per block
-    proposal_build_time_per_block: IntGaugeVec,
-    // time (ms) it takes proposal verification per block
-    proposal_verification_time_per_block: IntGaugeVec,
-    // map of block numbers to their consensus start times
-    block_consensus_start_times: HashMap<u64, Instant>
+    /// time (ms) it takes a round of consensus to complete per block
+    completion_time_per_block: Histogram,
+    /// The amount of time spent in each stage of the state machine
+    round_duration: HistogramVec,
+    /// time (us) it takes to build a proposal per block
+    proposal_build_time_per_block: Histogram,
+    /// time (us) it takes proposal verification per block
+    proposal_verification_time_per_block: Histogram
 }
 
 impl Default for ConsensusMetrics {

@@ -1544,6 +1544,7 @@ dependencies = [
  "alloy-primitives 0.8.12",
  "alloy-rlp",
  "anyhow",
+ "auto_impl",
  "base64 0.22.1",
  "bincode",
  "bitmaps",

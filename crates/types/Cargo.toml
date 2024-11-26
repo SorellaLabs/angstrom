@@ -47,6 +47,7 @@ testing-tools-macros = { workspace = true, optional = true }
 
 rand = { version = "0.8.5", optional = true }
 dashmap = "6.1.0"
+auto_impl.workspace = true
 
 [build-dependencies]
 convert_case = "0.6.0"

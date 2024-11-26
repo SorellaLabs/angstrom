@@ -55,6 +55,13 @@ where
     P: Provider<T> + 'static,
     T: Transport + Clone
 {
+    pub fn new_from_raw(
+        node_provider: Arc<P>,
+        mev_boost_providers: Vec<Arc<Box<dyn SubmitTx>>>
+    ) -> Self {
+        Self { node_provider, mev_boost_providers, _phantom: PhantomData }
+    }
+
     pub fn new_from_urls(node_provider: Arc<P>, urls: &[Url]) -> Self {
         let mev_boost_providers = urls
             .iter()

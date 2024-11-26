@@ -10,13 +10,13 @@ use alloy_rpc_types::TransactionRequest;
 use angstrom_types::{
     contract_payloads::angstrom::AngstromBundle, mev_boost::SubmitTx, primitive::AngstromSigner
 };
-use futures::{Future, FutureExt};
+use futures::{Future, FutureExt, StreamExt};
 use pade::PadeDecode;
 
 use crate::contracts::anvil::WalletProviderRpc;
 
 pub struct AnvilSubmissionProvider {
-    provider: WalletProviderRpc
+    pub provider: WalletProviderRpc
 }
 
 impl SubmitTx for AnvilSubmissionProvider {
@@ -32,6 +32,20 @@ impl SubmitTx for AnvilSubmissionProvider {
             let data_vec = tx.input.data.clone().unwrap().to_vec();
             let mut slice = data_vec.as_slice();
             let bundle = AngstromBundle::pade_decode(&mut slice, None).unwrap();
+            let block = self.provider.get_block_number().await.unwrap() + 1;
+            let order_overrides = bundle.fetch_needed_overrides(block);
+            let angstrom_address = *tx.to.as_ref().unwrap().to().unwrap();
+
+            let _ =
+                futures::stream::iter(order_overrides.into_slots_with_overrides(angstrom_address))
+                    .then(|(token, slot, value)| async move {
+                        self.provider
+                            .anvil_set_storage_at(token, slot.into(), value.into())
+                            .await
+                            .expect("failed to use anvil_set_storage_at");
+                    })
+                    .collect::<Vec<_>>()
+                    .await;
 
             let tx = tx.build(&signer).await.unwrap();
 
@@ -44,20 +58,3 @@ impl SubmitTx for AnvilSubmissionProvider {
         .boxed()
     }
 }
-
-// {
-//     "astId": 24,
-//     "contract": "test/_mocks/MintableMockERC20.sol:MintableMockERC20",
-//     "label": "balanceOf",
-//     "offset": 0,
-//     "slot": "1",
-//     "type": "t_mapping(t_address,t_uint256)"
-//   },
-//   {
-//     "astId": 30,
-//     "contract": "test/_mocks/MintableMockERC20.sol:MintableMockERC20",
-//     "label": "allowance",
-//     "offset": 0,
-//     "slot": "2",
-//     "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))"
-//   }

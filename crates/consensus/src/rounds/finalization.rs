@@ -77,6 +77,10 @@ where
     P: Provider + 'static,
     Matching: MatchingEngineHandle
 {
+    fn round_name(&self) -> &'static str {
+        "Finalization"
+    }
+
     fn on_consensus_message(
         &mut self,
         _: &mut SharedRoundState<P, Matching>,

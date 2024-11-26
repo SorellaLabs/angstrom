@@ -11,7 +11,7 @@ use alloy::{
     primitives::{Address, BlockNumber},
     providers::Provider
 };
-use angstrom_metrics::ConsensusMetricsWrapper;
+use angstrom_metrics::ConsensusMetrics;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer, contract_payloads::angstrom::UniswapAngstromRegistry,
@@ -83,7 +83,7 @@ where
                     signer,
                     leader,
                     validators.clone(),
-                    ConsensusMetricsWrapper::new(),
+                    ConsensusMetrics::new(),
                     pool_registry,
                     uniswap_pools,
                     provider,

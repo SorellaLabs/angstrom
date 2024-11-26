@@ -4,14 +4,14 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::Duration
+    time::{Duration, Instant}
 };
 
 use alloy::{
     primitives::{Address, BlockNumber, FixedBytes},
     providers::Provider
 };
-use angstrom_metrics::ConsensusMetricsWrapper;
+use angstrom_metrics::ConsensusMetrics;
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
     consensus::{PreProposal, PreProposalAggregation, Proposal},
@@ -39,9 +39,11 @@ mod proposal;
 
 pub trait ConsensusState<P, Matching>: Send
 where
-    P: Provider,
+    P: Provider + 'static,
     Matching: MatchingEngineHandle
 {
+    fn round_name(&self) -> &'static str;
+
     fn on_consensus_message(
         &mut self,
         handles: &mut SharedRoundState<P, Matching>,
@@ -55,6 +57,35 @@ where
         handles: &mut SharedRoundState<P, Matching>,
         cx: &mut Context<'_>
     ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>>;
+}
+
+pub struct RoundStateWrapper<P, Matching> {
+    start: Instant,
+    inner: Box<dyn ConsensusState<P, Matching>>
+}
+
+impl<P, Matching> RoundStateWrapper<P, Matching> {}
+
+impl<P, Matching> ConsensusState<P, Matching> for RoundStateWrapper<P, Matching> {
+    fn round_name(&self) -> &'static str {
+        self.inner.round_name()
+    }
+
+    fn on_consensus_message(
+        &mut self,
+        handles: &mut SharedRoundState<P, Matching>,
+        message: StromConsensusEvent
+    ) {
+        self.inner.on_consensus_message(handles, message)
+    }
+
+    fn poll_transition(
+        &mut self,
+        handles: &mut SharedRoundState<P, Matching>,
+        cx: &mut Context<'_>
+    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>> {
+        self.inner.poll_transition(handles, cx)
+    }
 }
 
 /// Holds and progresses the consensus state machine
@@ -128,7 +159,7 @@ pub struct SharedRoundState<P, Matching> {
     round_leader:     PeerId,
     validators:       Vec<AngstromValidator>,
     order_storage:    Arc<OrderStorage>,
-    _metrics:         ConsensusMetricsWrapper,
+    _metrics:         ConsensusMetrics,
     pool_registry:    UniswapAngstromRegistry,
     uniswap_pools:    SyncedUniswapPools,
     provider:         Arc<MevBoostProvider<P>>,
@@ -149,7 +180,7 @@ where
         signer: AngstromSigner,
         round_leader: PeerId,
         validators: Vec<AngstromValidator>,
-        metrics: ConsensusMetricsWrapper,
+        metrics: ConsensusMetrics,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
         provider: MevBoostProvider<P>,

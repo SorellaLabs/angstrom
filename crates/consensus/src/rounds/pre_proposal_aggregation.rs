@@ -63,6 +63,10 @@ where
     P: Provider + 'static,
     Matching: MatchingEngineHandle
 {
+    fn round_name(&self) -> &'static str {
+        "PreProposalAggregation"
+    }
+
     fn on_consensus_message(
         &mut self,
         handles: &mut SharedRoundState<P, Matching>,

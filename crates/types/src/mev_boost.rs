@@ -14,7 +14,7 @@ use crate::primitive::AngstromSigner;
 
 /// Allows for us to have a look at the angstrom payload to ensure that we can
 /// set balances properly for when the transaction is submitted
-pub trait SubmitTx {
+pub trait SubmitTx: Send + Sync {
     fn submit_transaction<'a>(
         &'a self,
         signer: &'a AngstromSigner,

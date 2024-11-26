@@ -75,6 +75,7 @@ where
                 provider.set_state(state_bytes).await?;
                 provider
             };
+
             tracing::info!(node_id, "connected to state provider");
 
             let mut node = TestnetNode::new(

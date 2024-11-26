@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use alloy::{providers::Provider, pubsub::PubSubFrontend};
+use alloy::{
+    providers::{ext::AnvilApi, Provider},
+    pubsub::PubSubFrontend
+};
 use alloy_rpc_types::Transaction;
 use angstrom::components::StromHandles;
 use angstrom_eth::handle::Eth;
@@ -193,6 +196,8 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
 
         let mev_boost_provider =
             MevBoostProvider::new_from_urls(Arc::new(state_provider.rpc_provider()), &[]);
+
+        let anvil = state_provider.rpc_provider().anvil_impersonate_account();
 
         let consensus = ConsensusManager::new(
             ManagerNetworkDeps::new(

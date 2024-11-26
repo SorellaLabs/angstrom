@@ -7,6 +7,7 @@ mod finders;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use alloy::primitives::{Address, U256};
+use angstrom_metrics::validation::ValidationMetrics;
 
 use self::{approvals::Approvals, balances::Balances, nonces::Nonces};
 
@@ -50,7 +51,8 @@ pub struct FetchUtils<DB> {
     pub approvals: Approvals,
     pub balances:  Balances,
     pub nonces:    Nonces,
-    pub db:        Arc<DB>
+    pub db:        Arc<DB>,
+    metrics:       ValidationMetrics
 }
 
 impl<DB> StateFetchUtils for FetchUtils<DB>
@@ -70,18 +72,24 @@ where
         overrides: &HashMap<Address, HashMap<U256, U256>>
     ) -> Option<U256> {
         let db = self.db.clone();
-        self.approvals
-            .fetch_approval_balance_for_token_overrides(user, token, db, overrides)
+        self.metrics.loading_approvals(|| {
+            self.approvals
+                .fetch_approval_balance_for_token_overrides(user, token, db, overrides)
+        })
     }
 
     fn fetch_approval_balance_for_token(&self, user: Address, token: Address) -> Option<U256> {
-        self.approvals
-            .fetch_approval_balance_for_token(user, token, &self.db)
+        self.metrics.loading_approvals(|| {
+            self.approvals
+                .fetch_approval_balance_for_token(user, token, &self.db)
+        })
     }
 
     fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256 {
-        self.balances
-            .fetch_balance_in_angstrom(user, token, &self.db)
+        self.metrics.loading_balances(|| {
+            self.balances
+                .fetch_balance_in_angstrom(user, token, &self.db)
+        })
     }
 
     fn fetch_balance_for_token_overrides(
@@ -91,12 +99,15 @@ where
         overrides: &HashMap<Address, HashMap<U256, U256>>
     ) -> Option<U256> {
         let db = self.db.clone();
-        self.balances
-            .fetch_balance_for_token_overrides(user, token, db, overrides)
+        self.metrics.loading_balances(|| {
+            self.balances
+                .fetch_balance_for_token_overrides(user, token, db, overrides)
+        })
     }
 
     fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256 {
-        self.balances.fetch_balance_for_token(user, token, &self.db)
+        self.metrics
+            .loading_balances(|| self.balances.fetch_balance_for_token(user, token, &self.db))
     }
 }
 
@@ -106,7 +117,8 @@ impl<DB: revm::DatabaseRef> FetchUtils<DB> {
             approvals: Approvals::new(angstrom_address),
             balances: Balances::new(angstrom_address),
             nonces: Nonces::new(angstrom_address),
-            db
+            db,
+            metrics: ValidationMetrics::new()
         }
     }
 }

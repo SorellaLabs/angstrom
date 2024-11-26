@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256};
+use angstrom_metrics::validation::ValidationMetrics;
 use angstrom_types::sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders};
 use db_state_utils::StateFetchUtils;
 use parking_lot::RwLock;
@@ -61,33 +62,43 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
     pub fn handle_regular_order<O: RawPoolOrder + Into<AllOrders>>(
         &self,
         order: O,
-        block: u64
+        block: u64,
+        metrics: ValidationMetrics
     ) -> OrderValidationResults {
-        let order_hash = order.order_hash();
-        if !order.is_valid_signature() {
-            return OrderValidationResults::Invalid(order_hash)
-        }
+        metrics.applying_state_transitions(|| {
+            let order_hash = order.order_hash();
+            if !order.is_valid_signature() {
+                return OrderValidationResults::Invalid(order_hash)
+            }
 
-        let Some(pool_info) = self.pool_tacker.read().fetch_pool_info_for_order(&order) else {
-            return OrderValidationResults::Invalid(order_hash);
-        };
+            let Some(pool_info) = self.pool_tacker.read().fetch_pool_info_for_order(&order) else {
+                return OrderValidationResults::Invalid(order_hash);
+            };
 
-        self.user_account_tracker
-            .verify_order::<O>(order, pool_info, block)
-            .map(|o: _| {
-                OrderValidationResults::Valid(o.try_map_inner(|inner| Ok(inner.into())).unwrap())
-            })
-            .unwrap_or_else(|_| OrderValidationResults::Invalid(order_hash))
+            self.user_account_tracker
+                .verify_order::<O>(order, pool_info, block)
+                .map(|o: _| {
+                    OrderValidationResults::Valid(
+                        o.try_map_inner(|inner| Ok(inner.into())).unwrap()
+                    )
+                })
+                .unwrap_or_else(|_| OrderValidationResults::Invalid(order_hash))
+        })
     }
 
-    pub fn validate_state_of_regular_order(&self, order: OrderValidation, block: u64) {
+    pub fn validate_state_of_regular_order(
+        &self,
+        order: OrderValidation,
+        block: u64,
+        metrics: ValidationMetrics
+    ) {
         match order {
             OrderValidation::Limit(tx, order, _) => {
-                let results = self.handle_regular_order(order, block);
+                let results = self.handle_regular_order(order, block, metrics);
                 let _ = tx.send(results);
             }
             OrderValidation::Searcher(tx, order, _) => {
-                let mut results = self.handle_regular_order(order, block);
+                let mut results = self.handle_regular_order(order, block, metrics);
                 if let OrderValidationResults::Valid(ref mut order_with_storage) = results {
                     let tob_order = order_with_storage
                         .clone()

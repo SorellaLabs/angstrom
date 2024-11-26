@@ -36,7 +36,8 @@ use crate::{
         },
         rpc_orders::TopOfBlockOrder as RpcTopOfBlockOrder,
         RawPoolOrder
-    }
+    },
+    testnet::TestnetStateOverrides
 };
 
 // This currently exists in types::sol_bindings as well, but that one is
@@ -156,6 +157,15 @@ pub struct StandingValidation {
 pub enum OrderQuantities {
     Exact { quantity: u128 },
     Partial { min_quantity_in: u128, max_quantity_in: u128, filled_quantity: u128 }
+}
+
+impl OrderQuantities {
+    pub fn fetch_max_amount(&self) -> u128 {
+        match self {
+            Self::Exact { quantity } => *quantity,
+            Self::Partial { max_quantity_in, .. } => *max_quantity_in
+        }
+    }
 }
 
 #[derive(Debug, PadeEncode, PadeDecode)]
@@ -304,6 +314,31 @@ pub struct AngstromBundle {
 impl AngstromBundle {
     pub fn get_prices_per_pair(&self) -> &[Pair] {
         &self.pairs
+    }
+
+    #[cfg(feature = "testnet")]
+    pub fn fetch_needed_overrides(&self) -> TestnetStateOverrides {
+        let mut approvals: HashMap<Address, HashMap<Address, u128>> = HashMap::new();
+        let mut balances: HashMap<Address, HashMap<Address, u128>> = HashMap::new();
+
+        self.user_orders.iter().for_each(|order| {
+            let token = if order.zero_for_one {
+                // token0
+                self.assets[self.pairs[order.pair_index as usize].index0 as usize].addr
+            } else {
+                self.assets[self.pairs[order.pair_index as usize].index1 as usize].addr
+            };
+
+            // need to recover sender from signature
+            let hash = order.order_hash();
+            let address = order.signature;
+
+            let qty = order.order_quantities.fetch_max_amount();
+            approvals.entry(token).or_default().insert(token, qty);
+            balances.entry(token).or_default().insert(token, qty);
+        });
+
+        TestnetStateOverrides { approvals, balances }
     }
 
     /// the block number is the block that this bundle was executed at.

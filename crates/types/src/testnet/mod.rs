@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use alloy_primitives::{Address, Bytes};
 
 use crate::contract_bindings::angstrom::Angstrom::PoolKey;
@@ -19,4 +21,11 @@ impl InitialTestnetState {
     ) -> Self {
         Self { angstrom_addr, state, pool_manager_addr, pool_keys }
     }
+}
+
+pub struct TestnetStateOverrides {
+    /// token -> user -> amount
+    pub approvals: HashMap<Address, HashMap<Address, u128>>,
+    /// token -> user -> amount
+    pub balances:  HashMap<Address, HashMap<Address, u128>>
 }

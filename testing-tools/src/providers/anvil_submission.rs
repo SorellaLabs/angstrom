@@ -29,7 +29,7 @@ impl SubmitTx for AnvilSubmissionProvider {
             // decoded encoded payload, then apply all mock approvals + balances for the
             // given token
 
-            let data_vec = tx.input.data.unwrap().to_vec();
+            let data_vec = tx.input.data.clone().unwrap().to_vec();
             let mut slice = data_vec.as_slice();
             let bundle = AngstromBundle::pade_decode(&mut slice, None).unwrap();
 

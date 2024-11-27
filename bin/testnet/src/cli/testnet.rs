@@ -1,6 +1,6 @@
 use std::{net::IpAddr, path::PathBuf, str::FromStr};
 
-use alloy::signers::local::PrivateKeySigner;
+use alloy::signers::{local::PrivateKeySigner, Signer};
 use alloy_primitives::{Address, Bytes};
 use alloy_signer_local::LocalSigner;
 use angstrom_metrics::{initialize_prometheus_metrics, METRICS_ENABLED};

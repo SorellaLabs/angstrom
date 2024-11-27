@@ -333,7 +333,7 @@ where
         .await
     }
 
-    pub(crate) async fn _testnet_future(self) {
+    pub async fn run_testnet(self) {
         self.start_network_and_consensus();
         self.state_lock.await;
     }

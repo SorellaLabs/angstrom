@@ -1,4 +1,3 @@
-pub mod devnet;
 pub mod testnet;
 
 use clap::{ArgAction, Parser, Subcommand};

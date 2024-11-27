@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use futures::{future::select_all, FutureExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
 use secp256k1::SecretKey;
@@ -105,5 +106,15 @@ where
         }
 
         Ok(())
+    }
+
+    pub async fn run_testnet(self) {
+        let peers = self
+            .peers
+            .into_values()
+            .map(|peer| async move { peer.run_testnet().await }.boxed());
+
+        let out = select_all(peers);
+        let _ = out.await;
     }
 }

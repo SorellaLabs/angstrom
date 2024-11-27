@@ -1,4 +1,5 @@
 //! CLI definition and entrypoint to executable
+#![allow(unused)]
 pub mod cli;
 pub(crate) mod utils;
 

@@ -171,7 +171,8 @@ enum RewardsUpdate {
     MultiTick {
         start_tick: i24,
         start_liquidity: u128,
-        quantities: List<u128>
+        quantities: List<u128>,
+        reward_checksum: u80
     },
     CurrentOnly {
         amount: u128
@@ -194,6 +195,7 @@ as the loop progresses to ensure consistency of reward distribution.
 |`start_liquidity: u128`|The current liquidity if `start_tick` were the current tick.|
 |`quantities: List<u128>`|The reward for each initialized tick range *including* the current tick in
 `asset0` base units.|
+|`reward_checksum: u80`|The upper 80-bits of the "reward checksum", the hash chain of the liquidity and ticks traversed for reward|
 
 **Reward Update Internals**
 

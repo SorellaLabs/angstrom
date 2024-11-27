@@ -226,6 +226,20 @@ library RewardLib {
         update.startTick = int24(uint24(initializedTicks.get(0)));
         uint128 poolLiq = getLiquidityAtTick(uni, id, currentTick, tickSpacing);
         update.startLiquidity = MixedSignLib.sub(poolLiq, cumulativeNetLiquidity);
+
+        {
+            PoolId id2 = id;
+            IPoolManager uni2 = uni;
+            bytes32 rewardChecksum;
+            uint128 liquidity = update.startLiquidity;
+            for (uint256 i = 0; i < initializedTicks.length; i++) {
+                int24 tick = int24(int256(initializedTicks.get(i)));
+                (, int128 netLiquidity) = uni2.getTickLiquidity(id2, tick);
+                liquidity = MixedSignLib.add(liquidity, netLiquidity);
+                rewardChecksum = keccak256(abi.encodePacked(rewardChecksum, liquidity, tick));
+            }
+            update.rewardChecksum = uint80(uint256(rewardChecksum) >> 176);
+        }
     }
 
     function _createRewardUpdateAbove(
@@ -294,6 +308,20 @@ library RewardLib {
 
         uint128 poolLiq = getLiquidityAtTick(uni, id, currentTick, tickSpacing);
         update.startLiquidity = MixedSignLib.add(poolLiq, cumulativeNetLiquidity);
+
+        {
+            PoolId id2 = id;
+            IPoolManager uni2 = uni;
+            bytes32 rewardChecksum;
+            uint128 liquidity = update.startLiquidity;
+            for (uint256 i = 0; i < initializedTicks.length; i++) {
+                int24 tick = int24(int256(initializedTicks.get(i)));
+                (, int128 netLiquidity) = uni2.getTickLiquidity(id2, tick);
+                liquidity = MixedSignLib.sub(liquidity, netLiquidity);
+                rewardChecksum = keccak256(abi.encodePacked(rewardChecksum, liquidity, tick));
+            }
+            update.rewardChecksum = uint80(uint256(rewardChecksum) >> 176);
+        }
     }
 
     function getLiquidityAtTick(IPoolManager uni, PoolId id, int24 futureTick, int24 tickSpacing)

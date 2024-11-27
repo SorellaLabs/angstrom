@@ -73,6 +73,7 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             .arg(self.global_config.anvil_rpc_endpoint(self.node_id))
             .arg("--code-size-limit")
             .arg("393216")
+            .arg("--disable-block-gas-limit")
             .arg("--preserve-historical-states")
             .arg("--max-persisted-states")
             .arg("500")

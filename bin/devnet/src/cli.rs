@@ -59,6 +59,7 @@ impl Cli {
 
         let layers = vec![
             layer_builder(format!("devnet={level}")),
+            layer_builder(format!("testnet={level}")),
             layer_builder(format!("angstrom={level}")),
             layer_builder(format!("testing_tools={level}")),
             layer_builder(format!("uniswap_v4={level}")),

@@ -20,7 +20,7 @@ pub fn run() -> eyre::Result<()> {
 async fn execute(executor: TaskExecutor) -> eyre::Result<()> {
     let cli = TestnetCli::parse();
 
-    let level = Level::Trace;
+    let level = Level::TRACE;
     let layers = vec![
         layer_builder(format!("devnet={level}")),
         layer_builder(format!("testnet={level}")),

@@ -6,18 +6,29 @@ import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step
 import {PoolConfigStoreLib, StoreKey, STORE_HEADER_SIZE} from "../libraries/PoolConfigStore.sol";
 import {ConfigEntry, ENTRY_SIZE, KEY_MASK} from "../types/ConfigEntry.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
+
+struct Distribution {
+    address to;
+    uint256 amount;
+}
+
+struct Asset {
+    address addr;
+    uint256 total;
+    Distribution[] dists;
+}
 
 /// @author philogy <https://github.com/philogy>
 contract ControllerV1 is Ownable2Step {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeTransferLib for address;
 
-    uint256 constant SCHEDULE_TO_CONFIRM_DELAY = 2 weeks;
     bytes32 constant STORE_ANGSTROM_SLOT = bytes32(uint256(2));
     uint256 constant STORE_RIGHT_SHIFT = 64;
 
-    event NewControllerScheduled(address indexed newController);
-    event NewControllerCancelled();
-    event NewControllerAccepted();
+    event NewControllerSet(address indexed newController);
+    event NewControllerAccepted(address indexed newController);
 
     event PoolConfigured(
         address indexed asset0, address indexed asset1, uint16 tickSpacing, uint24 feeInE6
@@ -27,13 +38,11 @@ contract ControllerV1 is Ownable2Step {
     event NodeAdded(address indexed node);
     event NodeRemoved(address indexed node);
 
-    error NotScheduledController();
-    error ControllerStillPending();
-    error ControllerNotPending();
-    error ControllerZero();
+    error NotSetController();
     error DuplicateAssets();
     error AlreadyNode();
     error NotNode();
+    error TotalNotDistributed();
 
     struct Pool {
         address asset0;
@@ -42,8 +51,7 @@ contract ControllerV1 is Ownable2Step {
 
     IAngstromAuth public immutable ANGSTROM;
 
-    address public pendingController;
-    uint40 public scheduledAt;
+    address public setController;
     EnumerableSet.AddressSet internal _nodes;
 
     mapping(StoreKey key => Pool) public pools;
@@ -52,30 +60,16 @@ contract ControllerV1 is Ownable2Step {
         ANGSTROM = angstrom;
     }
 
-    function scheduleNewController(address newController) public {
+    function setNewController(address newController) public {
         _checkOwner();
-        if (newController == address(0)) revert ControllerZero();
-        pendingController = newController;
-        scheduledAt = uint40(block.timestamp);
-        emit NewControllerScheduled(newController);
-    }
-
-    function cancelPendingController() public {
-        _checkOwner();
-        if (pendingController == address(0)) revert ControllerNotPending();
-        pendingController = address(0);
-        scheduledAt = 0;
-        emit NewControllerCancelled();
+        setController = newController;
+        emit NewControllerSet(newController);
     }
 
     function acceptNewController() public {
-        if (block.timestamp < scheduledAt + SCHEDULE_TO_CONFIRM_DELAY) {
-            revert ControllerStillPending();
-        }
-        if (msg.sender != pendingController) revert NotScheduledController();
-        pendingController = address(0);
-        scheduledAt = 0;
-        emit NewControllerAccepted();
+        if (msg.sender != setController) revert NotSetController();
+        setController = address(0);
+        emit NewControllerAccepted(msg.sender);
         ANGSTROM.setController(msg.sender);
     }
 
@@ -104,6 +98,26 @@ contract ControllerV1 is Ownable2Step {
         ANGSTROM.removePool(configStore, poolIndex);
     }
 
+    function distributeFees(Asset[] calldata assets) external {
+        _checkOwner();
+
+        uint256 totalAssets = assets.length;
+        for (uint256 i = 0; i < totalAssets; i++) {
+            Asset calldata asset = assets[i];
+            address addr = asset.addr;
+            uint256 totalRemaining = asset.total;
+            ANGSTROM.pullFee(addr, totalRemaining);
+            uint256 totalDists = asset.dists.length;
+            for (uint256 j = 0; j < totalDists; j++) {
+                Distribution calldata dist = asset.dists[j];
+                uint256 amount = dist.amount;
+                addr.safeTransfer(dist.to, amount);
+                totalRemaining -= amount;
+            }
+            if (totalRemaining != 0) revert TotalNotDistributed();
+        }
+    }
+
     function addNode(address node) external {
         _checkOwner();
         if (!_nodes.add(node)) revert AlreadyNode();
@@ -122,8 +136,7 @@ contract ControllerV1 is Ownable2Step {
         return _nodes.length();
     }
 
-    /// @dev Loads all node addresses from storage, could exceed gas limit if a lot of nodes are
-    /// added.
+    /// @dev Loads all node addresses from storage, could exceed gas limit if too many nodes are added.
     function nodes() public view returns (address[] memory) {
         return _nodes.values();
     }

@@ -4,20 +4,19 @@ pragma solidity ^0.8.0;
 import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {Angstrom} from "src/Angstrom.sol";
 import {PoolManager} from "v4-core/src/PoolManager.sol";
-import {ControllerV1} from "src/periphery/ControllerV1.sol";
+import {ControllerV1, Asset, Distribution} from "src/periphery/ControllerV1.sol";
 import {TopLevelAuth} from "src/modules/TopLevelAuth.sol";
 import {LibSort} from "solady/src/utils/LibSort.sol";
 import {
     PoolConfigStoreLib, PoolConfigStore, StoreKey
 } from "../../src/libraries/PoolConfigStore.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {MockERC20} from "super-sol/mocks/MockERC20.sol";
 
 import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract ControllerV1Test is BaseTest {
-    uint256 constant SCHEDULE_TO_CONFIRM_DELAY = 2 weeks;
-
     Angstrom angstrom;
     PoolManager uni;
     ControllerV1 controller;
@@ -61,25 +60,54 @@ contract ControllerV1Test is BaseTest {
         }
     }
 
+    function test_canPullFees() public {
+        MockERC20 token1 = new MockERC20();
+        MockERC20 token2 = new MockERC20();
+
+        address a = address(angstrom);
+        token1.mint(a, 120.1e18);
+        token2.mint(a, 20.0e18);
+
+        address[3] memory recipients = [makeAddr("r_1"), makeAddr("r_2"), makeAddr("r_3")];
+        Asset[] memory assets = new Asset[](2);
+
+        assets[0].addr = address(token1);
+        assets[0].total = 20.1e18;
+        Distribution[] memory dists = assets[0].dists = new Distribution[](3);
+        dists[0] = Distribution(recipients[0], 18.0e18);
+        dists[1] = Distribution(recipients[1], 2.0e18);
+        dists[2] = Distribution(recipients[2], 0.1e18);
+
+        assets[1].addr = address(token2);
+        assets[1].total = 13.5e18;
+        dists = assets[1].dists = new Distribution[](2);
+        dists[0] = Distribution(recipients[1], 6.2e18);
+        dists[1] = Distribution(recipients[0], 7.3e18);
+
+        vm.prank(controller_owner);
+        controller.distributeFees(assets);
+
+        assertEq(token1.balanceOf(recipients[0]), 18.0e18);
+        assertEq(token1.balanceOf(recipients[1]), 2.0e18);
+        assertEq(token1.balanceOf(recipients[2]), 0.1e18);
+        assertEq(token2.balanceOf(recipients[0]), 7.3e18);
+        assertEq(token2.balanceOf(recipients[1]), 6.2e18);
+        assertEq(token2.balanceOf(recipients[2]), 0);
+    }
+
     function test_can_cancelNewController() public {
         address bad_controller = makeAddr("bad_controller");
-        uint256 unlockTime = block.timestamp + SCHEDULE_TO_CONFIRM_DELAY;
         vm.expectEmit(true, true, true, true);
-        emit ControllerV1.NewControllerScheduled(bad_controller);
+        emit ControllerV1.NewControllerSet(bad_controller);
         vm.prank(controller_owner);
-        controller.scheduleNewController(bad_controller);
+        controller.setNewController(bad_controller);
 
         skip(1 days);
 
         vm.expectEmit(true, true, true, true);
-        emit ControllerV1.NewControllerCancelled();
+        emit ControllerV1.NewControllerSet(address(0));
         vm.prank(controller_owner);
-        controller.cancelPendingController();
-
-        vm.warp(unlockTime);
-        vm.expectRevert(ControllerV1.ControllerNotPending.selector);
-        vm.prank(controller_owner);
-        controller.cancelPendingController();
+        controller.setNewController(address(0));
     }
 
     function test_configurePools() public {
@@ -120,21 +148,18 @@ contract ControllerV1Test is BaseTest {
     function test_controllerMigration() public {
         address next_controller = makeAddr("next_controller");
         vm.expectEmit(true, true, true, true);
-        emit ControllerV1.NewControllerScheduled(next_controller);
+        emit ControllerV1.NewControllerSet(next_controller);
         vm.prank(controller_owner);
-        controller.scheduleNewController(next_controller);
-        assertEq(controller.pendingController(), next_controller);
+        controller.setNewController(next_controller);
+        assertEq(controller.setController(), next_controller);
 
-        skip(2 days);
-
-        vm.expectRevert(ControllerV1.ControllerStillPending.selector);
-        vm.prank(next_controller);
+        address not_next_controller = makeAddr("not_next");
+        vm.expectRevert(ControllerV1.NotSetController.selector);
+        vm.prank(not_next_controller);
         controller.acceptNewController();
 
-        skip(SCHEDULE_TO_CONFIRM_DELAY);
-
         vm.expectEmit(true, true, true, true);
-        emit ControllerV1.NewControllerAccepted();
+        emit ControllerV1.NewControllerAccepted(next_controller);
         vm.prank(next_controller);
         controller.acceptNewController();
 

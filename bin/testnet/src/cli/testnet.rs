@@ -16,7 +16,7 @@ use serde::Deserialize;
 pub struct TestnetCli {
     #[clap(long)]
     pub mev_guard:    bool,
-    #[clap(long, default_value = "./testnet_config.toml")]
+    #[clap(long, default_value = "./bin/testnet/testnet_config.toml")]
     pub node_config:  PathBuf,
     /// enables the metrics
     #[clap(long, default_value = "false", global = true)]

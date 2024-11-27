@@ -169,8 +169,8 @@ contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
         bytes32 delta1Slot = keccak256(abi.encode(sender, asset1));
         bytes32 rawDelta0 = UNI_V4.exttload(delta0Slot);
         bytes32 rawDelta1 = UNI_V4.exttload(delta1Slot);
-        delta = delta
-            + toBalanceDelta(int128(int256(uint256(rawDelta0))), int128(int256(uint256(rawDelta1))));
+        delta =
+            toBalanceDelta(int128(int256(uint256(rawDelta0))), int128(int256(uint256(rawDelta1))));
 
         require(delta.amount0() >= 0 && delta.amount1() >= 0, "losing money for removing liquidity");
         _clear(asset0, asset1, delta);

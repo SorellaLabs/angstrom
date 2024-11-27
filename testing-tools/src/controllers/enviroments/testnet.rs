@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use alloy::providers::ext::AnvilApi;
+use alloy_primitives::U256;
 use futures::{future::select_all, FutureExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
@@ -72,12 +74,20 @@ where
                 provider.deploy_pool_full().await?;
                 let initial_state = provider.initialize_state().await?;
                 initial_angstrom_state = Some(initial_state);
+                initializer
+                    .rpc_provider()
+                    .anvil_mine(Some(U256::from(5)), None)
+                    .await?;
                 initializer.into_state_provider()
             } else {
                 tracing::info!(?node_id, "default init");
                 let state_bytes = initial_angstrom_state.clone().unwrap().state.unwrap();
                 let provider = AnvilProvider::new(WalletProvider::new(node_config.clone())).await?;
                 provider.set_state(state_bytes).await?;
+                provider
+                    .rpc_provider()
+                    .anvil_mine(Some(U256::from(5)), None)
+                    .await?;
                 provider
             };
 

@@ -126,7 +126,6 @@ mod tests {
             rpc_orders::OmitOrderMeta
         }
     };
-    
     use pade::PadeEncode;
 
     use super::{AngstromEnv, DebugTransaction};
@@ -204,10 +203,8 @@ mod tests {
         let controller = nodes[7];
 
         let controller_signing_key = AngstromSigner::new(
-            PrivateKeySigner::from_slice(
-                &spawned_anvil.anvil.keys()[7].clone().to_bytes()
-            )
-            .unwrap()
+            PrivateKeySigner::from_slice(&spawned_anvil.anvil.keys()[7].clone().to_bytes())
+                .unwrap()
         );
 
         let uniswap = UniswapEnv::new(anvil).await.unwrap();

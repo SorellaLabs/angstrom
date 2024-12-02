@@ -19,9 +19,9 @@ impl OrderBuilder {
     }
 
     pub fn build_tob_order(&self, cur_price: f64, block_number: u64) -> TopOfBlockOrder {
-        // ToBOrderBuilder::new().sig
-
-        todo!()
+        ToBOrderBuilder::new()
+            .signing_key(self.keys.first().cloned())
+            .build()
     }
 
     pub fn build_user_order(

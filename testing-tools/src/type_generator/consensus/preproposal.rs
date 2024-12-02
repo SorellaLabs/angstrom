@@ -11,7 +11,7 @@ use rand::{thread_rng, Rng};
 
 use super::pool::{Pool, PoolBuilder};
 use crate::type_generator::orders::{
-    DistributionParameters, OrderDistributionBuilder, OrderIdBuilder, SigningInfo, ToBOrderBuilder
+    DistributionParameters, OrderDistributionBuilder, OrderIdBuilder, ToBOrderBuilder
 };
 
 #[derive(Debug, Default)]
@@ -19,8 +19,7 @@ pub struct PreproposalBuilder {
     order_count: Option<usize>,
     block:       Option<u64>,
     pools:       Option<Vec<Pool>>,
-    sk:          Option<AngstromSigner>,
-    order_key:   Option<SigningInfo>
+    sk:          Option<AngstromSigner>
 }
 
 impl PreproposalBuilder {
@@ -51,10 +50,6 @@ impl PreproposalBuilder {
         Self { sk: Some(sk), ..self }
     }
 
-    pub fn order_key(self, order_key: Option<SigningInfo>) -> Self {
-        Self { order_key, ..self }
-    }
-
     pub fn build(self) -> PreProposal {
         // Extract values from our struct
         let pools = self.pools.unwrap_or_default();
@@ -80,7 +75,7 @@ impl PreproposalBuilder {
                     .valid_block(block)
                     .price_params(bid_dist)
                     .volume_params(bid_quant)
-                    .signing_key(self.order_key.clone())
+                    .signing_key(Some(sk.clone()))
                     .build()
                     .unwrap();
                 let asks = OrderDistributionBuilder::new()
@@ -90,7 +85,7 @@ impl PreproposalBuilder {
                     .valid_block(block)
                     .price_params(ask_dist)
                     .volume_params(ask_quant)
-                    .signing_key(self.order_key.clone())
+                    .signing_key(Some(sk.clone()))
                     .build()
                     .unwrap();
                 [bids, asks].concat()
@@ -107,7 +102,7 @@ impl PreproposalBuilder {
                     .asset_out(pool_id.token0())
                     .quantity_in(2_201_872_310_000_u128)
                     .quantity_out(100000000_u128)
-                    .signing_key(self.order_key.clone())
+                    .signing_key(Some(sk.clone()))
                     .valid_block(block)
                     .build();
                 let order_id = OrderIdBuilder::new()

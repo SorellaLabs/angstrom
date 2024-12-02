@@ -1,9 +1,7 @@
-use alloy::{
-    primitives::Address,
-    signers::{local::LocalSigner, SignerSync}
-};
+use alloy::{primitives::Address, signers::SignerSync};
 use angstrom_types::{
     matching::Ray,
+    primitive::{AngstromSigner, ANGSTROM_DOMAIN},
     sol_bindings::{
         grouped_orders::{FlashVariants, GroupedVanillaOrder, StandingVariants},
         rpc_orders::{
@@ -14,7 +12,7 @@ use angstrom_types::{
 };
 use pade::PadeEncode;
 
-use super::{SigningInfo, StoredOrderBuilder};
+use super::StoredOrderBuilder;
 
 #[derive(Clone, Debug, Default)]
 pub struct UserOrderBuilder {
@@ -29,7 +27,7 @@ pub struct UserOrderBuilder {
     asset_out:   Address,
     amount:      u128,
     min_price:   Ray,
-    signing_key: Option<SigningInfo>
+    signing_key: Option<AngstromSigner>
 }
 
 impl UserOrderBuilder {
@@ -91,7 +89,7 @@ impl UserOrderBuilder {
         Self { min_price, ..self }
     }
 
-    pub fn signing_key(self, signing_key: Option<SigningInfo>) -> Self {
+    pub fn signing_key(self, signing_key: Option<AngstromSigner>) -> Self {
         Self { signing_key, ..self }
     }
 
@@ -107,9 +105,8 @@ impl UserOrderBuilder {
                     nonce: self.nonce,
                     ..Default::default()
                 };
-                if let Some(SigningInfo { domain, address, key }) = self.signing_key {
-                    let signer = LocalSigner::from_signing_key(key);
-                    let hash = order.no_meta_eip712_signing_hash(&domain);
+                if let Some(signer) = self.signing_key {
+                    let hash = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
                     println!("ExactStandingOrder Typehash: {:?}", order.eip712_type_hash());
                     println!("User Hash debug {:?}", hash);
                     println!("User Alt hash debug: {:?}", order.eip712_hash_struct());
@@ -117,7 +114,7 @@ impl UserOrderBuilder {
                     println!("Signature debug: {:?}", sig);
                     order.meta = OrderMeta {
                         isEcdsa:   true,
-                        from:      address,
+                        from:      signer.address(),
                         signature: sig.pade_encode().into()
                     };
                 }
@@ -132,16 +129,15 @@ impl UserOrderBuilder {
                     recipient: self.recipient,
                     ..Default::default()
                 };
-                if let Some(SigningInfo { domain, address, key }) = self.signing_key {
-                    let signer = LocalSigner::from_signing_key(key);
-                    let hash = order.no_meta_eip712_signing_hash(&domain);
+                if let Some(signer) = self.signing_key {
+                    let hash = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
                     println!("PartialStandingOrder Typehash: {:?}", order.eip712_type_hash());
                     println!("User Hash debug {:?}", hash);
                     println!("User Alt hash debug: {:?}", order.eip712_hash_struct());
                     let sig = signer.sign_hash_sync(&hash).unwrap();
                     order.meta = OrderMeta {
                         isEcdsa:   true,
-                        from:      address,
+                        from:      signer.address(),
                         signature: sig.pade_encode().into()
                     };
                 }
@@ -157,16 +153,15 @@ impl UserOrderBuilder {
                     recipient: self.recipient,
                     ..Default::default()
                 };
-                if let Some(SigningInfo { domain, address, key }) = self.signing_key {
-                    let signer = LocalSigner::from_signing_key(key);
-                    let hash = order.no_meta_eip712_signing_hash(&domain);
+                if let Some(signer) = self.signing_key {
+                    let hash = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
                     println!("ExactFlashOrder Typehash: {:?}", order.eip712_type_hash());
                     println!("User Hash debug {:?}", hash);
                     println!("User Alt hash debug: {:?}", order.eip712_hash_struct());
                     let sig = signer.sign_hash_sync(&hash).unwrap();
                     order.meta = OrderMeta {
                         isEcdsa:   true,
-                        from:      address,
+                        from:      signer.address(),
                         signature: sig.pade_encode().into()
                     };
                 }
@@ -182,9 +177,8 @@ impl UserOrderBuilder {
                     recipient: self.recipient,
                     ..Default::default()
                 };
-                if let Some(SigningInfo { domain, address, key }) = self.signing_key {
-                    let signer = LocalSigner::from_signing_key(key);
-                    let hash = order.no_meta_eip712_signing_hash(&domain);
+                if let Some(signer) = self.signing_key {
+                    let hash = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
                     println!("PartialFlashOrder Typehash: {:?}", order.eip712_type_hash());
                     println!("PartialFlashorder Typestring:\n{}", order.eip712_encode_type());
                     println!("User Hash debug {:?}", hash);
@@ -192,7 +186,7 @@ impl UserOrderBuilder {
                     let sig = signer.sign_hash_sync(&hash).unwrap();
                     order.meta = OrderMeta {
                         isEcdsa:   true,
-                        from:      address,
+                        from:      signer.address(),
                         signature: sig.pade_encode().into()
                     };
                 }

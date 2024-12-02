@@ -57,7 +57,7 @@ impl AllPoolKeyInners {
             format!("could not deserialize pool key config file {:?}", config_path)
         })?;
 
-        Ok(node_config.try_into()?)
+        node_config.try_into()
     }
 }
 

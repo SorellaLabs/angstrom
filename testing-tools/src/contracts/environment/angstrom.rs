@@ -104,7 +104,10 @@ mod tests {
             Address, Bytes, Uint, U256
         },
         providers::Provider,
-        signers::{local::LocalSigner, SignerSync}
+        signers::{
+            local::{LocalSigner, PrivateKeySigner},
+            SignerSync
+        }
     };
     use alloy_primitives::FixedBytes;
     use alloy_sol_types::{eip712_domain, Eip712Domain};
@@ -117,13 +120,13 @@ mod tests {
         contract_payloads::angstrom::{AngstromBundle, BundleGasDetails, UserOrder},
         matching::{uniswap::LiqRange, SqrtPriceX96},
         orders::{OrderFillState, OrderOutcome},
-        primitive::ANGSTROM_DOMAIN,
+        primitive::{AngstromSigner, ANGSTROM_DOMAIN},
         sol_bindings::{
             grouped_orders::{GroupedVanillaOrder, OrderWithStorageData, StandingVariants},
             rpc_orders::OmitOrderMeta
         }
     };
-    use enr::k256::ecdsa::SigningKey;
+    
     use pade::PadeEncode;
 
     use super::{AngstromEnv, DebugTransaction};
@@ -135,8 +138,7 @@ mod tests {
         providers::AnvilProvider,
         type_generator::{
             amm::AMMSnapshotBuilder,
-            consensus::{pool::Pool, proposal::ProposalBuilder},
-            orders::SigningInfo
+            consensus::{pool::Pool, proposal::ProposalBuilder}
         }
     };
 
@@ -200,7 +202,14 @@ mod tests {
 
         let nodes: Vec<Address> = spawned_anvil.anvil.addresses().to_vec();
         let controller = nodes[7];
-        let controller_signing_key: SigningKey = spawned_anvil.anvil.keys()[7].clone().into();
+
+        let controller_signing_key = AngstromSigner::new(
+            PrivateKeySigner::from_slice(
+                &spawned_anvil.anvil.keys()[7].clone().to_bytes()
+            )
+            .unwrap()
+        );
+
         let uniswap = UniswapEnv::new(anvil).await.unwrap();
         let env = AngstromEnv::new(uniswap).await.unwrap();
         let angstrom = AngstromInstance::new(env.angstrom(), env.provider());
@@ -264,8 +273,6 @@ mod tests {
             .await
             .unwrap();
 
-        let order_key = SigningInfo { domain, address: controller, key: controller_signing_key };
-
         // Get our ToB address and money it up
         // let tob_address = Address::random();
         // println!("TOB address: {:?}", tob_address);
@@ -292,7 +299,7 @@ mod tests {
             .for_pools(pools)
             .order_count(10)
             .preproposal_count(1)
-            .order_key(Some(order_key))
+            .with_secret_key(controller_signing_key)
             .for_block(current_block + 2)
             .build();
         println!("Proposal solutions:\n{:?}", proposal.solutions);

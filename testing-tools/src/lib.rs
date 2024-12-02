@@ -5,6 +5,8 @@
 pub mod mocks;
 /// Tools for testing network setup
 pub mod network;
+/// utils for generating orders based on exchange prices.
+pub mod order_generator;
 /// Tools for testing order_pool functionality
 pub mod order_pool;
 /// Tools for generating different types of orders

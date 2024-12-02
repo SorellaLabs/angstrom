@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use alloy::{
     hex,
@@ -214,6 +214,18 @@ where
             });
 
         Ok(())
+    }
+
+    pub fn calculate_price(&self) -> f64 {
+        let tick = uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(self.sqrt_price).unwrap();
+        let shift = self.token_a_decimals as i8 - self.token_b_decimals as i8;
+        let price = match shift.cmp(&0) {
+            Ordering::Less => 1.0001_f64.powi(tick) / 10_f64.powi(-shift as i32),
+            Ordering::Greater => 1.0001_f64.powi(tick) * 10_f64.powi(shift as i32),
+            Ordering::Equal => 1.0001_f64.powi(tick)
+        };
+
+        1.0 / price
     }
 
     /// Obvious doc: Sims the swap to get the state changes after applying it

@@ -348,7 +348,7 @@ pub mod test {
             Asset, Pair
         },
         orders::OrderOutcome,
-        primitive::ANGSTROM_DOMAIN,
+        primitive::{AngstromSigner, ANGSTROM_DOMAIN},
         sol_bindings::grouped_orders::OrderWithStorageData
     };
     use pade::PadeEncode;
@@ -409,12 +409,8 @@ pub mod test {
         }
     }
 
-    fn setup_signing_info() -> SigningInfo {
-        // let mut rand = rand::rng();
-        let wallet = PrivateKeySigner::random();
-        let addr = wallet.address();
-        let key = wallet.credential().clone();
-        SigningInfo { domain: ANGSTROM_DOMAIN, address: addr, key }
+    fn setup_signing_info() -> AngstromSigner {
+        AngstromSigner::random()
     }
 
     #[test]

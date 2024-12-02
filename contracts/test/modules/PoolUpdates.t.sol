@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {PoolRewardsHandler} from "../invariants/pool-rewards/PoolRewardsHandler.sol";
-import {POOL_FEE, ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
+import {POOL_FEE} from "src/Constants.sol";
 
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";

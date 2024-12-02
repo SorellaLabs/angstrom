@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {Script} from "forge-std/Script.sol";
 import {HookDeployer} from "../test/_helpers/HookDeployer.sol";
 import {MockRewardsManager} from "../test/_mocks/MockRewardsManager.sol";
-import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {hasAngstromHookFlags} from "src/modules/UniConsumer.sol";
 
 import {console2 as console} from "forge-std/console2.sol";
 
@@ -28,8 +28,8 @@ contract MockRewardsManagerScript is Test, Script, HookDeployer {
             abi.encodePacked(
                 type(MockRewardsManager).creationCode, abi.encode(UNI_V4_PM, vm.addr(key))
             ),
-            ANGSTROM_HOOK_FLAGS,
-            CREATE2_FACTORY
+            CREATE2_FACTORY,
+            hasAngstromHookFlags
         );
 
         assertTrue(suc);

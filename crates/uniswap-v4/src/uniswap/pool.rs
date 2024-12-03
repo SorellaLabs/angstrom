@@ -216,6 +216,11 @@ where
         Ok(())
     }
 
+    pub fn calculate_price_unshifted(&self) -> f64 {
+        let tick = uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(self.sqrt_price).unwrap();
+        1.0 / 1.0001_f64.powi(tick)
+    }
+
     pub fn calculate_price(&self) -> f64 {
         let tick = uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(self.sqrt_price).unwrap();
         let shift = self.token_a_decimals as i8 - self.token_b_decimals as i8;

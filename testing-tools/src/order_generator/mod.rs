@@ -3,7 +3,6 @@ use angstrom_types::{
     primitive::PoolId,
     sol_bindings::{grouped_orders::GroupedVanillaOrder, rpc_orders::TopOfBlockOrder}
 };
-use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 

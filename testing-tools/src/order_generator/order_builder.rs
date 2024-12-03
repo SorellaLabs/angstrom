@@ -4,7 +4,6 @@ use angstrom_types::{
     primitive::{AngstromSigner, PoolId},
     sol_bindings::{grouped_orders::GroupedVanillaOrder, rpc_orders::TopOfBlockOrder}
 };
-use rand::Rng;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::type_generator::orders::ToBOrderBuilder;
@@ -35,8 +34,8 @@ impl OrderBuilder {
         let token1 = pool.token_b;
         let t_in = if zfo { token0 } else { token1 };
 
-        /// want to swap to SqrtPriceX96. we set amount to negative so it will
-        /// just fil till we hit limit.
+        // want to swap to SqrtPriceX96. we set amount to negative so it will
+        // just fil till we hit limit.
         let (amount_in, amount_out) = pool.simulate_swap(t_in, I256::MIN, Some(price)).unwrap();
         let amount_in = u128::try_from(amount_in.abs()).unwrap();
         let amount_out = u128::try_from(amount_out.abs()).unwrap();
@@ -57,6 +56,13 @@ impl OrderBuilder {
         block_number: u64,
         is_partial: bool
     ) -> GroupedVanillaOrder {
+        let rng = rand::thread_rng();
+
+        let pool = self.pool_data.get(&self.pool_id).unwrap().read().unwrap();
+        let p_price = pool.calculate_price();
+        // if the pool price > than price we want. given t1 / t0 -> more t0 less t1 ->
+        // cur_price
+        let zfo = p_price > cur_price;
         todo!()
     }
 }

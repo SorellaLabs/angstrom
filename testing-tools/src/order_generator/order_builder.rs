@@ -1,3 +1,5 @@
+use rand::Rng;
+use tracing::info;
 use alloy::primitives::{I256, U256};
 use angstrom_types::{
     matching::SqrtPriceX96,
@@ -6,7 +8,7 @@ use angstrom_types::{
 };
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
-use crate::type_generator::orders::ToBOrderBuilder;
+use crate::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 
 pub struct OrderBuilder {
     keys:      Vec<AngstromSigner>,
@@ -39,6 +41,7 @@ impl OrderBuilder {
         let (amount_in, amount_out) = pool.simulate_swap(t_in, I256::MIN, Some(price)).unwrap();
         let amount_in = u128::try_from(amount_in.abs()).unwrap();
         let amount_out = u128::try_from(amount_out.abs()).unwrap();
+        info!(%amount_in, %amount_out, %cur_price, pool_price=%p_price, "tob order builder");
 
         ToBOrderBuilder::new()
             .signing_key(self.keys.first().cloned())
@@ -54,15 +57,39 @@ impl OrderBuilder {
         &self,
         cur_price: f64,
         block_number: u64,
-        is_partial: bool
+        partial_pct: f64
     ) -> GroupedVanillaOrder {
-        let rng = rand::thread_rng();
+        let mut rng = rand::thread_rng();
+        let is_partial = rng.gen_bool(partial_pct);
 
         let pool = self.pool_data.get(&self.pool_id).unwrap().read().unwrap();
         let p_price = pool.calculate_price();
         // if the pool price > than price we want. given t1 / t0 -> more t0 less t1 ->
         // cur_price
         let zfo = p_price > cur_price;
-        todo!()
+        let token0 = pool.token_a;
+        let token1 = pool.token_b;
+
+        let t_in = if zfo { token0 } else { token1 };
+        let price: U256 = SqrtPriceX96::from_float_price(cur_price).into();
+        let (amount_in, amount_out) = pool.simulate_swap(t_in, I256::MIN, Some(price)).unwrap();
+
+        let amount_in = u128::try_from(amount_in.abs()).unwrap();
+        let amount_out = u128::try_from(amount_out.abs()).unwrap();
+
+        info!(%amount_in, %amount_out, %cur_price, pool_price=%p_price, "tob order builder");
+        // from the amount in, calculate some random adjustment factor on the amount to ensure
+
+
+        UserOrderBuilder::new()
+            .signing_key(self.keys.get(0).cloned())
+            .is_exact(!is_partial)
+            .asset_in(if zfo { token0 } else { token1 })
+            .asset_out(if !zfo { token0 } else { token1 })
+            .is_standing(false)
+            .exact_in(true)
+            .block(block_number)
+            .amount(…)
+            .build()
     }
 }

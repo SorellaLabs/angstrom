@@ -20,6 +20,7 @@ pub struct UserOrderBuilder {
     is_standing: bool,
     /// If the order is not an Exact order, it is Partial
     is_exact:    bool,
+    exact_in:    bool,
     block:       u64,
     nonce:       u64,
     recipient:   Address,
@@ -85,6 +86,10 @@ impl UserOrderBuilder {
         Self { amount, ..self }
     }
 
+    pub fn exact_in(self, exact_in: bool) -> Self {
+        Self { exact_in, ..self }
+    }
+
     pub fn min_price(self, min_price: Ray) -> Self {
         Self { min_price, ..self }
     }
@@ -103,6 +108,7 @@ impl UserOrderBuilder {
                     min_price: *self.min_price,
                     recipient: self.recipient,
                     nonce: self.nonce,
+                    exact_in: self.exact_in,
                     ..Default::default()
                 };
                 if let Some(signer) = self.signing_key {
@@ -151,6 +157,7 @@ impl UserOrderBuilder {
                     amount: self.amount,
                     min_price: *self.min_price,
                     recipient: self.recipient,
+                    exact_in: self.exact_in,
                     ..Default::default()
                 };
                 if let Some(signer) = self.signing_key {

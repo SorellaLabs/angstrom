@@ -64,11 +64,10 @@ impl OrderGenerator {
 
         let price_samples: [f64; O] = self.price_distribution.sample_around_price();
 
-        let mut rng = rand::thread_rng();
         let book = core::array::from_fn(|i| {
             let price = price_samples[i];
             self.builder
-                .build_user_order(price, self.block_number + 1, rng.gen_bool(partial_pct))
+                .build_user_order(price, self.block_number + 1, partial_pct)
         });
 
         GeneratedPoolOrders { tob, book }

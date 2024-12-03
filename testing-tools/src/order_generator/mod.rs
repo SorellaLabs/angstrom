@@ -17,7 +17,6 @@ use order_builder::OrderBuilder;
 /// We will then generate orders around this sample point and stream
 /// them out of the order generator.
 pub struct OrderGenerator {
-    provider:           Box<dyn Provider>,
     block_number:       u64,
     cur_price:          f64,
     price_distribution: PriceDistribution,
@@ -25,12 +24,7 @@ pub struct OrderGenerator {
 }
 
 impl OrderGenerator {
-    pub fn new(
-        provider: Box<dyn Provider>,
-        pool_id: PoolId,
-        pool_data: SyncedUniswapPools,
-        block_number: u64
-    ) -> Self {
+    pub fn new(pool_id: PoolId, pool_data: SyncedUniswapPools, block_number: u64) -> Self {
         let price = pool_data
             .get(&pool_id)
             .unwrap()
@@ -44,7 +38,7 @@ impl OrderGenerator {
         let cur_price = price_distribution.generate_price();
         let builder = OrderBuilder::new(pool_id, pool_data);
 
-        Self { provider, block_number, price_distribution, cur_price, builder }
+        Self { block_number, price_distribution, cur_price, builder }
     }
 
     /// updates the block number and samples a new true price.
@@ -56,7 +50,6 @@ impl OrderGenerator {
     }
 
     pub fn generate_set<const O: usize>(&self, partial_pct: f64) -> GeneratedPoolOrders<O> {
-        // tob always goes to true price
         let tob = self
             .builder
             .build_tob_order(self.cur_price, self.block_number + 1);

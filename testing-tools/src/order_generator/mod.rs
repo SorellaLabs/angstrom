@@ -1,75 +1,66 @@
-use alloy::providers::Provider;
+use std::ops::Range;
+
 use angstrom_types::{
     primitive::PoolId,
     sol_bindings::{grouped_orders::GroupedVanillaOrder, rpc_orders::TopOfBlockOrder}
 };
+use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 mod order_builder;
-use order_builder::OrderBuilder;
+mod pool_order_generator;
+use pool_order_generator::PoolOrderGenerator;
 
-/// Order Generator is used for generating orders based off of
-/// the current pool state.
-///
-/// Currently the way this is built is for every block, a true price
-/// will be chosen based off of a sample of a normal distribution.
-/// We will then generate orders around this sample point and stream
-/// them out of the order generator.
 pub struct OrderGenerator {
-    block_number:       u64,
-    cur_price:          f64,
-    price_distribution: PriceDistribution,
-    builder:            OrderBuilder
+    pools:             Vec<PoolOrderGenerator>,
+    /// lower and upper bounds for the amount of book orders to generate
+    order_amt_range:   Range<usize>,
+    partial_pct_range: Range<f64>
 }
 
 impl OrderGenerator {
-    pub fn new(pool_id: PoolId, pool_data: SyncedUniswapPools, block_number: u64) -> Self {
-        let price = pool_data
-            .get(&pool_id)
-            .unwrap()
-            .read()
-            .unwrap()
-            .calculate_price();
+    pub fn new(
+        pool_data: SyncedUniswapPools,
+        block_number: u64,
+        order_amt_range: Range<usize>,
+        partial_pct_range: Range<f64>
+    ) -> Self {
+        let pools = pool_data
+            .iter()
+            .map(|(pool_id, pool_data)| {
+                PoolOrderGenerator::new(*pool_id, pool_data.clone(), block_number)
+            })
+            .collect::<Vec<_>>();
 
-        // bounds of 50% from start with a std of 3%
-        let mut price_distribution =
-            PriceDistribution::new(price, price * 1.5, price * 0.5, price * 0.03);
-        let cur_price = price_distribution.generate_price();
-        let builder = OrderBuilder::new(pool_id, pool_data);
-
-        Self { block_number, price_distribution, cur_price, builder }
+        Self { pools, order_amt_range, partial_pct_range }
     }
 
-    /// updates the block number and samples a new true price.
-    pub fn new_block(&mut self, block: u64) {
-        self.block_number = block;
-
-        let cur_price = self.price_distribution.generate_price();
-        self.cur_price = cur_price;
+    pub fn new_block(&mut self, block_number: u64) {
+        self.pools
+            .iter_mut()
+            .for_each(|pool| pool.new_block(block_number));
     }
 
-    pub fn generate_set<const O: usize>(&self, partial_pct: f64) -> GeneratedPoolOrders<O> {
-        let tob = self
-            .builder
-            .build_tob_order(self.cur_price, self.block_number + 1);
-
-        let price_samples: [f64; O] = self.price_distribution.sample_around_price();
-
-        let book = core::array::from_fn(|i| {
-            let price = price_samples[i];
-            self.builder
-                .build_user_order(price, self.block_number + 1, partial_pct)
-        });
-
-        GeneratedPoolOrders { tob, book }
+    pub fn generate_orders(&self) -> Vec<GeneratedPoolOrders> {
+        let mut rng = rand::thread_rng();
+        self.pools
+            .iter()
+            .map(|pool| {
+                pool.generate_set(
+                    rng.gen_range(self.order_amt_range.clone()),
+                    rng.gen_range(self.partial_pct_range.clone())
+                )
+            })
+            .collect::<Vec<_>>()
     }
 }
 
 /// container for orders generated for a specific pool
-pub struct GeneratedPoolOrders<const N: usize> {
-    pub tob:  TopOfBlockOrder,
-    pub book: [GroupedVanillaOrder; N]
+pub struct GeneratedPoolOrders {
+    pub pool_id: PoolId,
+    pub tob:     TopOfBlockOrder,
+    pub book:    Vec<GroupedVanillaOrder>
 }
 
 /// samples from a normal price distribution where true price is a
@@ -89,16 +80,17 @@ impl<const N: usize> PriceDistribution<N> {
     }
 
     /// samples around mean price
-    pub fn sample_around_price<const O: usize>(&self) -> [f64; O] {
+    pub fn sample_around_price(&self, amount: usize) -> Vec<f64> {
         let price_avg = self.last_prices.iter().sum::<f64>() / N as f64;
         let normal = Normal::new(price_avg, price_avg / self.sd_factor).unwrap();
         let mut rng = rand::thread_rng();
 
-        core::array::from_fn(|_| {
+        vec![
             normal
                 .sample(&mut rng)
-                .clamp(self.lower_bound, self.upper_bound)
-        })
+                .clamp(self.lower_bound, self.upper_bound);
+            amount
+        ]
     }
 
     /// updates the mean price

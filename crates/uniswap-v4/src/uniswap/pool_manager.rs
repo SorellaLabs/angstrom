@@ -34,7 +34,10 @@ use crate::uniswap::{
 
 pub type StateChangeCache<Loader, A> = HashMap<A, ArrayDeque<StateChange<Loader, A>, 150>>;
 pub type SyncedUniswapPools<A = PoolId, Loader = DataLoader<A>> =
-    Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>>;
+    Arc<HashMap<A, Arc<RwLock<EnhancedUniswapPool<Loader, A>>>>>;
+
+pub type SyncedUniswapPool<A = PoolId, Loader = DataLoader<A>> =
+    Arc<RwLock<EnhancedUniswapPool<Loader, A>>>;
 
 const MODULE_NAME: &str = "UniswapV4";
 
@@ -70,7 +73,7 @@ where
 
         let rwlock_pools = pools
             .into_iter()
-            .map(|pool| (pool.address(), RwLock::new(pool)))
+            .map(|pool| (pool.address(), Arc::new(RwLock::new(pool))))
             .collect();
         Self {
             pools: Arc::new(rwlock_pools),
@@ -96,7 +99,7 @@ where
         self.pools.keys()
     }
 
-    pub fn pools(&self) -> Arc<HashMap<A, RwLock<EnhancedUniswapPool<Loader, A>>>> {
+    pub fn pools(&self) -> SyncedUniswapPools<A, Loader> {
         self.pools.clone()
     }
 

@@ -110,7 +110,6 @@ mod tests {
         }
     };
     use alloy_primitives::FixedBytes;
-    use alloy_sol_types::{eip712_domain, Eip712Domain};
     use angstrom_types::{
         contract_bindings::{
             angstrom::Angstrom::{AngstromInstance, PoolKey},
@@ -210,18 +209,11 @@ mod tests {
         let uniswap = UniswapEnv::new(anvil).await.unwrap();
         let env = AngstromEnv::new(uniswap).await.unwrap();
         let angstrom = AngstromInstance::new(env.angstrom(), env.provider());
-        let angstrom_addr = env.angstrom;
         println!("Angstrom: {}", angstrom.address());
         println!("Controller: {}", controller);
         println!("Uniswap: {}", env.pool_manager());
         println!("PoolGate: {}", env.pool_gate());
 
-        let domain: Eip712Domain = eip712_domain!(
-           name: "Angstrom",
-           version: "v1",
-           chain_id: 1,
-           verifying_contract: angstrom_addr,
-        );
         let pool_gate = PoolGateInstance::new(env.pool_gate(), env.provider());
         let raw_c0 = MintableMockERC20::deploy(env.provider()).await.unwrap();
 

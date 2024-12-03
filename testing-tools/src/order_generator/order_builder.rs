@@ -1,29 +1,28 @@
 use alloy::primitives::{I256, U256};
 use angstrom_types::{
     matching::{Ray, SqrtPriceX96},
-    primitive::{AngstromSigner, PoolId},
+    primitive::AngstromSigner,
     sol_bindings::{grouped_orders::GroupedVanillaOrder, rpc_orders::TopOfBlockOrder}
 };
 use rand::Rng;
 use tracing::info;
-use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPool;
 
 use crate::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 
 pub struct OrderBuilder {
     keys:      Vec<AngstromSigner>,
-    pool_id:   PoolId,
     /// pools to based orders off of
-    pool_data: SyncedUniswapPools
+    pool_data: SyncedUniswapPool
 }
 
 impl OrderBuilder {
-    pub fn new(pool_id: PoolId, pool_data: SyncedUniswapPools) -> Self {
-        Self { keys: vec![AngstromSigner::random(); 10], pool_id, pool_data }
+    pub fn new(pool_data: SyncedUniswapPool) -> Self {
+        Self { keys: vec![AngstromSigner::random(); 10], pool_data }
     }
 
     pub fn build_tob_order(&self, cur_price: f64, block_number: u64) -> TopOfBlockOrder {
-        let pool = self.pool_data.get(&self.pool_id).unwrap().read().unwrap();
+        let pool = self.pool_data.read().unwrap();
         let p_price = pool.calculate_price();
         // if the pool price > than price we want. given t1 / t0 -> more t0 less t1 ->
         // cur_price
@@ -63,7 +62,7 @@ impl OrderBuilder {
         let mut rng = rand::thread_rng();
         let is_partial = rng.gen_bool(partial_pct);
 
-        let pool = self.pool_data.get(&self.pool_id).unwrap().read().unwrap();
+        let pool = self.pool_data.read().unwrap();
         let p_price = pool.calculate_price();
         let unshifted_price = Ray::from(pool.calculate_price_unshifted());
         // if the pool price > than price we want. given t1 / t0 -> more t0 less t1 ->

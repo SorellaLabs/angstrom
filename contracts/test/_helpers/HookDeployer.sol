@@ -18,10 +18,11 @@ abstract contract HookDeployer is Test {
         bytes32 initcodeHash;
     }
 
-    function deployHook(bytes memory initcode, uint160 flags, address factory)
-        internal
-        returns (bool success, address addr, bytes memory retdata)
-    {
+    function deployHook(
+        bytes memory initcode,
+        address factory,
+        function(address) internal pure returns (bool) isValidHookAddr
+    ) internal returns (bool success, address addr, bytes memory retdata) {
         Create2Params memory params = Create2Params(
             (uint256(0xff) << 160) | uint256(uint160(factory)), 0, keccak256(initcode)
         );
@@ -31,7 +32,7 @@ abstract contract HookDeployer is Test {
                 addr :=
                     and(keccak256(add(params, 11), 85), 0xffffffffffffffffffffffffffffffffffffffff)
             }
-            if (uint160(addr) & Hooks.ALL_HOOK_MASK == flags) break;
+            if (isValidHookAddr(addr)) break;
             unchecked {
                 params.salt++;
             }

@@ -15,7 +15,7 @@ import {stdError} from "forge-std/StdError.sol";
 import {OrderMeta, TopOfBlockOrder} from "test/_reference/OrderTypes.sol";
 import {TickLib} from "src/libraries/TickLib.sol";
 import {HookDeployer} from "./HookDeployer.sol";
-import {ANGSTROM_HOOK_FLAGS} from "src/Constants.sol";
+import {hasAngstromHookFlags} from "src/modules/UniConsumer.sol";
 import {TypedDataHasherLib} from "src/types/TypedDataHasher.sol";
 import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "src/libraries/PoolConfigStore.sol";
 import {PairLib} from "test/_reference/Pair.sol";
@@ -47,8 +47,8 @@ contract BaseTest is Test, HookDeployer {
         bool success;
         (success, addr,) = deployHook(
             bytes.concat(initcode, abi.encode(uni, controller)),
-            ANGSTROM_HOOK_FLAGS,
-            CREATE2_FACTORY
+            CREATE2_FACTORY,
+            hasAngstromHookFlags
         );
         assertTrue(success);
     }

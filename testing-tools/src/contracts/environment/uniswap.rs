@@ -101,7 +101,7 @@ where
             .pool_gate()
             .addLiquidity(asset0, asset1, lower_tick, upper_tick, liquidity, FixedBytes::default())
             .into_transaction_request();
-        println!("TX REQ: {tx:?}");
+        debug!("TX REQ: {tx:?}");
 
         self.pool_gate()
             .addLiquidity(asset0, asset1, lower_tick, upper_tick, liquidity, FixedBytes::default())

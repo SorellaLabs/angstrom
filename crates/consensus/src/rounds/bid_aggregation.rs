@@ -38,6 +38,7 @@ pub struct BidAggregationState {
 impl BidAggregationState {
     pub fn new(transition_timeout: Duration) -> Self {
         let sleep = sleep(transition_timeout);
+        tracing::info!("starting bid aggregation");
 
         Self {
             received_pre_proposals:    HashSet::default(),
@@ -101,6 +102,7 @@ where
         }
 
         if self.transition_timeout.poll_unpin(cx).is_ready() {
+            tracing::info!("transitioning out of order aggregation");
             // create the transition
             let pre_proposal = PreProposalState::new(
                 handles.block_height,

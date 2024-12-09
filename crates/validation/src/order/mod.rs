@@ -88,7 +88,8 @@ impl OrderValidationResults {
         &mut self,
         sim: &SimValidation<DB>,
         token_price: &TokenPriceGenerator,
-        is_limit: bool
+        is_limit: bool,
+        block: u64
     ) where
         DB: Unpin
             + Clone
@@ -108,6 +109,7 @@ impl OrderValidationResults {
                     order,
                     sim,
                     token_price,
+                    block,
                     |order| match order {
                         AllOrders::Standing(s) => GroupedVanillaOrder::Standing(s),
                         AllOrders::Flash(f) => GroupedVanillaOrder::KillOrFill(f),
@@ -133,6 +135,7 @@ impl OrderValidationResults {
                     order,
                     sim,
                     token_price,
+                    block,
                     |order| match order {
                         AllOrders::TOB(s) => s,
                         _ => unreachable!()
@@ -159,12 +162,14 @@ impl OrderValidationResults {
         order: OrderWithStorageData<Old>,
         sim: &SimValidation<DB>,
         token_price: &TokenPriceGenerator,
+        block: u64,
         map_new: impl Fn(Old) -> New,
         map_old: impl Fn(New) -> Old,
         calculate_function: impl Fn(
             &SimValidation<DB>,
             &OrderWithStorageData<New>,
-            &TokenPriceGenerator
+            &TokenPriceGenerator,
+            u64
         ) -> eyre::Result<(u64, U256)>
     ) -> eyre::Result<OrderWithStorageData<Old>>
     where
@@ -175,7 +180,7 @@ impl OrderValidationResults {
             .try_map_inner(move |order| Ok(map_new(order)))
             .unwrap();
 
-        let (gas_units, gas_used) = (calculate_function)(sim, &order, token_price)?;
+        let (gas_units, gas_used) = (calculate_function)(sim, &order, token_price, block)?;
         order.priority_data.gas += gas_used;
         order.priority_data.gas_units = gas_units;
 

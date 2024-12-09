@@ -315,7 +315,9 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             .iter()
             .filter(|(_, v)| {
                 v.deadline.map(|i| i <= expiry_deadline).unwrap_or_default()
-                    || v.flash_block.map(|b| b != block_number).unwrap_or_default()
+                    || v.flash_block
+                        .map(|b| b != block_number + 1)
+                        .unwrap_or_default()
             })
             .map(|(k, _)| *k)
             .collect::<Vec<_>>();
@@ -470,9 +472,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
     }
 
     fn notify_order_subscribers(&mut self, update: PoolManagerUpdate) {
-        if let Err(e) = self.orders_subscriber_tx.send(update) {
-            error!("could not send order update {:?}", e)
-        }
+        let _ = self.orders_subscriber_tx.send(update);
     }
 
     fn notify_validation_subscribers(&mut self, hash: &B256, result: OrderValidationResults) {
@@ -593,6 +593,9 @@ where
                     if let Ok(prop) = self.handle_validated_order(next) {
                         validated.push(prop);
                     }
+                }
+                OrderValidatorRes::TransitionComplete => {
+                    validated.push(PoolInnerEvent::HasTransitionedToNewBlock(self.block_number));
                 }
             }
         }

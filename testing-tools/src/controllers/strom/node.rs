@@ -68,7 +68,8 @@ where
         initial_validators: Vec<AngstromValidator>,
         inital_angstrom_state: InitialTestnetState,
         block_provider: BroadcastStream<(u64, Vec<alloy_rpc_types::Transaction>)>,
-        agents: Vec<F>
+        agents: Vec<F>,
+        block_sync: GlobalBlockSync
     ) -> eyre::Result<Self>
     where
         F: for<'a> Fn(
@@ -96,7 +97,8 @@ where
             initial_validators,
             block_provider,
             inital_angstrom_state,
-            agents
+            agents,
+            block_sync
         )
         .await?;
 

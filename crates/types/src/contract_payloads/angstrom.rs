@@ -499,6 +499,7 @@ impl AngstromBundle {
         let (t0, t1) = {
             let token_in = user_order.token_in();
             let token_out = user_order.token_out();
+
             if token_in < token_out {
                 (token_in, token_out)
             } else {
@@ -518,6 +519,14 @@ impl AngstromBundle {
             price_1over0: U256::from(1)
         };
         pairs.push(pair);
+
+        asset_builder.external_swap(
+            AssetBuilderStage::TopOfBlock,
+            user_order.token_in(),
+            user_order.token_out(),
+            user_order.quantity_in,
+            user_order.quantity_out
+        );
 
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of_max_gas(user_order, 0));
@@ -839,6 +848,9 @@ impl AngstromBundle {
         // this should never underflow. if it does. means that there is underlying
         // problem with the gas delegation module
         assert!(gas_details.total_gas_cost_wei > total_gas);
+        if total_swaps == 0 {
+            return Err(eyre::eyre!("have a total swaps count of 0"));
+        }
         let shared_gas_in_wei = (gas_details.total_gas_cost_wei - total_gas) / total_swaps;
 
         // fetch gas used

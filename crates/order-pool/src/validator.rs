@@ -216,17 +216,12 @@ where
                 tracing::info!("starting regular processing");
                 *this = new_state;
                 cx.waker().wake_by_ref();
-                Poll::Pending
+
+                Poll::Ready(Some(OrderValidatorRes::TransitionComplete))
             }
-            OrderValidator::RegularProcessing { remaining_futures, .. } => {
-                remaining_futures.poll_next_unpin(cx).map(|inner| {
-                    inner
-                        .map(OrderValidatorRes::ValidatedOrder)
-                        .inspect(|order| {
-                            tracing::debug!(?order, "order has been validated");
-                        })
-                })
-            }
+            OrderValidator::RegularProcessing { remaining_futures, .. } => remaining_futures
+                .poll_next_unpin(cx)
+                .map(|inner| inner.map(OrderValidatorRes::ValidatedOrder))
         }
     }
 }
@@ -238,5 +233,7 @@ pub enum OrderValidatorRes {
     /// Once all orders for the previous block have been validated. we go
     /// through all the addresses and orders and cleanup. once this is done
     /// we can go back to general flow.
-    EnsureClearForTransition { block: u64, orders: Vec<B256>, addresses: Vec<Address> }
+    EnsureClearForTransition { block: u64, orders: Vec<B256>, addresses: Vec<Address> },
+    /// has fully transitioned to new block
+    TransitionComplete
 }

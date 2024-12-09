@@ -258,7 +258,8 @@ impl TokenPriceGenerator {
             // token 0 / token1 * token1 / weth  = token0 / weth
             Some(first_hop_price * second_hop_price)
         } else {
-            panic!("found a token that doesn't have a 1 hop to WETH")
+            tracing::error!("found a token that doesn't have a 1 hop to WETH");
+            Some(U256::from(1))
         }
     }
 }

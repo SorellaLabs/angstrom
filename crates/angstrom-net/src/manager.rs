@@ -179,6 +179,11 @@ impl<DB: Unpin> Future for StromNetworkManager<DB> {
                                 let _ = tx.send(StromConsensusEvent::PreProposal(peer_id, p));
                             });
                         }
+                        StromMessage::PreProposeAgg(p) => {
+                            self.to_consensus_manager.as_ref().inspect(|tx| {
+                                let _ = tx.send(StromConsensusEvent::PreProposalAgg(peer_id, p));
+                            });
+                        }
                         StromMessage::Propose(a) => {
                             self.to_consensus_manager.as_ref().inspect(|tx| {
                                 let _ = tx.send(StromConsensusEvent::Proposal(peer_id, a));
@@ -190,7 +195,7 @@ impl<DB: Unpin> Future for StromNetworkManager<DB> {
                                     .send(NetworkOrderEvent::IncomingOrders { peer_id, orders: a });
                             });
                         }
-                        _ => {}
+                        StromMessage::Status(_) => {}
                     },
                     SwarmEvent::Disconnected { peer_id } => {
                         self.notify_listeners(StromNetworkEvent::SessionClosed {

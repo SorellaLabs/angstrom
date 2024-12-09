@@ -1,9 +1,9 @@
-use std::{collections::HashSet, pin::Pin};
+use std::{cell::Cell, collections::HashSet, pin::Pin, sync::Arc};
 
-use alloy::providers::ext::AnvilApi;
+use alloy::{primitives::Address, providers::ext::AnvilApi};
 use alloy_primitives::U256;
-use angstrom_types::testnet::InitialTestnetState;
-use futures::Future;
+use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
+use futures::{Future, StreamExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
 use reth_tasks::TaskExecutor;
@@ -76,7 +76,7 @@ where
     {
         let mut initial_angstrom_state = None;
 
-        let configs = (0..self.config.node_count())
+        let mut configs = (0..self.config.node_count())
             .map(|_| {
                 let node_id = self.incr_peer_id();
                 TestingNodeConfig::new(node_id, self.config.clone(), 100)
@@ -87,49 +87,120 @@ where
             .iter()
             .map(|node_config| node_config.angstrom_validator())
             .collect::<Vec<_>>();
+        let node_addresses = configs
+            .iter()
+            .map(|c| c.angstrom_signer().address())
+            .collect::<Vec<_>>();
 
-        for node_config in configs {
-            let node_id = node_config.node_id;
-            tracing::info!(node_id, "connecting to state provider");
-            let provider = if self.config.is_leader(node_id) {
-                tracing::info!(?node_id, "leader node init");
-                let (p, initial_state) = self.leader_initialization(node_config.clone()).await?;
-                initial_angstrom_state = Some(initial_state);
-                p
-            } else {
-                tracing::info!(?node_id, "follower node init");
-                AnvilProvider::new(WalletProvider::new(node_config.clone()), true).await?
-            };
-
-            tracing::info!(node_id, "connected to state provider");
-
-            let mut node = TestnetNode::new(
-                c.clone(),
-                node_config.clone(),
-                provider,
-                initial_validators.clone(),
-                initial_angstrom_state.clone().unwrap(),
-                self.block_provider.subscribe_to_new_blocks(),
-                agents.clone()
+        // initialize leader provider
+        let front = configs.remove(0);
+        let l_block_sync = GlobalBlockSync::new(0);
+        let leader_provider = Arc::new(Cell::new(
+            self.initalize_leader_provider(
+                l_block_sync.clone(),
+                front,
+                &mut initial_angstrom_state,
+                node_addresses
             )
-            .await?;
+            .await?
+        ));
+        // take the provider and then set all people in the testnet as nodes.
 
-            tracing::info!(node_id, "made angstrom node");
+        let nodes = futures::stream::iter(configs.into_iter())
+            .map(|node_config| {
+                let block_s = l_block_sync.clone();
+                let block_st = self.block_provider.subscribe_to_new_blocks();
+                let c = c.clone();
+                let initial_validators = initial_validators.clone();
+                let initial_angstrom_state = initial_angstrom_state.clone().unwrap();
+                let agents = agents.clone();
+                let leader_provider = leader_provider.clone();
 
+                async move {
+                    let node_id = node_config.node_id;
+                    let block_sync = if node_id == 0 { block_s } else { GlobalBlockSync::new(0) };
+
+                    tracing::info!(node_id, "connecting to state provider");
+                    let provider = if node_id == 0 {
+                        leader_provider.replace(
+                            AnvilProvider::new(
+                                WalletProvider::new(node_config.clone()),
+                                true,
+                                block_sync.clone()
+                            )
+                            .await?
+                        )
+                    } else {
+                        tracing::info!(?node_id, "follower node init");
+                        AnvilProvider::new(
+                            WalletProvider::new(node_config.clone()),
+                            true,
+                            block_sync.clone()
+                        )
+                        .await?
+                    };
+
+                    tracing::info!(node_id, "connected to state provider");
+
+                    let node_pk = node_config.angstrom_signer().id();
+
+                    let node = TestnetNode::new(
+                        c,
+                        node_config,
+                        provider,
+                        initial_validators,
+                        initial_angstrom_state,
+                        block_st,
+                        agents.clone(),
+                        block_sync
+                    )
+                    .await?;
+                    tracing::info!(?node_pk, "node pk!!!!!!!!!!!");
+
+                    tracing::info!(node_id, "made angstrom node");
+
+                    eyre::Ok((node_id, node))
+                }
+            })
+            .buffer_unordered(100)
+            .collect::<Vec<_>>()
+            .await;
+
+        for res in nodes {
+            let (node_id, mut node) = res?;
             node.connect_to_all_peers(&mut self.peers).await;
-            tracing::info!(node_id, "connected to all peers");
-
             self.peers.insert(node_id, node);
         }
 
         Ok(())
     }
 
+    async fn initalize_leader_provider(
+        &mut self,
+        block_sync: GlobalBlockSync,
+        node_config: TestingNodeConfig<TestnetConfig>,
+        initial_angstrom_state: &mut Option<InitialTestnetState>,
+        node_addresses: Vec<Address>
+    ) -> eyre::Result<AnvilProvider<WalletProvider>> {
+        let (p, initial_state) = self
+            .leader_initialization(node_config.clone(), block_sync.clone(), node_addresses)
+            .await?;
+        *initial_angstrom_state = Some(initial_state);
+        Ok(p)
+    }
+
     async fn leader_initialization(
         &mut self,
-        config: TestingNodeConfig<TestnetConfig>
+        config: TestingNodeConfig<TestnetConfig>,
+        block_sync: GlobalBlockSync,
+        node_addresses: Vec<Address>
     ) -> eyre::Result<(AnvilProvider<WalletProvider>, InitialTestnetState)> {
-        let mut provider = AnvilProvider::new(AnvilInitializer::new(config.clone()), true).await?;
+        let mut provider = AnvilProvider::new(
+            AnvilInitializer::new(config.clone(), node_addresses),
+            true,
+            block_sync
+        )
+        .await?;
         self._anvil_instance = Some(provider._instance.take().unwrap());
 
         let initializer = provider.provider_mut().provider_mut();
@@ -138,7 +209,7 @@ where
         let initial_state = initializer.initialize_state_no_bytes().await?;
         initializer
             .rpc_provider()
-            .anvil_mine(Some(U256::from(5)), None)
+            .anvil_mine(Some(U256::from(10)), None)
             .await?;
 
         Ok((provider.into_state_provider(), initial_state))

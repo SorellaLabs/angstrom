@@ -157,6 +157,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<(Vec<PoolSolution>, BundleGasDetails)> {
+        tracing::info!("starting to build proposal");
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
         let books = Self::build_non_proposal_books(limit.clone(), &pool_snapshots);

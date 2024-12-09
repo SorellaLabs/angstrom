@@ -190,6 +190,7 @@ where
             pool_manager_tx.clone(),
             pool_storage
         );
+        self.global_sync.register(MODULE_NAME);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -277,30 +278,6 @@ where
     V: OrderValidatorHandle<Order = AllOrders>,
     GlobalSync: BlockSyncConsumer
 {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        order_indexer: OrderIndexer<V>,
-        network: StromNetworkHandle,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
-        eth_network_events: UnboundedReceiverStream<EthEvent>,
-        global_sync: GlobalSync,
-        _command_tx: UnboundedSender<OrderCommand>,
-        command_rx: UnboundedReceiverStream<OrderCommand>,
-        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        _pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
-    ) -> Self {
-        Self {
-            strom_network_events,
-            network,
-            order_indexer,
-            peer_to_info: HashMap::new(),
-            order_events,
-            command_rx,
-            eth_network_events,
-            global_sync
-        }
-    }
-
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
             OrderCommand::NewOrder(_, order, validation_response) => self

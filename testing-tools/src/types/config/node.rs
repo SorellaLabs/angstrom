@@ -54,7 +54,8 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
     }
 
     pub fn angstrom_validator(&self) -> AngstromValidator {
-        AngstromValidator::new(pk2id(&self.pub_key), self.voting_power)
+        let id = self.angstrom_signer().id();
+        AngstromValidator::new(id, self.voting_power)
     }
 
     pub fn address(&self) -> Address {

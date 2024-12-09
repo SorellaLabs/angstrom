@@ -36,15 +36,15 @@ pub struct WeightedRoundRobin {
 
 impl WeightedRoundRobin {
     pub fn new(validators: Vec<AngstromValidator>, block_number: BlockNumber) -> Self {
-        let file_path = format!("{}/state.json", ROUND_ROBIN_CACHE);
-        if let Ok(mut file) = File::open(file_path) {
-            let mut contents = String::new();
-            if file.read_to_string(&mut contents).is_ok() {
-                if let Ok(state) = serde_json::from_str(&contents) {
-                    return state
-                }
-            }
-        }
+        // let file_path = format!("{}/state.json", ROUND_ROBIN_CACHE);
+        // if let Ok(mut file) = File::open(file_path) {
+        //     let mut contents = String::new();
+        //     if file.read_to_string(&mut contents).is_ok() {
+        //         if let Ok(state) = serde_json::from_str(&contents) {
+        //             return state
+        //         }
+        //     }
+        // }
         WeightedRoundRobin {
             validators: HashSet::from_iter(validators),
             new_joiner_penalty_factor: PENALTY_FACTOR,
@@ -82,7 +82,10 @@ impl WeightedRoundRobin {
     fn priority(a: &&AngstromValidator, b: &&AngstromValidator) -> Ordering {
         a.priority
             .partial_cmp(&b.priority)
-            .unwrap_or(Ordering::Equal)
+            // TODO: not the best because it encourages mining lower peer ids
+            // however we need a way for this to be uniform across nodes and
+            // this is the easiest
+            .unwrap_or_else(|| a.peer_id.cmp(&b.peer_id))
     }
 
     fn center_priorities(&mut self) {
@@ -135,6 +138,10 @@ impl WeightedRoundRobin {
         //    ideal, since nodes who were offline will not have seen the reorg, thus
         //    would not have executed the extra rounds after this if statement
         if block_number <= self.block_number {
+            if self.last_proposer.is_none() {
+                self.last_proposer = Some(self.proposer_selection());
+            }
+
             return self.last_proposer
         }
 

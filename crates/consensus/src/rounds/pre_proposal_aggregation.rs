@@ -54,6 +54,7 @@ impl PreProposalAggregationState {
         // ensure we get polled to start the checks for when we have 2f +1 pre_proposals
         // collected
         waker.wake_by_ref();
+        tracing::info!("starting pre proposal aggregation");
 
         Self { pre_proposals_aggregation, proposal: None, waker }
     }
@@ -103,11 +104,17 @@ where
                 cx.waker().clone()
             ))))
         }
+        let cur_preproposals_aggs = self.pre_proposals_aggregation.len();
+        let twthr = handles.two_thirds_of_validation_set();
 
         // if  we are the leader, then we will transition
-        if self.pre_proposals_aggregation.len() >= handles.two_thirds_of_validation_set()
-            && handles.i_am_leader()
-        {
+        if cur_preproposals_aggs >= twthr && handles.i_am_leader() {
+            tracing::info!(
+                ?cur_preproposals_aggs,
+                ?twthr,
+                is_leader = handles.i_am_leader(),
+                "aggregation transition to proposal"
+            );
             return Poll::Ready(Some(Box::new(ProposalState::new(
                 std::mem::take(&mut self.pre_proposals_aggregation),
                 handles,

@@ -41,6 +41,7 @@ where
 {
     /// allows us to set values to ensure
     pub db:         Arc<DB>,
+    pub node_id:    u64,
     pub client:     ValidationClient,
     pub underlying: Validator<DB, AngstromPoolsTracker, AutoMaxFetchUtils>
 }
@@ -60,7 +61,8 @@ where
         uniswap_pools: SyncedUniswapPools,
         token_conversion: TokenPriceGenerator,
         token_updates: Pin<Box<dyn Stream<Item = Vec<PairsWithPrice>> + Send + Sync + 'static>>,
-        pool_storage: AngstromPoolsTracker
+        pool_storage: AngstromPoolsTracker,
+        node_id: u64
     ) -> eyre::Result<Self> {
         let current_block = Arc::new(AtomicU64::new(BlockNumReader::best_block_number(&db)?));
         let db = Arc::new(db);
@@ -69,7 +71,7 @@ where
 
         let handle = tokio::runtime::Handle::current();
         let thread_pool = KeySplitThreadpool::new(handle, 3);
-        let sim = SimValidation::new(db.clone(), pool_manager_address);
+        let sim = SimValidation::new(db.clone(), pool_manager_address, node_address);
 
         let order_validator =
             OrderValidator::new(sim, current_block, pool_storage, fetch, uniswap_pools).await;
@@ -79,7 +81,7 @@ where
 
         let val = Validator::new(validator_rx, order_validator, bundle_validator, shared_utils);
 
-        Ok(Self { db, client: validation_client, underlying: val })
+        Ok(Self { db, client: validation_client, underlying: val, node_id })
     }
 
     pub async fn poll_for(&mut self, duration: Duration) {
@@ -111,7 +113,11 @@ where
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        self.underlying.poll_unpin(cx)
+        let span = tracing::span!(tracing::Level::ERROR, "validator", self.node_id);
+        let e = span.enter();
+        let r = self.underlying.poll_unpin(cx);
+        drop(e);
+        r
     }
 }
 

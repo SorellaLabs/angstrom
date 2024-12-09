@@ -15,7 +15,7 @@ use pade::PadeDecode;
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{span, Level};
+use tracing::{span, Instrument, Level};
 
 pub struct AnvilEthDataCleanser<S: Stream<Item = (u64, Vec<Transaction>)>> {
     testnet_node_id:             u64,
@@ -51,7 +51,14 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
             block_sync
         };
 
-        tp.spawn_critical("eth handle", Box::pin(this));
+        tp.spawn_critical(
+            "eth handle",
+            Box::pin(this.instrument(tracing::span!(
+                Level::ERROR,
+                "data cleanser",
+                testnet_node_id
+            )))
+        );
 
         let handle = EthHandle::new(tx);
 
@@ -127,24 +134,16 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> Future
     type Output = ();
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let span = span!(Level::TRACE, "node", id = self.testnet_node_id);
+        let span = span!(Level::ERROR, "node", id = self.testnet_node_id);
         let e = span.enter();
 
-        let mut work = 1048;
-        loop {
-            if let Poll::Ready(Some(block)) = self.block_subscription.poll_next_unpin(cx) {
-                tracing::trace!(block_number = block.0, "received new block from anvil");
-                self.on_new_block(block);
-            }
-            if let Poll::Ready(Some(cmd)) = self.commander.poll_next_unpin(cx) {
-                tracing::trace!("received command from channel");
-                self.on_command(cmd);
-            }
-            work -= 1;
-            if work == 0 {
-                cx.waker().wake_by_ref();
-                break;
-            }
+        while let Poll::Ready(Some(block)) = self.block_subscription.poll_next_unpin(cx) {
+            tracing::trace!(block_number = block.0, "received new block from anvil");
+            self.on_new_block(block);
+        }
+        while let Poll::Ready(Some(cmd)) = self.commander.poll_next_unpin(cx) {
+            tracing::trace!("received command from channel");
+            self.on_command(cmd);
         }
 
         drop(e);

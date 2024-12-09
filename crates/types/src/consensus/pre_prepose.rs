@@ -81,7 +81,6 @@ impl PreProposal {
 impl PreProposal {
     fn sign_payload(sk: &AngstromSigner, payload: Vec<u8>) -> Signature {
         let hash = keccak256(payload);
-
         sk.sign_hash_sync(&hash).unwrap()
     }
 
@@ -103,6 +102,9 @@ impl PreProposal {
         orders: OrderSet<GroupedVanillaOrder, TopOfBlockOrder>
     ) -> Self {
         let OrderSet { limit, searcher } = orders;
+        let limit_orders = limit.len();
+        let searcher_orders = searcher.len();
+        tracing::info!(%limit_orders,%searcher_orders, %ethereum_height,"building my pre_proposal");
         Self::generate_pre_proposal(ethereum_height, sk, limit, searcher)
     }
 

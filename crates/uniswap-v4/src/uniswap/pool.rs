@@ -102,7 +102,7 @@ where
             .sorted_unstable_by(|a, b| a.0.cmp(b.0))
             .map_windows(|[(tick_lower, _), (tick_upper, tick_inner_upper)]| {
                 // ensure everything is spaced properly
-                assert_eq!(**tick_upper - **tick_lower, self.tick_spacing);
+                assert_eq!(tick_upper.abs() - tick_lower.abs(), self.tick_spacing);
                 LiqRange::new(**tick_lower, **tick_upper, tick_inner_upper.liquidity_net as u128)
                     .unwrap()
             })

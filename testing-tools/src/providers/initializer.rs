@@ -246,7 +246,7 @@ impl AnvilInitializer {
                     .from(self.provider.controller())
                     .nonce(nonce + 3 + (i as u64))
                     .into_transaction_request();
-                debug!("TX REQ: {tx:?}");
+                tracing::error!("TX REQ: {tx:?}");
             }
 
             let add_liq = self

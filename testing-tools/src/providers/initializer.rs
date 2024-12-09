@@ -232,6 +232,23 @@ impl AnvilInitializer {
             let lower = I24::unchecked_from(tick - (pool_key.tickSpacing.as_i32() * (101 - i)));
             let upper = lower + pool_key.tickSpacing;
 
+            if i == 0 {
+                let tx = self
+                    .pool_gate
+                    .addLiquidity(
+                        pool_key.currency0,
+                        pool_key.currency1,
+                        lower,
+                        upper,
+                        U256::from(liquidity),
+                        FixedBytes::<32>::default()
+                    )
+                    .from(self.provider.controller())
+                    .nonce(nonce + 3 + (i as u64))
+                    .into_transaction_request();
+                debug!("TX REQ: {tx:?}");
+            }
+
             let add_liq = self
                 .pool_gate
                 .addLiquidity(

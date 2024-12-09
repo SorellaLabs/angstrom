@@ -97,6 +97,12 @@ where
         upper_tick: I24,
         liquidity: U256
     ) -> eyre::Result<TxHash> {
+        let tx = self
+            .pool_gate()
+            .addLiquidity(asset0, asset1, lower_tick, upper_tick, liquidity, FixedBytes::default())
+            .into_transaction_request();
+        println!("TX REQ: {tx:?}");
+
         self.pool_gate()
             .addLiquidity(asset0, asset1, lower_tick, upper_tick, liquidity, FixedBytes::default())
             .run_safe()

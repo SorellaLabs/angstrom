@@ -47,6 +47,7 @@ pub fn run() -> eyre::Result<()> {
         let pool = channels.get_pool_handle();
         let executor_clone = executor.clone();
         let validation_client = ValidationClient(channels.validator_tx.clone());
+
         let NodeHandle { node, node_exit_future } = builder
             .with_types::<EthereumNode>()
             .with_components(

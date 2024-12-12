@@ -65,7 +65,7 @@ impl OrderBuilder {
         let is_partial = rng.gen_bool(partial_pct);
 
         let pool = self.pool_data.read().unwrap();
-        let unshifted_price = Ray::from(pool.calculate_price_unshifted());
+        let unshifted_price = Ray::from(cur_price);
         // if the pool price > than price we want. given t1 / t0 -> more t0 less t1 ->
         // cur_price
 
@@ -92,12 +92,13 @@ impl OrderBuilder {
         // 50% amount range
         let modifier = rng.gen_range(0.5..=1.5);
         let amount = (amount_in as f64 * modifier) as u128;
+        let direction: bool = rng.gen();
 
         UserOrderBuilder::new()
             .signing_key(self.keys.get(rng.gen_range(0..10)).cloned())
             .is_exact(!is_partial)
-            .asset_in(if zfo { token0 } else { token1 })
-            .asset_out(if !zfo { token0 } else { token1 })
+            .asset_in(if direction { token0 } else { token1 })
+            .asset_out(if !direction { token0 } else { token1 })
             .is_standing(false)
             .exact_in(true)
             .min_price(unshifted_price)

@@ -68,6 +68,7 @@ impl FinalizationState {
             .boxed();
 
         waker.wake_by_ref();
+        tracing::info!("finalization");
 
         Self { verification_future: future, completed: false }
     }

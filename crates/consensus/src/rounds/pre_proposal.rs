@@ -53,6 +53,7 @@ impl PreProposalState {
         // ensure we get polled to start the checks for when we have 2f +1 pre_proposals
         // collected
         waker.wake_by_ref();
+        tracing::info!("starting pre proposal");
 
         Self { pre_proposals, pre_proposals_aggregation, proposal: None, waker }
     }
@@ -107,7 +108,11 @@ where
             ))))
         }
 
-        if self.pre_proposals.len() >= handles.two_thirds_of_validation_set() {
+        let cur_preproposals = self.pre_proposals.len();
+        let twthr = handles.two_thirds_of_validation_set();
+        if cur_preproposals >= twthr {
+            tracing::info!("got two thrids, moving to pre proposal aggregation");
+
             return Poll::Ready(Some(Box::new(PreProposalAggregationState::new(
                 std::mem::take(&mut self.pre_proposals),
                 std::mem::take(&mut self.pre_proposals_aggregation),

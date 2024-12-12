@@ -157,7 +157,7 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        let span = span!(Level::TRACE, "node", id = this.eth_peer.node_id);
+        let span = span!(Level::ERROR, "node", id = this.eth_peer.node_id);
         let e = span.enter();
 
         if this.eth_peer.fut.poll_unpin(cx).is_ready() {
@@ -240,16 +240,14 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        let span = span!(Level::TRACE, "node", id = this.node_id);
-        let e = span.enter();
-
-        if this.lock.load(Ordering::Relaxed) && this.inner.lock_arc().poll_unpin(cx).is_ready() {
-            return Poll::Ready(())
-        }
-
-        drop(e);
-
-        cx.waker().wake_by_ref();
-        Poll::Pending
+        let span = span!(Level::ERROR, "node", id = this.node_id);
+        span.in_scope(|| {
+            if this.lock.load(Ordering::Relaxed) && this.inner.lock_arc().poll_unpin(cx).is_ready()
+            {
+                return Poll::Ready(())
+            }
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        })
     }
 }

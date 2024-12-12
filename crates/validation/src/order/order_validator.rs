@@ -24,9 +24,9 @@ use crate::{
 };
 
 pub struct OrderValidator<DB, Pools, Fetch> {
-    sim:          SimValidation<DB>,
-    state:        StateValidation<Pools, Fetch>,
-    block_number: Arc<AtomicU64>
+    sim:                     SimValidation<DB>,
+    state:                   StateValidation<Pools, Fetch>,
+    pub(crate) block_number: Arc<AtomicU64>
 }
 
 impl<DB, Pools, Fetch> OrderValidator<DB, Pools, Fetch>
@@ -91,7 +91,8 @@ where
                             results.add_gas_cost_or_invalidate(
                                 &cloned_sim,
                                 &token_conversion,
-                                true
+                                true,
+                                block_number
                             );
 
                             let _ = tx.send(results);
@@ -107,7 +108,8 @@ where
                             results.add_gas_cost_or_invalidate(
                                 &cloned_sim,
                                 &token_conversion,
-                                false
+                                false,
+                                block_number
                             );
 
                             let _ = tx.send(results);

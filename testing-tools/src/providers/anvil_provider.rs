@@ -8,6 +8,7 @@ use alloy::{
     signers::local::PrivateKeySigner
 };
 use alloy_primitives::Bytes;
+use angstrom_types::block_sync::GlobalBlockSync;
 
 use super::{AnvilStateProvider, WalletProvider};
 use crate::{contracts::anvil::WalletProviderRpc, types::WithWalletProvider};
@@ -21,12 +22,13 @@ impl<P> AnvilProvider<P>
 where
     P: WithWalletProvider
 {
-    pub async fn new<F>(fut: F, testnet: bool) -> eyre::Result<Self>
+    pub async fn new<F>(fut: F, testnet: bool, block_sync: GlobalBlockSync) -> eyre::Result<Self>
     where
         F: Future<Output = eyre::Result<(P, Option<AnvilInstance>)>>
     {
         let (provider, anvil) = fut.await?;
-        let this = Self { provider: AnvilStateProvider::new(provider), _instance: anvil };
+        let this =
+            Self { provider: AnvilStateProvider::new(provider, block_sync), _instance: anvil };
         if testnet {
             tokio::spawn(
                 this.provider
@@ -114,7 +116,7 @@ where
 }
 
 impl AnvilProvider<WalletProvider> {
-    pub async fn spawn_new_isolated() -> eyre::Result<Self> {
+    pub async fn spawn_new_isolated(block_sync: GlobalBlockSync) -> eyre::Result<Self> {
         let anvil = Anvil::new()
             .block_time(12)
             .chain_id(1)
@@ -137,7 +139,10 @@ impl AnvilProvider<WalletProvider> {
         tracing::info!("connected to anvil");
 
         Ok(Self {
-            provider:  AnvilStateProvider::new(WalletProvider::new_with_provider(rpc, sk)),
+            provider:  AnvilStateProvider::new(
+                WalletProvider::new_with_provider(rpc, sk),
+                block_sync
+            ),
             _instance: Some(anvil)
         })
     }

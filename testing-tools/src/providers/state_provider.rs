@@ -3,6 +3,7 @@ use std::{future::IntoFuture, time::Duration};
 use alloy::{providers::Provider, rpc::types::Block};
 use alloy_primitives::{Address, BlockNumber, B256, U256};
 use alloy_rpc_types::BlockId;
+use angstrom_types::block_sync::{BlockSyncProducer, GlobalBlockSync};
 use eyre::bail;
 use futures::stream::StreamExt;
 use reth_provider::{
@@ -23,15 +24,17 @@ use crate::{
 pub struct AnvilStateProvider<P> {
     provider:       P,
     canon_state:    AnvilConsensusCanonStateNotification,
-    canon_state_tx: broadcast::Sender<CanonStateNotification>
+    canon_state_tx: broadcast::Sender<CanonStateNotification>,
+    block_sync:     GlobalBlockSync
 }
 
 impl<P: WithWalletProvider> AnvilStateProvider<P> {
-    pub(crate) fn new(provider: P) -> Self {
+    pub(crate) fn new(provider: P, block_sync: GlobalBlockSync) -> Self {
         Self {
             provider,
             canon_state: AnvilConsensusCanonStateNotification::new(),
-            canon_state_tx: broadcast::channel(1000).0
+            canon_state_tx: broadcast::channel(1000).0,
+            block_sync
         }
     }
 
@@ -60,7 +63,8 @@ impl<P: WithWalletProvider> AnvilStateProvider<P> {
         AnvilStateProvider {
             provider:       self.provider.wallet_provider(),
             canon_state:    self.canon_state.clone(),
-            canon_state_tx: self.canon_state_tx.clone()
+            canon_state_tx: self.canon_state_tx.clone(),
+            block_sync:     self.block_sync.clone()
         }
     }
 
@@ -91,6 +95,10 @@ impl<P: WithWalletProvider> AnvilStateProvider<P> {
                     .await
                     .unwrap()
                     .unwrap();
+                tracing::info!("updating block sync");
+                self.block_sync.new_block(block.header.number);
+                tracing::info!("updating cannon chain");
+
                 self.update_canon_chain(&block).unwrap();
             }
         }

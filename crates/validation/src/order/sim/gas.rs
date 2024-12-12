@@ -1,8 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use alloy::{
-    primitives::{address, keccak256, Address, TxKind, B256, U160, U256},
-    rlp::Bytes,
+    primitives::{address, keccak256, Address, Bytes, TxKind, B256, U160, U256},
     sol_types::{SolCall, SolValue}
 };
 use angstrom_types::{
@@ -42,7 +41,9 @@ const DEFAULT_CREATE2_FACTORY: Address = address!("4e59b44847b379578588920cA78Fb
 pub struct OrderGasCalculations<DB> {
     db:               CacheDB<Arc<DB>>,
     // the deployed addresses in cache_db
-    angstrom_address: Address
+    angstrom_address: Address,
+    /// the address(pubkey) of this node.
+    node_address:     Option<Address>
 }
 
 impl<DB> OrderGasCalculations<DB>
@@ -50,80 +51,87 @@ where
     DB: Unpin + Clone + 'static + revm::DatabaseRef + BlockNumReader,
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
-    pub fn new(db: Arc<DB>, angstrom_address: Option<Address>) -> eyre::Result<Self> {
+    pub fn new(
+        db: Arc<DB>,
+        angstrom_address: Option<Address>,
+        node_address: Address
+    ) -> eyre::Result<Self> {
         if let Some(angstrom_address) = angstrom_address {
-            Ok(Self { db: CacheDB::new(db), angstrom_address })
+            Ok(Self { db: CacheDB::new(db), angstrom_address, node_address: Some(node_address) })
         } else {
             let ConfiguredRevm { db, angstrom } =
                 Self::setup_revm_cache_database_for_simulation(db)?;
 
-            Ok(Self { db, angstrom_address: angstrom })
+            Ok(Self { db, angstrom_address: angstrom, node_address: None })
         }
     }
 
     pub fn gas_of_tob_order(
         &self,
-        tob: &OrderWithStorageData<TopOfBlockOrder>
+        tob: &OrderWithStorageData<TopOfBlockOrder>,
+        block: u64
     ) -> eyre::Result<GasUsed> {
         self.execute_on_revm(
             &HashMap::default(),
             OverridesForTestAngstrom {
-                amount_in:    U256::from(tob.amount_in()),
-                amount_out:   U256::from(tob.quantity_out),
-                token_out:    tob.token_out(),
-                token_in:     tob.token_in(),
-                user_address: tob.from()
+                flipped_order: Address::ZERO,
+                amount_in:     U256::from(tob.amount_in()),
+                amount_out:    U256::from(tob.quantity_out),
+                token_out:     tob.token_out(),
+                token_in:      tob.token_in(),
+                user_address:  tob.from()
             },
             |execution_env| {
                 let bundle = AngstromBundle::build_dummy_for_tob_gas(tob)
                     .unwrap()
                     .pade_encode();
+                let bundle_bytes: Bytes = bundle.into();
+                execution_env.block.number = U256::from(block + 1);
 
                 let tx = &mut execution_env.tx;
-                tx.caller = DEFAULT_FROM;
+                tx.caller = self.node_address.unwrap_or(DEFAULT_FROM);
                 tx.transact_to = TxKind::Call(self.angstrom_address);
                 tx.data = angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new(
-                    (bundle.into(),)
+                    (bundle_bytes,)
                 )
                 .abi_encode()
                 .into();
-                tx.value = U256::from(0);
-                tx.nonce = None;
             }
         )
+        .map_err(|e| eyre!("tob order err={}", e))
     }
 
     pub fn gas_of_book_order(
         &self,
-        order: &OrderWithStorageData<GroupedVanillaOrder>
+        order: &OrderWithStorageData<GroupedVanillaOrder>,
+        block: u64
     ) -> eyre::Result<GasUsed> {
+        let (bundle, other_from) = AngstromBundle::build_dummy_for_user_gas(order).unwrap();
+        let bundle = bundle.pade_encode();
         self.execute_on_revm(
             &HashMap::default(),
             OverridesForTestAngstrom {
-                amount_in:    U256::from(order.amount_in()),
-                // TODO: fix
-                amount_out:   U256::from(order.amount_in()),
-                token_out:    order.token_out(),
-                token_in:     order.token_in(),
-                user_address: order.from()
+                amount_in:     U256::from(order.amount_in()),
+                amount_out:    U256::from(order.amount_in()),
+                token_out:     order.token_out(),
+                token_in:      order.token_in(),
+                user_address:  order.from(),
+                flipped_order: other_from
             },
             |execution_env| {
-                let bundle = AngstromBundle::build_dummy_for_user_gas(order)
-                    .unwrap()
-                    .pade_encode();
+                execution_env.block.number = U256::from(block + 1);
 
                 let tx = &mut execution_env.tx;
-                tx.caller = DEFAULT_FROM;
+                tx.caller = self.node_address.unwrap_or(DEFAULT_FROM);
                 tx.transact_to = TxKind::Call(self.angstrom_address);
                 tx.data = angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new(
                     (bundle.into(),)
                 )
                 .abi_encode()
                 .into();
-                tx.value = U256::from(0);
-                tx.nonce = None;
             }
         )
+        .map_err(|e| eyre!("user order err={}", e))
     }
 
     fn execute_with_db<D: DatabaseRef, F>(db: D, f: F) -> eyre::Result<(ResultAndState, D)>
@@ -138,7 +146,6 @@ where
             .modify_env(|env| {
                 env.cfg.disable_balance_check = true;
                 env.cfg.limit_contract_code_size = Some(usize::MAX - 1);
-                env.cfg.disable_block_gas_limit = true;
                 env.cfg.disable_block_gas_limit = true;
             })
             .modify_tx_env(f)
@@ -231,30 +238,90 @@ where
         let mut cache_db = self.db.clone();
 
         // change approval of token in and then balance of token out
-        let OverridesForTestAngstrom { user_address, amount_in, amount_out, token_in, token_out } =
-            overrides;
+        let OverridesForTestAngstrom {
+            user_address,
+            flipped_order,
+            amount_in,
+            amount_out,
+            token_in,
+            token_out
+        } = overrides;
         // for the first 10 slots, we just force override everything to balance. because
         // of the way storage slots work in solidity. this shouldn't effect
         // anything
         // https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html
         for i in 0..10 {
-            let balance_amount_out_slot = keccak256((self.angstrom_address, i).abi_encode());
+            let balance_amount_out_slot_angstrom =
+                keccak256((self.angstrom_address, i).abi_encode());
 
-            //keccak256(angstrom . keccak256(user . idx)))
+            // user
+            let balance_amount_in_slot_user = keccak256((user_address, i).abi_encode());
             let approval_slot = keccak256(
                 (self.angstrom_address, keccak256((user_address, i).abi_encode())).abi_encode()
             );
 
-            cache_db
-                .insert_account_storage(token_out, balance_amount_out_slot.into(), amount_out)
-                .map_err(|e| eyre!("failed to insert account into storage {e:?}"))?;
+            // flipped
+            let balance_amount_in_slot_flipped = keccak256((flipped_order, i).abi_encode());
+            let approval_slot_flipped = keccak256(
+                (self.angstrom_address, keccak256((flipped_order, i).abi_encode())).abi_encode()
+            );
 
-            cache_db
-                .insert_account_storage(token_in, approval_slot.into(), amount_in)
-                .map_err(|e| eyre!("failed to insert account into storage {e:?}"))?;
+            // give angstrom both amounts of tokens.
+            Self::insert_into_storage(
+                &mut cache_db,
+                token_out,
+                balance_amount_out_slot_angstrom.into(),
+                amount_out
+            )?;
+
+            Self::insert_into_storage(
+                &mut cache_db,
+                token_in,
+                balance_amount_out_slot_angstrom.into(),
+                amount_in
+            )?;
+
+            // default user approvals + balances for tokens
+            Self::insert_into_storage(
+                &mut cache_db,
+                token_in,
+                balance_amount_in_slot_user.into(),
+                amount_in
+            )?;
+            Self::insert_into_storage(&mut cache_db, token_in, approval_slot.into(), amount_in)?;
+
+            // flipped approval + balances
+            Self::insert_into_storage(
+                &mut cache_db,
+                token_out,
+                balance_amount_in_slot_flipped.into(),
+                amount_out
+            )?;
+            Self::insert_into_storage(
+                &mut cache_db,
+                token_out,
+                approval_slot_flipped.into(),
+                amount_out
+            )?;
         }
 
         Ok(cache_db)
+    }
+
+    fn insert_into_storage(
+        cache_db: &mut CacheDB<Arc<DB>>,
+        token_address: Address,
+        slot: U256,
+        value: U256
+    ) -> eyre::Result<()> {
+        cache_db
+            .insert_account_storage(token_address, slot, value)
+            .map_err(|e| {
+                eyre!(
+                    "failed to insert
+            account into storage {e:?}"
+                )
+            })
     }
 
     fn execute_on_revm<F>(
@@ -305,11 +372,12 @@ struct ConfiguredRevm<DB> {
 }
 
 struct OverridesForTestAngstrom {
-    pub user_address: Address,
-    pub amount_in:    U256,
-    pub amount_out:   U256,
-    pub token_in:     Address,
-    pub token_out:    Address
+    pub flipped_order: Address,
+    pub user_address:  Address,
+    pub amount_in:     U256,
+    pub amount_out:    U256,
+    pub token_in:      Address,
+    pub token_out:     Address
 }
 
 pub fn mine_address_with_factory(
@@ -378,7 +446,7 @@ pub mod test {
     fn ensure_creation_of_mock_works() {
         let db_path = Path::new("/home/data/reth/db/");
         let db = load_reth_db(db_path);
-        let res = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None);
+        let res = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None, Address::ZERO);
 
         if let Err(e) = res.as_ref() {
             eprintln!("{}", e);
@@ -452,7 +520,8 @@ pub mod test {
         let db_path = Path::new("/home/data/reth/db/");
         let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
 
-        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None);
+        let gas_calculations =
+            OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None, Address::ZERO);
 
         assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
         let mut gas_calculations = gas_calculations.unwrap();
@@ -491,7 +560,8 @@ pub mod test {
         let db_path = Path::new("/home/data/reth/db/");
         let db = Arc::new(RethDbWrapper::new(load_reth_db(db_path)));
 
-        let gas_calculations = OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None);
+        let gas_calculations =
+            OrderGasCalculations::new(Arc::new(RethDbWrapper::new(db)), None, Address::ZERO);
 
         assert!(gas_calculations.is_ok(), "failed to deploy angstrom structure and v4 to chain");
         let mut gas_calculations = gas_calculations.unwrap();

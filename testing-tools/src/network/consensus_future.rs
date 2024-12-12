@@ -88,7 +88,7 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        let span = span!(Level::TRACE, "node", id = this.testnet_node_id);
+        let span = span!(Level::ERROR, "node", id = this.testnet_node_id);
         let e = span.enter();
 
         if this.running.load(Ordering::Relaxed) {

@@ -7,9 +7,9 @@ use angstrom_eth::handle::Eth;
 use angstrom_network::{pool_manager::PoolHandle, PoolManagerBuilder, StromNetworkHandle};
 use angstrom_rpc::{api::OrderApiServer, OrderApi};
 use angstrom_types::{
-    block_sync::GlobalBlockSync,
+    block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    mev_boost::MevBoostProvider,
+    mev_boost::{MevBoostProvider, SubmitTx},
     pair_with_price::PairsWithPrice,
     primitive::UniswapPoolRegistry,
     sol_bindings::testnet::TestnetHub,
@@ -23,6 +23,7 @@ use order_pool::{order_storage::OrderStorage, PoolConfig};
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TokioTaskExecutor;
 use tokio_stream::wrappers::BroadcastStream;
+use tracing::{span, Instrument};
 use validation::{
     common::TokenPriceGenerator, order::state::pools::AngstromPoolsTracker,
     validator::ValidationClient
@@ -33,7 +34,7 @@ use crate::{
     contracts::anvil::WalletProviderRpc,
     providers::{
         utils::StromContractInstance, AnvilEthDataCleanser, AnvilProvider, AnvilStateProvider,
-        WalletProvider
+        AnvilSubmissionProvider, WalletProvider
     },
     types::{
         config::TestingNodeConfig, GlobalTestingConfig, SendingStromHandles, WithWalletProvider
@@ -59,7 +60,8 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
         initial_validators: Vec<AngstromValidator>,
         block_rx: BroadcastStream<(u64, Vec<Transaction>)>,
         inital_angstrom_state: InitialTestnetState,
-        agents: Vec<F>
+        agents: Vec<F>,
+        block_sync: GlobalBlockSync
     ) -> eyre::Result<(
         Self,
         ConsensusManager<WalletProviderRpc, PubSubFrontend, MatcherHandle, GlobalBlockSync>,
@@ -99,7 +101,7 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
         };
 
         let block_number = BlockNumReader::best_block_number(&state_provider.state_provider())?;
-        let block_sync = GlobalBlockSync::new(block_number);
+        block_sync.set_block(block_number);
 
         let eth_handle = AnvilEthDataCleanser::spawn(
             node_config.node_id,
@@ -112,6 +114,18 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
             block_sync.clone()
         )
         .await?;
+        // wait for new block then clear all proposals and init rest.
+        // this gives us 12 seconds so we can ensure all nodes are on the same update
+
+        let b = state_provider
+            .state_provider()
+            .subscribe_to_canonical_state()
+            .recv()
+            .await
+            .expect("startup sequence failed");
+
+        block_sync.clear();
+        let block_number = b.tip().number;
 
         tracing::debug!(block_number, "creating strom internals");
 
@@ -140,7 +154,13 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
         .await;
 
         let uniswap_pools = uniswap_pool_manager.pools();
-        tokio::spawn(async move { uniswap_pool_manager.watch_state_changes().await });
+        tokio::spawn(
+            async move { uniswap_pool_manager.watch_state_changes().await }.instrument(span!(
+                tracing::Level::ERROR,
+                "pool manager",
+                node_config.node_id
+            ))
+        );
 
         let token_conversion = TokenPriceGenerator::new(
             Arc::new(state_provider.rpc_provider()),
@@ -172,7 +192,8 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
             uniswap_pools.clone(),
             token_conversion,
             token_price_update_stream,
-            pool_storage.clone()
+            pool_storage.clone(),
+            node_config.node_id
         )
         .await?;
 
@@ -220,8 +241,12 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
 
         tracing::debug!("created testnet hub and uniswap registry");
 
-        let mev_boost_provider =
-            MevBoostProvider::new_from_urls(Arc::new(state_provider.rpc_provider()), &[]);
+        let anvil = AnvilSubmissionProvider { provider: state_provider.rpc_provider() };
+
+        let mev_boost_provider = MevBoostProvider::new_from_raw(
+            Arc::new(state_provider.rpc_provider()),
+            vec![Arc::new(Box::new(anvil) as Box<dyn SubmitTx>)]
+        );
 
         tracing::debug!("created mev boost provider");
 
@@ -264,6 +289,7 @@ impl<P: WithWalletProvider> AngstromDevnetNodeInternals<P> {
 
         tracing::info!("created consensus manager");
 
+        block_sync.finalize_modules();
         Ok((
             Self {
                 rpc_port,

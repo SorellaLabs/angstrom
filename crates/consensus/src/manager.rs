@@ -72,14 +72,17 @@ where
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
+        tracing::info!(?validators, "setting up with validators");
         let mut leader_selection = WeightedRoundRobin::new(validators.clone(), current_height);
         let leader = leader_selection.choose_proposer(current_height).unwrap();
+        block_sync.register(MODULE_NAME);
+
         Self {
             strom_consensus_event,
             current_height,
             leader_selection,
             consensus_round_state: RoundStateMachine::new(
-                Duration::new(8, 0),
+                Duration::new(6, 0),
                 SharedRoundState::new(
                     current_height,
                     angstrom_address,
@@ -103,12 +106,14 @@ where
     }
 
     fn on_blockchain_state(&mut self, notification: CanonStateNotification, waker: Waker) {
+        tracing::info!("got new block_chain state");
         let new_block = notification.tip();
         self.current_height = new_block.block.number;
         let round_leader = self
             .leader_selection
             .choose_proposer(self.current_height)
             .unwrap();
+        tracing::info!(?round_leader, "selected new round leader");
 
         self.consensus_round_state
             .reset_round(self.current_height, round_leader);
@@ -159,7 +164,7 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        if let Poll::Ready(Some(msg)) = this.canonical_block_stream.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(msg)) = this.canonical_block_stream.poll_next_unpin(cx) {
             match msg {
                 Ok(notification) => this.on_blockchain_state(notification, cx.waker().clone()),
                 Err(e) => tracing::error!("Error receiving chain state notification: {}", e)

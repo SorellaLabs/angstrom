@@ -22,8 +22,7 @@ impl PoolOrderGenerator {
         let price = pool_data.read().unwrap().calculate_price();
 
         // bounds of 50% from start with a std of 10%
-        let mut price_distribution =
-            PriceDistribution::new(price, price * 1.5, price * 0.5, price * 0.1);
+        let mut price_distribution = PriceDistribution::new(price, price * 2.0, price * 0.5, price);
         let cur_price = price_distribution.generate_price();
         let builder = OrderBuilder::new(pool_data);
 
@@ -44,6 +43,7 @@ impl PoolOrderGenerator {
             .build_tob_order(self.cur_price, self.block_number + 1);
 
         let price_samples = self.price_distribution.sample_around_price(amount);
+        tracing::info!(?price_samples, "sampled prices for order generation");
         let mut book = vec![];
 
         for price in price_samples.into_iter().take(amount) {

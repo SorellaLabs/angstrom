@@ -1,6 +1,9 @@
 use std::{fmt::Debug, pin::Pin, sync::Arc};
 
-use alloy::{primitives::Address, sol_types::SolCall};
+use alloy::{
+    primitives::{Address, U256},
+    sol_types::SolCall
+};
 use angstrom_metrics::validation::ValidationMetrics;
 use angstrom_types::contract_payloads::angstrom::{AngstromBundle, BundleGasDetails};
 use eyre::eyre;
@@ -41,7 +44,8 @@ where
             Pin<Box<dyn Future<Output = ()> + Send + Sync>>,
             Handle
         >,
-        metrics: ValidationMetrics
+        metrics: ValidationMetrics,
+        number: u64
     ) {
         let node_address = self.node_address;
         let angstrom_address = self.angstrom_address;
@@ -58,6 +62,9 @@ where
                     .with_env_with_handler_cfg(EnvWithHandlerCfg::default())
                     .modify_env(|env| {
                         env.cfg.disable_balance_check = true;
+                    })
+                    .modify_block_env(|env| {
+                        env.number = U256::from(number + 1);
                     })
                     .modify_tx_env(|tx| {
                         tx.caller = node_address;
@@ -77,6 +84,7 @@ where
                     .unwrap();
 
                 if !result.result.is_success() {
+                    tracing::warn!(?result.result);
                     let _ = sender.send(Err(eyre!("transaction simulation failed")));
                     return
                 }

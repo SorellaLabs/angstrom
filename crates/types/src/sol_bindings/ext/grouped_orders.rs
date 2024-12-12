@@ -8,7 +8,7 @@ use alloy_primitives::B256;
 use pade::PadeDecode;
 use serde::{Deserialize, Serialize};
 
-use super::{RawPoolOrder, RespendAvoidanceMethod};
+use super::{GenerateFlippedOrder, RawPoolOrder, RespendAvoidanceMethod};
 use crate::{
     matching::Ray,
     orders::{OrderId, OrderLocation, OrderPriorityData},
@@ -146,6 +146,15 @@ pub struct OrderWithStorageData<Order> {
     /// holds expiry data
     pub order_id:           OrderId,
     pub tob_reward:         U256
+}
+
+impl<O: GenerateFlippedOrder> GenerateFlippedOrder for OrderWithStorageData<O> {
+    fn flip(&self) -> Self
+    where
+        Self: Sized
+    {
+        Self { order: self.order.flip(), is_bid: !self.is_bid, ..self.clone() }
+    }
 }
 
 impl<Order> Hash for OrderWithStorageData<Order> {
@@ -409,6 +418,7 @@ pub enum GroupedVanillaOrder {
     Standing(StandingVariants),
     KillOrFill(FlashVariants)
 }
+
 impl Default for GroupedVanillaOrder {
     fn default() -> Self {
         GroupedVanillaOrder::Standing(StandingVariants::Exact(ExactStandingOrder::default()))

@@ -3,7 +3,7 @@ use std::pin::Pin;
 use angstrom_eth::manager::ChainExt;
 use angstrom_rpc::{api::OrderApiClient, impls::OrderApi};
 use angstrom_types::{sol_bindings::grouped_orders::AllOrders, testnet::InitialTestnetState};
-use futures::{Future, StreamExt};
+use futures::{stream::FuturesUnordered, Future, StreamExt};
 use jsonrpsee::http_client::HttpClient;
 use reth_provider::{test_utils::NoopProvider, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
@@ -45,8 +45,8 @@ fn end_to_end_agent<'a>(
         let mut generator = OrderGenerator::new(
             agent_config.uniswap_pools.clone(),
             agent_config.current_block,
-            5..20,
-            0.05..0.1
+            20..50,
+            0.50..0.7
         );
 
         let mut stream =
@@ -63,23 +63,30 @@ fn end_to_end_agent<'a>(
                 let rpc_address = format!("http://{}", agent_config.rpc_address);
                 let client = HttpClient::builder().build(rpc_address).unwrap();
                 tracing::info!("waiting for new block");
-                while let Some(block_number) = stream.next().await {
-                    generator.new_block(block_number);
-                    let new_orders = generator.generate_orders();
-                    tracing::info!("generated new orders. submitting to rpc");
+                let mut pending_orders = FuturesUnordered::new();
 
-                    for orders in new_orders {
-                        let GeneratedPoolOrders { pool_id, tob, book } = orders;
-                        let all_orders = book
-                            .into_iter()
-                            .map(Into::into)
-                            .chain(vec![tob.into()])
-                            .collect::<Vec<AllOrders>>();
+                loop {
+                    tokio::select! {
+                        Some(block_number) = stream.next() => {
+                            generator.new_block(block_number);
+                            let new_orders = generator.generate_orders();
+                            tracing::info!("generated new orders. submitting to rpc");
 
-                        let order_res = client
-                            .send_orders(all_orders)
-                            .await
-                            .expect("failed to send orders");
+                            for orders in new_orders {
+                                let GeneratedPoolOrders { pool_id, tob, book } = orders;
+                                let all_orders = book
+                                    .into_iter()
+                                    .map(Into::into)
+                                    .chain(vec![tob.into()])
+                                    .collect::<Vec<AllOrders>>();
+
+                                 pending_orders.push(client.send_orders(all_orders));
+                            }
+                        }
+                        Some(resolved_order) = pending_orders.next() => {
+                            tracing::info!("orders resolved");
+                        }
+
                     }
                 }
             }

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::orders::OrderLocation;
 
+pub mod flips;
 pub mod grouped_orders;
 
 /// The capability of all default orders.
@@ -43,6 +44,12 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
 
     /// whether to use angstrom balances or not
     fn use_internal(&self) -> bool;
+}
+
+pub trait GenerateFlippedOrder: Send + Sync + Clone + Unpin + 'static {
+    fn flip(&self) -> Self
+    where
+        Self: Sized;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash, Copy)]

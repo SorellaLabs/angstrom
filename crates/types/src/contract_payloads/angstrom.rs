@@ -31,7 +31,7 @@ use crate::{
     contract_bindings::angstrom::Angstrom::PoolKey,
     matching::{uniswap::PoolSnapshot, Ray},
     orders::{OrderFillState, OrderOutcome, PoolSolution},
-    primitive::{PoolId, UniswapPoolRegistry},
+    primitive::{AngstromSigner, PoolId, UniswapPoolRegistry},
     sol_bindings::{
         grouped_orders::{
             FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
@@ -40,7 +40,7 @@ use crate::{
             ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder,
             TopOfBlockOrder as RpcTopOfBlockOrder
         },
-        RawPoolOrder
+        GenerateFlippedOrder, RawPoolOrder
     },
     testnet::TestnetStateOverrides
 };
@@ -481,7 +481,7 @@ impl AngstromBundle {
         user_order: &OrderWithStorageData<RpcTopOfBlockOrder>
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
-        let pool_updates = Vec::new();
+        let mut pool_updates = Vec::new();
         let mut pairs = Vec::new();
         let user_orders = Vec::new();
         let mut asset_builder = AssetBuilder::new();
@@ -491,6 +491,7 @@ impl AngstromBundle {
         let (t0, t1) = {
             let token_in = user_order.token_in();
             let token_out = user_order.token_out();
+
             if token_in < token_out {
                 (token_in, token_out)
             } else {
@@ -502,7 +503,6 @@ impl AngstromBundle {
         let t0_idx = asset_builder.add_or_get_asset(t0) as u16;
         let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
 
-        // TODO this wasn't done when pulled from davids branch.
         let pair = Pair {
             index0:       t0_idx,
             index1:       t1_idx,
@@ -510,6 +510,21 @@ impl AngstromBundle {
             price_1over0: U256::from(1)
         };
         pairs.push(pair);
+
+        asset_builder.external_swap(
+            AssetBuilderStage::TopOfBlock,
+            user_order.token_in(),
+            user_order.token_out(),
+            user_order.quantity_in,
+            user_order.quantity_out
+        );
+
+        pool_updates.push(PoolUpdate {
+            zero_for_one:     false,
+            pair_index:       0,
+            swap_in_quantity: user_order.quantity_out,
+            rewards_update:   super::rewards::RewardsUpdate::CurrentOnly { amount: 0 }
+        });
 
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of_max_gas(user_order, 0));
@@ -525,55 +540,71 @@ impl AngstromBundle {
 
     pub fn build_dummy_for_user_gas(
         user_order: &OrderWithStorageData<GroupedVanillaOrder>
-    ) -> eyre::Result<Self> {
+    ) -> eyre::Result<(Self, Address)> {
+        // in order to properly build this. we will create a fake order with the
+        // amount's flipped going the other way so we have a direct match and
+        // don't have to worry about balance deltas
+
         let top_of_block_orders = Vec::new();
         let pool_updates = Vec::new();
         let mut pairs = Vec::new();
         let mut user_orders = Vec::new();
         let mut asset_builder = AssetBuilder::new();
 
-        // Get the information for the pool or skip this solution if we can't find a
-        // pool for it
-        let (t0, t1) = {
-            let token_in = user_order.token_in();
-            let token_out = user_order.token_out();
-            if token_in < token_out {
-                (token_in, token_out)
-            } else {
-                (token_out, token_in)
+        let flipped_user = user_order.flip();
+        let flipped_from = flipped_user.from();
+
+        for user_order in vec![user_order, &flipped_user] {
+            // Get the information for the pool or skip this solution if we can't find a
+            // pool for it
+            let (t0, t1) = {
+                let token_in = user_order.token_in();
+                let token_out = user_order.token_out();
+                if token_in < token_out {
+                    (token_in, token_out)
+                } else {
+                    (token_out, token_in)
+                }
+            };
+            // Make sure the involved assets are in our assets array and we have the
+            // appropriate asset index for them
+            let t0_idx = asset_builder.add_or_get_asset(t0) as u16;
+            let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
+
+            // hacky but works
+            if pairs.is_empty() {
+                let pair = Pair {
+                    index0:       t0_idx,
+                    index1:       t1_idx,
+                    store_index:  0,
+                    price_1over0: U256::from(user_order.limit_price())
+                };
+                pairs.push(pair);
             }
-        };
-        // Make sure the involved assets are in our assets array and we have the
-        // appropriate asset index for them
-        let t0_idx = asset_builder.add_or_get_asset(t0) as u16;
-        let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
 
-        // TODO this wasn't done when pulled from davids branch.
-        let pair = Pair {
-            index0:       t0_idx,
-            index1:       t1_idx,
-            store_index:  0,
-            price_1over0: U256::from(1)
-        };
-        pairs.push(pair);
+            let pair_idx = pairs.len() - 1;
 
-        let pair_idx = pairs.len() - 1;
+            let outcome = OrderOutcome {
+                id:      user_order.order_id,
+                outcome: OrderFillState::CompleteFill
+            };
+            // Get our list of user orders, if we have any
+            user_orders.push(UserOrder::from_internal_order_max_gas(
+                user_order,
+                &outcome,
+                pair_idx as u16
+            ));
+        }
 
-        let outcome =
-            OrderOutcome { id: user_order.order_id, outcome: OrderFillState::CompleteFill };
-        // Get our list of user orders, if we have any
-        user_orders.push(UserOrder::from_internal_order_max_gas(
-            user_order,
-            &outcome,
-            pair_idx as u16
-        ));
-
-        Ok(Self::new(
-            asset_builder.get_asset_array(),
-            pairs,
-            pool_updates,
-            top_of_block_orders,
-            user_orders
+        Ok((
+            Self::new(
+                asset_builder.get_asset_array(),
+                pairs,
+                pool_updates,
+                top_of_block_orders,
+                user_orders
+            ),
+            flipped_from
         ))
     }
 
@@ -831,6 +862,9 @@ impl AngstromBundle {
         // this should never underflow. if it does. means that there is underlying
         // problem with the gas delegation module
         assert!(gas_details.total_gas_cost_wei > total_gas);
+        if total_swaps == 0 {
+            return Err(eyre::eyre!("have a total swaps count of 0"));
+        }
         let shared_gas_in_wei = (gas_details.total_gas_cost_wei - total_gas) / total_swaps;
 
         // fetch gas used

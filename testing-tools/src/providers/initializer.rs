@@ -46,7 +46,8 @@ pub struct AnvilInitializer {
 
 impl AnvilInitializer {
     pub async fn new<G: GlobalTestingConfig>(
-        config: TestingNodeConfig<G>
+        config: TestingNodeConfig<G>,
+        nodes: Vec<Address>
     ) -> eyre::Result<(Self, Option<AnvilInstance>)> {
         let (provider, anvil) = config.spawn_anvil_rpc().await?;
 
@@ -55,7 +56,7 @@ impl AnvilInitializer {
         tracing::info!("deployed UniV4 enviroment");
 
         tracing::debug!("deploying Angstrom enviroment");
-        let angstrom_env = AngstromEnv::new(uniswap_env).await?;
+        let angstrom_env = AngstromEnv::new(uniswap_env, nodes).await?;
         tracing::info!("deployed Angstrom enviroment");
 
         let angstrom =

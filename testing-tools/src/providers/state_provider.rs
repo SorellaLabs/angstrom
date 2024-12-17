@@ -2,13 +2,14 @@ use std::{future::IntoFuture, time::Duration};
 
 use alloy::{providers::Provider, rpc::types::Block};
 use alloy_primitives::{Address, BlockNumber, B256, U256};
-use alloy_rpc_types::BlockId;
+use alloy_rpc_types::{BlockId, BlockTransactionsKind};
 use angstrom_types::block_sync::{BlockSyncProducer, GlobalBlockSync};
 use eyre::bail;
 use futures::stream::StreamExt;
+use reth_primitives::EthPrimitives;
 use reth_provider::{
     BlockHashReader, BlockNumReader, CanonStateNotification, CanonStateNotifications,
-    CanonStateSubscriptions, ProviderError, ProviderResult
+    CanonStateSubscriptions, NodePrimitivesProvider, ProviderError, ProviderResult
 };
 use reth_revm::primitives::Bytecode;
 use tokio::sync::broadcast;
@@ -150,7 +151,10 @@ impl<P: WithWalletProvider> reth_revm::DatabaseRef for AnvilStateProvider<P> {
         let acc = async_to_sync(
             self.provider
                 .rpc_provider()
-                .get_block_by_number(reth_primitives::BlockNumberOrTag::Number(number), false)
+                .get_block_by_number(
+                    alloy_rpc_types::BlockNumberOrTag::Number(number),
+                    BlockTransactionsKind::Hashes
+                )
                 .into_future()
         )?;
 
@@ -240,7 +244,11 @@ impl<P: WithWalletProvider> BlockStateProviderFactory for AnvilStateProvider<P> 
 }
 
 impl<P: WithWalletProvider> CanonStateSubscriptions for AnvilStateProvider<P> {
-    fn subscribe_to_canonical_state(&self) -> CanonStateNotifications {
+    fn subscribe_to_canonical_state(&self) -> CanonStateNotifications<Self::Primitives> {
         self.canon_state_tx.subscribe()
     }
+}
+
+impl<P: WithWalletProvider> NodePrimitivesProvider for AnvilStateProvider<P> {
+    type Primitives = EthPrimitives;
 }

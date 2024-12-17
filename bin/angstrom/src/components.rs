@@ -31,11 +31,14 @@ use order_pool::{order_storage::OrderStorage, PoolConfig, PoolManagerUpdate};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
+    chainspec::ChainSpec,
+    primitives::EthPrimitives,
     providers::{BlockNumReader, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
-use reth_node_builder::FullNode;
+use reth_node_builder::{node::FullNodeTypes, rpc::RethRpcAddOns, FullNode, NodeTypes};
+use reth_provider::BlockReader;
 use tokio::sync::mpsc::{
     channel, unbounded_channel, Receiver, Sender, UnboundedReceiver, UnboundedSender
 };
@@ -126,14 +129,23 @@ pub fn initialize_strom_handles() -> StromHandles {
     }
 }
 
-pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeAddOns<Node>>(
+pub async fn initialize_strom_components<Node, AddOns>(
     config: AngstromConfig,
     signer: AngstromSigner,
     handles: StromHandles,
     network_builder: StromNetworkBuilder,
     node: FullNode<Node, AddOns>,
     executor: &TaskExecutor
-) {
+) where
+    Node: FullNodeComponents
+        + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
+    Node::Provider: BlockReader<
+        Block = reth::primitives::Block,
+        Receipt = reth::primitives::Receipt,
+        Header = reth::primitives::Header
+    >,
+    AddOns: NodeAddOns<Node> + RethRpcAddOns<Node>
+{
     let node_config = NodeConfig::load_from_config(Some(config.node_config)).unwrap();
 
     let node_address = signer.address();
@@ -145,7 +157,7 @@ pub async fn initialize_strom_components<Node: FullNodeComponents, AddOns: NodeA
 
     let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
         .with_recommended_fillers()
-        .on_builtin(node.rpc_server_handles.rpc.http_url().unwrap().as_str())
+        .on_builtin(node.rpc_server_handle().http_url().unwrap().as_str())
         .await
         .unwrap()
         .into();

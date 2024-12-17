@@ -6,7 +6,7 @@ use angstrom_types::{
     sol_bindings::grouped_orders::AllOrders
 };
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 
 use crate::{
     controllers::enviroments::{AngstromTestnet, DevnetStateMachine},
@@ -16,9 +16,9 @@ use crate::{
 
 pub trait WithCheckedAction<'a, C>
 where
-    C: BlockReader
-        + HeaderProvider
-        + ChainSpecProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
@@ -35,9 +35,9 @@ where
 
 impl<'a, C> WithCheckedAction<'a, C> for DevnetStateMachine<'a, C>
 where
-    C: BlockReader
-        + HeaderProvider
-        + ChainSpecProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>

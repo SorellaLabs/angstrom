@@ -17,7 +17,7 @@ use matching_engine::manager::MatcherHandle;
 use parking_lot::Mutex;
 use reth_chainspec::Hardforks;
 use reth_network::test_utils::Peer;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use tokio::task::JoinHandle;
 use tracing::{span, Level};
 
@@ -36,7 +36,12 @@ pub(crate) struct TestnetStateFutureLock<C, T> {
 
 impl<C, T> TestnetStateFutureLock<C, T>
 where
-    C: Unpin + BlockReader + 'static,
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
+        + ChainSpecProvider<ChainSpec: Hardforks>
+        + Unpin
+        + 'static,
     T: Provider<PubSubFrontend> + 'static
 {
     pub(crate) fn new(

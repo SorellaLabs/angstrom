@@ -3,15 +3,17 @@ use alloy::primitives::{
     Address, BlockHash, BlockNumber, Bytes, StorageKey, StorageValue, B256, U256
 };
 use reth_chainspec::ChainInfo;
-use reth_primitives::{BlockNumHash, Bytecode};
+use reth_primitives::Bytecode;
 use reth_provider::{
-    AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, ProviderResult,
-    StateProofProvider, StateProvider, StateProviderFactory
+    AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, HashedPostStateProvider,
+    ProviderResult, StateProofProvider, StateProvider, StateProviderFactory
 };
 use reth_storage_api::{StateRootProvider, StorageRootProvider};
 use reth_trie::{
-    updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof, TrieInput
+    updates::TrieUpdates, AccountProof, HashedPostState, HashedStorage, MultiProof,
+    StorageMultiProof, TrieInput
 };
+use revm::db::BundleState;
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -85,7 +87,7 @@ where
 
     fn convert_number(
         &self,
-        id: reth_primitives::BlockHashOrNumber
+        id: alloy::eips::BlockHashOrNumber
     ) -> reth_provider::ProviderResult<Option<B256>> {
         self.0.convert_number(id)
     }
@@ -100,7 +102,7 @@ where
 
     fn convert_hash_or_number(
         &self,
-        id: reth_primitives::BlockHashOrNumber
+        id: alloy::eips::BlockHashOrNumber
     ) -> reth_provider::ProviderResult<Option<BlockNumber>> {
         self.0.convert_hash_or_number(id)
     }
@@ -110,15 +112,15 @@ impl<DB> BlockIdReader for RethDbWrapper<DB>
 where
     DB: StateProviderFactory + Unpin + Clone + 'static
 {
-    fn pending_block_num_hash(&self) -> ProviderResult<Option<BlockNumHash>> {
+    fn pending_block_num_hash(&self) -> ProviderResult<Option<alloy::eips::BlockNumHash>> {
         self.0.pending_block_num_hash()
     }
 
-    fn safe_block_num_hash(&self) -> ProviderResult<Option<BlockNumHash>> {
+    fn safe_block_num_hash(&self) -> ProviderResult<Option<alloy::eips::BlockNumHash>> {
         self.0.safe_block_num_hash()
     }
 
-    fn finalized_block_num_hash(&self) -> ProviderResult<Option<BlockNumHash>> {
+    fn finalized_block_num_hash(&self) -> ProviderResult<Option<alloy::eips::BlockNumHash>> {
         self.0.finalized_block_num_hash()
     }
 }
@@ -137,7 +139,7 @@ where
 
     fn state_by_block_id(
         &self,
-        block_id: reth_primitives::BlockId
+        block_id: alloy::eips::BlockId
     ) -> reth_provider::ProviderResult<reth_provider::StateProviderBox> {
         self.0.state_by_block_id(block_id)
     }
@@ -165,7 +167,7 @@ where
 
     fn state_by_block_number_or_tag(
         &self,
-        number_or_tag: reth_primitives::BlockNumberOrTag
+        number_or_tag: alloy::eips::BlockNumberOrTag
     ) -> reth_provider::ProviderResult<reth_provider::StateProviderBox> {
         self.0.state_by_block_number_or_tag(number_or_tag)
     }
@@ -229,7 +231,7 @@ where
 
     fn convert_block_hash(
         &self,
-        hash_or_number: reth_primitives::BlockHashOrNumber
+        hash_or_number: alloy::eips::BlockHashOrNumber
     ) -> reth_provider::ProviderResult<Option<B256>> {
         self.0.latest()?.convert_block_hash(hash_or_number)
     }
@@ -240,6 +242,15 @@ where
         end: BlockNumber
     ) -> reth_provider::ProviderResult<Vec<B256>> {
         self.0.latest()?.canonical_hashes_range(start, end)
+    }
+}
+
+impl<DB> HashedPostStateProvider for RethDbWrapper<DB>
+where
+    DB: StateProviderFactory + Unpin + Clone + 'static
+{
+    fn hashed_post_state(&self, bundle_state: &BundleState) -> HashedPostState {
+        self.0.latest().unwrap().hashed_post_state(bundle_state)
     }
 }
 
@@ -291,6 +302,17 @@ where
         hashed_storage: HashedStorage
     ) -> ProviderResult<B256> {
         self.0.latest()?.storage_root(address, hashed_storage)
+    }
+
+    fn storage_multiproof(
+        &self,
+        address: Address,
+        slots: &[B256],
+        hashed_storage: HashedStorage
+    ) -> ProviderResult<StorageMultiProof> {
+        self.0
+            .latest()?
+            .storage_multiproof(address, slots, hashed_storage)
     }
 }
 

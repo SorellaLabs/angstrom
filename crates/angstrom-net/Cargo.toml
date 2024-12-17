@@ -36,12 +36,12 @@ reth-network-peers.workspace = true
 reth-node-builder.workspace = true
 reth.workspace = true
 
-reth-network-p2p = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-net-banlist = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-network-p2p = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-net-banlist = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
 reth-discv4.workspace = true
-reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
 
 alloy.workspace = true
 alloy-chains.workspace = true

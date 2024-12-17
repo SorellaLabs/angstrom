@@ -1,6 +1,7 @@
 use std::task::{Context, Poll};
 
 use alloy::{primitives::Address, rpc::types::Transaction, sol_types::SolCall};
+use alloy_rpc_types::TransactionTrait;
 use angstrom_eth::{
     handle::{EthCommand, EthHandle},
     manager::EthEvent
@@ -90,7 +91,7 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         // find angstrom tx
         let Some(angstrom_tx) = txes
             .into_iter()
-            .find(|tx| tx.to == Some(self.angstrom_contract))
+            .find(|tx| tx.to() == Some(self.angstrom_contract))
         else {
             tracing::info!("No angstrom txs found");
             self.send_events(EthEvent::NewBlockTransitions {
@@ -101,7 +102,7 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
 
             return
         };
-        let input = angstrom_tx.input;
+        let input = angstrom_tx.input();
 
         let Ok(bytes) = TestnetHub::executeCall::abi_decode(&input, false) else {
             tracing::warn!("found angstrom contract call thats not a bundle");

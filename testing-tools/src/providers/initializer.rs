@@ -12,6 +12,7 @@ use alloy_sol_types::SolValue;
 use angstrom_types::{
     contract_bindings::{
         angstrom::Angstrom::{AngstromInstance, PoolKey},
+        controller_v_1::ControllerV1::ControllerV1Instance,
         mintable_mock_erc_20::MintableMockERC20,
         pool_gate::PoolGate::PoolGateInstance
     },
@@ -40,6 +41,7 @@ use crate::{
 pub struct AnvilInitializer {
     provider:      WalletProvider,
     angstrom_env:  AngstromEnv<UniswapEnv<WalletProvider>>,
+    controller_v1: ControllerV1Instance<PubSubFrontend, WalletProviderRpc>,
     angstrom:      AngstromInstance<PubSubFrontend, WalletProviderRpc>,
     pool_gate:     PoolGateInstance<PubSubFrontend, WalletProviderRpc>,
     pending_state: PendingDeployedPools
@@ -64,10 +66,15 @@ impl AnvilInitializer {
             AngstromInstance::new(angstrom_env.angstrom(), angstrom_env.provider().clone());
         let pool_gate =
             PoolGateInstance::new(angstrom_env.pool_gate(), angstrom_env.provider().clone());
+        let controller_v1 = ControllerV1Instance::new(
+            angstrom_env.controller_v1(),
+            angstrom_env.provider().clone()
+        );
 
         let pending_state = PendingDeployedPools::new();
 
-        let this = Self { provider, angstrom_env, angstrom, pool_gate, pending_state };
+        let this =
+            Self { provider, controller_v1, angstrom_env, angstrom, pool_gate, pending_state };
 
         Ok((this, anvil))
     }
@@ -223,14 +230,28 @@ impl AnvilInitializer {
             .nonce(nonce)
             .deploy_pending()
             .await?;
-
         self.pending_state.add_pending_tx(configure_pool);
+
+        let controller_configure_pool = self
+            .controller_v1
+            .addPoolToMap(pool_key.currency0, pool_key.currency1)
+            // .configurePool(
+            //     pool_key.currency0,
+            //     pool_key.currency1,
+            //     pool_key.tickSpacing.as_i32() as u16,
+            //     pool_key.fee
+            // )
+            .from(self.provider.controller())
+            .nonce(nonce + 1)
+            .deploy_pending()
+            .await?;
+        self.pending_state.add_pending_tx(controller_configure_pool);
 
         tracing::debug!("initializing pool");
         self.angstrom
             .initializePool(pool_key.currency0, pool_key.currency1, store_index, *price)
             .from(self.provider.controller())
-            .nonce(nonce + 1)
+            .nonce(nonce + 2)
             .deploy_pending()
             .await?;
 
@@ -239,7 +260,7 @@ impl AnvilInitializer {
             .pool_gate
             .tickSpacing(pool_key.tickSpacing)
             .from(self.provider.controller())
-            .nonce(nonce + 2)
+            .nonce(nonce + 3)
             .deploy_pending()
             .await?;
 
@@ -261,7 +282,7 @@ impl AnvilInitializer {
                     FixedBytes::<32>::default()
                 )
                 .from(self.provider.controller())
-                .nonce(nonce + 3 + (i as u64))
+                .nonce(nonce + 4 + (i as u64))
                 .deploy_pending()
                 .await?;
 
@@ -337,12 +358,36 @@ impl WithWalletProvider for AnvilInitializer {
 #[cfg(test)]
 mod tests {
     use alloy::providers::Provider;
+    use alloy_primitives::TxKind;
+    use alloy_rpc_types::{BlockId, TransactionInput, TransactionRequest};
+    use alloy_sol_types::SolCall;
+    use angstrom_types::{
+        contract_bindings::controller_v_1::ControllerV1,
+        contract_payloads::angstrom::AngstromPoolConfigStore
+    };
 
     use super::*;
     use crate::types::config::DevnetConfig;
 
     async fn get_block(provider: &WalletProvider) -> eyre::Result<u64> {
         Ok(provider.provider.get_block_number().await?)
+    }
+
+    async fn view_call<IC>(
+        provider: &WalletProvider,
+        contract: Address,
+        call: IC
+    ) -> eyre::Result<IC::Return>
+    where
+        IC: SolCall + Send
+    {
+        let tx = TransactionRequest {
+            to: Some(TxKind::Call(contract)),
+            input: TransactionInput::both(call.abi_encode().into()),
+            ..Default::default()
+        };
+
+        Ok(IC::abi_decode_returns(&provider.provider().call(&tx).await?, true)?)
     }
 
     #[tokio::test]
@@ -366,5 +411,31 @@ mod tests {
             .unwrap();
 
         assert_eq!(current_block + 1, get_block(&initializer.provider).await.unwrap());
+
+        let config_store = AngstromPoolConfigStore::load_from_chain(
+            *initializer.angstrom.address(),
+            BlockId::latest(),
+            &initializer.provider.provider()
+        )
+        .await
+        .unwrap();
+
+        let partial_keys = config_store
+            .all_entries()
+            .iter()
+            .map(|val| FixedBytes::from(*val.pool_partial_key))
+            .collect::<Vec<_>>();
+
+        println!("{partial_keys:?}");
+
+        let all_pools_call = view_call(
+            &initializer.provider,
+            *initializer.controller_v1.address(),
+            ControllerV1::getAllPoolsCall { storeKeys: partial_keys }
+        )
+        .await
+        .unwrap();
+
+        println!("{all_pools_call:?}")
     }
 }

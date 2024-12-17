@@ -5,8 +5,9 @@ use alloy::{
     providers::Provider,
     transports::TransportResult
 };
+use alloy_rpc_types::{BlockNumberOrTag, BlockTransactionsKind};
 use eyre::bail;
-use reth_primitives::{Account, BlockNumberOrTag};
+use reth_primitives::Account;
 use reth_provider::{ProviderError, ProviderResult};
 use reth_revm::primitives::Bytecode;
 use validation::common::db::{BlockStateProvider, BlockStateProviderFactory};
@@ -111,7 +112,10 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
     fn block_hash_ref(&self, number: u64) -> Result<alloy::primitives::B256, Self::Error> {
         let acc = async_to_sync(
             self.provider
-                .get_block_by_number(BlockNumberOrTag::Number(number), false)
+                .get_block_by_number(
+                    BlockNumberOrTag::Number(number),
+                    BlockTransactionsKind::Hashes
+                )
                 .into_future()
         )?;
 

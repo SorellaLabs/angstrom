@@ -6,6 +6,7 @@ use std::{
 };
 
 use alloy::{
+    consensus::Transaction,
     primitives::{Address, BlockHash, BlockNumber, B256},
     sol_types::SolEvent
 };
@@ -330,7 +331,7 @@ impl ChainExt for Chain {
     }
 
     fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
-        self.tip().transactions()
+        self.tip().transactions().into_iter()
     }
 }
 

@@ -2,7 +2,7 @@ use alloy::{
     primitives::{BlockNumber, U256},
     signers::{Signature, SignerSync}
 };
-use alloy_primitives::{keccak256, Parity};
+use alloy_primitives::keccak256;
 use bytes::Bytes;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,7 @@ impl Default for Proposal {
             source:       Default::default(),
             preproposals: Default::default(),
             solutions:    Default::default(),
-            signature:    Signature::new(U256::ZERO, U256::ZERO, Parity::default())
+            signature:    Signature::new(U256::ZERO, U256::ZERO, false)
         }
     }
 }

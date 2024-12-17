@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use alloy_rpc_types::Block;
 use parking_lot::RwLock;
+use reth_primitives::BlockExt;
 use reth_provider::{Chain, ExecutionOutcome};
 
 #[derive(Clone, Debug)]

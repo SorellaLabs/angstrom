@@ -72,6 +72,9 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
 
         Anvil::new()
             .chain_id(1)
+            .arg("--host")
+            .arg("0.0.0.0")
+            .port((9545 + self.node_id) as u16)
             .fork(self.global_config.eth_ws_url())
             .arg("--ipc")
             .arg(self.global_config.anvil_rpc_endpoint(self.node_id))
@@ -84,6 +87,9 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
     fn configure_devnet_anvil(&self) -> Anvil {
         let mut anvil_builder = Anvil::new()
             .chain_id(1)
+            .arg("--host")
+            .arg("0.0.0.0")
+            .port((9545 + self.node_id) as u16)
             .arg("--ipc")
             .arg(self.global_config.anvil_rpc_endpoint(self.node_id))
             .arg("--code-size-limit")

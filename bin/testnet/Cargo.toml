@@ -36,10 +36,8 @@ reth-blockchain-tree.workspace = true
 reth-beacon-consensus.workspace = true
 reth-tokio-util.workspace = true
 reth-ecies.workspace = true
-reth-discv4 = { workspace = true, features = [
-  "test-utils",
-] }
-reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-discv4 = { workspace = true, features = ["test-utils"] }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
 reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-network = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
@@ -95,7 +93,6 @@ ipc = []
 
 jemalloc = ["dep:tikv-jemallocator"]
 jemalloc-prof = ["jemalloc", "tikv-jemallocator?/profiling"]
-
 
 
 [[bin]]

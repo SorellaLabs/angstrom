@@ -5,7 +5,7 @@ use alloy_primitives::U256;
 use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
 use futures::Future;
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 
 use super::AngstromTestnet;
 use crate::{
@@ -20,9 +20,9 @@ use crate::{
 
 impl<C> AngstromTestnet<C, DevnetConfig, WalletProvider>
 where
-    C: BlockReader
-        + HeaderProvider
-        + ChainSpecProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>

@@ -234,8 +234,10 @@ mod tests {
         let controller = nodes[7];
 
         let controller_signing_key = AngstromSigner::new(
-            PrivateKeySigner::from_slice(&spawned_anvil.anvil.keys()[7].clone().to_bytes())
-                .unwrap()
+            PrivateKeySigner::from_slice(
+                &spawned_anvil.anvil.keys()[7].clone().to_bytes().to_vec()
+            )
+            .unwrap()
         );
 
         let uniswap = UniswapEnv::new(anvil).await.unwrap();

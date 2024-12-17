@@ -17,7 +17,7 @@ use reth_chainspec::Hardforks;
 use reth_metrics::common::mpsc::{
     metered_unbounded_channel, UnboundedMeteredReceiver, UnboundedMeteredSender
 };
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 pub use state_machine::*;
 use tokio_stream::StreamExt;
 use tracing::{span, Instrument, Level};
@@ -40,12 +40,12 @@ pub struct AngstromTestnet<C, G, P> {
 
 impl<C, G, P> AngstromTestnet<C, G, P>
 where
-    C: BlockReader
-        + HeaderProvider
-        + ChainSpecProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
+        + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + Clone
-        + ChainSpecProvider<ChainSpec: Hardforks>
         + 'static,
     G: GlobalTestingConfig,
     P: WithWalletProvider

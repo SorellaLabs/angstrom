@@ -44,6 +44,7 @@ impl PairsWithPrice {
             new_cannon_chain
                 .tip()
                 .transactions()
+                .iter()
                 .filter(|tx| tx.transaction.to() == Some(angstrom_address))
                 .filter_map(|transaction| {
                     let mut input: &[u8] = transaction.input();

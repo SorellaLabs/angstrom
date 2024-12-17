@@ -7,7 +7,7 @@ use alloy::{
     primitives::{keccak256, BlockNumber},
     signers::{Signature, SignerSync}
 };
-use alloy_primitives::{Parity, U256};
+use alloy_primitives::U256;
 use bytes::Bytes;
 use reth_network_peers::PeerId;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ pub struct PreProposal {
 impl Default for PreProposal {
     fn default() -> Self {
         Self {
-            signature:    Signature::new(U256::ZERO, U256::ZERO, Parity::default()),
+            signature:    Signature::new(U256::ZERO, U256::ZERO, false),
             block_height: Default::default(),
             source:       Default::default(),
             limit:        Default::default(),

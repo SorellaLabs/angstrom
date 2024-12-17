@@ -28,7 +28,7 @@ use reth_network::{
     test_utils::{Peer, PeerHandle},
     NetworkHandle, NetworkInfo, Peers
 };
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use tracing::instrument;
 
@@ -51,8 +51,9 @@ pub struct TestnetNode<C, P> {
 
 impl<C, P> TestnetNode<C, P>
 where
-    C: BlockReader
-        + HeaderProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + HeaderProvider<Header = reth_primitives::Header>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
         + ChainSpecProvider
         + Unpin
         + Clone

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use alloy_primitives::{keccak256, Address, FixedBytes, Signature, B256, U256};
+use alloy_primitives::{keccak256, Address, FixedBytes, PrimitiveSignature, B256, U256};
 use alloy_sol_types::SolValue;
 use angstrom_types::{
     orders::{OrderLocation, OrderStatus},
@@ -17,7 +17,7 @@ use crate::types::{OrderSubscriptionFilter, OrderSubscriptionKind};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CancelOrderRequest {
-    pub signature:    Signature,
+    pub signature:    PrimitiveSignature,
     // if there's no salt to make this a unique signing hash. One can just
     // copy the signature of the order and id and it will verify
     pub user_address: Address,

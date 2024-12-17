@@ -12,7 +12,7 @@ exclude.workspace = true
 consensus.workspace = true
 angstrom-types = { workspace = true, features = ["testnet"] }
 angstrom-utils.workspace = true
-uniswap-v4.workspace =true
+uniswap-v4.workspace = true
 angstrom-network.workspace = true
 angstrom-eth.workspace = true
 angstrom-rpc.workspace = true
@@ -41,14 +41,14 @@ reth-node-types.workspace = true
 reth-node-ethereum.workspace = true
 reth-revm.workspace = true
 revm.workspace = true
-reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
-reth-prune-types = { git = "https://github.com/paradigmxyz/reth", version = "1.1.0", tag = "v1.1.0" }
+reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-prune-types = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
 alloy-chains.workspace = true
 
 
@@ -85,5 +85,5 @@ tempfile.workspace = true
 
 parking_lot.workspace = true
 clap = { version = "4.5.4", features = ["derive"] }
-eyre = "0.6.12"
+eyre.workspace = true
 uniswap_v3_math.workspace = true

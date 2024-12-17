@@ -1,7 +1,7 @@
 use std::{future::Future, pin::Pin};
 
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 
 use crate::{
     controllers::enviroments::{AngstromTestnet, DevnetStateMachine},
@@ -11,12 +11,12 @@ use crate::{
 
 pub trait WithAction<'a, C>
 where
-    C: BlockReader
-        + HeaderProvider
-        + ChainSpecProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
+        + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + Clone
-        + ChainSpecProvider<ChainSpec: Hardforks>
         + 'static
 {
     type FunctionOutput = StateMachineActionHookFn<'a, C>;
@@ -26,12 +26,12 @@ where
 
 impl<'a, C> WithAction<'a, C> for DevnetStateMachine<'a, C>
 where
-    C: BlockReader
-        + HeaderProvider
-        + ChainSpecProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
+        + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + Clone
-        + ChainSpecProvider<ChainSpec: Hardforks>
         + 'static
 {
     fn advance_block(&mut self) {

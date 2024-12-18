@@ -696,10 +696,11 @@ impl AngstromBundle {
             // appropriate asset index for them
             let t0_idx = asset_builder.add_or_get_asset(*t0) as u16;
             let t1_idx = asset_builder.add_or_get_asset(*t1) as u16;
+
             // Build our Pair featuring our uniform clearing price
             // This price is in Ray format as requested.
             // TODO:  Get the store index so this can be correct
-            let ucp: U256 = *solution.ucp;
+            let ucp: U256 = *solution.ucp.inv_ray();
             let pair = Pair {
                 index0:       t0_idx,
                 index1:       t1_idx,

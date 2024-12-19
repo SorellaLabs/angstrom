@@ -281,6 +281,7 @@ impl<'a> VolumeFillMatcher<'a> {
                 }
                 Ordering::Less => {
                     println!("Less match");
+                    self.results.price = Some(bid.price());
                     // Our debt is greater than the order
                     // Find the end price of the debt and move it there
                     self.debt = self.debt.map(|d| d.partial_fill(matched));

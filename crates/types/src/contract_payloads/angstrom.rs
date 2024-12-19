@@ -800,7 +800,6 @@ impl AngstromBundle {
                 (false, false) => a.priority_data.cmp(&b.priority_data),
                 (..) => b.is_bid.cmp(&a.is_bid)
             });
-            println!("{:#?}", order_list);
             // Loop through our filled user orders, do accounting, and add them to our user
             // order list
             for (outcome, order) in solution
@@ -809,6 +808,8 @@ impl AngstromBundle {
                 .zip(order_list.iter())
                 .filter(|(outcome, _)| outcome.is_filled())
             {
+                assert_eq!(outcome.id.hash, order.order_id.hash);
+
                 let quantity_out = match outcome.outcome {
                     OrderFillState::PartialFill(p) => p,
                     _ => order.quantity()
@@ -1049,7 +1050,7 @@ impl AngstromBundle {
             // Sort the user order list so we can properly associate it with our
             // OrderOutcomes.  First bids by price then asks by price.
             order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
-                (true, true) => b.priority_data.cmp(&a.priority_data),
+                (true, true) => a.priority_data.cmp(&b.priority_data),
                 (false, false) => a.priority_data.cmp(&b.priority_data),
                 (..) => b.is_bid.cmp(&a.is_bid)
             });
@@ -1061,6 +1062,7 @@ impl AngstromBundle {
                 .zip(order_list.iter())
                 .filter(|(outcome, _)| outcome.is_filled())
             {
+                assert_eq!(outcome.id.hash, order.order_id.hash);
                 let t0_moving = U256::from(outcome.fill_amount(order.quantity()));
                 let t1_moving = Ray::from(ucp).mul_quantity(t0_moving);
 

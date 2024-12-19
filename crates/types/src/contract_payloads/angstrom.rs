@@ -796,7 +796,7 @@ impl AngstromBundle {
             // Sort the user order list so we can properly associate it with our
             // OrderOutcomes.  First bids by price then asks by price.
             order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
-                (true, true) => b.priority_data.cmp(&a.priority_data),
+                (true, true) => a.priority_data.cmp(&b.priority_data),
                 (false, false) => a.priority_data.cmp(&b.priority_data),
                 (..) => b.is_bid.cmp(&a.is_bid)
             });

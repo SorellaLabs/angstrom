@@ -800,6 +800,7 @@ impl AngstromBundle {
                 (false, false) => a.priority_data.cmp(&b.priority_data),
                 (..) => b.is_bid.cmp(&a.is_bid)
             });
+            println!("{:#?}", order_list);
             // Loop through our filled user orders, do accounting, and add them to our user
             // order list
             for (outcome, order) in solution

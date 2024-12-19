@@ -625,11 +625,7 @@ impl AngstromBundle {
                     index0:       t0_idx,
                     index1:       t1_idx,
                     store_index:  0,
-                    price_1over0: if user_order.is_bid {
-                        user_order.limit_price()
-                    } else {
-                        *Ray::from(user_order.limit_price()).inv_ray()
-                    }
+                    price_1over0: user_order.limit_price()
                 };
                 pairs.push(pair);
             }

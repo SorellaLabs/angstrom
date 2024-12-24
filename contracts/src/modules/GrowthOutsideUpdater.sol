@@ -18,12 +18,14 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
     using TickLib for uint256;
 
     error WrongEndLiquidity(uint128 endLiquidity, uint128 actualCurrentLiquidity);
+    error RewardChecksumMismatch();
 
     // Stack too deep shenanigan.
     struct RewardParams {
         PoolId id;
         int24 tickSpacing;
         int24 currentTick;
+        uint256 rewardChecksum;
     }
 
     function _decodeAndReward(
@@ -58,7 +60,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         PoolRewards storage poolRewards = poolRewards_;
 
         uint256 total;
-        RewardParams memory pool = RewardParams(id, tickSpacing, currentTick);
+        RewardParams memory pool = RewardParams(id, tickSpacing, currentTick, 0);
         (newReader, total, cumulativeGrowth, endLiquidity) = startTick <= pool.currentTick
             ? _rewardBelow(poolRewards.rewardGrowthOutside, startTick, newReader, liquidity, pool)
             : _rewardAbove(poolRewards.rewardGrowthOutside, startTick, newReader, liquidity, pool);
@@ -71,6 +73,14 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         total += donateToCurrent;
 
         newReader.requireAtEndOf(amountsEnd);
+
+        {
+            uint256 upperCheckSumBits;
+            (newReader, upperCheckSumBits) = newReader.readU80();
+            if (upperCheckSumBits != pool.rewardChecksum >> 176) {
+                revert RewardChecksumMismatch();
+            }
+        }
 
         uint128 currentLiquidity = UNI_V4.getPoolLiquidity(pool.id);
         if (endLiquidity != currentLiquidity) {
@@ -94,6 +104,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         bool initialized = true;
         uint256 total = 0;
         uint256 cumulativeGrowth = 0;
+        uint256 rewardChecksum = 0;
 
         do {
             if (initialized) {
@@ -108,10 +119,18 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
 
                 (, int128 netLiquidity) = UNI_V4.getTickLiquidity(pool.id, rewardTick);
                 liquidity = MixedSignLib.add(liquidity, netLiquidity);
+
+                assembly ("memory-safe") {
+                    mstore(0x13, rewardTick)
+                    mstore(0x10, liquidity)
+                    mstore(0x00, rewardChecksum)
+                    rewardChecksum := keccak256(0x00, add(32, add(16, 3)))
+                }
             }
             (initialized, rewardTick) = UNI_V4.getNextTickGt(pool.id, rewardTick, pool.tickSpacing);
         } while (rewardTick <= pool.currentTick);
 
+        pool.rewardChecksum = rewardChecksum;
         return (reader, total, cumulativeGrowth, liquidity);
     }
 
@@ -125,6 +144,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         bool initialized = true;
         uint256 total = 0;
         uint256 cumulativeGrowth = 0;
+        uint256 rewardChecksum = 0;
 
         do {
             if (initialized) {
@@ -139,10 +159,18 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
 
                 (, int128 netLiquidity) = UNI_V4.getTickLiquidity(pool.id, rewardTick);
                 liquidity = MixedSignLib.sub(liquidity, netLiquidity);
+
+                assembly ("memory-safe") {
+                    mstore(0x20, rewardTick)
+                    mstore(0x1d, liquidity)
+                    mstore(0x0d, rewardChecksum)
+                    rewardChecksum := keccak256(0x0d, add(32, add(16, 3)))
+                }
             }
             (initialized, rewardTick) = UNI_V4.getNextTickLt(pool.id, rewardTick, pool.tickSpacing);
         } while (rewardTick > pool.currentTick);
 
+        pool.rewardChecksum = rewardChecksum;
         return (reader, total, cumulativeGrowth, liquidity);
     }
 }

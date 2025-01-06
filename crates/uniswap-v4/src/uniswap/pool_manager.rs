@@ -97,8 +97,6 @@ where
         pool_id: A,
         tob: &OrderWithStorageData<TopOfBlockOrder>
     ) -> eyre::Result<ToBOutcome> {
-        tracing::info!("calculate_rewards function");
-
         let mut cnt = ATTEMPTS;
         loop {
             let market_snapshot = {

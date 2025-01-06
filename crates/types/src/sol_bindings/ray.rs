@@ -8,7 +8,7 @@ use alloy::primitives::{aliases::U320, Uint, U256, U512};
 use alloy_primitives::U160;
 use malachite::{
     num::{
-        arithmetic::traits::{DivRound, Pow},
+        arithmetic::traits::{DivRound, Mod, Pow},
         conversion::traits::{RoundingInto, SaturatingFrom}
     },
     rounding_modes::RoundingMode,
@@ -297,7 +297,7 @@ impl Ray {
     /// use RoundingMode::Floor.  This is for rounding in the matching engine
     /// where we want to ensure that, depending on the bid/ask nature of the
     /// order, we always round in a direction that is most favorable to us
-    pub fn inv_ray_round(&self, round_up: bool) -> Self {
+    pub fn inv_ray_round(&self, round_up: bool) -> Ray {
         if round_up {
             self.invert(RoundingMode::Ceiling)
         } else {
@@ -350,7 +350,7 @@ impl Ray {
     }
 
     /// Given a price ratio t1/t0 calculates how much t1 would be needed to
-    /// output the provided amount of t0 (q) ROUNDED UP
+    /// output the provided amount of t0 (q) rounds DOWN by default
     pub fn mul_quantity(&self, q: U256) -> U256 {
         let p: U512 = self.0.widening_mul(q);
         let numerator = Natural::from_limbs_asc(p.as_limbs());
@@ -358,6 +358,16 @@ impl Ray {
             numerator.div_round(const_1e27(), malachite::rounding_modes::RoundingMode::Floor);
         let reslimbs = res.into_limbs_asc();
         Uint::from_limbs_slice(&reslimbs)
+    }
+
+    /// Given a price ration t1/t0 calculates how much t1 would be needed to
+    /// output the provided amount of t0 (q).  Rounding determined by parameter
+    pub fn quantity(&self, q: u128, round_up: bool) -> u128 {
+        let rm = if round_up { RoundingMode::Ceiling } else { RoundingMode::Floor };
+        let product: U512 = self.0.widening_mul(U256::from(q));
+        let numerator = Natural::from_limbs_asc(product.as_limbs());
+        let (res, _) = numerator.div_round(const_1e27(), rm);
+        u128::saturating_from(&res)
     }
 
     /// Given a price ratio t1/t0 calculates how much t0 would be needed to
@@ -368,6 +378,15 @@ impl Ray {
         let denominator = Natural::from_limbs_asc(self.0.as_limbs());
         let (res, _) = numerator.div_round(denominator, rm);
         u128::saturating_from(&res)
+    }
+
+    /// Given a price ratio t1/t0 calculates the amount of excess T1 left after
+    /// dividing out an even amount of T0
+    pub fn inverse_remainder(&self, q: u128) -> u128 {
+        let numerator = Natural::from(q) * const_1e27();
+        let denominator = Natural::from_limbs_asc(self.0.as_limbs());
+        let remainder = numerator.mod_op(denominator);
+        u128::saturating_from(&remainder)
     }
 }
 

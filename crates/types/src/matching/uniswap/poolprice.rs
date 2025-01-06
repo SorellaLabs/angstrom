@@ -170,8 +170,13 @@ impl<'a> PoolPrice<'a> {
         let vec_to_upper = self.to_liq_range_upper()?;
         let next_range_start = vec_to_upper.end_bound;
         let t0_to_upper = vec_to_upper.d_t0;
-        let solve =
-            price_intersect_solve(self.liquidity(), self.price, debt.magnitude(), debt.price());
+        let solve = price_intersect_solve(
+            self.liquidity(),
+            self.price,
+            debt.magnitude(),
+            debt.price(),
+            Direction::BuyingT0
+        );
         println!("Solve: {}", solve);
         let step = resolve_precision(192, solve, RoundingMode::Floor);
         println!("Step: {}", step);

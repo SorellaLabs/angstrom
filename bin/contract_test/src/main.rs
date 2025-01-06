@@ -37,6 +37,10 @@ async fn local_anvil() -> eyre::Result<()> {
     Ok(())
 }
 
+fn raw_bundle() -> AngstromBundle {
+
+}
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let env_filter = tracing_subscriber::EnvFilter::from_default_env();

@@ -1661,6 +1661,7 @@ dependencies = [
  "serde_json",
  "testing-tools",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "uniswap_v3_math",
 ]

@@ -5,12 +5,14 @@ use std::{
 
 use alloy::primitives::U256;
 
+mod comparable;
 mod composite;
 pub use composite::CompositeOrder;
 pub mod debt;
 pub use debt::{Debt, DebtType};
 pub mod match_estimate_response;
 mod math;
+pub use math::max_t1_for_t0;
 mod sqrtprice;
 mod tokens;
 pub mod uniswap;

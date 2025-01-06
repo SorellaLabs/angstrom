@@ -7,7 +7,7 @@ use alloy::primitives::U256;
 use angstrom_types::{
     matching::{
         uniswap::{Direction, PoolPrice, PoolPriceVec},
-        CompositeOrder, Debt, Ray
+        CompositeOrder, Debt, MatchingPrice, Ray
     },
     orders::{NetAmmOrder, OrderFillState, OrderOutcome, PoolSolution},
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
@@ -180,8 +180,7 @@ impl<'a> VolumeFillMatcher<'a> {
 
         // Limit to price so that AMM orders will only offer the quantity they can
         // profitably sell.  (Non-AMM orders ignore the provided price)
-        let ask_q = ask.quantity(bid.price());
-        let bid_q = bid.quantity(ask.price());
+        let (bid_q, ask_q) = Self::get_match_quantities(&bid, &ask, self.debt.as_ref());
 
         println!("Got bid: {} @ {:?}", bid_q, bid.price());
         println!("Got ask: {} @ {:?}", ask_q, ask.price());
@@ -211,7 +210,7 @@ impl<'a> VolumeFillMatcher<'a> {
             // Check to see if our next order is AMM.  If so we have to do some cool
             // bounding math where we reset the bound of our current order to be
             // the closer of the intersection point or the next order's bound.
-            let normal_next_q = next_ask.quantity(bid.price());
+            let normal_next_q = next_ask.quantity(&bid, self.debt.as_ref());
             let next_ask_q = if next_ask.is_amm() {
                 self.debt
                     .as_ref()
@@ -255,7 +254,7 @@ impl<'a> VolumeFillMatcher<'a> {
             match next_ask_q.cmp(&cur_ask_q) {
                 Ordering::Equal => {
                     println!("Equal match");
-                    // We annihilated
+                    // We annihilated in which case the debt price has moved to the next_ask price
                     self.results.price = Some(next_ask.price());
                     // Mark as filled if non-AMM order
                     if !next_ask.is_amm() && !next_ask.is_composite() {
@@ -268,7 +267,8 @@ impl<'a> VolumeFillMatcher<'a> {
                 }
                 Ordering::Greater => {
                     println!("Greater match");
-                    // Our next order is greater than our debt
+                    // Our next order is greater than our debt.  The debt has been moved to next_ask
+                    // price without consuming the entirety of next_ask
                     // The end point is our next ask's price
                     self.results.price = Some(next_ask.price());
                     // Set the Debt's current price to the target price
@@ -283,7 +283,12 @@ impl<'a> VolumeFillMatcher<'a> {
                     println!("Less match");
                     // Our debt is greater than the order
                     // Find the end price of the debt and move it there
-                    self.debt = self.debt.map(|d| d.partial_fill(matched));
+                    if let Some(cur_debt) = self.debt.as_mut() {
+                        let new_debt = cur_debt.partial_fill(matched);
+                        // Our new final price is the last moved price of our debt
+                        self.results.price = Some(new_debt.price().into());
+                        *cur_debt = new_debt;
+                    }
                     // Mark as filled if non-AMM order
                     if !next_ask.is_amm() && !next_ask.is_composite() {
                         self.ask_outcomes[self.ask_idx.get()] = OrderFillState::CompleteFill
@@ -299,6 +304,9 @@ impl<'a> VolumeFillMatcher<'a> {
         println!("Normal match of bid_q: {} vs ask_q: {}", bid_q, ask_q);
 
         // If either quantity is zero at this point we should break
+        // I actually think this might be OK - there are some edge cases where this is
+        // fine
+        // A 0-volume match can happen if we have some kind of "slack" bid or ask left
         if ask_q == 0 || bid_q == 0 {
             return Some(VolumeFillMatchEndReason::ZeroQuantity)
         }
@@ -316,6 +324,8 @@ impl<'a> VolumeFillMatcher<'a> {
         }
 
         // If bid or ask was an AMM order, we update our AMM stats
+        // Might need to work on this as well, the quantity we actually buy or sell to
+        // the AMM is not necessarily what we think
         if let Some(amm) = self.amm_price.as_mut() {
             let direction = match (bid.is_amm(), ask.is_amm()) {
                 (true, false) => Some(Direction::BuyingT0),
@@ -336,8 +346,24 @@ impl<'a> VolumeFillMatcher<'a> {
             Ordering::Equal => {
                 println!("Equal match");
                 // We annihilated
-                self.results.price = Some((*(ask.price() + bid.price()) / U256::from(2)).into());
-                // self.results.price = Some((ask.price() + bid.price()) / 2.0_f64);
+
+                // Settle our debt
+                if let Some(net_debt) = match (ask.as_debt(), bid.as_debt()) {
+                    (Some(a), Some(b)) => a + b,
+                    (a, b) => a.or(b)
+                } {
+                    self.debt += net_debt;
+                }
+
+                // If we have a debt price, this is our current price, otherwise we get a price
+                // from our orders
+                let new_price = self
+                    .debt
+                    .map(|d| d.price())
+                    .unwrap_or_else(|| (*(ask.price() + bid.price()) / U256::from(2)).into());
+
+                self.results.price = Some(new_price.into());
+
                 // Mark as filled if non-AMM order
                 if !ask.is_amm() && !ask.is_composite() {
                     self.ask_outcomes[self.ask_idx.get()] = OrderFillState::CompleteFill
@@ -395,6 +421,32 @@ impl<'a> VolumeFillMatcher<'a> {
         None
     }
 
+    /// Returns (bid_q, ask_q)
+    fn get_match_quantities(
+        bid: &OrderContainer,
+        ask: &OrderContainer,
+        debt: Option<&Debt>
+    ) -> (u128, u128) {
+        if bid.is_book() && ask.is_book() {
+            // We have a pair of book orders
+            match (bid.inverse_order(), ask.inverse_order()) {
+                // Inverse vs inverse is a T1 match
+                (true, true) => {
+                    // We already know these are book orders so we can unwrap here
+                    (bid.quantity_t1(debt).unwrap(), ask.quantity_t1(debt).unwrap())
+                }
+                // Mixed order returns quantity in T0 at debt or order price
+                (true, false) | (false, true) => (bid.quantity(ask, debt), ask.quantity(bid, debt)),
+                // Normal book order and normal book order just return T0 quantities
+                (false, false) => (bid.quantity(ask, debt), ask.quantity(bid, debt))
+            }
+        } else {
+            // We have either a book order and a Composite order or a pair of Composite
+            // orders, all of which return T0
+            (bid.quantity(ask, debt), ask.quantity(bid, debt))
+        }
+    }
+
     fn next_order(
         bid: bool,
         book_idx: &Cell<usize>,
@@ -408,7 +460,7 @@ impl<'a> VolumeFillMatcher<'a> {
         if let Some(state @ OrderFillState::PartialFill(_)) = fill_state.get(book_idx.get()) {
             return book
                 .get(book_idx.get())
-                .map(|order| OrderContainer::BookOrderFragment { order, state: *state })
+                .map(|order| OrderContainer::BookOrder { order, state: *state })
         }
         // Fix what makes a price "less" or "more" advantageous depending on direction
         let (less_advantageous, more_advantageous) = if bid {
@@ -499,7 +551,10 @@ impl<'a> VolumeFillMatcher<'a> {
         .map(OrderContainer::Composite)
         .or_else(|| {
             book_idx.set(cur_idx);
-            book_order.map(OrderContainer::BookOrder)
+            book_order.map(|order| {
+                let state = fill_state[cur_idx];
+                OrderContainer::BookOrder { order, state }
+            })
         })
     }
 
@@ -568,6 +623,7 @@ mod tests {
         let low_price = Ray::from(Uint::from(1_000_u128));
         let bid_order = UserOrderBuilder::new()
             .partial()
+            .bid()
             .amount(100)
             .min_price(bid_price)
             .with_storage()
@@ -575,16 +631,24 @@ mod tests {
             .build();
         let ask_order = UserOrderBuilder::new()
             .exact()
+            .ask()
             .amount(10)
+            .exact_in(true)
             .min_price(low_price)
             .with_storage()
             .ask()
             .build();
+        println!("Bid order:\n{:?}", bid_order);
         println!("Ask order:\n{:?}", ask_order);
         let book = OrderBook::new(pool_id, None, vec![bid_order.clone()], vec![ask_order], None);
         let mut matcher = VolumeFillMatcher::new(&book);
         let _fill_outcome = matcher.run_match();
         let solution = matcher.from_checkpoint().unwrap().solution(None);
+        println!(
+            "Solution UCP: {:?}\nFinal bid: {:?}",
+            solution.ucp,
+            bid_price.inv_ray_round(true)
+        );
         assert!(
             solution.ucp == bid_price.inv_ray_round(true),
             "Bid outweighed but the final price wasn't properly set"
@@ -598,6 +662,7 @@ mod tests {
         let low_price = Ray::from(Uint::from(1_000_u128));
         let bid_order = UserOrderBuilder::new()
             .exact()
+            .bid()
             .amount(10)
             .bid_min_price(high_price)
             .with_storage()
@@ -605,6 +670,7 @@ mod tests {
             .build();
         let ask_order = UserOrderBuilder::new()
             .partial()
+            .ask()
             .amount(100)
             .min_price(low_price)
             .with_storage()
@@ -635,8 +701,11 @@ mod tests {
                     target_price + (i * price_step)
                 };
                 UserOrderBuilder::new()
+                    .exact()
+                    .exact_in(!is_bid)
                     .min_price(min_price)
                     .amount(100)
+                    .is_bid(is_bid)
                     .with_storage()
                     .is_bid(is_bid)
                     .build()
@@ -654,8 +723,8 @@ mod tests {
         let amm = None;
         let next_order =
             VolumeFillMatcher::next_order(true, &index, &debt, amm, &book, &fill_state).unwrap();
-        if let OrderContainer::BookOrder(o) = next_order {
-            assert_eq!(*o, book[0], "Next order selected was not first order in book");
+        if let OrderContainer::BookOrder { order, .. } = next_order {
+            assert_eq!(*order, book[0], "Next order selected was not first order in book");
         } else {
             panic!("Next order is not a BookOrder");
         }
@@ -732,8 +801,8 @@ mod tests {
         let next_order =
             VolumeFillMatcher::next_order(true, &index, &debt, amm, &book, &fill_state).unwrap();
 
-        assert!(matches!(next_order, OrderContainer::BookOrder(_)), "Book order not chosen");
-        if let OrderContainer::BookOrder(b) = next_order {
+        assert!(matches!(next_order, OrderContainer::BookOrder { .. }), "Book order not chosen");
+        if let OrderContainer::BookOrder { order: b, .. } = next_order {
             assert_eq!(*b, book[0], "First book order not chosen");
         } else {
             panic!("Book order not created but did match?");
@@ -880,5 +949,18 @@ mod tests {
         );
         let end = matcher.single_match();
         println!("Fill ended: {:?}", end);
+    }
+
+    #[test]
+    fn get_match_quantities_works_properly() {
+        let bid_price = Ray::from(SqrtPriceX96::at_tick(110000).unwrap());
+        let ask_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let (bid_book, bid_states) = basic_order_book(true, 10, bid_price, 10);
+        let (ask_book, ask_states) = basic_order_book(false, 10, ask_price, 10);
+        let bid = OrderContainer::from(&bid_book[0]);
+        let ask = OrderContainer::from(&ask_book[0]);
+        println!("Bid order: {:?}\nAsk order: {:?}", bid, ask);
+        let (bid_q, ask_q) = VolumeFillMatcher::get_match_quantities(&bid, &ask, None);
+        println!("Bidq: {}\nAskq: {}", bid_q, ask_q);
     }
 }

@@ -20,6 +20,13 @@ impl OrderFillState {
         matches!(self, Self::CompleteFill | Self::PartialFill(_))
     }
 
+    pub fn partial_q(&self) -> Option<OrderVolume> {
+        match self {
+            Self::PartialFill(v) => Some(*v),
+            _ => None
+        }
+    }
+
     pub fn partial_fill(&self, quantity: OrderVolume) -> Self {
         match self {
             Self::Unfilled => Self::PartialFill(quantity),

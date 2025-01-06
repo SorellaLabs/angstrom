@@ -23,6 +23,23 @@ impl TestOrder {
         UserOrderBuilder::new()
             .amount(self.q)
             .min_price(min_price)
+            .exact()
+            .with_storage()
+            .is_bid(is_bid)
+            .build()
+    }
+
+    pub fn to_inverse_order(&self, is_bid: bool) -> BookOrder {
+        let min_price = if is_bid { self.p.inv_ray_round(true) } else { self.p };
+        // If it's a bid, our t1-based order is Exact In.  If ask, t1-based orders are
+        // Exact Out
+        let exact_in = is_bid;
+        UserOrderBuilder::new()
+            .is_bid(is_bid)
+            .amount(self.q)
+            .min_price(min_price)
+            .exact_in(exact_in)
+            .exact()
             .with_storage()
             .is_bid(is_bid)
             .build()
@@ -141,3 +158,22 @@ fn amm_provides_last_mile_liquidity() {
 
 #[test]
 fn debt_price_is_final_price() {}
+
+#[test]
+fn annihilating_debt() {
+    let bids = vec![(TestOrder { q: 1000, p: raw_price(50) }).to_inverse_order(true)];
+    let asks = vec![(TestOrder { q: 1000, p: raw_price(10) }).to_inverse_order(false)];
+    println!("{:?}", asks);
+    println!("{:?}", bids);
+    let book = OrderBook::new(
+        FixedBytes::random(),
+        None,
+        bids,
+        asks,
+        Some(matching_engine::book::sort::SortStrategy::ByPriceByVolume)
+    );
+    let mut matcher = VolumeFillMatcher::new(&book);
+    let end = matcher.run_match();
+    let solution = matcher.solution(None);
+    assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All orders not filled");
+}

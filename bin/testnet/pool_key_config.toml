@@ -1,5 +1,5 @@
 [[pool_keys]]
 fee = 0
 tick_spacing = 60
-liquidity = "340282366920938"
+liquidity = "3402823669"
 tick = 100020

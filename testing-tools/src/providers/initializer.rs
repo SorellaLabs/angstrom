@@ -280,7 +280,7 @@ impl AnvilInitializer {
                     pool_key.currency1,
                     lower,
                     upper,
-                    U256::from(rng.gen_range(liquidity / 2..liquidity)),
+                    U256::from(rng.gen_range((liquidity / 2)..liquidity)),
                     FixedBytes::<32>::default()
                 )
                 .from(self.provider.controller())

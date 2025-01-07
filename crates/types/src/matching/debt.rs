@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Sub};
 
 use malachite::{
     num::{
@@ -82,6 +82,17 @@ impl Add for DebtType {
             (Self::ExactIn(q_1), Self::ExactOut(q_2)) => Self::ExactIn(q_1 - q_2),
             (Self::ExactOut(q_1), Self::ExactIn(q_2)) if q_2 > q_1 => Self::ExactIn(q_2 - q_1),
             (Self::ExactOut(q_1), Self::ExactIn(q_2)) => Self::ExactOut(q_1 - q_2)
+        }
+    }
+}
+
+impl Sub<u128> for DebtType {
+    type Output = Self;
+
+    fn sub(self, rhs: u128) -> Self::Output {
+        match self {
+            Self::ExactIn(q) => Self::ExactIn(q.saturating_sub(rhs)),
+            Self::ExactOut(q) => Self::ExactOut(q.saturating_sub(rhs))
         }
     }
 }
@@ -175,6 +186,15 @@ impl Debt {
         self.magnitude.t0_at_price(self.cur_price)
     }
 
+    pub fn freed_t0(&self, t1_change: u128) -> u128 {
+        let i_t0 = self.current_t0();
+        let f_t0 = self
+            .magnitude
+            .same_type(self.magnitude.magnitude().saturating_sub(t1_change))
+            .t0_at_price(self.cur_price);
+        i_t0.saturating_sub(f_t0)
+    }
+
     /// Create a new Debt object based on the price change created by filling
     /// the debt with a specified amount of t0
     pub fn partial_fill(&self, q: u128) -> Self {
@@ -185,6 +205,23 @@ impl Debt {
             DebtType::ExactOut(_) => self.cur_price - price_diff
         };
         Self { magnitude: self.magnitude, cur_price: new_price }
+    }
+
+    /// Create a new Debt object based on the price change created by filling
+    /// the debt with a specified amount of T1
+    pub fn partial_fill_t1(&self, q: u128) -> Self {
+        let current_t0 = self.current_t0();
+        let new_t1 = self.magnitude - q;
+        let new_price = Ray::calc_price_generic(current_t0, new_t1.magnitude());
+        Self { magnitude: new_t1, cur_price: new_price }
+    }
+
+    /// Create a new debt object which just has our T1 reduced by the specified
+    /// amount, the intention being that the T0 previously allocated has been
+    /// elsewise pushed to a paired AMM in a Composite order
+    pub fn flat_fill_t1(&self, q: u128) -> Self {
+        let new_t1 = self.magnitude - q;
+        Self { magnitude: new_t1, cur_price: self.cur_price }
     }
 
     /// Difference in t0 required to move the price from the current price to

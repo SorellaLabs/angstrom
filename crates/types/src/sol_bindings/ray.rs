@@ -288,7 +288,8 @@ impl Ray {
     }
 
     fn invert(&self, rm: RoundingMode) -> Self {
-        let res: Natural = const_1e54().div_round(Natural::from(*self), rm).0;
+        let (res, ordering) = const_1e54().div_round(Natural::from(*self), rm);
+        println!("Invert ordering: {:?}", ordering);
         Self(U256::from_limbs_slice(&res.to_limbs_asc()))
     }
 
@@ -400,6 +401,21 @@ mod tests {
 
     use super::*;
     use crate::matching::{const_2_96, debt::Debt};
+
+    #[test]
+    fn inverts_properly() {
+        // This test currently fails due to our precision issues
+        let s = SqrtPriceX96::at_tick(100000).unwrap();
+        let r = Ray::from(s);
+        let inv_r = r.inv_ray();
+        println!(
+            "R_O: {:?}\nR_F: {:?}\nR0F: {:?}",
+            r,
+            inv_r.inv_ray(),
+            r.inv_ray_round(true).inv_ray_round(true)
+        );
+        assert!(inv_r.inv_ray() == r, "Inverted price has changed");
+    }
 
     #[test]
     fn another_math_test() {

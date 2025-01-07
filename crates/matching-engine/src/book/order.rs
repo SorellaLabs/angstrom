@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use angstrom_types::{
     matching::{
         max_t1_for_t0,
@@ -14,6 +12,7 @@ use angstrom_types::{
         RawPoolOrder
     }
 };
+use eyre::{eyre, OptionExt};
 
 use super::BookOrder;
 
@@ -23,8 +22,6 @@ use super::BookOrder;
 pub enum OrderContainer<'a> {
     /// An order from our Book and its current fill state
     BookOrder { order: &'a BookOrder, state: OrderFillState },
-    /// An order constructed from the current state of our AMM
-    AMM(PoolPriceVec<'a>),
     /// A CompositeOrder built of Debt or AMM or Both
     Composite(CompositeOrder<'a>)
 }
@@ -32,12 +29,6 @@ pub enum OrderContainer<'a> {
 impl<'a> From<&'a BookOrder> for OrderContainer<'a> {
     fn from(value: &'a BookOrder) -> Self {
         Self::BookOrder { order: value, state: OrderFillState::Unfilled }
-    }
-}
-
-impl<'a> From<PoolPriceVec<'a>> for OrderContainer<'a> {
-    fn from(value: PoolPriceVec<'a>) -> Self {
-        Self::AMM(value)
     }
 }
 
@@ -63,13 +54,25 @@ impl<'a> OrderContainer<'a> {
         matches!(self, Self::Composite(_))
     }
 
+    pub fn composite_t0_quantities(
+        &self,
+        t0_input: u128,
+        direction: Direction
+    ) -> (Option<u128>, Option<u128>) {
+        if let Self::Composite(c) = self {
+            c.t0_quantities(t0_input, direction)
+        } else {
+            (None, None)
+        }
+    }
+
     /// Is `true` when the order in the container includes the AMM, either as a
     /// distinct AMM order or as a Composite order that includes the AMM
     pub fn is_amm(&self) -> bool {
         if let Self::Composite(o) = self {
             o.has_amm()
         } else {
-            matches!(self, Self::AMM(_))
+            false
         }
     }
 
@@ -99,15 +102,20 @@ impl<'a> OrderContainer<'a> {
         None
     }
 
-    /// Represents an applicable order as a debt at its current price
-    pub fn as_debt(&self) -> Option<Debt> {
+    /// Represents an applicable book order as a debt at its current price,
+    /// taking partial fill into account
+    pub fn as_debt(&self, limit: Option<u128>) -> Option<Debt> {
         if self.inverse_order() {
-            if let Self::BookOrder { order: o, .. } = self {
-                let magnitude = if o.is_bid {
-                    DebtType::exact_in(o.max_q())
-                } else {
-                    DebtType::exact_out(o.max_q())
-                };
+            if let Self::BookOrder { order: o, state } = self {
+                let partial_fill = if let OrderFillState::PartialFill(y) = state { *y } else { 0 };
+                let whole_order = o.max_q().saturating_sub(partial_fill);
+                // If we have a limit, restrict the debt to that much.  This is for partial
+                // fills.
+                let debt_q = limit
+                    .map(|l| std::cmp::min(l, whole_order))
+                    .unwrap_or(whole_order);
+                let magnitude =
+                    if o.is_bid { DebtType::exact_in(debt_q) } else { DebtType::exact_out(debt_q) };
                 return Some(Debt::new(magnitude, o.price()))
             }
         }
@@ -116,7 +124,10 @@ impl<'a> OrderContainer<'a> {
 
     pub fn amm_intersect(&self, debt: Debt) -> eyre::Result<u128> {
         match self {
-            Self::AMM(a) => a.start_bound.intersect_with_debt(debt),
+            Self::Composite(c) => c
+                .amm()
+                .map(|a| a.intersect_with_debt(debt))
+                .ok_or_eyre(eyre!("No intersection"))?,
             _ => Ok(0)
         }
     }
@@ -131,7 +142,6 @@ impl<'a> OrderContainer<'a> {
                         | GroupedVanillaOrder::KillOrFill(FlashVariants::Partial(_))
                 )
             }
-            Self::AMM(_) => false,
             Self::Composite(_) => false
         }
     }
@@ -241,7 +251,6 @@ impl<'a> OrderContainer<'a> {
                     Self::book_order_q_t0(order, debt)
                 }
             }
-            Self::AMM(ammo) => ammo.quantity(target_price).0,
             Self::Composite(c) => c.quantity(target_price.into())
         }
     }
@@ -254,6 +263,15 @@ impl<'a> OrderContainer<'a> {
             }
             Self::BookOrder { order, .. } => Self::book_order_q_t1(order, debt),
             Self::Composite(c) => None,
+            _ => None
+        }
+    }
+
+    /// Get back the maximum amount of T1 we can match against our opposed order
+    /// for a given amount of T0 matched
+    pub fn max_t1_for_t0(&self, debt: Option<&Debt>) -> Option<OrderVolume> {
+        match self {
+            Self::BookOrder { order, state } => None,
             _ => None
         }
     }
@@ -272,7 +290,6 @@ impl<'a> OrderContainer<'a> {
     pub fn price(&self) -> OrderPrice {
         match self {
             Self::BookOrder { order, .. } => order.price_for_book_side(order.is_bid).into(),
-            Self::AMM(o) => (*o.start_bound.price()).into(),
             Self::Composite(o) => o.start_price().into()
         }
     }

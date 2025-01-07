@@ -1060,15 +1060,25 @@ impl AngstromBundle {
             });
             // Loop through our filled user orders, do accounting, and add them to our user
             // order list
+            let ray_ucp = Ray::from(ucp);
             for (outcome, order) in solution
                 .limit
                 .iter()
                 .zip(order_list.iter())
                 .filter(|(outcome, _)| outcome.is_filled())
             {
+                // Calculate our final amounts based on whether the order is in T0 or T1 context
+                let inverse_order = order.is_bid() == order.exact_in();
                 assert_eq!(outcome.id.hash, order.order_id.hash);
-                let t0_moving = U256::from(outcome.fill_amount(order.max_q()));
-                let t1_moving = Ray::from(ucp).mul_quantity(t0_moving);
+                let (t0_moving, t1_moving) = if inverse_order {
+                    let t1_moving = outcome.fill_amount(order.max_q());
+                    let t0_moving = ray_ucp.inverse_quantity(t1_moving, !order.is_bid());
+                    (U256::from(t0_moving), U256::from(t1_moving))
+                } else {
+                    let t0_moving = U256::from(outcome.fill_amount(order.max_q()));
+                    let t1_moving = Ray::from(ucp).mul_quantity(t0_moving);
+                    (t0_moving, t1_moving)
+                };
 
                 let (quantity_in, quantity_out) =
                     if order.is_bid { (t1_moving, t0_moving) } else { (t0_moving, t1_moving) };

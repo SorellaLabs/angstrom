@@ -1,10 +1,11 @@
-use std::pin::Pin;
+use std::{pin::Pin, time::Duration};
 
 use angstrom_eth::manager::ChainExt;
 use angstrom_rpc::{api::OrderApiClient, impls::OrderApi};
 use angstrom_types::{sol_bindings::grouped_orders::AllOrders, testnet::InitialTestnetState};
 use futures::{stream::FuturesUnordered, Future, StreamExt};
 use jsonrpsee::http_client::HttpClient;
+use rand::{thread_rng, Rng};
 use reth_provider::{test_utils::NoopProvider, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
 use testing_tools::{
@@ -16,6 +17,7 @@ use testing_tools::{
         config::DevnetConfig
     }
 };
+use tokio::time::sleep;
 use tracing::{debug, info, span, Instrument, Level};
 
 use crate::cli::e2e_orders::End2EndOrdersCli;
@@ -45,8 +47,8 @@ fn end_to_end_agent<'a>(
         let mut generator = OrderGenerator::new(
             agent_config.uniswap_pools.clone(),
             agent_config.current_block,
-            5..10,
-            0.1..0.15
+            5..25,
+            0.1..0.35
         );
 
         let mut stream =
@@ -64,11 +66,14 @@ fn end_to_end_agent<'a>(
                 let client = HttpClient::builder().build(rpc_address).unwrap();
                 tracing::info!("waiting for new block");
                 let mut pending_orders = FuturesUnordered::new();
+                let mut rng = thread_rng();
 
                 loop {
+                    let rand_sleep = sleep(Duration::from_millis(rng.gen_range(500..1000)));
+                    rand_sleep.await;
+
                     tokio::select! {
-                        Some(block_number) = stream.next() => {
-                            generator.new_block(block_number);
+                        _ = rand_sleep => {
                             let new_orders = generator.generate_orders();
                             tracing::info!("generated new orders. submitting to rpc");
 
@@ -81,7 +86,10 @@ fn end_to_end_agent<'a>(
                                     .collect::<Vec<AllOrders>>();
 
                                  pending_orders.push(client.send_orders(all_orders));
-                            }
+                             }
+                        }
+                        Some(block_number) = stream.next() => {
+                            generator.new_block(block_number);
                         }
                         Some(resolved_order) = pending_orders.next() => {
                             tracing::info!("orders resolved");

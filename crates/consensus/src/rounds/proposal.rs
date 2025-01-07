@@ -80,6 +80,11 @@ impl ProposalState {
         T: Transport + Clone,
         Matching: MatchingEngineHandle
     {
+        // NOTE: this is here while davids shit is broken
+        self.last_round_info = Some(LastRoundInfo {
+            time_to_complete: Instant::now().duration_since(self.trigger_time)
+        });
+
         tracing::debug!("starting to build proposal");
         let Ok((pool_solution, gas_info)) = result.inspect_err(|e| {
             tracing::error!(err=%e,

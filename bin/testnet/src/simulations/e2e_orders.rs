@@ -90,7 +90,8 @@ fn end_to_end_agent<'a>(
                             generator.new_block(block_number);
                         }
                         Some(resolved_order) = pending_orders.next() => {
-                            tracing::info!("orders resolved");
+
+                            tracing::info!(?resolved_order,"orders resolved");
                         }
 
                     }

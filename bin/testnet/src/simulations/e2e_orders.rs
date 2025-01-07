@@ -70,7 +70,6 @@ fn end_to_end_agent<'a>(
 
                 loop {
                     let rand_sleep = sleep(Duration::from_millis(rng.gen_range(500..1000)));
-                    rand_sleep.await;
 
                     tokio::select! {
                         _ = rand_sleep => {

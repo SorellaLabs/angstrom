@@ -28,6 +28,12 @@ pub struct OrderSet<Limit, Searcher> {
     pub searcher: Vec<OrderWithStorageData<Searcher>>
 }
 
+impl<Limit, Searcher> OrderSet<Limit, Searcher> {
+    pub fn total_orders(&self) -> usize {
+        self.limit.len() + self.searcher.len()
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetAmmOrder {
     Buy(U256, U256),

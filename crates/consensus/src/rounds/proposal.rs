@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     task::{Context, Poll, Waker},
-    time::Duration
+    time::{Duration, Instant}
 };
 
 use alloy::{
@@ -20,7 +20,7 @@ use matching_engine::MatchingEngineHandle;
 use pade::PadeEncode;
 
 use super::{ConsensusState, SharedRoundState};
-use crate::rounds::ConsensusMessage;
+use crate::rounds::{preproposal_wait_trigger::LastRoundInfo, ConsensusMessage};
 
 type MatchingEngineFuture = BoxFuture<'static, eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>;
 
@@ -36,6 +36,8 @@ pub struct ProposalState {
     submission_future:      Option<BoxFuture<'static, bool>>,
     pre_proposal_aggs:      Vec<PreProposalAggregation>,
     proposal:               Option<Proposal>,
+    last_round_info:        Option<LastRoundInfo>,
+    trigger_time:           Instant,
     waker:                  Waker
 }
 
@@ -43,6 +45,7 @@ impl ProposalState {
     pub fn new<P, T, Matching>(
         pre_proposal_aggregation: HashSet<PreProposalAggregation>,
         handles: &mut SharedRoundState<P, T, Matching>,
+        trigger_time: Instant,
         waker: Waker
     ) -> Self
     where
@@ -58,9 +61,11 @@ impl ProposalState {
             matching_engine_future: Some(
                 handles.matching_engine_output(pre_proposal_aggregation.clone())
             ),
+            last_round_info: None,
             pre_proposal_aggs: pre_proposal_aggregation.into_iter().collect::<Vec<_>>(),
             submission_future: None,
             proposal: None,
+            trigger_time,
             waker
         }
     }
@@ -113,6 +118,11 @@ impl ProposalState {
 
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();
+
+        // mark the time we try to submitted
+        self.last_round_info = Some(LastRoundInfo {
+            time_to_complete: Instant::now().duration_since(self.trigger_time)
+        });
 
         let submission_future = async move {
             tracing::info!("building bundle");
@@ -200,5 +210,9 @@ where
         }
 
         Poll::Pending
+    }
+
+    fn last_round_info(&mut self) -> Option<LastRoundInfo> {
+        self.last_round_info.take()
     }
 }

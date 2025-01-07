@@ -1,8 +1,7 @@
 use std::{
     collections::HashSet,
-    pin::Pin,
     task::{Context, Poll, Waker},
-    time::Duration
+    time::Instant
 };
 
 use alloy::{providers::Provider, transports::Transport};
@@ -10,11 +9,10 @@ use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::consensus::{PreProposal, PreProposalAggregation, Proposal};
 use futures::FutureExt;
 use matching_engine::MatchingEngineHandle;
-use tokio::time::{sleep, Sleep};
 
 use super::{
-    finalization::FinalizationState, pre_proposal::PreProposalState, ConsensusState,
-    SharedRoundState
+    finalization::FinalizationState, pre_proposal::PreProposalState,
+    preproposal_wait_trigger::PreProposalWaitTrigger, ConsensusState, SharedRoundState
 };
 
 /// BidAggregationState
@@ -31,21 +29,23 @@ pub struct BidAggregationState {
     /// we collect these here given that the leader could be running behind.
     pre_proposals_aggregation: HashSet<PreProposalAggregation>,
     proposal:                  Option<Proposal>,
-    transition_timeout:        Pin<Box<Sleep>>,
+    start_time:                Instant,
+    transition_timeout:        PreProposalWaitTrigger,
     waker:                     Option<Waker>
 }
 
 impl BidAggregationState {
-    pub fn new(transition_timeout: Duration) -> Self {
-        let sleep = sleep(transition_timeout);
+    pub fn new(transition_timeout: PreProposalWaitTrigger) -> Self {
+        // let sleep = sleep(transition_timeout);
         tracing::info!("starting bid aggregation");
 
         Self {
-            received_pre_proposals:    HashSet::default(),
+            received_pre_proposals: HashSet::default(),
             pre_proposals_aggregation: HashSet::default(),
-            transition_timeout:        Box::pin(sleep),
-            proposal:                  None,
-            waker:                     None
+            transition_timeout,
+            start_time: Instant::now(),
+            proposal: None,
+            waker: None
         }
     }
 }
@@ -109,6 +109,7 @@ where
                 std::mem::take(&mut self.received_pre_proposals),
                 std::mem::take(&mut self.pre_proposals_aggregation),
                 handles,
+                self.start_time,
                 cx.waker().clone()
             );
 

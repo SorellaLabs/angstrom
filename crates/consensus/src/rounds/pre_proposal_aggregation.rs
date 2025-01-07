@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
-    task::{Context, Poll, Waker}
+    task::{Context, Poll, Waker},
+    time::Instant
 };
 
 use alloy::{providers::Provider, transports::Transport};
@@ -24,6 +25,7 @@ use crate::rounds::{finalization::FinalizationState, proposal::ProposalState};
 pub struct PreProposalAggregationState {
     pre_proposals_aggregation: HashSet<PreProposalAggregation>,
     proposal:                  Option<Proposal>,
+    trigger_time:              Instant,
     waker:                     Waker
 }
 
@@ -32,6 +34,7 @@ impl PreProposalAggregationState {
         pre_proposals: HashSet<PreProposal>,
         mut pre_proposals_aggregation: HashSet<PreProposalAggregation>,
         handles: &mut SharedRoundState<P, T, Matching>,
+        trigger_time: Instant,
         waker: Waker
     ) -> Self
     where
@@ -56,7 +59,7 @@ impl PreProposalAggregationState {
         waker.wake_by_ref();
         tracing::info!("starting pre proposal aggregation");
 
-        Self { pre_proposals_aggregation, proposal: None, waker }
+        Self { pre_proposals_aggregation, proposal: None, waker, trigger_time }
     }
 }
 
@@ -118,6 +121,7 @@ where
             return Poll::Ready(Some(Box::new(ProposalState::new(
                 std::mem::take(&mut self.pre_proposals_aggregation),
                 handles,
+                self.trigger_time,
                 cx.waker().clone()
             ))))
         }

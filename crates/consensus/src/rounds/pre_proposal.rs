@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
-    task::{Context, Poll, Waker}
+    task::{Context, Poll, Waker},
+    time::Instant
 };
 
 use alloy::{primitives::BlockNumber, providers::Provider, transports::Transport};
@@ -25,6 +26,7 @@ pub struct PreProposalState {
     pre_proposals:             HashSet<PreProposal>,
     pre_proposals_aggregation: HashSet<PreProposalAggregation>,
     proposal:                  Option<Proposal>,
+    trigger_time:              Instant,
     waker:                     Waker
 }
 
@@ -34,6 +36,7 @@ impl PreProposalState {
         mut pre_proposals: HashSet<PreProposal>,
         pre_proposals_aggregation: HashSet<PreProposalAggregation>,
         handles: &mut SharedRoundState<P, T, Matching>,
+        trigger_time: Instant,
         waker: Waker
     ) -> Self
     where
@@ -55,7 +58,7 @@ impl PreProposalState {
         waker.wake_by_ref();
         tracing::info!("starting pre proposal");
 
-        Self { pre_proposals, pre_proposals_aggregation, proposal: None, waker }
+        Self { pre_proposals, pre_proposals_aggregation, proposal: None, waker, trigger_time }
     }
 }
 
@@ -117,6 +120,7 @@ where
                 std::mem::take(&mut self.pre_proposals),
                 std::mem::take(&mut self.pre_proposals_aggregation),
                 handles,
+                self.trigger_time,
                 cx.waker().clone()
             ))))
         }

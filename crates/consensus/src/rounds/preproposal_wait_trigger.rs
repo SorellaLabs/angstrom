@@ -15,7 +15,7 @@ const DEFAULT_DURATION: Duration = Duration::from_secs(9);
 /// because its very low overhead to check
 const CHECK_INTERVAL: Duration = Duration::from_millis(1);
 /// How much to scale per order in the order pool
-const ORDER_SCALING: Duration = Duration::from_millis(10);
+const ORDER_SCALING: Duration = Duration::from_millis(3);
 /// How close we want to be to the creation of the ethereum block
 const TARGET_SUBMISSION_TIME_REM: Duration = Duration::from_millis(800);
 /// Eth block time

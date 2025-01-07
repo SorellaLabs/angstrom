@@ -40,6 +40,7 @@ mod pre_proposal_aggregation;
 mod proposal;
 
 type PollTransition<P, T, Matching> = Poll<Option<Box<dyn ConsensusState<P, T, Matching>>>>;
+
 pub trait ConsensusState<P, T, Matching>: Send
 where
     P: Provider<T>,

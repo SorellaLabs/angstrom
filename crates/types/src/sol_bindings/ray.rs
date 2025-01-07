@@ -288,8 +288,8 @@ impl Ray {
     }
 
     fn invert(&self, rm: RoundingMode) -> Self {
-        let (res, ordering) = const_1e54().div_round(Natural::from(*self), rm);
-        println!("Invert ordering: {:?}", ordering);
+        let (res, _) = const_1e54().div_round(Natural::from(*self), rm);
+        // println!("Invert ordering: {:?}", ordering);
         Self(U256::from_limbs_slice(&res.to_limbs_asc()))
     }
 

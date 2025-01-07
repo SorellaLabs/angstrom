@@ -99,6 +99,13 @@ where
         // grab the last round info if we were the leader.
         let info = self.current_state.last_round_info();
 
+        // reset before we got to proposal, we decay the round time to handle this case
+        // as otherwise, can end up in a loop where we never submit and never
+        // adjust time
+        if info.is_none() && self.shared_state.i_am_leader() {
+            self.consensus_wait_duration.reset_before_submission();
+        }
+
         self.shared_state.block_height = new_block;
         self.shared_state.round_leader = new_leader;
 

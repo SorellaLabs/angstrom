@@ -69,6 +69,12 @@ impl PreProposalWaitTrigger {
         self.clone()
     }
 
+    pub fn reset_before_submission(&mut self) {
+        self.wait_duration = self
+            .wait_duration
+            .saturating_sub(TARGET_SUBMISSION_TIME_REM);
+    }
+
     fn update_wait_duration_base(&mut self, info: LastRoundInfo) {
         let base = ETH_BLOCK_TIME - TARGET_SUBMISSION_TIME_REM;
 

@@ -80,7 +80,6 @@ impl ProposalState {
         T: Transport + Clone,
         Matching: MatchingEngineHandle
     {
-        // NOTE: this is here while davids shit is broken
         self.last_round_info = Some(LastRoundInfo {
             time_to_complete: Instant::now().duration_since(self.trigger_time)
         });
@@ -123,11 +122,6 @@ impl ProposalState {
 
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();
-
-        // mark the time we try to submitted
-        self.last_round_info = Some(LastRoundInfo {
-            time_to_complete: Instant::now().duration_since(self.trigger_time)
-        });
 
         let submission_future = async move {
             tracing::info!("building bundle");

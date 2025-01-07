@@ -66,13 +66,12 @@ fn end_to_end_agent<'a>(
                 let client = HttpClient::builder().build(rpc_address).unwrap();
                 tracing::info!("waiting for new block");
                 let mut pending_orders = FuturesUnordered::new();
-                let mut rng = thread_rng();
 
                 loop {
-                    let rand_sleep = sleep(Duration::from_millis(rng.gen_range(500..1000)));
+                    let sleep = sleep(Duration::from_millis(750));
 
                     tokio::select! {
-                        _ = rand_sleep => {
+                        _ = sleep => {
                             let new_orders = generator.generate_orders();
                             tracing::info!("generated new orders. submitting to rpc");
 

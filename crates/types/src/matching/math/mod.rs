@@ -3,7 +3,7 @@ use std::ops::Neg;
 use malachite::{
     num::{
         arithmetic::traits::{DivRound, FloorSqrt, Pow, PowerOf2},
-        basic::traits::{One, Two},
+        basic::traits::{One, Two, Zero},
         conversion::traits::{RoundingFrom, SaturatingInto}
     },
     rounding_modes::RoundingMode,
@@ -148,14 +148,25 @@ pub fn quadratic_solve(
     let denom_plus = &neg_b + &sqrt_b24ac;
     println!("Numerator: {}\nDenom Plus: {}\nDenom Minus: {}", numerator, denom_plus, denom_minus);
 
-    let answer_minus = numerator
-        .clone()
-        .div_round(&denom_minus, RoundingMode::Nearest)
-        .0;
-    let answer_plus = numerator.div_round(&denom_plus, RoundingMode::Nearest).0;
-    match direction {
-        Direction::BuyingT0 => Integer::min(answer_plus, answer_minus),
-        Direction::SellingT0 => Integer::max(answer_plus, answer_minus)
+    // Save ourselves from zeroes
+    match (denom_plus == Integer::ZERO, denom_minus == Integer::ZERO) {
+        (true, true) => panic!("Both denominators in quadratic solve were zero, this math sucks"),
+        // Just one that's valid, return that
+        (true, false) => numerator.div_round(&denom_plus, RoundingMode::Nearest).0,
+        // Just one that's valid, return that
+        (false, true) => numerator.div_round(&denom_minus, RoundingMode::Nearest).0,
+        // Both valid, compare and return the best option
+        (false, false) => {
+            let answer_plus = numerator
+                .clone()
+                .div_round(&denom_plus, RoundingMode::Nearest)
+                .0;
+            let answer_minus = numerator.div_round(&denom_minus, RoundingMode::Nearest).0;
+            match direction {
+                Direction::BuyingT0 => Integer::min(answer_plus, answer_minus),
+                Direction::SellingT0 => Integer::max(answer_plus, answer_minus)
+            }
+        }
     }
 }
 

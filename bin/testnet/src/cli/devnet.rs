@@ -1,7 +1,7 @@
 use clap::Parser;
 use testing_tools::types::config::DevnetConfig;
 
-#[derive(Parser)]
+#[derive(Parser, Clone, Debug)]
 pub struct DevnetCli {
     /// starting port for the rpc for submitting transactions.
     /// each node will have an rpc submission endpoint at this port + their
@@ -13,8 +13,7 @@ pub struct DevnetCli {
     #[clap(short, long, default_value = "12")]
     pub testnet_block_time_secs: u64,
     /// the amount of testnet nodes that will be spawned and connected to.
-    /// this will change in the future but is good enough for testing currently
-    #[clap(short, long, default_value = "2")]
+    #[clap(short, long, default_value = "3")]
     pub nodes_in_network:        u64,
     /// the secret key/address to use as the controller
     #[clap(short, long, default_value = "7")]
@@ -28,7 +27,7 @@ pub struct DevnetCli {
 }
 
 impl DevnetCli {
-    pub fn _make_config(self) -> DevnetConfig {
+    pub fn make_config(self) -> DevnetConfig {
         DevnetConfig::new(self.nodes_in_network, self.starting_port, self.fork_block, self.fork_url)
     }
 }

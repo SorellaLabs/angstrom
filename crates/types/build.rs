@@ -5,14 +5,16 @@ use itertools::Itertools;
 
 const CONTRACT_LOCATION: &str = "contracts/";
 const OUT_DIRECTORY: &str = "contracts/out/";
+const SRC_DIRECTORY: &str = "contracts/src";
 const BINDINGS_PATH: &str = "/src/contract_bindings/mod.rs";
 
-const WANTED_CONTRACTS: [&str; 5] = [
+const WANTED_CONTRACTS: [&str; 6] = [
     "Angstrom.sol",
     "PoolManager.sol",
     "PoolGate.sol",
     "MockRewardsManager.sol",
-    "MintableMockERC20.sol"
+    "MintableMockERC20.sol",
+    "ControllerV1.sol"
 ];
 
 // builds the contracts crate. then goes and generates bindings on this
@@ -24,6 +26,13 @@ fn main() {
 
     let mut contract_dir = base_dir.clone();
     contract_dir.push(CONTRACT_LOCATION);
+
+    // Only rerun if our contracts have actually changed
+    let mut src_dir = base_dir.clone();
+    src_dir.push(SRC_DIRECTORY);
+    if let Some(src_dir_str) = src_dir.to_str() {
+        println!("cargo::rerun-if-changed={}", src_dir_str);
+    }
 
     let mut out_dir = base_dir.clone();
     out_dir.push(OUT_DIRECTORY);
@@ -68,7 +77,7 @@ pub mod {mod_name} {{
     alloy::sol!(
         #[allow(missing_docs)]
         #[sol(rpc)]
-        #[derive(Debug, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug,Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         {name},
         "{path_of_contracts}"
     );

@@ -3,10 +3,11 @@ use std::ops::Deref;
 use eyre::eyre;
 use uniswap_v3_math::tick_math::{MAX_TICK, MIN_TICK};
 
-use super::{Direction, PoolSnapshot, Tick};
+use super::{Direction, PoolPrice, PoolSnapshot, Tick};
+use crate::matching::SqrtPriceX96;
 
 /// A LiqRange describes the liquidity conditions within a specific range of
-/// ticks.
+/// ticks.  A LiqRange covers ticks [lower_tick, upper_tick)
 #[derive(Default, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct LiqRange {
     /// Lower tick for this range
@@ -79,13 +80,42 @@ impl<'a> LiqRangeRef<'a> {
         Self { pool_snap: market, range, range_idx }
     }
 
+    /// Determines if a given SqrtPriceX96 is within this liquidity range
+    pub fn price_in_range(&self, price: SqrtPriceX96) -> bool {
+        if let Ok(price_tick) = price.to_tick() {
+            price_tick >= self.lower_tick && price_tick < self.upper_tick
+        } else {
+            println!("Default false");
+            false
+        }
+    }
+
+    pub fn start_tick(&self, direction: Direction) -> Tick {
+        match direction {
+            Direction::BuyingT0 => self.lower_tick,
+            Direction::SellingT0 => self.upper_tick
+        }
+    }
+
     /// Returns the final tick in this liquidity range presuming the price
     /// starts
-    pub fn end_bound(&self, direction: Direction) -> Tick {
+    pub fn end_tick(&self, direction: Direction) -> Tick {
         match direction {
             Direction::BuyingT0 => self.upper_tick,
             Direction::SellingT0 => self.lower_tick
         }
+    }
+
+    /// PoolPrice representing the start price of this liquidity bound
+    pub fn start_price(&self, direction: Direction) -> PoolPrice<'a> {
+        let tick = self.start_tick(direction);
+        PoolPrice { tick, liq_range: *self, price: SqrtPriceX96::at_tick(tick).unwrap() }
+    }
+
+    /// PoolPrice representing the end price of this liquidity bound
+    pub fn end_price(&self, direction: Direction) -> PoolPrice<'a> {
+        let tick = self.end_tick(direction);
+        PoolPrice { tick, liq_range: *self, price: SqrtPriceX96::at_tick(tick).unwrap() }
     }
 
     /// Returns the appropriate tick to donate to in order to reward LPs in this

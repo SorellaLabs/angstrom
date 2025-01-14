@@ -120,6 +120,10 @@ impl SearcherPool {
             .is_none();
         assert!(old_is_none);
     }
+
+    pub fn remove_pool(&mut self, key: &PoolId) {
+        let _ = self.searcher_orders.remove(key);
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

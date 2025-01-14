@@ -1,5 +1,5 @@
 use super::TestingConfigKind;
-use crate::types::GlobalTestingConfig;
+use crate::types::{initial_state::PartialConfigPoolKey, GlobalTestingConfig};
 
 #[derive(Debug, Clone)]
 pub struct DevnetConfig {
@@ -31,7 +31,7 @@ impl DevnetConfig {
 impl Default for DevnetConfig {
     fn default() -> Self {
         Self {
-            intial_node_count: 2,
+            intial_node_count: 5,
             initial_rpc_port:  4200,
             fork_block_number: None,
             fork_url:          None
@@ -62,5 +62,9 @@ impl GlobalTestingConfig for DevnetConfig {
 
     fn node_count(&self) -> u64 {
         self.intial_node_count
+    }
+
+    fn pool_keys(&self) -> Vec<PartialConfigPoolKey> {
+        Vec::new()
     }
 }

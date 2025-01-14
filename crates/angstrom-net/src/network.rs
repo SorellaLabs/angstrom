@@ -1,6 +1,8 @@
 use std::sync::{atomic::AtomicUsize, Arc};
 
-use angstrom_types::{primitive::PeerId, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types::{
+    orders::CancelOrderRequest, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
+};
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;
 use tokio::sync::{
@@ -36,7 +38,6 @@ impl StromNetworkHandle {
 
     /// Send Strom message to peer
     pub fn send_message(&self, peer_id: PeerId, msg: StromMessage) {
-        tracing::debug!("sent message to peer {:?}", peer_id);
         self.send_to_network_manager(StromNetworkHandleMsg::SendStromMessage { peer_id, msg })
     }
 
@@ -90,7 +91,8 @@ struct StromNetworkInner {
 /// All events related to orders emitted by the network.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NetworkOrderEvent {
-    IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> }
+    IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> },
+    CancelOrder { peer_id: PeerId, request: CancelOrderRequest }
 }
 
 #[derive(Debug)]

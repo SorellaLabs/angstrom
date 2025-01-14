@@ -15,7 +15,7 @@ use crate::limit::LimitPoolError;
 #[derive(Default)]
 pub struct LimitPool {
     pub(super) pending_orders: HashMap<PoolId, PendingPool<GroupedVanillaOrder>>,
-    parked_orders:             HashMap<PoolId, ParkedPool>,
+    pub(super) parked_orders:  HashMap<PoolId, ParkedPool>,
     metrics:                   VanillaLimitOrderPoolMetricsWrapper
 }
 

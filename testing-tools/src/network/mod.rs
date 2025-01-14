@@ -3,6 +3,7 @@ mod strom_peer;
 use std::{collections::HashSet, sync::Arc};
 
 use alloy_chains::Chain;
+use angstrom_eth::manager::EthEvent;
 use angstrom_network::{
     manager::StromConsensusEvent, state::StromState, NetworkOrderEvent, StatusState,
     StromNetworkManager, StromProtocolHandler, StromSessionManager, Swarm, VerificationSidecar
@@ -16,6 +17,7 @@ use reth_network_peers::{pk2id, PeerId};
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
 use secp256k1::SecretKey;
 pub use strom_peer::*;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::PollSender;
 
 use crate::{
@@ -29,7 +31,8 @@ pub struct TestnetNodeNetwork {
     // strom components
     pub strom_handle: StromNetworkPeer,
     pub secret_key:   SecretKey,
-    pub pubkey:       PeerId
+    pub pubkey:       PeerId,
+    pub eth_tx:       UnboundedSender<EthEvent>
 }
 
 impl TestnetNodeNetwork {
@@ -79,7 +82,10 @@ impl TestnetNodeNetwork {
         let sessions = StromSessionManager::new(session_manager_rx);
         let swarm = Swarm::new(sessions, state);
 
-        let strom_network = StromNetworkManager::new(swarm, to_pool_manager, to_consensus_manager);
+        let (eth_tx, eth_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let strom_network =
+            StromNetworkManager::new(swarm, eth_rx, to_pool_manager, to_consensus_manager);
 
         let mut eth_peer = peer.launch().await.unwrap();
         eth_peer.network_mut().add_rlpx_sub_protocol(protocol);
@@ -89,7 +95,7 @@ impl TestnetNodeNetwork {
         let eth_handle = EthNetworkPeer::new(&eth_peer);
 
         (
-            Self { strom_handle, secret_key: sk, pubkey: peer_id, eth_handle },
+            Self { strom_handle, secret_key: sk, pubkey: peer_id, eth_handle, eth_tx },
             eth_peer,
             strom_network
         )

@@ -55,6 +55,12 @@ impl LimitOrderPool {
             })
     }
 
+    pub fn remove_pool(&mut self, key: &PoolId) {
+        let _ = self.composable_orders.map.remove(key);
+        let _ = self.limit_orders.parked_orders.remove(key);
+        let _ = self.limit_orders.pending_orders.remove(key);
+    }
+
     pub fn get_order_status(&self, order_hash: B256) -> Option<OrderStatus> {
         self.limit_orders.get_order_status(order_hash)
     }

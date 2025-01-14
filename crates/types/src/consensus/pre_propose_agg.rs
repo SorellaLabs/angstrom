@@ -1,5 +1,5 @@
 use alloy::{
-    primitives::{keccak256, BlockNumber, Parity, U256},
+    primitives::{keccak256, BlockNumber, U256},
     signers::{Signature, SignerSync}
 };
 use bytes::Bytes;
@@ -22,7 +22,7 @@ impl Default for PreProposalAggregation {
             block_height:  Default::default(),
             source:        Default::default(),
             pre_proposals: Default::default(),
-            signature:     Signature::new(U256::ZERO, U256::ZERO, Parity::default())
+            signature:     Signature::new(U256::ZERO, U256::ZERO, false)
         }
     }
 }

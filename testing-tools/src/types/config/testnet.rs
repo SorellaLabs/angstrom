@@ -1,19 +1,30 @@
-use angstrom_types::contract_bindings::angstrom::Angstrom::PoolKey;
-
 use super::TestingConfigKind;
-use crate::types::GlobalTestingConfig;
+use crate::types::{initial_state::PartialConfigPoolKey, GlobalTestingConfig};
 
 #[derive(Debug, Clone)]
 pub struct TestnetConfig {
     pub node_count: u64,
-    pub pool_keys:  Vec<PoolKey>,
+    pub pool_keys:  Vec<PartialConfigPoolKey>,
     /// only the leader can have this
-    pub eth_ws_url: String
+    pub eth_ws_url: String,
+    pub mev_guard:  bool,
+    seed:           u16
 }
 
 impl TestnetConfig {
-    pub fn new(node_count: u64, pool_keys: Vec<PoolKey>, eth_ws_url: impl ToString) -> Self {
-        Self { node_count, pool_keys, eth_ws_url: eth_ws_url.to_string() }
+    pub fn new(
+        node_count: u64,
+        pool_keys: Vec<PartialConfigPoolKey>,
+        eth_ws_url: impl ToString,
+        mev_guard: bool
+    ) -> Self {
+        Self {
+            node_count,
+            pool_keys,
+            eth_ws_url: eth_ws_url.to_string(),
+            mev_guard,
+            seed: rand::random()
+        }
     }
 }
 
@@ -23,7 +34,7 @@ impl GlobalTestingConfig for TestnetConfig {
     }
 
     fn fork_config(&self) -> Option<(u64, String)> {
-        unreachable!()
+        Some((0, self.eth_ws_url.clone()))
     }
 
     fn config_type(&self) -> TestingConfigKind {
@@ -31,7 +42,7 @@ impl GlobalTestingConfig for TestnetConfig {
     }
 
     fn anvil_rpc_endpoint(&self, _: u64) -> String {
-        "/tmp/testnet_anvil.ipc".to_string()
+        format!("/tmp/testnet_anvil_{}.ipc", self.seed)
     }
 
     fn is_leader(&self, node_id: u64) -> bool {
@@ -40,5 +51,9 @@ impl GlobalTestingConfig for TestnetConfig {
 
     fn node_count(&self) -> u64 {
         self.node_count
+    }
+
+    fn pool_keys(&self) -> Vec<PartialConfigPoolKey> {
+        self.pool_keys.clone()
     }
 }

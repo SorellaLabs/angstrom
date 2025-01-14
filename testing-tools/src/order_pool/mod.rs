@@ -13,7 +13,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::state::pools::AngstromPoolsTracker;
 
-use crate::{mocks::validator::MockValidator, types::MockBlockSync};
+use crate::mocks::validator::MockValidator;
 
 type DefaultMockPoolManager = PoolManager<MockValidator, MockBlockSync>;
 

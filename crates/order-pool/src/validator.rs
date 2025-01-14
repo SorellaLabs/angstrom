@@ -62,7 +62,7 @@ where
         block_number: u64,
         completed_orders: Vec<B256>,
         revalidation_addresses: Vec<Address>
-    ) -> Self {
+    ) {
         assert!(
             !self.is_transitioning(),
             "already clearing for new block. if this gets triggered, means we have a big runtime \
@@ -77,7 +77,8 @@ where
                 >)
         });
 
-        Self::ClearingForNewBlock {
+        tracing::info!("clearing for block");
+        *self = Self::ClearingForNewBlock {
             validator: validator.clone(),
             waiting_for_new_block: VecDeque::default(),
             remaining_futures: FuturesUnordered::from_iter(rem_futures),
@@ -93,11 +94,13 @@ where
         orders: Vec<B256>,
         changed_addresses: Vec<Address>
     ) {
-        assert!(matches!(self, Self::WaitingForStorageCleanup { .. }));
+        tracing::info!("notify validation on changes");
         let Self::WaitingForStorageCleanup { validator, waiting_for_new_block } = self else {
-            unreachable!()
+            tracing::error!("should not happen");
+            return
         };
         let validator_clone = validator.clone();
+        tracing::info!("informing validation that we got a new block");
         let fut = Box::pin(async move {
             validator_clone
                 .new_block(block_number, orders, changed_addresses)
@@ -175,14 +178,13 @@ where
                 revalidation_addresses,
                 remaining_futures
             } => {
-                let next = remaining_futures.poll_next_unpin(cx);
-                match next {
-                    res @ Poll::Ready(Some(_)) => {
-                        return res.map(|inner| inner.map(OrderValidatorRes::ValidatedOrder))
-                    }
-                    Poll::Pending => return Poll::Pending,
-                    _ => {}
+                if let Poll::Ready(Some(next)) = remaining_futures.poll_next_unpin(cx) {
+                    return Poll::Ready(Some(OrderValidatorRes::ValidatedOrder(next)))
                 }
+                if !remaining_futures.is_empty() {
+                    return Poll::Pending
+                }
+
                 info!(
                     "clearing for new block done. triggering clearing and starting to validate \
                      state for current block"
@@ -209,9 +211,12 @@ where
                 else {
                     return Poll::Pending
                 };
+
+                tracing::info!("starting regular processing");
                 *this = new_state;
                 cx.waker().wake_by_ref();
-                Poll::Pending
+
+                Poll::Ready(Some(OrderValidatorRes::TransitionComplete))
             }
             OrderValidator::RegularProcessing { remaining_futures, .. } => remaining_futures
                 .poll_next_unpin(cx)
@@ -220,11 +225,14 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum OrderValidatorRes {
     /// standard flow
     ValidatedOrder(OrderValidationResults),
     /// Once all orders for the previous block have been validated. we go
     /// through all the addresses and orders and cleanup. once this is done
     /// we can go back to general flow.
-    EnsureClearForTransition { block: u64, orders: Vec<B256>, addresses: Vec<Address> }
+    EnsureClearForTransition { block: u64, orders: Vec<B256>, addresses: Vec<Address> },
+    /// has fully transitioned to new block
+    TransitionComplete
 }

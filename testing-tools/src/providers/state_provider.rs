@@ -1,11 +1,15 @@
-use std::future::IntoFuture;
+use std::{future::IntoFuture, time::Duration};
 
 use alloy::{providers::Provider, rpc::types::Block};
 use alloy_primitives::{Address, BlockNumber, B256, U256};
+use alloy_rpc_types::{BlockId, BlockTransactionsKind};
+use angstrom_types::block_sync::{BlockSyncProducer, GlobalBlockSync};
 use eyre::bail;
+use futures::stream::StreamExt;
+use reth_primitives::EthPrimitives;
 use reth_provider::{
     BlockHashReader, BlockNumReader, CanonStateNotification, CanonStateNotifications,
-    CanonStateSubscriptions, ProviderError, ProviderResult
+    CanonStateSubscriptions, NodePrimitivesProvider, ProviderError, ProviderResult
 };
 use reth_revm::primitives::Bytecode;
 use tokio::sync::broadcast;
@@ -21,15 +25,17 @@ use crate::{
 pub struct AnvilStateProvider<P> {
     provider:       P,
     canon_state:    AnvilConsensusCanonStateNotification,
-    canon_state_tx: broadcast::Sender<CanonStateNotification>
+    canon_state_tx: broadcast::Sender<CanonStateNotification>,
+    block_sync:     GlobalBlockSync
 }
 
 impl<P: WithWalletProvider> AnvilStateProvider<P> {
-    pub(crate) fn new(provider: P) -> Self {
+    pub(crate) fn new(provider: P, block_sync: GlobalBlockSync) -> Self {
         Self {
             provider,
             canon_state: AnvilConsensusCanonStateNotification::new(),
-            canon_state_tx: broadcast::channel(1000).0
+            canon_state_tx: broadcast::channel(1000).0,
+            block_sync
         }
     }
 
@@ -58,7 +64,44 @@ impl<P: WithWalletProvider> AnvilStateProvider<P> {
         AnvilStateProvider {
             provider:       self.provider.wallet_provider(),
             canon_state:    self.canon_state.clone(),
-            canon_state_tx: self.canon_state_tx.clone()
+            canon_state_tx: self.canon_state_tx.clone(),
+            block_sync:     self.block_sync.clone()
+        }
+    }
+
+    /// used for testnet to make sure cannon notifications work
+    pub async fn listen_to_new_blocks(self) {
+        let mut new_blocks = self
+            .provider()
+            .rpc_provider()
+            .watch_blocks()
+            .await
+            .unwrap()
+            .with_poll_interval(Duration::from_millis(100))
+            .into_stream();
+
+        while let Some(block_hash) = new_blocks.next().await {
+            if let Some(block_hash) = block_hash.first() {
+                tracing::info!("got new blockhash");
+                let block = self
+                    .provider()
+                    .rpc_provider()
+                    .get_block(
+                        BlockId::Hash(alloy_rpc_types::RpcBlockHash {
+                            block_hash:        *block_hash,
+                            require_canonical: None
+                        }),
+                        alloy_rpc_types::BlockTransactionsKind::Full
+                    )
+                    .await
+                    .unwrap()
+                    .unwrap();
+                tracing::info!("updating block sync");
+                self.block_sync.new_block(block.header.number);
+                tracing::info!("updating cannon chain");
+
+                self.update_canon_chain(&block).unwrap();
+            }
         }
     }
 }
@@ -108,7 +151,10 @@ impl<P: WithWalletProvider> reth_revm::DatabaseRef for AnvilStateProvider<P> {
         let acc = async_to_sync(
             self.provider
                 .rpc_provider()
-                .get_block_by_number(reth_primitives::BlockNumberOrTag::Number(number), false)
+                .get_block_by_number(
+                    alloy_rpc_types::BlockNumberOrTag::Number(number),
+                    BlockTransactionsKind::Hashes
+                )
                 .into_future()
         )?;
 
@@ -198,7 +244,11 @@ impl<P: WithWalletProvider> BlockStateProviderFactory for AnvilStateProvider<P> 
 }
 
 impl<P: WithWalletProvider> CanonStateSubscriptions for AnvilStateProvider<P> {
-    fn subscribe_to_canonical_state(&self) -> CanonStateNotifications {
+    fn subscribe_to_canonical_state(&self) -> CanonStateNotifications<Self::Primitives> {
         self.canon_state_tx.subscribe()
     }
+}
+
+impl<P: WithWalletProvider> NodePrimitivesProvider for AnvilStateProvider<P> {
+    type Primitives = EthPrimitives;
 }

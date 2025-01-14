@@ -2,10 +2,12 @@
 use std::fmt;
 
 use alloy::primitives::{Address, TxHash, U256};
+use alloy_primitives::PrimitiveSignature;
 use serde::{Deserialize, Serialize};
 
 use crate::orders::OrderLocation;
 
+pub mod flips;
 pub mod grouped_orders;
 
 /// The capability of all default orders.
@@ -20,9 +22,6 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
 
     /// Amount of tokens to sell
     fn amount_in(&self) -> u128;
-
-    /// Min amount of tokens to buy
-    fn amount_out_min(&self) -> u128;
 
     /// Limit Price
     fn limit_price(&self) -> U256;
@@ -46,6 +45,14 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
 
     /// whether to use angstrom balances or not
     fn use_internal(&self) -> bool;
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature>;
+}
+
+pub trait GenerateFlippedOrder: Send + Sync + Clone + Unpin + 'static {
+    fn flip(&self) -> Self
+    where
+        Self: Sized;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash, Copy)]

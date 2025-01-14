@@ -5,6 +5,7 @@ use itertools::Itertools;
 
 const CONTRACT_LOCATION: &str = "contracts/";
 const OUT_DIRECTORY: &str = "contracts/out/";
+const SRC_DIRECTORY: &str = "contracts/src";
 const BINDINGS_PATH: &str = "/src/uniswap/loaders/mod.rs";
 
 const WANTED_CONTRACTS: [&str; 4] = [
@@ -23,6 +24,13 @@ fn main() {
 
     let mut contract_dir = base_dir.clone();
     contract_dir.push(CONTRACT_LOCATION);
+
+    // Only rerun if our contracts have actually changed
+    let mut src_dir = base_dir.clone();
+    src_dir.push(SRC_DIRECTORY);
+    if let Some(src_dir_str) = src_dir.to_str() {
+        println!("cargo::rerun-if-changed={}", src_dir_str);
+    }
 
     let mut out_dir = base_dir.clone();
     out_dir.push(OUT_DIRECTORY);

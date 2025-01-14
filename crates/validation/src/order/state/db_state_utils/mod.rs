@@ -123,11 +123,50 @@ impl<DB: revm::DatabaseRef> FetchUtils<DB> {
     }
 }
 
+#[derive(Clone)]
+pub struct AutoMaxFetchUtils;
+
+impl StateFetchUtils for AutoMaxFetchUtils {
+    fn is_valid_nonce(&self, _: Address, _: u64) -> bool {
+        true
+    }
+
+    fn fetch_approval_balance_for_token_overrides(
+        &self,
+        _: Address,
+        _: Address,
+        _: &HashMap<Address, HashMap<U256, U256>>
+    ) -> Option<U256> {
+        Some(U256::MAX)
+    }
+
+    fn fetch_approval_balance_for_token(&self, _: Address, _: Address) -> Option<U256> {
+        Some(U256::MAX)
+    }
+
+    fn fetch_balance_for_token_overrides(
+        &self,
+        _: Address,
+        _: Address,
+        _: &HashMap<Address, HashMap<U256, U256>>
+    ) -> Option<U256> {
+        Some(U256::MAX)
+    }
+
+    fn fetch_balance_for_token(&self, _: Address, _: Address) -> U256 {
+        U256::MAX
+    }
+
+    fn fetch_token_balance_in_angstrom(&self, _: Address, _: Address) -> U256 {
+        U256::MAX
+    }
+}
+
 #[cfg(test)]
 pub mod test_fetching {
     use std::collections::{HashMap, HashSet};
 
-    use alloy::primitives::U256;
+    use alloy::primitives::{address, U256};
     use dashmap::DashMap;
 
     use super::{StateFetchUtils, *};
@@ -205,5 +244,91 @@ pub mod test_fetching {
                 .and_then(|inner| inner.value().get(&token).cloned())
                 .unwrap_or_default()
         }
+    }
+
+    fn setup_mock_fetch() -> MockFetch {
+        MockFetch::default()
+    }
+
+    #[test]
+    fn test_balance_operations() {
+        let mock = setup_mock_fetch();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        let balance = U256::from(1000);
+
+        // Test setting and fetching balance
+        mock.set_balance_for_user(user, token, balance);
+        assert_eq!(mock.fetch_balance_for_token(user, token), balance);
+
+        // Test non-existent balance returns zero
+        let other_token = address!("beefdeadbeefdeadbeefdeadbeefdeadbeefdead");
+        assert_eq!(mock.fetch_balance_for_token(user, other_token), U256::ZERO);
+    }
+
+    #[test]
+    fn test_approval_operations() {
+        let mock = setup_mock_fetch();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        let approval = U256::from(500);
+
+        // Test setting and fetching approval
+        mock.set_approval_for_user(user, token, approval);
+        assert_eq!(mock.fetch_approval_balance_for_token(user, token), Some(approval));
+
+        // Test non-existent approval returns None
+        let other_token = address!("beefdeadbeefdeadbeefdeadbeefdeadbeefdead");
+        assert_eq!(mock.fetch_approval_balance_for_token(user, other_token), None);
+    }
+
+    #[test]
+    fn test_nonce_validation() {
+        let mock = setup_mock_fetch();
+        let user = address!("1234567890123456789012345678901234567890");
+
+        // Test unused nonce is valid
+        assert!(mock.is_valid_nonce(user, 1));
+
+        // Set used nonces
+        let mut used_nonces = HashSet::new();
+        used_nonces.insert(1);
+        used_nonces.insert(2);
+        mock.set_used_nonces(user, used_nonces);
+
+        // Test used nonces are invalid
+        assert!(!mock.is_valid_nonce(user, 1));
+        assert!(!mock.is_valid_nonce(user, 2));
+
+        // Test unused nonce is still valid
+        assert!(mock.is_valid_nonce(user, 3));
+    }
+
+    #[test]
+    fn test_angstrom_balance() {
+        let mock = setup_mock_fetch();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Test default angstrom balance is zero
+        assert_eq!(mock.fetch_token_balance_in_angstrom(user, token), U256::ZERO);
+
+        // We can't directly set angstrom values as there's no public method,
+        // but we can verify the default behavior
+        let other_token = address!("beefdeadbeefdeadbeefdeadbeefdeadbeefdead");
+        assert_eq!(mock.fetch_token_balance_in_angstrom(user, other_token), U256::ZERO);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_overrides_not_implemented() {
+        let mock = setup_mock_fetch();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+        let overrides = HashMap::new();
+
+        // Verify that override methods panic with todo!()
+        mock.fetch_approval_balance_for_token_overrides(user, token, &overrides);
+        mock.fetch_balance_for_token_overrides(user, token, &overrides);
     }
 }

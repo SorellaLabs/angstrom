@@ -39,9 +39,10 @@ pub fn run() -> eyre::Result<()> {
 
         let secret_key = get_secret_key(&args.secret_key_location)?;
 
-        let mut network = init_network_builder(secret_key.clone())?;
+        let mut channels = initialize_strom_handles();
+        let mut network =
+            init_network_builder(secret_key.clone(), channels.eth_handle_rx.take().unwrap())?;
         let protocol_handle = network.build_protocol_handler();
-        let channels = initialize_strom_handles();
 
         // for rpc
         let pool = channels.get_pool_handle();
@@ -54,7 +55,7 @@ pub fn run() -> eyre::Result<()> {
                     .components_builder()
                     .network(AngstromNetworkBuilder::new(protocol_handle))
             )
-            .with_add_ons::<EthereumAddOns>(Default::default())
+            .with_add_ons::<EthereumAddOns<_>>(Default::default())
             .extend_rpc_modules(move |rpc_context| {
                 let order_api = OrderApi::new(pool.clone(), executor_clone, validation_client);
                 rpc_context.modules.merge_configured(order_api.into_rpc())?;

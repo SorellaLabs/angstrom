@@ -33,7 +33,7 @@ impl Status {
     /// returns true if the signature is valid
     pub fn verify(self) -> Result<PeerId, alloy::signers::Error> {
         let message = self.state.to_message();
-        let key = self.signature.recover_from_msg(message)?;
+        let key = self.signature.recover_from_prehash(&message).unwrap();
 
         Ok(AngstromSigner::public_key_to_peer_id(&key))
     }

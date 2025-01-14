@@ -19,7 +19,7 @@ pub trait MatchingStrategy<'a> {
     /// `finalize()` method to do our "last mile" computation
     fn run(book: &'a OrderBook) -> Option<VolumeFillMatcher<'a>> {
         let mut solver = VolumeFillMatcher::new(book);
-        solver.fill();
+        solver.run_match();
         Self::finalize(solver)
     }
 

@@ -17,6 +17,7 @@ pub struct BaselineState {
     angstrom_balance: HashMap<TokenAddress, Amount>
 }
 
+#[derive(Debug)]
 pub struct LiveState {
     pub token:            TokenAddress,
     pub approval:         Amount,
@@ -39,7 +40,7 @@ impl LiveState {
             }
             (amount_in, U256::ZERO)
         } else {
-            if self.approval < amount_in && self.balance < amount_in {
+            if self.approval < amount_in || self.balance < amount_in {
                 return None;
             }
             (U256::ZERO, amount_in)
@@ -58,7 +59,7 @@ impl LiveState {
 }
 
 /// deltas to be applied to the base user action
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PendingUserAction {
     /// hash of order
     pub order_hash:     B256,
@@ -200,12 +201,12 @@ impl UserAccounts {
         drop(entry);
 
         // iterate through all vales collected the orders that
-
         self.fetch_all_invalidated_orders(user, token)
     }
 
     fn fetch_all_invalidated_orders(&self, user: UserAddress, token: TokenAddress) -> Vec<B256> {
-        let baseline = self.last_known_state.get(&user).unwrap();
+        let Some(baseline) = self.last_known_state.get(&user) else { return vec![] };
+
         let mut baseline_approval = *baseline.token_approval.get(&token).unwrap();
         let mut baseline_balance = *baseline.token_balance.get(&token).unwrap();
         let mut baseline_angstrom_balance = *baseline.angstrom_balance.get(&token).unwrap();
@@ -290,5 +291,298 @@ impl UserAccounts {
             approval: live_approval,
             angstrom_balance: live_angstrom_balance
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::address;
+
+    use super::*;
+
+    fn setup_test_accounts() -> UserAccounts {
+        UserAccounts::new()
+    }
+
+    fn create_test_pending_action(
+        token: TokenAddress,
+        token_delta: U256,
+        angstrom_delta: U256,
+        token_approval: U256,
+        nonce: u64
+    ) -> PendingUserAction {
+        PendingUserAction {
+            order_hash: B256::random(),
+            respend: RespendAvoidanceMethod::Nonce(nonce),
+            token_address: token,
+            token_delta,
+            token_approval,
+            angstrom_delta,
+            pool_info: UserOrderPoolInfo { token, ..Default::default() }
+        }
+    }
+
+    #[test]
+    fn test_new_block_handling() {
+        let accounts = setup_test_accounts();
+        let user1 = address!("1234567890123456789012345678901234567890");
+        let user2 = address!("2234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Add some pending actions
+        let action1 =
+            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
+        let action2 =
+            create_test_pending_action(token, U256::from(200), U256::from(0), U256::from(200), 2);
+
+        accounts.insert_pending_user_action(user1, action1.clone());
+        accounts.insert_pending_user_action(user2, action2.clone());
+
+        // Verify actions are present
+        assert!(accounts.pending_actions.contains_key(&user1));
+        assert!(accounts.pending_actions.contains_key(&user2));
+
+        // Call new_block to clear specific users and orders
+        accounts.new_block(vec![user1], vec![action2.order_hash]);
+
+        // Verify user1's actions are cleared
+        assert!(!accounts.pending_actions.contains_key(&user1));
+        // Verify user2's actions with matching order_hash are cleared
+        assert!(accounts
+            .pending_actions
+            .get(&user2)
+            .map_or(true, |actions| actions.is_empty()));
+    }
+
+    #[test]
+    fn test_cancel_order() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        let action =
+            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
+        let order_hash = action.order_hash;
+
+        accounts.insert_pending_user_action(user, action);
+
+        // Test canceling non-existent order
+        assert!(!accounts.cancel_order(&user, &B256::random()));
+
+        // Test canceling existing order
+        assert!(accounts.cancel_order(&user, &order_hash));
+
+        // Verify order was removed
+        assert!(accounts
+            .pending_actions
+            .get(&user)
+            .map_or(true, |actions| actions.is_empty()));
+    }
+
+    #[test]
+    fn test_respend_conflicts() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Test with empty state first
+        let conflicts = accounts.respend_conflicts(user, RespendAvoidanceMethod::Nonce(1));
+        assert!(conflicts.is_empty(), "Should return empty vec when no actions exist");
+
+        // Create actions with same nonce
+        let action1 =
+            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
+        let action2 =
+            create_test_pending_action(token, U256::from(200), U256::from(0), U256::from(200), 1);
+        let action3 =
+            create_test_pending_action(token, U256::from(300), U256::from(0), U256::from(300), 2);
+
+        // Insert actions one by one and verify
+        accounts.insert_pending_user_action(user, action1.clone());
+        let conflicts = accounts.respend_conflicts(user, RespendAvoidanceMethod::Nonce(1));
+        assert_eq!(conflicts.len(), 1, "Should find one conflict for nonce 1");
+
+        accounts.insert_pending_user_action(user, action2.clone());
+        let conflicts = accounts.respend_conflicts(user, RespendAvoidanceMethod::Nonce(1));
+        assert_eq!(conflicts.len(), 2, "Should find two conflicts for nonce 1");
+
+        accounts.insert_pending_user_action(user, action3.clone());
+        let conflicts = accounts.respend_conflicts(user, RespendAvoidanceMethod::Nonce(2));
+        assert_eq!(conflicts.len(), 1, "Should find one conflict for nonce 2");
+
+        // Test block-based respend avoidance
+        let conflicts = accounts.respend_conflicts(user, RespendAvoidanceMethod::Block(1));
+        assert!(conflicts.is_empty(), "Block-based respend should return empty vec");
+    }
+
+    #[test]
+    fn test_live_state_calculation() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Set up initial state
+        let mut baseline = BaselineState::default();
+        baseline.token_approval.insert(token, U256::from(1000));
+        baseline.token_balance.insert(token, U256::from(1000));
+        baseline.angstrom_balance.insert(token, U256::from(1000));
+        accounts.last_known_state.insert(user, baseline);
+
+        // Add pending actions
+        let action1 =
+            create_test_pending_action(token, U256::from(100), U256::from(50), U256::from(100), 1);
+        let action2 =
+            create_test_pending_action(token, U256::from(200), U256::from(100), U256::from(200), 2);
+
+        accounts.insert_pending_user_action(user, action1);
+        accounts.insert_pending_user_action(user, action2);
+
+        // Test live state for different nonces
+        let live_state = accounts
+            .try_fetch_live_pending_state(user, token, RespendAvoidanceMethod::Nonce(1))
+            .unwrap();
+
+        assert_eq!(live_state.approval, U256::from(900)); // 1000 - 100
+        assert_eq!(live_state.balance, U256::from(900)); // 1000 - 100
+        assert_eq!(live_state.angstrom_balance, U256::from(950)); // 1000 - 50
+
+        let live_state = accounts
+            .try_fetch_live_pending_state(user, token, RespendAvoidanceMethod::Nonce(2))
+            .unwrap();
+
+        assert_eq!(live_state.approval, U256::from(700)); // 1000 - 100 - 200
+        assert_eq!(live_state.balance, U256::from(700)); // 1000 - 100 - 200
+        assert_eq!(live_state.angstrom_balance, U256::from(850)); // 1000 - 50 -
+                                                                  // 100
+    }
+
+    #[test]
+    fn test_insert_pending_user_action_with_invalidation() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Set up initial state with limited balance
+        let mut baseline = BaselineState::default();
+        baseline.token_approval.insert(token, U256::from(1000));
+        baseline.token_balance.insert(token, U256::from(1000));
+        baseline.angstrom_balance.insert(token, U256::from(1000));
+        accounts.last_known_state.insert(user, baseline);
+
+        // Add action that consumes most of the balance
+        let action1 =
+            create_test_pending_action(token, U256::from(900), U256::from(0), U256::from(900), 1);
+        accounts.insert_pending_user_action(user, action1);
+
+        // Add action that would overflow the balance
+        let action2 =
+            create_test_pending_action(token, U256::from(200), U256::from(0), U256::from(200), 2);
+        let invalidated = accounts.insert_pending_user_action(user, action2.clone());
+
+        // The second action should be invalidated due to insufficient balance
+        assert!(invalidated.contains(&action2.order_hash));
+    }
+
+    #[test]
+    fn test_new_block_with_empty_state() {
+        let accounts = setup_test_accounts();
+        accounts.new_block(vec![], vec![]);
+        assert!(accounts.pending_actions.is_empty());
+        assert!(accounts.last_known_state.is_empty());
+    }
+
+    #[test]
+    fn test_cancel_nonexistent_user() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        assert!(!accounts.cancel_order(&user, &B256::random()));
+    }
+
+    #[test]
+    fn test_respend_conflicts_with_block_avoidance() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        let action =
+            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
+        accounts.insert_pending_user_action(user, action);
+
+        let conflicts = accounts.respend_conflicts(user, RespendAvoidanceMethod::Block(1));
+        assert!(conflicts.is_empty());
+    }
+
+    #[test]
+    fn test_live_state_with_multiple_tokens() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token1 = address!("1111111111111111111111111111111111111111");
+        let token2 = address!("2222222222222222222222222222222222222222");
+
+        // Set up initial state for multiple tokens
+        let mut baseline = BaselineState::default();
+        baseline.token_approval.insert(token1, U256::from(1000));
+        baseline.token_balance.insert(token1, U256::from(1000));
+        baseline.angstrom_balance.insert(token1, U256::from(1000));
+        baseline.token_approval.insert(token2, U256::from(2000));
+        baseline.token_balance.insert(token2, U256::from(2000));
+        baseline.angstrom_balance.insert(token2, U256::from(2000));
+        accounts.last_known_state.insert(user, baseline);
+
+        // Add pending actions for different tokens
+        let action1 =
+            create_test_pending_action(token1, U256::from(100), U256::from(50), U256::from(100), 1);
+        let action2 = create_test_pending_action(
+            token2,
+            U256::from(200),
+            U256::from(100),
+            U256::from(200),
+            1
+        );
+
+        accounts.insert_pending_user_action(user, action1);
+        accounts.insert_pending_user_action(user, action2);
+
+        // Check live state for token1
+        let live_state = accounts
+            .try_fetch_live_pending_state(user, token1, RespendAvoidanceMethod::Nonce(1))
+            .unwrap();
+        assert_eq!(live_state.approval, U256::from(900));
+        assert_eq!(live_state.balance, U256::from(900));
+        assert_eq!(live_state.angstrom_balance, U256::from(950));
+
+        // Check live state for token2
+        let live_state = accounts
+            .try_fetch_live_pending_state(user, token2, RespendAvoidanceMethod::Nonce(1))
+            .unwrap();
+        assert_eq!(live_state.approval, U256::from(1800));
+        assert_eq!(live_state.balance, U256::from(1800));
+        assert_eq!(live_state.angstrom_balance, U256::from(1900));
+    }
+
+    #[test]
+    fn test_fetch_all_invalidated_orders_with_overflow() {
+        let accounts = setup_test_accounts();
+        let user = address!("1234567890123456789012345678901234567890");
+        let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+
+        // Set up initial state with maximum values
+        let mut baseline = BaselineState::default();
+        baseline.token_approval.insert(token, U256::MAX);
+        baseline.token_balance.insert(token, U256::MAX);
+        baseline.angstrom_balance.insert(token, U256::MAX);
+        accounts.last_known_state.insert(user, baseline);
+
+        // Add action that would cause overflow
+        let action = create_test_pending_action(token, U256::MAX, U256::MAX, U256::MAX, 1);
+        accounts.insert_pending_user_action(user, action.clone());
+
+        // Add another action that should be invalidated
+        let action2 =
+            create_test_pending_action(token, U256::from(1), U256::from(1), U256::from(1), 2);
+        accounts.insert_pending_user_action(user, action2.clone());
+
+        let invalidated = accounts.fetch_all_invalidated_orders(user, token);
+        assert!(invalidated.contains(&action2.order_hash));
     }
 }

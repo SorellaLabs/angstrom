@@ -1,6 +1,9 @@
-use alloy::primitives::{
-    aliases::{I24, U24},
-    Address, U256
+use alloy::{
+    primitives::{
+        aliases::{I24, U24},
+        Address, U256
+    },
+    transports::BoxTransport
 };
 use alloy_primitives::TxHash;
 use angstrom_types::{
@@ -88,7 +91,7 @@ where
         Ok(pool_key)
     }
 
-    pub fn mock_reward(&self) -> MockRewardsManagerInstance<E::T, &E::P> {
+    pub fn mock_reward(&self) -> MockRewardsManagerInstance<BoxTransport, &E::P> {
         MockRewardsManagerInstance::new(self.mock_reward, self.provider())
     }
 
@@ -147,7 +150,6 @@ where
     E: TestUniswapEnv
 {
     type P = E::P;
-    type T = E::T;
 
     fn provider(&self) -> &Self::P {
         self.inner.provider()
@@ -195,12 +197,16 @@ where
 
 #[cfg(test)]
 mod tests {
+    use angstrom_types::block_sync::GlobalBlockSync;
+
     use super::MockRewardEnv;
     use crate::{contracts::environment::uniswap::UniswapEnv, providers::AnvilProvider};
 
     #[tokio::test]
     async fn can_be_constructed() {
-        let anvil = AnvilProvider::spawn_new_isolated().await.unwrap();
+        let anvil = AnvilProvider::spawn_new_isolated(GlobalBlockSync::new(0))
+            .await
+            .unwrap();
         let uniswap = UniswapEnv::new(anvil.wallet_provider()).await.unwrap();
         MockRewardEnv::new(uniswap).await.unwrap();
     }

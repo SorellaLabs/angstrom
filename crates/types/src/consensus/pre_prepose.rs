@@ -7,7 +7,7 @@ use alloy::{
     primitives::{keccak256, BlockNumber},
     signers::{Signature, SignerSync}
 };
-use alloy_primitives::{Parity, U256};
+use alloy_primitives::U256;
 use bytes::Bytes;
 use reth_network_peers::PeerId;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ pub struct PreProposal {
 impl Default for PreProposal {
     fn default() -> Self {
         Self {
-            signature:    Signature::new(U256::ZERO, U256::ZERO, Parity::default()),
+            signature:    Signature::new(U256::ZERO, U256::ZERO, false),
             block_height: Default::default(),
             source:       Default::default(),
             limit:        Default::default(),
@@ -81,7 +81,6 @@ impl PreProposal {
 impl PreProposal {
     fn sign_payload(sk: &AngstromSigner, payload: Vec<u8>) -> Signature {
         let hash = keccak256(payload);
-
         sk.sign_hash_sync(&hash).unwrap()
     }
 
@@ -103,6 +102,9 @@ impl PreProposal {
         orders: OrderSet<GroupedVanillaOrder, TopOfBlockOrder>
     ) -> Self {
         let OrderSet { limit, searcher } = orders;
+        let limit_orders = limit.len();
+        let searcher_orders = searcher.len();
+        tracing::info!(%limit_orders,%searcher_orders, %ethereum_height,"building my pre_proposal");
         Self::generate_pre_proposal(ethereum_height, sk, limit, searcher)
     }
 

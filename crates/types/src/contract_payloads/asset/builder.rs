@@ -52,6 +52,20 @@ impl AssetBuilder {
         );
     }
 
+    /// Uniswap swap, we 'take' everything from this. uses addresses instead of
+    /// asset_ids
+    pub fn uniswap_swap_raw(
+        &mut self,
+        stage: AssetBuilderStage,
+        asset_in: Address,
+        asset_out: Address,
+        quantity_in: u128,
+        quantity_out: u128
+    ) {
+        self.get_stage(stage)
+            .uniswap_swap(asset_in, asset_out, quantity_in, quantity_out);
+    }
+
     /// User swap, impacts only our own liquidity
     pub fn external_swap(
         &mut self,

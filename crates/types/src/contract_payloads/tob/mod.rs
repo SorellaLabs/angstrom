@@ -41,7 +41,7 @@ impl ToBOutcome {
             false => Quantity::Token1(tob.quantity_out)
         };
         let pricevec = (snapshot.current_price() - output)?;
-        let total_cost: u128 = pricevec.input().saturating_to();
+        let total_cost: u128 = pricevec.input();
         if total_cost > tob.quantity_in {
             return Err(eyre!("Not enough input to cover the transaction"));
         }
@@ -51,7 +51,7 @@ impl ToBOutcome {
             start_tick:      snapshot.current_price().tick(),
             start_liquidity: snapshot.current_price().liquidity(),
             tribute:         U256::from(donation.tribute),
-            total_cost:      pricevec.input(),
+            total_cost:      U256::from(pricevec.input()),
             total_reward:    U256::from(donation.total_donated),
             tick_donations:  donation.tick_donations
         };
@@ -73,6 +73,7 @@ impl ToBOutcome {
             .collect::<Vec<_>>();
         let start_tick = I24::try_from(donations.first().map(|(a, _)| *a + 1).unwrap_or_default())
             .unwrap_or_default();
+
         match quantities.len() {
             0 | 1 => RewardsUpdate::CurrentOnly {
                 amount: quantities.first().copied().unwrap_or_default()

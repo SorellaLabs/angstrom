@@ -106,7 +106,9 @@ library PoolConfigStoreLib {
                     add(sub(totalEntryBytes, ENTRY_SIZE), STORE_DEPLOYER_BYTES)
                 )
         }
-        if (PoolConfigStore.unwrap(newStore) == address(0)) revert FailedToDeployNewStore();
+        if (PoolConfigStore.unwrap(newStore) == address(0)) {
+            revert FailedToDeployNewStore();
+        }
     }
 
     /// @dev Create a new store from an old when appending or overriding the entry for the given
@@ -168,7 +170,9 @@ library PoolConfigStoreLib {
                 )
         }
 
-        if (PoolConfigStore.unwrap(newStore) == address(0)) revert FailedToDeployNewStore();
+        if (PoolConfigStore.unwrap(newStore) == address(0)) {
+            revert FailedToDeployNewStore();
+        }
     }
 
     function totalEntries(PoolConfigStore self) internal view returns (uint256) {

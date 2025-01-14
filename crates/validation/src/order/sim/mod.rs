@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use alloy::primitives::Address;
 use angstrom_metrics::validation::ValidationMetrics;
@@ -26,21 +26,23 @@ pub struct SimValidation<DB> {
 impl<DB> SimValidation<DB>
 where
     DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Send + Sync,
-    <DB as revm::DatabaseRef>::Error: Send + Sync
+    <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
-    pub fn new(db: Arc<DB>, angstrom_address: Address) -> Self {
-        let gas_calculator = OrderGasCalculations::new(db.clone(), Some(angstrom_address))
-            .expect("failed to deploy baseline angstrom for gas calculations");
+    pub fn new(db: Arc<DB>, angstrom_address: Address, node_address: Address) -> Self {
+        let gas_calculator =
+            OrderGasCalculations::new(db.clone(), Some(angstrom_address), node_address)
+                .expect("failed to deploy baseline angstrom for gas calculations");
         Self { gas_calculator, metrics: ValidationMetrics::new() }
     }
 
     pub fn calculate_tob_gas(
         &self,
         order: &OrderWithStorageData<TopOfBlockOrder>,
-        conversion: &TokenPriceGenerator
+        conversion: &TokenPriceGenerator,
+        block: u64
     ) -> eyre::Result<(GasUsed, GasInToken0)> {
         self.metrics.fetch_gas_for_user(true, || {
-            let gas_in_wei = self.gas_calculator.gas_of_tob_order(order)?;
+            let gas_in_wei = self.gas_calculator.gas_of_tob_order(order, block)?;
             // grab order tokens;
             let (token0, token1) = if order.asset_in < order.asset_out {
                 (order.asset_in, order.asset_out)
@@ -50,17 +52,19 @@ where
 
             // grab price conversion
             let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
-            Ok((gas_in_wei, conversion_factor * U256::from(gas_in_wei)))
+
+            Ok((gas_in_wei, (conversion_factor * U256::from(gas_in_wei)).scale_out_of_ray()))
         })
     }
 
     pub fn calculate_user_gas(
         &self,
         order: &OrderWithStorageData<GroupedVanillaOrder>,
-        conversion: &TokenPriceGenerator
+        conversion: &TokenPriceGenerator,
+        block: u64
     ) -> eyre::Result<(GasUsed, GasInToken0)> {
         self.metrics.fetch_gas_for_user(false, || {
-            let gas_in_wei = self.gas_calculator.gas_of_book_order(order)?;
+            let gas_in_wei = self.gas_calculator.gas_of_book_order(order, block)?;
             // grab order tokens;
             let (token0, token1) = if order.token_in() < order.token_out() {
                 (order.token_in(), order.token_out())
@@ -70,7 +74,8 @@ where
 
             // grab price conversion
             let conversion_factor = conversion.get_eth_conversion_price(token0, token1).unwrap();
-            Ok((gas_in_wei, conversion_factor * U256::from(gas_in_wei)))
+
+            Ok((gas_in_wei, (conversion_factor * U256::from(gas_in_wei)).scale_out_of_ray()))
         })
     }
 }

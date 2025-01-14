@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::OrderVolume;
 
-#[derive(Clone, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderFillState {
     /// The order has not yet been processed
     #[default]
@@ -24,7 +24,7 @@ impl OrderFillState {
         match self {
             Self::Unfilled => Self::PartialFill(quantity),
             Self::PartialFill(f) => Self::PartialFill(f + quantity),
-            Self::CompleteFill | Self::Killed => self.clone()
+            Self::CompleteFill | Self::Killed => *self
         }
     }
 }

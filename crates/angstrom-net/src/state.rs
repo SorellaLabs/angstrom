@@ -29,6 +29,23 @@ impl<DB> StromState<DB> {
         &mut self.peers_manager
     }
 
+    pub fn add_validator(&self, addr: Address) {
+        self.validators.write_arc().insert(addr);
+    }
+
+    pub fn remove_validator(&mut self, addr: Address) {
+        self.validators.write_arc().remove(&addr);
+        // check active peer_id. if we are connected to this old validator
+        // we will remove them
+        if let Some(id) = self.active_peers.iter().find(|peer| {
+            let digest = alloy::primitives::keccak256(peer);
+            let this_addr = Address::from_slice(&digest[12..]);
+            this_addr == addr
+        }) {
+            self.peers_manager.remove_peer(*id);
+        }
+    }
+
     pub fn validators(&self) -> Arc<RwLock<HashSet<Address>>> {
         self.validators.clone()
     }

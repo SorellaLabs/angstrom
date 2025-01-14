@@ -34,6 +34,7 @@ pub struct AngstromConfig {
 pub struct NodeConfig {
     pub secret_key:           String,
     pub angstrom_address:     Address,
+    pub periphery_addr:       Address,
     pub pool_manager_address: Address,
     pub pools:                Vec<PoolKey>
 }

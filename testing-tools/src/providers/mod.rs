@@ -13,9 +13,7 @@ mod block_provider;
 pub mod utils;
 pub use block_provider::*;
 mod initializer;
-use alloy::{
-    node_bindings::AnvilInstance, pubsub::PubSubFrontend, signers::local::PrivateKeySigner
-};
+use alloy::{node_bindings::AnvilInstance, signers::local::PrivateKeySigner};
 pub use initializer::*;
 
 use crate::{
@@ -54,7 +52,6 @@ impl WalletProvider {
 
 impl TestAnvilEnvironment for WalletProvider {
     type P = WalletProviderRpc;
-    type T = PubSubFrontend;
 
     fn provider(&self) -> &WalletProviderRpc {
         &self.provider

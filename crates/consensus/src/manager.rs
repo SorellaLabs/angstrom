@@ -1,17 +1,14 @@
 use std::{
     collections::HashSet,
     future::Future,
-    marker::PhantomData,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker},
-    time::Duration
+    task::{Context, Poll, Waker}
 };
 
 use alloy::{
     primitives::{Address, BlockNumber},
-    providers::Provider,
-    transports::Transport
+    providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{manager::StromConsensusEvent, StromMessage, StromNetworkHandle};
@@ -35,24 +32,22 @@ use crate::{
 
 const MODULE_NAME: &str = "Consensus";
 
-pub struct ConsensusManager<P, T, Matching, BlockSync> {
+pub struct ConsensusManager<P, Matching, BlockSync> {
     current_height:         BlockNumber,
     leader_selection:       WeightedRoundRobin,
-    consensus_round_state:  RoundStateMachine<P, T, Matching>,
+    consensus_round_state:  RoundStateMachine<P, Matching>,
     canonical_block_stream: BroadcastStream<CanonStateNotification>,
     strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>,
     network:                StromNetworkHandle,
     block_sync:             BlockSync,
 
     /// Track broadcasted messages to avoid rebroadcasting
-    broadcasted_messages: HashSet<StromConsensusEvent>,
-    _phantom:             PhantomData<T>
+    broadcasted_messages: HashSet<StromConsensusEvent>
 }
 
-impl<P, T, Matching, BlockSync> ConsensusManager<P, T, Matching, BlockSync>
+impl<P, Matching, BlockSync> ConsensusManager<P, Matching, BlockSync>
 where
-    P: Provider<T> + 'static,
-    T: Transport + Clone,
+    P: Provider + 'static,
     BlockSync: BlockSyncConsumer,
     Matching: MatchingEngineHandle
 {
@@ -66,49 +61,50 @@ where
         angstrom_address: Address,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: MevBoostProvider<P, T>,
+        provider: MevBoostProvider<P>,
         matching_engine: Matching,
         block_sync: BlockSync
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
+        tracing::info!(?validators, "setting up with validators");
         let mut leader_selection = WeightedRoundRobin::new(validators.clone(), current_height);
         let leader = leader_selection.choose_proposer(current_height).unwrap();
+        block_sync.register(MODULE_NAME);
+
         Self {
             strom_consensus_event,
             current_height,
             leader_selection,
-            consensus_round_state: RoundStateMachine::new(
-                Duration::new(8, 0),
-                SharedRoundState::new(
-                    current_height,
-                    angstrom_address,
-                    order_storage,
-                    signer,
-                    leader,
-                    validators.clone(),
-                    ConsensusMetricsWrapper::new(),
-                    pool_registry,
-                    uniswap_pools,
-                    provider,
-                    matching_engine
-                )
-            ),
+            consensus_round_state: RoundStateMachine::new(SharedRoundState::new(
+                current_height,
+                angstrom_address,
+                order_storage,
+                signer,
+                leader,
+                validators.clone(),
+                ConsensusMetricsWrapper::new(),
+                pool_registry,
+                uniswap_pools,
+                provider,
+                matching_engine
+            )),
             block_sync,
             network,
             canonical_block_stream: wrapped_broadcast_stream,
-            broadcasted_messages: HashSet::new(),
-            _phantom: PhantomData
+            broadcasted_messages: HashSet::new()
         }
     }
 
     fn on_blockchain_state(&mut self, notification: CanonStateNotification, waker: Waker) {
+        tracing::info!("got new block_chain state");
         let new_block = notification.tip();
         self.current_height = new_block.block.number;
         let round_leader = self
             .leader_selection
             .choose_proposer(self.current_height)
             .unwrap();
+        tracing::info!(?round_leader, "selected new round leader");
 
         self.consensus_round_state
             .reset_round(self.current_height, round_leader);
@@ -147,10 +143,9 @@ where
     }
 }
 
-impl<P, T, Matching, BlockSync> Future for ConsensusManager<P, T, Matching, BlockSync>
+impl<P, Matching, BlockSync> Future for ConsensusManager<P, Matching, BlockSync>
 where
-    P: Provider<T> + 'static,
-    T: Transport + Clone + Unpin,
+    P: Provider + 'static,
     Matching: MatchingEngineHandle,
     BlockSync: BlockSyncConsumer
 {
@@ -159,7 +154,7 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        if let Poll::Ready(Some(msg)) = this.canonical_block_stream.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(msg)) = this.canonical_block_stream.poll_next_unpin(cx) {
             match msg {
                 Ok(notification) => this.on_blockchain_state(notification, cx.waker().clone()),
                 Err(e) => tracing::error!("Error receiving chain state notification: {}", e)

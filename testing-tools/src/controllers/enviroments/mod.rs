@@ -11,14 +11,15 @@ use angstrom_network::{
     manager::StromConsensusEvent, NetworkOrderEvent, StromMessage, StromNetworkManager
 };
 use angstrom_types::sol_bindings::grouped_orders::AllOrders;
-use futures::{StreamExt, TryFutureExt};
+use futures::TryFutureExt;
 use rand::Rng;
 use reth_chainspec::Hardforks;
 use reth_metrics::common::mpsc::{
     metered_unbounded_channel, UnboundedMeteredReceiver, UnboundedMeteredSender
 };
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 pub use state_machine::*;
+use tokio_stream::StreamExt;
 use tracing::{span, Instrument, Level};
 
 use crate::{
@@ -39,16 +40,22 @@ pub struct AngstromTestnet<C, G, P> {
 
 impl<C, G, P> AngstromTestnet<C, G, P>
 where
-    C: BlockReader
-        + HeaderProvider
-        + ChainSpecProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+        + HeaderProvider<Header = reth_primitives::Header>
+        + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + Clone
-        + ChainSpecProvider<ChainSpec: Hardforks>
         + 'static,
     G: GlobalTestingConfig,
     P: WithWalletProvider
 {
+    pub fn random_peer(&self) -> &TestnetNode<C, P> {
+        let mut rng = rand::thread_rng();
+        let peer = rng.gen_range(0..self.current_max_peer_id);
+        self.get_peer(peer)
+    }
+
     /// increments the `current_max_peer_id` and returns the previous value
     fn incr_peer_id(&mut self) -> u64 {
         let prev_id = self.current_max_peer_id;
@@ -229,7 +236,7 @@ where
         };
 
         let peer = self.peers.get(&id).unwrap();
-        let span = span!(Level::TRACE, "testnet node", ?id);
+        let span = span!(Level::ERROR, "testnet node", ?id);
         f(peer).instrument(span).await
     }
 

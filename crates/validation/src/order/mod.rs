@@ -11,6 +11,7 @@ use angstrom_types::{
         rpc_orders::TopOfBlockOrder
     }
 };
+use serde::{Deserialize, Serialize};
 use sim::SimValidation;
 use tokio::sync::oneshot::{channel, Sender};
 
@@ -83,12 +84,44 @@ pub enum OrderValidationResults {
     TransitionedToBlock
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OrderPoolNewOrderResult {
+    Valid,
+    Invalid,
+    TransitionedToBlock,
+    Error(String)
+}
+
+impl OrderPoolNewOrderResult {
+    pub fn is_valid(&self) -> bool {
+        matches!(self, OrderPoolNewOrderResult::Valid)
+    }
+}
+
+impl<E: std::error::Error + Send + Sync + 'static> From<Result<OrderValidationResults, E>>
+    for OrderPoolNewOrderResult
+{
+    fn from(value: Result<OrderValidationResults, E>) -> Self {
+        match value {
+            Ok(val) => match val {
+                OrderValidationResults::Valid(_) => OrderPoolNewOrderResult::Valid,
+                OrderValidationResults::Invalid(_) => OrderPoolNewOrderResult::Invalid,
+                OrderValidationResults::TransitionedToBlock => {
+                    OrderPoolNewOrderResult::TransitionedToBlock
+                }
+            },
+            Err(e) => OrderPoolNewOrderResult::Error(e.to_string())
+        }
+    }
+}
+
 impl OrderValidationResults {
     pub fn add_gas_cost_or_invalidate<DB>(
         &mut self,
         sim: &SimValidation<DB>,
         token_price: &TokenPriceGenerator,
-        is_limit: bool
+        is_limit: bool,
+        block: u64
     ) where
         DB: Unpin
             + Clone
@@ -97,9 +130,8 @@ impl OrderValidationResults {
             + reth_provider::BlockNumReader
             + Send
             + Sync,
-        <DB as revm::DatabaseRef>::Error: Send + Sync
+        <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
     {
-        // TODO: this can be done without a clone but is super annoying
         let this = self.clone();
         if let Self::Valid(order) = this {
             let order_hash = order.order_hash();
@@ -108,6 +140,7 @@ impl OrderValidationResults {
                     order,
                     sim,
                     token_price,
+                    block,
                     |order| match order {
                         AllOrders::Standing(s) => GroupedVanillaOrder::Standing(s),
                         AllOrders::Flash(f) => GroupedVanillaOrder::KillOrFill(f),
@@ -120,7 +153,8 @@ impl OrderValidationResults {
                     SimValidation::calculate_user_gas
                 );
 
-                if res.is_err() {
+                if let Err(e) = res {
+                    tracing::info!(%e, "failed to add gas to order");
                     *self = OrderValidationResults::Invalid(order_hash);
 
                     return
@@ -132,6 +166,7 @@ impl OrderValidationResults {
                     order,
                     sim,
                     token_price,
+                    block,
                     |order| match order {
                         AllOrders::TOB(s) => s,
                         _ => unreachable!()
@@ -139,7 +174,8 @@ impl OrderValidationResults {
                     AllOrders::TOB,
                     SimValidation::calculate_tob_gas
                 );
-                if res.is_err() {
+                if let Err(e) = res {
+                    tracing::info!(%e, "failed to add gas to order");
                     *self = OrderValidationResults::Invalid(order_hash);
 
                     return
@@ -157,12 +193,14 @@ impl OrderValidationResults {
         order: OrderWithStorageData<Old>,
         sim: &SimValidation<DB>,
         token_price: &TokenPriceGenerator,
+        block: u64,
         map_new: impl Fn(Old) -> New,
         map_old: impl Fn(New) -> Old,
         calculate_function: impl Fn(
             &SimValidation<DB>,
             &OrderWithStorageData<New>,
-            &TokenPriceGenerator
+            &TokenPriceGenerator,
+            u64
         ) -> eyre::Result<(u64, U256)>
     ) -> eyre::Result<OrderWithStorageData<Old>>
     where
@@ -173,12 +211,9 @@ impl OrderValidationResults {
             .try_map_inner(move |order| Ok(map_new(order)))
             .unwrap();
 
-        if let Ok((gas_units, gas_used)) = (calculate_function)(sim, &order, token_price) {
-            order.priority_data.gas += gas_used;
-            order.priority_data.gas_units = gas_units;
-        } else {
-            return Err(eyre::eyre!("not able to process gas"))
-        }
+        let (gas_units, gas_used) = (calculate_function)(sim, &order, token_price, block)?;
+        order.priority_data.gas += gas_used;
+        order.priority_data.gas_units = gas_units;
 
         order.try_map_inner(move |new_order| Ok(map_old(new_order)))
     }

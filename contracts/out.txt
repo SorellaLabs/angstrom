@@ -1,0 +1,1038 @@
+AccessControl
+AccessControlDefaultAdminRules
+AccessControlDefaultAdminRulesHarness
+AccessControlERC20MintBase
+AccessControlERC20MintMissing
+AccessControlERC20MintOnlyRole
+AccessControlEnumerable
+AccessControlHarness
+AccessControlModified
+AccessControlUnrevokableAdmin
+AccessManaged
+AccessManagedERC20MintBase
+AccessManagedHarness
+AccessManagedTarget
+AccessManager
+AccessManagerHarness
+AccessManagerMock
+ActionsRouter
+Address
+AmountHelpers
+{
+  "AssetAccessOutOfBounds(uint256,uint256)": "ffc31e71",
+  "AssetsOutOfOrderOrNotUnique()": "80f11acf",
+  "BundlDeltaUnresolved(address)": "cc67af53",
+  "DuplicateAsset()": "587daa30",
+  "Expired()": "203d82d8",
+  "FailedToDeployNewStore()": "56702587",
+  "FeeAboveMax()": "76a3f95d",
+  "FillingTooLittle()": "c4daf003",
+  "FillingTooMuch()": "44182331",
+  "GasAboveMax()": "668fef1b",
+  "IndexMayHaveChanged()": "f21fd99f",
+  "InvalidPermitType(uint8)": "6f1d1509",
+  "InvalidSignature()": "8baa579f",
+  "InvalidStoreIndex()": "d2c6aae6",
+  "InvalidTickSpacing()": "270815a0",
+  "LimitViolated()": "8e1edfa4",
+  "MissingHookPermissions()": "d7ab5027",
+  "NoEntry()": "2f659e44",
+  "NonceReuse()": "8cb88872",
+  "NotController()": "23019e67",
+  "NotNode()": "5cd26b68",
+  "NotUniswap()": "f8328614",
+  "OnlyOncePerBlock()": "d8a6b89b",
+  "OrderAlreadyExecuted()": "8a2ef116",
+  "OutOfOrderOrDuplicatePairs()": "f35f9399",
+  "Overflow()": "35278d12",
+  "PairAccessOutOfBounds(uint256,uint256)": "f6601b50",
+  "ReaderNotAtEnd()": "01842f8c",
+  "ToBGasUsedAboveMax()": "2bae6c52",
+  "WrongEndLiquidity(uint128,uint128)": "6429cfd2"
+}
+Angstrom
+{
+  "IndexOutOfBounds()": "4e23d035",
+  "InvalidBounds()": "a8834357",
+  "OutOfBoundsVecGet()": "44dd369f",
+  "Overflow()": "35278d12",
+  "PairAssetsWrong(tuple)": "51903443",
+  "Underflow()": "caccb6d9"
+}
+AngstromHandler
+AngstromInvariants
+Approval
+ApprovalToZero
+ArrayLib
+Arrays
+ArraysMock
+Asset
+Auth
+AuthorityMock
+AuthorityUtils
+BadBeacon
+BalanceDelta
+Base
+Base64
+Base64Dirty
+Base64NFT
+{}
+BaseTest
+BaseTestHooks
+BatchCaller
+BeaconProxy
+BeforeSwapDelta
+BitMaps
+{}
+BitMath
+{
+  "BitOverlap()": "037d1f02"
+}
+BitPackLib
+BlockList
+Brutalizer
+Bundle
+Bytes32AddressLib
+Bytes32Metadata
+CREATE3
+CWIA
+CallReceiverMock
+CalldataReader
+Checkpoints
+CircularBuffer
+ClashingImplementation
+Clones
+CompTimelock
+Comparators
+CompilationScript
+CompilationScriptBase
+CompilationTest
+CompilationTestBase
+ConfigEntry
+Constants
+ConstructorMock
+{}
+Context
+ContextMock
+{
+  "AlreadyNode()": "ef6f5236",
+  "DuplicateAssets()": "e535448e",
+  "NotNode()": "5cd26b68",
+  "NotSetController()": "b0634a76",
+  "OwnableInvalidOwner(address)": "1e4fbdf7",
+  "OwnableUnauthorizedAccount(address)": "118cdaa7",
+  "TotalNotDistributed()": "b21c63eb"
+}
+ControllerV1
+Create2
+Currency
+{}
+CurrencyDelta
+{}
+CurrencyReserves
+CurrencySettler
+CurrencyTest
+CustomAccounting
+CustomCurveHook
+{
+  "WrappedError(address,bytes4,bytes,bytes)": "90bfb865"
+}
+CustomRevert
+DSInvariantTest
+DSTestPlus
+DaiPermit
+DateTimeLib
+DelegateCheckerLib
+{}
+DeltaClearerERC20
+DeltaReturningHook
+DeltaTracker
+Deployers
+DeploylessPredeployQueryer
+DoubleEndedQueue
+DoubleEndedQueueHarness
+DummyImplementation
+DynamicArrayLib
+DynamicBufferLib
+DynamicFees
+DynamicFeesTestHook
+DynamicReturnFeeTestHook
+DynamicReturnFees
+{
+  "InvalidSignature()": "8baa579f"
+}
+ECDSA
+{}
+EIP712
+EIP712Mock
+EIP712Verifier
+ERC1155
+ERC1155Burnable
+ERC1155Holder
+ERC1155Mock
+ERC1155Pausable
+ERC1155ReceiverMock
+ERC1155Supply
+ERC1155URIStorage
+ERC1155Utils
+ERC1271
+ERC1271WalletMock
+ERC1363
+ERC1363ForceApproveMock
+ERC1363NoReturnMock
+ERC1363ReceiverMock
+ERC1363ReturnFalseMock
+ERC1363SpenderMock
+ERC1363Utils
+ERC165
+ERC165Checker
+ERC165InterfacesSupported
+ERC165MaliciousData
+ERC165MissingData
+ERC165NotSupported
+ERC165ReturnBomb
+ERC1967Factory
+ERC1967FactoryConstants
+ERC1967Proxy
+ERC1967Utils
+ERC20
+ERC20ApprovalMock
+ERC20Burnable
+ERC20Capped
+ERC20DecimalsMock
+ERC20ExcessDecimalsMock
+ERC20FlashMint
+ERC20FlashMintHarness
+ERC20FlashMintMock
+ERC20ForceApproveMock
+ERC20GetterHelper
+ERC20Mock
+ERC20MulticallMock
+ERC20NoReturnMock
+ERC20Pausable
+ERC20Permit
+ERC20PermitHarness
+ERC20Reentrant
+ERC20ReturnFalseMock
+ERC20Votes
+ERC20VotesLegacyMock
+ERC20VotesTimestampMock
+ERC20WithAutoMinerReward
+ERC20Wrapper
+ERC20WrapperHarness
+ERC2771Context
+ERC2771ContextMock
+ERC2771Forwarder
+ERC2981
+ERC3156FlashBorrowerHarness
+ERC3156FlashBorrowerMock
+ERC4337
+ERC4337Factory
+ERC4626
+ERC4626Fees
+ERC4626LimitsMock
+ERC4626Mock
+ERC4626OffsetMock
+ERC4646FeesMock
+ERC6551
+ERC6551Proxy
+{}
+ERC6909
+{}
+ERC6909Claims
+ERC721
+ERC721Burnable
+ERC721Consecutive
+ERC721ConsecutiveEnumerableMock
+ERC721ConsecutiveMock
+ERC721Enumerable
+ERC721Harness
+ERC721Holder
+ERC721Mock
+ERC721Pausable
+ERC721ReceiverHarness
+ERC721ReceiverMock
+ERC721Royalty
+ERC721URIStorage
+ERC721URIStorageMock
+ERC721Utils
+ERC721Votes
+ERC721Wrapper
+EfficientHashLib
+EmptyRevertContract
+EmptyTestHooks
+EnumerableMap
+EnumerableMapHarness
+EnumerableRoles
+{}
+EnumerableSet
+EnumerableSetHarness
+{
+  "IndexOutOfBounds()": "4e23d035",
+  "ValueIsZeroSentinel()": "f5a267f1"
+}
+EnumerableSetLib
+Errors
+EtherReceiverMock
+{}
+Extsload
+{}
+Exttload
+FeeTakingHook
+{}
+FixedPoint128
+{}
+FixedPoint96
+{
+  "DivFailed()": "65244e4e",
+  "DivWadFailed()": "7c5f487d",
+  "ExpOverflow()": "a37bfec9",
+  "FactorialOverflow()": "aba0f2a2",
+  "FullMulDivFailed()": "ae47f702",
+  "LnWadUndefined()": "1615e638",
+  "MantissaOverflow()": "ce30380c",
+  "MulDivFailed()": "ad251c27",
+  "MulWadFailed()": "bac65e5b",
+  "OutOfDomain()": "f2b402bb",
+  "RPowOverflow()": "49f7642b",
+  "SDivWadFailed()": "5c43740d",
+  "SMulWadFailed()": "edcd4dd4"
+}
+FixedPointMathLib
+{}
+FormatLib
+FullBundle
+{}
+FullMath
+Fuzzers
+GLDToken
+GameItem
+GameItems
+GasBurnerLib
+GasMetering
+Governor
+GovernorCountingFractional
+GovernorCountingSimple
+GovernorFractionalMock
+GovernorMock
+GovernorPreventLateQuorum
+GovernorPreventLateQuorumMock
+GovernorSettings
+GovernorStorage
+GovernorStorageMock
+GovernorTimelockAccess
+GovernorTimelockAccessMock
+GovernorTimelockCompound
+GovernorTimelockCompoundMock
+GovernorTimelockControl
+GovernorTimelockControlMock
+GovernorVoteMock
+GovernorVotes
+GovernorVotesQuorumFraction
+GovernorWithParamsMock
+{
+  "MissingHookPermissions()": "d7ab5027",
+  "NotUniswap()": "f8328614",
+  "WrongEndLiquidity(uint128,uint128)": "6429cfd2"
+}
+GrowthOutsideUpdater
+GuardedDeposit
+Hashes
+Heap
+Hevm
+HighDecimals
+HookBuffer
+{}
+HookDeployer
+{
+  "HookAddressNotValid(address)": "e65af6a0",
+  "HookCallFailed()": "a9e35b2f",
+  "HookDeltaExceedsSwapAmount()": "fa0b71d6",
+  "InvalidHookResponse()": "1e048e1d"
+}
+Hooks
+HooksTest
+IAccessControl
+IAccessControlDefaultAdminRules
+IAccessControlEnumerable
+IAccessManaged
+IAccessManager
+{}
+IAngstromAuth
+{}
+IAngstromComposable
+IAuthority
+IBeacon
+ICompoundTimelock
+{}
+IDaiPermit
+IERC1155
+IERC1155MetadataURI
+IERC1155Receiver
+IERC1271
+IERC1363
+IERC1363Receiver
+IERC1363Spender
+{}
+IERC165
+IERC1820Implementer
+IERC1820Registry
+IERC1967
+{}
+IERC20
+IERC20Metadata
+{}
+IERC20Minimal
+IERC20Permit
+IERC2309
+{}
+IERC2612
+IERC2981
+IERC3156
+IERC3156FlashBorrower
+IERC3156FlashLender
+IERC4626
+IERC4906
+IERC5267
+IERC5313
+IERC5805
+IERC6372
+{}
+IERC6909Claims
+{}
+IERC721
+{}
+IERC721Enumerable
+{}
+IERC721Metadata
+IERC721Receiver
+IERC777
+IERC777Recipient
+IERC777Sender
+{}
+IExtsload
+{}
+IExttload
+IGovernor
+{}
+IHooks
+{}
+IMulticall3
+{
+  "AlreadyUnlocked()": "5090d6c6",
+  "CurrenciesOutOfOrderOrEqual(address,address)": "6e6c9830",
+  "CurrencyNotSettled()": "5212cba1",
+  "InvalidCaller()": "48f5c3ed",
+  "ManagerLocked()": "54e3ca0d",
+  "MustClearExactPositiveDelta()": "bda73abf",
+  "NonzeroNativeValue()": "b0ec849e",
+  "PoolNotInitialized()": "486aa307",
+  "ProtocolFeeCurrencySynced()": "c79e5948",
+  "ProtocolFeeTooLarge(uint24)": "a7abe2f7",
+  "SwapAmountCannotBeZero()": "be8b8507",
+  "TickSpacingTooLarge(int24)": "b70024f8",
+  "TickSpacingTooSmall(int24)": "e9e90588",
+  "UnauthorizedDynamicLPFeeUpdate()": "30d21641"
+}
+IPoolManager
+{
+  "InvalidCaller()": "48f5c3ed",
+  "ProtocolFeeCurrencySynced()": "c79e5948",
+  "ProtocolFeeTooLarge(uint24)": "a7abe2f7"
+}
+IProtocolFees
+{
+  "ExtsloadFailed()": "535cf94b"
+}
+IUniV4
+{}
+IUnlockCallback
+IVotes
+Initializable
+InitializableHarness
+InitializableMock
+InvariantTest
+{
+  "AlreadyUnlocked()": "5090d6c6",
+  "CurrenciesOutOfOrderOrEqual(address,address)": "6e6c9830",
+  "CurrencyNotSettled()": "5212cba1",
+  "DelegateCallNotAllowed()": "0d89438e",
+  "InvalidCaller()": "48f5c3ed",
+  "ManagerLocked()": "54e3ca0d",
+  "MustClearExactPositiveDelta()": "bda73abf",
+  "NonzeroNativeValue()": "b0ec849e",
+  "PoolNotInitialized()": "486aa307",
+  "ProtocolFeeCurrencySynced()": "c79e5948",
+  "ProtocolFeeTooLarge(uint24)": "a7abe2f7",
+  "SwapAmountCannotBeZero()": "be8b8507",
+  "TickSpacingTooLarge(int24)": "b70024f8",
+  "TickSpacingTooSmall(int24)": "e9e90588",
+  "UnauthorizedDynamicLPFeeUpdate()": "30d21641"
+}
+InvasiveV4
+JSONParserLib
+JavascriptFfi
+{
+  "LPFeeTooLarge(uint24)": "14002113"
+}
+LPFeeLibrary
+LPFeeTakingHook
+{}
+LibBit
+LibBitmap
+{}
+LibBytes
+LibCWIA
+LibClone
+LibERC6551
+LibMap
+LibPRNG
+LibRLP
+{}
+LibSort
+{
+  "HexLengthInsufficient()": "2194895a",
+  "StringNot7BitASCII()": "c9807e0d",
+  "TooBigForSmallString()": "ec92f9a3"
+}
+LibString
+LibTransient
+LibZip
+Lifebuoy
+LiquidityAmounts
+{}
+LiquidityMath
+LiquidityMathTest
+{}
+Lock
+Logger
+LowDecimals
+{}
+Math
+MerkleProof
+MerkleProofCustomHashMock
+MerkleProofLib
+MerkleProofMock
+MerkleTree
+MerkleTreeMock
+MessageHashUtils
+MetadataReaderLib
+Milady
+MinHeapLib
+{}
+MintableMockERC20
+MissingReturnToken
+MissingReturns
+{
+  "ArithmeticOverflowUnderflow()": "c9654ed4"
+}
+MixedSignLib
+MockAuthChild
+MockAuthority
+MockCd
+MockContract
+MockEIP712
+MockEIP712Dynamic
+MockERC1155
+MockERC1271Malicious
+MockERC1271Wallet
+MockERC20
+MockERC20ForPermit2
+MockERC20LikeUSDT
+MockERC20Votes
+MockERC2981
+MockERC4337
+MockERC4626
+MockERC6551
+MockERC6551Registry
+MockERC6909
+MockERC6909Claims
+{}
+MockERC721
+MockETHRecipient
+MockEntryPoint
+MockEnumerableRoles
+MockHooks
+MockImplementation
+MockInitializable
+MockLifebuoy
+MockMulticallable
+MockOwnable
+MockOwnableRoles
+MockOwned
+MockPod
+MockReceiver
+MockReentrancyGuard
+MockReentrancyGuardTransient
+{
+  "AssetAccessOutOfBounds(uint256,uint256)": "ffc31e71",
+  "AssetsOutOfOrderOrNotUnique()": "80f11acf",
+  "BundlDeltaUnresolved(address)": "cc67af53",
+  "DuplicateAsset()": "587daa30",
+  "FailedToDeployNewStore()": "56702587",
+  "FeeAboveMax()": "76a3f95d",
+  "IndexMayHaveChanged()": "f21fd99f",
+  "InvalidStoreIndex()": "d2c6aae6",
+  "InvalidTickSpacing()": "270815a0",
+  "MissingHookPermissions()": "d7ab5027",
+  "NoEntry()": "2f659e44",
+  "NotController()": "23019e67",
+  "NotNode()": "5cd26b68",
+  "NotUniswap()": "f8328614",
+  "OnlyOncePerBlock()": "d8a6b89b",
+  "OutOfOrderOrDuplicatePairs()": "f35f9399",
+  "Overflow()": "35278d12",
+  "PairAccessOutOfBounds(uint256,uint256)": "f6601b50",
+  "ReaderNotAtEnd()": "01842f8c",
+  "WrongEndLiquidity(uint128,uint128)": "6429cfd2"
+}
+MockRewardsManager
+MockUUPSImplementation
+ModifyLiquidity
+MultiRolesAuthority
+Multicall
+MulticallHelper
+MulticallTest
+Multicallable
+MultipleInheritanceInitializableMocks
+MyContractOwnable
+MyERC115HolderContract
+MyGovernor
+MyNFT
+MyToken
+MyTokenTimestampBased
+MyTokenWrapped
+NativeERC20
+NestedActions
+{
+  "DelegateCallNotAllowed()": "0d89438e"
+}
+NoDelegateCall
+NoDelegateCallTest
+NoETHMock
+NoRevert
+NonStandardERC20s
+Nonces
+NoncesHarness
+{}
+NonzeroDeltaCount
+{
+  "AssetAccessOutOfBounds(uint256,uint256)": "ffc31e71",
+  "AssetsOutOfOrderOrNotUnique()": "80f11acf",
+  "BundlDeltaUnresolved(address)": "cc67af53",
+  "DuplicateAsset()": "587daa30",
+  "Expired()": "203d82d8",
+  "FailedToDeployNewStore()": "56702587",
+  "FeeAboveMax()": "76a3f95d",
+  "FillingTooLittle()": "c4daf003",
+  "FillingTooMuch()": "44182331",
+  "GasAboveMax()": "668fef1b",
+  "IndexMayHaveChanged()": "f21fd99f",
+  "InvalidPermitType(uint8)": "6f1d1509",
+  "InvalidSignature()": "8baa579f",
+  "InvalidStoreIndex()": "d2c6aae6",
+  "InvalidTickSpacing()": "270815a0",
+  "LimitViolated()": "8e1edfa4",
+  "MissingHookPermissions()": "d7ab5027",
+  "NoEntry()": "2f659e44",
+  "NonceReuse()": "8cb88872",
+  "NotController()": "23019e67",
+  "NotNode()": "5cd26b68",
+  "NotUniswap()": "f8328614",
+  "OnlyOncePerBlock()": "d8a6b89b",
+  "OrderAlreadyExecuted()": "8a2ef116",
+  "OutOfOrderOrDuplicatePairs()": "f35f9399",
+  "Overflow()": "35278d12",
+  "PairAccessOutOfBounds(uint256,uint256)": "f6601b50",
+  "ReaderNotAtEnd()": "01842f8c",
+  "ToBGasUsedAboveMax()": "2bae6c52",
+  "WrongEndLiquidity(uint128,uint128)": "6429cfd2"
+}
+OpenAngstrom
+{
+  "Expired()": "203d82d8",
+  "NonceReuse()": "8cb88872",
+  "OrderAlreadyExecuted()": "8a2ef116"
+}
+OrderInvalidation
+OrderTypes
+OrderVariant
+{
+  "OwnableInvalidOwner(address)": "1e4fbdf7",
+  "OwnableUnauthorizedAccount(address)": "118cdaa7"
+}
+Ownable
+{
+  "OwnableInvalidOwner(address)": "1e4fbdf7",
+  "OwnableUnauthorizedAccount(address)": "118cdaa7"
+}
+Ownable2Step
+Ownable2StepHarness
+OwnableHarness
+OwnableRoles
+{}
+Owned
+P256
+PRNG
+Packing
+Pair
+PairIterator
+Panic
+{}
+ParseBytes
+Pausable
+PausableHarness
+PausableMock
+PayableMulticallable
+{
+  "InvalidPermitType(uint8)": "6f1d1509"
+}
+PermitSubmitterHook
+Pod
+{
+  "InvalidFeeForExactOut()": "96206246",
+  "NoLiquidityToReceiveFees()": "a74f97ab",
+  "PoolAlreadyInitialized()": "7983c051",
+  "PoolNotInitialized()": "486aa307",
+  "PriceLimitAlreadyExceeded(uint160,uint160)": "7c9c6e8f",
+  "PriceLimitOutOfBounds(uint160)": "9e4d7cc7",
+  "TickLiquidityOverflow(int24)": "b8e3c385",
+  "TickLowerOutOfBounds(int24)": "d5e2f7ab",
+  "TickUpperOutOfBounds(int24)": "1ad777f8",
+  "TicksMisordered(int24,int24)": "c4433ed5"
+}
+Pool
+PoolClaimsTest
+PoolConfigStore
+PoolDonateTest
+PoolEmptyUnlockTest
+{
+  "GettingFees()": "bbae62aa",
+  "GettingTokensForAddingLiq()": "6f8208b9",
+  "Overflow()": "35278d12"
+}
+PoolGate
+PoolId
+PoolKey
+{
+  "AlreadyUnlocked()": "5090d6c6",
+  "CurrenciesOutOfOrderOrEqual(address,address)": "6e6c9830",
+  "CurrencyNotSettled()": "5212cba1",
+  "DelegateCallNotAllowed()": "0d89438e",
+  "InvalidCaller()": "48f5c3ed",
+  "ManagerLocked()": "54e3ca0d",
+  "MustClearExactPositiveDelta()": "bda73abf",
+  "NonzeroNativeValue()": "b0ec849e",
+  "PoolNotInitialized()": "486aa307",
+  "ProtocolFeeCurrencySynced()": "c79e5948",
+  "ProtocolFeeTooLarge(uint24)": "a7abe2f7",
+  "SwapAmountCannotBeZero()": "be8b8507",
+  "TickSpacingTooLarge(int24)": "b70024f8",
+  "TickSpacingTooSmall(int24)": "e9e90588",
+  "UnauthorizedDynamicLPFeeUpdate()": "30d21641"
+}
+PoolManager
+PoolManagerInitialize
+PoolManagerStateGetter
+PoolModifyLiquidityTest
+PoolModifyLiquidityTestNoChecks
+PoolNestedActionsTest
+PoolRewards
+{
+  "BitOverlap()": "037d1f02",
+  "IndexOutOfBounds()": "4e23d035",
+  "InvalidBounds()": "a8834357",
+  "OutOfBoundsVecGet()": "44dd369f",
+  "Overflow()": "35278d12",
+  "PairAssetsWrong(tuple)": "51903443",
+  "Underflow()": "caccb6d9"
+}
+PoolRewardsHandler
+PoolSwapTest
+PoolTakeTest
+PoolTestBase
+PoolUpdate
+PoolUpdateVariantMap
+{
+  "BundlDeltaUnresolved(address)": "cc67af53",
+  "DuplicateAsset()": "587daa30",
+  "FailedToDeployNewStore()": "56702587",
+  "FeeAboveMax()": "76a3f95d",
+  "IndexMayHaveChanged()": "f21fd99f",
+  "InvalidStoreIndex()": "d2c6aae6",
+  "InvalidTickSpacing()": "270815a0",
+  "MissingHookPermissions()": "d7ab5027",
+  "NoEntry()": "2f659e44",
+  "NotController()": "23019e67",
+  "NotNode()": "5cd26b68",
+  "NotUniswap()": "f8328614",
+  "OnlyOncePerBlock()": "d8a6b89b",
+  "WrongEndLiquidity(uint128,uint128)": "6429cfd2"
+}
+PoolUpdates
+{
+  "CannotUpdateEmptyPosition()": "aefeb924"
+}
+Position
+Positions
+Price
+{}
+ProtocolFeeLibrary
+{
+  "InvalidCaller()": "48f5c3ed",
+  "ProtocolFeeCurrencySynced()": "c79e5948",
+  "ProtocolFeeTooLarge(uint24)": "a7abe2f7"
+}
+ProtocolFees
+ProtocolFeesImplementation
+Proxied
+Proxy
+ProxyAdmin
+ProxyPoolManager
+RSA
+{}
+RayMathLib
+Receiver
+{}
+Recorder
+RedBlackTree
+RedBlackTreeLib
+Reenterer
+ReentrancyAttack
+ReentrancyGuard
+ReentrancyGuardTransient
+ReentrancyMock
+ReentrancyTransientMock
+Reentrant
+RegressionImplementation
+{}
+ReturnerERC1271
+ReturnsFalse
+ReturnsFalseToken
+ReturnsGarbageToken
+ReturnsRawBytesToken
+ReturnsTooLittleToken
+ReturnsTooMuchToken
+ReturnsTwoToken
+RevertToZero
+RevertZero
+{}
+RevertingERC1271
+RevertingToken
+{}
+RewardLib
+RolesAuthority
+{}
+RouterActor
+SSTORE2
+SVM
+{
+  "SafeCastOverflow()": "93dafdf1"
+}
+SafeCast
+{
+  "Overflow()": "35278d12"
+}
+SafeCastLib
+SafeERC20
+{
+  "ApproveFailed()": "3e3f8f73",
+  "ETHTransferFailed()": "b12d13eb",
+  "Permit2AmountOverflow()": "8757f0fd",
+  "Permit2Failed()": "6b836e6b",
+  "TransferFailed()": "90b8ec18",
+  "TransferFromFailed()": "7939f424"
+}
+SafeTransferLib
+{}
+Script
+SepoliaPoolManager
+{
+  "BundlDeltaUnresolved(address)": "cc67af53",
+  "MissingHookPermissions()": "d7ab5027",
+  "NotUniswap()": "f8328614"
+}
+Settlement
+ShortStrings
+SignatureChecker
+{}
+SignatureCheckerLib
+SignatureCheckerMock
+{
+  "InvalidSignature()": "8baa579f"
+}
+SignatureLib
+SignedMath
+SignedTypes
+{
+  "Overflow()": "35278d12",
+  "Underflow()": "caccb6d9"
+}
+SignedUnsignedLib
+SignedWadMath
+SingleInheritanceInitializableMocks
+SkipCallsTestHook
+Slot0
+SlotDerivation
+{}
+SmolReturn
+SoladyTest
+SortTokens
+{
+  "InvalidPrice()": "00bfc921",
+  "InvalidPriceOrLiquidity()": "4f2461b8",
+  "NotEnoughLiquidity()": "4323a555",
+  "PriceOverflow()": "f5c787f1"
+}
+SqrtPriceMath
+SqrtPriceMathEchidnaTest
+StateLibrary
+Stateless
+{}
+StdAssertions
+{}
+StdChains
+{}
+StdCheats
+StdError
+{}
+StdInvariant
+StdJson
+StdMath
+StdStorage
+{}
+StdStyle
+StdToml
+{}
+StdUtils
+StorageSlot
+StorageSlotMock
+Strings
+{}
+SuperConversionLib
+SwapCall
+SwapHelper
+{}
+SwapMath
+SwapRouterNoChecks
+SymTest
+Sync
+{}
+Test
+TestERC20
+TestInvalidERC20
+TestPlus
+TestnetSetup
+Tick
+{
+  "TickMisaligned(int24,int24)": "d4d8f3e6"
+}
+TickBitmap
+{}
+TickLib
+{
+  "InvalidSqrtPrice(uint160)": "61487524",
+  "InvalidTick(int24)": "8b86327a"
+}
+TickMath
+TickMathEchidnaTest
+TickMathTest
+TickOverflowSafetyEchidnaTest
+TickRangeMap
+Time
+TimelockController
+TimelockControllerHarness
+TimelockReentrant
+ToBOrderBuffer
+ToBOrderVariantMap
+{
+  "DuplicateAsset()": "587daa30",
+  "FailedToDeployNewStore()": "56702587",
+  "FeeAboveMax()": "76a3f95d",
+  "IndexMayHaveChanged()": "f21fd99f",
+  "InvalidStoreIndex()": "d2c6aae6",
+  "InvalidTickSpacing()": "270815a0",
+  "MissingHookPermissions()": "d7ab5027",
+  "NoEntry()": "2f659e44",
+  "NotController()": "23019e67",
+  "NotNode()": "5cd26b68",
+  "NotUniswap()": "f8328614",
+  "OnlyOncePerBlock()": "d8a6b89b"
+}
+TopLevelAuth
+Trader
+TransferFee
+TransientBytes
+TransientBytesLib
+TransientPrimitives
+TransientSlot
+TransientSlotMock
+TransientStateLibrary
+TransparentUpgradeableProxy
+{}
+TwoSigERC1271
+TypedDataHasher
+UUPSUpgradeable
+UUPSUpgradeableMock
+Uint96
+{
+  "MissingHookPermissions()": "d7ab5027",
+  "NotUniswap()": "f8328614"
+}
+UniConsumer
+{
+  "AlreadyUnlocked()": "5090d6c6",
+  "CurrenciesOutOfOrderOrEqual(address,address)": "6e6c9830",
+  "CurrencyNotSettled()": "5212cba1",
+  "DelegateCallNotAllowed()": "0d89438e",
+  "InvalidCaller()": "48f5c3ed",
+  "ManagerLocked()": "54e3ca0d",
+  "MustClearExactPositiveDelta()": "bda73abf",
+  "NonzeroNativeValue()": "b0ec849e",
+  "PoolNotInitialized()": "486aa307",
+  "ProtocolFeeCurrencySynced()": "c79e5948",
+  "ProtocolFeeTooLarge(uint24)": "a7abe2f7",
+  "SwapAmountCannotBeZero()": "be8b8507",
+  "TickSpacingTooLarge(int24)": "b70024f8",
+  "TickSpacingTooSmall(int24)": "e9e90588",
+  "UnauthorizedDynamicLPFeeUpdate()": "30d21641"
+}
+UniV4Inspector
+{}
+UnsafeMath
+Upgradable
+UpgradeableBeacon
+UpgradeableBeaconMock
+UsedIndexMap
+UserOrder
+UserOrderBuffer
+UserOrderVariantMap
+{}
+Utils
+V3Helper
+Vec
+VestingWallet
+VestingWalletCliff
+{}
+Vm
+Votes
+VotesMock
+VotesTimestamp
+WETH
+WebAuthn
+{
+  "FullMulX128Failed()": "c56a0159"
+}
+X128MathLib
+{}
+console
+console2
+consoleext
+demo
+draft-ERC20TemporaryApproval
+draft-IERC1822
+draft-IERC6093
+draft-IERC7674
+{}
+safeconsole
+test

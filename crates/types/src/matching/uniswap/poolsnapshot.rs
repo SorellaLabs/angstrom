@@ -8,7 +8,7 @@ use super::{
     poolprice::PoolPrice,
     Tick
 };
-use crate::matching::SqrtPriceX96;
+use crate::matching::{math::low_to_high, SqrtPriceX96};
 
 /// Snapshot of a particular Uniswap pool and a map of its liquidity.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
@@ -50,7 +50,11 @@ impl PoolSnapshot {
             .iter()
             .position(|r| r.lower_tick <= current_tick && current_tick < r.upper_tick)
         else {
-            return Err(eyre!("Unable to find initialized tick window for tick '{}'", current_tick));
+            return Err(eyre!(
+                "Unable to find initialized tick window for tick '{}'\n {:?}",
+                current_tick,
+                ranges
+            ));
         };
 
         Ok(Self { ranges, sqrt_price_x96, current_tick, cur_tick_idx })
@@ -64,6 +68,29 @@ impl PoolSnapshot {
             .enumerate()
             .find(|(_, r)| r.lower_tick <= tick && tick < r.upper_tick)
             .map(|(range_idx, range)| LiqRangeRef { pool_snap: self, range, range_idx })
+    }
+
+    /// Returns a list of references to all liquidity ranges including and
+    /// between the given Ticks.  These ranges will be continuous in order.
+    pub fn ranges_for_ticks(
+        &self,
+        start_tick: Tick,
+        end_tick: Tick
+    ) -> eyre::Result<Vec<LiqRangeRef>> {
+        let (low, high) = low_to_high(&start_tick, &end_tick);
+        let output = self
+            .ranges
+            .iter()
+            .enumerate()
+            .filter_map(|(range_idx, range)| {
+                if range.upper_tick > *low && range.lower_tick <= *high {
+                    Some(LiqRangeRef { pool_snap: self, range, range_idx })
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Ok(output)
     }
 
     /// Return a read-only iterator over the liquidity ranges in this snapshot
@@ -82,6 +109,14 @@ impl PoolSnapshot {
 
     pub fn at_price(&self, price: SqrtPriceX96) -> eyre::Result<PoolPrice> {
         let tick = price.to_tick()?;
+        let range = self
+            .get_range_for_tick(tick)
+            .ok_or_eyre("Unable to find tick range for price")?;
+        Ok(PoolPrice { liq_range: range, tick, price })
+    }
+
+    pub fn at_tick(&self, tick: i32) -> eyre::Result<PoolPrice> {
+        let price = SqrtPriceX96::at_tick(tick)?;
         let range = self
             .get_range_for_tick(tick)
             .ok_or_eyre("Unable to find tick range for price")?;

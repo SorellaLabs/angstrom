@@ -11,10 +11,7 @@ use angstrom_types::{
     matching::{match_estimate_response::BundleEstimate, uniswap::PoolSnapshot},
     orders::PoolSolution,
     primitive::PoolId,
-    sol_bindings::{
-        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
-        rpc_orders::TopOfBlockOrder
-    }
+    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 use futures::{stream::FuturesUnordered, Future};
 use futures_util::FutureExt;
@@ -29,7 +26,7 @@ use tokio::{
 use validation::bundle::BundleValidatorHandle;
 
 use crate::{
-    book::OrderBook,
+    book::{BookOrder, OrderBook},
     build_book,
     strategy::{MatchingStrategy, SimpleCheckpointStrategy},
     MatchingEngineHandle
@@ -37,13 +34,13 @@ use crate::{
 
 pub enum MatcherCommand {
     BuildProposal(
-        Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        Vec<BookOrder>,
         Vec<OrderWithStorageData<TopOfBlockOrder>>,
         HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>,
         oneshot::Sender<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>
     ),
     EstimateGasPerPool {
-        limit:    Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        limit:    Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pools:    HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>,
         tx:       oneshot::Sender<eyre::Result<BundleEstimate>>
@@ -69,7 +66,7 @@ impl MatcherHandle {
 impl MatchingEngineHandle for MatcherHandle {
     fn solve_pools(
         &self,
-        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> futures_util::future::BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> {
@@ -106,9 +103,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         MatcherHandle { sender: tx }
     }
 
-    pub fn orders_by_pool_id(
-        preproposals: &[PreProposal]
-    ) -> HashMap<PoolId, HashSet<OrderWithStorageData<GroupedVanillaOrder>>> {
+    pub fn orders_by_pool_id(preproposals: &[PreProposal]) -> HashMap<PoolId, HashSet<BookOrder>> {
         preproposals
             .iter()
             .flat_map(|p| p.limit.iter())
@@ -120,7 +115,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
     }
 
     pub fn build_non_proposal_books(
-        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        limit: Vec<BookOrder>,
         pool_snapshots: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> Vec<OrderBook> {
         let book_sources = Self::orders_sorted_by_pool_id(limit);
@@ -153,10 +148,11 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
 
     pub async fn build_proposal(
         &self,
-        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<(Vec<PoolSolution>, BundleGasDetails)> {
+        tracing::info!("starting to build proposal");
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
         let books = Self::build_non_proposal_books(limit.clone(), &pool_snapshots);
@@ -190,14 +186,13 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         let bundle =
             AngstromBundle::for_gas_finalization(limit, solutions.clone(), &pool_snapshots)?;
 
+        println!("{:#?}", bundle);
         let gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
 
         Ok((solutions, gas_response))
     }
 
-    pub fn orders_sorted_by_pool_id(
-        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>
-    ) -> HashMap<PoolId, HashSet<OrderWithStorageData<GroupedVanillaOrder>>> {
+    pub fn orders_sorted_by_pool_id(limit: Vec<BookOrder>) -> HashMap<PoolId, HashSet<BookOrder>> {
         limit.into_iter().fold(HashMap::new(), |mut acc, order| {
             acc.entry(order.pool_id).or_default().insert(order);
             acc
@@ -206,7 +201,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
 
     async fn _estimate_current_fills(
         &self,
-        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<BundleEstimate> {

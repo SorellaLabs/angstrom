@@ -10,8 +10,6 @@ exclude.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-client = []
 
 [dependencies]
 angstrom-types.workspace = true
@@ -48,3 +46,7 @@ hyper = "1.2.0"
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "tracing"] }
 rand = "0.8.5"
+
+[features]
+default = ["client"]
+client = []

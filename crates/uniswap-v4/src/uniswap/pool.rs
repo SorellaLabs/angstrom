@@ -1,4 +1,10 @@
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{hash_map::Entry, HashMap},
+    fmt::Debug,
+    marker::PhantomData,
+    sync::Arc
+};
 
 use alloy::{
     hex,
@@ -15,7 +21,7 @@ use uniswap_v3_math::{
     tick_math::{MAX_SQRT_RATIO, MAX_TICK, MIN_SQRT_RATIO, MIN_TICK}
 };
 
-use super::pool_data_loader::PoolData;
+use super::{pool_data_loader::PoolData, pool_manager::TickRangeToLoad};
 use crate::uniswap::{
     i32_to_i24,
     pool_data_loader::{DataLoader, ModifyPositionEvent, PoolDataLoader, TickData},
@@ -39,7 +45,7 @@ pub struct TickInfo {
 }
 
 // at around 190 is when "max code size exceeded" comes up
-const MAX_TICKS_PER_REQUEST: u16 = 150;
+// const MAX_TICKS_PER_REQUEST: u16 = 150;
 
 pub const U256_1: U256 = U256::from_limbs([1, 0, 0, 0]);
 
@@ -91,6 +97,14 @@ where
             .await
     }
 
+    pub fn fetch_lowest_tick(&self) -> i32 {
+        *self.ticks.keys().min().unwrap()
+    }
+
+    pub fn fetch_highest_tick(&self) -> i32 {
+        *self.ticks.keys().max().unwrap()
+    }
+
     pub fn fetch_pool_snapshot(&self) -> Result<(Address, Address, PoolSnapshot), PoolError> {
         if !self.data_is_populated() {
             return Err(PoolError::PoolNotInitialized)
@@ -102,7 +116,7 @@ where
             .sorted_unstable_by(|a, b| a.0.cmp(b.0))
             .map_windows(|[(tick_lower, _), (tick_upper, tick_inner_upper)]| {
                 // ensure everything is spaced properly
-                assert_eq!(**tick_upper - **tick_lower, self.tick_spacing);
+                assert_eq!(tick_upper.abs() - tick_lower.abs(), self.tick_spacing);
                 LiqRange::new(**tick_lower, **tick_upper, tick_inner_upper.liquidity_net as u128)
                     .unwrap()
             })
@@ -140,6 +154,7 @@ where
         block_number: Option<BlockNumber>,
         provider: Arc<P>
     ) -> Result<(Vec<TickData>, U256), PoolError> {
+        tracing::info!(?tick_start,?num_ticks,addr=?self.address());
         let (tick_data, block_number) = self
             .data_loader
             .load_tick_data(
@@ -155,6 +170,43 @@ where
         Ok((tick_data, block_number))
     }
 
+    pub fn apply_ticks(&mut self, mut fetched_ticks: Vec<TickData>) {
+        fetched_ticks.sort_by_key(|k| k.tick);
+
+        fetched_ticks
+            .into_iter()
+            .filter(|tick| tick.initialized)
+            .for_each(|tick| {
+                self.ticks.insert(
+                    tick.tick.as_i32(),
+                    TickInfo {
+                        initialized:     tick.initialized,
+                        liquidity_gross: tick.liquidityGross,
+                        liquidity_net:   tick.liquidityNet
+                    }
+                );
+                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
+            });
+    }
+
+    pub async fn load_more_ticks<P: Provider<T>, T: Transport + Clone>(
+        &self,
+        tick_data: TickRangeToLoad<A>,
+        block_number: Option<BlockNumber>,
+        provider: Arc<P>
+    ) -> Result<Vec<TickData>, PoolError> {
+        Ok(self
+            .get_tick_data_batch_request(
+                i32_to_i24(tick_data.start_tick)?,
+                tick_data.zfo,
+                tick_data.tick_count,
+                block_number,
+                provider
+            )
+            .await?
+            .0)
+    }
+
     async fn sync_ticks<P: Provider<T>, T: Transport + Clone>(
         &mut self,
         block_number: Option<u64>,
@@ -167,36 +219,27 @@ where
         self.ticks.clear();
         self.tick_bitmap.clear();
 
+        tracing::info!(?self.token_a, ?self.token_b,?self.tick, ?self.tick_spacing, ?self.liquidity,?self.liquidity_net);
         let total_ticks_to_fetch = self.initial_ticks_per_side * 2;
-        let mut remaining_ticks = total_ticks_to_fetch;
-        //  +1 because the retrieve is gt start_tick, i.e. start one step back to
-        // include the tick
-        let mut start_tick = (self.tick / self.tick_spacing) * self.tick_spacing
-            - self.tick_spacing * (self.initial_ticks_per_side + 1) as i32;
+        // current tick when loaded (init tick) - (half total tics * spacing);
 
-        // Fetch ticks from left to right
-        let mut fetched_ticks = Vec::new();
-        while remaining_ticks > 0 {
-            let ticks_to_fetch = remaining_ticks.min(MAX_TICKS_PER_REQUEST);
-            let (mut batch_ticks, _) = self
-                .get_tick_data_batch_request(
-                    // safe because we pull the ticks form chain where they are i24
-                    i32_to_i24(start_tick)?,
-                    false,
-                    ticks_to_fetch,
-                    block_number,
-                    provider.clone()
-                )
-                .await?;
-            batch_ticks.sort_by_key(|s| s.tick);
-            fetched_ticks.append(&mut batch_ticks);
-            remaining_ticks -= ticks_to_fetch;
-            if let Some(last_tick) = fetched_ticks.last() {
-                start_tick = last_tick.tick.as_i32();
-            } else {
-                break
-            }
-        }
+        let start_tick = self.tick - (total_ticks_to_fetch.div_ceil(2) as i32 * self.tick_spacing);
+
+        let end_tick = start_tick + (self.tick_spacing as u16 * total_ticks_to_fetch) as i32;
+        tracing::info!(?start_tick, ?end_tick);
+
+        let mut fetched_ticks = self
+            .get_tick_data_batch_request(
+                i32_to_i24(start_tick)?,
+                false,
+                total_ticks_to_fetch,
+                block_number,
+                provider.clone()
+            )
+            .await?
+            .0;
+
+        fetched_ticks.sort_by_key(|k| k.tick);
 
         fetched_ticks
             .into_iter()
@@ -214,6 +257,33 @@ where
             });
 
         Ok(())
+    }
+
+    pub fn calculate_price_unshifted(&self, sqrt_price_limit_x96: U256) -> f64 {
+        let tick =
+            uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(sqrt_price_limit_x96).unwrap();
+
+        let shift = self.token_a_decimals as i8 - self.token_b_decimals as i8;
+        // flipped to scale them properly with the token spacing
+        let price = match shift.cmp(&0) {
+            Ordering::Less => 1.0001_f64.powi(tick) * 10_f64.powi(-shift as i32),
+            Ordering::Greater => 1.0001_f64.powi(tick) / 10_f64.powi(shift as i32),
+            Ordering::Equal => 1.0001_f64.powi(tick)
+        };
+
+        1.0 / price
+    }
+
+    pub fn calculate_price(&self) -> f64 {
+        let tick = uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(self.sqrt_price).unwrap();
+        let shift = self.token_a_decimals as i8 - self.token_b_decimals as i8;
+        let price = match shift.cmp(&0) {
+            Ordering::Less => 1.0001_f64.powi(tick) / 10_f64.powi(-shift as i32),
+            Ordering::Greater => 1.0001_f64.powi(tick) * 10_f64.powi(shift as i32),
+            Ordering::Equal => 1.0001_f64.powi(tick)
+        };
+
+        1.0 / price
     }
 
     /// Obvious doc: Sims the swap to get the state changes after applying it
@@ -261,6 +331,7 @@ where
                 && (sqrt_price_limit_x96 <= self.sqrt_price
                     || sqrt_price_limit_x96 >= MAX_SQRT_RATIO))
         {
+            tracing::warn!(?zero_for_one, ?sqrt_price_limit_x96, ?self.sqrt_price);
             return Err(SwapSimulationError::InvalidSqrtPriceLimit)
         }
 
@@ -377,8 +448,6 @@ where
         } else {
             (amount_calculated, amount_specified - amount_specified_remaining)
         };
-
-        tracing::debug!(?amount0, ?amount1);
 
         Ok(SwapResult { amount0, amount1, liquidity, sqrt_price_x_96, tick })
     }
@@ -570,7 +639,12 @@ where
     }
 
     pub fn update_tick(&mut self, tick: i32, liquidity_delta: i128, upper: bool) -> bool {
-        let info = self.ticks.entry(tick).or_default();
+        let Entry::Occupied(mut e) = self.ticks.entry(tick) else {
+            // we return false here because if the tick hasn't been loaded by the loader.
+            // Initializing from this log will lead to incorrect data.
+            return false;
+        };
+        let info = e.get_mut();
 
         let liquidity_gross_before = info.liquidity_gross;
 

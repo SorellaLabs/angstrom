@@ -89,8 +89,8 @@ impl StoredOrderBuilder {
             .or(self.order.flash_block())
             .unwrap_or_default();
         let priority_data = OrderPriorityData {
-            price:     self.order.price().into(),
-            volume:    self.order.quantity().to(),
+            price:     self.order.price_for_book_side(is_bid).into(),
+            volume:    self.order.quantity(),
             gas:       U256::ZERO,
             gas_units: 0
         };

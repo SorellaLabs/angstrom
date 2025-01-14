@@ -1,13 +1,13 @@
 use alloy::primitives::Uint;
 use angstrom_types::{
     matching::Ray,
-    primitive::PoolId,
+    primitive::{AngstromSigner, PoolId},
     sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
 };
 use eyre::eyre;
 use rand_distr::{num_traits::ToPrimitive, Distribution, SkewNormal};
 
-use super::{DistributionParameters, SigningInfo, UserOrderBuilder};
+use super::{DistributionParameters, UserOrderBuilder};
 
 #[derive(Default)]
 pub struct OrderDistributionBuilder {
@@ -17,7 +17,7 @@ pub struct OrderDistributionBuilder {
     volumeparams: Option<DistributionParameters>,
     pool_id:      Option<PoolId>,
     valid_block:  Option<u64>,
-    signing_key:  Option<SigningInfo>
+    signing_key:  Option<AngstromSigner>
 }
 
 impl OrderDistributionBuilder {
@@ -57,7 +57,7 @@ impl OrderDistributionBuilder {
         Self { valid_block: Some(valid_block), ..self }
     }
 
-    pub fn signing_key(self, signing_key: Option<SigningInfo>) -> Self {
+    pub fn signing_key(self, signing_key: Option<AngstromSigner>) -> Self {
         Self { signing_key, ..self }
     }
 

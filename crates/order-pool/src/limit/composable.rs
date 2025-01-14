@@ -11,8 +11,8 @@ use super::{pending::PendingPool, LimitPoolError};
 
 #[derive(Default)]
 pub struct ComposableLimitPool {
-    map:     HashMap<PoolId, PendingPool<GroupedComposableOrder>>,
-    metrics: ComposableLimitOrderPoolMetricsWrapper
+    pub(super) map: HashMap<PoolId, PendingPool<GroupedComposableOrder>>,
+    metrics:        ComposableLimitOrderPoolMetricsWrapper
 }
 
 impl ComposableLimitPool {

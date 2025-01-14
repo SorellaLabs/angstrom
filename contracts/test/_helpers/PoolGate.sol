@@ -136,6 +136,9 @@ contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
         _clearDelta(Currency.unwrap(key.currency1), swapDelta.amount1());
     }
 
+    error GettingFees();
+    error GettingTokensForAddingLiq();
+
     function __addLiquidity(
         address asset0,
         address asset1,
@@ -146,11 +149,11 @@ contract PoolGate is IUnlockCallback, CommonBase, BaseTest {
         if (address(vm).code.length > 0) vm.startPrank(sender);
         BalanceDelta feeDelta;
         (callerDelta, feeDelta) = UNI_V4.modifyLiquidity(pk, params, "");
-        require(feeDelta.amount0() == 0 && feeDelta.amount1() == 0, "Getting fees?");
-        require(
-            callerDelta.amount0() <= 0 && callerDelta.amount1() <= 0,
-            "getting tokens for adding liquidity"
-        );
+        if (!(feeDelta.amount0() == 0 && feeDelta.amount1() == 0)) revert GettingFees();
+
+        if (!(callerDelta.amount0() <= 0 && callerDelta.amount1() <= 0)) {
+            revert GettingTokensForAddingLiq();
+        }
         _clear(asset0, asset1, callerDelta);
         if (address(vm).code.length > 0) vm.stopPrank();
     }

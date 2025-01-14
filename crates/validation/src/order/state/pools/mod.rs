@@ -15,7 +15,7 @@ pub trait PoolsTracker: Send + Unpin {
     fn fetch_pool_info_for_order<O: RawPoolOrder>(&self, order: &O) -> Option<UserOrderPoolInfo>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct UserOrderPoolInfo {
     // token in for pool
     pub token:   Address,
@@ -52,14 +52,19 @@ impl AngstromPoolsTracker {
 
     pub fn order_info(
         &self,
-        currency_in: Address,
-        currency_out: Address
+        mut currency_in: Address,
+        mut currency_out: Address
     ) -> Option<(bool, PoolId)> {
         // Uniswap pools are priced as t1/t0 - the order is a bid if it's offering t1 to
         // get t0.   Uniswap standard has the token addresses sorted and t0 is the
         // lower of the two, therefore if the currency_in is the higher of the two we
         // know it's t1 and therefore this order is a bid.
         let is_bid = currency_in > currency_out;
+
+        if currency_in > currency_out {
+            std::mem::swap(&mut currency_in, &mut currency_out)
+        };
+
         let key = self.get_poolid(currency_in, currency_out)?;
 
         Some((is_bid, key))

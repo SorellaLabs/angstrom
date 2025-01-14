@@ -61,7 +61,7 @@ pub struct GlobalBlockSync {
     block_number:           Arc<AtomicU64>,
     /// the modules with there current sign off state for the transition of
     /// pending state -> cur state
-    registered_modules:     DashMap<&'static str, VecDeque<SignOffState>>,
+    registered_modules:     Arc<DashMap<&'static str, VecDeque<SignOffState>>>,
     /// Avoids having a module join the set while running. This is to ensure
     /// no race conditions.
     all_modules_registered: Arc<AtomicBool>
@@ -72,7 +72,7 @@ impl GlobalBlockSync {
         Self {
             block_number:           Arc::new(AtomicU64::new(block_number)),
             pending_state:          Arc::new(RwLock::new(VecDeque::with_capacity(2))),
-            registered_modules:     DashMap::default(),
+            registered_modules:     Arc::new(DashMap::default()),
             all_modules_registered: AtomicBool::new(false).into()
         }
     }
@@ -80,19 +80,37 @@ impl GlobalBlockSync {
     fn proper_proposal(&self, proposal: &GlobalBlockState) -> bool {
         self.pending_state.read().unwrap().contains(proposal)
     }
+
+    pub fn clear(&self) {
+        self.pending_state.write().unwrap().clear();
+    }
+
+    pub fn set_block(&self, block_number: u64) {
+        self.block_number.store(block_number, Ordering::SeqCst);
+    }
 }
 impl BlockSyncProducer for GlobalBlockSync {
     fn new_block(&self, block_number: u64) {
         // add to pending state. this will trigger everyone to stop and start dealing
         // with new blocks
-        if self.block_number.load(Ordering::SeqCst) + 1 != block_number {
-            panic!("already have this block_number");
+
+        // let cur_block = self.block_number.load(Ordering::SeqCst);
+        // if cur_block + 1 != block_number {
+        //     tracing::warn!(%cur_block, %block_number, "got invalid new block");
+        //     return
+        // }
+        self.block_number.store(block_number, Ordering::SeqCst);
+
+        let modules = self.registered_modules.len();
+        tracing::info!(%block_number, mod_cnt=modules,"new block proposal");
+
+        let mut lock = self.pending_state.write().unwrap();
+        if lock.back() == Some(&GlobalBlockState::PendingProgression(block_number)) {
+            return
         }
 
-        self.pending_state
-            .write()
-            .unwrap()
-            .push_back(GlobalBlockState::PendingProgression(block_number));
+        lock.push_back(GlobalBlockState::PendingProgression(block_number));
+        tracing::info!(?self.pending_state, "current pending state");
     }
 
     fn reorg(&self, reorg_range: RangeInclusive<u64>) {
@@ -139,9 +157,10 @@ impl BlockSyncConsumer for GlobalBlockSync {
         if transition {
             // was last sign off, pending state -> cur state
             let mut lock = self.pending_state.write().unwrap();
-            let new_state = lock
-                .pop_front()
-                .expect("everyone signed off on a transition proposal that didn't exist");
+            let Some(new_state) = lock.pop_front() else {
+                // are racing and someone beat us to it!
+                return
+            };
             drop(lock);
 
             tracing::info!(handled_state=?new_state, "detected reorg has been handled successfully");
@@ -155,13 +174,20 @@ impl BlockSyncConsumer for GlobalBlockSync {
     }
 
     fn sign_off_on_block(&self, module: &'static str, block_number: u64, waker: Option<Waker>) {
+        tracing::info!(?module, ?block_number, "module signed off for block");
         // check to see if there is pending state
         if self.pending_state.read().unwrap().is_empty() {
             panic!("{} tried to sign off on a proposal that didn't exist", module);
         }
         // ensure the block number is cur_block + 1
         if !self.proper_proposal(&GlobalBlockState::PendingProgression(block_number)) {
-            panic!("{} tried to sign off on a incorrect proposal", module);
+            panic!(
+                "{} tried to sign off on a incorrect proposal. current proposals: {:?}, got \
+                 proposal: {:?}",
+                module,
+                self.pending_state,
+                GlobalBlockState::PendingProgression(block_number)
+            );
         }
 
         let check = SignOffState::ReadyForNextBlock(waker);
@@ -178,10 +204,13 @@ impl BlockSyncConsumer for GlobalBlockSync {
         });
 
         if transition {
+            tracing::info!("transitioning to new block");
             let mut lock = self.pending_state.write().unwrap();
-            let new_state = lock
-                .pop_front()
-                .expect("everyone signed off on a transition proposal that didn't exist");
+            let Some(new_state) = lock.pop_front() else {
+                // are racing and someone beat us to it!
+                return
+            };
+
             drop(lock);
 
             tracing::info!(handled_state=?new_state, "new block has been handled successfully");
@@ -220,6 +249,7 @@ impl BlockSyncConsumer for GlobalBlockSync {
             tracing::warn!(%module_name, "tried to register a module after setting no more modules to true. This module won't be added");
             return
         }
+        tracing::info!(%module_name, "registered module on block sync");
 
         if self
             .registered_modules

@@ -159,9 +159,13 @@ impl ValidationMetricsInner {
         r
     }
 
-    fn new_order(&self, is_searcher: bool, f: impl FnOnce()) {
+    async fn new_order<T, F>(&self, is_searcher: bool, f: T)
+    where
+        T: FnOnce() -> F,
+        F: Future<Output = ()>
+    {
         let start = Instant::now();
-        f();
+        f().await;
         let elapsed = start.elapsed().as_nanos() as f64;
         self.processing_time
             .with_label_values(&[if is_searcher { "searcher" } else { "limit" }])
@@ -224,14 +228,18 @@ impl ValidationMetrics {
         f().await
     }
 
-    pub fn new_order(&self, is_searcher: bool, f: impl FnOnce()) {
+    pub async fn new_order<T, F>(&self, is_searcher: bool, f: T)
+    where
+        T: FnOnce() -> F,
+        F: Future<Output = ()>
+    {
         if let Some(inner) = self.0.as_ref() {
-            inner.new_order(is_searcher, f);
+            inner.new_order(is_searcher, f).await;
 
             return
         }
 
-        f()
+        f().await;
     }
 
     pub fn fetch_gas_for_user<T>(&self, is_searcher: bool, f: impl FnOnce() -> T) -> T {

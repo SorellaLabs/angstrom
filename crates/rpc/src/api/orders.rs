@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
-use alloy_primitives::{keccak256, Address, FixedBytes, Signature, B256, U256};
-use alloy_sol_types::SolValue;
+use alloy_primitives::{Address, B256, U256};
 use angstrom_types::{
-    orders::{OrderLocation, OrderStatus},
+    orders::{CancelOrderRequest, OrderLocation, OrderStatus},
+    primitive::PoolId,
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
@@ -12,25 +12,11 @@ use jsonrpsee::{
     proc_macros::rpc
 };
 use serde::Deserialize;
+use validation::order::OrderPoolNewOrderResult;
 
 use crate::types::{OrderSubscriptionFilter, OrderSubscriptionKind};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct CancelOrderRequest {
-    pub signature:    Signature,
-    // if there's no salt to make this a unique signing hash. One can just
-    // copy the signature of the order and id and it will verify
-    pub user_address: Address,
-    pub order_id:     B256
-}
-
-impl CancelOrderRequest {
-    pub fn signing_payload(&self) -> FixedBytes<32> {
-        keccak256((self.user_address, self.order_id).abi_encode())
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct GasEstimateResponse {
     pub gas_units: u64,
     pub gas:       U256
@@ -42,7 +28,7 @@ pub struct GasEstimateResponse {
 pub trait OrderApi {
     /// Submit any type of order
     #[method(name = "sendOrder")]
-    async fn send_order(&self, order: AllOrders) -> RpcResult<bool>;
+    async fn send_order(&self, order: AllOrders) -> RpcResult<OrderPoolNewOrderResult>;
 
     #[method(name = "pendingOrder")]
     async fn pending_order(&self, from: Address) -> RpcResult<Vec<AllOrders>>;
@@ -57,9 +43,9 @@ pub trait OrderApi {
     async fn order_status(&self, order_hash: B256) -> RpcResult<Option<OrderStatus>>;
 
     #[method(name = "ordersByPair")]
-    async fn orders_by_pair(
+    async fn orders_by_pool_id(
         &self,
-        pair: FixedBytes<32>,
+        pool_id: PoolId,
         location: OrderLocation
     ) -> RpcResult<Vec<AllOrders>>;
 
@@ -76,7 +62,7 @@ pub trait OrderApi {
 
     // MULTI CALL
     #[method(name = "sendOrders")]
-    async fn send_orders(&self, orders: Vec<AllOrders>) -> RpcResult<Vec<bool>> {
+    async fn send_orders(&self, orders: Vec<AllOrders>) -> RpcResult<Vec<OrderPoolNewOrderResult>> {
         futures::stream::iter(orders.into_iter())
             .map(|order| async { self.send_order(order).await })
             .buffered(3)
@@ -140,12 +126,12 @@ pub trait OrderApi {
     }
 
     #[method(name = "ordersByPairs")]
-    async fn orders_by_pairs(
+    async fn orders_by_pool_ids(
         &self,
-        pair_with_location: Vec<(FixedBytes<32>, OrderLocation)>
+        pool_ids_with_location: Vec<(PoolId, OrderLocation)>
     ) -> RpcResult<Vec<AllOrders>> {
-        Ok(futures::stream::iter(pair_with_location.into_iter())
-            .map(|(pair, location)| async move { self.orders_by_pair(pair, location).await })
+        Ok(futures::stream::iter(pool_ids_with_location.into_iter())
+            .map(|(pair, location)| async move { self.orders_by_pool_id(pair, location).await })
             .buffered(3)
             .collect::<Vec<_>>()
             .await

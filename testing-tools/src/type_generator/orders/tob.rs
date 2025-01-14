@@ -1,11 +1,9 @@
-use alloy::{
-    primitives::Address,
-    signers::{local::LocalSigner, SignerSync}
+use alloy::{primitives::Address, signers::SignerSync};
+use angstrom_types::{
+    primitive::{AngstromSigner, ANGSTROM_DOMAIN},
+    sol_bindings::rpc_orders::{OmitOrderMeta, OrderMeta, TopOfBlockOrder}
 };
-use angstrom_types::sol_bindings::rpc_orders::{OmitOrderMeta, OrderMeta, TopOfBlockOrder};
 use pade::PadeEncode;
-
-use super::SigningInfo;
 
 #[derive(Default, Debug)]
 pub struct ToBOrderBuilder {
@@ -15,7 +13,7 @@ pub struct ToBOrderBuilder {
     quantity_in:  Option<u128>,
     quantity_out: Option<u128>,
     valid_block:  Option<u64>,
-    signing_key:  Option<SigningInfo>
+    signing_key:  Option<AngstromSigner>
 }
 
 impl ToBOrderBuilder {
@@ -47,7 +45,7 @@ impl ToBOrderBuilder {
         Self { valid_block: Some(valid_block), ..self }
     }
 
-    pub fn signing_key(self, signing_key: Option<SigningInfo>) -> Self {
+    pub fn signing_key(self, signing_key: Option<AngstromSigner>) -> Self {
         Self { signing_key, ..self }
     }
 
@@ -59,19 +57,15 @@ impl ToBOrderBuilder {
             quantity_out: self.quantity_out.unwrap_or_default(),
             valid_for_block: self.valid_block.unwrap_or_default(),
             recipient: self.recipient.unwrap_or_else(|| Address::random()),
+            max_gas_asset0: self.quantity_in.unwrap_or_default(),
             ..Default::default()
         };
-        if let Some(SigningInfo { domain, address, key }) = self.signing_key {
-            let signer = LocalSigner::from_signing_key(key);
-            let hash = order.no_meta_eip712_signing_hash(&domain);
-            println!("Typehash: {:?}", order.eip712_type_hash());
-            println!("Hash debug {:?}", hash);
-            println!("Alt hash debug: {:?}", order.eip712_hash_struct());
+        if let Some(signer) = self.signing_key {
+            let hash = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
             let sig = signer.sign_hash_sync(&hash).unwrap();
-            println!("Signature debug: {:?}", sig);
             order.meta = OrderMeta {
                 isEcdsa:   true,
-                from:      address,
+                from:      signer.address(),
                 signature: sig.pade_encode().into()
             };
         }

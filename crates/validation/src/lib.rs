@@ -62,7 +62,7 @@ pub fn init_validation<
         let pools = AngstromPoolsTracker::new(angstrom_address, pool_store);
         // load storage slot state + pools
         let thread_pool = KeySplitThreadpool::new(handle, MAX_VALIDATION_PER_ADDR);
-        let sim = SimValidation::new(revm_lru.clone(), angstrom_address);
+        let sim = SimValidation::new(revm_lru.clone(), angstrom_address, node_address);
 
         // load price update stream;
         let update_stream =

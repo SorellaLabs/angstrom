@@ -18,10 +18,7 @@ use matching_engine::{
 use reth_tasks::TokioTaskExecutor;
 
 use super::{pool::Pool, pre_proposal_agg::PreProposalAggregationBuilder};
-use crate::{
-    mocks::validator::MockValidator,
-    type_generator::{amm::AMMSnapshotBuilder, orders::SigningInfo}
-};
+use crate::{mocks::validator::MockValidator, type_generator::amm::AMMSnapshotBuilder};
 
 #[derive(Debug, Default)]
 pub struct ProposalBuilder {
@@ -31,8 +28,7 @@ pub struct ProposalBuilder {
     preproposal_count: Option<usize>,
     block:             Option<u64>,
     pools:             Option<Vec<Pool>>,
-    sk:                Option<AngstromSigner>,
-    order_key:         Option<SigningInfo>
+    sk:                Option<AngstromSigner>
 }
 
 impl ProposalBuilder {
@@ -87,10 +83,6 @@ impl ProposalBuilder {
         Self { sk: Some(sk), ..self }
     }
 
-    pub fn order_key(self, order_key: Option<SigningInfo>) -> Self {
-        Self { order_key, ..self }
-    }
-
     pub fn build(self) -> Proposal {
         // Extract values from our struct
         let ethereum_height = self.ethereum_height.unwrap_or_default();
@@ -108,7 +100,7 @@ impl ProposalBuilder {
                         .for_block(block)
                         .order_count(count)
                         .for_pools(pools.clone())
-                        .order_key(self.order_key.clone())
+                        .with_secret_key(sk.clone())
                         .build()
                 })
                 .collect::<Vec<_>>()

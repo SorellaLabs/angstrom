@@ -1,9 +1,10 @@
 use std::{
     collections::HashSet,
-    task::{Context, Poll, Waker}
+    task::{Context, Poll, Waker},
+    time::Instant
 };
 
-use alloy::{primitives::BlockNumber, providers::Provider, transports::Transport};
+use alloy::{primitives::BlockNumber, providers::Provider};
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::consensus::{PreProposal, PreProposalAggregation, Proposal};
 use matching_engine::MatchingEngineHandle;
@@ -25,20 +26,21 @@ pub struct PreProposalState {
     pre_proposals:             HashSet<PreProposal>,
     pre_proposals_aggregation: HashSet<PreProposalAggregation>,
     proposal:                  Option<Proposal>,
+    trigger_time:              Instant,
     waker:                     Waker
 }
 
 impl PreProposalState {
-    pub fn new<P, T, Matching>(
+    pub fn new<P, Matching>(
         block_height: BlockNumber,
         mut pre_proposals: HashSet<PreProposal>,
         pre_proposals_aggregation: HashSet<PreProposalAggregation>,
-        handles: &mut SharedRoundState<P, T, Matching>,
+        handles: &mut SharedRoundState<P, Matching>,
+        trigger_time: Instant,
         waker: Waker
     ) -> Self
     where
-        P: Provider<T> + 'static,
-        T: Transport + Clone,
+        P: Provider + 'static,
         Matching: MatchingEngineHandle
     {
         // generate my pre_proposal
@@ -53,20 +55,20 @@ impl PreProposalState {
         // ensure we get polled to start the checks for when we have 2f +1 pre_proposals
         // collected
         waker.wake_by_ref();
+        tracing::info!("starting pre proposal");
 
-        Self { pre_proposals, pre_proposals_aggregation, proposal: None, waker }
+        Self { pre_proposals, pre_proposals_aggregation, proposal: None, waker, trigger_time }
     }
 }
 
-impl<P, T, Matching> ConsensusState<P, T, Matching> for PreProposalState
+impl<P, Matching> ConsensusState<P, Matching> for PreProposalState
 where
-    P: Provider<T> + 'static,
-    T: Transport + Clone,
+    P: Provider + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(
         &mut self,
-        handles: &mut SharedRoundState<P, T, Matching>,
+        handles: &mut SharedRoundState<P, Matching>,
         message: StromConsensusEvent
     ) {
         match message {
@@ -95,9 +97,9 @@ where
 
     fn poll_transition(
         &mut self,
-        handles: &mut SharedRoundState<P, T, Matching>,
+        handles: &mut SharedRoundState<P, Matching>,
         cx: &mut Context<'_>
-    ) -> Poll<Option<Box<dyn ConsensusState<P, T, Matching>>>> {
+    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>> {
         if let Some(proposal) = self.proposal.take() {
             // skip to finalization
             return Poll::Ready(Some(Box::new(FinalizationState::new(
@@ -107,11 +109,16 @@ where
             ))))
         }
 
-        if self.pre_proposals.len() >= handles.two_thirds_of_validation_set() {
+        let cur_preproposals = self.pre_proposals.len();
+        let twthr = handles.two_thirds_of_validation_set();
+        if cur_preproposals >= twthr {
+            tracing::info!("got two thrids, moving to pre proposal aggregation");
+
             return Poll::Ready(Some(Box::new(PreProposalAggregationState::new(
                 std::mem::take(&mut self.pre_proposals),
                 std::mem::take(&mut self.pre_proposals_aggregation),
                 handles,
+                self.trigger_time,
                 cx.waker().clone()
             ))))
         }

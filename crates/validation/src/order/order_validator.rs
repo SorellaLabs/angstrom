@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     pin::Pin,
     sync::{atomic::AtomicU64, Arc}
 };
@@ -23,15 +24,15 @@ use crate::{
 };
 
 pub struct OrderValidator<DB, Pools, Fetch> {
-    sim:          SimValidation<DB>,
-    state:        StateValidation<Pools, Fetch>,
-    block_number: Arc<AtomicU64>
+    sim:                     SimValidation<DB>,
+    state:                   StateValidation<Pools, Fetch>,
+    pub(crate) block_number: Arc<AtomicU64>
 }
 
 impl<DB, Pools, Fetch> OrderValidator<DB, Pools, Fetch>
 where
     DB: Unpin + Clone + 'static + revm::DatabaseRef + reth_provider::BlockNumReader + Sync + Send,
-    <DB as revm::DatabaseRef>::Error: Send + Sync,
+    <DB as revm::DatabaseRef>::Error: Send + Sync + Debug,
     Pools: PoolsTracker + Send + Sync + 'static,
     Fetch: StateFetchUtils + Send + Sync + 'static
 {
@@ -81,36 +82,41 @@ where
             Box::pin(async move {
                 match order_validation {
                     OrderValidation::Limit(tx, order, _) => {
-                        metrics.new_order(false, || {
-                            let mut results = cloned_state.handle_regular_order(
-                                order,
-                                block_number,
-                                metrics.clone()
-                            );
-                            results.add_gas_cost_or_invalidate(
-                                &cloned_sim,
-                                &token_conversion,
-                                true
-                            );
+                        metrics
+                            .new_order(false, || async {
+                                let mut results = cloned_state.handle_regular_order(
+                                    order,
+                                    block_number,
+                                    metrics.clone()
+                                );
+                                results.add_gas_cost_or_invalidate(
+                                    &cloned_sim,
+                                    &token_conversion,
+                                    true,
+                                    block_number
+                                );
 
-                            let _ = tx.send(results);
-                        });
+                                let _ = tx.send(results);
+                            })
+                            .await;
                     }
                     OrderValidation::Searcher(tx, order, _) => {
-                        metrics.new_order(true, || {
-                            let mut results = cloned_state.handle_regular_order(
-                                order,
-                                block_number,
-                                metrics.clone()
-                            );
-                            results.add_gas_cost_or_invalidate(
-                                &cloned_sim,
-                                &token_conversion,
-                                false
-                            );
+                        metrics
+                            .new_order(true, || async {
+                                let mut results = cloned_state
+                                    .handle_tob_order(order, block_number, metrics.clone())
+                                    .await;
 
-                            let _ = tx.send(results);
-                        });
+                                results.add_gas_cost_or_invalidate(
+                                    &cloned_sim,
+                                    &token_conversion,
+                                    false,
+                                    block_number
+                                );
+
+                                let _ = tx.send(results);
+                            })
+                            .await;
                     }
                     _ => unreachable!()
                 }

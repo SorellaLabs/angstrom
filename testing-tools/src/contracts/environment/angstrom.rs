@@ -1,6 +1,9 @@
 use alloy::primitives::Address;
 use alloy_primitives::TxHash;
-use angstrom_types::contract_bindings::pool_gate::PoolGate::PoolGateInstance;
+use angstrom_types::contract_bindings::{
+    angstrom::Angstrom::AngstromInstance, controller_v_1::ControllerV1,
+    pool_gate::PoolGate::PoolGateInstance
+};
 use tracing::debug;
 
 use super::{uniswap::TestUniswapEnv, TestAnvilEnvironment};
@@ -13,39 +16,65 @@ pub trait TestAngstromEnv: TestAnvilEnvironment + TestUniswapEnv {
 #[derive(Clone)]
 pub struct AngstromEnv<E: TestUniswapEnv> {
     #[allow(dead_code)]
-    inner:    E,
-    angstrom: Address
+    inner:         E,
+    angstrom:      Address,
+    controller_v1: Address
 }
 
 impl<E> AngstromEnv<E>
 where
     E: TestUniswapEnv
 {
-    pub async fn new(inner: E) -> eyre::Result<Self> {
+    pub async fn new(inner: E, nodes: Vec<Address>) -> eyre::Result<Self> {
         let provider = inner.provider();
         debug!("Deploying mock rewards manager...");
-        let angstrom = deploy_angstrom(
-            &provider,
-            inner.pool_manager(),
-            inner.controller(),
-            Address::default()
-        )
-        .await;
+        let angstrom = inner
+            .execute_then_mine(deploy_angstrom(
+                &provider,
+                inner.pool_manager(),
+                inner.controller(),
+                Address::default()
+            ))
+            .await;
         debug!("Angstrom deployed at: {}", angstrom);
-        // Set the PoolGate's hook to be our Mock
-        debug!("Setting PoolGate hook...");
-        let pool_gate_instance = PoolGateInstance::new(inner.pool_gate(), &provider);
-        pool_gate_instance
-            .setHook(angstrom)
+        // gotta toggle nodes
+        let ang_i = AngstromInstance::new(angstrom, &provider);
+        let _ = ang_i
+            .toggleNodes(nodes)
             .from(inner.controller())
             .run_safe()
             .await?;
+
+        let controller_v1 = *inner
+            .execute_then_mine(ControllerV1::deploy(&provider, angstrom, inner.controller()))
+            .await?
+            .address();
+
+        debug!("ControllerV1 deployed at: {}", controller_v1);
+
+        // Set the PoolGate's hook to be our Mock
+        debug!("Setting PoolGate hook...");
+        let pool_gate_instance = PoolGateInstance::new(inner.pool_gate(), &provider);
+        inner
+            .execute_then_mine(
+                pool_gate_instance
+                    .setHook(angstrom)
+                    .from(inner.controller())
+                    .run_safe()
+            )
+            .await?;
+
         debug!("Environment deploy complete!");
-        Ok(Self { inner, angstrom })
+
+        Ok(Self { inner, angstrom, controller_v1 })
     }
 
     pub fn angstrom(&self) -> Address {
         self.angstrom
+    }
+
+    pub fn controller_v1(&self) -> Address {
+        self.controller_v1
     }
 }
 
@@ -80,7 +109,6 @@ where
     E: TestUniswapEnv
 {
     type P = E::P;
-    type T = E::T;
 
     fn provider(&self) -> &Self::P {
         self.inner.provider()
@@ -104,11 +132,14 @@ mod tests {
             Address, Bytes, Uint, U256
         },
         providers::Provider,
-        signers::{local::LocalSigner, SignerSync}
+        signers::{
+            local::{LocalSigner, PrivateKeySigner},
+            SignerSync
+        }
     };
     use alloy_primitives::FixedBytes;
-    use alloy_sol_types::{eip712_domain, Eip712Domain};
     use angstrom_types::{
+        block_sync::GlobalBlockSync,
         contract_bindings::{
             angstrom::Angstrom::{AngstromInstance, PoolKey},
             mintable_mock_erc_20::MintableMockERC20,
@@ -117,13 +148,12 @@ mod tests {
         contract_payloads::angstrom::{AngstromBundle, BundleGasDetails, UserOrder},
         matching::{uniswap::LiqRange, SqrtPriceX96},
         orders::{OrderFillState, OrderOutcome},
-        primitive::ANGSTROM_DOMAIN,
+        primitive::{AngstromSigner, ANGSTROM_DOMAIN},
         sol_bindings::{
             grouped_orders::{GroupedVanillaOrder, OrderWithStorageData, StandingVariants},
             rpc_orders::OmitOrderMeta
         }
     };
-    use enr::k256::ecdsa::SigningKey;
     use pade::PadeEncode;
 
     use super::{AngstromEnv, DebugTransaction};
@@ -135,16 +165,17 @@ mod tests {
         providers::AnvilProvider,
         type_generator::{
             amm::AMMSnapshotBuilder,
-            consensus::{pool::Pool, proposal::ProposalBuilder},
-            orders::SigningInfo
+            consensus::{pool::Pool, proposal::ProposalBuilder}
         }
     };
 
     #[tokio::test]
     async fn can_be_constructed() {
-        let anvil = AnvilProvider::spawn_new_isolated().await.unwrap();
+        let anvil = AnvilProvider::spawn_new_isolated(GlobalBlockSync::new(0))
+            .await
+            .unwrap();
         let uniswap = UniswapEnv::new(anvil.wallet_provider()).await.unwrap();
-        AngstromEnv::new(uniswap).await.unwrap();
+        AngstromEnv::new(uniswap, vec![]).await.unwrap();
     }
 
     #[test]
@@ -200,22 +231,20 @@ mod tests {
 
         let nodes: Vec<Address> = spawned_anvil.anvil.addresses().to_vec();
         let controller = nodes[7];
-        let controller_signing_key: SigningKey = spawned_anvil.anvil.keys()[7].clone().into();
+
+        let controller_signing_key = AngstromSigner::new(
+            PrivateKeySigner::from_slice(&spawned_anvil.anvil.keys()[7].clone().to_bytes())
+                .unwrap()
+        );
+
         let uniswap = UniswapEnv::new(anvil).await.unwrap();
-        let env = AngstromEnv::new(uniswap).await.unwrap();
+        let env = AngstromEnv::new(uniswap, vec![]).await.unwrap();
         let angstrom = AngstromInstance::new(env.angstrom(), env.provider());
-        let angstrom_addr = env.angstrom;
         println!("Angstrom: {}", angstrom.address());
         println!("Controller: {}", controller);
         println!("Uniswap: {}", env.pool_manager());
         println!("PoolGate: {}", env.pool_gate());
 
-        let domain: Eip712Domain = eip712_domain!(
-           name: "Angstrom",
-           version: "v1",
-           chain_id: 1,
-           verifying_contract: angstrom_addr,
-        );
         let pool_gate = PoolGateInstance::new(env.pool_gate(), env.provider());
         let raw_c0 = MintableMockERC20::deploy(env.provider()).await.unwrap();
 
@@ -264,8 +293,6 @@ mod tests {
             .await
             .unwrap();
 
-        let order_key = SigningInfo { domain, address: controller, key: controller_signing_key };
-
         // Get our ToB address and money it up
         // let tob_address = Address::random();
         // println!("TOB address: {:?}", tob_address);
@@ -292,7 +319,7 @@ mod tests {
             .for_pools(pools)
             .order_count(10)
             .preproposal_count(1)
-            .order_key(Some(order_key))
+            .with_secret_key(controller_signing_key)
             .for_block(current_block + 2)
             .build();
         println!("Proposal solutions:\n{:?}", proposal.solutions);

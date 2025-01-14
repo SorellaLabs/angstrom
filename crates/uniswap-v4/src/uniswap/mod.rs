@@ -1,4 +1,7 @@
+use std::cmp::Ordering;
+
 use alloy_primitives::{aliases::I24, I256};
+use malachite::num::arithmetic::traits::Sign;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -22,10 +25,18 @@ fn i32_to_i24(val: i32) -> Result<I24, ConversionError> {
     if !(MIN_I24..=MAX_I24).contains(&val) {
         return Err(ConversionError::OverflowErrorI24(val));
     }
+    let sign = val.sign();
+    let inner = val.abs();
+
     let mut bytes = [0u8; 3];
-    let value_bytes = val.to_be_bytes();
+    let value_bytes = inner.to_be_bytes();
     bytes[..].copy_from_slice(&value_bytes[1..]);
-    Ok(I24::from_be_bytes(bytes))
+
+    let mut new = I24::from_be_bytes(bytes);
+    if sign == Ordering::Less {
+        new = -new;
+    }
+    Ok(new)
 }
 
 fn i128_to_i256(value: i128) -> I256 {

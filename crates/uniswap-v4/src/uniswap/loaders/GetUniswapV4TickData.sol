@@ -33,44 +33,50 @@ contract GetUniswapV4TickData {
         uint256 counter = 0;
 
         while (counter < numTicks) {
-            (bool initialized, int24 nextTick) = zeroForOne
-                ? IUniV4.getNextTickLt(IPoolManager(poolManager), poolId, currentTick, tickSpacing)
-                : IUniV4.getNextTickGt(IPoolManager(poolManager), poolId, currentTick, tickSpacing);
+            // (bool initialized, int24 nextTick) = zeroForOne
+            //     ? IUniV4.getNextTickLt(IPoolManager(poolManager), poolId, currentTick, tickSpacing)
+            //     : IUniV4.getNextTickGt(IPoolManager(poolManager), poolId, currentTick, tickSpacing);
 
-            (uint128 liquidityGross, int128 liquidityNet) =
-                IUniV4.getTickLiquidity(IPoolManager(poolManager), poolId, nextTick);
+            (uint128 liquidityGross, int128 liquidityNet) = IUniV4
+                .getTickLiquidity(
+                    IPoolManager(poolManager),
+                    poolId,
+                    currentTick
+                );
 
             //Make sure not to overshoot the max/min tick
             //If we do, break the loop, and set the last initialized tick to the max/min tick=
-            if (nextTick < TickMath.MIN_TICK) {
-                nextTick = TickMath.MIN_TICK;
-                tickData[counter].initialized = initialized;
-                tickData[counter].tick = nextTick;
+            if (currentTick < TickMath.MIN_TICK) {
+                tickData[counter].initialized = liquidityGross != 0;
+                tickData[counter].tick = currentTick;
                 tickData[counter].liquidityGross = liquidityGross;
                 tickData[counter].liquidityNet = liquidityNet;
                 break;
-            } else if (nextTick > TickMath.MAX_TICK) {
-                nextTick = TickMath.MIN_TICK;
-                tickData[counter].initialized = initialized;
-                tickData[counter].tick = nextTick;
+            } else if (currentTick > TickMath.MAX_TICK) {
+                tickData[counter].initialized = liquidityGross != 0;
+                tickData[counter].tick = currentTick;
                 tickData[counter].liquidityGross = liquidityGross;
                 tickData[counter].liquidityNet = liquidityNet;
                 break;
             } else {
-                tickData[counter].initialized = initialized;
-                tickData[counter].tick = nextTick;
+                tickData[counter].initialized = liquidityGross != 0;
+                tickData[counter].tick = currentTick;
                 tickData[counter].liquidityGross = liquidityGross;
                 tickData[counter].liquidityNet = liquidityNet;
             }
 
             counter++;
 
-            //Set the current tick to the next tick and repeat
-            currentTick = nextTick;
+            // Set the current tick to the next tick and repeat
+            currentTick =
+                currentTick +
+                (zeroForOne ? -tickSpacing : tickSpacing);
         }
 
-        TicksWithBlock memory ticksWithBlock =
-            TicksWithBlock({ticks: tickData, blockNumber: block.number});
+        TicksWithBlock memory ticksWithBlock = TicksWithBlock({
+            ticks: tickData,
+            blockNumber: block.number
+        });
 
         // ensure abi encoding, not needed here but increase reusability for different return types
         // note: abi.encode add a first 32 bytes word with the address of the original data

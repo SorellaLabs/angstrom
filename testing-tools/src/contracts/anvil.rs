@@ -10,14 +10,10 @@ use alloy::{
             BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
             WalletFiller
         },
-        Identity, IpcConnect, PendingTransaction, Provider, RootProvider
+        Identity, PendingTransaction, Provider, RootProvider
     },
-    pubsub::PubSubFrontend,
     signers::local::PrivateKeySigner,
-    transports::{
-        http::{Client, Http},
-        Transport
-    }
+    transports::{BoxTransport, Transport}
 };
 use alloy_primitives::Address;
 use alloy_sol_types::SolCall;
@@ -30,8 +26,8 @@ pub type WalletProviderRpc = FillProvider<
         >,
         WalletFiller<EthereumWallet>
     >,
-    RootProvider<PubSubFrontend>,
-    PubSubFrontend,
+    RootProvider<BoxTransport>,
+    BoxTransport,
     Ethereum
 >;
 
@@ -52,8 +48,8 @@ pub type LocalAnvilRpc = alloy::providers::fillers::FillProvider<
         >,
         alloy::providers::fillers::WalletFiller<EthereumWallet>
     >,
-    RootProvider<Http<Client>>,
-    Http<Client>,
+    RootProvider<BoxTransport>,
+    BoxTransport,
     Ethereum
 >;
 
@@ -68,14 +64,14 @@ pub async fn spawn_anvil(anvil_key: usize) -> eyre::Result<(AnvilInstance, Walle
 
     let endpoint = "/tmp/anvil.ipc";
     tracing::info!(?endpoint);
-    let ipc = IpcConnect::new(endpoint.to_string());
+    // let ipc = IpcConnect::new(endpoint.to_string());
     let sk: PrivateKeySigner = anvil.keys()[anvil_key].clone().into();
 
     let wallet = EthereumWallet::new(sk);
     let rpc = builder::<Ethereum>()
         .with_recommended_fillers()
         .wallet(wallet)
-        .on_ipc(ipc)
+        .on_builtin(endpoint)
         .await?;
 
     tracing::info!("connected to anvil");
@@ -122,8 +118,8 @@ where
 impl<T, P, C, N> SafeDeployPending for SolCallBuilder<T, P, C, N>
 where
     T: Transport + Clone,
-    P: Provider<T, N>,
-    C: SolCall + Send + Sync,
+    P: Provider<T, N> + Clone,
+    C: SolCall + Send + Sync + Clone,
     N: Network
 {
     async fn deploy_pending(self) -> eyre::Result<PendingTransaction> {

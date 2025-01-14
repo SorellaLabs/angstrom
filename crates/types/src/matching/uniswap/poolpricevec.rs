@@ -12,7 +12,7 @@ use uniswap_v3_math::{
 
 use super::{poolprice::PoolPrice, Direction, LiqRangeRef, Quantity, Tick};
 use crate::{
-    matching::{Ray, SqrtPriceX96},
+    matching::{math::low_to_high, Ray, SqrtPriceX96},
     orders::OrderPrice
 };
 
@@ -20,12 +20,80 @@ use crate::{
 pub struct SwapStep<'a> {
     start_price: SqrtPriceX96,
     end_price:   SqrtPriceX96,
-    d_t0:        U256,
-    d_t1:        U256,
+    d_t0:        u128,
+    d_t1:        u128,
     liq_range:   LiqRangeRef<'a>
 }
 
 impl<'a> SwapStep<'a> {
+    /// Create a SwapStep that covers the portion of the liquidity range
+    /// contained within the bounds of the two prices given.  If the
+    /// liquidity range is completely contained within the interval `[start,
+    /// end)` then the generated SwapStep will cover the entire liquidity
+    /// range.
+    pub fn for_range(
+        start: &PoolPrice<'a>,
+        end: &PoolPrice<'a>,
+        liq_range: &LiqRangeRef<'a>
+    ) -> eyre::Result<Self> {
+        Self::for_price_range(&start.price, &end.price, liq_range)
+    }
+
+    /// Create a SwapStep that covers the portion of the liquidity range
+    /// contained within the bounds of the two prices given.  If the
+    /// liquidity range is completely contained within the interval `[start,
+    /// end)` then the generated SwapStep will cover the entire liquidity
+    /// range.
+    ///
+    /// This method uses raw prices instead of PoolPrice references
+    pub fn for_price_range(
+        start: &SqrtPriceX96,
+        end: &SqrtPriceX96,
+        liq_range: &LiqRangeRef<'a>
+    ) -> eyre::Result<Self> {
+        // Sort our incoming prices into the low and high price
+        let (low, high) = low_to_high(start, end);
+        let low_tick = low.to_tick()?;
+        let high_tick = high.to_tick()?;
+
+        // Make sure both of our price ticks are within bounds, otherwise return an
+        // error
+        if low_tick >= liq_range.upper_tick || high_tick < liq_range.lower_tick {
+            return Err(eyre!("Ticks out of bounds, unable to construct step"))
+        }
+
+        let start_price = if low_tick >= liq_range.lower_tick {
+            *low
+        } else {
+            SqrtPriceX96::at_tick(liq_range.lower_tick)?
+        };
+
+        let end_price = if high_tick < liq_range.upper_tick {
+            *high
+        } else {
+            SqrtPriceX96::at_tick(liq_range.upper_tick)?
+        };
+
+        Self::compute_info(start_price, end_price, *liq_range)
+    }
+
+    /// Creates a SwapStep that goes from the price given to the edge of the
+    /// liquidity range that the price is associated with in the given Direction
+    pub fn to_bound(start: PoolPrice<'a>, direction: Direction) -> eyre::Result<Self> {
+        let end = start.liq_range.clone().end_price(direction);
+        Self::from_prices(start, end)
+    }
+
+    /// Creates a SwapStep that covers the entirety of the provided liquidity
+    /// range
+    pub fn whole_range(range: LiqRangeRef<'a>, direction: Direction) -> eyre::Result<Self> {
+        let start = range.start_price(direction);
+        let end = range.end_price(direction);
+        Self::from_prices(start, end)
+    }
+
+    /// Creates a SwapStep that covers the range between two prices, provided
+    /// those prices are both within the same liquidity range
     pub fn from_prices(start: PoolPrice<'a>, end: PoolPrice<'a>) -> eyre::Result<Self> {
         if start.liq_range != end.liq_range {
             return Err(eyre!(
@@ -33,24 +101,41 @@ impl<'a> SwapStep<'a> {
                  different ranges"
             ));
         }
-        let liquidity = start.liquidity();
-        let (round_0, round_1) = match Direction::from_prices(start.price, end.price) {
+        Self::compute_info(start.price, end.price, start.liq_range)
+    }
+
+    /// Internal method for computing swap step details
+    fn compute_info(
+        start_price: SqrtPriceX96,
+        end_price: SqrtPriceX96,
+        liq_range: LiqRangeRef<'a>
+    ) -> eyre::Result<Self> {
+        // Make sure our prices are in the appropriate range.
+        let (low_price, high_price) = low_to_high(&start_price, &end_price);
+        // Low price is valid if it's within our liquidity range
+        let low_price_valid = liq_range.price_in_range(*low_price);
+        // High price is valid if it's either within our liquidity range or at the very
+        // top of the liquidity range
+        let high_price_valid = liq_range.price_in_range(*high_price)
+            || *high_price == SqrtPriceX96::at_tick(liq_range.upper_tick).unwrap();
+        if !(low_price_valid && high_price_valid) {
+            return Err(eyre!("Price outside liquidity range"))
+        }
+
+        let liquidity = liq_range.liquidity;
+        let (round_0, round_1) = match Direction::from_prices(start_price, end_price) {
             Direction::BuyingT0 => (false, true),
             Direction::SellingT0 => (true, false)
         };
-        let sqrt_ratio_a_x_96 = start.price.into();
-        let sqrt_ratio_b_x_96 = end.price.into();
+        let sqrt_ratio_a_x_96 = start_price.into();
+        let sqrt_ratio_b_x_96 = end_price.into();
         let d_t0 = _get_amount_0_delta(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, liquidity, round_0)
-            .unwrap_or(Uint::from(0));
+            .unwrap_or(Uint::from(0))
+            .to();
         let d_t1 = _get_amount_1_delta(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, liquidity, round_1)
-            .unwrap_or(Uint::from(0));
-        Ok(Self {
-            start_price: start.price,
-            end_price: end.price,
-            d_t0,
-            d_t1,
-            liq_range: start.liq_range
-        })
+            .unwrap_or(Uint::from(0))
+            .to();
+        Ok(Self { start_price, end_price, d_t0, d_t1, liq_range })
     }
 
     pub fn start_price(&self) -> SqrtPriceX96 {
@@ -62,14 +147,14 @@ impl<'a> SwapStep<'a> {
     }
 
     pub fn avg_price(&self) -> Ray {
-        Ray::calc_price(self.d_t0, self.d_t1)
+        Ray::calc_price(U256::from(self.d_t0), U256::from(self.d_t1))
     }
 
     pub fn liquidity(&self) -> u128 {
         self.liq_range.liquidity
     }
 
-    pub fn input(&self) -> U256 {
+    pub fn input(&self) -> u128 {
         if self.end_price > self.start_price {
             self.d_t1
         } else {
@@ -77,7 +162,7 @@ impl<'a> SwapStep<'a> {
         }
     }
 
-    pub fn output(&self) -> U256 {
+    pub fn output(&self) -> u128 {
         if self.end_price > self.start_price {
             self.d_t0
         } else {
@@ -98,19 +183,24 @@ pub struct DonationResult {
 pub struct PoolPriceVec<'a> {
     pub start_bound: PoolPrice<'a>,
     pub end_bound:   PoolPrice<'a>,
-    pub d_t0:        U256,
-    pub d_t1:        U256,
+    pub d_t0:        u128,
+    pub d_t1:        u128,
     steps:           Option<Vec<SwapStep<'a>>>
 }
 
 impl<'a> PoolPriceVec<'a> {
+    /// Create a new PoolPriceVec from a start and end price with minimal
+    /// checks.  The liquidity used will be the liquidity available at the
+    /// `start_bound`.  This should be used in quick-and-dirty situations
+    /// when we know that we're building a short-range PoolPriceVec that exists
+    /// within a single liquidity position
     pub fn new(start_bound: PoolPrice<'a>, end_bound: PoolPrice<'a>) -> Self {
         let (d_t0, d_t1) =
             Self::delta_to_price(start_bound.price, end_bound.price, start_bound.liquidity());
         Self { start_bound, end_bound, d_t0, d_t1, steps: None }
     }
 
-    pub fn input(&self) -> U256 {
+    pub fn input(&self) -> u128 {
         if self.end_bound.price > self.start_bound.price {
             self.d_t1
         } else {
@@ -118,7 +208,7 @@ impl<'a> PoolPriceVec<'a> {
         }
     }
 
-    pub fn output(&self) -> U256 {
+    pub fn output(&self) -> u128 {
         if self.end_bound.price > self.start_bound.price {
             self.d_t0
         } else {
@@ -130,38 +220,69 @@ impl<'a> PoolPriceVec<'a> {
         self.steps.as_ref()
     }
 
+    /// Create a new PoolPriceVec from a start and end price with full safety
+    /// checks and with the ability to span liquidity boundaries.
     pub fn from_price_range(start: PoolPrice<'a>, end: PoolPrice<'a>) -> eyre::Result<Self> {
         // If the two prices aren't from the same pool, we should error
         if !std::ptr::eq(start.liq_range.pool_snap, end.liq_range.pool_snap) {
             return Err(eyre!("Cannot create a price range from prices not in the same pool"));
         }
-        let direction = Direction::from_prices(start.price, end.price);
-        let mut cur_price = start.price;
-        let mut cur_liq_range = Some(start.liq_range);
 
-        while cur_price != end.price {
-            // Update our current liquidiy range
-            let liq_range =
-                cur_liq_range.ok_or_else(|| eyre!("Unable to find next liquidity range"))?;
-            // Compute our swap towards the appropriate end of our current liquidity bound
-            let target_tick = liq_range.end_bound(direction);
-            let target_price = SqrtPriceX96::at_tick(target_tick)?;
-            // If our target price is equal to our current price, we're precisely at the
-            // "bottom" of a liquidity range and we can skip this computation as
-            // it will be a null step
-            if target_price == cur_price {
-                cur_liq_range = liq_range.next(direction);
-                continue;
-            }
-            cur_price = target_price;
-        }
-        Ok(Self {
-            start_bound: start,
-            end_bound:   end,
-            d_t0:        U256::ZERO,
-            d_t1:        U256::ZERO,
-            steps:       None
-        })
+        let steps: Vec<SwapStep> = start
+            .liq_range
+            .pool_snap
+            .ranges_for_ticks(start.tick, end.tick)?
+            .iter()
+            .map(|liq_range| SwapStep::for_range(&start, &end, liq_range))
+            .collect::<eyre::Result<Vec<SwapStep>>>()?;
+
+        Self::from_steps(start, end, steps)
+    }
+
+    pub fn to_price_bound(start: PoolPrice<'a>, end: SqrtPriceX96) -> eyre::Result<Self> {
+        let end_tick = end.to_tick()?;
+        let steps = start
+            .liq_range
+            .pool_snap
+            .ranges_for_ticks(start.tick, end_tick)?
+            .iter()
+            .map(|liq_range| {
+                let (start, end) = low_to_high(&start.price, &end);
+                SwapStep::for_price_range(start, end, liq_range)
+            })
+            .collect::<eyre::Result<Vec<SwapStep>>>()?;
+        let end = if let Some(l) = steps.last() {
+            let tick = l.end_price.to_tick()?;
+            PoolPrice { liq_range: l.liq_range, price: l.end_price, tick }
+        } else {
+            return Err(eyre!("Unable to find actual end price"))
+        };
+        Self::from_steps(start, end, steps)
+    }
+
+    pub fn to_upper(start: PoolPrice<'a>) -> eyre::Result<Self> {
+        let end = if let Some(range) = start
+            .liq_range
+            .pool_snap
+            .get_range_for_tick(start.liq_range.upper_tick)
+        {
+            range.start_price(Direction::BuyingT0)
+        } else {
+            start.liq_range.end_price(Direction::BuyingT0)
+        };
+        let steps = vec![SwapStep::to_bound(start.clone(), Direction::BuyingT0)?];
+        Self::from_steps(start, end, steps)
+    }
+
+    fn from_steps(
+        start: PoolPrice<'a>,
+        end: PoolPrice<'a>,
+        steps: Vec<SwapStep<'a>>
+    ) -> eyre::Result<Self> {
+        let (d_t0, d_t1) = steps.iter().fold((0_u128, 0_u128), |(t0, t1), step| {
+            (t0.saturating_add(step.d_t0), t1.saturating_add(step.d_t1))
+        });
+        Ok(Self { start_bound: start, end_bound: end, d_t0, d_t1, steps: Some(steps) })
     }
 
     pub fn from_swap(
@@ -193,7 +314,7 @@ impl<'a> PoolPriceVec<'a> {
             let liq_range =
                 current_liq_range.ok_or_else(|| eyre!("Unable to find next liquidity range"))?;
             // Compute our swap towards the appropriate end of our current liquidity bound
-            let target_tick = liq_range.end_bound(direction);
+            let target_tick = liq_range.end_tick(direction);
             let target_price = SqrtPriceX96::at_tick(target_tick)?;
             // If our target price is equal to our current price, we're precisely at the
             // "bottom" of a liquidity range and we can skip this computation as
@@ -230,7 +351,7 @@ impl<'a> PoolPriceVec<'a> {
             total_in += amount_fee;
 
             // Based on our direction, sort out what our token0 and token1 are
-            let (d_t0, d_t1) = direction.sort_tokens(amount_in, amount_out);
+            let (d_t0, d_t1) = direction.sort_tokens(amount_in.to(), amount_out.to());
 
             // Push this step onto our list of swap steps
             steps.push(SwapStep {
@@ -247,7 +368,7 @@ impl<'a> PoolPriceVec<'a> {
             current_price = SqrtPriceX96::from(fin_price);
         }
 
-        let (d_t0, d_t1) = direction.sort_tokens(total_in, total_out);
+        let (d_t0, d_t1) = direction.sort_tokens(total_in.to(), total_out.to());
         let end_bound = start.liq_range.pool_snap.at_price(current_price)?;
         Ok(Self { start_bound: start, end_bound, d_t0, d_t1, steps: Some(steps) })
     }
@@ -264,7 +385,7 @@ impl<'a> PoolPriceVec<'a> {
         let steps = self.steps.as_ref().unwrap_or(&empty);
         let mut step_iter = steps.iter().peekable();
         while let Some(step) = step_iter.next() {
-            let q_step = cur_q + step.output();
+            let q_step = cur_q + U256::from(step.output());
             // Our target price is either the average price of the next stake or the end
             // price of the current stake if there's no next stake to deal with
             let target_price = step_iter
@@ -307,7 +428,7 @@ impl<'a> PoolPriceVec<'a> {
                 let tick_num = step.liq_range.lower_tick();
                 if filled_price > step.avg_price() {
                     let tick_dprice = filled_price - step.avg_price();
-                    let tick_reward = tick_dprice.mul_quantity(step.output());
+                    let tick_reward = tick_dprice.mul_quantity(U256::from(step.output()));
                     if tick_reward > U256::ZERO {
                         total_donated += tick_reward;
                         Some((tick_num, tick_reward))
@@ -352,60 +473,148 @@ impl<'a> PoolPriceVec<'a> {
         }
     }
 
+    /// A very raw delta to a specific price presuming the liquidity is constant
+    /// for the duration of the swap
     fn delta_to_price(
         start_price: SqrtPriceX96,
         end_price: SqrtPriceX96,
         liquidity: u128
-    ) -> (U256, U256) {
+    ) -> (u128, u128) {
         let sqrt_ratio_a_x_96 = start_price.into();
         let sqrt_ratio_b_x_96 = end_price.into();
         let d_t0 = _get_amount_0_delta(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, liquidity, false)
             .unwrap_or(Uint::from(0));
         let d_t1 = _get_amount_1_delta(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, liquidity, false)
             .unwrap_or(Uint::from(0));
-        (d_t0, d_t1)
+        (d_t0.to(), d_t1.to())
     }
 
     pub fn is_buy(&self) -> bool {
         self.start_bound.price < self.end_bound.price
     }
 
-    /// Returns `(quantity, price)`
-    pub fn quantity(&self, target_price: OrderPrice) -> (U256, U256) {
+    /// Returns `(d_t0, d_t1, price)`
+    pub fn quantity(&self, target_price: OrderPrice) -> (u128, u128, OrderPrice) {
         let t: SqrtPriceX96 = Ray::from(*target_price).into();
 
         // If our target price is past our end bound, our quantity is the entire range
         if (self.is_buy() && t > self.end_bound.price) || t < self.end_bound.price {
-            return (self.d_t0, self.d_t1);
+            return (self.d_t0, self.d_t1, OrderPrice::from(self.end_bound.price));
         }
 
-        let (quantity, price) =
+        let (d_t0, d_t1) =
             Self::delta_to_price(self.start_bound.price, t, self.start_bound.liquidity());
-        (quantity, price)
+        (d_t0, d_t1, target_price)
     }
 
     // Maybe it's OK that I don't check the price again here because in the matching
     // algo I've only offered a quantity bounded by the price, so we should
     // always be OK?
-    pub fn fill(&self, quantity: U256) -> Self {
+    pub fn fill(&self, quantity: u128) -> Self {
         let liquidity = self.start_bound.liquidity();
         let end_sqrt_price = if self.is_buy() {
             get_next_sqrt_price_from_output(
                 self.start_bound.price.into(),
                 liquidity,
-                quantity,
+                U256::from(quantity),
                 true
             )
             .map(SqrtPriceX96::from)
             .unwrap()
         } else {
-            get_next_sqrt_price_from_input(self.start_bound.price.into(), liquidity, quantity, true)
-                .map(SqrtPriceX96::from)
-                .unwrap()
+            get_next_sqrt_price_from_input(
+                self.start_bound.price.into(),
+                liquidity,
+                U256::from(quantity),
+                true
+            )
+            .map(SqrtPriceX96::from)
+            .unwrap()
         };
         let (d_t0, d_t1) = Self::delta_to_price(self.start_bound.price, end_sqrt_price, liquidity);
         let mut end_bound = self.start_bound.clone();
         end_bound.price = end_sqrt_price;
         Self { end_bound, start_bound: self.start_bound.clone(), d_t0, d_t1, steps: None }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::matching::uniswap::{LiqRange, PoolSnapshot};
+
+    #[test]
+    fn can_construct_pricevec() {
+        let liquidity = 1_000_000_000_000_000_u128;
+        let pool = PoolSnapshot::new(
+            vec![LiqRange { liquidity, lower_tick: 100000, upper_tick: 100100 }],
+            SqrtPriceX96::at_tick(100050).unwrap()
+        )
+        .unwrap();
+        PoolPriceVec::new(pool.current_price(), pool.current_price());
+    }
+
+    #[test]
+    fn will_span_segments() {
+        let seg_1_liq = 1_000_000_000_000_000_u128;
+        let seg_2_liq = 1_000_000_000_000_u128;
+        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
+        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
+        let cur_price = SqrtPriceX96::at_tick(100025).unwrap();
+        let end_price = SqrtPriceX96::at_tick(100075).unwrap();
+        let pool = PoolSnapshot::new(vec![segment_1, segment_2], cur_price).unwrap();
+        let start_bound = pool.current_price();
+        let end_bound = pool.at_price(end_price).unwrap();
+        let pricevec = PoolPriceVec::from_price_range(start_bound, end_bound).unwrap();
+        assert!(pricevec.steps.is_some(), "No steps in our price vector");
+        let steps = pricevec.steps.as_ref().unwrap();
+        assert_eq!(steps.len(), 2, "Wrong number of steps in our price vector");
+
+        // Make sure the total swap is the same
+        let mid_price = SqrtPriceX96::at_tick(100050).unwrap();
+        let amount_remaining = I256::unchecked_from(pricevec.d_t1);
+        let (next_price, first_step_in, first_step_out, _) =
+            compute_swap_step(cur_price.into(), mid_price.into(), seg_1_liq, amount_remaining, 0)
+                .unwrap();
+        assert_eq!(
+            first_step_in,
+            U256::from(steps[0].d_t1),
+            "Token1 payment incorrect for first step"
+        );
+        assert_eq!(
+            first_step_out,
+            U256::from(steps[0].d_t0),
+            "Token0 received incorrect for first step"
+        );
+        assert_eq!(SqrtPriceX96::from(next_price), mid_price, "Price after first step mismatched");
+        let (post_second_price, second_step_in, second_step_out, _) =
+            compute_swap_step(mid_price.into(), end_price.into(), seg_2_liq, amount_remaining, 0)
+                .unwrap();
+        assert_eq!(
+            second_step_in,
+            U256::from(steps[1].d_t1),
+            "Token1 payment incorrect for second step"
+        );
+        assert_eq!(
+            second_step_out,
+            U256::from(steps[1].d_t0),
+            "Token0 received incorrect for second step"
+        );
+        assert_eq!(
+            SqrtPriceX96::from(post_second_price),
+            end_price,
+            "Price after second step mismatched"
+        );
+
+        assert_eq!(
+            first_step_in + second_step_in,
+            U256::from(pricevec.d_t1),
+            "Final vec doesn't match input sum"
+        );
+        assert_eq!(
+            first_step_out + second_step_out,
+            U256::from(pricevec.d_t0),
+            "Final vec doesn't match input sum"
+        );
     }
 }

@@ -9,6 +9,8 @@ use angstrom_types::{
 };
 use rand_distr::{Distribution, SkewNormal};
 
+use crate::book::BookOrder;
+
 #[allow(clippy::too_many_arguments)]
 pub fn order_distribution(
     is_bid: bool,
@@ -19,7 +21,7 @@ pub fn order_distribution(
     quantity_location: f64,
     quantity_scale: f64,
     quantity_shape: f64
-) -> Result<Vec<OrderWithStorageData<GroupedVanillaOrder>>, String> {
+) -> Result<Vec<BookOrder>, String> {
     let mut rng = rand::thread_rng();
     let mut rng2 = rand::thread_rng();
     let price_gen = SkewNormal::new(price_location, price_scale, price_shape)

@@ -1,5 +1,5 @@
 use alloy::{
-    primitives::{Address, Bytes, FixedBytes, Parity, U256},
+    primitives::{Address, Bytes, FixedBytes, U256},
     sol
 };
 use alloy_primitives::B256;
@@ -23,7 +23,7 @@ sol! {
         uint128 settle;
     }
 
-    #[derive(Debug,Default, PadeEncode, PadeDecode)]
+    #[derive(Debug, Default, PadeEncode, PadeDecode)]
     struct Pair {
         uint16 index0;
         uint16 index1;
@@ -43,10 +43,10 @@ impl Signature {
         match self {
             Self::Contract { from, .. } => *from,
             Self::Ecdsa { v, r, s } => {
-                let sig = alloy::primitives::Signature::new(
+                let sig = alloy::primitives::PrimitiveSignature::new(
                     U256::from_be_slice(&**r),
                     U256::from_be_slice(&**s),
-                    Parity::NonEip155(*v == 1)
+                    *v == 1
                 );
                 sig.recover_address_from_prehash(&hash).unwrap()
             }
@@ -60,9 +60,9 @@ impl Default for Signature {
     }
 }
 
-impl From<alloy::primitives::Signature> for Signature {
-    fn from(value: alloy::primitives::Signature) -> Self {
-        let v = value.v().y_parity_byte_non_eip155().unwrap();
+impl From<alloy::primitives::PrimitiveSignature> for Signature {
+    fn from(value: alloy::primitives::PrimitiveSignature) -> Self {
+        let v = 27 + value.v() as u8;
         let r: FixedBytes<32> = value.r().into();
         let s: FixedBytes<32> = value.s().into();
         Self::Ecdsa { v, r, s }

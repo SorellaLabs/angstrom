@@ -10,8 +10,8 @@ use alloy::primitives::{Address, FixedBytes, B256};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    orders::{OrderLocation, OrderOrigin, OrderStatus},
-    primitive::PeerId,
+    orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
+    primitive::{NewInitializedPool, PeerId, PoolId},
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::{Future, FutureExt, StreamExt};
@@ -27,7 +27,8 @@ use tokio::sync::{
 };
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{
-    state::pools::AngstromPoolsTracker, OrderValidationResults, OrderValidatorHandle
+    state::pools::AngstromPoolsTracker, OrderPoolNewOrderResult, OrderValidationResults,
+    OrderValidatorHandle
 };
 
 use crate::{LruCache, NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
@@ -48,7 +49,7 @@ pub struct PoolHandle {
 pub enum OrderCommand {
     // new orders
     NewOrder(OrderOrigin, AllOrders, tokio::sync::oneshot::Sender<OrderValidationResults>),
-    CancelOrder(Address, B256, tokio::sync::oneshot::Sender<bool>),
+    CancelOrder(CancelOrderRequest, tokio::sync::oneshot::Sender<bool>),
     PendingOrders(Address, tokio::sync::oneshot::Sender<Vec<AllOrders>>),
     OrdersByPool(FixedBytes<32>, OrderLocation, tokio::sync::oneshot::Sender<Vec<AllOrders>>),
     OrderStatus(B256, tokio::sync::oneshot::Sender<Option<OrderStatus>>)
@@ -65,15 +66,10 @@ impl OrderPoolHandle for PoolHandle {
         &self,
         origin: OrderOrigin,
         order: AllOrders
-    ) -> impl Future<Output = bool> + Send {
+    ) -> impl Future<Output = OrderPoolNewOrderResult> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let _ = self.send(OrderCommand::NewOrder(origin, order, tx));
-        rx.map(|result| match result {
-            Ok(OrderValidationResults::Valid(_)) => true,
-            Ok(OrderValidationResults::Invalid(_)) => false,
-            Ok(OrderValidationResults::TransitionedToBlock) => false,
-            Err(_) => false
-        })
+        rx.map(Into::into)
     }
 
     fn subscribe_orders(&self) -> BroadcastStream<PoolManagerUpdate> {
@@ -112,9 +108,9 @@ impl OrderPoolHandle for PoolHandle {
         rx.map(|res| res.unwrap_or_default())
     }
 
-    fn cancel_order(&self, from: Address, order_hash: B256) -> impl Future<Output = bool> + Send {
+    fn cancel_order(&self, req: CancelOrderRequest) -> impl Future<Output = bool> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let _ = self.send(OrderCommand::CancelOrder(from, order_hash, tx));
+        let _ = self.send(OrderCommand::CancelOrder(req, tx));
         rx.map(|res| res.unwrap_or(false))
     }
 }
@@ -190,6 +186,7 @@ where
             pool_manager_tx.clone(),
             pool_storage
         );
+        self.global_sync.register(MODULE_NAME);
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -277,37 +274,16 @@ where
     V: OrderValidatorHandle<Order = AllOrders>,
     GlobalSync: BlockSyncConsumer
 {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        order_indexer: OrderIndexer<V>,
-        network: StromNetworkHandle,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
-        eth_network_events: UnboundedReceiverStream<EthEvent>,
-        global_sync: GlobalSync,
-        _command_tx: UnboundedSender<OrderCommand>,
-        command_rx: UnboundedReceiverStream<OrderCommand>,
-        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        _pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
-    ) -> Self {
-        Self {
-            strom_network_events,
-            network,
-            order_indexer,
-            peer_to_info: HashMap::new(),
-            order_events,
-            command_rx,
-            eth_network_events,
-            global_sync
-        }
-    }
-
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
             OrderCommand::NewOrder(_, order, validation_response) => self
                 .order_indexer
                 .new_rpc_order(OrderOrigin::External, order, validation_response),
-            OrderCommand::CancelOrder(from, order_hash, receiver) => {
-                let res = self.order_indexer.cancel_order(from, order_hash);
+            OrderCommand::CancelOrder(req, receiver) => {
+                let res = self.order_indexer.cancel_order(&req);
+                if res {
+                    self.broadcast_cancel_to_peers(req);
+                }
                 let _ = receiver.send(res);
             }
             OrderCommand::PendingOrders(from, receiver) => {
@@ -326,7 +302,7 @@ where
         }
     }
 
-    fn on_eth_event(&mut self, eth: EthEvent, waker: impl FnOnce() -> Waker) {
+    fn on_eth_event(&mut self, eth: EthEvent, waker: Waker) {
         match eth {
             EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
                 self.order_indexer.start_new_block_processing(
@@ -334,16 +310,30 @@ where
                     filled_orders,
                     address_changeset
                 );
+                waker.clone().wake_by_ref();
             }
             EthEvent::ReorgedOrders(orders, range) => {
                 self.order_indexer.reorg(orders);
                 self.global_sync
-                    .sign_off_reorg(MODULE_NAME, range, Some(waker()))
+                    .sign_off_reorg(MODULE_NAME, range, Some(waker))
             }
             EthEvent::FinalizedBlock(block) => {
                 self.order_indexer.finalized_block(block);
             }
-            EthEvent::NewPool(pool) => self.order_indexer.new_pool(pool),
+            EthEvent::NewPool { pool } => {
+                let t0 = pool.currency0;
+                let t1 = pool.currency1;
+                let id: PoolId = pool.into();
+
+                let pool = NewInitializedPool { currency_in: t0, currency_out: t1, id };
+
+                self.order_indexer.new_pool(pool);
+            }
+            EthEvent::RemovedPool { pool } => {
+                self.order_indexer.remove_pool(pool.into());
+            }
+            EthEvent::AddedNode(_) => {}
+            EthEvent::RemovedNode(_) => {}
             EthEvent::NewBlock(_) => {}
         }
     }
@@ -351,7 +341,6 @@ where
     fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
         match event {
             NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
-                tracing::debug!("recieved IncomingOrders from peer {:?}", peer_id);
                 orders.into_iter().for_each(|order| {
                     self.peer_to_info
                         .get_mut(&peer_id)
@@ -364,6 +353,12 @@ where
                     );
                 });
             }
+            NetworkOrderEvent::CancelOrder { request, .. } => {
+                let res = self.order_indexer.cancel_order(&request);
+                if res {
+                    self.broadcast_cancel_to_peers(request);
+                }
+            }
         }
     }
 
@@ -374,7 +369,12 @@ where
                 self.peer_to_info.insert(
                     peer_id,
                     StromPeer {
-                        orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap())
+                        orders:        LruCache::new(
+                            NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
+                        ),
+                        cancellations: LruCache::new(
+                            NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
+                        )
                     }
                 );
             }
@@ -389,7 +389,12 @@ where
                 self.peer_to_info.insert(
                     peer_id,
                     StromPeer {
-                        orders: LruCache::new(NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap())
+                        orders:        LruCache::new(
+                            NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
+                        ),
+                        cancellations: LruCache::new(
+                            NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
+                        )
                     }
                 );
             }
@@ -422,6 +427,18 @@ where
         self.broadcast_orders_to_peers(valid_orders);
     }
 
+    fn broadcast_cancel_to_peers(&mut self, cancel: CancelOrderRequest) {
+        for (peer_id, info) in self.peer_to_info.iter_mut() {
+            let order_hash = cancel.order_id;
+            if !info.cancellations.contains(&order_hash) {
+                self.network
+                    .send_message(*peer_id, StromMessage::OrderCancellation(cancel.clone()));
+
+                info.cancellations.insert(order_hash);
+            }
+        }
+    }
+
     fn broadcast_orders_to_peers(&mut self, valid_orders: Vec<AllOrders>) {
         for order in valid_orders.iter() {
             for (peer_id, info) in self.peer_to_info.iter_mut() {
@@ -448,32 +465,41 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        // pull all eth events
-        while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
-            this.on_eth_event(eth, || cx.waker().clone());
-        }
-
-        // drain network/peer related events
-        while let Poll::Ready(Some(event)) = this.strom_network_events.poll_next_unpin(cx) {
-            this.on_network_event(event);
-        }
-
-        // poll underlying pool. This is the validation process that's being polled
-        while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
-            this.on_pool_events(orders, || cx.waker().clone());
-        }
-
-        // halt dealing with these till we have synced
-        if this.global_sync.can_operate() {
-            // drain commands
-            while let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
-                tracing::debug!(?cmd, "that was a command");
-                this.on_command(cmd);
+        let mut work = 30;
+        loop {
+            work -= 1;
+            if work == 0 {
+                cx.waker().wake_by_ref();
+                break;
+            }
+            // pull all eth events
+            while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
+                this.on_eth_event(eth, cx.waker().clone());
             }
 
-            // drain incoming transaction events
-            while let Poll::Ready(Some(event)) = this.order_events.poll_next_unpin(cx) {
-                this.on_network_order_event(event);
+            // drain network/peer related events
+            while let Poll::Ready(Some(event)) = this.strom_network_events.poll_next_unpin(cx) {
+                this.on_network_event(event);
+            }
+
+            // poll underlying pool. This is the validation process that's being polled
+            while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
+                this.on_pool_events(orders, || cx.waker().clone());
+            }
+
+            // halt dealing with these till we have synced
+            if this.global_sync.can_operate() {
+                // drain commands
+                while let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
+                    this.on_command(cmd);
+                    cx.waker().wake_by_ref();
+                }
+
+                // drain incoming transaction events
+                while let Poll::Ready(Some(event)) = this.order_events.poll_next_unpin(cx) {
+                    this.on_network_order_event(event);
+                    cx.waker().wake_by_ref();
+                }
             }
         }
 
@@ -495,5 +521,6 @@ pub enum NetworkTransactionEvent {
 #[derive(Debug)]
 struct StromPeer {
     /// Keeps track of transactions that we know the peer has seen.
-    orders: LruCache<B256>
+    orders:        LruCache<B256>,
+    cancellations: LruCache<B256>
 }

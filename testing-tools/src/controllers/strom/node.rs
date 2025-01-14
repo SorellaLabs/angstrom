@@ -1,22 +1,24 @@
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
+    pin::Pin,
     sync::Arc,
     task::Poll
 };
 
-use alloy::pubsub::PubSubFrontend;
 use alloy_primitives::Address;
 use angstrom::components::initialize_strom_handles;
 use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager
 };
 use angstrom_types::{
+    block_sync::GlobalBlockSync,
     primitive::PeerId,
     sol_bindings::{grouped_orders::AllOrders, testnet::random::RandomValues},
     testnet::InitialTestnetState
 };
 use consensus::{AngstromValidator, ConsensusManager};
+use futures::Future;
 use matching_engine::manager::MatcherHandle;
 use parking_lot::RwLock;
 use reth_chainspec::Hardforks;
@@ -25,17 +27,18 @@ use reth_network::{
     test_utils::{Peer, PeerHandle},
     NetworkHandle, NetworkInfo, Peers
 };
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use tracing::instrument;
 
 use super::internals::AngstromDevnetNodeInternals;
 use crate::{
+    agents::AgentConfig,
     contracts::anvil::WalletProviderRpc,
     controllers::TestnetStateFutureLock,
     network::{EthPeerPool, TestnetNodeNetwork},
     providers::AnvilProvider,
-    types::{config::TestingNodeConfig, GlobalTestingConfig, MockBlockSync, WithWalletProvider}
+    types::{config::TestingNodeConfig, GlobalTestingConfig, WithWalletProvider}
 };
 
 pub struct TestnetNode<C, P> {
@@ -47,8 +50,9 @@ pub struct TestnetNode<C, P> {
 
 impl<C, P> TestnetNode<C, P>
 where
-    C: BlockReader
-        + HeaderProvider
+    C: BlockReader<Block = reth_primitives::Block>
+        + HeaderProvider<Header = reth_primitives::Header>
+        + ReceiptProvider<Receipt = reth_primitives::Receipt>
         + ChainSpecProvider
         + Unpin
         + Clone
@@ -56,15 +60,24 @@ where
         + 'static,
     P: WithWalletProvider
 {
-    #[instrument(name = "node", skip(node_config, c, state_provider, initial_validators, inital_angstrom_state, block_provider), fields(id = node_config.node_id))]
-    pub async fn new<G: GlobalTestingConfig>(
+    #[instrument(name = "node", level = "trace", skip(node_config, c, state_provider, initial_validators, inital_angstrom_state, block_provider, agents), fields(id = node_config.node_id))]
+    pub async fn new<G: GlobalTestingConfig, F>(
         c: C,
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
         initial_validators: Vec<AngstromValidator>,
         inital_angstrom_state: InitialTestnetState,
-        block_provider: BroadcastStream<(u64, Vec<alloy_rpc_types::Transaction>)>
-    ) -> eyre::Result<Self> {
+        block_provider: BroadcastStream<(u64, Vec<alloy_rpc_types::Transaction>)>,
+        agents: Vec<F>,
+        block_sync: GlobalBlockSync
+    ) -> eyre::Result<Self>
+    where
+        F: for<'a> Fn(
+            &'a InitialTestnetState,
+            AgentConfig
+        ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
+        F: Clone
+    {
         tracing::info!("spawning node");
 
         let strom_handles = initialize_strom_handles();
@@ -76,14 +89,16 @@ where
         )
         .await;
 
-        let (strom, consensus) = AngstromDevnetNodeInternals::new(
+        let (strom, consensus, validation) = AngstromDevnetNodeInternals::new(
             node_config.clone(),
             state_provider,
             strom_handles,
             strom_network.strom_handle.network_handle().clone(),
             initial_validators,
             block_provider,
-            inital_angstrom_state
+            inital_angstrom_state,
+            agents,
+            block_sync
         )
         .await?;
 
@@ -93,7 +108,8 @@ where
             node_config.node_id,
             eth_peer,
             strom_network_manager,
-            consensus
+            consensus,
+            validation
         );
 
         Ok(Self { testnet_node_id: node_config.node_id, network: strom_network, strom, state_lock })
@@ -101,6 +117,10 @@ where
 
     /// General
     /// -------------------------------------
+    pub fn node_rpc_url(&self) -> String {
+        let port = (4200 + self.testnet_node_id) as u16;
+        format!("http://localhost:{port}")
+    }
 
     pub fn testnet_node_id(&self) -> u64 {
         self.testnet_node_id
@@ -208,9 +228,10 @@ where
         !self.state_lock.network_state()
     }
 
-    pub fn start_network_and_consensus(&self) {
+    pub fn start_network_and_consensus_and_validation(&self) {
         self.start_network();
         self.start_conensus();
+        self.state_lock.set_validation(true);
     }
 
     pub fn stop_network_and_consensus(&self) {
@@ -222,18 +243,14 @@ where
     /// -------------------------------------
     pub fn strom_consensus<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(
-            &ConsensusManager<WalletProviderRpc, PubSubFrontend, MatcherHandle, MockBlockSync>
-        ) -> R
+        F: FnOnce(&ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync>) -> R
     {
         self.state_lock.strom_consensus(f)
     }
 
     pub fn strom_consensus_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(
-            &mut ConsensusManager<WalletProviderRpc, PubSubFrontend, MatcherHandle, MockBlockSync>
-        ) -> R
+        F: FnOnce(&mut ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync>) -> R
     {
         self.state_lock.strom_consensus_mut(f)
     }
@@ -257,7 +274,7 @@ where
     /// Testing Utils
     /// -------------------------------------
 
-    fn add_validator_bidirectional(&mut self, other: &Self) {
+    fn add_validator_bidirectional(&self, other: &Self) {
         self.add_strom_validator(other.network.pubkey());
         other.add_strom_validator(self.network.pubkey());
     }
@@ -333,8 +350,8 @@ where
         .await
     }
 
-    pub(crate) async fn _testnet_future(self) {
-        self.start_network_and_consensus();
+    pub(crate) async fn testnet_future(self) {
+        self.start_network_and_consensus_and_validation();
         self.state_lock.await;
     }
 }

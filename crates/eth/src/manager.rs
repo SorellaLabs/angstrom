@@ -6,14 +6,17 @@ use std::{
 };
 
 use alloy::{
-    primitives::{Address, BlockHash, BlockNumber, B256},
+    consensus::Transaction,
+    primitives::{aliases::I24, Address, BlockHash, BlockNumber, B256},
     sol_types::SolEvent
 };
 use angstrom_types::{
     block_sync::BlockSyncProducer,
-    contract_bindings,
-    contract_payloads::angstrom::{AngstromBundle, AngstromPoolConfigStore},
-    primitive::NewInitializedPool
+    contract_bindings::{
+        angstrom::Angstrom::PoolKey,
+        controller_v_1::ControllerV1::{NodeAdded, NodeRemoved, PoolConfigured, PoolRemoved}
+    },
+    contract_payloads::angstrom::{AngPoolConfigEntry, AngstromBundle, AngstromPoolConfigStore}
 };
 use futures::Future;
 use futures_util::{FutureExt, StreamExt};
@@ -36,25 +39,23 @@ const MAX_REORG_DEPTH: u64 = 30;
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
 pub struct EthDataCleanser<Sync> {
-    angstrom_address: Address,
+    angstrom_address:  Address,
+    periphery_address: Address,
     /// our command receiver
-    commander:        ReceiverStream<EthCommand>,
+    commander:         ReceiverStream<EthCommand>,
     /// people listening to events
-    event_listeners:  Vec<UnboundedSender<EthEvent>>,
-
+    event_listeners:   Vec<UnboundedSender<EthEvent>>,
     /// for rebroadcasting
-    cannon_sender: tokio::sync::broadcast::Sender<CanonStateNotification>,
-
+    cannon_sender:     tokio::sync::broadcast::Sender<CanonStateNotification>,
     /// Notifications for Canonical Block updates
     canonical_updates: BroadcastStream<CanonStateNotification>,
     angstrom_tokens:   HashSet<Address>,
     /// handles syncing of blocks.
     block_sync:        Sync,
-
-    /// TODO: Once the periphery contracts are finished. we will add a watcher
-    /// on the contract that every time a new pair is added, we update the
-    /// pool store globally.
-    _pool_store: Arc<AngstromPoolConfigStore>
+    /// updated by periphery contract.
+    pool_store:        Arc<AngstromPoolConfigStore>,
+    /// the set of currently active nodes.
+    node_set:          HashSet<Address>
 }
 
 impl<Sync> EthDataCleanser<Sync>
@@ -63,27 +64,39 @@ where
 {
     pub fn spawn<TP: TaskSpawner>(
         angstrom_address: Address,
+        periphery_address: Address,
         canonical_updates: CanonStateNotifications,
         tp: TP,
         tx: Sender<EthCommand>,
         rx: Receiver<EthCommand>,
         angstrom_tokens: HashSet<Address>,
         pool_store: Arc<AngstromPoolConfigStore>,
-        sync: Sync
+        sync: Sync,
+        node_set: HashSet<Address>,
+        event_listeners: Vec<UnboundedSender<EthEvent>>
     ) -> anyhow::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
         let (cannon_tx, _) = tokio::sync::broadcast::channel(1000);
 
-        let this = Self {
+        let mut this = Self {
             angstrom_address,
+            periphery_address,
             canonical_updates: BroadcastStream::new(canonical_updates),
             commander: stream,
-            event_listeners: Vec::new(),
             angstrom_tokens,
             cannon_sender: cannon_tx,
             block_sync: sync,
-            _pool_store: pool_store
+            pool_store,
+            node_set,
+            event_listeners
         };
+        // ensure we broadcast node set. will allow for proper connections
+        // on the network side
+        for n in &this.node_set {
+            this.event_listeners
+                .retain(|e| e.send(EthEvent::AddedNode(*n)).is_ok());
+        }
+
         tp.spawn_critical("eth handle", this.boxed());
 
         let handle = EthHandle::new(tx);
@@ -120,6 +133,7 @@ where
     }
 
     fn handle_reorg(&mut self, old: Arc<impl ChainExt>, new: Arc<impl ChainExt>) {
+        self.apply_periphery_logs(&new);
         // notify producer of reorg if one happened. NOTE: reth also calls this
         // on reverts
         let tip = new.tip_number();
@@ -141,16 +155,17 @@ where
             filled_orders:     new_filled.into_iter().collect(),
             address_changeset: eoas
         };
+
         self.send_events(transitions);
         self.send_events(reorged_orders);
     }
 
     fn handle_commit(&mut self, new: Arc<impl ChainExt>) {
+        // handle this first so the newest state is the first available
+        self.apply_periphery_logs(&new);
+
         let tip = new.tip_number();
         self.block_sync.new_block(tip);
-
-        // handle this first so the newest state is the first available
-        self.handle_new_pools(new.clone());
 
         let filled_orders = self.fetch_filled_order(&new).collect::<Vec<_>>();
 
@@ -164,19 +179,68 @@ where
         self.send_events(transitions);
     }
 
-    fn handle_new_pools(&mut self, chain: Arc<impl ChainExt>) {
-        Self::get_new_pools(&chain)
-            .inspect(|pool| {
-                let token_0 = pool.currency_in;
-                let token_1 = pool.currency_out;
-                self.angstrom_tokens.insert(token_0);
-                self.angstrom_tokens.insert(token_1);
-            })
-            .map(EthEvent::NewPool)
-            .for_each(|pool_event| {
-                // didn't use send event fn because of lifetimes.
-                self.event_listeners
-                    .retain(|e| e.send(pool_event.clone()).is_ok());
+    /// looks at all periphery contrct events updating the internal state +
+    /// sending out info.
+    fn apply_periphery_logs(&mut self, chain: &impl ChainExt) {
+        let periphery_address = self.periphery_address;
+        chain
+            .receipts_by_block_hash(chain.tip_hash())
+            .unwrap()
+            .into_iter()
+            .flat_map(|receipt| &receipt.logs)
+            .filter(|log| log.address == periphery_address)
+            .for_each(|log| {
+                if let Ok(remove_node) = NodeRemoved::decode_log(log, true) {
+                    self.node_set.remove(&remove_node.address);
+                    self.send_events(EthEvent::RemovedNode(remove_node.node));
+                }
+                if let Ok(added_node) = NodeAdded::decode_log(log, true) {
+                    self.node_set.insert(added_node.address);
+                    self.send_events(EthEvent::AddedNode(added_node.node));
+                }
+                if let Ok(removed_pool) = PoolRemoved::decode_log(log, true) {
+                    self.pool_store
+                        .remove_pair(removed_pool.asset0, removed_pool.asset1);
+
+                    let pool_key = PoolKey {
+                        currency1:   removed_pool.asset1,
+                        currency0:   removed_pool.asset0,
+                        fee:         removed_pool.feeInE6,
+                        tickSpacing: removed_pool.tickSpacing,
+                        hooks:       self.angstrom_address
+                    };
+                    self.send_events(EthEvent::RemovedPool { pool: pool_key });
+                }
+                if let Ok(added_pool) = PoolConfigured::decode_log(log, true) {
+                    let asset0 = added_pool.asset0;
+                    let asset1 = added_pool.asset1;
+                    let entry = AngPoolConfigEntry {
+                        pool_partial_key: AngstromPoolConfigStore::derive_store_key(asset0, asset1),
+                        tick_spacing:     added_pool.tickSpacing,
+                        fee_in_e6:        added_pool.feeInE6.to(),
+                        store_index:      self.pool_store.length()
+                    };
+
+                    let pool_key = PoolKey {
+                        currency1:   asset1,
+                        currency0:   asset0,
+                        fee:         added_pool.feeInE6,
+                        tickSpacing: I24::try_from_be_slice(&{
+                            let bytes = added_pool.tickSpacing.to_be_bytes();
+                            let mut a = [0u8; 3];
+                            a[1..3].copy_from_slice(&bytes);
+                            a
+                        })
+                        .unwrap(),
+                        hooks:       self.angstrom_address
+                    };
+
+                    self.pool_store.new_pool(asset0, asset1, entry);
+                    self.angstrom_tokens.insert(asset0);
+                    self.angstrom_tokens.insert(asset1);
+
+                    self.send_events(EthEvent::NewPool { pool: pool_key });
+                }
             });
     }
 
@@ -214,22 +278,6 @@ where
                     .or_else(|_| Approval::decode_log(logs, true).map(|log| log._owner))
             })
             .collect()
-    }
-
-    /// gets any newly initialized pools in this block
-    /// do we want to use logs here?
-    fn get_new_pools(chain: &impl ChainExt) -> impl Iterator<Item = NewInitializedPool> + '_ {
-        chain
-            .receipts_by_block_hash(chain.tip_hash())
-            .unwrap()
-            .into_iter()
-            .flat_map(|receipt| {
-                receipt.logs.iter().filter_map(|log| {
-                    contract_bindings::pool_manager::PoolManager::Initialize::decode_log(log, true)
-                        .map(Into::into)
-                        .ok()
-                })
-            })
     }
 }
 
@@ -272,7 +320,14 @@ pub enum EthEvent {
     },
     ReorgedOrders(Vec<B256>, RangeInclusive<u64>),
     FinalizedBlock(u64),
-    NewPool(NewInitializedPool)
+    NewPool {
+        pool: PoolKey
+    },
+    RemovedPool {
+        pool: PoolKey
+    },
+    AddedNode(Address),
+    RemovedNode(Address)
 }
 
 #[auto_impl::auto_impl(&,Arc)]
@@ -330,7 +385,7 @@ impl ChainExt for Chain {
     }
 
     fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
-        self.tip().transactions()
+        self.tip().transactions().iter()
     }
 }
 
@@ -338,8 +393,7 @@ impl ChainExt for Chain {
 pub mod test {
     use alloy::{
         hex,
-        primitives::{b256, TxKind, U256},
-        signers::local::PrivateKeySigner
+        primitives::{b256, TxKind, U256}
     };
     use angstrom_types::{
         block_sync::*,
@@ -348,12 +402,12 @@ pub mod test {
             Asset, Pair
         },
         orders::OrderOutcome,
-        primitive::ANGSTROM_DOMAIN,
+        primitive::AngstromSigner,
         sol_bindings::grouped_orders::OrderWithStorageData
     };
     use pade::PadeEncode;
     use reth_primitives::Transaction;
-    use testing_tools::type_generator::orders::{SigningInfo, ToBOrderBuilder, UserOrderBuilder};
+    use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 
     use super::*;
 
@@ -401,20 +455,18 @@ pub mod test {
             commander:         ReceiverStream::new(command_rx),
             event_listeners:   vec![],
             angstrom_tokens:   HashSet::default(),
+            node_set:          HashSet::default(),
             angstrom_address:  angstrom_address.unwrap_or_default(),
+            periphery_address: Address::default(),
             canonical_updates: BroadcastStream::new(cannon_rx),
             block_sync:        GlobalBlockSync::new(1),
             cannon_sender:     tx,
-            _pool_store:       Default::default()
+            pool_store:        Default::default()
         }
     }
 
-    fn setup_signing_info() -> SigningInfo {
-        // let mut rand = rand::rng();
-        let wallet = PrivateKeySigner::random();
-        let addr = wallet.address();
-        let key = wallet.credential().clone();
-        SigningInfo { domain: ANGSTROM_DOMAIN, address: addr, key }
+    fn setup_signing_info() -> AngstromSigner {
+        AngstromSigner::random()
     }
 
     #[test]

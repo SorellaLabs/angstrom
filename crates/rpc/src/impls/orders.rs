@@ -1,20 +1,21 @@
 use std::collections::HashSet;
 
-use alloy_primitives::{Address, FixedBytes, B256};
+use alloy_primitives::{Address, B256};
 use angstrom_types::{
-    orders::{OrderLocation, OrderOrigin, OrderStatus},
+    orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
+    primitive::PoolId,
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
 use jsonrpsee::{core::RpcResult, PendingSubscriptionSink, SubscriptionMessage};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use reth_tasks::TaskSpawner;
-use validation::order::OrderValidatorHandle;
+use validation::order::{OrderPoolNewOrderResult, OrderValidatorHandle};
 
 use crate::{
-    api::{CancelOrderRequest, GasEstimateResponse, OrderApiServer},
+    api::{GasEstimateResponse, OrderApiServer},
     types::{OrderSubscriptionFilter, OrderSubscriptionKind, OrderSubscriptionResult},
-    OrderApiError::{GasEstimationError, SignatureRecoveryError}
+    OrderApiError::GasEstimationError
 };
 
 pub struct OrderApi<OrderPool, Spawner, Validator> {
@@ -36,7 +37,7 @@ where
     Spawner: TaskSpawner + 'static,
     Validator: OrderValidatorHandle
 {
-    async fn send_order(&self, order: AllOrders) -> RpcResult<bool> {
+    async fn send_order(&self, order: AllOrders) -> RpcResult<OrderPoolNewOrderResult> {
         Ok(self.pool.new_order(OrderOrigin::External, order).await)
     }
 
@@ -45,17 +46,7 @@ where
     }
 
     async fn cancel_order(&self, request: CancelOrderRequest) -> RpcResult<bool> {
-        let hash = request.signing_payload();
-        let sender = request
-            .signature
-            .recover_address_from_msg(hash)
-            .map_err(|_| SignatureRecoveryError)?;
-
-        if sender != request.user_address {
-            return Ok(false)
-        }
-
-        Ok(self.pool.cancel_order(sender, request.order_id).await)
+        Ok(self.pool.cancel_order(request).await)
     }
 
     async fn estimate_gas(&self, order: AllOrders) -> RpcResult<GasEstimateResponse> {
@@ -71,12 +62,12 @@ where
         Ok(self.pool.fetch_order_status(order_hash).await)
     }
 
-    async fn orders_by_pair(
+    async fn orders_by_pool_id(
         &self,
-        pair: FixedBytes<32>,
+        pool_id: PoolId,
         location: OrderLocation
     ) -> RpcResult<Vec<AllOrders>> {
-        Ok(self.pool.fetch_orders_from_pool(pair, location).await)
+        Ok(self.pool.fetch_orders_from_pool(pool_id, location).await)
     }
 
     async fn subscribe_orders(
@@ -248,18 +239,24 @@ mod tests {
         assert!(api
             .send_order(standing_order)
             .await
-            .expect("to not throw error"));
+            .expect("to not throw error")
+            .is_valid());
 
         // Test flash order
         let flash_order = create_flash_order();
         assert!(api
             .send_order(flash_order)
             .await
-            .expect("to not throw error"));
+            .expect("to not throw error")
+            .is_valid());
 
         // Test TOB order
         let tob_order = create_tob_order();
-        assert!(api.send_order(tob_order).await.expect("to not throw error"));
+        assert!(api
+            .send_order(tob_order)
+            .await
+            .expect("to not throw error")
+            .is_valid());
     }
 
     fn setup_order_api(
@@ -290,7 +287,7 @@ mod tests {
     impl OrderPoolHandle for MockOrderPoolHandle {
         fn fetch_orders_from_pool(
             &self,
-            _: FixedBytes<32>,
+            _: PoolId,
             _: OrderLocation
         ) -> impl Future<Output = Vec<AllOrders>> + Send {
             future::ready(vec![])
@@ -300,29 +297,22 @@ mod tests {
             &self,
             origin: OrderOrigin,
             order: AllOrders
-        ) -> impl Future<Output = bool> + Send {
+        ) -> impl Future<Output = OrderPoolNewOrderResult> + Send {
             let (tx, _) = tokio::sync::oneshot::channel();
             let _ = self
                 .sender
                 .send(OrderCommand::NewOrder(origin, order, tx))
                 .is_ok();
-            future::ready(true)
+            future::ready(OrderPoolNewOrderResult::Valid)
         }
 
         fn subscribe_orders(&self) -> BroadcastStream<PoolManagerUpdate> {
             unimplemented!("Not needed for this test")
         }
 
-        fn cancel_order(
-            &self,
-            from: Address,
-            order_hash: B256
-        ) -> impl Future<Output = bool> + Send {
+        fn cancel_order(&self, req: CancelOrderRequest) -> impl Future<Output = bool> + Send {
             let (tx, _) = tokio::sync::oneshot::channel();
-            let _ = self
-                .sender
-                .send(OrderCommand::CancelOrder(from, order_hash, tx))
-                .is_ok();
+            let _ = self.sender.send(OrderCommand::CancelOrder(req, tx)).is_ok();
             future::ready(true)
         }
 

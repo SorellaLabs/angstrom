@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use alloy::primitives::{Uint, U160, U256};
+use alloy::primitives::{aliases::U320, Uint, U160, U256};
 use malachite::{
     num::{
         arithmetic::traits::{CeilingRoot, DivRound, Pow, PowerOf2},
@@ -34,12 +34,25 @@ impl SqrtPriceX96 {
         SqrtPriceX96(U160::from(price.sqrt() * (2.0_f64.pow(96))))
     }
 
+    /// Produces the SqrtPriceX96 precisely at a given tick
     pub fn at_tick(tick: i32) -> eyre::Result<Self> {
         Ok(Self::from(get_sqrt_ratio_at_tick(tick)?))
     }
 
+    /// Produces the maximum SqrtPriceX96 valid for a given tick before we step
+    /// forward into the next tick
+    pub fn max_at_tick(tick: i32) -> eyre::Result<Self> {
+        Ok(Self::from(get_sqrt_ratio_at_tick(tick + 1)?.saturating_sub(U256::from(1))))
+    }
+
     pub fn to_tick(&self) -> eyre::Result<i32> {
         Ok(get_tick_at_sqrt_ratio(U256::from(self.0))?)
+    }
+
+    /// Squares this value with no loss of precision, returning a U320 that
+    /// contains PriceX192
+    pub fn as_price_x192(&self) -> U320 {
+        self.0.widening_mul(self.0)
     }
 }
 
@@ -78,5 +91,29 @@ impl From<Ray> for SqrtPriceX96 {
         let reslimbs = root.into_limbs_asc();
         let output: U160 = Uint::from_limbs_slice(&reslimbs);
         Self(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio;
+
+    use super::SqrtPriceX96;
+
+    #[test]
+    fn min_and_max_for_tick() {
+        let _min_at_tick = SqrtPriceX96::at_tick(100000).unwrap();
+        let max_at_tick = SqrtPriceX96::max_at_tick(100000).unwrap();
+        let next_tick = SqrtPriceX96::at_tick(100001).unwrap();
+
+        assert!(next_tick != max_at_tick, "Max at tick is equal to next tick");
+        assert!(
+            get_tick_at_sqrt_ratio(max_at_tick.into()).unwrap() == 100000,
+            "Max tick outside range"
+        );
+        assert!(
+            get_tick_at_sqrt_ratio(next_tick.into()).unwrap() == 100001,
+            "Next tick outside range"
+        );
     }
 }

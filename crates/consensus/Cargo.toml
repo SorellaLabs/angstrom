@@ -48,3 +48,6 @@ pade.workspace = true
 
 [dev-dependencies]
 testing-tools.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true

@@ -8,7 +8,7 @@ use alloy::{
     providers::Provider,
     transports::Transport
 };
-use angstrom_types::{pair_with_price::PairsWithPrice, primitive::PoolId};
+use angstrom_types::{pair_with_price::PairsWithPrice, primitive::PoolId, sol_bindings::Ray};
 use futures::StreamExt;
 use tracing::warn;
 use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools};
@@ -68,7 +68,7 @@ impl TokenPriceGenerator {
                     };
 
                     for block_number in
-                        current_block.saturating_sub(blocks_to_avg_price)..=current_block
+                        current_block.saturating_sub(blocks_to_avg_price)..current_block
                     {
                         tracing::debug!(block_number, current_block, ?pool_key, "loading pool");
                         let pool_data = data_loader
@@ -76,6 +76,7 @@ impl TokenPriceGenerator {
                             .await
                             .expect("failed to load historical price for token price conversion");
 
+                        // price as ray
                         let price = pool_data.get_raw_price();
 
                         queue.push_back(PairsWithPrice {
@@ -99,7 +100,7 @@ impl TokenPriceGenerator {
         Ok(Self { prev_prices: pools, cur_block: current_block, pair_to_pool, blocks_to_avg_price })
     }
 
-    pub fn generate_lookup_map(&self) -> HashMap<(Address, Address), U256> {
+    pub fn generate_lookup_map(&self) -> HashMap<(Address, Address), Ray> {
         self.pair_to_pool
             .keys()
             .filter_map(|(mut token0, mut token1)| {
@@ -133,13 +134,12 @@ impl TokenPriceGenerator {
         self.cur_block += 1;
     }
 
-    /// NOTE: assumes tokens are properly sorted
-    /// returns the conversion ratio of the pair to eth, this looks like
-    /// non-weth / weth. This then allows for the simple calcuation of
-    /// gas_in_wei * conversion price in order to get the used token_0
-    pub fn get_eth_conversion_price(&self, token_0: Address, token_1: Address) -> Option<U256> {
+    /// NOTE: assumes tokens are properly sorted.
+    /// the previous prices are stored in RAY (1e27).
+    /// we take this price. then
+    pub fn get_eth_conversion_price(&self, token_0: Address, token_1: Address) -> Option<Ray> {
         if token_0 == WETH_ADDRESS {
-            return Some(U256::from(1))
+            return Some(Ray::scale_to_ray(U256::from(1)))
         }
         // should only be called if token_1 is weth or needs multi-hop as otherwise
         // conversion factor will be 1-1
@@ -154,18 +154,18 @@ impl TokenPriceGenerator {
             let size = prices.len() as u64;
 
             if self.blocks_to_avg_price > 0 && size != self.blocks_to_avg_price {
-                warn!("size of loaded blocks doesn't match the value we set");
+                warn!(?size,?self.blocks_to_avg_price,"size of loaded blocks doesn't match the value we set");
             }
 
             return Some(
                 prices
                     .iter()
                     .map(|price| {
-                        // need to flip. add 18 decimal precision then reciprocal
-                        U256::from(1e36) / price.price_1_over_0
+                        // flip price
+                        price.price_1_over_0.inv_ray()
                     })
-                    .sum::<U256>()
-                    / U256::from(size.max(1))
+                    .sum::<Ray>()
+                    / U256::from(size)
             )
         }
 
@@ -200,12 +200,11 @@ impl TokenPriceGenerator {
                         if first_flip {
                             price.price_1_over_0
                         } else {
-                            // need to flip. add 18 decimal precision then reciprocal
-                            U256::from(1e36) / price.price_1_over_0
+                            price.price_1_over_0.inv_ray()
                         }
                     })
-                    .sum::<U256>()
-                    / U256::from(size.max(1))
+                    .sum::<Ray>()
+                    / U256::from(size)
             )
         } else if let Some(key) = self.pair_to_pool.get(&(token_0_hop2, token_1_hop2)) {
             // because we are going through token1 here and we want token zero, we need to
@@ -216,6 +215,7 @@ impl TokenPriceGenerator {
                 .expect("got pool update that we don't have stored");
 
             let prices = self.prev_prices.get(default_pool_key)?;
+            println!("{:?}", prices);
             let size = prices.len() as u64;
 
             if self.blocks_to_avg_price > 0 && size != self.blocks_to_avg_price {
@@ -225,12 +225,9 @@ impl TokenPriceGenerator {
             // token 0 / token 1
             let first_hop_price = prices
                 .iter()
-                .map(|price| {
-                    // need to flip. add 18 decimal precision then reciprocal
-                    U256::from(1e36) / price.price_1_over_0
-                })
-                .sum::<U256>()
-                / U256::from(size.max(1));
+                .map(|price| price.price_1_over_0.inv_ray())
+                .sum::<Ray>()
+                / U256::from(size);
 
             // grab second hop
             let prices = self.prev_prices.get(key)?;
@@ -249,16 +246,17 @@ impl TokenPriceGenerator {
                         price.price_1_over_0
                     } else {
                         // need to flip. add 18 decimal precision then reciprocal
-                        U256::from(1e36) / price.price_1_over_0
+                        price.price_1_over_0.inv_ray()
                     }
                 })
-                .sum::<U256>()
-                / U256::from(size.max(1));
+                .sum::<Ray>()
+                / U256::from(size);
 
             // token 0 / token1 * token1 / weth  = token0 / weth
-            Some(first_hop_price * second_hop_price)
+            Some(first_hop_price.mul_ray(second_hop_price))
         } else {
-            panic!("found a token that doesn't have a 1 hop to WETH")
+            tracing::error!("found a token that doesn't have a 1 hop to WETH");
+            None
         }
     }
 }
@@ -271,16 +269,17 @@ pub mod test {
         node_bindings::WEI_IN_ETHER,
         primitives::{Address, FixedBytes, U256}
     };
-    use angstrom_types::pair_with_price::PairsWithPrice;
+    use angstrom_types::{pair_with_price::PairsWithPrice, sol_bindings::Ray};
     use revm::primitives::address;
 
-    use super::{TokenPriceGenerator, BLOCKS_TO_AVG_PRICE};
+    use super::{TokenPriceGenerator, BLOCKS_TO_AVG_PRICE, WETH_ADDRESS};
 
     const TOKEN0: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
     const TOKEN1: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc3");
     const TOKEN2: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc1");
     const TOKEN3: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc5");
     const TOKEN4: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc0");
+    const TOKEN5: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc6");
 
     /// sets up pools with prices for all scenarios
     fn setup() -> TokenPriceGenerator {
@@ -308,7 +307,7 @@ pub mod test {
             token0:         TOKEN2,
             token1:         TOKEN0,
             block_num:      0,
-            price_1_over_0: pair1_rate
+            price_1_over_0: Ray::scale_to_ray(pair1_rate)
         };
         let queue = VecDeque::from([pair; 5]);
         prices.insert(FixedBytes::<32>::with_last_byte(1), queue);
@@ -321,31 +320,31 @@ pub mod test {
             token0:         TOKEN0,
             token1:         TOKEN1,
             block_num:      0,
-            price_1_over_0: pair2_rate
+            price_1_over_0: Ray::scale_to_ray(pair2_rate)
         };
         let queue = VecDeque::from([pair; 5]);
         prices.insert(FixedBytes::<32>::with_last_byte(2), queue);
 
         // simple conversion rate of 2/1 on 18 decimals
-        let pair3_rate = U256::from(2e18);
+        let pair3_rate = U256::from(2) * WEI_IN_ETHER;
 
         let pair = PairsWithPrice {
             token0:         TOKEN2,
             token1:         TOKEN3,
             block_num:      0,
-            price_1_over_0: pair3_rate
+            price_1_over_0: Ray::scale_to_ray(pair3_rate)
         };
         let queue = VecDeque::from([pair; 5]);
         prices.insert(FixedBytes::<32>::with_last_byte(3), queue);
 
         // token 1 is 18 decimals, token 0 is 6 with a conversion rate of 1/8
-        let pair4_rate = U256::from(1e36) / U256::from(8e6);
+        let pair4_rate = U256::from(1e18) / U256::from(8e6);
 
         let pair = PairsWithPrice {
             token0:         TOKEN4,
             token1:         TOKEN1,
             block_num:      0,
-            price_1_over_0: pair4_rate
+            price_1_over_0: Ray::scale_to_ray(pair4_rate)
         };
 
         let queue = VecDeque::from([pair; 5]);
@@ -366,7 +365,9 @@ pub mod test {
             .get_eth_conversion_price(TOKEN2, TOKEN0)
             .unwrap();
 
-        let expected_rate = U256::from(1e36) / U256::from(5e18);
+        let expected_rate = Ray::scale_to_ray(U256::from(5e18)).inv_ray();
+
+        println!("rate: {:?} got: {:?}", rate, expected_rate);
         assert_eq!(rate, expected_rate)
     }
 
@@ -377,7 +378,8 @@ pub mod test {
             .get_eth_conversion_price(TOKEN2, TOKEN3)
             .unwrap();
 
-        let expected_rate = U256::from(1e36) / U256::from(5e18);
+        let expected_rate = Ray::scale_to_ray(U256::from(5e18)).inv_ray();
+        println!("rate: {:?} got: {:?}", rate, expected_rate);
         assert_eq!(rate, expected_rate)
     }
 
@@ -394,10 +396,128 @@ pub mod test {
         //
         // hop 2 rate
         // token 1 is 18 decimals, token 0 is 6 with a conversion rate of 1/8
-        // let pair4_rate = U256::from(1e36) / U256::from(8e6);
+        // let pair4_rate = U256::from(1e18) / U256::from(8e6);
         //
         // gives us 0.2 * 0.8 = 0.16;
-        let expected_rate = U256::from(1600000000000u128);
+        let expected_rate = Ray(U256::from(1600000000000000000000u128));
         assert_eq!(rate, expected_rate)
+    }
+
+    #[test]
+    fn test_weth_direct_cases() {
+        let token_conversion = setup();
+
+        // WETH as token0 should return 1
+        let rate = token_conversion
+            .get_eth_conversion_price(WETH_ADDRESS, TOKEN1)
+            .unwrap();
+        assert_eq!(rate, Ray::scale_to_ray(U256::from(1)));
+
+        // 5 weth .inv
+        let rate = token_conversion
+            .get_eth_conversion_price(TOKEN2, WETH_ADDRESS)
+            .unwrap();
+
+        assert_eq!(rate, Ray::scale_to_ray(U256::from(5) * WEI_IN_ETHER).inv_ray());
+    }
+
+    #[test]
+    fn test_price_averaging() {
+        let mut token_conversion = setup();
+
+        // Create varying prices over 5 blocks
+        let mut updates = Vec::new();
+        for i in 1..=5 {
+            updates.push(PairsWithPrice {
+                token0:         TOKEN2,
+                token1:         TOKEN0,
+                block_num:      i,
+                price_1_over_0: Ray::scale_to_ray(U256::from(i) * WEI_IN_ETHER)
+            });
+        }
+
+        // Apply the updates
+        for update in updates {
+            token_conversion.apply_update(vec![update]);
+        }
+
+        // Average should be (1 + 2 + 3 + 4 + 5) / 5 = 3
+        let rate = token_conversion
+            .get_eth_conversion_price(TOKEN2, TOKEN0)
+            .unwrap();
+
+        let mut sum = Ray::default();
+        for i in 1..=5 {
+            sum += Ray::scale_to_ray(U256::from(i) * WEI_IN_ETHER).inv_ray();
+        }
+        let expected = sum / U256::from(5);
+
+        assert_eq!(rate, expected);
+    }
+
+    #[test]
+    fn test_generate_lookup_map() {
+        let token_conversion = setup();
+        let lookup_map = token_conversion.generate_lookup_map();
+
+        // Check that all pairs are properly ordered (token0 < token1)
+        for ((token0, token1), _) in lookup_map.iter() {
+            assert!(token0 < token1, "Tokens should be ordered in lookup map");
+        }
+
+        // Verify expected number of pairs
+        assert_eq!(lookup_map.len(), 4, "Should have all valid pairs in lookup map");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_apply_update_validation() {
+        let mut token_conversion = setup();
+
+        // Should panic on non-sequential block updates
+        token_conversion.apply_update(vec![PairsWithPrice {
+            token0:         TOKEN2,
+            token1:         TOKEN0,
+            block_num:      5, // Non-sequential block
+            price_1_over_0: Ray::scale_to_ray(U256::from(1) * WEI_IN_ETHER)
+        }]);
+    }
+
+    #[test]
+    fn test_missing_pool() {
+        let token_conversion = setup();
+
+        // Try to get price for non-existent pool
+        let rate = token_conversion.get_eth_conversion_price(
+            address!("1111111111111111111111111111111111111111"),
+            address!("2222222222222222222222222222222222222222")
+        );
+        assert!(rate.is_none(), "Should return None for missing pool");
+    }
+
+    #[test]
+    fn test_insufficient_price_data() {
+        let mut token_conversion = setup();
+
+        // Create a pool with insufficient price data
+        let pool_id = FixedBytes::<32>::with_last_byte(6);
+        token_conversion
+            .pair_to_pool
+            .insert((TOKEN5, WETH_ADDRESS), pool_id);
+
+        let mut queue = VecDeque::new();
+        queue.push_back(PairsWithPrice {
+            token0:         TOKEN5,
+            token1:         WETH_ADDRESS,
+            block_num:      0,
+            price_1_over_0: Ray::scale_to_ray(U256::from(1) * WEI_IN_ETHER)
+        });
+        token_conversion.prev_prices.insert(pool_id, queue);
+
+        let rate = token_conversion
+            .get_eth_conversion_price(TOKEN5, WETH_ADDRESS)
+            .unwrap();
+
+        assert_eq!(rate, Ray::scale_to_ray(U256::from(1) * WEI_IN_ETHER).inv_ray());
     }
 }

@@ -4,10 +4,11 @@ use alloy::{
     primitives::{Address, Bytes, FixedBytes, TxHash, U256},
     signers::Signature
 };
-use alloy_primitives::B256;
+use alloy_primitives::{PrimitiveSignature, B256};
+use pade::PadeDecode;
 use serde::{Deserialize, Serialize};
 
-use super::{RawPoolOrder, RespendAvoidanceMethod};
+use super::{GenerateFlippedOrder, RawPoolOrder, RespendAvoidanceMethod};
 use crate::{
     matching::Ray,
     orders::{OrderId, OrderLocation, OrderPriorityData},
@@ -19,7 +20,6 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-
 pub enum AllOrders {
     Standing(StandingVariants),
     Flash(FlashVariants),
@@ -146,6 +146,15 @@ pub struct OrderWithStorageData<Order> {
     /// holds expiry data
     pub order_id:           OrderId,
     pub tob_reward:         U256
+}
+
+impl<O: GenerateFlippedOrder> GenerateFlippedOrder for OrderWithStorageData<O> {
+    fn flip(&self) -> Self
+    where
+        Self: Sized
+    {
+        Self { order: self.order.flip(), is_bid: !self.is_bid, ..self.clone() }
+    }
 }
 
 impl<Order> Hash for OrderWithStorageData<Order> {
@@ -291,13 +300,6 @@ impl RawPoolOrder for StandingVariants {
         }
     }
 
-    fn amount_out_min(&self) -> u128 {
-        match self {
-            StandingVariants::Exact(e) => e.amount_out_min(),
-            StandingVariants::Partial(p) => p.amount_out_min()
-        }
-    }
-
     fn flash_block(&self) -> Option<u64> {
         None
     }
@@ -317,6 +319,13 @@ impl RawPoolOrder for StandingVariants {
         match self {
             StandingVariants::Exact(e) => e.use_internal(),
             StandingVariants::Partial(p) => p.use_internal()
+        }
+    }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        match self {
+            StandingVariants::Exact(e) => e.order_signature(),
+            StandingVariants::Partial(p) => p.order_signature()
         }
     }
 }
@@ -378,13 +387,6 @@ impl RawPoolOrder for FlashVariants {
         }
     }
 
-    fn amount_out_min(&self) -> u128 {
-        match self {
-            FlashVariants::Exact(e) => e.amount_out_min(),
-            FlashVariants::Partial(p) => p.amount_out_min()
-        }
-    }
-
     fn token_out(&self) -> Address {
         match self {
             FlashVariants::Exact(e) => e.token_out(),
@@ -416,6 +418,13 @@ impl RawPoolOrder for FlashVariants {
             FlashVariants::Partial(p) => p.use_internal()
         }
     }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        match self {
+            FlashVariants::Exact(e) => e.order_signature(),
+            FlashVariants::Partial(p) => p.order_signature()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -423,6 +432,7 @@ pub enum GroupedVanillaOrder {
     Standing(StandingVariants),
     KillOrFill(FlashVariants)
 }
+
 impl Default for GroupedVanillaOrder {
     fn default() -> Self {
         GroupedVanillaOrder::Standing(StandingVariants::Exact(ExactStandingOrder::default()))
@@ -445,6 +455,21 @@ impl GroupedVanillaOrder {
         }
     }
 
+    /// Bid orders need to invert their price
+    pub fn bid_price(&self) -> Ray {
+        self.price().inv_ray_round(true)
+    }
+
+    /// Get the appropriate price when passed a bool telling us if we're looking
+    /// for a bid-side price or not
+    pub fn price_for_book_side(&self, is_bid: bool) -> Ray {
+        if is_bid {
+            self.bid_price()
+        } else {
+            self.price()
+        }
+    }
+
     pub fn price(&self) -> Ray {
         match self {
             Self::Standing(o) => o.limit_price().into(),
@@ -452,10 +477,10 @@ impl GroupedVanillaOrder {
         }
     }
 
-    pub fn quantity(&self) -> U256 {
+    pub fn quantity(&self) -> u128 {
         match self {
-            Self::Standing(o) => U256::from(o.amount_in()),
-            Self::KillOrFill(o) => U256::from(o.amount_in())
+            Self::Standing(o) => o.amount_in(),
+            Self::KillOrFill(o) => o.amount_in()
         }
     }
 
@@ -563,11 +588,7 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn limit_price(&self) -> U256 {
-        U256::from(self.amount_in() / self.amount_out_min())
-    }
-
-    fn amount_out_min(&self) -> u128 {
-        self.quantity_out
+        *Ray::scale_to_ray(U256::from(self.amount_in() / self.quantity_out))
     }
 
     fn token_in(&self) -> Address {
@@ -579,11 +600,10 @@ impl RawPoolOrder for TopOfBlockOrder {
     }
 
     fn is_valid_signature(&self) -> bool {
-        let s = self.meta.signature.to_vec();
-        let Ok(sig) = Signature::try_from(s.as_slice()) else { return false };
+        let Ok(sig) = self.order_signature() else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
 
-        sig.recover_address_from_msg(hash)
+        sig.recover_address_from_prehash(&hash)
             .map(|addr| addr == self.meta.from)
             .unwrap_or_default()
     }
@@ -595,6 +615,13 @@ impl RawPoolOrder for TopOfBlockOrder {
     fn use_internal(&self) -> bool {
         self.use_internal
     }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        let s = self.meta.signature.to_vec();
+        let mut slice = s.as_slice();
+
+        Ok(Signature::pade_decode(&mut slice, None)?)
+    }
 }
 
 impl RawPoolOrder for PartialStandingOrder {
@@ -604,10 +631,12 @@ impl RawPoolOrder for PartialStandingOrder {
 
     fn is_valid_signature(&self) -> bool {
         let s = self.meta.signature.to_vec();
-        let Ok(sig) = Signature::try_from(s.as_slice()) else { return false };
+        let mut slice = s.as_slice();
+
+        let Ok(sig) = Signature::pade_decode(&mut slice, None) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
 
-        sig.recover_address_from_msg(hash)
+        sig.recover_address_from_prehash(&hash)
             .map(|addr| addr == self.meta.from)
             .unwrap_or_default()
     }
@@ -618,15 +647,6 @@ impl RawPoolOrder for PartialStandingOrder {
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
         RespendAvoidanceMethod::Nonce(self.nonce)
-    }
-
-    fn amount_out_min(&self) -> u128 {
-        // TODO: verify math on this. feels wrong
-        if self.asset_in < self.asset_out {
-            self.min_amount_in * self.min_price.to::<u128>()
-        } else {
-            self.min_amount_in / self.min_price.to::<u128>()
-        }
     }
 
     fn limit_price(&self) -> U256 {
@@ -663,6 +683,13 @@ impl RawPoolOrder for PartialStandingOrder {
 
     fn use_internal(&self) -> bool {
         self.use_internal
+    }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        let s = self.meta.signature.to_vec();
+        let mut slice = s.as_slice();
+
+        Ok(Signature::pade_decode(&mut slice, None)?)
     }
 }
 
@@ -673,10 +700,12 @@ impl RawPoolOrder for ExactStandingOrder {
 
     fn is_valid_signature(&self) -> bool {
         let s = self.meta.signature.to_vec();
-        let Ok(sig) = Signature::try_from(s.as_slice()) else { return false };
+        let mut slice = s.as_slice();
+
+        let Ok(sig) = Signature::pade_decode(&mut slice, None) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
 
-        sig.recover_address_from_msg(hash)
+        sig.recover_address_from_prehash(&hash)
             .map(|addr| addr == self.meta.from)
             .unwrap_or_default()
     }
@@ -687,15 +716,6 @@ impl RawPoolOrder for ExactStandingOrder {
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
         RespendAvoidanceMethod::Nonce(self.nonce)
-    }
-
-    fn amount_out_min(&self) -> u128 {
-        // TODO: verify math on this. feels wrong
-        if self.asset_in < self.asset_out {
-            self.amount * self.min_price.to::<u128>()
-        } else {
-            self.amount / self.min_price.to::<u128>()
-        }
     }
 
     fn limit_price(&self) -> U256 {
@@ -733,6 +753,13 @@ impl RawPoolOrder for ExactStandingOrder {
     fn use_internal(&self) -> bool {
         self.use_internal
     }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        let s = self.meta.signature.to_vec();
+        let mut slice = s.as_slice();
+
+        Ok(Signature::pade_decode(&mut slice, None)?)
+    }
 }
 
 impl RawPoolOrder for PartialFlashOrder {
@@ -742,10 +769,12 @@ impl RawPoolOrder for PartialFlashOrder {
 
     fn is_valid_signature(&self) -> bool {
         let s = self.meta.signature.to_vec();
-        let Ok(sig) = Signature::try_from(s.as_slice()) else { return false };
+        let mut slice = s.as_slice();
+
+        let Ok(sig) = Signature::pade_decode(&mut slice, None) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
 
-        sig.recover_address_from_msg(hash)
+        sig.recover_address_from_prehash(&hash)
             .map(|addr| addr == self.meta.from)
             .unwrap_or_default()
     }
@@ -774,15 +803,6 @@ impl RawPoolOrder for PartialFlashOrder {
         self.min_price
     }
 
-    fn amount_out_min(&self) -> u128 {
-        // TODO: verify math on this. feels wrong
-        if self.asset_in < self.asset_out {
-            self.min_amount_in * self.min_price.to::<u128>()
-        } else {
-            self.min_amount_in / self.min_price.to::<u128>()
-        }
-    }
-
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
         RespendAvoidanceMethod::Block(self.valid_for_block)
     }
@@ -802,6 +822,13 @@ impl RawPoolOrder for PartialFlashOrder {
     fn use_internal(&self) -> bool {
         self.use_internal
     }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        let s = self.meta.signature.to_vec();
+        let mut slice = s.as_slice();
+
+        Ok(Signature::pade_decode(&mut slice, None)?)
+    }
 }
 
 impl RawPoolOrder for ExactFlashOrder {
@@ -811,10 +838,12 @@ impl RawPoolOrder for ExactFlashOrder {
 
     fn is_valid_signature(&self) -> bool {
         let s = self.meta.signature.to_vec();
-        let Ok(sig) = Signature::try_from(s.as_slice()) else { return false };
+        let mut slice = s.as_slice();
+
+        let Ok(sig) = Signature::pade_decode(&mut slice, None) else { return false };
         let hash = self.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
 
-        sig.recover_address_from_msg(hash)
+        sig.recover_address_from_prehash(&hash)
             .map(|addr| addr == self.meta.from)
             .unwrap_or_default()
     }
@@ -851,15 +880,6 @@ impl RawPoolOrder for ExactFlashOrder {
         self.min_price
     }
 
-    fn amount_out_min(&self) -> u128 {
-        // TODO: verify math on this. feels wrong
-        if self.asset_in < self.asset_out {
-            self.amount * self.min_price.to::<u128>()
-        } else {
-            self.amount / self.min_price.to::<u128>()
-        }
-    }
-
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
         RespendAvoidanceMethod::Block(self.valid_for_block)
     }
@@ -870,6 +890,13 @@ impl RawPoolOrder for ExactFlashOrder {
 
     fn use_internal(&self) -> bool {
         self.use_internal
+    }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        let s = self.meta.signature.to_vec();
+        let mut slice = s.as_slice();
+
+        Ok(Signature::pade_decode(&mut slice, None)?)
     }
 }
 
@@ -938,14 +965,6 @@ impl RawPoolOrder for AllOrders {
         }
     }
 
-    fn amount_out_min(&self) -> u128 {
-        match self {
-            AllOrders::Standing(p) => p.amount_out_min(),
-            AllOrders::Flash(kof) => kof.amount_out_min(),
-            AllOrders::TOB(tob) => tob.amount_out_min()
-        }
-    }
-
     fn token_out(&self) -> Address {
         match self {
             AllOrders::Standing(p) => p.token_out(),
@@ -983,6 +1002,14 @@ impl RawPoolOrder for AllOrders {
             AllOrders::Standing(p) => p.use_internal(),
             AllOrders::Flash(kof) => kof.use_internal(),
             AllOrders::TOB(tob) => tob.use_internal()
+        }
+    }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        match self {
+            AllOrders::Standing(p) => p.order_signature(),
+            AllOrders::Flash(kof) => kof.order_signature(),
+            AllOrders::TOB(tob) => tob.order_signature()
         }
     }
 }
@@ -1065,13 +1092,6 @@ impl RawPoolOrder for GroupedVanillaOrder {
         }
     }
 
-    fn amount_out_min(&self) -> u128 {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.amount_out_min(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.amount_out_min()
-        }
-    }
-
     fn order_location(&self) -> OrderLocation {
         match &self {
             GroupedVanillaOrder::Standing(_) => OrderLocation::Limit,
@@ -1083,6 +1103,13 @@ impl RawPoolOrder for GroupedVanillaOrder {
         match self {
             GroupedVanillaOrder::Standing(p) => p.use_internal(),
             GroupedVanillaOrder::KillOrFill(kof) => kof.use_internal()
+        }
+    }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        match self {
+            GroupedVanillaOrder::Standing(p) => p.order_signature(),
+            GroupedVanillaOrder::KillOrFill(kof) => kof.order_signature()
         }
     }
 }
@@ -1158,13 +1185,6 @@ impl RawPoolOrder for GroupedComposableOrder {
         }
     }
 
-    fn amount_out_min(&self) -> u128 {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.amount_out_min(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.amount_out_min()
-        }
-    }
-
     fn is_valid_signature(&self) -> bool {
         match self {
             GroupedComposableOrder::Partial(p) => p.is_valid_signature(),
@@ -1183,6 +1203,13 @@ impl RawPoolOrder for GroupedComposableOrder {
         match self {
             GroupedComposableOrder::Partial(p) => p.use_internal(),
             GroupedComposableOrder::KillOrFill(kof) => kof.use_internal()
+        }
+    }
+
+    fn order_signature(&self) -> eyre::Result<PrimitiveSignature> {
+        match self {
+            GroupedComposableOrder::Partial(p) => p.order_signature(),
+            GroupedComposableOrder::KillOrFill(kof) => kof.order_signature()
         }
     }
 }

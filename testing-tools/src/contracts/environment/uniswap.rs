@@ -1,4 +1,7 @@
-use alloy::primitives::{aliases::I24, Address, FixedBytes, U256};
+use alloy::{
+    primitives::{aliases::I24, Address, FixedBytes, U256},
+    transports::BoxTransport
+};
 use alloy_primitives::TxHash;
 use angstrom_types::contract_bindings::{
     pool_gate::PoolGate::{self, PoolGateInstance},
@@ -23,6 +26,7 @@ pub trait TestUniswapEnv: TestAnvilEnvironment {
     ) -> eyre::Result<TxHash>;
 }
 
+#[derive(Clone)]
 pub struct UniswapEnv<E: TestAnvilEnvironment> {
     inner:        E,
     pool_manager: Address,
@@ -35,18 +39,21 @@ where
 {
     pub async fn new(inner: E) -> eyre::Result<Self> {
         debug!("Deploying pool manager...");
-        let pool_manager = *PoolManager::deploy(inner.provider(), inner.controller())
+        let pool_manager = *inner
+            .execute_then_mine(PoolManager::deploy(inner.provider(), inner.controller()))
             .await?
             .address();
         debug!("Pool manager deployed at: {}", pool_manager);
         debug!("Deploying pool gate...");
-        let pool_gate_instance = PoolGate::deploy(inner.provider(), pool_manager).await?;
+        let pool_gate_instance = inner
+            .execute_then_mine(PoolGate::deploy(inner.provider(), pool_manager))
+            .await?;
         let pool_gate = *pool_gate_instance.address();
         debug!("Pool gate deployed at: {}", pool_gate);
         Ok(Self { inner, pool_manager, pool_gate })
     }
 
-    pub fn pool_gate(&self) -> PoolGateInstance<E::T, &E::P> {
+    pub fn pool_gate(&self) -> PoolGateInstance<BoxTransport, &E::P> {
         PoolGateInstance::new(self.pool_gate, self.provider())
     }
 }
@@ -62,7 +69,6 @@ where
     E: TestAnvilEnvironment
 {
     type P = E::P;
-    type T = E::T;
 
     fn provider(&self) -> &Self::P {
         self.inner.provider()

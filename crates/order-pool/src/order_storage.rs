@@ -63,6 +63,11 @@ impl OrderStorage {
         }
     }
 
+    pub fn remove_pool(&self, key: PoolId) {
+        self.searcher_orders.lock().unwrap().remove_pool(&key);
+        self.limit_orders.lock().unwrap().remove_pool(&key);
+    }
+
     pub fn fetch_status_of_order(&self, order: B256) -> Option<OrderStatus> {
         if self
             .filled_orders
@@ -158,26 +163,18 @@ impl OrderStorage {
             });
     }
 
-    pub fn top_tob_order_for_pool(
-        &self,
-        pool_id: &PoolId
-    ) -> Option<OrderWithStorageData<TopOfBlockOrder>> {
-        self.searcher_orders
-            .lock()
-            .expect("lock poisoned")
-            .get_orders_for_pool(pool_id)
-            .unwrap_or_else(|| panic!("pool {} does not exist", pool_id))
-            .iter()
-            .max_by_key(|order| order.tob_reward)
-            .cloned()
-    }
-
     pub fn top_tob_orders(&self) -> Vec<OrderWithStorageData<TopOfBlockOrder>> {
         let mut top_orders = Vec::new();
         let searcher_orders = self.searcher_orders.lock().expect("lock poisoned");
 
         for pool_id in searcher_orders.get_all_pool_ids() {
-            if let Some(top_order) = self.top_tob_order_for_pool(&pool_id) {
+            if let Some(top_order) = searcher_orders
+                .get_orders_for_pool(&pool_id)
+                .unwrap_or_else(|| panic!("pool {} does not exist", pool_id))
+                .iter()
+                .max_by_key(|order| order.tob_reward)
+                .cloned()
+            {
                 top_orders.push(top_order);
             }
         }

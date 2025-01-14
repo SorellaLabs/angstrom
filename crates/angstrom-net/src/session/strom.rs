@@ -110,6 +110,10 @@ impl StromSession {
 
     /// Report back that this session has been closed.
     fn emit_disconnect(&mut self, cx: &mut Context<'_>) -> Poll<Option<BytesMut>> {
+        tracing::debug!(
+            "got disconnect message, disconnecting from peer {:?}",
+            self.remote_peer_id
+        );
         let msg = StromSessionMessage::Disconnected { peer_id: self.remote_peer_id };
 
         self.terminate_message = Some((self.to_session_manager.inner().clone(), msg));
@@ -193,7 +197,10 @@ impl StromSession {
                     .unwrap_or(StromSessionMessage::BadMessage { peer_id: self.remote_peer_id });
                 self.outbound_buffer.push_back(msg);
             })
-            .ok_or_else(|| self.emit_disconnect(cx))
+            .ok_or_else(|| {
+                tracing::debug!("got a empty message, disconnecting");
+                self.emit_disconnect(cx)
+            })
         }) {
             if let Err(e) = msg {
                 return Some(e)
@@ -233,6 +240,8 @@ impl StromSession {
                     msg.map_or(false, |msg| {
                         // first message has to be status
                         if let StromMessage::Status(status) = msg.message {
+                            tracing::debug!(?status, peer=?self.remote_peer_id, "decoded status message");
+
                             self.verify_incoming_status(status)
                         } else {
                             false
@@ -242,7 +251,13 @@ impl StromSession {
                 // if false, i.e verification failed. then we disconnect
                 .filter(|f| *f)
                 .map(|_| Poll::Pending)
-                .unwrap_or_else(|| self.emit_disconnect(cx))
+                .unwrap_or_else(|| {
+                    tracing::debug!(
+                        "empty bytes when trying to verify message from peer: {:?}",
+                        self.remote_peer_id
+                    );
+                    self.emit_disconnect(cx)
+                })
             })
             .flatten()
     }

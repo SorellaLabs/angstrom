@@ -1,6 +1,9 @@
 mod fillstate;
 mod origin;
-use alloy::primitives::U256;
+use alloy::{
+    primitives::{keccak256, Address, FixedBytes, PrimitiveSignature, B256, U256},
+    sol_types::SolValue
+};
 pub mod orderpool;
 
 pub use fillstate::*;
@@ -10,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 pub type BookID = u128;
 pub type OrderID = u128;
-pub type OrderVolume = U256;
+pub type OrderVolume = u128;
 pub type OrderPrice = MatchingPrice;
 
 use crate::{
@@ -23,6 +26,12 @@ use crate::{
 pub struct OrderSet<Limit, Searcher> {
     pub limit:    Vec<OrderWithStorageData<Limit>>,
     pub searcher: Vec<OrderWithStorageData<Searcher>>
+}
+
+impl<Limit, Searcher> OrderSet<Limit, Searcher> {
+    pub fn total_orders(&self) -> usize {
+        self.limit.len() + self.searcher.len()
+    }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,6 +97,14 @@ impl OrderOutcome {
     pub fn is_filled(&self) -> bool {
         self.outcome.is_filled()
     }
+
+    pub fn fill_amount(&self, max: u128) -> u128 {
+        match self.outcome {
+            OrderFillState::CompleteFill => max,
+            OrderFillState::PartialFill(p) => std::cmp::min(max, p),
+            _ => 0
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,5 +131,27 @@ impl PartialOrd for PoolSolution {
 impl Ord for PoolSolution {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CancelOrderRequest {
+    pub signature:    PrimitiveSignature,
+    // if there's no salt to make this a unique signing hash. One can just
+    // copy the signature of the order and id and it will verify
+    pub user_address: Address,
+    pub order_id:     B256
+}
+
+impl CancelOrderRequest {
+    fn signing_payload(&self) -> FixedBytes<32> {
+        keccak256((self.user_address, self.order_id).abi_encode())
+    }
+
+    pub fn is_valid(&self) -> bool {
+        let hash = self.signing_payload();
+        let Ok(sender) = self.signature.recover_address_from_prehash(&hash) else { return false };
+
+        sender == self.user_address
     }
 }

@@ -67,15 +67,22 @@ where
                 self.utils.metrics.clone()
             ),
             ValidationRequest::Bundle { sender, bundle } => {
+                tracing::debug!("simulating bundle");
+                let bn = self
+                    .order_validator
+                    .block_number
+                    .load(std::sync::atomic::Ordering::SeqCst);
                 self.bundle_validator.simulate_bundle(
                     sender,
                     bundle,
                     &self.utils.token_pricing,
                     &mut self.utils.thread_pool,
-                    self.utils.metrics.clone()
+                    self.utils.metrics.clone(),
+                    bn
                 );
             }
             ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
+                tracing::debug!("transitioning to new block");
                 self.utils.metrics.eth_transition_updates(|| {
                     self.order_validator
                         .on_new_block(block_number, orders, addresses);

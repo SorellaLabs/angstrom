@@ -40,23 +40,3 @@ impl From<&StromHandles> for SendingStromHandles {
         }
     }
 }
-
-// pub struct ReceivingStromHandles {
-//     pub eth_rx:          Receiver<EthCommand>,
-//     pub pool_rx:         UnboundedMeteredReceiver<NetworkOrderEvent>,
-//     pub orderpool_rx:    UnboundedReceiver<OrderCommand>,
-//     pub consensus_rx:    Receiver<ConsensusCommand>,
-//     pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>
-// }
-
-// impl From<StromHandles> for ReceivingStromHandles {
-//     fn from(value: StromHandles) -> Self {
-//         Self {
-//             eth_rx:          value.eth_rx,
-//             pool_rx:         value.pool_rx,
-//             orderpool_rx:    value.orderpool_rx,
-//             consensus_rx:    value.consensus_rx,
-//             consensus_rx_op: value.consensus_rx_op
-//         }
-//     }
-// }

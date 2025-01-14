@@ -7,14 +7,17 @@ use alloy::{
 };
 use serde::{Deserialize, Serialize};
 
+// use super::Ray;
+
 sol! {
-    #[derive(Debug, Default, PartialEq, Eq, Hash,Serialize, Deserialize)]
+    type SolRay is uint256;
+
+    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
     struct OrderMeta {
         bool isEcdsa;
         address from;
         bytes signature;
     }
-
 
     #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
     struct PartialStandingOrder {
@@ -22,7 +25,7 @@ sol! {
         uint128 min_amount_in;
         uint128 max_amount_in;
         uint128 max_extra_fee_asset0;
-        uint256 min_price;
+        SolRay min_price;
         bool use_internal;
         address asset_in;
         address asset_out;
@@ -39,7 +42,7 @@ sol! {
         bool exact_in;
         uint128 amount;
         uint128 max_extra_fee_asset0;
-        uint256 min_price;
+        SolRay min_price;
         bool use_internal;
         address asset_in;
         address asset_out;
@@ -56,7 +59,7 @@ sol! {
         uint128 min_amount_in;
         uint128 max_amount_in;
         uint128 max_extra_fee_asset0;
-        uint256 min_price;
+        SolRay min_price;
         bool use_internal;
         address asset_in;
         address asset_out;
@@ -72,7 +75,7 @@ sol! {
         bool exact_in;
         uint128 amount;
         uint128 max_extra_fee_asset0;
-        uint256 min_price;
+        SolRay min_price;
         bool use_internal;
         address asset_in;
         address asset_out;
@@ -191,12 +194,15 @@ pub mod test {
     mod a {
         alloy::sol! {
             #[derive(Default)]
+            type Ray is uint256;
+
+            #[derive(Default)]
             struct PartialStandingOrder {
                 uint32 ref_id;
                 uint128 min_amount_in;
                 uint128 max_amount_in;
                 uint128 max_extra_fee_asset0;
-                uint256 min_price;
+                Ray min_price;
                 bool use_internal;
                 address asset_in;
                 address asset_out;

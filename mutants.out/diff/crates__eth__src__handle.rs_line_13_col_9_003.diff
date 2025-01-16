@@ -1,0 +1,21 @@
+--- crates/eth/src/handle.rs
++++ replace Eth::subscribe_network_stream -> Pin<Box<dyn Stream<Item = EthEvent>+Send>> with Pin::new()
+@@ -5,17 +5,17 @@
+ use reth_provider::CanonStateNotification;
+ use tokio::sync::mpsc::{unbounded_channel, Sender, UnboundedSender};
+ use tokio_stream::wrappers::UnboundedReceiverStream;
+ 
+ use crate::manager::EthEvent;
+ 
+ pub trait Eth: Clone + Send + Sync {
+     fn subscribe_network_stream(&self) -> Pin<Box<dyn Stream<Item = EthEvent> + Send>> {
+-        Box::pin(self.subscribe_network())
++        Pin::new() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn subscribe_network(&self) -> UnboundedReceiverStream<EthEvent>;
+     fn subscribe_cannon_state_notifications(
+         &self
+     ) -> impl Future<Output = tokio::sync::broadcast::Receiver<CanonStateNotification>> + Send;
+ }
+ 

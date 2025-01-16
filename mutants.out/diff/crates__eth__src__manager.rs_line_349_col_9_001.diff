@@ -1,0 +1,44 @@
+--- crates/eth/src/manager.rs
++++ replace <impl ChainExt for Chain>::reorged_range -> Option<RangeInclusive<u64>> with Some(RangeInclusive::from_iter([0]))
+@@ -341,40 +341,17 @@
+ }
+ 
+ impl ChainExt for Chain {
+     fn tip_hash(&self) -> BlockHash {
+         self.tip().hash()
+     }
+ 
+     fn reorged_range(&self, new: impl ChainExt) -> Option<RangeInclusive<u64>> {
+-        let tip = new.tip_number();
+-        // search 150 blocks back;
+-        let start = tip - MAX_REORG_DEPTH;
+-
+-        let mut range = self
+-            .blocks_iter()
+-            .filter(|b| b.block.number >= start)
+-            .zip(new.blocks_iter().filter(|b| b.block.number >= start))
+-            .filter(|&(old, new)| (old.block.hash() != new.block.hash()))
+-            .map(|(_, new)| new.block.number)
+-            .collect::<Vec<_>>();
+-
+-        match range.len() {
+-            0 => None,
+-            1 => {
+-                let r = range.remove(0);
+-                Some(r..=r)
+-            }
+-            _ => {
+-                let start = *range.first().unwrap();
+-                let end = *range.last().unwrap();
+-                Some(start..=end)
+-            }
+-        }
++        Some(RangeInclusive::from_iter([0])) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn blocks_iter(&self) -> impl Iterator<Item = &SealedBlockWithSenders> + '_ {
+         self.blocks_iter()
+     }
+ 
+     fn tip_number(&self) -> BlockNumber {
+         self.tip().number

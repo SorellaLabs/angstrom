@@ -1,0 +1,21 @@
+--- crates/eth/src/manager.rs
++++ replace <impl ChainExt for Chain>::tip_hash -> BlockHash with Default::default()
+@@ -337,17 +337,17 @@
+     fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>>;
+     fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_;
+     fn reorged_range(&self, new: impl ChainExt) -> Option<RangeInclusive<u64>>;
+     fn blocks_iter(&self) -> impl Iterator<Item = &SealedBlockWithSenders> + '_;
+ }
+ 
+ impl ChainExt for Chain {
+     fn tip_hash(&self) -> BlockHash {
+-        self.tip().hash()
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn reorged_range(&self, new: impl ChainExt) -> Option<RangeInclusive<u64>> {
+         let tip = new.tip_number();
+         // search 150 blocks back;
+         let start = tip - MAX_REORG_DEPTH;
+ 
+         let mut range = self

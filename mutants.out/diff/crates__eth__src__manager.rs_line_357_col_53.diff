@@ -1,0 +1,21 @@
+--- crates/eth/src/manager.rs
++++ replace != with == in <impl ChainExt for Chain>::reorged_range
+@@ -349,17 +349,17 @@
+         let tip = new.tip_number();
+         // search 150 blocks back;
+         let start = tip - MAX_REORG_DEPTH;
+ 
+         let mut range = self
+             .blocks_iter()
+             .filter(|b| b.block.number >= start)
+             .zip(new.blocks_iter().filter(|b| b.block.number >= start))
+-            .filter(|&(old, new)| (old.block.hash() != new.block.hash()))
++            .filter(|&(old, new)| (old.block.hash() == /* ~ changed by cargo-mutants ~ */ new.block.hash()))
+             .map(|(_, new)| new.block.number)
+             .collect::<Vec<_>>();
+ 
+         match range.len() {
+             0 => None,
+             1 => {
+                 let r = range.remove(0);
+                 Some(r..=r)

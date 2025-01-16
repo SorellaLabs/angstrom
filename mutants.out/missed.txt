@@ -1,0 +1,15 @@
+crates/eth/src/manager.rs:129:9: replace EthDataCleanser<Sync>::on_canon_update with ()
+crates/eth/src/manager.rs:349:9: replace <impl ChainExt for Chain>::reorged_range -> Option<RangeInclusive<u64>> with None
+crates/eth/src/manager.rs:356:62: replace >= with < in <impl ChainExt for Chain>::reorged_range
+crates/eth/src/manager.rs:299:16: delete ! in <impl Future for EthDataCleanser<Sync>>::poll
+crates/eth/src/manager.rs:351:25: replace - with / in <impl ChainExt for Chain>::reorged_range
+crates/eth/src/manager.rs:384:9: replace <impl ChainExt for Chain>::receipts_by_block_hash -> Option<Vec<&Receipt>> with Some(vec![])
+crates/eth/src/manager.rs:345:9: replace <impl ChainExt for Chain>::tip_hash -> BlockHash with Default::default()
+crates/eth/src/manager.rs:355:40: replace >= with < in <impl ChainExt for Chain>::reorged_range
+crates/eth/src/manager.rs:120:9: replace EthDataCleanser<Sync>::on_command with ()
+crates/eth/src/manager.rs:376:9: replace <impl ChainExt for Chain>::blocks_iter -> impl Iterator<Item =&SealedBlockWithSenders>+'_ with ::std::iter::empty()
+crates/eth/src/manager.rs:388:9: replace <impl ChainExt for Chain>::tip_transactions -> impl Iterator<Item =&TransactionSigned>+'_ with ::std::iter::empty()
+crates/eth/src/manager.rs:351:25: replace - with + in <impl ChainExt for Chain>::reorged_range
+crates/eth/src/manager.rs:384:9: replace <impl ChainExt for Chain>::receipts_by_block_hash -> Option<Vec<&Receipt>> with None
+crates/eth/src/manager.rs:380:9: replace <impl ChainExt for Chain>::tip_number -> BlockNumber with Default::default()
+crates/eth/src/manager.rs:357:53: replace != with == in <impl ChainExt for Chain>::reorged_range

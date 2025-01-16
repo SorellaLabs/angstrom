@@ -1,0 +1,3254 @@
+{
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Success",
+      "log_path": "log/baseline.log",
+      "diff_path": null,
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 56.458888083,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 7.945018833,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::get_eoa",
+            "return_type": "-> Vec<Address>",
+            "span": {
+              "start": {
+                "line": 266,
+                "column": 5
+              },
+              "end": {
+                "line": 281,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 268,
+              "column": 9
+            },
+            "end": {
+              "line": 280,
+              "column": 23
+            }
+          },
+          "replacement": "vec![]",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_268_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_268_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.63560975,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.650741958,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::on_canon_update",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 128,
+                "column": 5
+              },
+              "end": {
+                "line": 134,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 129,
+              "column": 9
+            },
+            "end": {
+              "line": 133,
+              "column": 60
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_129_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_129_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.511185875,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.761824875,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::subscribe_cannon_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 108,
+                "column": 5
+              },
+              "end": {
+                "line": 112,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 111,
+              "column": 9
+            },
+            "end": {
+              "line": 111,
+              "column": 39
+            }
+          },
+          "replacement": "Receiver::new(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_111_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_111_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.648244958,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.3948945,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.812548958,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::send_events",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 114,
+                "column": 5
+              },
+              "end": {
+                "line": 117,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 115,
+              "column": 9
+            },
+            "end": {
+              "line": 116,
+              "column": 56
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_115_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_115_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.440770417,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.64166125,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "Some(RangeInclusive::from_iter([0]))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.640689792,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::receipts_by_block_hash",
+            "return_type": "-> Option<Vec<&Receipt>>",
+            "span": {
+              "start": {
+                "line": 383,
+                "column": 5
+              },
+              "end": {
+                "line": 385,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 384,
+              "column": 9
+            },
+            "end": {
+              "line": 384,
+              "column": 48
+            }
+          },
+          "replacement": "Some(vec![&Default::default()])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_384_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_384_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.591781542,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::get_eoa",
+            "return_type": "-> Vec<Address>",
+            "span": {
+              "start": {
+                "line": 266,
+                "column": 5
+              },
+              "end": {
+                "line": 281,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 268,
+              "column": 9
+            },
+            "end": {
+              "line": 280,
+              "column": 23
+            }
+          },
+          "replacement": "vec![Default::default()]",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_268_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_268_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.2687546659999995,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.646007583,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::apply_periphery_logs",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 183,
+                "column": 5
+              },
+              "end": {
+                "line": 246,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 186,
+              "column": 9
+            },
+            "end": {
+              "line": 245,
+              "column": 16
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_186_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_186_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.24889625,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.6471485,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "Some(RangeInclusive::new())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9_002.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.583652375,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::subscribe_cannon_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 108,
+                "column": 5
+              },
+              "end": {
+                "line": 112,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 111,
+              "column": 9
+            },
+            "end": {
+              "line": 111,
+              "column": 39
+            }
+          },
+          "replacement": "Receiver::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_111_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_111_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.639881417,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "Some(RangeInclusive::new(1))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9_003.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.588729917,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::subscribe_cannon_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 108,
+                "column": 5
+              },
+              "end": {
+                "line": 112,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 111,
+              "column": 9
+            },
+            "end": {
+              "line": 111,
+              "column": 39
+            }
+          },
+          "replacement": "Receiver::from_iter([Default::default()])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_111_col_9_002.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_111_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.645295417,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::handle_reorg",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 136,
+                "column": 5
+              },
+              "end": {
+                "line": 162,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 137,
+              "column": 9
+            },
+            "end": {
+              "line": 161,
+              "column": 42
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_137_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_137_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.251897667,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.595692333,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl Future for EthDataCleanser<Sync>>::poll",
+            "return_type": "-> Poll<Self::Output>",
+            "span": {
+              "start": {
+                "line": 290,
+                "column": 5
+              },
+              "end": {
+                "line": 309,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 9
+            },
+            "end": {
+              "line": 308,
+              "column": 22
+            }
+          },
+          "replacement": "Poll::from_iter([Default::default()])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_292_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_292_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.647095,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::fetch_filled_order",
+            "return_type": "-> impl Iterator<Item = B256>+'a",
+            "span": {
+              "start": {
+                "line": 248,
+                "column": 5
+              },
+              "end": {
+                "line": 264,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 252,
+              "column": 9
+            },
+            "end": {
+              "line": 263,
+              "column": 15
+            }
+          },
+          "replacement": "::std::iter::empty()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_252_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_252_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.366183958,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.636317541,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::subscribe_cannon_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 108,
+                "column": 5
+              },
+              "end": {
+                "line": 112,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 111,
+              "column": 9
+            },
+            "end": {
+              "line": 111,
+              "column": 39
+            }
+          },
+          "replacement": "Receiver::from(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_111_col_9_003.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_111_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.6490325,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_cannon_state_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 41,
+                "column": 5
+              },
+              "end": {
+                "line": 47,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 44,
+              "column": 9
+            },
+            "end": {
+              "line": 46,
+              "column": 26
+            }
+          },
+          "replacement": "Receiver::from(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_44_col_9.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_44_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.591825916,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "Some(RangeInclusive::from(0))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9_004.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9_004.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.638516416,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_cannon_state_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 41,
+                "column": 5
+              },
+              "end": {
+                "line": 47,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 44,
+              "column": 9
+            },
+            "end": {
+              "line": 46,
+              "column": 26
+            }
+          },
+          "replacement": "Receiver::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_44_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_44_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.588615583,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 356,
+              "column": 62
+            },
+            "end": {
+              "line": 356,
+              "column": 64
+            }
+          },
+          "replacement": "<",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_356_col_62.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_356_col_62.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.3587845,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.740063458,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl Future for EthDataCleanser<Sync>>::poll",
+            "return_type": "-> Poll<Self::Output>",
+            "span": {
+              "start": {
+                "line": 290,
+                "column": 5
+              },
+              "end": {
+                "line": 309,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 9
+            },
+            "end": {
+              "line": 308,
+              "column": 22
+            }
+          },
+          "replacement": "Poll::new(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_292_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_292_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.64878325,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::fetch_filled_order",
+            "return_type": "-> impl Iterator<Item = B256>+'a",
+            "span": {
+              "start": {
+                "line": 248,
+                "column": 5
+              },
+              "end": {
+                "line": 264,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 254,
+              "column": 46
+            },
+            "end": {
+              "line": 254,
+              "column": 48
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_254_col_46.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_254_col_46.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.199769541,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.64148875,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl Future for EthDataCleanser<Sync>>::poll",
+            "return_type": "-> Poll<Self::Output>",
+            "span": {
+              "start": {
+                "line": 290,
+                "column": 5
+              },
+              "end": {
+                "line": 309,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 299,
+              "column": 16
+            },
+            "end": {
+              "line": 299,
+              "column": 17
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_299_col_16.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_299_col_16.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.326350208,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.744845084,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 351,
+              "column": 25
+            },
+            "end": {
+              "line": 351,
+              "column": 26
+            }
+          },
+          "replacement": "/",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_351_col_25.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_351_col_25.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.226999,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.760898125,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::blocks_iter",
+            "return_type": "-> impl Iterator<Item =&SealedBlockWithSenders>+'_",
+            "span": {
+              "start": {
+                "line": 375,
+                "column": 5
+              },
+              "end": {
+                "line": 377,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 376,
+              "column": 9
+            },
+            "end": {
+              "line": 376,
+              "column": 27
+            }
+          },
+          "replacement": "::std::iter::once(&Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_376_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_376_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.582461542,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "Eth::subscribe_network_stream",
+            "return_type": "-> Pin<Box<dyn Stream<Item = EthEvent>+Send>>",
+            "span": {
+              "start": {
+                "line": 12,
+                "column": 5
+              },
+              "end": {
+                "line": 14,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 13,
+              "column": 9
+            },
+            "end": {
+              "line": 13,
+              "column": 43
+            }
+          },
+          "replacement": "Pin::from(Box::new(Default::default()))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_13_col_9.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_13_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.53975575,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "Eth::subscribe_network_stream",
+            "return_type": "-> Pin<Box<dyn Stream<Item = EthEvent>+Send>>",
+            "span": {
+              "start": {
+                "line": 12,
+                "column": 5
+              },
+              "end": {
+                "line": 14,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 13,
+              "column": 9
+            },
+            "end": {
+              "line": 13,
+              "column": 43
+            }
+          },
+          "replacement": "Pin::new(Box::new(Default::default()))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_13_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_13_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.59242975,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::apply_periphery_logs",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 183,
+                "column": 5
+              },
+              "end": {
+                "line": 246,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 192,
+              "column": 39
+            },
+            "end": {
+              "line": 192,
+              "column": 41
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_192_col_39.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_192_col_39.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.224728542,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.649556,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::handle_commit",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 164,
+                "column": 5
+              },
+              "end": {
+                "line": 181,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 166,
+              "column": 9
+            },
+            "end": {
+              "line": 180,
+              "column": 39
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_166_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_166_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.260744458,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.644005041,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_network",
+            "return_type": "-> UnboundedReceiverStream<EthEvent>",
+            "span": {
+              "start": {
+                "line": 49,
+                "column": 5
+              },
+              "end": {
+                "line": 56,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 50,
+              "column": 9
+            },
+            "end": {
+              "line": 55,
+              "column": 41
+            }
+          },
+          "replacement": "UnboundedReceiverStream::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_50_col_9.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_50_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.657595875,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::receipts_by_block_hash",
+            "return_type": "-> Option<Vec<&Receipt>>",
+            "span": {
+              "start": {
+                "line": 383,
+                "column": 5
+              },
+              "end": {
+                "line": 385,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 384,
+              "column": 9
+            },
+            "end": {
+              "line": 384,
+              "column": 48
+            }
+          },
+          "replacement": "Some(vec![])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_384_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_384_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 6.867589083,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.756981208,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::tip_hash",
+            "return_type": "-> BlockHash",
+            "span": {
+              "start": {
+                "line": 344,
+                "column": 5
+              },
+              "end": {
+                "line": 346,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 345,
+              "column": 9
+            },
+            "end": {
+              "line": 345,
+              "column": 26
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_345_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_345_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 6.784734666,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.756629125,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 355,
+              "column": 40
+            },
+            "end": {
+              "line": 355,
+              "column": 42
+            }
+          },
+          "replacement": "<",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_355_col_40.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_355_col_40.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.150850334,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.760692792,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "Some(RangeInclusive::new(0))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9_005.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9_005.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.585949959,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::on_command",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 119,
+                "column": 5
+              },
+              "end": {
+                "line": 126,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 120,
+              "column": 9
+            },
+            "end": {
+              "line": 125,
+              "column": 10
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_120_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_120_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.4361855,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.752344834,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl Future for EthDataCleanser<Sync>>::poll",
+            "return_type": "-> Poll<Self::Output>",
+            "span": {
+              "start": {
+                "line": 290,
+                "column": 5
+              },
+              "end": {
+                "line": 309,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 9
+            },
+            "end": {
+              "line": 308,
+              "column": 22
+            }
+          },
+          "replacement": "Poll::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_292_col_9_002.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_292_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.650913417,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::spawn",
+            "return_type": "-> anyhow::Result<EthHandle>",
+            "span": {
+              "start": {
+                "line": 66,
+                "column": 5
+              },
+              "end": {
+                "line": 106,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 79,
+              "column": 9
+            },
+            "end": {
+              "line": 105,
+              "column": 19
+            }
+          },
+          "replacement": "Ok(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_79_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_79_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.638483167,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "Eth::subscribe_network_stream",
+            "return_type": "-> Pin<Box<dyn Stream<Item = EthEvent>+Send>>",
+            "span": {
+              "start": {
+                "line": 12,
+                "column": 5
+              },
+              "end": {
+                "line": 14,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 13,
+              "column": 9
+            },
+            "end": {
+              "line": 13,
+              "column": 43
+            }
+          },
+          "replacement": "Pin::from_iter([Box::new(Default::default())])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_13_col_9_002.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_13_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.643486667,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::blocks_iter",
+            "return_type": "-> impl Iterator<Item =&SealedBlockWithSenders>+'_",
+            "span": {
+              "start": {
+                "line": 375,
+                "column": 5
+              },
+              "end": {
+                "line": 377,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 376,
+              "column": 9
+            },
+            "end": {
+              "line": 376,
+              "column": 27
+            }
+          },
+          "replacement": "::std::iter::empty()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_376_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_376_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.607928459,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.759610292,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "Some(RangeInclusive::from_iter([1]))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9_006.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9_006.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.639110167,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_cannon_state_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 41,
+                "column": 5
+              },
+              "end": {
+                "line": 47,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 44,
+              "column": 9
+            },
+            "end": {
+              "line": 46,
+              "column": 26
+            }
+          },
+          "replacement": "Receiver::new(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_44_col_9_002.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_44_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.5875635,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl Future for EthDataCleanser<Sync>>::poll",
+            "return_type": "-> Poll<Self::Output>",
+            "span": {
+              "start": {
+                "line": 290,
+                "column": 5
+              },
+              "end": {
+                "line": 309,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 9
+            },
+            "end": {
+              "line": 308,
+              "column": 22
+            }
+          },
+          "replacement": "Poll::from(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_292_col_9_003.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_292_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.59830775,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "EthDataCleanser<Sync>::fetch_filled_order",
+            "return_type": "-> impl Iterator<Item = B256>+'a",
+            "span": {
+              "start": {
+                "line": 248,
+                "column": 5
+              },
+              "end": {
+                "line": 264,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 252,
+              "column": 9
+            },
+            "end": {
+              "line": 263,
+              "column": 15
+            }
+          },
+          "replacement": "::std::iter::once(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_252_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_252_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.577307125,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.592779292,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_network",
+            "return_type": "-> UnboundedReceiverStream<EthEvent>",
+            "span": {
+              "start": {
+                "line": 49,
+                "column": 5
+              },
+              "end": {
+                "line": 56,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 50,
+              "column": 9
+            },
+            "end": {
+              "line": 55,
+              "column": 41
+            }
+          },
+          "replacement": "UnboundedReceiverStream::new(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_50_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_50_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.589701208,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "Eth::subscribe_network_stream",
+            "return_type": "-> Pin<Box<dyn Stream<Item = EthEvent>+Send>>",
+            "span": {
+              "start": {
+                "line": 12,
+                "column": 5
+              },
+              "end": {
+                "line": 14,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 13,
+              "column": 9
+            },
+            "end": {
+              "line": 13,
+              "column": 43
+            }
+          },
+          "replacement": "Pin::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_13_col_9_003.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_13_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.596014125,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_network",
+            "return_type": "-> UnboundedReceiverStream<EthEvent>",
+            "span": {
+              "start": {
+                "line": 49,
+                "column": 5
+              },
+              "end": {
+                "line": 56,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 50,
+              "column": 9
+            },
+            "end": {
+              "line": 55,
+              "column": 41
+            }
+          },
+          "replacement": "UnboundedReceiverStream::from(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_50_col_9_002.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_50_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.590615708,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::tip_transactions",
+            "return_type": "-> impl Iterator<Item =&TransactionSigned>+'_",
+            "span": {
+              "start": {
+                "line": 387,
+                "column": 5
+              },
+              "end": {
+                "line": 389,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 388,
+              "column": 9
+            },
+            "end": {
+              "line": 388,
+              "column": 41
+            }
+          },
+          "replacement": "::std::iter::empty()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_388_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_388_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.429913333,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.812405167,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_cannon_state_notifications",
+            "return_type": "-> tokio::sync::broadcast::Receiver<CanonStateNotification>",
+            "span": {
+              "start": {
+                "line": 41,
+                "column": 5
+              },
+              "end": {
+                "line": 47,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 44,
+              "column": 9
+            },
+            "end": {
+              "line": 46,
+              "column": 26
+            }
+          },
+          "replacement": "Receiver::from_iter([Default::default()])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_44_col_9_003.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_44_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.592642625,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/handle.rs",
+          "function": {
+            "function_name": "<impl Eth for EthHandle>::subscribe_network",
+            "return_type": "-> UnboundedReceiverStream<EthEvent>",
+            "span": {
+              "start": {
+                "line": 49,
+                "column": 5
+              },
+              "end": {
+                "line": 56,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 50,
+              "column": 9
+            },
+            "end": {
+              "line": 55,
+              "column": 41
+            }
+          },
+          "replacement": "UnboundedReceiverStream::from_iter([Default::default()])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__handle.rs_line_50_col_9_003.log",
+      "diff_path": "diff/crates__eth__src__handle.rs_line_50_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.65040425,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 351,
+              "column": 25
+            },
+            "end": {
+              "line": 351,
+              "column": 26
+            }
+          },
+          "replacement": "+",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_351_col_25_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_351_col_25_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.18955525,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.805760958,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::tip_transactions",
+            "return_type": "-> impl Iterator<Item =&TransactionSigned>+'_",
+            "span": {
+              "start": {
+                "line": 387,
+                "column": 5
+              },
+              "end": {
+                "line": 389,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 388,
+              "column": 9
+            },
+            "end": {
+              "line": 388,
+              "column": 41
+            }
+          },
+          "replacement": "::std::iter::once(&Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_388_col_9_001.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_388_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.590614375,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::receipts_by_block_hash",
+            "return_type": "-> Option<Vec<&Receipt>>",
+            "span": {
+              "start": {
+                "line": 383,
+                "column": 5
+              },
+              "end": {
+                "line": 385,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 384,
+              "column": 9
+            },
+            "end": {
+              "line": 384,
+              "column": 48
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_384_col_9_002.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_384_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 6.822304583,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.759073917,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::tip_number",
+            "return_type": "-> BlockNumber",
+            "span": {
+              "start": {
+                "line": 379,
+                "column": 5
+              },
+              "end": {
+                "line": 381,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 380,
+              "column": 9
+            },
+            "end": {
+              "line": 380,
+              "column": 26
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_380_col_9.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_380_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 6.6378145,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.760335583,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 372,
+              "column": 10
+            }
+          },
+          "replacement": "Some(RangeInclusive::from(1))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__eth__src__manager.rs_line_349_col_9_007.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_349_col_9_007.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.5916165,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "angstrom-eth",
+          "file": "crates/eth/src/manager.rs",
+          "function": {
+            "function_name": "<impl ChainExt for Chain>::reorged_range",
+            "return_type": "-> Option<RangeInclusive<u64>>",
+            "span": {
+              "start": {
+                "line": 348,
+                "column": 5
+              },
+              "end": {
+                "line": 373,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 357,
+              "column": 53
+            },
+            "end": {
+              "line": 357,
+              "column": 55
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__eth__src__manager.rs_line_357_col_53.log",
+      "diff_path": "diff/crates__eth__src__manager.rs_line_357_col_53.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 5.361158375,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.81005725,
+          "process_status": "Success",
+          "argv": [
+            "/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=angstrom-eth@0.1.0"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 56,
+  "missed": 15,
+  "caught": 10,
+  "timeout": 0,
+  "unviable": 31,
+  "success": 0
+}

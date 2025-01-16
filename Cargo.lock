@@ -2985,6 +2985,7 @@ dependencies = [
  "ciborium",
  "clap",
  "criterion-plot",
+ "futures",
  "is-terminal",
  "itertools 0.10.5",
  "num-traits",
@@ -2997,6 +2998,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 
@@ -11847,6 +11849,7 @@ dependencies = [
  "async-trait",
  "auto_impl",
  "byteorder",
+ "criterion",
  "dashmap 6.1.0",
  "derive_more 0.99.18",
  "eyre",

@@ -1,0 +1,23 @@
+--- crates/eth/src/handle.rs
++++ replace <impl Eth for EthHandle>::subscribe_cannon_state_notifications -> tokio::sync::broadcast::Receiver<CanonStateNotification> with Receiver::new(Default::default())
+@@ -36,19 +36,17 @@
+         Self { sender }
+     }
+ }
+ 
+ impl Eth for EthHandle {
+     async fn subscribe_cannon_state_notifications(
+         &self
+     ) -> tokio::sync::broadcast::Receiver<CanonStateNotification> {
+-        let (tx, rx) = tokio::sync::oneshot::channel();
+-        let _ = self.sender.send(EthCommand::SubscribeCannon(tx)).await;
+-        rx.await.unwrap()
++        Receiver::new(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn subscribe_network(&self) -> UnboundedReceiverStream<EthEvent> {
+         let (tx, rx) = unbounded_channel();
+         let _ = self
+             .sender
+             .try_send(EthCommand::SubscribeEthNetworkEvents(tx));
+ 

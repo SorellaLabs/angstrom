@@ -1,0 +1,10 @@
+crates/eth/src/manager.rs:268:9: replace EthDataCleanser<Sync>::get_eoa -> Vec<Address> with vec![]
+crates/eth/src/manager.rs:115:9: replace EthDataCleanser<Sync>::send_events with ()
+crates/eth/src/manager.rs:268:9: replace EthDataCleanser<Sync>::get_eoa -> Vec<Address> with vec![Default::default()]
+crates/eth/src/manager.rs:186:9: replace EthDataCleanser<Sync>::apply_periphery_logs with ()
+crates/eth/src/manager.rs:137:9: replace EthDataCleanser<Sync>::handle_reorg with ()
+crates/eth/src/manager.rs:252:9: replace EthDataCleanser<Sync>::fetch_filled_order -> impl Iterator<Item = B256>+'a with ::std::iter::empty()
+crates/eth/src/manager.rs:254:46: replace == with != in EthDataCleanser<Sync>::fetch_filled_order
+crates/eth/src/manager.rs:192:39: replace == with != in EthDataCleanser<Sync>::apply_periphery_logs
+crates/eth/src/manager.rs:166:9: replace EthDataCleanser<Sync>::handle_commit with ()
+crates/eth/src/manager.rs:252:9: replace EthDataCleanser<Sync>::fetch_filled_order -> impl Iterator<Item = B256>+'a with ::std::iter::once(Default::default())

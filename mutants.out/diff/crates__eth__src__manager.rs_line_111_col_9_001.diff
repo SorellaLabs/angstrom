@@ -1,0 +1,21 @@
+--- crates/eth/src/manager.rs
++++ replace EthDataCleanser<Sync>::subscribe_cannon_notifications -> tokio::sync::broadcast::Receiver<CanonStateNotification> with Receiver::new()
+@@ -103,17 +103,17 @@
+         let handle = EthHandle::new(tx);
+ 
+         Ok(handle)
+     }
+ 
+     fn subscribe_cannon_notifications(
+         &self
+     ) -> tokio::sync::broadcast::Receiver<CanonStateNotification> {
+-        self.cannon_sender.subscribe()
++        Receiver::new() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn send_events(&mut self, event: EthEvent) {
+         self.event_listeners
+             .retain(|e| e.send(event.clone()).is_ok());
+     }
+ 
+     fn on_command(&mut self, command: EthCommand) {

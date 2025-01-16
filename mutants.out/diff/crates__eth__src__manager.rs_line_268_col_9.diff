@@ -1,0 +1,33 @@
+--- crates/eth/src/manager.rs
++++ replace EthDataCleanser<Sync>::get_eoa -> Vec<Address> with vec![]
+@@ -260,29 +260,17 @@
+                 bundle
+                     .get_order_hashes(chain.tip_number())
+                     .collect::<Vec<_>>()
+             })
+     }
+ 
+     /// fetches all eoa addresses touched
+     fn get_eoa(&self, chain: Arc<impl ChainExt>) -> Vec<Address> {
+-        chain
+-            .receipts_by_block_hash(chain.tip_hash())
+-            .unwrap_or_default()
+-            .into_iter()
+-            .flat_map(|receipt| &receipt.logs)
+-            .filter(|log| self.angstrom_tokens.contains(&log.address))
+-            .flat_map(|logs| {
+-                Transfer::decode_log(logs, true)
+-                    .map(|log| log._from)
+-                    .or_else(|_| Approval::decode_log(logs, true).map(|log| log._owner))
+-            })
+-            .unique()
+-            .collect()
++        vec![] /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl<Sync> Future for EthDataCleanser<Sync>
+ where
+     Sync: BlockSyncProducer
+ {
+     type Output = ();

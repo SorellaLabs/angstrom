@@ -42,7 +42,7 @@ where
     async fn deploy_angstrom(inner: &E, nodes: Vec<Address>) -> eyre::Result<Address> {
         let provider = inner.provider();
         let key = provider.default_signer_address();
-        debug!(?key, "Deploying Angstrom...");
+        debug!("Deploying Angstrom...");
         let angstrom_addr = inner
             .execute_then_mine(deploy_angstrom(
                 provider,

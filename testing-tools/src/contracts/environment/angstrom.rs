@@ -11,9 +11,7 @@ use tracing::{debug, info};
 
 use super::{uniswap::TestUniswapEnv, TestAnvilEnvironment};
 use crate::contracts::{
-    deploy::angstrom::{deploy_angstrom, deploy_angstrom_create3},
-    environment::CONTROLLER_V1_ADDRESS,
-    DebugTransaction
+    deploy_old::angstrom::deploy_angstrom, environment::CONTROLLER_V1_ADDRESS, DebugTransaction
 };
 
 pub trait TestAngstromEnv: TestAnvilEnvironment + TestUniswapEnv {
@@ -45,22 +43,22 @@ where
         let provider = inner.provider();
         let key = provider.default_signer_address();
         debug!(?key, "Deploying Angstrom...");
-        // let angstrom_addr = inner
-        //     .execute_then_mine(deploy_angstrom(
-        //         provider,
-        //         inner.pool_manager(),
-        //         inner.controller(),
-        //         Address::default()
-        //     ))
-        //     .await;
-
         let angstrom_addr = inner
-            .execute_then_mine(deploy_angstrom_create3(
+            .execute_then_mine(deploy_angstrom(
                 provider,
                 inner.pool_manager(),
-                inner.controller()
+                inner.controller(),
+                Address::default()
             ))
             .await;
+
+        // let angstrom_addr = inner
+        //     .execute_then_mine(deploy_angstrom_create3(
+        //         provider,
+        //         inner.pool_manager(),
+        //         inner.controller()
+        //     ))
+        //     .await;
         // assert code is set
         let code = provider.get_code_at(angstrom_addr).await.unwrap();
         tracing::info!(?code);

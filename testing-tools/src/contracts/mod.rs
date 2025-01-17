@@ -20,6 +20,7 @@ use futures::Future;
 
 pub mod anvil;
 pub mod deploy;
+pub mod deploy_old;
 pub mod environment;
 //mod reward;
 //pub use reward::RewardTestEnv;

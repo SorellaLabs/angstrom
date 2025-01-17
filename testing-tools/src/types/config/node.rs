@@ -85,11 +85,13 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             panic!("only the leader can call this!")
         }
 
+        let port = ((random::<u8>() as u64) + self.node_id) as u16;
+        tracing::info!(port, "leader node eth port");
         Anvil::new()
             .chain_id(1)
             .arg("--host")
             .arg("0.0.0.0")
-            .port(((random::<u8>() as u64) + self.node_id) as u16)
+            .port(port)
             .fork(self.global_config.eth_ws_url())
             .arg("--ipc")
             .arg(self.global_config.anvil_rpc_endpoint(self.node_id))

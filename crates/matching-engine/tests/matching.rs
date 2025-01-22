@@ -18,11 +18,48 @@ struct TestOrder {
 }
 
 impl TestOrder {
+    fn exact_bid(q: u128, p: Ray) -> BookOrder {
+        Self { q, p }.to_order(true)
+    }
+
+    fn exact_ask(q: u128, p: Ray) -> BookOrder {
+        Self { q, p }.to_order(false)
+    }
+
+    fn exact_inverse_bid(q: u128, p: Ray) -> BookOrder {
+        Self { q, p }.to_inverse_order(true)
+    }
+
+    fn exact_inverse_ask(q: u128, p: Ray) -> BookOrder {
+        Self { q, p }.to_inverse_order(false)
+    }
+}
+
+impl TestOrder {
     pub fn to_order(&self, is_bid: bool) -> BookOrder {
         let min_price = if is_bid { self.p.inv_ray_round(true) } else { self.p };
         UserOrderBuilder::new()
             .amount(self.q)
             .min_price(min_price)
+            .exact()
+            .exact_in(!is_bid)
+            .is_bid(is_bid)
+            .with_storage()
+            .is_bid(is_bid)
+            .build()
+    }
+
+    pub fn to_inverse_order(&self, is_bid: bool) -> BookOrder {
+        let min_price = if is_bid { self.p.inv_ray_round(true) } else { self.p };
+        // If it's a bid, our t1-based order is Exact In.  If ask, t1-based orders are
+        // Exact Out
+        let exact_in = is_bid;
+        UserOrderBuilder::new()
+            .is_bid(is_bid)
+            .amount(self.q)
+            .min_price(min_price)
+            .exact_in(exact_in)
+            .exact()
             .with_storage()
             .is_bid(is_bid)
             .build()
@@ -72,21 +109,24 @@ fn simple_book() {
     assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All orders not filled");
 }
 
-// #[test]
-// fn unsolveable_book() {
-//     // Simple book where we can't fill anything because both orders don't
-// have the     // right size
-//     let book = make_books(
-//         vec![TestOrder { q: 80, p: raw_price(100) }],
-//         vec![TestOrder { q: 100, p: raw_price(10) }],
-//         None
-//     );
-//     let mut matcher = VolumeFillMatcher::new(&book);
-//     let end = matcher.run_match();
-//     println!("End reason: {:?}", end);
-//     let solution = matcher.solution(None);
-//     assert!(solution.limit.iter().all(|outcome| !outcome.is_filled()), "All
-// orders not unfilled"); }
+#[test]
+fn unsolveable_book() {
+    // Simple book where we can't fill anything because both orders don't have the
+    // right size
+    let book = make_books(
+        vec![TestOrder { q: 80, p: raw_price(100) }],
+        vec![TestOrder { q: 100, p: raw_price(10) }],
+        None
+    );
+    let mut matcher = VolumeFillMatcher::new(&book);
+    let end = matcher.run_match();
+    println!("End reason: {:?}", end);
+    let solution = matcher
+        .from_checkpoint()
+        .expect("No checkpoint in matcher")
+        .solution(None);
+    assert!(solution.limit.iter().all(|outcome| !outcome.is_filled()), "All orders not unfilled");
+}
 
 #[test]
 fn multiple_orders_fill() {
@@ -110,7 +150,10 @@ fn multiple_orders_fill() {
     let mut matcher = VolumeFillMatcher::new(&book);
     let end = matcher.run_match();
     println!("End reason: {:?}", end);
-    let solution = matcher.solution(None);
+    let solution = matcher
+        .from_checkpoint()
+        .expect("No checkpointed solution")
+        .solution(None);
     assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All orders not filled");
 }
 
@@ -124,20 +167,74 @@ fn fill_from_amm() {
     assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All orders not filled");
 }
 
-// #[test]
-// fn amm_provides_last_mile_liquidity() {
-//     let amm_price = Ray::from(SqrtPriceX96::at_tick(100001).unwrap());
-//     let amm = generate_single_position_amm_at_tick(100000, 100,
-// 1_000_000_000_000_000_u128);     let book = make_books(
-//         vec![TestOrder { q: 100, p: amm_price + 100_usize }],
-//         vec![TestOrder { q: 50, p: amm_price - 100_usize }],
-//         Some(amm)
-//     );
-//     let mut matcher = VolumeFillMatcher::new(&book);
-//     let _ = matcher.run_match();
-//     let solution = matcher.solution(None);
-//     assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All
-// orders not filled"); }
+#[test]
+fn amm_provides_last_mile_liquidity() {
+    let amm = generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+    let amm_price = amm.current_price().as_ray();
+    let book = make_books(
+        vec![TestOrder { q: 100, p: amm_price + 100000000000_usize }],
+        vec![TestOrder { q: 50, p: amm_price - 100_usize }],
+        Some(amm)
+    );
+    let mut matcher = VolumeFillMatcher::new(&book);
+    let _ = matcher.run_match();
+    let solution = matcher.solution(None);
+    assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All orders not filled");
+}
 
 #[test]
-fn debt_price_is_final_price() {}
+fn debt_is_created() {
+    let book = OrderBook::new(
+        FixedBytes::random(),
+        None,
+        vec![TestOrder::exact_bid(1000000000000000000000000000_u128, raw_price(500))],
+        vec![TestOrder::exact_inverse_ask(100, raw_price(100))],
+        Some(matching_engine::book::sort::SortStrategy::ByPriceByVolume)
+    );
+    let mut matcher = VolumeFillMatcher::new(&book);
+    let _ = matcher.run_match();
+    let checkpoint = matcher.from_checkpoint().expect("No checkpoint created");
+    assert!(checkpoint.cur_debt().is_some(), "No debt found");
+    let solution = checkpoint.solution(None);
+    assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All orders not filled");
+}
+
+#[test]
+fn debt_price_is_final_price() {
+    let book = OrderBook::new(
+        FixedBytes::random(),
+        None,
+        vec![TestOrder::exact_bid(1000000000000000000000000000_u128, raw_price(500))],
+        vec![TestOrder::exact_inverse_ask(100, raw_price(100))],
+        Some(matching_engine::book::sort::SortStrategy::ByPriceByVolume)
+    );
+    let mut matcher = VolumeFillMatcher::new(&book);
+    let _ = matcher.run_match();
+    let solution = matcher
+        .from_checkpoint()
+        .expect("No checkpointed solution")
+        .solution(None);
+    assert!(solution.ucp == book.asks()[0].price(), "Price is not stuck at debt price");
+}
+
+#[test]
+fn annihilating_debt() {
+    let response_offer = 1_000_000_000_000_000_000_000_000_000_u128 + 99_u128;
+    let book = OrderBook::new(
+        FixedBytes::random(),
+        None,
+        vec![
+            TestOrder::exact_bid(1000000000000000000000000_u128, raw_price(500000)),
+            TestOrder::exact_inverse_bid(100000000000000000000000, raw_price(1000000)),
+        ],
+        vec![
+            TestOrder::exact_inverse_ask(100, raw_price(100)),
+            TestOrder::exact_ask(response_offer, raw_price(100)),
+        ],
+        Some(matching_engine::book::sort::SortStrategy::ByPriceByVolume)
+    );
+    let mut matcher = VolumeFillMatcher::new(&book);
+    let _end = matcher.run_match();
+    let solution = matcher.solution(None);
+    assert!(solution.limit.iter().all(|outcome| outcome.is_filled()), "All orders not filled");
+}

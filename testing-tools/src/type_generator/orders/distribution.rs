@@ -89,7 +89,7 @@ impl OrderDistributionBuilder {
                     .is_standing(false)
                     .block(valid_block)
                     .amount(v.to_u128().unwrap_or_default())
-                    .min_price(Ray::from(Uint::from(p.to_u128().unwrap_or_default())))
+                    .min_price(Ray::from(Uint::from(p.to_u128().unwrap_or(1_u128))))
                     .signing_key(self.signing_key.clone())
                     .with_storage()
                     .pool_id(pool_id)

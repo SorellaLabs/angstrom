@@ -13,6 +13,7 @@ use tracing::error_span;
 
 use crate::{common::TokenPriceGenerator, order::sim::gas_inspector::GasUsed};
 
+pub mod console_log;
 mod gas;
 mod gas_inspector;
 

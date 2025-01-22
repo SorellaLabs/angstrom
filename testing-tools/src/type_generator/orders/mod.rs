@@ -1,4 +1,7 @@
+use std::sync::OnceLock;
+
 use alloy::{
+    hex::FromHex,
     primitives::{Address, FixedBytes, U256},
     sol_types::Eip712Domain
 };
@@ -22,10 +25,16 @@ pub use distribution::OrderDistributionBuilder;
 pub use tob::ToBOrderBuilder;
 pub use user::UserOrderBuilder;
 
-// fn build_priority_data(order: &GroupedVanillaOrder) -> OrderPriorityData {
-//     OrderPriorityData { price: order.price().into(), volume: order.quantity()
-// as u128, gas: 10 } }
+pub fn default_low_addr() -> &'static Address {
+    static LOWADDR: OnceLock<Address> = OnceLock::new();
+    LOWADDR.get_or_init(|| Address::from_hex("0x0000000000000000000000000000000000000001").unwrap())
+}
 
+pub fn default_high_addr() -> &'static Address {
+    static HIGHADDR: OnceLock<Address> = OnceLock::new();
+    HIGHADDR
+        .get_or_init(|| Address::from_hex("0x0000000000000000000000000000000000000010").unwrap())
+}
 #[derive(Clone, Debug)]
 pub struct SigningInfo {
     pub domain:  Eip712Domain,
@@ -90,7 +99,7 @@ impl StoredOrderBuilder {
             .unwrap_or_default();
         let priority_data = OrderPriorityData {
             price:     self.order.price_for_book_side(is_bid).into(),
-            volume:    self.order.quantity(),
+            volume:    self.order.max_q(),
             gas:       U256::ZERO,
             gas_units: 0
         };

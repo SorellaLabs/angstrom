@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{GenerateFlippedOrder, RawPoolOrder, RespendAvoidanceMethod};
 use crate::{
-    matching::Ray,
+    matching::{Debt, Ray},
     orders::{OrderId, OrderLocation, OrderPriorityData},
     primitive::{PoolId, ANGSTROM_DOMAIN},
     sol_bindings::rpc_orders::{
@@ -46,6 +46,55 @@ impl StandingVariants {
             StandingVariants::Partial(o) => &o.hook_data
         }
     }
+
+    /// Maximum quantity accepted by this order
+    pub fn max_q(&self) -> u128 {
+        match self {
+            Self::Exact(o) => o.amount,
+            Self::Partial(o) => o.max_amount_in
+        }
+    }
+
+    /// Minimum quantity accepted by this order
+    pub fn min_q(&self) -> u128 {
+        match self {
+            Self::Exact(o) => o.amount,
+            Self::Partial(o) => o.min_amount_in
+        }
+    }
+
+    /// The quantity available for this order to match in terms of T0
+    pub fn quantity(&self, _debt: Option<&Debt>) -> u128 {
+        let is_bid = self.is_bid();
+        let exact_in = self.exact_in();
+        let raw_q = match self {
+            Self::Exact(o) => o.amount,
+            Self::Partial(o) => o.max_amount_in
+        };
+        match (is_bid, exact_in) {
+            // Exact In bid
+            (true, true) => {
+                // In this case the price in this order is stored as T0/T1 so we use
+                // mul_quantity to get the number of T0 for this amount of T1
+                let order_price = Ray::from(self.limit_price());
+                order_price.mul_quantity(U256::from(raw_q)).saturating_to()
+            }
+            // Exact Out ask
+            (false, false) => {
+                let order_price = Ray::from(self.limit_price());
+                order_price.inverse_quantity(raw_q, true)
+            }
+            // Exact Out bid (normal bid) and Exact In ask (normal ask)
+            (true, false) | (false, true) => raw_q
+        }
+    }
+
+    pub fn exact_in(&self) -> bool {
+        match self {
+            StandingVariants::Exact(o) => o.exact_in,
+            StandingVariants::Partial(_) => true
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -66,6 +115,53 @@ impl FlashVariants {
         match self {
             FlashVariants::Exact(o) => &o.hook_data,
             FlashVariants::Partial(o) => &o.hook_data
+        }
+    }
+
+    pub fn max_q(&self) -> u128 {
+        match self {
+            Self::Exact(o) => o.amount,
+            Self::Partial(o) => o.max_amount_in
+        }
+    }
+
+    pub fn min_q(&self) -> u128 {
+        match self {
+            Self::Exact(o) => o.amount,
+            Self::Partial(o) => o.max_amount_in
+        }
+    }
+
+    /// The quantity available for this order to match in terms of T0
+    pub fn quantity(&self) -> u128 {
+        let is_bid = self.is_bid();
+        let exact_in = self.exact_in();
+        let raw_q = match self {
+            Self::Exact(o) => o.amount,
+            Self::Partial(o) => o.max_amount_in
+        };
+        match (is_bid, exact_in) {
+            // Exact In bid
+            (true, true) => {
+                // In this case the price is stored as T0/T1 so we use mul_quantity
+                // to get the number of T0 for this amount of T1
+                let order_price = Ray::from(self.limit_price());
+                order_price.mul_quantity(U256::from(raw_q)).saturating_to()
+            }
+            // Exact Out ask
+            (false, false) => {
+                let order_price = Ray::from(self.limit_price());
+                order_price.inverse_quantity(raw_q, true)
+            }
+            // Exact Out bid (normal bid) and Exact In ask (normal ask)
+            (true, false) | (false, true) => raw_q
+        }
+    }
+
+    pub fn exact_in(&self) -> bool {
+        match self {
+            FlashVariants::Exact(o) => o.exact_in,
+            FlashVariants::Partial(_) => true
         }
     }
 }
@@ -484,6 +580,8 @@ impl GroupedVanillaOrder {
         }
     }
 
+    /// Provides the LITERAL price as specified in the order.  Note that for
+    /// bids this can be inverse
     pub fn price(&self) -> Ray {
         match self {
             Self::Standing(o) => o.limit_price().into(),
@@ -491,48 +589,24 @@ impl GroupedVanillaOrder {
         }
     }
 
-    pub fn quantity(&self) -> u128 {
+    pub fn exact_in(&self) -> bool {
         match self {
-            Self::Standing(o) => o.amount_in(),
-            Self::KillOrFill(o) => o.amount_in()
+            Self::Standing(o) => o.exact_in(),
+            Self::KillOrFill(o) => o.exact_in()
         }
     }
 
-    /// Creates a new order fragment representing the current order as filled by
-    /// a specific quantity
-    pub fn fill(&self, filled_quantity: u128) -> Self {
+    /// Maximum quantity fillable by this order
+    pub fn max_q(&self) -> u128 {
         match self {
-            Self::Standing(p) => match p {
-                StandingVariants::Partial(part) => {
-                    Self::Standing(StandingVariants::Partial(PartialStandingOrder {
-                        min_amount_in: part.min_amount_in.saturating_sub(filled_quantity),
-                        max_amount_in: part.max_amount_in - filled_quantity,
-                        ..part.clone()
-                    }))
-                }
-                StandingVariants::Exact(exact) => {
-                    Self::Standing(StandingVariants::Exact(ExactStandingOrder {
-                        amount: exact.amount - filled_quantity,
-                        ..exact.clone()
-                    }))
-                }
-            },
-            Self::KillOrFill(kof) => match kof {
-                FlashVariants::Partial(part) => {
-                    Self::KillOrFill(FlashVariants::Partial(PartialFlashOrder {
-                        min_amount_in: part.min_amount_in.saturating_sub(filled_quantity),
-                        max_amount_in: part.max_amount_in - filled_quantity,
-                        ..part.clone()
-                    }))
-                }
-                FlashVariants::Exact(exact) => {
-                    Self::KillOrFill(FlashVariants::Exact(ExactFlashOrder {
-                        amount: exact.amount - filled_quantity,
-                        ..exact.clone()
-                    }))
-                }
-            }
+            Self::Standing(o) => o.max_q(),
+            Self::KillOrFill(o) => o.max_q()
         }
+    }
+
+    /// Quantity filled by this order in terms of T0
+    pub fn quantity_t0(&self) -> u128 {
+        0
     }
 
     pub fn signature(&self) -> &Bytes {

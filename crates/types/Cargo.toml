@@ -53,6 +53,7 @@ itertools = "0.13.0"
 
 [dev-dependencies]
 rand.workspace = true
+tokio.workspace = true
 testing-tools.workspace = true
 
 [features]
@@ -60,3 +61,4 @@ default = ["serde", "testnet"]
 testnet = ["dep:rand"]
 # serde = ["dep:serde", "alloy-primitives/serde"]
 serde = ["dep:serde"]
+anvil = []

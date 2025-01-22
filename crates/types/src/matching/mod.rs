@@ -11,6 +11,7 @@ pub mod debt;
 pub use debt::{Debt, DebtType};
 pub mod match_estimate_response;
 mod math;
+pub use math::max_t1_for_t0;
 mod sqrtprice;
 mod tokens;
 pub mod uniswap;

@@ -5,7 +5,7 @@ use alloy_primitives::{
 use angstrom_types::{
     contract_bindings::angstrom::Angstrom::PoolKey,
     matching::{
-        uniswap::{PoolPrice, PoolSnapshot},
+        uniswap::{LiqRange, PoolPrice, PoolSnapshot},
         SqrtPriceX96
     },
     primitive::PoolId,
@@ -81,7 +81,7 @@ impl PoolBuilder {
 
     fn random_snapshot() -> PoolSnapshot {
         let price = SqrtPriceX96::at_tick(100000).unwrap();
-        let ranges = vec![];
+        let ranges = vec![LiqRange::new(99000, 101000, 1_000_000_000_000_000_000_u128).unwrap()];
         PoolSnapshot::new(ranges, price).unwrap()
     }
 

@@ -58,7 +58,7 @@ pub trait TestAnvilEnvironment: Clone {
 #[derive(Clone)]
 pub struct SpawnedAnvil {
     #[allow(dead_code)]
-    anvil:      Arc<AnvilInstance>,
+    pub anvil:  Arc<AnvilInstance>,
     provider:   WalletProviderRpc,
     controller: Address
 }

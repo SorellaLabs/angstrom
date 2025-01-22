@@ -16,7 +16,7 @@ use angstrom_types::{
 };
 use pade::PadeEncode;
 
-use super::StoredOrderBuilder;
+use super::{default_high_addr, default_low_addr, StoredOrderBuilder};
 
 #[derive(Clone, Debug, Default)]
 pub struct UserOrderBuilder {
@@ -89,6 +89,26 @@ impl UserOrderBuilder {
 
     pub fn asset_out(self, asset_out: Address) -> Self {
         Self { asset_out, ..self }
+    }
+
+    pub fn is_bid(self, bid: bool) -> Self {
+        if bid {
+            self.bid()
+        } else {
+            self.ask()
+        }
+    }
+
+    /// Set this order to be a bid with the default In and Out addresses
+    pub fn bid(self) -> Self {
+        self.asset_in(*default_high_addr())
+            .asset_out(*default_low_addr())
+    }
+
+    /// Set this order to be an ask with the default In and Out addresses
+    pub fn ask(self) -> Self {
+        self.asset_out(*default_high_addr())
+            .asset_in(*default_low_addr())
     }
 
     pub fn amount(self, amount: u128) -> Self {
@@ -177,7 +197,7 @@ impl UserOrderBuilder {
                     } else {
                         self.min_price
                             .mul_quantity(U256::from(self.amount))
-                            .to::<u128>()
+                            .saturating_to::<u128>()
                     },
                     amount: self.amount,
                     min_price: *self.min_price,

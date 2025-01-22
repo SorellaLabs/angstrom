@@ -39,6 +39,13 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
     /// token out
     fn token_out(&self) -> Address;
 
+    /// An order is a bid if it's putting in T1 to get out T0.  T1 is always the
+    /// greater address, so if `token_in > token_out` then T1 is being put in to
+    /// get T0 out and this order is a bid
+    fn is_bid(&self) -> bool {
+        self.token_in() > self.token_out()
+    }
+
     fn is_valid_signature(&self) -> bool;
 
     fn order_location(&self) -> OrderLocation;

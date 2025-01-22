@@ -1662,6 +1662,7 @@ dependencies = [
  "serde_json",
  "testing-tools",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "uniswap_v3_math",
 ]
@@ -2079,6 +2080,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64-serde"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c6d128af408d8ebd08331f0331cf2cf20d19e6c44a7aec58791641ecc8c0b5"
+
+[[package]]
 name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2114,7 +2121,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -5197,7 +5204,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -5457,6 +5464,8 @@ dependencies = [
  "angstrom-types",
  "angstrom-utils",
  "arraydeque",
+ "base64 0.22.1",
+ "base64-serde",
  "clap",
  "criterion",
  "divan",
@@ -5474,6 +5483,8 @@ dependencies = [
  "rand_distr",
  "reth-provider",
  "reth-tasks",
+ "serde",
+ "serde_json",
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
@@ -12111,7 +12122,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use alloy::primitives::Address;
-use revm::{primitives::address, Database, Inspector};
+use revm::{Database, Inspector};
 
 pub type GasUsed = u64;
 
@@ -81,26 +81,5 @@ impl<DB: Database> Inspector<DB> for GasSimulationInspector<'_> {
             let gas_used = end_gas - start_gas;
             self.results.insert((start_pc, pc), gas_used);
         }
-    }
-}
-
-// 0x000000000000000000636F6e736F6c652e6c6f67
-const CONSOLE_LOG_ADDR: Address = address!("000000000000000000636F6e736F6c652e6c6f67");
-
-/// Inspector that monitors and prints calldata for specific address calls
-pub struct CallDataInspector;
-
-impl<DB: Database> Inspector<DB> for CallDataInspector {
-    fn call(
-        &mut self,
-        _context: &mut revm::EvmContext<DB>,
-        inputs: &mut revm::interpreter::CallInputs
-    ) -> Option<revm::interpreter::CallOutcome> {
-        if inputs.target_address == CONSOLE_LOG_ADDR {
-            let bytes = alloy::hex::encode(&inputs.input);
-
-            tracing::info!("{}", bytes);
-        }
-        None
     }
 }

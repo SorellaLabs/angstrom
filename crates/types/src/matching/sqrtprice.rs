@@ -8,11 +8,12 @@ use malachite::{
     },
     Natural, Rational
 };
+use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::{get_sqrt_ratio_at_tick, get_tick_at_sqrt_ratio};
 
 use super::{const_1e27, const_2_192, Ray};
 
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct SqrtPriceX96(U160);
 
 impl SqrtPriceX96 {

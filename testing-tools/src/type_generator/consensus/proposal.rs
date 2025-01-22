@@ -130,3 +130,28 @@ impl ProposalBuilder {
         Proposal::generate_proposal(ethereum_height, &sk, preproposals, solutions)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloy::signers::local::PrivateKeySigner;
+    use angstrom_types::primitive::AngstromSigner;
+
+    use super::ProposalBuilder;
+    use crate::type_generator::consensus::pool::PoolBuilder;
+
+    #[test]
+    fn builds_generic_preproposal() {
+        let random_key = PrivateKeySigner::random();
+        let controller_signing_key = AngstromSigner::new(random_key);
+        let pool = PoolBuilder::new().build();
+        let pools = vec![pool.clone()];
+        let current_block = 10;
+        let _proposal = ProposalBuilder::new()
+            .for_pools(pools)
+            .order_count(10)
+            .preproposal_count(1)
+            .with_secret_key(controller_signing_key)
+            .for_block(current_block + 2)
+            .build();
+    }
+}

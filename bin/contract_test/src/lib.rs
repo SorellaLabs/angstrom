@@ -74,3 +74,7 @@ where
     let pool_manager_address = pool_manager.address();
     Ok(*pool_manager_address)
 }
+
+fn raw_bundle() -> AngstromBundle {
+    ()
+}

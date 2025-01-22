@@ -71,7 +71,7 @@ impl ToBOutcome {
                 Some(u128::try_from(*state).unwrap())
             })
             .collect::<Vec<_>>();
-        let start_tick = I24::try_from(donations.first().map(|(a, _)| *a + 1).unwrap_or_default())
+        let start_tick = I24::try_from(donations.first().map(|(a, _)| **a).unwrap_or_default())
             .unwrap_or_default();
 
         match quantities.len() {

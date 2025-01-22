@@ -329,13 +329,14 @@ impl AngstromBundle {
                 continue;
             };
             println!("Processing pair {} - {}", t0, t1);
+
             // Make sure the involved assets are in our assets array and we have the
             // appropriate asset index for them
             let t0_idx = asset_builder.add_or_get_asset(*t0) as u16;
             let t1_idx = asset_builder.add_or_get_asset(*t1) as u16;
+
             // Build our Pair featuring our uniform clearing price
             // This price is in Ray format as requested.
-            // TODO:  Get the store index so this can be correct
             let ucp: U256 = *solution.ucp;
             let pair = Pair {
                 index0:       t0_idx,
@@ -344,7 +345,6 @@ impl AngstromBundle {
                 price_1over0: ucp
             };
             pairs.push(pair);
-
             let pair_idx = pairs.len() - 1;
 
             // Pull out our net AMM order
@@ -408,11 +408,13 @@ impl AngstromBundle {
                 swap_in_quantity: quantity_in,
                 rewards_update
             });
+
             // Add the ToB order to our tob order list - This is currently converting
             // between two ToB order formats
             if let Some(tob) = solution.searcher.as_ref() {
                 // Account for our ToB order
                 let (asset_in, asset_out) = if tob.is_bid { (*t1, *t0) } else { (*t0, *t1) };
+
                 asset_builder.external_swap(
                     AssetBuilderStage::TopOfBlock,
                     asset_in,
@@ -429,7 +431,6 @@ impl AngstromBundle {
                 .get(&solution.id)
                 .map(|order_set| order_set.iter().collect())
                 .unwrap_or_default();
-
             // Sort the user order list so we can properly associate it with our
             // OrderOutcomes.  First bids by price then asks by price.
             order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
@@ -439,24 +440,28 @@ impl AngstromBundle {
             });
             // Loop through our filled user orders, do accounting, and add them to our user
             // order list
+            let ray_ucp = Ray::from(ucp);
             for (outcome, order) in solution
                 .limit
                 .iter()
                 .zip(order_list.iter())
                 .filter(|(outcome, _)| outcome.is_filled())
             {
+                // Calculate our final amounts based on whether the order is in T0 or T1 context
+                let inverse_order = order.is_bid() == order.exact_in();
                 assert_eq!(outcome.id.hash, order.order_id.hash);
-
-                let quantity_out = match outcome.outcome {
-                    OrderFillState::PartialFill(p) => p,
-                    _ => order.max_q()
-                };
-                // Calculate the price of this order given the amount filled and the UCP
-                let quantity_in = if order.is_bid {
-                    Ray::from(ucp).mul_quantity(U256::from(quantity_out))
+                let (t0_moving, t1_moving) = if inverse_order {
+                    let t1_moving = outcome.fill_amount(order.max_q());
+                    let t0_moving = ray_ucp.inverse_quantity(t1_moving, !order.is_bid());
+                    (U256::from(t0_moving), U256::from(t1_moving))
                 } else {
-                    U256::from(Ray::from(ucp).inverse_quantity(quantity_out, true))
+                    let t0_moving = U256::from(outcome.fill_amount(order.max_q()));
+                    let t1_moving = Ray::from(ucp).mul_quantity(t0_moving);
+                    (t0_moving, t1_moving)
                 };
+
+                let (quantity_in, quantity_out) =
+                    if order.is_bid { (t1_moving, t0_moving) } else { (t0_moving, t1_moving) };
                 // Account for our user order
                 let (asset_in, asset_out) = if order.is_bid { (*t1, *t0) } else { (*t0, *t1) };
                 asset_builder.external_swap(
@@ -464,7 +469,7 @@ impl AngstromBundle {
                     asset_in,
                     asset_out,
                     quantity_in.to(),
-                    quantity_out
+                    quantity_out.to()
                 );
                 user_orders.push(UserOrder::from_internal_order_max_gas(
                     order,

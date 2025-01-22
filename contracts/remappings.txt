@@ -1,0 +1,5 @@
+solady/src/=lib/solady/src/
+v4-core/src/=lib/v4-periphery/lib/v4-core/src/
+v4-periphery/src/=lib/v4-periphery/src/
+forge-std/=lib/forge-std/src
+solmate/=lib/solmate/

@@ -25,7 +25,7 @@ pub trait BlockStateProviderFactory: Send + Sync {
 
 impl BlockStateProvider for StateProviderBox {
     fn get_basic_account(&self, address: Address) -> ProviderResult<Option<Account>> {
-        AccountReader::basic_account(self, address)
+        AccountReader::basic_account(self, &address)
     }
 
     fn get_storage(

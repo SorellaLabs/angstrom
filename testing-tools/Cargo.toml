@@ -41,14 +41,14 @@ reth-node-types.workspace = true
 reth-node-ethereum.workspace = true
 reth-revm.workspace = true
 revm.workspace = true
-reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
-reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
-reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
-reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
-reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
-reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
-reth-prune-types = { git = "https://github.com/paradigmxyz/reth", version = "1.1.4", tag = "v1.1.4" }
+reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
+reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
+reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
+reth-prune-types = { git = "https://github.com/paradigmxyz/reth", version = "1.1.5", tag = "v1.1.5" }
 alloy-chains.workspace = true
 
 

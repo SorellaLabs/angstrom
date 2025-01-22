@@ -63,23 +63,6 @@ contract ControllerV1 is Ownable2Step {
         ANGSTROM = angstrom;
     }
 
-    function getAllPools(StoreKey[] calldata storeKeys) external view returns (Pool[] memory) {
-        Pool[] memory allPools = new Pool[](storeKeys.length);
-
-        for (uint256 i = 0; i < storeKeys.length; i++) {
-            allPools[i] = pools[storeKeys[i]];
-        }
-
-        return allPools;
-    }
-
-    function addPoolToMap(address asset0, address asset1) external {
-        _checkOwner();
-        if (asset0 > asset1) (asset0, asset1) = (asset1, asset0);
-        StoreKey key = PoolConfigStoreLib.keyFromAssetsUnchecked(asset0, asset1);
-        pools[key] = Pool(asset0, asset1);
-    }
-
     function setNewController(address newController) public {
         _checkOwner();
         setController = newController;

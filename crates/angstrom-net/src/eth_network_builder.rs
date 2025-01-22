@@ -1,10 +1,11 @@
 use reth::{chainspec::ChainSpec, transaction_pool::TransactionPool};
-use reth_network::{protocol::IntoRlpxSubProtocol, NetworkHandle, NetworkManager};
-use reth_node_builder::{
-    components::NetworkBuilder, node::FullNodeTypes, BuilderContext, NodeTypes
+use reth_network::{
+    protocol::IntoRlpxSubProtocol, EthNetworkPrimitives, NetworkHandle, NetworkManager
 };
-use reth_primitives::{Block, Header, PooledTransactionsElement, Receipt, TransactionSigned};
-use reth_provider::BlockReader;
+use reth_node_builder::{
+    components::NetworkBuilder, node::FullNodeTypes, BuilderContext, NodeTypes, TxTy
+};
+use reth_primitives::{EthPrimitives, PooledTransaction};
 use reth_transaction_pool::PoolTransaction;
 
 /// A basic ethereum payload service.
@@ -21,16 +22,14 @@ impl<I: IntoRlpxSubProtocol + Send> AngstromNetworkBuilder<I> {
 impl<Node, Pool, I> NetworkBuilder<Node, Pool> for AngstromNetworkBuilder<I>
 where
     I: IntoRlpxSubProtocol + Send,
-    Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec>>,
+    Node: FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
     Pool: TransactionPool<
-            Transaction: PoolTransaction<
-                Consensus = TransactionSigned,
-                Pooled = PooledTransactionsElement
-            >
+            Transaction: PoolTransaction<Consensus = TxTy<Node::Types>, Pooled = PooledTransaction>
         > + Unpin
-        + 'static,
-    Node::Provider: BlockReader<Block = Block, Receipt = Receipt, Header = Header>
+        + 'static
 {
+    type Primitives = EthNetworkPrimitives;
+
     async fn build_network(
         self,
         ctx: &BuilderContext<Node>,

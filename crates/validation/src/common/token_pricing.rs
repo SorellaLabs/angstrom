@@ -47,7 +47,7 @@ impl TokenPriceGenerator {
         let mut pair_to_pool = HashMap::default();
         for (key, pool) in uni.iter() {
             let pool = pool.read().unwrap();
-            pair_to_pool.insert((pool.token_a, pool.token_b), *key);
+            pair_to_pool.insert((pool.token0, pool.token1), *key);
         }
 
         let blocks_to_avg_price = blocks_to_avg_price_override.unwrap_or(BLOCKS_TO_AVG_PRICE);

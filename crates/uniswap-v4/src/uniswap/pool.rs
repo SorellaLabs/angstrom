@@ -48,10 +48,10 @@ pub struct EnhancedUniswapPool<Loader: PoolDataLoader<A> = DataLoader<Address>, 
     sync_swap_with_sim:     bool,
     initial_ticks_per_side: u16,
     pub data_loader:        Loader,
-    pub token_a:            Address,
-    pub token_a_decimals:   u8,
-    pub token_b:            Address,
-    pub token_b_decimals:   u8,
+    pub token0:             Address,
+    pub token0_decimals:    u8,
+    pub token1:             Address,
+    pub token1_decimals:    u8,
     pub liquidity:          u128,
     pub liquidity_net:      i128,
     pub sqrt_price:         U256,
@@ -124,7 +124,7 @@ where
             })
             .collect::<Vec<_>>();
 
-        Ok((self.token_a, self.token_b, PoolSnapshot::new(liq_ranges, self.sqrt_price.into())?))
+        Ok((self.token0, self.token1, PoolSnapshot::new(liq_ranges, self.sqrt_price.into())?))
     }
 
     pub async fn initialize<T: Transport + Clone>(
@@ -221,7 +221,7 @@ where
         self.ticks.clear();
         self.tick_bitmap.clear();
 
-        tracing::info!(?self.token_a, ?self.token_b,?self.tick, ?self.tick_spacing, ?self.liquidity,?self.liquidity_net);
+        tracing::info!(?self.token0, ?self.token1,?self.tick, ?self.tick_spacing, ?self.liquidity,?self.liquidity_net);
         let total_ticks_to_fetch = self.initial_ticks_per_side * 2;
         // current tick when loaded (init tick) - (half total tics * spacing);
 
@@ -265,7 +265,7 @@ where
         let tick =
             uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(sqrt_price_limit_x96).unwrap();
 
-        let shift = self.token_a_decimals as i8 - self.token_b_decimals as i8;
+        let shift = self.token0_decimals as i8 - self.token1_decimals as i8;
         // flipped to scale them properly with the token spacing
         let price = match shift.cmp(&0) {
             Ordering::Less => 1.0001_f64.powi(tick) * 10_f64.powi(-shift as i32),
@@ -278,7 +278,7 @@ where
 
     pub fn calculate_price(&self) -> f64 {
         let tick = uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(self.sqrt_price).unwrap();
-        let shift = self.token_a_decimals as i8 - self.token_b_decimals as i8;
+        let shift = self.token0_decimals as i8 - self.token1_decimals as i8;
         let price = match shift.cmp(&0) {
             Ordering::Less => 1.0001_f64.powi(tick) / 10_f64.powi(-shift as i32),
             Ordering::Greater => 1.0001_f64.powi(tick) * 10_f64.powi(shift as i32),
@@ -311,7 +311,7 @@ where
             return Err(SwapSimulationError::ZeroAmountSpecified)
         }
 
-        let zero_for_one = token_in == self.token_a;
+        let zero_for_one = token_in == self.token0;
         let exact_input = amount_specified.is_positive();
 
         let sqrt_price_limit_x96 = sqrt_price_limit_x96.unwrap_or(if zero_for_one {
@@ -487,10 +487,10 @@ where
         tracing::debug!(swap_tick=swap_event.tick, swap_price=?swap_event.sqrt_price_x96, swap_liquidity=?swap_event.liquidity, swap_amount0=?swap_event.amount0, swap_amount1=?swap_event.amount1, "swap event");
 
         let combinations = [
-            (self.token_b, swap_event.amount1),
-            (self.token_a, swap_event.amount0),
-            (self.token_a, swap_event.amount1),
-            (self.token_b, swap_event.amount0)
+            (self.token1, swap_event.amount1),
+            (self.token0, swap_event.amount0),
+            (self.token0, swap_event.amount1),
+            (self.token1, swap_event.amount0)
         ];
 
         let mut simulation_failed = true;
@@ -584,10 +584,10 @@ where
             .load_pool_data(block_number, provider)
             .await?;
 
-        self.token_a = pool_data.tokenA;
-        self.token_a_decimals = pool_data.tokenADecimals;
-        self.token_b = pool_data.tokenB;
-        self.token_b_decimals = pool_data.tokenBDecimals;
+        self.token0 = pool_data.tokenA;
+        self.token0_decimals = pool_data.tokenADecimals;
+        self.token1 = pool_data.tokenB;
+        self.token1_decimals = pool_data.tokenBDecimals;
         self.liquidity = pool_data.liquidity;
         self.sqrt_price = U256::from(pool_data.sqrtPrice);
         self.tick = pool_data.tick.as_i32();
@@ -600,7 +600,7 @@ where
     }
 
     pub fn data_is_populated(&self) -> bool {
-        !(self.token_a.is_zero() || self.token_b.is_zero())
+        !(self.token0.is_zero() || self.token1.is_zero())
     }
 
     pub(crate) fn event_signatures(&self) -> Vec<B256> {
@@ -689,10 +689,10 @@ where
     }
 
     pub fn get_token_out(&self, token_in: Address) -> Address {
-        if self.token_a == token_in {
-            self.token_b
+        if self.token0 == token_in {
+            self.token1
         } else {
-            self.token_a
+            self.token0
         }
     }
 
@@ -826,10 +826,10 @@ mod tests {
 
     fn setup_basic_pool() -> EnhancedUniswapPool<MockLoader> {
         let mut pool = EnhancedUniswapPool::new(MockLoader, 10);
-        pool.token_a = Address::from_slice(&[1u8; 20]);
-        pool.token_b = Address::from_slice(&[2u8; 20]);
-        pool.token_a_decimals = 18;
-        pool.token_b_decimals = 18;
+        pool.token0 = Address::from_slice(&[1u8; 20]);
+        pool.token1 = Address::from_slice(&[2u8; 20]);
+        pool.token0_decimals = 18;
+        pool.token1_decimals = 18;
         pool.liquidity = 1_000_000;
         pool.sqrt_price = U256::from(1004968906420141727126888u128);
         pool.fee = 3000;
@@ -843,11 +843,11 @@ mod tests {
         setup_tracing();
         let pool = setup_basic_pool();
 
-        let token_out = pool.get_token_out(pool.token_a);
-        assert_eq!(token_out, pool.token_b);
+        let token_out = pool.get_token_out(pool.token0);
+        assert_eq!(token_out, pool.token1);
 
-        let token_out = pool.get_token_out(pool.token_b);
-        assert_eq!(token_out, pool.token_a);
+        let token_out = pool.get_token_out(pool.token1);
+        assert_eq!(token_out, pool.token0);
     }
 
     #[test]
@@ -985,13 +985,13 @@ mod tests {
         let pool = setup_basic_pool();
 
         // Test zero amount
-        let result = pool.simulate_swap(pool.token_a, I256::ZERO, None);
+        let result = pool.simulate_swap(pool.token0, I256::ZERO, None);
         assert!(matches!(result, Err(SwapSimulationError::ZeroAmountSpecified)));
 
         // Test invalid sqrt price limit
         let invalid_price = MAX_SQRT_RATIO;
         let result =
-            pool.simulate_swap(pool.token_a, I256::try_from(1000i32).unwrap(), Some(invalid_price));
+            pool.simulate_swap(pool.token0, I256::try_from(1000i32).unwrap(), Some(invalid_price));
         assert!(matches!(result, Err(SwapSimulationError::InvalidSqrtPriceLimit)));
     }
 
@@ -1013,8 +1013,8 @@ mod tests {
         assert!(result.is_ok(), "{:?}", result);
 
         let (token_a, token_b, snapshot) = result.unwrap();
-        assert_eq!(token_a, pool.token_a);
-        assert_eq!(token_b, pool.token_b);
+        assert_eq!(token_a, pool.token0);
+        assert_eq!(token_b, pool.token1);
         assert!(!snapshot.ranges.is_empty());
     }
 }

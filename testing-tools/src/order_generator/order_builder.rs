@@ -31,8 +31,8 @@ impl OrderBuilder {
 
         let zfo = sqrt_price > price;
 
-        let token0 = pool.token_a;
-        let token1 = pool.token_b;
+        let token0 = pool.token0;
+        let token1 = pool.token1;
         // if zfo, sqrtprice < pool price
         let t_in = if zfo { token0 } else { token1 };
         let amount_specified = if zfo { I256::MAX - I256::ONE } else { I256::MIN + I256::ONE };
@@ -79,8 +79,8 @@ impl OrderBuilder {
 
         let zfo = sqrt_price > price;
 
-        let token0 = pool.token_a;
-        let token1 = pool.token_b;
+        let token0 = pool.token0;
+        let token1 = pool.token1;
 
         let t_in = if zfo { token0 } else { token1 };
         let amount_specified = if zfo { I256::MAX - I256::ONE } else { I256::MIN + I256::ONE };

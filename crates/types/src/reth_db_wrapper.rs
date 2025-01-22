@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 // Allows us to impl revm::DatabaseRef on the default provider type.
 use alloy::primitives::{
     Address, BlockHash, BlockNumber, Bytes, StorageKey, StorageValue, B256, U256
 };
+use alloy_primitives::map::FbBuildHasher;
 use reth_chainspec::ChainInfo;
 use reth_primitives::Bytecode;
 use reth_provider::{
@@ -42,7 +45,7 @@ where
         &self,
         address: Address
     ) -> Result<Option<revm::primitives::AccountInfo>, Self::Error> {
-        Ok(self.basic_account(address)?.map(Into::into))
+        Ok(self.basic_account(&address)?.map(Into::into))
     }
 
     /// Retrieves the bytecode associated with a given code hash.
@@ -50,7 +53,7 @@ where
     /// Returns `Ok` with the bytecode if found, or the default bytecode
     /// otherwise.
     fn code_by_hash_ref(&self, code_hash: B256) -> Result<revm::primitives::Bytecode, Self::Error> {
-        Ok(self.bytecode_by_hash(code_hash)?.unwrap_or_default().0)
+        Ok(self.bytecode_by_hash(&code_hash)?.unwrap_or_default().0)
     }
 
     /// Retrieves the storage value at a specific index for a given address.
@@ -192,19 +195,22 @@ where
         self.0.latest()?.storage(account, storage_key)
     }
 
-    fn account_code(&self, addr: Address) -> reth_provider::ProviderResult<Option<Bytecode>> {
+    fn account_code(&self, addr: &Address) -> reth_provider::ProviderResult<Option<Bytecode>> {
         self.0.latest()?.account_code(addr)
     }
 
-    fn account_nonce(&self, addr: Address) -> reth_provider::ProviderResult<Option<u64>> {
+    fn account_nonce(&self, addr: &Address) -> reth_provider::ProviderResult<Option<u64>> {
         self.0.latest()?.account_nonce(addr)
     }
 
-    fn account_balance(&self, addr: Address) -> reth_provider::ProviderResult<Option<U256>> {
+    fn account_balance(&self, addr: &Address) -> reth_provider::ProviderResult<Option<U256>> {
         self.0.latest()?.account_balance(addr)
     }
 
-    fn bytecode_by_hash(&self, code_hash: B256) -> reth_provider::ProviderResult<Option<Bytecode>> {
+    fn bytecode_by_hash(
+        &self,
+        code_hash: &B256
+    ) -> reth_provider::ProviderResult<Option<Bytecode>> {
         self.0.latest()?.bytecode_by_hash(code_hash)
     }
 }
@@ -215,7 +221,7 @@ where
 {
     fn basic_account(
         &self,
-        address: Address
+        address: &Address
     ) -> reth_provider::ProviderResult<Option<reth_primitives::Account>> {
         self.0.latest()?.basic_account(address)
     }
@@ -333,14 +339,17 @@ where
         &self,
         input: TrieInput,
         target: HashedPostState
-    ) -> ProviderResult<revm::primitives::HashMap<B256, Bytes>> {
-        self.0.latest()?.witness(input, target)
+    ) -> ProviderResult<HashMap<B256, Bytes, FbBuildHasher<32>>> {
+        self.0
+            .latest()?
+            .witness(input, target)
+            .map(|v| v.into_iter().collect())
     }
 
     fn multiproof(
         &self,
         input: TrieInput,
-        targets: revm::primitives::HashMap<B256, revm::primitives::HashSet<B256>>
+        targets: reth_trie::MultiProofTargets
     ) -> ProviderResult<MultiProof> {
         self.0.latest()?.multiproof(input, targets)
     }

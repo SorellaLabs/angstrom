@@ -8,13 +8,16 @@ const OUT_DIRECTORY: &str = "contracts/out/";
 const SRC_DIRECTORY: &str = "contracts/src";
 const BINDINGS_PATH: &str = "/src/contract_bindings/mod.rs";
 
-const WANTED_CONTRACTS: [&str; 6] = [
+const WANTED_CONTRACTS: [&str; 9] = [
     "Angstrom.sol",
     "PoolManager.sol",
     "PoolGate.sol",
     "MockRewardsManager.sol",
     "MintableMockERC20.sol",
-    "ControllerV1.sol"
+    "ControllerV1.sol",
+    "PositionFetcher.sol",
+    "PositionManager.sol",
+    "IPositionDescriptor.sol"
 ];
 
 // builds the contracts crate. then goes and generates bindings on this
@@ -76,7 +79,7 @@ fn main() {
 pub mod {mod_name} {{
     alloy::sol!(
         #[allow(missing_docs)]
-        #[sol(rpc)]
+        #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         {name},
         "{path_of_contracts}"

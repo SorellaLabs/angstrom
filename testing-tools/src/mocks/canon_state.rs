@@ -30,13 +30,8 @@ impl AnvilConsensusCanonStateNotification {
             ..Default::default()
         };
 
-        chain.append_block(
-            reth_block
-                .with_recovered_senders()
-                .unwrap()
-                .seal(block.header.hash),
-            ExecutionOutcome::default()
-        );
+        let block_with_senders = reth_block.with_recovered_senders().unwrap().seal_slow();
+        chain.append_block(block_with_senders, ExecutionOutcome::default());
 
         Arc::new(chain.clone())
     }

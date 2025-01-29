@@ -607,15 +607,13 @@ mod test {
         let price = Ray::calc_price_generic(100u64, 200u64, false);
         let debt = Debt::new(DebtType::ExactIn(200), price);
 
-        // Test freed T0
-        assert_eq!(debt.freed_t0(50), 25); // 25% of T1 frees 25% of T0
-        assert_eq!(debt.freed_t0(200), 100); // Full amount
-        assert_eq!(debt.freed_t0(300), 100); // Over amount still returns max
+        assert_eq!(debt.freed_t0(50), 25);
+        assert_eq!(debt.freed_t0(200), 100);
+        assert_eq!(debt.freed_t0(300), 100);
 
-        // Test freed T1
-        assert_eq!(debt.freed_t1(25), 50); // 25% of T0 frees 25% of T1
-        assert_eq!(debt.freed_t1(100), 200); // Full amount
-        assert_eq!(debt.freed_t1(150), 200); // Over amount still returns max
+        assert_eq!(debt.freed_t1(25), 50); // panics here, returns 51
+        assert_eq!(debt.freed_t1(100), 200);
+        assert_eq!(debt.freed_t1(150), 200);
     }
 
     #[test]

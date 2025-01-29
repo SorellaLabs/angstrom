@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace -= with += in PoolPrice<'a>::d_t0
+@@ -148,17 +148,17 @@
+                             return Err(eyre!("Bad stuff"));
+                         }
+                     }
+                 }
+             }
+             debug!(next_price = ?new_price, amount_in = ?amount_in, amount_out = ?amount_out, "Settings after compute_swap_step");
+             // Update our current quantity
+             match direction {
+-                Direction::BuyingT0 => cur_quantity -= amount_out,
++                Direction::BuyingT0 => cur_quantity += /* ~ changed by cargo-mutants ~ */ amount_out,
+                 Direction::SellingT0 => cur_quantity -= amount_in
+             }
+             // Update our current price
+             sqrt_ratio_current_x_96 = new_price;
+         }
+         // Convert our final elements into a new price element
+         let price = SqrtPriceX96::from(sqrt_ratio_current_x_96);
+         let tick = price.to_tick()?;

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace >= with < in PoolPriceVec<'a>::donation
+@@ -394,17 +394,17 @@
+                 .unwrap_or_else(|| Ray::from(step.end_price));
+             // The difference between this tick's average price and our target price
+             let d_price = target_price - step.avg_price();
+ 
+             // The step cost is the total cost in needed to ensure that all sold quantities
+             // were sold at our target price
+             let step_cost = d_price.mul_quantity(q_step);
+ 
+-            if remaining_donation >= step_cost {
++            if remaining_donation < /* ~ changed by cargo-mutants ~ */ step_cost {
+                 // If we have enough bribe to pay the whole cost, allocate that and step forward
+                 // to the next price gap
+                 cur_q = q_step;
+                 filled_price = target_price;
+                 remaining_donation -= step_cost;
+             } else {
+                 // If we don't have enough bribe to pay the whole cost, figure out where the
+                 // target price winds up based on what we do have and end this iteration

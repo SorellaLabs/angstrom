@@ -1,0 +1,24 @@
+--- crates/types/src/matching/uniswap/mod.rs
++++ replace Direction::is_input -> bool with true
+@@ -74,20 +74,17 @@
+             std::cmp::Ordering::Less => Self::BuyingT0,
+             _ => Self::SellingT0
+         }
+     }
+ 
+     /// Returns true if the given quantity is on the input side of this
+     /// direction
+     pub fn is_input(&self, q: &Quantity) -> bool {
+-        matches!(
+-            (self, q),
+-            (Self::BuyingT0, Quantity::Token1(_)) | (Self::SellingT0, Quantity::Token0(_))
+-        )
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Given our transaction direction, turns (amount_in, amount_out) into
+     /// (token0, token1) for use when working with a uniswap pool
+     pub fn sort_tokens<T>(&self, amount_in: T, amount_out: T) -> (T, T) {
+         match self {
+             Self::BuyingT0 => (amount_out, amount_in),
+             Self::SellingT0 => (amount_in, amount_out)

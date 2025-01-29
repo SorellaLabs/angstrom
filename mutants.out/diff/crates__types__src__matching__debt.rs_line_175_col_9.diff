@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::slack -> u128 with 1
+@@ -167,17 +167,17 @@
+     pub fn bid_side(&self) -> bool {
+         matches!(self.magnitude, DebtType::ExactIn(_))
+     }
+ 
+     /// Return the T1 quantity of debt "slack" - i.e. the amount that is being
+     /// rounded away at the current price.  This is primarily for use in order
+     /// quantity calculations to ensure we don't over or underfill orders
+     pub fn slack(&self) -> u128 {
+-        self.magnitude.slack_at_price(self.cur_price)
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Given the Debt's direction and rounding, return the low and high price
+     /// that will result in an exchange for an identical amount of T0
+     pub fn price_range(&self) -> (Ray, Ray) {
+         let current_amount = self.current_t0();
+         let bound_amount = match self.magnitude {
+             DebtType::ExactIn(_) => current_amount + 1,

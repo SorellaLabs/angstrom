@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolsnapshot.rs
++++ replace PoolSnapshot::ranges -> Iter<LiqRange> with Iter::from(Default::default())
+@@ -91,17 +91,17 @@
+                 }
+             })
+             .collect();
+         Ok(output)
+     }
+ 
+     /// Return a read-only iterator over the liquidity ranges in this snapshot
+     pub fn ranges(&self) -> Iter<LiqRange> {
+-        self.ranges.iter()
++        Iter::from(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn current_price(&self) -> PoolPrice {
+         let range = self
+             .ranges
+             .get(self.cur_tick_idx)
+             .map(|range| LiqRangeRef { pool_snap: self, range, range_idx: self.cur_tick_idx })
+             .unwrap();

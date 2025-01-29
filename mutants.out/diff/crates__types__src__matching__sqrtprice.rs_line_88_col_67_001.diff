@@ -1,0 +1,21 @@
+--- crates/types/src/matching/sqrtprice.rs
++++ replace * with + in <impl From for SqrtPriceX96>::from
+@@ -80,17 +80,17 @@
+ impl From<U160> for SqrtPriceX96 {
+     fn from(value: U160) -> Self {
+         Self(value)
+     }
+ }
+ 
+ impl From<Ray> for SqrtPriceX96 {
+     fn from(value: Ray) -> Self {
+-        let numerator = Natural::from_limbs_asc(value.as_limbs()) * const_2_192();
++        let numerator = Natural::from_limbs_asc(value.as_limbs()) + /* ~ changed by cargo-mutants ~ */ const_2_192();
+         let (res, _) =
+             numerator.div_round(const_1e27(), malachite::rounding_modes::RoundingMode::Ceiling);
+         let root = res.ceiling_root(2);
+         let reslimbs = root.into_limbs_asc();
+         let output: U160 = Uint::from_limbs_slice(&reslimbs);
+         Self(output)
+     }
+ }

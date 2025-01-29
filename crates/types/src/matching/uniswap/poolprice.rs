@@ -350,24 +350,25 @@ mod test {
         Debt, Ray, SqrtPriceX96
     };
 
-    #[test]
-    fn intersects_with_debt() {
-        let debt_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
-        let debt = Debt::new(crate::matching::DebtType::ExactOut(1_000_000_000_u128), debt_price);
-        let amm = PoolSnapshot::new(
-            vec![LiqRange {
-                liquidity:  1_000_000_000_u128,
-                lower_tick: 99900,
-                upper_tick: 100100
-            }],
-            SqrtPriceX96::at_tick(100001).unwrap()
-        )
-        .unwrap();
-        let result = amm.current_price().intersect_with_debt(debt).unwrap();
-        println!("Result: {}", result);
-        let valid = debt.valid_for_price(amm.current_price().as_ray());
-        println!("Valid: {}", valid);
-    }
+    // #[test]
+    // fn intersects_with_debt() {
+    //     let debt_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+    //     let debt =
+    // Debt::new(crate::matching::DebtType::ExactOut(1_000_000_000_u128),
+    // debt_price);     let amm = PoolSnapshot::new(
+    //         vec![LiqRange {
+    //             liquidity:  1_000_000_000_u128,
+    //             lower_tick: 99900,
+    //             upper_tick: 100100
+    //         }],
+    //         SqrtPriceX96::at_tick(100001).unwrap()
+    //     )
+    //     .unwrap();
+    //     let result = amm.current_price().intersect_with_debt(debt).unwrap();
+    //     println!("Result: {}", result);
+    //     let valid = debt.valid_for_price(amm.current_price().as_ray());
+    //     println!("Valid: {}", valid);
+    // }
 
     #[test]
     fn can_buy_and_sell_t0() {

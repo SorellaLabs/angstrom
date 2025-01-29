@@ -1,0 +1,22 @@
+--- crates/types/src/matching/composite.rs
++++ replace CompositeOrder<'a>::debt_direction -> Option<Direction> with None
+@@ -74,18 +74,17 @@
+                 external_bound
+             }
+         } else {
+             external_bound
+         }
+     }
+ 
+     fn debt_direction(&self, target_price: Ray) -> Option<Direction> {
+-        self.debt
+-            .map(|d| Direction::from_prices(d.price(), target_price))
++        None /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Return the quantity of t0 available to fill from this order to the
+     /// target price.  If the quantity is equal to zero, we are in a "negative
+     /// quantity" situation where the debt is on the Ask side and we have to
+     /// do a "same side" match.  I'm pretty sure that's the only time that will
+     /// happen
+     pub fn quantity(&self, external_bound: Ray) -> u128 {

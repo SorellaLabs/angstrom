@@ -273,8 +273,8 @@ impl<'a> OrderContainer<'a> {
         }
     }
 
-    /// Get back the maximum amount of T1 out of our bid we can match against our opposed order
-    /// for a given amount of T0 matched
+    /// Get back the maximum amount of T1 out of our bid we can match against
+    /// our opposed order for a given amount of T0 matched
     pub fn max_t1_for_t0(&self, t0: u128, debt: Option<&Debt>) -> Option<OrderVolume> {
         match self {
             Self::BookOrder { order, .. } => {

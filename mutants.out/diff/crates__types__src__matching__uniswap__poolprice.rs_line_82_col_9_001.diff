@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace PoolPrice<'a>::liquidity -> u128 with 1
+@@ -74,17 +74,17 @@
+         self.tick
+     }
+ 
+     pub fn liquidity_range(&self) -> LiqRangeRef<'a> {
+         self.liq_range
+     }
+ 
+     pub fn liquidity(&self) -> u128 {
+-        self.liq_range.liquidity
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Presuming a transaction in T0, return a new PoolPrice.  We error
+     /// if we're not able to move enough in the direction we want to.
+     pub fn d_t0(&self, quantity: u128, direction: Direction) -> eyre::Result<Self> {
+         // We can short-circuit for a transaction of zero
+         if quantity == 0 {
+             return Ok(self.clone())

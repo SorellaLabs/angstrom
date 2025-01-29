@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace > with == in PoolPrice<'a>::d_t0
+@@ -89,17 +89,17 @@
+         if quantity == 0 {
+             return Ok(self.clone())
+         }
+         // Otherwise let's calculate
+         let mut sqrt_ratio_current_x_96 = self.price.into();
+         debug!(current_price = ?sqrt_ratio_current_x_96, "Current price");
+         let mut active_liq_range: Option<LiqRangeRef<'a>> = None;
+         let mut cur_quantity = U256::from(quantity);
+-        while cur_quantity > U256::ZERO {
++        while cur_quantity == /* ~ changed by cargo-mutants ~ */ U256::ZERO {
+             debug!("Starting new loop");
+             // There might be a more suave way to do this
+             let cur_liq_range = if let Some(lqr) = active_liq_range.as_mut() {
+                 debug!("Bumping forward liquidity range");
+                 // If we already tested a liquidity range let's move to the next one
+                 let new_lqr = lqr.next(direction).ok_or_else(|| {
+                     eyre!("Unable to find liquidity ranges that span the whole transaction")
+                 })?;

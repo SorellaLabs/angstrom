@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace PoolPrice<'a>::as_float -> f64 with 1.0
+@@ -310,17 +310,17 @@
+     /// Return the current SqrtPriceX96 structure
+     pub fn as_sqrtpricex96(&self) -> SqrtPriceX96 {
+         self.price
+     }
+ 
+     /// Return the current price (NOT sqrt) as a float by calling SqrtPriceX86's
+     /// `as_f64` method
+     pub fn as_float(&self) -> f64 {
+-        self.price.as_f64()
++        1.0 /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl<'a> Add<Quantity> for PoolPrice<'a> {
+     type Output = eyre::Result<PoolPriceVec<'a>>;
+ 
+     fn add(self, rhs: Quantity) -> Self::Output {
+         PoolPriceVec::from_swap(self, rhs.as_input(), rhs)

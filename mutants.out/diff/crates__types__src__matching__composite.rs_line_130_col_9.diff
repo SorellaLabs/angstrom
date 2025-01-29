@@ -1,0 +1,30 @@
+--- crates/types/src/matching/composite.rs
++++ replace CompositeOrder<'a>::negative_quantity_t1 -> u128 with 0
+@@ -122,26 +122,17 @@
+             debt_q.saturating_sub(amm_q)
+         } else {
+             0
+         }
+     }
+ 
+     pub fn negative_quantity_t1(&self, external_bound: Ray) -> u128 {
+         // cur_q - amm contribution * external_bound.inverse_quantity
+-        if let Some(d) = self.debt {
+-            let target_price = self.find_closest_bound(external_bound);
+-            let (amm_q, _) = self.calc_quantities(target_price);
+-            if let Some(Direction::BuyingT0) = self.debt_direction(target_price) {
+-                let t0_f = d.current_t0().saturating_sub(amm_q);
+-                let t1_f = target_price.quantity(t0_f, false);
+-                return t1_f.saturating_sub(d.magnitude());
+-            }
+-        }
+-        0
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Compute the final state for the AMM and for the Debt when we partially
+     /// fill this order with T1
+     pub fn partial_fill_t1(&self, _partial_q_t1: u128) -> Self {
+         self.clone()
+     }
+ 

@@ -1,0 +1,24 @@
+--- crates/types/src/matching/uniswap/liqrange.rs
++++ replace LiqRangeRef<'a>::start_tick -> Tick with Default::default()
+@@ -86,20 +86,17 @@
+         if let Ok(price_tick) = price.to_tick() {
+             price_tick >= self.lower_tick && price_tick < self.upper_tick
+         } else {
+             false
+         }
+     }
+ 
+     pub fn start_tick(&self, direction: Direction) -> Tick {
+-        match direction {
+-            Direction::BuyingT0 => self.lower_tick,
+-            Direction::SellingT0 => self.upper_tick
+-        }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Returns the final tick in this liquidity range presuming the price
+     /// starts
+     pub fn end_tick(&self, direction: Direction) -> Tick {
+         match direction {
+             Direction::BuyingT0 => self.upper_tick,
+             Direction::SellingT0 => self.lower_tick

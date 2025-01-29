@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace && with || in <impl PartialEq for PoolPrice<'a>>::eq
+@@ -38,17 +38,17 @@
+     /// The ratio between Token0 and Token1
+     pub(crate) price:     SqrtPriceX96
+ }
+ 
+ impl<'a> Eq for PoolPrice<'a> {}
+ 
+ impl<'a> PartialEq for PoolPrice<'a> {
+     fn eq(&self, other: &Self) -> bool {
+-        self.price.eq(&other.price) && self.liq_range == other.liq_range
++        self.price.eq(&other.price) || /* ~ changed by cargo-mutants ~ */ self.liq_range == other.liq_range
+     }
+ }
+ 
+ impl<'a> PartialOrd for PoolPrice<'a> {
+     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+         Some(self.cmp(other))
+     }
+ }

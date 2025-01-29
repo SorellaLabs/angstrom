@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::price -> Ray with Default::default()
+@@ -145,17 +145,17 @@
+         Self { cur_price: new_price, ..*self }
+     }
+ 
+     pub fn magnitude(&self) -> u128 {
+         self.magnitude.magnitude()
+     }
+ 
+     pub fn price(&self) -> Ray {
+-        self.cur_price
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Returns the additional T0 needed to increase a debt from a specific T1
+     /// to another greater T1 count
+     pub fn additional_t0_needed(&self, added_t1: u128) -> u128 {
+         let new_magnitude = self.magnitude + self.magnitude.same_type(added_t1);
+         let new_debt = Self { magnitude: new_magnitude, cur_price: self.cur_price };
+         new_debt.current_t0() - self.current_t0()

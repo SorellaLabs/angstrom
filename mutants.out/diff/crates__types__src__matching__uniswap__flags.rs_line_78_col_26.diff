@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/flags.rs
++++ replace << with >> in <impl From for U160>::from
+@@ -70,17 +70,17 @@
+             UniswapFlags::AfterSwap => 6,
+             UniswapFlags::BeforeDonate => 5,
+             UniswapFlags::AfterDonate => 4,
+             UniswapFlags::BeforeSwapReturnsDelta => 3,
+             UniswapFlags::AfterSwapReturnsDelta => 2,
+             UniswapFlags::AfterAddLiquidityReturnsDelta => 1,
+             UniswapFlags::AfterRemoveLiquidityReturnsDelta => 0
+         };
+-        U160::from(1_u8) << bitshift
++        U160::from(1_u8) >> /* ~ changed by cargo-mutants ~ */ bitshift
+     }
+ }
+ 
+ impl BitOr for UniswapFlags {
+     type Output = U160;
+ 
+     fn bitor(self, rhs: Self) -> Self::Output {
+         Into::<U160>::into(self) | Into::<U160>::into(rhs)

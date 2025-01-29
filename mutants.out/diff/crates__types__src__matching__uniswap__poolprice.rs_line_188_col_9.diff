@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace PoolPrice<'a>::to_liq_range_lower -> eyre::Result<PoolPriceVec<'a>> with Ok(Default::default())
+@@ -180,17 +180,17 @@
+     /// liquidity range that the current price is in
+     pub fn to_liq_range_upper(&self) -> eyre::Result<PoolPriceVec<'a>> {
+         PoolPriceVec::to_upper(self.clone())
+     }
+ 
+     /// Create a PoolPriceVec from the current price to the lower bound of the
+     /// liquidity range that the current price is in
+     pub fn to_liq_range_lower(&self) -> eyre::Result<PoolPriceVec<'a>> {
+-        self.vec_to(SqrtPriceX96::at_tick(self.liq_range.lower_tick)?)
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Determine the quantity of t0 needed to bring this price to the price of
+     /// the given Debt
+     pub fn intersect_with_debt(&self, debt: Debt) -> eyre::Result<u128> {
+         // If the debt is already valid at our current price we can just move it, we're
+         // done
+         if debt.valid_for_price(self.as_ray()) {

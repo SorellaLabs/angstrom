@@ -1,0 +1,21 @@
+--- crates/types/src/matching/mod.rs
++++ replace <impl From for MatchingPrice>::from -> Self with Default::default()
+@@ -76,17 +76,17 @@
+ impl From<SqrtPriceX96> for MatchingPrice {
+     fn from(value: SqrtPriceX96) -> Self {
+         Ray::from(value).into()
+     }
+ }
+ 
+ impl From<Ray> for MatchingPrice {
+     fn from(value: Ray) -> Self {
+-        Self(*value)
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl From<U256> for MatchingPrice {
+     fn from(value: U256) -> Self {
+         Self(value)
+     }
+ }

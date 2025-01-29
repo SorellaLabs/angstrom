@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace PoolPrice<'a>::to_liq_range_upper -> eyre::Result<PoolPriceVec<'a>> with Ok(Default::default())
+@@ -174,17 +174,17 @@
+     /// value within the associated Pool
+     pub fn vec_to(&self, end_price: SqrtPriceX96) -> eyre::Result<PoolPriceVec<'a>> {
+         PoolPriceVec::to_price_bound(self.clone(), end_price)
+     }
+ 
+     /// Create a PoolPriceVec from the current price to the upper bound of the
+     /// liquidity range that the current price is in
+     pub fn to_liq_range_upper(&self) -> eyre::Result<PoolPriceVec<'a>> {
+-        PoolPriceVec::to_upper(self.clone())
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Create a PoolPriceVec from the current price to the lower bound of the
+     /// liquidity range that the current price is in
+     pub fn to_liq_range_lower(&self) -> eyre::Result<PoolPriceVec<'a>> {
+         self.vec_to(SqrtPriceX96::at_tick(self.liq_range.lower_tick)?)
+     }
+ 

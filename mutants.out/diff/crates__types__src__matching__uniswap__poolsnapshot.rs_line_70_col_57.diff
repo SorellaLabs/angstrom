@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolsnapshot.rs
++++ replace < with > in PoolSnapshot::get_range_for_tick
+@@ -62,17 +62,17 @@
+     }
+ 
+     /// Find the PoolRange in this market snapshot that the provided tick lies
+     /// within, if any
+     pub fn get_range_for_tick(&self, tick: Tick) -> Option<LiqRangeRef> {
+         self.ranges
+             .iter()
+             .enumerate()
+-            .find(|(_, r)| r.lower_tick <= tick && tick < r.upper_tick)
++            .find(|(_, r)| r.lower_tick <= tick && tick > /* ~ changed by cargo-mutants ~ */ r.upper_tick)
+             .map(|(range_idx, range)| LiqRangeRef { pool_snap: self, range, range_idx })
+     }
+ 
+     /// Returns a list of references to all liquidity ranges including and
+     /// between the given Ticks.  These ranges will be continuous in order.
+     pub fn ranges_for_ticks(
+         &self,
+         start_tick: Tick,

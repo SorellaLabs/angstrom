@@ -1,0 +1,21 @@
+--- crates/types/src/matching/tokens.rs
++++ replace TokenQuantity::one -> Self with Default::default()
+@@ -45,17 +45,17 @@
+ impl TokenQuantity {
+     /// A new quantity of Token0
+     pub fn zero<T: Into<u128>>(source: T) -> Self {
+         Self::Token0(source.into())
+     }
+ 
+     /// A new quantity of Token1
+     pub fn one<T: Into<u128>>(source: T) -> Self {
+-        Self::Token1(source.into())
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// A quantity of Token0 from the U256 format specifically
+     pub fn zero_from_uint(source: U256) -> Self {
+         Self::Token0(source.to())
+     }
+ 
+     /// A quantity of Token1 from the U256 format specifically

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace == with != in PoolPriceVec<'a>::from_swap
+@@ -314,17 +314,17 @@
+             let liq_range =
+                 current_liq_range.ok_or_else(|| eyre!("Unable to find next liquidity range"))?;
+             // Compute our swap towards the appropriate end of our current liquidity bound
+             let target_tick = liq_range.end_tick(direction);
+             let target_price = SqrtPriceX96::at_tick(target_tick)?;
+             // If our target price is equal to our current price, we're precisely at the
+             // "bottom" of a liquidity range and we can skip this computation as
+             // it will be a null step
+-            if target_price == current_price {
++            if target_price != /* ~ changed by cargo-mutants ~ */ current_price {
+                 current_liq_range = liq_range.next(direction);
+                 continue;
+             }
+             // Otherwise we can compute our step
+             let (fin_price, amount_in, amount_out, amount_fee) = compute_swap_step(
+                 current_price.into(),
+                 target_price.into(),
+                 liq_range.liquidity(),

@@ -1,0 +1,22 @@
+--- crates/types/src/matching/uniswap/liqrange.rs
++++ replace LiqRangeRef<'a>::start_price -> PoolPrice<'a> with Default::default()
+@@ -103,18 +103,17 @@
+         match direction {
+             Direction::BuyingT0 => self.upper_tick,
+             Direction::SellingT0 => self.lower_tick
+         }
+     }
+ 
+     /// PoolPrice representing the start price of this liquidity bound
+     pub fn start_price(&self, direction: Direction) -> PoolPrice<'a> {
+-        let tick = self.start_tick(direction);
+-        PoolPrice { tick, liq_range: *self, price: SqrtPriceX96::at_tick(tick).unwrap() }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// PoolPrice representing the end price of this liquidity bound
+     pub fn end_price(&self, direction: Direction) -> PoolPrice<'a> {
+         let tick = self.end_tick(direction);
+         PoolPrice { tick, liq_range: *self, price: SqrtPriceX96::at_tick(tick).unwrap() }
+     }
+ 

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/math/mod.rs
++++ replace - with / in price_intersect_solve
+@@ -138,17 +138,17 @@
+         Integer::ONE << (192 + precision),
+         Integer::from(Natural::from_limbs_asc(amm_price.as_price_x192().as_limbs()))
+     );
+     // Precision is x96
+     let c_part_2 = Rational::from_integers(
+         (Integer::ONE * Integer::from(const_1e27())) << precision,
+         Integer::from(Natural::from_limbs_asc(debt_price.as_limbs()))
+     );
+-    let c = Integer::rounding_from(c_part_1 - c_part_2, RoundingMode::Nearest).0;
++    let c = Integer::rounding_from(c_part_1 / /* ~ changed by cargo-mutants ~ */ c_part_2, RoundingMode::Nearest).0;
+     debug!(c = ?c, "C factor");
+ 
+     let solution = quadratic_solve(a, b, c, precision);
+     solution.0.or(solution.1).unwrap()
+ }
+ 
+ pub fn quadratic_solve(
+     a: Integer,

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace + with * in <impl Add for &'a Debt>::add
+@@ -392,17 +392,17 @@
+         Some(Self { magnitude, cur_price })
+     }
+ }
+ 
+ impl<'a> Add<DebtType> for &'a Debt {
+     type Output = Debt;
+ 
+     fn add(self, rhs: DebtType) -> Self::Output {
+-        Debt { cur_price: self.cur_price, magnitude: self.magnitude + rhs }
++        Debt { cur_price: self.cur_price, magnitude: self.magnitude * /* ~ changed by cargo-mutants ~ */ rhs }
+     }
+ }
+ 
+ impl PartialEq<Ray> for Debt {
+     fn eq(&self, other: &Ray) -> bool {
+         self.valid_for_price(*other)
+     }
+ }

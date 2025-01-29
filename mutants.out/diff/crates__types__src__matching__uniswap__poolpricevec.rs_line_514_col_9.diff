@@ -1,0 +1,44 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace PoolPriceVec<'a>::fill -> Self with Default::default()
+@@ -506,40 +506,17 @@
+             Self::delta_to_price(self.start_bound.price, t, self.start_bound.liquidity());
+         (d_t0, d_t1, target_price)
+     }
+ 
+     // Maybe it's OK that I don't check the price again here because in the matching
+     // algo I've only offered a quantity bounded by the price, so we should
+     // always be OK?
+     pub fn fill(&self, quantity: u128) -> Self {
+-        let liquidity = self.start_bound.liquidity();
+-        let end_sqrt_price = if self.is_buy() {
+-            get_next_sqrt_price_from_output(
+-                self.start_bound.price.into(),
+-                liquidity,
+-                U256::from(quantity),
+-                true
+-            )
+-            .map(SqrtPriceX96::from)
+-            .unwrap()
+-        } else {
+-            get_next_sqrt_price_from_input(
+-                self.start_bound.price.into(),
+-                liquidity,
+-                U256::from(quantity),
+-                true
+-            )
+-            .map(SqrtPriceX96::from)
+-            .unwrap()
+-        };
+-        let (d_t0, d_t1) = Self::delta_to_price(self.start_bound.price, end_sqrt_price, liquidity);
+-        let mut end_bound = self.start_bound.clone();
+-        end_bound.price = end_sqrt_price;
+-        Self { end_bound, start_bound: self.start_bound.clone(), d_t0, d_t1, steps: None }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+     use crate::matching::uniswap::{LiqRange, PoolSnapshot};
+ 

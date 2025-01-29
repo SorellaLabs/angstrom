@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace PoolPrice<'a>::liquidity_range -> LiqRangeRef<'a> with Default::default()
+@@ -70,17 +70,17 @@
+         Self { liq_range, price, tick }
+     }
+ 
+     pub fn tick(&self) -> Tick {
+         self.tick
+     }
+ 
+     pub fn liquidity_range(&self) -> LiqRangeRef<'a> {
+-        self.liq_range
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn liquidity(&self) -> u128 {
+         self.liq_range.liquidity
+     }
+ 
+     /// Presuming a transaction in T0, return a new PoolPrice.  We error
+     /// if we're not able to move enough in the direction we want to.

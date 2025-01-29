@@ -1,0 +1,53 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::calc_proportion -> u128 with 0
+@@ -319,49 +319,17 @@
+     /// of this debt to the same price as the AMM
+     pub fn calc_proportion(
+         &self,
+         amm_delta: u128,
+         amm_liquidity: u128,
+         amm_positive_delta: bool
+     ) -> u128 {
+         // Put our constants into Integer format
+-        let t1 = Natural::from(self.magnitude.magnitude());
+-        let t0_start = Natural::from(self.current_t0());
+-        let l = Natural::from(amm_liquidity);
+-        let dx = Natural::from(amm_delta);
+-
+-        // Find our Sqrts that we're using, with extra precision baked in
+-        let sqrt_t1_x96 = ((&t1 << 192) as Natural).floor_sqrt();
+-        let sqrt_t0_start_x96 = ((&t0_start << 192) as Natural).floor_sqrt();
+-
+-        let a_num_portion_1 = &dx * &sqrt_t1_x96;
+-        let a_num_portion_2 = &l * &sqrt_t0_start_x96;
+-        let a_numerator_sum = if amm_positive_delta {
+-            a_num_portion_1 + a_num_portion_2
+-        } else {
+-            a_num_portion_2 - a_num_portion_1
+-        };
+-
+-        let (a_fraction, _) = (&a_numerator_sum).div_round(&l, RoundingMode::Nearest);
+-        debug!(
+-            numerator_sum = ?a_numerator_sum,
+-            denominator = ?l,
+-            result = ?&a_fraction,
+-            rounded = ?(&a_fraction >> 96),
+-            "Fraction calculation"
+-        );
+-
+-        // if A = sqrt(x + dX) then we have to square A and subtract the original X
+-        let debt_delta_t0 = &t0_start
+-            - &a_fraction
+-                .pow(2)
+-                .div_round(const_2_192(), RoundingMode::Ceiling)
+-                .0;
+-        u128::saturating_from(&debt_delta_t0)
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl Add<Debt> for Option<Debt> {
+     type Output = Option<Debt>;
+ 
+     fn add(self, rhs: Debt) -> Self::Output {
+         match self {

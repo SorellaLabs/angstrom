@@ -1,0 +1,84 @@
+--- crates/types/src/matching/math/mod.rs
++++ replace amm_debt_same_move_solve -> u128 with 0
+@@ -27,80 +27,17 @@
+ /// order to ensure that they both end up at the closest price possible.
+ pub fn amm_debt_same_move_solve(
+     amm_liquidity: u128,
+     debt_initial_t0: u128,
+     debt_fixed_t1: u128,
+     quantity_moved: u128,
+     direction: Direction
+ ) -> u128 {
+-    let l = Integer::from(amm_liquidity);
+-    let l_squared = (&l).pow(2);
+-
+-    // The precision we want to use for this operation, depending on our common
+-    // values we might need to adjust this
+-    let precision: usize = 192;
+-
+-    // a = T1d / L^2
+-    let a_frac =
+-        Rational::from_integers_ref(&(Integer::from(debt_fixed_t1) << precision), &l_squared);
+-    let a = Integer::rounding_from(a_frac, RoundingMode::Nearest).0;
+-
+-    debug!(a = ?a, "A factor");
+-
+-    // b = 2(sqrt(t0Debt * t1Debt)/L) + 1
+-    let dt0 = Integer::from(debt_initial_t0) << precision;
+-    let dt1 = Integer::from(debt_fixed_t1) << precision;
+-    let mul_debt = dt0 * dt1;
+-    let sqrt_debt = mul_debt.floor_sqrt();
+-    let debt_numerator = (Integer::TWO * sqrt_debt) + (l.clone() << precision);
+-    let b = debt_numerator.div_round(l, RoundingMode::Nearest).0;
+-    // let debt_numerator = ((Integer::from(debt_initial_t0) *
+-    // Integer::from(debt_fixed_t1))     << (precision * 2))
+-    //     .floor_sqrt()
+-    //     * Integer::TWO;
+-
+-    // let b = debt_numerator.div_round(l, RoundingMode::Nearest).0 + (Integer::ONE
+-    // << precision);
+-
+-    debug!(b = ?b, "B factor");
+-
+-    // c = -T
+-    let c = match direction {
+-        // If the market is selling T0 to us, then we are on the bid side.  T is negative so -T is
+-        // positive
+-        Direction::SellingT0 => Integer::from(quantity_moved),
+-        // If the market is buying T0 from us, then we are on the ask side.  T is positive so -T is
+-        // negative
+-        Direction::BuyingT0 => Integer::from(quantity_moved).neg()
+-    } << precision;
+-
+-    debug!(c = ?c, "C factor");
+-
+-    let solution = quadratic_solve(a, b, c, precision);
+-    println!("Got solutions: {:?}", solution);
+-    let answer = solution
+-        .0
+-        .filter(|i| match direction {
+-            Direction::BuyingT0 => *i <= Integer::ZERO,
+-            Direction::SellingT0 => *i >= Integer::ZERO
+-        })
+-        .map(|i| resolve_precision(precision, i, RoundingMode::Ceiling))
+-        .filter(|i| *i < quantity_moved)
+-        .or(solution
+-            .1
+-            .filter(|i| match direction {
+-                Direction::BuyingT0 => *i <= Integer::ZERO,
+-                Direction::SellingT0 => *i >= Integer::ZERO
+-            })
+-            .map(|i| resolve_precision(precision, i, RoundingMode::Ceiling))
+-            .filter(|i| *i < quantity_moved))
+-        // If nothing else works, we can presume it all goes to the AMM?
+-        .unwrap_or(quantity_moved);
+-    answer
++    0 /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Given an AMM with a constant liquidity and a debt, this will find the
+ /// quantity of T0 you can buy from the AMM and feed into the debt such that
+ /// their prices end up as close as possible
+ pub fn price_intersect_solve(
+     amm_liquidity: u128,
+     amm_price: SqrtPriceX96,

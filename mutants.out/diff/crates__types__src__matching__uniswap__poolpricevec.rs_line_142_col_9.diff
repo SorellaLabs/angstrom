@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace SwapStep<'a>::start_price -> SqrtPriceX96 with Default::default()
+@@ -134,17 +134,17 @@
+             .to();
+         let d_t1 = _get_amount_1_delta(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, liquidity, round_1)
+             .unwrap_or(Uint::from(0))
+             .to();
+         Ok(Self { start_price, end_price, d_t0, d_t1, liq_range })
+     }
+ 
+     pub fn start_price(&self) -> SqrtPriceX96 {
+-        self.start_price
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn end_price(&self) -> SqrtPriceX96 {
+         self.end_price
+     }
+ 
+     pub fn avg_price(&self) -> Ray {
+         Ray::calc_price(U256::from(self.d_t0), U256::from(self.d_t1))

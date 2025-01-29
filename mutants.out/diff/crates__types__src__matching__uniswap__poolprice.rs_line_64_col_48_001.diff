@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace > with < in PoolPrice<'a>::checked_new
+@@ -56,17 +56,17 @@
+ impl<'a> Ord for PoolPrice<'a> {
+     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+         self.price.cmp(&other.price)
+     }
+ }
+ 
+ impl<'a> PoolPrice<'a> {
+     pub fn checked_new(liq_range: LiqRangeRef<'a>, price: SqrtPriceX96, tick: i32) -> Self {
+-        if tick < liq_range.lower_tick || tick > liq_range.upper_tick {
++        if tick < liq_range.lower_tick || tick < /* ~ changed by cargo-mutants ~ */ liq_range.upper_tick {
+             panic!("Created PoolPrice with out of range tick!");
+         }
+         if get_tick_at_sqrt_ratio(price.into()).unwrap() != tick {
+             panic!("Created PoolPrice with price that doesn't match the given tick!");
+         }
+         Self { liq_range, price, tick }
+     }
+ 

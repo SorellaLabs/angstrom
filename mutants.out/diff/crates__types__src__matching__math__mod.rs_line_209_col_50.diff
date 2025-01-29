@@ -1,0 +1,21 @@
+--- crates/types/src/matching/math/mod.rs
++++ replace + with - in max_t1_for_t0
+@@ -201,17 +201,17 @@
+         std::cmp::Ordering::Greater => (b, a),
+         _ => (a, b)
+     }
+ }
+ 
+ pub fn max_t1_for_t0(t0: u128, direction: Direction, price: Ray) -> u128 {
+     match direction {
+         // If we're buying we always round down so it's the amount it'd take to buy (t0 + 1) - 1
+-        Direction::BuyingT0 => price.quantity(t0 + 1, true).saturating_sub(1),
++        Direction::BuyingT0 => price.quantity(t0 - /* ~ changed by cargo-mutants ~ */ 1, true).saturating_sub(1),
+         // If we're selling, we always round up, so the max for a quantity is just what's at the
+         // quantity
+         Direction::SellingT0 => price.quantity(t0, false)
+     }
+ }
+ 
+ #[cfg(test)]
+ mod tests {

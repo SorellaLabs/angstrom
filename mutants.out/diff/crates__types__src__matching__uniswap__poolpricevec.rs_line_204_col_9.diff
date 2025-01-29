@@ -1,0 +1,25 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace PoolPriceVec<'a>::input -> u128 with 0
+@@ -196,21 +196,17 @@
+     /// within a single liquidity position
+     pub fn new(start_bound: PoolPrice<'a>, end_bound: PoolPrice<'a>) -> Self {
+         let (d_t0, d_t1) =
+             Self::delta_to_price(start_bound.price, end_bound.price, start_bound.liquidity());
+         Self { start_bound, end_bound, d_t0, d_t1, steps: None }
+     }
+ 
+     pub fn input(&self) -> u128 {
+-        if self.end_bound.price > self.start_bound.price {
+-            self.d_t1
+-        } else {
+-            self.d_t0
+-        }
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn output(&self) -> u128 {
+         if self.end_bound.price > self.start_bound.price {
+             self.d_t0
+         } else {
+             self.d_t1
+         }

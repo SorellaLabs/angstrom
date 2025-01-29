@@ -1,0 +1,24 @@
+--- crates/types/src/matching/uniswap/mod.rs
++++ replace Quantity::as_input -> Direction with Default::default()
+@@ -22,20 +22,17 @@
+         match self {
+             Self::Token0(q) => *q,
+             Self::Token1(q) => *q
+         }
+     }
+ 
+     /// The direction of the swap if this quantity is used as input
+     pub fn as_input(&self) -> Direction {
+-        match self {
+-            Self::Token0(_) => Direction::SellingT0,
+-            Self::Token1(_) => Direction::BuyingT0
+-        }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// The direction of the swap if this quantity is used as output
+     pub fn as_output(&self) -> Direction {
+         match self {
+             Self::Token0(_) => Direction::BuyingT0,
+             Self::Token1(_) => Direction::SellingT0
+         }

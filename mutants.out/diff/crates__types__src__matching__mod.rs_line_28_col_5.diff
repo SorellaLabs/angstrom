@@ -1,0 +1,22 @@
+--- crates/types/src/matching/mod.rs
++++ replace const_1e27 -> &'static Natural with &Default::default()
+@@ -20,18 +20,17 @@
+     Natural
+ };
+ pub use sqrtprice::SqrtPriceX96;
+ pub use tokens::TokenQuantity;
+ 
+ pub use super::sol_bindings::Ray;
+ 
+ pub fn const_1e27() -> &'static Natural {
+-    static TWENTYSEVEN: OnceLock<Natural> = OnceLock::new();
+-    TWENTYSEVEN.get_or_init(|| Natural::from_sci_string("1e27").unwrap())
++    &Default::default() /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ pub fn const_1e54() -> &'static Natural {
+     static FIFTYFOUR: OnceLock<Natural> = OnceLock::new();
+     FIFTYFOUR.get_or_init(|| Natural::from_sci_string("1e54").unwrap())
+ }
+ 
+ pub fn const_2_192() -> &'static Natural {

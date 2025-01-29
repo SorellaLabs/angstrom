@@ -1,0 +1,25 @@
+--- crates/types/src/matching/debt.rs
++++ replace DebtType::same_side -> bool with true
+@@ -80,21 +80,17 @@
+             Self::ExactOut(_) => 1
+         };
+         ray_price
+             .inverse_remainder(self.magnitude())
+             .saturating_sub(ask_side)
+     }
+ 
+     pub fn same_side(&self, other: &Self) -> bool {
+-        if let Self::ExactIn(_) = self {
+-            matches!(other, Self::ExactIn(_))
+-        } else {
+-            matches!(other, Self::ExactOut(_))
+-        }
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl Add for DebtType {
+     type Output = Self;
+ 
+     fn add(self, rhs: Self) -> Self::Output {
+         match (self, rhs) {

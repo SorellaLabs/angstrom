@@ -1,0 +1,22 @@
+--- crates/types/src/matching/mod.rs
++++ replace const_1e54 -> &'static Natural with &Default::default()
+@@ -25,18 +25,17 @@
+ pub use super::sol_bindings::Ray;
+ 
+ pub fn const_1e27() -> &'static Natural {
+     static TWENTYSEVEN: OnceLock<Natural> = OnceLock::new();
+     TWENTYSEVEN.get_or_init(|| Natural::from_sci_string("1e27").unwrap())
+ }
+ 
+ pub fn const_1e54() -> &'static Natural {
+-    static FIFTYFOUR: OnceLock<Natural> = OnceLock::new();
+-    FIFTYFOUR.get_or_init(|| Natural::from_sci_string("1e54").unwrap())
++    &Default::default() /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ pub fn const_2_192() -> &'static Natural {
+     static ONENINETWO: OnceLock<Natural> = OnceLock::new();
+     ONENINETWO.get_or_init(|| Natural::power_of_2(192))
+ }
+ 
+ #[allow(unused)]

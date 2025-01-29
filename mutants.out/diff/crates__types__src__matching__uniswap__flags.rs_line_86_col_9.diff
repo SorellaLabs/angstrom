@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/flags.rs
++++ replace <impl BitOr for UniswapFlags>::bitor -> Self::Output with Default::default()
+@@ -78,17 +78,17 @@
+         U160::from(1_u8) << bitshift
+     }
+ }
+ 
+ impl BitOr for UniswapFlags {
+     type Output = U160;
+ 
+     fn bitor(self, rhs: Self) -> Self::Output {
+-        Into::<U160>::into(self) | Into::<U160>::into(rhs)
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl BitOr<UniswapFlags> for U160 {
+     type Output = U160;
+ 
+     fn bitor(self, rhs: UniswapFlags) -> Self::Output {
+         self | Into::<U160>::into(rhs)

@@ -1,0 +1,24 @@
+--- crates/types/src/matching/uniswap/mod.rs
++++ replace Direction::sort_tokens -> (T, T) with (Default::default(), Default::default())
+@@ -83,20 +83,17 @@
+             (self, q),
+             (Self::BuyingT0, Quantity::Token1(_)) | (Self::SellingT0, Quantity::Token0(_))
+         )
+     }
+ 
+     /// Given our transaction direction, turns (amount_in, amount_out) into
+     /// (token0, token1) for use when working with a uniswap pool
+     pub fn sort_tokens<T>(&self, amount_in: T, amount_out: T) -> (T, T) {
+-        match self {
+-            Self::BuyingT0 => (amount_out, amount_in),
+-            Self::SellingT0 => (amount_in, amount_out)
+-        }
++        (Default::default(), Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Given our transaction direction turns (q_t0, q_t1) into (amount_in,
+     /// amount_out)
+     pub fn sort_amounts<T>(&self, token0: T, token1: T) -> (T, T) {
+         match self {
+             Self::BuyingT0 => (token1, token0),
+             Self::SellingT0 => (token0, token1)

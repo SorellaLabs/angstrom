@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace DebtType::exact_in -> Self with Default::default()
+@@ -24,17 +24,17 @@
+         if is_bid {
+             Self::ExactIn(q)
+         } else {
+             Self::ExactOut(q)
+         }
+     }
+ 
+     pub fn exact_in(q: u128) -> Self {
+-        Self::ExactIn(q)
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn exact_out(q: u128) -> Self {
+         Self::ExactOut(q)
+     }
+ 
+     /// Whether or not price calculations for this debt type should round up
+     pub fn round_up(&self) -> bool {

@@ -1,0 +1,101 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace PoolPriceVec<'a>::from_swap -> eyre::Result<Self> with Ok(Default::default())
+@@ -285,97 +285,17 @@
+         Ok(Self { start_bound: start, end_bound: end, d_t0, d_t1, steps: Some(steps) })
+     }
+ 
+     pub fn from_swap(
+         start: PoolPrice<'a>,
+         direction: Direction,
+         quantity: Quantity
+     ) -> eyre::Result<Self> {
+-        let fee_pips = 0;
+-        let mut total_in = U256::ZERO;
+-        let mut current_price = start.price;
+-        let mut current_liq_range: Option<_> = Some(start.liquidity_range());
+-        let q = quantity.magnitude();
+-
+-        let mut steps: Vec<SwapStep> = Vec::new();
+-        let total_out = U256::from(q);
+-
+-        let mut remaining = I256::try_from(q).wrap_err_with(|| {
+-            // Should be impossible
+-            format!("Quantity too large to convert u128 -> I256: {}", q)
+-        })?;
+-
+-        // "Exact out" is calculated with a negative quantity
+-        if !direction.is_input(&quantity) {
+-            remaining *= I256::MINUS_ONE;
+-        }
+-
+-        while remaining < I256::ZERO {
+-            // Update our current liquidiy range
+-            let liq_range =
+-                current_liq_range.ok_or_else(|| eyre!("Unable to find next liquidity range"))?;
+-            // Compute our swap towards the appropriate end of our current liquidity bound
+-            let target_tick = liq_range.end_tick(direction);
+-            let target_price = SqrtPriceX96::at_tick(target_tick)?;
+-            // If our target price is equal to our current price, we're precisely at the
+-            // "bottom" of a liquidity range and we can skip this computation as
+-            // it will be a null step
+-            if target_price == current_price {
+-                current_liq_range = liq_range.next(direction);
+-                continue;
+-            }
+-            // Otherwise we can compute our step
+-            let (fin_price, amount_in, amount_out, amount_fee) = compute_swap_step(
+-                current_price.into(),
+-                target_price.into(),
+-                liq_range.liquidity(),
+-                remaining,
+-                fee_pips
+-            )
+-            .wrap_err_with(|| {
+-                format!(
+-                    "Unable to compute swap step from tick {:?} to {}",
+-                    current_price.to_tick(),
+-                    target_tick
+-                )
+-            })?;
+-
+-            // See how much output we have yet to go
+-            let signed_out = I256::try_from(amount_out)
+-                .wrap_err("Output of step too large to convert U256 -> I256")?;
+-            remaining = remaining
+-                .checked_add(signed_out)
+-                .ok_or_eyre("Unable to add signed_out to expected_out")?;
+-
+-            // Add the amount in and our total fee to our cost
+-            total_in += amount_in;
+-            total_in += amount_fee;
+-
+-            // Based on our direction, sort out what our token0 and token1 are
+-            let (d_t0, d_t1) = direction.sort_tokens(amount_in.to(), amount_out.to());
+-
+-            // Push this step onto our list of swap steps
+-            steps.push(SwapStep {
+-                start_price: current_price,
+-                end_price: SqrtPriceX96::from(fin_price),
+-                d_t0,
+-                d_t1,
+-                liq_range
+-            });
+-            // (avg_price, end_price, amount_out, liq_range));
+-
+-            // If we're going to be continuing, move on to the next liquidity range
+-            current_liq_range = liq_range.next(direction);
+-            current_price = SqrtPriceX96::from(fin_price);
+-        }
+-
+-        let (d_t0, d_t1) = direction.sort_tokens(total_in.to(), total_out.to());
+-        let end_bound = start.liq_range.pool_snap.at_price(current_price)?;
+-        Ok(Self { start_bound: start, end_bound, d_t0, d_t1, steps: Some(steps) })
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn donation(&self, q: u128) -> DonationResult {
+         let mut remaining_donation = U256::from(q);
+         let mut cur_q = U256::ZERO;
+         let mut filled_price = self
+             .steps
+             .as_ref()

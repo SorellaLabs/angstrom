@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/liqrange.rs
++++ replace < with == in LiqRangeRef<'a>::price_in_range
+@@ -79,17 +79,17 @@
+ impl<'a> LiqRangeRef<'a> {
+     pub fn new(market: &'a PoolSnapshot, range: &'a LiqRange, range_idx: usize) -> Self {
+         Self { pool_snap: market, range, range_idx }
+     }
+ 
+     /// Determines if a given SqrtPriceX96 is within this liquidity range
+     pub fn price_in_range(&self, price: SqrtPriceX96) -> bool {
+         if let Ok(price_tick) = price.to_tick() {
+-            price_tick >= self.lower_tick && price_tick < self.upper_tick
++            price_tick >= self.lower_tick && price_tick == /* ~ changed by cargo-mutants ~ */ self.upper_tick
+         } else {
+             false
+         }
+     }
+ 
+     pub fn start_tick(&self, direction: Direction) -> Tick {
+         match direction {
+             Direction::BuyingT0 => self.lower_tick,

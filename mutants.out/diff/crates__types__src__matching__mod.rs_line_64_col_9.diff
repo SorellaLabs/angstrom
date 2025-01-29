@@ -1,0 +1,21 @@
+--- crates/types/src/matching/mod.rs
++++ replace <impl Deref for MatchingPrice>::deref -> &Self::Target with &Default::default()
+@@ -56,17 +56,17 @@
+ /// can be converted to/from this standard so our Math is sane.  This is a Ray.
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+ pub struct MatchingPrice(U256);
+ 
+ impl Deref for MatchingPrice {
+     type Target = U256;
+ 
+     fn deref(&self) -> &Self::Target {
+-        &self.0
++        &Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl Add for MatchingPrice {
+     type Output = Self;
+ 
+     fn add(self, rhs: Self) -> Self::Output {
+         Self(self.0 + rhs.0)

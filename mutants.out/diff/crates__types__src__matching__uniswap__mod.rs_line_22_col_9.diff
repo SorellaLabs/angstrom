@@ -1,0 +1,24 @@
+--- crates/types/src/matching/uniswap/mod.rs
++++ replace Quantity::magnitude -> u128 with 1
+@@ -14,20 +14,17 @@
+ 
+ pub enum Quantity {
+     Token0(u128),
+     Token1(u128)
+ }
+ 
+ impl Quantity {
+     pub fn magnitude(&self) -> u128 {
+-        match self {
+-            Self::Token0(q) => *q,
+-            Self::Token1(q) => *q
+-        }
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// The direction of the swap if this quantity is used as input
+     pub fn as_input(&self) -> Direction {
+         match self {
+             Self::Token0(_) => Direction::SellingT0,
+             Self::Token1(_) => Direction::BuyingT0
+         }

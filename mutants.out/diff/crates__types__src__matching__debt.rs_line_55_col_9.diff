@@ -1,0 +1,23 @@
+--- crates/types/src/matching/debt.rs
++++ replace DebtType::magnitude -> u128 with 1
+@@ -47,19 +47,17 @@
+     pub fn same_type(&self, q: u128) -> Self {
+         match self {
+             Self::ExactIn(_) => Self::ExactIn(q),
+             Self::ExactOut(_) => Self::ExactOut(q)
+         }
+     }
+ 
+     pub fn magnitude(&self) -> u128 {
+-        match self {
+-            Self::ExactIn(q) | Self::ExactOut(q) => *q
+-        }
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn is_empty(&self) -> bool {
+         self.magnitude() == 0
+     }
+ 
+     pub fn t0_at_price<T: Into<Ray>>(&self, price: T) -> u128 {
+         // If it's an ExactIn debt our output is rounded down, otherwise it's ExactOut

@@ -1,0 +1,25 @@
+--- crates/types/src/matching/composite.rs
++++ replace CompositeOrder<'a>::start_price -> Ray with Default::default()
+@@ -198,21 +198,17 @@
+         };
+         Self { amm: new_amm, debt: new_debt, bound_price: self.bound_price }
+     }
+ 
+     /// Initial price of this composite order in Ray format.  Will default to
+     /// the AMM price as it's more accurate, then step to the currently stored
+     /// price on the Debt
+     pub fn start_price(&self) -> Ray {
+-        self.amm
+-            .as_ref()
+-            .map(|a| a.as_ray())
+-            .or_else(|| self.debt.map(|d| d.price()))
+-            .unwrap()
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+ 
+     use super::*;
+     use crate::matching::{

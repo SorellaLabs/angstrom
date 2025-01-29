@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace >= with < in SwapStep<'a>::for_price_range
+@@ -57,17 +57,17 @@
+         let high_tick = high.to_tick()?;
+ 
+         // Make sure both of our price ticks are within bounds, otherwise return an
+         // error
+         if low_tick >= liq_range.upper_tick || high_tick < liq_range.lower_tick {
+             return Err(eyre!("Ticks out of bounds, unable to construct step"))
+         }
+ 
+-        let start_price = if low_tick >= liq_range.lower_tick {
++        let start_price = if low_tick < /* ~ changed by cargo-mutants ~ */ liq_range.lower_tick {
+             *low
+         } else {
+             SqrtPriceX96::at_tick(liq_range.lower_tick)?
+         };
+ 
+         let end_price = if high_tick < liq_range.upper_tick {
+             *high
+         } else {

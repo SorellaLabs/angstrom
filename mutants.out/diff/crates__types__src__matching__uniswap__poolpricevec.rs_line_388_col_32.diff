@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace + with - in PoolPriceVec<'a>::donation
+@@ -380,17 +380,17 @@
+             .steps
+             .as_ref()
+             .and_then(|v| v.first().map(|s| s.avg_price()))
+             .unwrap_or_default();
+         let empty = vec![];
+         let steps = self.steps.as_ref().unwrap_or(&empty);
+         let mut step_iter = steps.iter().peekable();
+         while let Some(step) = step_iter.next() {
+-            let q_step = cur_q + U256::from(step.output());
++            let q_step = cur_q - /* ~ changed by cargo-mutants ~ */ U256::from(step.output());
+             // Our target price is either the average price of the next stake or the end
+             // price of the current stake if there's no next stake to deal with
+             let target_price = step_iter
+                 .peek()
+                 .map(|next_stake| next_stake.avg_price())
+                 .unwrap_or_else(|| Ray::from(step.end_price));
+             // The difference between this tick's average price and our target price
+             let d_price = target_price - step.avg_price();

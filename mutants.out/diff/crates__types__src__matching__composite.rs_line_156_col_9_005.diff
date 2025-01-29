@@ -1,0 +1,37 @@
+--- crates/types/src/matching/composite.rs
++++ replace CompositeOrder<'a>::t0_quantities -> (Option<u128>, Option<u128>) with (None, None)
+@@ -148,33 +148,17 @@
+     /// Given an incoming amount of T0, determine how much of that T0 should go
+     /// to the debt vs the AMM to ensure an equal movement of both
+     /// quantities.  Works fine if we have only a debt or only an AMM
+     pub fn t0_quantities(
+         &self,
+         t0_input: u128,
+         direction: Direction
+     ) -> (Option<u128>, Option<u128>) {
+-        match (self.amm.as_ref(), self.debt.as_ref()) {
+-            (None, None) => (None, None),
+-            (Some(_), None) => (Some(t0_input), None),
+-            (None, Some(_)) => (None, Some(t0_input)),
+-            (Some(a), Some(d)) => {
+-                let amm_portion = amm_debt_same_move_solve(
+-                    a.liquidity(),
+-                    d.current_t0(),
+-                    d.magnitude(),
+-                    t0_input,
+-                    direction
+-                );
+-                // Maybe build in some safety here around partial quantities
+-                let debt_portion = t0_input.saturating_sub(amm_portion);
+-                (Some(amm_portion), Some(debt_portion))
+-            }
+-        }
++        (None, None) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Compute the final state for the AMM and for the Debt when we partially
+     /// fill this order.  The requirements for this final state are as follows:
+     ///
+     /// 1. The quantity filled is used precisely
+     /// 2. The debt and the AMM end up at as close a price to each other as
+     ///    possible

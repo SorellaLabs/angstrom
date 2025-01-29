@@ -1,0 +1,37 @@
+--- crates/types/src/matching/composite.rs
++++ replace CompositeOrder<'a>::quantity -> u128 with 1
+@@ -86,33 +86,17 @@
+     /// Return the quantity of t0 available to fill from this order to the
+     /// target price.  If the quantity is equal to zero, we are in a "negative
+     /// quantity" situation where the debt is on the Ask side and we have to
+     /// do a "same side" match.  I'm pretty sure that's the only time that will
+     /// happen
+     pub fn quantity(&self, external_bound: Ray) -> u128 {
+         // Check whether our external bound or internal bound is closer to our current
+         // price
+-        let target_price = self.find_closest_bound(external_bound);
+-        // The quantity available to the target price is the combination of
+-        // the amount it takes to get our amm to the target price plus the
+-        // amount it takes to get our debt to the target price
+-        let (amm_q, debt_q) = self.calc_quantities(target_price);
+-        if let Some(Direction::BuyingT0) = self.debt_direction(target_price) {
+-            // If the price is going up, we're buying T0 from the AMM but our debt will be
+-            // providing less and less T0 so we subtract the `debt_q` from
+-            // the `amm_q` to determine how much T0 this composite order can
+-            // actually offer in liquidity
+-            amm_q.saturating_sub(debt_q)
+-        } else {
+-            // If the price is going down, we're selling T0 to the AMM and our debt will be
+-            // purchasing more and more T0 so we can just add the quantities
+-            // together to find the total liquidity consumed by both operations
+-            amm_q + debt_q
+-        }
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Specifically in the case that we are buying T0, there's a "negative
+     /// quantity" - the amount of T0 that is required to be provided from an
+     /// external source as the T0 provided by the debt decreases with a price
+     /// motion.  If an AMM is moving along with the debt, we can see if it
+     /// provides an amount of T0 that offsets the debt's negative quantity.
+     pub fn negative_quantity(&self, external_bound: Ray) -> u128 {

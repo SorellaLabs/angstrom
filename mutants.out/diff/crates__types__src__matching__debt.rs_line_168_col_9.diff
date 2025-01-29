@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::bid_side -> bool with true
+@@ -160,17 +160,17 @@
+         let new_debt = Self { magnitude: new_magnitude, cur_price: self.cur_price };
+         new_debt.current_t0() - self.current_t0()
+     }
+ 
+     /// Does this debt exist on the bid side of the book?  A debt is on the bid
+     /// side of the book when it's an ExactIn debt (i.e. I would like to pay 100
+     /// T1 and get as many T0 as I can for that amount)
+     pub fn bid_side(&self) -> bool {
+-        matches!(self.magnitude, DebtType::ExactIn(_))
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Return the T1 quantity of debt "slack" - i.e. the amount that is being
+     /// rounded away at the current price.  This is primarily for use in order
+     /// quantity calculations to ensure we don't over or underfill orders
+     pub fn slack(&self) -> u128 {
+         self.magnitude.slack_at_price(self.cur_price)
+     }

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/sqrtprice.rs
++++ replace <impl From for SqrtPriceX96>::from -> Self with Default::default()
+@@ -68,17 +68,17 @@
+ impl From<SqrtPriceX96> for U256 {
+     fn from(value: SqrtPriceX96) -> Self {
+         Uint::from(value.0)
+     }
+ }
+ 
+ impl From<U256> for SqrtPriceX96 {
+     fn from(value: U256) -> Self {
+-        Self(Uint::from(value))
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl From<U160> for SqrtPriceX96 {
+     fn from(value: U160) -> Self {
+         Self(value)
+     }
+ }

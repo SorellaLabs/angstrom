@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace <impl Sub for PoolPrice<'a>>::sub -> Self::Output with Default::default()
+@@ -326,17 +326,17 @@
+         PoolPriceVec::from_swap(self, rhs.as_input(), rhs)
+     }
+ }
+ 
+ impl<'a> Sub<Quantity> for PoolPrice<'a> {
+     type Output = eyre::Result<PoolPriceVec<'a>>;
+ 
+     fn sub(self, rhs: Quantity) -> Self::Output {
+-        PoolPriceVec::from_swap(self, rhs.as_output(), rhs)
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl<'a> From<PoolPrice<'a>> for U256 {
+     fn from(value: PoolPrice) -> Self {
+         value.price.into()
+     }
+ }

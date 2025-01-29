@@ -1,0 +1,21 @@
+--- crates/types/src/matching/sqrtprice.rs
++++ replace SqrtPriceX96::to_tick -> eyre::Result<i32> with Ok(1)
+@@ -42,17 +42,17 @@
+ 
+     /// Produces the maximum SqrtPriceX96 valid for a given tick before we step
+     /// forward into the next tick
+     pub fn max_at_tick(tick: i32) -> eyre::Result<Self> {
+         Ok(Self::from(get_sqrt_ratio_at_tick(tick + 1)?.saturating_sub(U256::from(1))))
+     }
+ 
+     pub fn to_tick(&self) -> eyre::Result<i32> {
+-        Ok(get_tick_at_sqrt_ratio(U256::from(self.0))?)
++        Ok(1) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Squares this value with no loss of precision, returning a U320 that
+     /// contains PriceX192
+     pub fn as_price_x192(&self) -> U320 {
+         self.0.widening_mul(self.0)
+     }
+ }

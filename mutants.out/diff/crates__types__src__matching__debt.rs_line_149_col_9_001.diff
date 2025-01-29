@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::magnitude -> u128 with 0
+@@ -141,17 +141,17 @@
+ 
+     /// Creates a new Debt item at the price provided with the same quantity as
+     /// the current Debt
+     pub fn set_price(&self, new_price: Ray) -> Self {
+         Self { cur_price: new_price, ..*self }
+     }
+ 
+     pub fn magnitude(&self) -> u128 {
+-        self.magnitude.magnitude()
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn price(&self) -> Ray {
+         self.cur_price
+     }
+ 
+     /// Returns the additional T0 needed to increase a debt from a specific T1
+     /// to another greater T1 count

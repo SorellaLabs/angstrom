@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace > with == in Debt::valid_for_price
+@@ -205,17 +205,17 @@
+     /// Will return true if the price provided is equivalent to the current
+     /// price of this debt due to the rounding innate to performing the actual
+     /// transaction
+     pub fn valid_for_price(&self, price: Ray) -> bool {
+         let (low, high) = self.price_range();
+         debug!(low = ?low, high = ?high, "Validating for price range");
+ 
+         match self.magnitude {
+-            DebtType::ExactIn(_) => price > low && price <= high,
++            DebtType::ExactIn(_) => price == /* ~ changed by cargo-mutants ~ */ low && price <= high,
+             DebtType::ExactOut(_) => price >= low && price < high
+         }
+     }
+ 
+     pub fn validate_and_set_price(&mut self, price: Ray) -> bool {
+         let res = self.valid_for_price(price);
+         if res {
+             self.cur_price = price;

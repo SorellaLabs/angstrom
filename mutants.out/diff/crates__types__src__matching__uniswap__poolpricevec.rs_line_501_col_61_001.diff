@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace < with > in PoolPriceVec<'a>::quantity
+@@ -493,17 +493,17 @@
+         self.start_bound.price < self.end_bound.price
+     }
+ 
+     /// Returns `(d_t0, d_t1, price)`
+     pub fn quantity(&self, target_price: OrderPrice) -> (u128, u128, OrderPrice) {
+         let t: SqrtPriceX96 = Ray::from(*target_price).into();
+ 
+         // If our target price is past our end bound, our quantity is the entire range
+-        if (self.is_buy() && t > self.end_bound.price) || t < self.end_bound.price {
++        if (self.is_buy() && t > self.end_bound.price) || t > /* ~ changed by cargo-mutants ~ */ self.end_bound.price {
+             return (self.d_t0, self.d_t1, OrderPrice::from(self.end_bound.price));
+         }
+ 
+         let (d_t0, d_t1) =
+             Self::delta_to_price(self.start_bound.price, t, self.start_bound.liquidity());
+         (d_t0, d_t1, target_price)
+     }
+ 

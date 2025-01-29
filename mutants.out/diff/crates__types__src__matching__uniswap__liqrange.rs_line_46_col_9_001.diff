@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/liqrange.rs
++++ replace LiqRange::upper_tick -> i32 with 1
+@@ -38,17 +38,17 @@
+         Ok(Self { lower_tick, upper_tick, liquidity })
+     }
+ 
+     pub fn lower_tick(&self) -> i32 {
+         self.lower_tick
+     }
+ 
+     pub fn upper_tick(&self) -> i32 {
+-        self.upper_tick
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn liquidity(&self) -> u128 {
+         self.liquidity
+     }
+ }
+ 
+ #[derive(Copy, Clone)]

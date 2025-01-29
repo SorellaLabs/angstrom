@@ -1,0 +1,21 @@
+--- crates/types/src/matching/composite.rs
++++ replace CompositeOrder<'a>::amm -> Option<&PoolPrice<'a>> with None
+@@ -30,17 +30,17 @@
+         self.amm.is_some()
+     }
+ 
+     pub fn has_debt(&self) -> bool {
+         self.debt.is_some()
+     }
+ 
+     pub fn amm(&self) -> Option<&PoolPrice<'a>> {
+-        self.amm.as_ref()
++        None /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn bound(&self) -> Option<Ray> {
+         self.bound_price
+     }
+ 
+     pub fn calc_quantities(&self, target_price: Ray) -> (u128, u128) {
+         debug!(target_price = ?target_price, "Calculating quantities to target price");

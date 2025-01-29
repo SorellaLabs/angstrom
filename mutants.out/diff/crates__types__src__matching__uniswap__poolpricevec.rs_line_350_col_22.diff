@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace += with -= in PoolPriceVec<'a>::from_swap
+@@ -342,17 +342,17 @@
+             // See how much output we have yet to go
+             let signed_out = I256::try_from(amount_out)
+                 .wrap_err("Output of step too large to convert U256 -> I256")?;
+             remaining = remaining
+                 .checked_add(signed_out)
+                 .ok_or_eyre("Unable to add signed_out to expected_out")?;
+ 
+             // Add the amount in and our total fee to our cost
+-            total_in += amount_in;
++            total_in -= /* ~ changed by cargo-mutants ~ */ amount_in;
+             total_in += amount_fee;
+ 
+             // Based on our direction, sort out what our token0 and token1 are
+             let (d_t0, d_t1) = direction.sort_tokens(amount_in.to(), amount_out.to());
+ 
+             // Push this step onto our list of swap steps
+             steps.push(SwapStep {
+                 start_price: current_price,

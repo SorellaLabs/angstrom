@@ -1,0 +1,38 @@
+--- crates/types/src/matching/composite.rs
++++ replace CompositeOrder<'a>::partial_fill -> Self with Default::default()
+@@ -174,34 +174,17 @@
+ 
+     /// Compute the final state for the AMM and for the Debt when we partially
+     /// fill this order.  The requirements for this final state are as follows:
+     ///
+     /// 1. The quantity filled is used precisely
+     /// 2. The debt and the AMM end up at as close a price to each other as
+     ///    possible
+     pub fn partial_fill(&self, partial_q: u128, direction: Direction) -> Self {
+-        let (amm_quantity, debt_quantity) = self.t0_quantities(partial_q, direction);
+-        let new_amm = if let Some(amm_q) = amm_quantity {
+-            self.amm.clone().map(|a| {
+-                let quantity = Quantity::Token0(amm_q);
+-                PoolPriceVec::from_swap(a.clone(), direction, quantity)
+-                    .map(|v| v.end_bound)
+-                    .ok()
+-                    .unwrap_or_else(|| a.clone())
+-            })
+-        } else {
+-            self.amm.clone()
+-        };
+-        let new_debt = if let Some(debt_q) = debt_quantity {
+-            self.debt.map(|d| d.partial_fill(debt_q))
+-        } else {
+-            self.debt
+-        };
+-        Self { amm: new_amm, debt: new_debt, bound_price: self.bound_price }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Initial price of this composite order in Ray format.  Will default to
+     /// the AMM price as it's more accurate, then step to the currently stored
+     /// price on the Debt
+     pub fn start_price(&self) -> Ray {
+         self.amm
+             .as_ref()

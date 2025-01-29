@@ -1,0 +1,29 @@
+--- crates/types/src/matching/debt.rs
++++ replace DebtType::slack_at_price -> u128 with 0
+@@ -68,25 +68,17 @@
+             Self::ExactIn(_) => false,
+             Self::ExactOut(_) => true
+         };
+         let ray_price: Ray = price.into();
+         ray_price.inverse_quantity(self.magnitude(), round_up)
+     }
+ 
+     pub fn slack_at_price<T: Into<Ray>>(&self, price: T) -> u128 {
+-        let ray_price: Ray = price.into();
+-        // If I'm on the Ask side (ExactOut debt) I need to substract 1 from my slack
+-        let ask_side = match self {
+-            Self::ExactIn(_) => 0,
+-            Self::ExactOut(_) => 1
+-        };
+-        ray_price
+-            .inverse_remainder(self.magnitude())
+-            .saturating_sub(ask_side)
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn same_side(&self, other: &Self) -> bool {
+         if let Self::ExactIn(_) = self {
+             matches!(other, Self::ExactIn(_))
+         } else {
+             matches!(other, Self::ExactOut(_))
+         }

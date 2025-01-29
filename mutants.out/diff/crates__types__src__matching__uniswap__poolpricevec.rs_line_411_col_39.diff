@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace > with < in PoolPriceVec<'a>::donation
+@@ -403,17 +403,17 @@
+                 // If we have enough bribe to pay the whole cost, allocate that and step forward
+                 // to the next price gap
+                 cur_q = q_step;
+                 filled_price = target_price;
+                 remaining_donation -= step_cost;
+             } else {
+                 // If we don't have enough bribe to pay the whole cost, figure out where the
+                 // target price winds up based on what we do have and end this iteration
+-                if remaining_donation > U256::ZERO {
++                if remaining_donation < /* ~ changed by cargo-mutants ~ */ U256::ZERO {
+                     let partial_dprice = Ray::calc_price(q_step, remaining_donation);
+                     filled_price += partial_dprice;
+                 }
+                 break
+             }
+         }
+ 
+         // We've now found our filled price, we can allocate our reward to each tick

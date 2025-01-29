@@ -1,0 +1,861 @@
+
+*** crates/types/src/matching/uniswap/poolprice.rs:52:9: replace <impl PartialOrd for PoolPrice<'a>>::partial_cmp -> Option<std::cmp::Ordering> with Some(Default::default())
+
+*** mutation diff:
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace <impl PartialOrd for PoolPrice<'a>>::partial_cmp -> Option<std::cmp::Ordering> with Some(Default::default())
+@@ -44,17 +44,17 @@
+ impl<'a> PartialEq for PoolPrice<'a> {
+     fn eq(&self, other: &Self) -> bool {
+         self.price.eq(&other.price) && self.liq_range == other.liq_range
+     }
+ }
+ 
+ impl<'a> PartialOrd for PoolPrice<'a> {
+     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+-        Some(self.cmp(other))
++        Some(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl<'a> Ord for PoolPrice<'a> {
+     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+         self.price.cmp(&other.price)
+     }
+ }
+
+
+*** /Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/cargo test --no-run --verbose --package=angstrom-types@0.1.0
+       Fresh unicode-ident v1.0.14
+       Fresh cfg-if v1.0.0
+       Fresh version_check v0.9.5
+       Fresh autocfg v1.4.0
+       Fresh critical-section v1.2.0
+       Fresh byteorder v1.5.0
+       Fresh itoa v1.0.14
+       Fresh const-oid v0.9.6
+       Fresh fnv v1.0.7
+       Fresh proc-macro2 v1.0.93
+       Fresh shlex v1.3.0
+       Fresh regex-syntax v0.8.5
+       Fresh spin v0.9.8
+       Fresh equivalent v1.0.1
+       Fresh allocator-api2 v0.2.21
+       Fresh pin-project-lite v0.2.16
+       Fresh quote v1.0.38
+       Fresh portable-atomic v1.10.0
+       Fresh typenum v1.17.0
+       Fresh libm v0.2.11
+       Fresh libc v0.2.169
+       Fresh ryu v1.0.18
+       Fresh foldhash v0.1.4
+       Fresh base16ct v0.2.0
+       Fresh lazy_static v1.5.0
+       Fresh fastrand v2.3.0
+       Fresh syn v2.0.96
+       Fresh getrandom v0.2.15
+       Fresh once_cell v1.20.2
+       Fresh num-traits v0.2.19
+       Fresh cpufeatures v0.2.16
+       Fresh jobserver v0.1.32
+       Fresh errno v0.3.10
+       Fresh quick-error v1.2.3
+       Fresh ruint-macro v1.2.1
+       Fresh unicode-segmentation v1.12.0
+       Fresh wait-timeout v0.2.0
+       Fresh bit-vec v0.6.3
+       Fresh unarray v0.1.4
+       Fresh serde_derive v1.0.217
+       Fresh derive_arbitrary v1.4.1
+       Fresh zeroize_derive v1.4.2
+       Fresh zerocopy-derive v0.7.35
+       Fresh cc v1.2.10
+       Fresh signature_derive v2.1.0
+       Fresh paste v1.0.15
+       Fresh alloy-rlp-derive v0.3.11
+       Fresh bit-set v0.5.3
+       Fresh convert_case v0.6.0
+       Fresh tracing-core v0.1.33
+       Fresh tracing-attributes v0.1.28
+       Fresh unicode-xid v0.2.6
+       Fresh either v1.13.0
+       Fresh arbitrary v1.4.1
+       Fresh zeroize v1.8.1
+       Fresh zerocopy v0.7.35
+       Fresh ff v0.13.0
+       Fresh rand_xorshift v0.3.0
+       Fresh tracing v0.1.41
+       Fresh derive_more-impl v1.0.0
+       Fresh proptest-derive v0.5.1
+       Fresh heck v0.5.0
+       Fresh itertools v0.13.0
+       Fresh scopeguard v1.2.0
+       Fresh ppv-lite86 v0.2.20
+       Fresh smallvec v1.13.2
+       Fresh der v0.7.9
+       Fresh serdect v0.2.0
+       Fresh group v0.13.0
+       Fresh arrayvec v0.7.6
+       Fresh strsim v0.11.1
+       Fresh crypto-common v0.1.6
+       Fresh block-buffer v0.10.4
+       Fresh rand_chacha v0.3.1
+       Fresh rustix v0.38.44
+       Fresh spki v0.7.3
+       Fresh sec1 v0.7.3
+       Fresh crypto-bigint v0.5.5
+       Fresh alloy-rlp v0.3.11
+       Fresh serde v1.0.217
+       Fresh parking_lot_core v0.9.10
+       Fresh lock_api v0.4.12
+       Fresh hex v0.4.3
+       Fresh thiserror-impl v2.0.11
+       Fresh thiserror-impl v1.0.69
+       Fresh hashbrown v0.15.2
+       Fresh digest v0.10.7
+       Fresh pkcs8 v0.10.2
+       Fresh tempfile v3.15.0
+       Fresh parking_lot v0.12.3
+       Fresh ident_case v1.0.1
+       Fresh signal-hook-registry v1.4.2
+       Fresh winnow v0.6.24
+       Fresh mio v1.0.3
+       Fresh auto_impl v1.2.1
+       Fresh tokio-macros v2.5.0
+       Fresh socket2 v0.5.8
+       Fresh memchr v2.7.4
+       Fresh futures-core v0.3.31
+       Fresh hmac v0.12.1
+       Fresh sha2 v0.10.8
+       Fresh signature v2.2.0
+       Fresh elliptic-curve v0.13.8
+       Fresh rusty-fork v0.3.0
+       Fresh thiserror v2.0.11
+       Fresh darling_core v0.20.10
+       Fresh thiserror v1.0.69
+       Fresh tokio v1.43.0
+       Fresh num_cpus v1.16.0
+       Fresh futures-sink v0.3.31
+       Fresh futures-io v0.3.31
+       Fresh rfc6979 v0.4.0
+       Fresh proptest v1.5.0
+       Fresh darling_macro v0.20.10
+       Fresh threadpool v1.8.1
+       Fresh futures-channel v0.3.31
+       Fresh synstructure v0.13.1
+       Fresh http v1.2.0
+       Fresh futures-macro v0.3.31
+       Fresh pin-utils v0.1.0
+       Fresh futures-task v0.3.31
+       Fresh const-hex v1.14.0
+       Fresh stable_deref_trait v1.2.0
+       Fresh ecdsa v0.16.9
+       Fresh darling v0.20.10
+       Fresh crunchy v0.2.3
+       Fresh blst v0.3.13
+       Fresh slab v0.4.9
+       Fresh rustversion v1.0.19
+       Fresh nybbles v0.3.4
+       Fresh zerofrom-derive v0.1.5
+       Fresh yoke-derive v0.7.5
+       Fresh zerovec-derive v0.10.3
+       Fresh pkg-config v0.3.31
+       Fresh displaydoc v0.2.5
+       Fresh dunce v1.0.5
+       Fresh k256 v0.13.4
+       Fresh serde_with_macros v3.12.0
+       Fresh c-kzg v1.0.3
+       Fresh ethereum_ssz_derive v0.8.2
+       Fresh crossbeam-utils v0.8.21
+       Fresh futures-util v0.3.31
+       Fresh zerofrom v0.1.5
+       Fresh tiny-keccak v2.0.2
+       Fresh tap v1.0.1
+       Fresh litemap v0.7.4
+       Fresh writeable v0.5.5
+       Fresh icu_provider_macros v1.5.0
+       Fresh funty v2.0.0
+       Fresh icu_locid_transform_data v1.5.0
+       Fresh serde_with v3.12.0
+       Fresh yoke v0.7.5
+       Fresh wyz v0.5.1
+       Fresh radium v0.7.0
+       Fresh dyn-clone v1.0.17
+       Fresh tokio-util v0.7.13
+       Fresh icu_properties_data v1.5.0
+       Fresh static_assertions v1.1.0
+       Fresh bytes v1.9.0
+       Fresh ruint v1.12.4
+       Fresh derive_more v1.0.0
+       Fresh rustc-hash v2.1.0
+       Fresh crossbeam-epoch v0.9.18
+       Fresh alloy-eip2930 v0.1.0
+       Fresh alloy-eip7702 v0.5.0
+       Fresh ethereum_serde_utils v0.7.0
+       Fresh alloy-serde v0.9.2
+       Fresh alloy-trie v0.7.8
+       Fresh zerovec v0.10.4
+       Fresh bitvec v1.0.1
+       Fresh serde_json v1.0.137
+       Fresh ahash v0.8.11
+       Fresh alloy-primitives v0.8.19
+       Fresh proc-macro-error-attr2 v2.0.0
+       Fresh utf16_iter v1.0.5
+       Fresh write16 v1.0.0
+       Fresh utf8_iter v1.0.4
+       Fresh ethereum_ssz v0.8.2
+       Fresh tinystr v0.7.6
+       Fresh icu_collections v1.5.0
+       Fresh icu_normalizer_data v1.5.0
+       Fresh proc-macro-error2 v2.0.1
+       Fresh syn v1.0.109
+       Fresh strum_macros v0.26.4
+       Fresh syn-solidity v0.8.19
+       Fresh num-integer v0.1.46
+       Fresh percent-encoding v2.3.1
+       Fresh alloy-sol-type-parser v0.8.19
+       Fresh jsonrpsee-types v0.24.7
+       Fresh enumn v0.1.14
+       Fresh alloy-eips v0.9.2
+       Fresh icu_locid v1.5.0
+       Fresh strum v0.26.3
+       Fresh secp256k1-sys v0.10.1
+       Fresh alloy-sol-macro-input v0.8.19
+       Fresh num-bigint v0.4.6
+       Fresh form_urlencoded v1.2.1
+       Fresh alloy-json-abi v0.8.19
+       Fresh crossbeam-deque v0.8.6
+       Fresh revm-primitives v15.1.0
+       Fresh futures-executor v0.3.31
+       Fresh base64 v0.21.7
+       Fresh modular-bitfield-impl v0.11.2
+       Fresh indexmap v2.7.1
+       Fresh alloy-consensus v0.9.2
+       Fresh icu_provider v1.5.0
+       Fresh secp256k1 v0.29.1
+       Fresh proc-macro-crate v3.2.0
+       Fresh alloy-sol-macro-expander v0.8.19
+       Fresh alloy-genesis v0.9.2
+       Fresh rayon-core v1.12.1
+       Fresh futures v0.3.31
+       Fresh modular-bitfield v0.11.2
+       Fresh reth-codecs-derive v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh visibility v0.1.1
+       Fresh powerfmt v0.2.0
+       Fresh core-foundation-sys v0.8.7
+       Fresh crc-catalog v2.4.0
+       Fresh colorchoice v1.0.3
+       Fresh icu_locid_transform v1.5.0
+       Fresh alloy-sol-macro v0.8.19
+       Fresh num_enum_derive v0.7.3
+       Fresh rayon v1.10.0
+       Fresh reth-codecs v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh anstyle v1.0.10
+       Fresh num-conv v0.1.0
+       Fresh time-core v0.1.2
+       Fresh crc v3.2.1
+       Fresh zstd-sys v2.0.13+zstd.1.5.6
+       Fresh proptest-arbitrary-interop v0.1.0
+       Fresh base64 v0.22.1
+       Fresh utf8parse v0.2.2
+       Fresh keccak v0.1.5
+       Fresh icu_properties v1.5.1
+       Fresh alloy-sol-types v0.8.19
+       Fresh num_enum v0.7.3
+       Fresh anstyle-parse v0.2.6
+       Fresh reth-primitives-traits v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy-eip2124 v0.1.0
+       Fresh is_terminal_polyfill v1.70.1
+       Fresh untrusted v0.9.0
+       Fresh anstyle-query v1.1.2
+       Fresh sha3 v0.10.8
+       Fresh alloy-network-primitives v0.9.2
+       Fresh alloy-consensus-any v0.9.2
+       Fresh clap_lex v0.7.4
+       Fresh clap_derive v4.5.24
+       Fresh time-macros v0.2.19
+       Fresh icu_normalizer v1.5.0
+       Fresh alloy-chains v0.1.57
+       Fresh zstd-safe v7.2.1
+       Fresh anstream v0.6.18
+       Fresh ring v0.17.8
+       Fresh alloy-rpc-types-eth v0.9.2
+       Fresh ed25519 v2.2.3
+       Fresh aho-corasick v1.1.3
+       Fresh hashbrown v0.14.5
+       Fresh pin-project-internal v1.1.8
+       Fresh tokio-stream v0.1.17
+       Fresh glob v0.3.2
+       Fresh metrics v0.24.1
+       Fresh reth-fs-util v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh idna_adapter v1.2.0
+       Fresh zstd v0.13.2
+       Fresh reth-ethereum-forks v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh clap_builder v4.5.27
+       Fresh rustc_version v0.4.1
+       Fresh pin-project v1.1.8
+       Fresh async-trait v0.1.85
+       Fresh ripemd v0.1.3
+       Fresh minimal-lexical v0.2.1
+       Fresh block-padding v0.3.3
+       Fresh libloading v0.8.6
+       Fresh bitflags v2.8.0
+       Fresh rustc-hash v1.1.0
+       Fresh idna v1.0.3
+       Fresh clap v4.5.27
+       Fresh reth-zstd-compressors v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh nom v7.1.3
+       Fresh inout v0.1.3
+       Fresh reth-prune-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh regex-automata v0.4.9
+       Fresh regex-syntax v0.6.29
+       Fresh hash-db v0.15.2
+       Fresh indenter v0.3.3
+       Fresh rustc-hex v2.1.0
+       Fresh overload v0.1.1
+       Fresh crossbeam-channel v0.5.14
+       Fresh url v2.5.4
+       Fresh reth-static-file-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh cexpr v0.6.0
+       Fresh clang-sys v1.8.1
+       Fresh cipher v0.4.4
+       Fresh regex-automata v0.1.10
+       Fresh regex v1.11.1
+       Fresh metrics-derive v0.1.0
+       Fresh nu-ansi-term v0.46.0
+       Fresh tracing-serde v0.2.0
+       Fresh tracing-log v0.2.0
+       Fresh plain_hasher v0.2.3
+       Fresh thread_local v1.1.8
+       Fresh sharded-slab v0.1.7
+       Fresh reth-primitives v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh curve25519-dalek v4.1.3
+       Fresh reth-storage-errors v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh bindgen v0.70.1
+       Fresh eyre v0.6.12
+       Fresh matchers v0.1.0
+       Fresh reth-trie-common v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-metrics v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh dashmap v6.1.0
+       Fresh num-rational v0.4.2
+       Fresh num-iter v0.1.45
+       Fresh num-complex v0.4.6
+       Fresh simple_asn1 v0.6.3
+       Fresh pem v3.0.4
+       Fresh iana-time-zone v0.1.61
+       Fresh bytemuck_derive v1.8.1
+       Fresh ed25519-dalek v2.1.1
+       Fresh reth-consensus v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh tracing-subscriber v0.3.19
+       Fresh num v0.4.3
+       Fresh jsonwebtoken v9.3.0
+       Fresh reth-stages-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh bytemuck v1.21.0
+       Fresh chrono v0.4.39
+       Fresh substrate-bn v0.6.0
+       Fresh alloy-json-rpc v0.9.2
+       Fresh futures-utils-wasm v0.1.0
+       Fresh aes v0.8.4
+       Fresh bs58 v0.5.1
+       Fresh enr v0.12.1
+       Fresh aurora-engine-modexp v1.1.0
+       Fresh tracing-logfmt v0.3.5
+       Fresh alloy-rpc-types-engine v0.9.2
+       Fresh rolling-file v0.2.0
+       Fresh tracing-journald v0.3.1
+       Fresh tracing-appender v0.2.3
+       Fresh libusb1-sys v0.7.0
+       Fresh reth-execution-errors v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh ctr v0.9.2
+       Fresh uuid v1.12.1
+       Fresh impl-trait-for-tuples v0.2.3
+       Fresh byte-slice-cast v1.2.2
+       Fresh roaring v0.10.10
+       Fresh reth-network-peers v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh anyhow v1.0.95
+       Fresh reth-tracing v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh rusb v0.9.4
+       Fresh parity-scale-codec v3.6.12
+       Fresh reth-db-models v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh revm-precompile v16.0.0
+       Fresh reth-mdbx-sys v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh rlp v0.5.2
+       Fresh revm-interpreter v15.1.0
+       Fresh bincode v1.3.3
+       Fresh memmap2 v0.9.5
+       Fresh lz4_flex v0.11.3
+       Fresh sysinfo v0.32.1
+       Fresh page_size v0.6.0
+       Fresh alloy-signer v0.9.2
+       Fresh reth-chainspec v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-db-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh revm v19.3.0
+       Fresh reth-libmdbx v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-nippy-jar v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-trie-sparse v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh triehash v0.8.4
+       Fresh alloy-rpc-types-any v0.9.2
+       Fresh primeorder v0.13.6
+       Fresh tower-service v0.3.3
+       Fresh bech32 v0.9.1
+       Fresh salsa20 v0.10.2
+       Fresh http-body v1.0.1
+       Fresh pbkdf2 v0.12.2
+       Fresh pbkdf2 v0.11.0
+       Fresh dbl v0.3.2
+       Fresh reth-db v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh httparse v1.9.5
+       Fresh alloy-network v0.9.2
+       Fresh coins-core v0.12.0
+       Fresh reth-trie v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh p256 v0.13.2
+       Fresh cmac v0.7.2
+       Fresh scrypt v0.10.0
+       Fresh p384 v0.13.0
+       Fresh cbc v0.1.2
+       Fresh uuid v0.8.2
+       Fresh rustls-pki-types v1.10.1
+       Fresh http-body-util v0.1.2
+       Fresh tower-layer v0.3.3
+       Fresh httpdate v1.0.3
+       Fresh reth-blockchain-tree-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh coins-bip32 v0.12.0
+       Fresh reth-execution-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh yubihsm v0.42.1
+       Fresh reth-trie-db v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh eth-keystore v0.5.0
+       Fresh rustls-webpki v0.102.8
+       Fresh try-lock v0.2.5
+       Fresh reth-errors v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh core-foundation v0.9.4
+       Fresh security-framework-sys v2.14.0
+       Fresh atomic-waker v1.1.2
+       Fresh alloy-rpc-types-trace v0.9.2
+       Fresh reth-net-banlist v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh humantime v2.1.0
+       Fresh reth-eth-wire-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh coins-bip39 v0.12.0
+       Fresh reth-storage-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh want v0.3.1
+       Fresh rustls v0.23.21
+       Fresh security-framework v2.11.1
+       Fresh h2 v0.4.7
+       Fresh humantime-serde v1.1.1
+       Fresh webpki-roots v0.26.7
+       Fresh alloy-rpc-types-anvil v0.9.2
+       Fresh sync_wrapper v1.0.2
+       Fresh hashbrown v0.13.2
+       Fresh mime v0.3.17
+       Fresh ipnet v2.11.0
+       Fresh reth-rpc-types-compat v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-consensus-common v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh same-file v1.0.6
+       Fresh alloy-signer-local v0.9.2
+       Fresh tokio-rustls v0.26.1
+       Fresh hyper v1.5.2
+       Fresh reth-network-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh tower v0.5.2
+       Fresh alloy-rpc-types v0.9.2
+       Fresh reth-revm v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh schnellru v0.2.4
+       Fresh walkdir v2.5.0
+       Fresh rustls-pemfile v2.2.0
+       Fresh tracing-futures v0.2.5
+       Fresh serde_urlencoded v0.7.1
+       Fresh fsevent-sys v4.1.0
+       Fresh filetime v0.2.25
+       Fresh lru v0.12.5
+       Fresh reth-chain-state v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh hyper-util v0.1.10
+       Fresh reth-network-p2p v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh native-tls v0.2.12
+       Fresh reth-payload-validator v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-evm v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh notify v6.1.1
+       Fresh reth-tasks v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh itertools v0.10.5
+       Fresh bumpalo v3.16.0
+       Fresh log v0.4.25
+       Fresh sha1 v0.10.6
+       Fresh subtle v2.6.1
+       Fresh reth-payload-primitives v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh hyper-rustls v0.27.5
+       Fresh tokio-native-tls v0.3.1
+       Fresh generic-array v0.14.7
+       Fresh opaque-debug v0.3.1
+       Fresh serde_spanned v0.6.8
+       Fresh toml_datetime v0.6.8
+       Fresh include_dir_macros v0.7.4
+       Fresh reth-tokio-util v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh crypto-mac v0.8.0
+       Fresh block-buffer v0.9.0
+       Fresh data-encoding v2.7.0
+       Fresh universal-hash v0.5.1
+       Fresh core2 v0.4.0
+       Fresh reth-payload-builder-primitives v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh hyper-tls v0.6.0
+       Fresh wasm-bindgen-shared v0.2.100
+       Fresh digest v0.9.0
+       Fresh include_dir v0.7.4
+       Fresh toml_edit v0.22.22
+       Fresh hmac v0.8.1
+       Fresh sha2 v0.9.9
+       Fresh data-encoding-macro-internal v0.1.14
+       Fresh arrayref v0.3.9
+       Fresh base64 v0.13.1
+       Fresh unsigned-varint v0.8.0
+       Fresh send_wrapper v0.4.0
+       Fresh polyval v0.6.2
+       Fresh hkdf v0.12.4
+       Fresh quick-protobuf v0.8.1
+       Fresh reth-engine-primitives v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reqwest v0.12.12
+       Fresh wasm-bindgen-backend v0.2.100
+       Fresh libsecp256k1-core v0.3.0
+       Fresh toml v0.8.19
+       Fresh aquamarine v0.6.0
+       Fresh hmac-drbg v0.3.0
+       Fresh multihash v0.19.3
+       Fresh data-encoding-macro v0.1.16
+       Fresh asn1_der v0.7.6
+       Fresh base-x v0.2.11
+       Fresh ghash v0.5.1
+       Fresh reth-payload-util v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh aead v0.5.2
+       Fresh tinyvec_macros v0.1.1
+       Fresh reth-ethereum-engine-primitives v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-node-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh wasm-bindgen-macro-support v0.2.100
+       Fresh libsecp256k1-gen-genmult v0.3.0
+       Fresh libsecp256k1-gen-ecmult v0.3.0
+       Fresh multibase v0.9.1
+       Fresh siphasher v1.0.1
+       Fresh match_cfg v0.1.0
+       Fresh hashbrown v0.12.3
+       Fresh rand_core v0.6.4
+       Fresh aes-gcm v0.10.3
+       Fresh tinyvec v1.8.1
+       Fresh reth-transaction-pool v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-config v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh hashlink v0.9.1
+       Fresh alloy-rpc-types-admin v0.9.2
+       Fresh reth-provider v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh wasm-bindgen-macro v0.2.100
+       Fresh hostname v0.3.1
+       Fresh indexmap v1.9.3
+       Fresh rand v0.8.5
+       Fresh phf_shared v0.11.3
+       Fresh delay_map v0.4.0
+       Fresh uint v0.10.0
+       Fresh enum-as-inner v0.6.1
+       Fresh async-recursion v1.1.1
+       Fresh more-asserts v0.3.1
+       Fresh tagptr v0.2.0
+       Fresh reth-network-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy-dyn-abi v0.8.19
+       Fresh concat-kdf v0.1.0
+       Fresh wasm-bindgen v0.2.100
+       Fresh resolv-conf v0.7.0
+       Fresh hickory-proto v0.25.0-alpha.4
+       Fresh phf_generator v0.11.3
+       Fresh moka v0.12.10
+       Fresh if-addrs v0.13.3
+       Fresh sptr v0.3.2
+       Fresh fast-float2 v0.2.3
+       Fresh linked-hash-map v0.5.6
+       Fresh reth-ecies v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh boa_macros v0.20.0
+       Fresh thin-vec v0.2.13
+       Fresh boa_profiler v0.20.0
+       Fresh reth-exex-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh js-sys v0.3.77
+       Fresh libsecp256k1 v0.7.1
+       Fresh phf_macros v0.11.3
+       Fresh reth-net-nat v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh snap v1.1.1
+       Fresh boa_string v0.20.0
+       Fresh hickory-resolver v0.25.0-alpha.4
+       Fresh linked_hash_set v0.1.5
+       Fresh convert_case v0.4.0
+       Fresh reth-prune v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-static-file v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-payload-builder v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy-transport v0.9.2
+       Fresh reth-ethereum-consensus v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh gloo-timers v0.2.6
+       Fresh libp2p-identity v0.2.10
+       Fresh phf v0.11.3
+       Fresh boa_gc v0.20.0
+       Fresh reth-dns-discovery v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-eth-wire v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh derive_more v0.99.18
+       Fresh alloy-rpc-types-debug v0.9.2
+       Fresh doctest-file v1.0.0
+       Fresh option-ext v0.2.0
+       Fresh hex-literal v0.4.1
+       Fresh reth-stages-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh tikv-jemalloc-sys v0.6.0+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7
+       Fresh deranged v0.3.11
+       Fresh futures-timer v3.0.3
+       Fresh multiaddr v0.18.2
+       Fresh boa_interner v0.20.0
+       Fresh camino v1.1.9
+       Fresh interprocess v2.2.2
+       Fresh memoffset v0.9.1
+       Fresh dirs-sys v0.4.1
+       Fresh cargo-platform v0.1.9
+       Fresh regress v0.10.3
+       Fresh num_threads v0.1.7
+       Fresh bimap v0.6.3
+       Fresh utf-8 v0.7.6
+       Fresh hdrhistogram v7.5.4
+       Fresh pollster v0.4.0
+       Fresh ryu-js v1.0.1
+       Fresh reth-beacon-consensus v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh jsonrpsee-core v0.24.7
+       Fresh discv5 v0.8.0
+       Fresh boa_ast v0.20.0
+       Fresh alloy-pubsub v0.9.2
+       Fresh dirs v5.0.1
+       Fresh tungstenite v0.24.0
+       Fresh time v0.3.37
+       Fresh cargo_metadata v0.18.1
+       Fresh intrusive-collections v0.9.7
+       Fresh tower v0.4.13
+       Fresh tikv-jemallocator v0.6.0
+       Fresh alloy-transport-http v0.9.2
+       Fresh soketto v0.8.1
+       Fresh rustls-platform-verifier v0.3.4
+       Fresh async-stream-impl v0.3.6
+       Fresh dirs-sys-next v0.1.2
+       Fresh alloy-node-bindings v0.9.2
+       Fresh reth-discv5 v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-discv4 v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh boa_parser v0.20.0
+       Fresh shellexpand v3.1.0
+       Fresh tokio-tungstenite v0.24.0
+       Fresh vergen v8.3.2
+       Fresh reth-rpc-server-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy-transport-ipc v0.9.2
+       Fresh dirs-next v2.0.0
+       Fresh reth-cli-util v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh async-stream v0.3.6
+       Fresh route-recognizer v0.3.1
+       Fresh jsonrpsee-http-client v0.24.7
+       Fresh jsonrpsee-client-transport v0.24.7
+       Fresh mach2 v0.4.2
+       Fresh jsonrpsee-proc-macros v0.24.7
+       Fresh reth-network v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh boa_engine v0.20.0
+       Fresh alloy-transport-ws v0.9.2
+       Fresh jsonrpsee-server v0.24.7
+       Fresh jsonrpsee-ws-client v0.24.7
+       Fresh jsonrpsee-wasm-client v0.24.7
+       Fresh alloc-no-stdlib v2.0.4
+       Fresh protobuf-support v3.3.0
+       Fresh unicase v2.8.1
+       Fresh adler2 v2.0.0
+       Fresh revm-inspectors v0.14.1
+       Fresh alloy-rpc-client v0.9.2
+       Fresh jsonrpsee v0.24.7
+       Fresh alloc-stdlib v0.2.2
+       Fresh miniz_oxide v0.8.3
+       Fresh libproc v0.14.10
+       Fresh alloy-core v0.8.19
+       Fresh alloy-rpc-types-mev v0.9.2
+       Fresh itertools v0.11.0
+       Fresh reth-rpc-eth-types v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy-provider v0.9.2
+       Fresh protobuf v3.3.0
+       Fresh semver v1.0.25
+       Fresh hidapi-rusb v1.3.3
+       Fresh rlimit v0.10.2
+       Fresh brotli-decompressor v4.0.2
+       Fresh crc32fast v1.4.2
+       Fresh malachite-base v0.4.16
+       Fresh proc-macro-error-attr v1.0.4
+       Fresh alloy-primitives v0.7.7
+       Fresh alloy-rpc-types-beacon v0.9.2
+       Fresh alloy-rpc-types-txpool v0.9.2
+       Fresh iri-string v0.7.7
+       Fresh reth-node-core v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh coins-ledger v0.12.0
+       Fresh trezor-client v0.1.4
+       Fresh brotli v7.0.0
+       Fresh flate2 v1.0.35
+       Fresh mime_guess v2.0.5
+       Fresh proc-macro-error v1.0.4
+       Fresh alloy-contract v0.9.2
+       Fresh http-range-header v0.4.2
+       Fresh alloy-serde v0.2.1
+       Fresh alloy v0.7.3
+       Fresh reth-trie-parallel v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh pade-macro v0.1.0 (https://github.com/SorellaLabs/pade#06433112)
+       Fresh rmp v0.8.14
+       Fresh metrics-macros v0.7.1
+       Fresh reth-node-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh malachite-nz v0.4.16
+       Fresh alloy-signer-ledger v0.9.2
+       Fresh async-compression v0.4.18
+       Fresh alloy-signer-trezor v0.9.2
+       Fresh reth-blockchain-tree v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh pade v0.1.0 (https://github.com/SorellaLabs/pade#06433112)
+       Fresh metrics v0.21.1
+       Fresh rmp-serde v1.3.0
+       Fresh reth-etl v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh quanta v0.12.5
+       Fresh open-fastrlp v0.1.4
+       Fresh http v0.2.12
+       Fresh nibble_vec v0.1.0
+       Fresh itertools v0.12.1
+       Fresh reth-rpc-eth-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy v0.9.2
+       Fresh malachite-q v0.4.16
+       Fresh tower-http v0.6.2
+       Fresh rand_xoshiro v0.6.0
+       Fresh half v2.4.1
+       Fresh bitmaps v3.2.1
+       Fresh sketches-ddsketch v0.3.0
+       Fresh plotters-backend v0.3.7
+       Fresh endian-type v0.1.2
+       Fresh ciborium-io v0.2.2
+       Fresh reth-exex v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-engine-tree v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh http-body v0.4.6
+       Fresh reth-rpc-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh uniswap_v3_math v0.5.3 (https://github.com/0xKitsune/uniswap-v3-math.git#8a9d9354)
+       Fresh malachite v0.4.16
+       Fresh reth-rpc-layer v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh metrics-util v0.19.0
+       Fresh ciborium-ll v0.2.2
+       Fresh signal-hook v0.3.17
+       Fresh radix_trie v0.2.1
+       Fresh plotters-svg v0.3.7
+       Fresh alloy-eips v0.2.1
+       Fresh reth-ipc v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh quanta v0.11.1
+       Fresh ordered-float v3.9.2
+       Fresh aho-corasick v0.7.20
+       Fresh debug-helper v0.3.13
+       Fresh reth-rpc-engine-api v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Dirty angstrom-types v0.1.0 (/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/crates/types): the file `crates/types/src/matching/uniswap/poolprice.rs` has changed (1738181312.687486741s, 11s after last build at 1738181301.362213356s)
+   Compiling angstrom-types v0.1.0 (/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/crates/types)
+       Fresh sketches-ddsketch v0.2.2
+       Fresh diff v0.1.13
+       Fresh yansi v1.0.1
+       Fresh cast v0.3.0
+       Fresh ciborium v0.2.2
+       Fresh metrics-exporter-prometheus v0.16.1
+       Fresh plotters v0.3.7
+       Fresh protobuf v2.28.0
+       Fresh boyer-moore-magiclen v0.2.20
+       Fresh signal-hook-mio v0.2.4
+       Fresh secp256k1-sys v0.8.1
+       Fresh hyper v0.14.32
+       Fresh reth-engine-service v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-stages v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-rpc v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh pretty_assertions v1.4.1
+       Fresh criterion-plot v0.5.0
+       Fresh metrics-util v0.15.0
+       Fresh metrics-process v2.4.0
+       Fresh tikv-jemalloc-ctl v0.6.0
+       Fresh angstrom-utils v0.1.0 (/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/crates/utils)
+       Fresh metrics-util v0.18.0
+       Fresh tinytemplate v1.2.1
+       Fresh syn-solidity v0.7.7
+       Fresh is-terminal v0.4.15
+       Fresh anes v0.1.6
+       Fresh ringbuffer v0.15.0
+       Fresh oorandom v11.1.4
+       Fresh reth-rpc-builder v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-invalid-block-hooks v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-node-metrics v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh metrics-exporter-prometheus v0.12.1
+       Fresh alloy-sol-macro-input v0.7.7
+       Fresh criterion v0.5.1
+       Fresh prometheus v0.13.4
+       Fresh crossterm v0.28.1
+       Fresh secp256k1 v0.27.0
+       Fresh reth-db-common v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-node-events v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-engine-local v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh metrics-process v1.0.14
+       Fresh reth-engine-util v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-downloaders v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-consensus-debug-client v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-cli-runner v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh dashmap v5.5.3
+       Fresh castaway v0.2.3
+       Fresh fdlimit v0.3.0
+       Fresh rand_distr v0.4.3
+       Fresh num-bigfloat v1.7.1
+       Fresh unicode-width v0.1.14
+       Fresh arraydeque v0.5.1
+       Fresh indoc v2.0.5
+       Fresh alloy-sol-macro-expander v0.7.7
+       Fresh reth-evm-ethereum v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh reth-basic-payload-builder v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh cassowary v0.3.0
+       Fresh unicode-width v0.2.0
+       Fresh backon v1.3.0
+       Fresh reth-cli v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh instability v0.3.7
+       Fresh unicode-truncate v1.1.0
+       Fresh reth-node-builder v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh compact_str v0.8.1
+       Fresh alloy-sol-macro v0.7.7
+       Fresh comfy-table v7.1.3
+       Fresh reth-ethereum-payload-builder v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh similar v2.7.0
+       Fresh console v0.15.10
+       Fresh human_bytes v0.4.3
+       Fresh revm-primitives v7.1.0
+       Fresh alloy-consensus v0.2.1
+       Fresh aquamarine v0.5.0
+       Fresh alloy-network-primitives v0.2.1
+       Fresh base64-serde v0.8.0
+     Running `/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/rustc --crate-name angstrom_types --edition=2021 crates/types/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --cfg 'feature="default"' --cfg 'feature="serde"' --cfg 'feature="testnet"' --check-cfg 'cfg(docsrs)' --check-cfg 'cfg(feature, values("anvil", "default", "serde", "testnet"))' -C metadata=372a74e5be66aa98 -C extra-filename=-372a74e5be66aa98 --out-dir /private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps -C incremental=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/incremental -L dependency=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps --extern alloy=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/liballoy-60a04e8f45840d88.rmeta --extern alloy_primitives=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/liballoy_primitives-f469f883cc6000db.rmeta --extern alloy_rlp=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/liballoy_rlp-65d882dfc6cfcd48.rmeta --extern anyhow=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libanyhow-3c7da2cf6c9da667.rmeta --extern auto_impl=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libauto_impl-5f3337a269ff58b0.dylib --extern base64=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbase64-a296a990702c6aab.rmeta --extern bincode=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbincode-5b36ea13c3153956.rmeta --extern bitmaps=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbitmaps-00fbf7e4904e9fba.rmeta --extern bytes=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbytes-44607b006a2782cf.rmeta --extern dashmap=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libdashmap-0c2dd1dc48e9fa4b.rmeta --extern derive_more=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libderive_more-ffb1b41762fc9648.dylib --extern eyre=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libeyre-9239c0de6222ab67.rmeta --extern foldhash=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libfoldhash-c8cdaddd5f558948.rmeta --extern futures=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libfutures-16e2dd306b6e7e78.rmeta --extern hex_literal=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libhex_literal-12bab3ce17f6dd1d.rmeta --extern itertools=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libitertools-1834c01c9ff72ca7.rmeta --extern k256=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libk256-c1ee9476dfb2be98.rmeta --extern malachite=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libmalachite-b5d7c984f4014449.rmeta --extern modular_bitfield=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libmodular_bitfield-eb253bac07094bb9.rmeta --extern num_traits=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libnum_traits-d73b9c44cc1fe1ad.rmeta --extern open_fastrlp=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libopen_fastrlp-968448897a614404.rmeta --extern pade=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libpade-86277a00c8631ab0.rmeta --extern pade_macro=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libpade_macro-8ef6a67f0aafa01d.dylib --extern rand=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/librand-dd31e075f52f1986.rmeta --extern reth_chainspec=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_chainspec-06b161d3bd30da1e.rmeta --extern reth_codecs=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_codecs-bdd2abc0ea616e12.rmeta --extern reth_network_peers=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_network_peers-6935fd824f7da706.rmeta --extern reth_primitives=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_primitives-d3cb43450b892de6.rmeta --extern reth_provider=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_provider-42e6f054bb667795.rmeta --extern reth_storage_api=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_storage_api-4656353eefda560a.rmeta --extern reth_trie=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_trie-37779245b254380f.rmeta --extern revm=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/librevm-2609bb30e1857b91.rmeta --extern secp256k1=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libsecp256k1-d0182f1df172f02a.rmeta --extern serde=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libserde-3a9bb1f5d68b10a2.rmeta --extern serde_json=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libserde_json-46cedb30a1321914.rmeta --extern thiserror=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libthiserror-0d55dcede3fec3ee.rmeta --extern tracing=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libtracing-ceb51f06bc6f8717.rmeta --extern uniswap_v3_math=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libuniswap_v3_math-48022726bc03a78c.rmeta -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/c-kzg-3abf1a041566e965/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/blst-28e130eb4fce58a8/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/ring-80860799c6027ef9/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/libusb1-sys-799be932718c4c04/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/hidapi-rusb-181254c81655302a/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/secp256k1-sys-a54f89cc45d95bc4/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/zstd-sys-a451d451c91dc9de/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/reth-mdbx-sys-918d658604e67194/out`
+       Fresh reth-ethereum-cli v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh ratatui v0.28.1
+       Fresh similar-asserts v1.6.1
+       Fresh alloy-sol-types v0.7.7
+       Fresh reth-node-ethereum v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh revm-interpreter v8.1.0
+       Fresh revm-precompile v9.2.0
+       Fresh tower-http v0.5.2
+       Fresh sdd v3.0.5
+       Fresh serial_test_derive v3.2.0
+       Fresh enr v0.10.0
+       Fresh create3 v0.1.0 (https://github.com/AmanRaj1608/create3#09f5a624)
+       Fresh reth-cli-commands v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy-rpc-types-eth v0.2.1
+       Fresh revm v12.1.0
+       Fresh scc v2.3.0
+       Fresh reth v1.1.5 (https://github.com/paradigmxyz/reth?tag=v1.1.5#3212af2d)
+       Fresh alloy-rpc-types-trace v0.2.1
+       Fresh serial_test v3.2.0
+       Fresh alloy-rpc-types v0.2.1
+       Fresh revm-inspectors v0.5.5
+error[E0277]: the trait bound `std::cmp::Ordering: std::default::Default` is not satisfied
+  --> crates/types/src/matching/uniswap/poolprice.rs:52:14
+   |
+52 |         Some(Default::default()) /* ~ changed by cargo-mutants ~ */
+   |              ^^^^^^^^^^^^^^^^^^ the trait `std::default::Default` is not implemented for `std::cmp::Ordering`
+
+warning: unused variable: `direction`
+   --> crates/types/src/matching/math/mod.rs:109:5
+    |
+109 |     direction: Direction
+    |     ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_direction`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `angstrom-types` (lib) generated 1 warning
+error: could not compile `angstrom-types` (lib) due to 1 previous error; 1 warning emitted
+
+Caused by:
+  process didn't exit successfully: `/Users/will/.rustup/toolchains/nightly-2024-09-20-aarch64-apple-darwin/bin/rustc --crate-name angstrom_types --edition=2021 crates/types/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --cfg 'feature="default"' --cfg 'feature="serde"' --cfg 'feature="testnet"' --check-cfg 'cfg(docsrs)' --check-cfg 'cfg(feature, values("anvil", "default", "serde", "testnet"))' -C metadata=372a74e5be66aa98 -C extra-filename=-372a74e5be66aa98 --out-dir /private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps -C incremental=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/incremental -L dependency=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps --extern alloy=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/liballoy-60a04e8f45840d88.rmeta --extern alloy_primitives=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/liballoy_primitives-f469f883cc6000db.rmeta --extern alloy_rlp=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/liballoy_rlp-65d882dfc6cfcd48.rmeta --extern anyhow=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libanyhow-3c7da2cf6c9da667.rmeta --extern auto_impl=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libauto_impl-5f3337a269ff58b0.dylib --extern base64=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbase64-a296a990702c6aab.rmeta --extern bincode=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbincode-5b36ea13c3153956.rmeta --extern bitmaps=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbitmaps-00fbf7e4904e9fba.rmeta --extern bytes=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libbytes-44607b006a2782cf.rmeta --extern dashmap=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libdashmap-0c2dd1dc48e9fa4b.rmeta --extern derive_more=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libderive_more-ffb1b41762fc9648.dylib --extern eyre=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libeyre-9239c0de6222ab67.rmeta --extern foldhash=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libfoldhash-c8cdaddd5f558948.rmeta --extern futures=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libfutures-16e2dd306b6e7e78.rmeta --extern hex_literal=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libhex_literal-12bab3ce17f6dd1d.rmeta --extern itertools=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libitertools-1834c01c9ff72ca7.rmeta --extern k256=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libk256-c1ee9476dfb2be98.rmeta --extern malachite=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libmalachite-b5d7c984f4014449.rmeta --extern modular_bitfield=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libmodular_bitfield-eb253bac07094bb9.rmeta --extern num_traits=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libnum_traits-d73b9c44cc1fe1ad.rmeta --extern open_fastrlp=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libopen_fastrlp-968448897a614404.rmeta --extern pade=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libpade-86277a00c8631ab0.rmeta --extern pade_macro=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libpade_macro-8ef6a67f0aafa01d.dylib --extern rand=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/librand-dd31e075f52f1986.rmeta --extern reth_chainspec=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_chainspec-06b161d3bd30da1e.rmeta --extern reth_codecs=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_codecs-bdd2abc0ea616e12.rmeta --extern reth_network_peers=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_network_peers-6935fd824f7da706.rmeta --extern reth_primitives=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_primitives-d3cb43450b892de6.rmeta --extern reth_provider=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_provider-42e6f054bb667795.rmeta --extern reth_storage_api=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_storage_api-4656353eefda560a.rmeta --extern reth_trie=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libreth_trie-37779245b254380f.rmeta --extern revm=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/librevm-2609bb30e1857b91.rmeta --extern secp256k1=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libsecp256k1-d0182f1df172f02a.rmeta --extern serde=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libserde-3a9bb1f5d68b10a2.rmeta --extern serde_json=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libserde_json-46cedb30a1321914.rmeta --extern thiserror=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libthiserror-0d55dcede3fec3ee.rmeta --extern tracing=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libtracing-ceb51f06bc6f8717.rmeta --extern uniswap_v3_math=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/deps/libuniswap_v3_math-48022726bc03a78c.rmeta -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/c-kzg-3abf1a041566e965/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/blst-28e130eb4fce58a8/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/ring-80860799c6027ef9/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/libusb1-sys-799be932718c4c04/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/hidapi-rusb-181254c81655302a/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/secp256k1-sys-a54f89cc45d95bc4/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/zstd-sys-a451d451c91dc9de/out -L native=/private/var/folders/47/0ycx8zbs4g5_v1z1bpk2x5kw0000gn/T/cargo-mutants-angstrom-pEQuFt.tmp/target/debug/build/reth-mdbx-sys-918d658604e67194/out` (exit status: 1)
+
+*** result: Failure(101)

@@ -121,7 +121,7 @@ impl Sub<u128> for DebtType {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Debt {
     cur_price: Ray,
     magnitude: DebtType
@@ -180,7 +180,7 @@ impl Debt {
     pub fn price_range(&self) -> (Ray, Ray) {
         let current_amount = self.current_t0();
         let bound_amount = match self.magnitude {
-            DebtType::ExactIn(_) => current_amount + 1,
+            DebtType::ExactIn(_) => current_amount.saturating_add(1),
             DebtType::ExactOut(_) => current_amount.saturating_sub(1)
         };
         debug!(current_amount, bound_amount, "Getting price range between targets");
@@ -435,15 +435,67 @@ impl<'a> PartialOrd<PoolPrice<'a>> for Debt {
 
 #[cfg(test)]
 mod test {
-    use super::Debt;
+    use super::{Debt, DebtType};
     use crate::matching::Ray;
+
+    #[test]
+    fn test_debt_type_basics() {
+        // Test creation methods
+        let exact_in = DebtType::new(100, true);
+        assert!(matches!(exact_in, DebtType::ExactIn(100)));
+
+        let exact_out = DebtType::new(100, false);
+        assert!(matches!(exact_out, DebtType::ExactOut(100)));
+
+        // Test round_up behavior
+        assert!(!exact_in.round_up());
+        assert!(exact_out.round_up());
+
+        // Test same_type
+        assert!(matches!(exact_in.same_type(200), DebtType::ExactIn(200)));
+        assert!(matches!(exact_out.same_type(200), DebtType::ExactOut(200)));
+
+        // Test magnitude
+        assert_eq!(exact_in.magnitude(), 100);
+        assert_eq!(exact_out.magnitude(), 100);
+
+        // Test is_empty
+        assert!(!exact_in.is_empty());
+        assert!(DebtType::exact_in(0).is_empty());
+
+        // Test same_side
+        assert!(exact_in.same_side(&DebtType::exact_in(200)));
+        assert!(!exact_in.same_side(&DebtType::exact_out(200)));
+    }
+
+    #[test]
+    fn test_debt_type_arithmetic() {
+        // Test addition of same types
+        let sum = DebtType::exact_in(100) + DebtType::exact_in(50);
+        assert!(matches!(sum, DebtType::ExactIn(150)));
+
+        // Test addition with cancellation
+        let sum = DebtType::exact_in(100) + DebtType::exact_out(50);
+        assert!(matches!(sum, DebtType::ExactIn(50)));
+
+        let sum = DebtType::exact_in(50) + DebtType::exact_out(100);
+        assert!(matches!(sum, DebtType::ExactOut(50)));
+
+        // Test subtraction
+        let diff = DebtType::exact_in(100) - 50;
+        assert!(matches!(diff, DebtType::ExactIn(50)));
+
+        // Test saturation
+        let diff = DebtType::exact_in(50) - 100;
+        assert!(matches!(diff, DebtType::ExactIn(0)));
+    }
 
     #[test]
     fn debt_t0_magnitude_calculation() {
         let t0_q = 2214_u128;
         let t1_q = 55383699_u128;
         let price = Ray::calc_price_generic(t0_q, t1_q, false);
-        let debt = Debt::new(super::DebtType::ExactIn(t1_q), price);
+        let debt = Debt::new(DebtType::ExactIn(t1_q), price);
         assert!(debt.magnitude() == t1_q, "ExactIn Debt magnitude is not as initialized");
         assert!(
             debt.current_t0() == t0_q,
@@ -453,7 +505,7 @@ mod test {
         );
 
         let eo_price = Ray::calc_price_generic(t0_q, t1_q, true);
-        let debt_out = Debt::new(super::DebtType::ExactOut(t1_q), eo_price);
+        let debt_out = Debt::new(DebtType::ExactOut(t1_q), eo_price);
         assert!(debt_out.magnitude() == t1_q, "ExactOut Debt magnitude is not as initialized");
         assert!(
             debt_out.current_t0() == t0_q,
@@ -461,5 +513,144 @@ mod test {
             debt_out.current_t0(),
             t0_q
         );
+    }
+
+    #[test]
+    fn test_debt_addition() {
+        let price = Ray::calc_price_generic(100u64, 200u64, false);
+
+        // Same type debts add
+        let debt1 = Debt::new(DebtType::ExactIn(100), price);
+        let debt2 = Debt::new(DebtType::ExactIn(50), price);
+        let sum = debt1 + debt2;
+        assert!(sum.is_some());
+        assert_eq!(sum.unwrap().magnitude(), 150);
+
+        // Opposite debts subtract
+        let debt1 = Debt::new(DebtType::ExactIn(100), price);
+        let debt2 = Debt::new(DebtType::ExactOut(50), price);
+        let sum = debt1 + debt2;
+        assert!(sum.is_some());
+        assert_eq!(sum.unwrap().magnitude(), 50);
+
+        // Equal opposite debts cancel to None
+        let debt1 = Debt::new(DebtType::ExactIn(100), price);
+        let debt2 = Debt::new(DebtType::ExactOut(100), price);
+        let sum = debt1 + debt2;
+        assert!(sum.is_none());
+    }
+
+    #[test]
+    fn test_price_validation() {
+        let price = Ray::calc_price_generic(100u64, 200u64, false);
+        let mut debt = Debt::new(DebtType::ExactIn(200), price);
+
+        // Test price range
+        let (low, high) = debt.price_range();
+        assert!(low < high);
+
+        // Test valid prices
+        assert!(debt.valid_for_price(price));
+        assert!(debt.validate_and_set_price(price));
+        assert_eq!(debt.price(), price);
+
+        // Test invalid prices
+        let invalid_price = Ray::calc_price_generic(100u64, 400u64, false); // Much different price
+        assert!(!debt.valid_for_price(invalid_price));
+        assert!(!debt.validate_and_set_price(invalid_price));
+        assert_eq!(debt.price(), price); // Price should remain unchanged
+
+        // Test ExactOut price validation
+        let price_out = Ray::calc_price_generic(100u64, 200u64, true);
+        let debt_out = Debt::new(DebtType::ExactOut(200), price_out);
+        let (low_out, high_out) = debt_out.price_range();
+        assert!(low_out < high_out);
+        assert!(debt_out.valid_for_price(price_out));
+    }
+
+    #[test]
+    fn test_debt_comparison() {
+        let price1 = Ray::calc_price_generic(100u64, 200u64, false);
+        let price2 = Ray::calc_price_generic(100u64, 300u64, false);
+        let debt = Debt::new(DebtType::ExactIn(200), price1);
+
+        // Test Ray comparisons
+        assert!(debt == price1);
+        assert!(debt < price2);
+        assert!(debt > Ray::calc_price_generic(100u64, 400u64, false));
+
+        // Test PoolPrice comparisons (would need to mock PoolPrice)
+    }
+
+    #[test]
+    fn test_partial_fills() {
+        let price = Ray::calc_price_generic(100u64, 200u64, false);
+        let debt = Debt::new(DebtType::ExactIn(200), price);
+
+        // Test partial fill
+        let partial = debt.partial_fill(50);
+        assert_eq!(partial.magnitude(), 200);
+        assert!(partial.price() > debt.price());
+
+        // Test partial fill T1
+        let partial_t1 = debt.partial_fill_t1(50);
+        assert_eq!(partial_t1.magnitude(), 150);
+
+        // Test flat fill T1
+        let flat = debt.flat_fill_t1(50);
+        assert_eq!(flat.magnitude(), 150);
+        assert_eq!(flat.price(), debt.price());
+    }
+
+    #[test]
+    fn test_freed_amounts() {
+        let price = Ray::calc_price_generic(100u64, 200u64, false);
+        let debt = Debt::new(DebtType::ExactIn(200), price);
+
+        // Test freed T0
+        assert_eq!(debt.freed_t0(50), 25); // 25% of T1 frees 25% of T0
+        assert_eq!(debt.freed_t0(200), 100); // Full amount
+        assert_eq!(debt.freed_t0(300), 100); // Over amount still returns max
+
+        // Test freed T1
+        assert_eq!(debt.freed_t1(25), 50); // 25% of T0 frees 25% of T1
+        assert_eq!(debt.freed_t1(100), 200); // Full amount
+        assert_eq!(debt.freed_t1(150), 200); // Over amount still returns max
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        // Test zero amounts
+        let price = Ray::calc_price_generic(1u64, 1u64, false);
+        let debt = Debt::new(DebtType::ExactIn(0), price);
+        assert_eq!(debt.magnitude(), 0);
+        assert_eq!(debt.current_t0(), 0);
+
+        // Test max amounts
+        let big_num = u128::MAX;
+        let debt = Debt::new(DebtType::ExactIn(big_num), price);
+        assert_eq!(debt.magnitude(), big_num);
+
+        // Test price range with zero amounts
+        let (low, high) = debt.price_range();
+        assert!(low < high);
+    }
+
+    #[test]
+    fn test_amm_proportion_calculation() {
+        let price = Ray::calc_price_generic(100u64, 200u64, false);
+        let debt = Debt::new(DebtType::ExactIn(200), price);
+
+        // Test positive delta
+        let proportion = debt.calc_proportion(50, 1000, true);
+        assert!(proportion > 0);
+
+        // Test negative delta
+        let proportion = debt.calc_proportion(50, 1000, false);
+        assert!(proportion > 0);
+
+        // Test with zero liquidity should not panic
+        let proportion = debt.calc_proportion(50, 0, true);
+        assert_eq!(proportion, 0);
     }
 }

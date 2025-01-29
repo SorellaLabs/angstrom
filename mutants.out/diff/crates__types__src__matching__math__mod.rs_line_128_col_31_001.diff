@@ -1,0 +1,21 @@
+--- crates/types/src/matching/math/mod.rs
++++ replace + with - in price_intersect_solve
+@@ -120,17 +120,17 @@
+ 
+     // a = 1/L^2
+     let a_frac = Rational::from_integers_ref(&(Integer::ONE << precision), &l_squared);
+     let a = Integer::rounding_from(a_frac, RoundingMode::Nearest).0;
+     debug!(a = ?a, "A factor");
+ 
+     // b = [ 2/(L*sqrt(Pa)) - 1/(T1d) ]
+     let b_first_part = Rational::from_integers_ref(
+-        &(Integer::TWO << (96 + precision)),
++        &(Integer::TWO << (96 - /* ~ changed by cargo-mutants ~ */ precision)),
+         &(&l * &amm_sqrt_price_x96)
+     );
+     let b_second_part = Rational::from_integers_ref(&(Integer::ONE << precision), &debt_magnitude);
+     let b = Integer::rounding_from(b_first_part - b_second_part, RoundingMode::Nearest).0;
+     debug!(b = ?b, "B factor");
+ 
+     // c = [ 1/Pa - 1/Pd ]
+     // Precision is x96

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/math/mod.rs
++++ replace >= with < in amm_debt_same_move_solve
+@@ -76,17 +76,17 @@
+     debug!(c = ?c, "C factor");
+ 
+     let solution = quadratic_solve(a, b, c, precision);
+     println!("Got solutions: {:?}", solution);
+     let answer = solution
+         .0
+         .filter(|i| match direction {
+             Direction::BuyingT0 => *i <= Integer::ZERO,
+-            Direction::SellingT0 => *i >= Integer::ZERO
++            Direction::SellingT0 => *i < /* ~ changed by cargo-mutants ~ */ Integer::ZERO
+         })
+         .map(|i| resolve_precision(precision, i, RoundingMode::Ceiling))
+         .filter(|i| *i < quantity_moved)
+         .or(solution
+             .1
+             .filter(|i| match direction {
+                 Direction::BuyingT0 => *i <= Integer::ZERO,
+                 Direction::SellingT0 => *i >= Integer::ZERO

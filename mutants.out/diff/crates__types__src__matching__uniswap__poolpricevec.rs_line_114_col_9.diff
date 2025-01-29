@@ -1,0 +1,45 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace SwapStep<'a>::compute_info -> eyre::Result<Self> with Ok(Default::default())
+@@ -106,41 +106,17 @@
+ 
+     /// Internal method for computing swap step details
+     fn compute_info(
+         start_price: SqrtPriceX96,
+         end_price: SqrtPriceX96,
+         liq_range: LiqRangeRef<'a>
+     ) -> eyre::Result<Self> {
+         // Make sure our prices are in the appropriate range.
+-        let (low_price, high_price) = low_to_high(&start_price, &end_price);
+-        // Low price is valid if it's within our liquidity range
+-        let low_price_valid = liq_range.price_in_range(*low_price);
+-        // High price is valid if it's either within our liquidity range or at the very
+-        // top of the liquidity range
+-        let high_price_valid = liq_range.price_in_range(*high_price)
+-            || *high_price == SqrtPriceX96::at_tick(liq_range.upper_tick).unwrap();
+-        if !(low_price_valid && high_price_valid) {
+-            return Err(eyre!("Price outside liquidity range"))
+-        }
+-
+-        let liquidity = liq_range.liquidity;
+-        let (round_0, round_1) = match Direction::from_prices(start_price, end_price) {
+-            Direction::BuyingT0 => (false, true),
+-            Direction::SellingT0 => (true, false)
+-        };
+-        let sqrt_ratio_a_x_96 = start_price.into();
+-        let sqrt_ratio_b_x_96 = end_price.into();
+-        let d_t0 = _get_amount_0_delta(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, liquidity, round_0)
+-            .unwrap_or(Uint::from(0))
+-            .to();
+-        let d_t1 = _get_amount_1_delta(sqrt_ratio_a_x_96, sqrt_ratio_b_x_96, liquidity, round_1)
+-            .unwrap_or(Uint::from(0))
+-            .to();
+-        Ok(Self { start_price, end_price, d_t0, d_t1, liq_range })
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn start_price(&self) -> SqrtPriceX96 {
+         self.start_price
+     }
+ 
+     pub fn end_price(&self) -> SqrtPriceX96 {
+         self.end_price

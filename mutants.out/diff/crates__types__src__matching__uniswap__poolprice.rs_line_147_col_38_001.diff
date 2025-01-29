@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace < with > in PoolPrice<'a>::d_t0
+@@ -139,17 +139,17 @@
+             if new_price != sqrt_ratio_current_x_96 {
+                 match direction {
+                     Direction::BuyingT0 => {
+                         if amount_out < cur_quantity {
+                             return Err(eyre!("Bad stuff"));
+                         }
+                     }
+                     Direction::SellingT0 => {
+-                        if amount_in < cur_quantity {
++                        if amount_in > /* ~ changed by cargo-mutants ~ */ cur_quantity {
+                             return Err(eyre!("Bad stuff"));
+                         }
+                     }
+                 }
+             }
+             debug!(next_price = ?new_price, amount_in = ?amount_in, amount_out = ?amount_out, "Settings after compute_swap_step");
+             // Update our current quantity
+             match direction {

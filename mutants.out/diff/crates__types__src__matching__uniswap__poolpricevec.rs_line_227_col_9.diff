@@ -1,0 +1,33 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace PoolPriceVec<'a>::from_price_range -> eyre::Result<Self> with Ok(Default::default())
+@@ -219,29 +219,17 @@
+     pub fn steps(&self) -> Option<&Vec<SwapStep>> {
+         self.steps.as_ref()
+     }
+ 
+     /// Create a new PoolPriceVec from a start and end price with full safety
+     /// checks and with the ability to span liquidity boundaries.
+     pub fn from_price_range(start: PoolPrice<'a>, end: PoolPrice<'a>) -> eyre::Result<Self> {
+         // If the two prices aren't from the same pool, we should error
+-        if !std::ptr::eq(start.liq_range.pool_snap, end.liq_range.pool_snap) {
+-            return Err(eyre!("Cannot create a price range from prices not in the same pool"));
+-        }
+-
+-        let steps: Vec<SwapStep> = start
+-            .liq_range
+-            .pool_snap
+-            .ranges_for_ticks(start.tick, end.tick)?
+-            .iter()
+-            .map(|liq_range| SwapStep::for_range(&start, &end, liq_range))
+-            .collect::<eyre::Result<Vec<SwapStep>>>()?;
+-
+-        Self::from_steps(start, end, steps)
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn to_price_bound(start: PoolPrice<'a>, end: SqrtPriceX96) -> eyre::Result<Self> {
+         let end_tick = end.to_tick()?;
+         let steps = start
+             .liq_range
+             .pool_snap
+             .ranges_for_ticks(start.tick, end_tick)?

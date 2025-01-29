@@ -1,0 +1,23 @@
+--- crates/types/src/matching/tokens.rs
++++ replace <impl Deref for TokenQuantity>::deref -> &Self::Target with &Default::default()
+@@ -9,19 +9,17 @@
+     Token0(u128),
+     Token1(u128)
+ }
+ 
+ impl Deref for TokenQuantity {
+     type Target = u128;
+ 
+     fn deref(&self) -> &Self::Target {
+-        match self {
+-            Self::Token0(q) | Self::Token1(q) => q
+-        }
++        &Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl Add<u128> for TokenQuantity {
+     type Output = Self;
+ 
+     fn add(self, rhs: u128) -> Self::Output {
+         match self {

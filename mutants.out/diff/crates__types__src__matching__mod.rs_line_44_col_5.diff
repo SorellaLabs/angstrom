@@ -1,0 +1,22 @@
+--- crates/types/src/matching/mod.rs
++++ replace const_2_96 -> &'static Natural with &Default::default()
+@@ -36,18 +36,17 @@
+ 
+ pub fn const_2_192() -> &'static Natural {
+     static ONENINETWO: OnceLock<Natural> = OnceLock::new();
+     ONENINETWO.get_or_init(|| Natural::power_of_2(192))
+ }
+ 
+ #[allow(unused)]
+ pub fn const_2_96() -> &'static Natural {
+-    static ONENINETWO: OnceLock<Natural> = OnceLock::new();
+-    ONENINETWO.get_or_init(|| Natural::power_of_2(96))
++    &Default::default() /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ pub enum BookSide {
+     Bid,
+     Ask
+ }
+ 
+ /// Internal price representation used in the matching engine.

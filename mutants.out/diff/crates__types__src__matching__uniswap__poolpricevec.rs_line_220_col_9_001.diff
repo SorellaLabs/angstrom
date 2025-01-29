@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace PoolPriceVec<'a>::steps -> Option<&Vec<SwapStep>> with Some(&vec![])
+@@ -212,17 +212,17 @@
+         if self.end_bound.price > self.start_bound.price {
+             self.d_t0
+         } else {
+             self.d_t1
+         }
+     }
+ 
+     pub fn steps(&self) -> Option<&Vec<SwapStep>> {
+-        self.steps.as_ref()
++        Some(&vec![]) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Create a new PoolPriceVec from a start and end price with full safety
+     /// checks and with the ability to span liquidity boundaries.
+     pub fn from_price_range(start: PoolPrice<'a>, end: PoolPrice<'a>) -> eyre::Result<Self> {
+         // If the two prices aren't from the same pool, we should error
+         if !std::ptr::eq(start.liq_range.pool_snap, end.liq_range.pool_snap) {
+             return Err(eyre!("Cannot create a price range from prices not in the same pool"));

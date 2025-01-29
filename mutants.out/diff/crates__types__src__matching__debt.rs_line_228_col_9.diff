@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::current_t0 -> u128 with 0
+@@ -220,17 +220,17 @@
+         if res {
+             self.cur_price = price;
+         }
+         res
+     }
+ 
+     /// The current amount of T0 this debt is obligated to fill
+     pub fn current_t0(&self) -> u128 {
+-        self.magnitude.t0_at_price(self.cur_price)
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Returns the amount of T0 that needs to be reallocated for a given change
+     /// in a debt's T1 value
+     pub fn freed_t0(&self, t1_change: u128) -> u128 {
+         let i_t0 = self.current_t0();
+         // If we're freeing as much as is in the debt or more, we're freeing the whole
+         // amount

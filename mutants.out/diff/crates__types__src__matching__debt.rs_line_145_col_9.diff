@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::set_price -> Self with Default::default()
+@@ -137,17 +137,17 @@
+         let magnitude = if exact_in { DebtType::exact_in(t1_q) } else { DebtType::exact_out(t1_q) };
+         let price = Ray::calc_price_generic(t0_q, t1_q, magnitude.round_up());
+         Debt::new(magnitude, price)
+     }
+ 
+     /// Creates a new Debt item at the price provided with the same quantity as
+     /// the current Debt
+     pub fn set_price(&self, new_price: Ray) -> Self {
+-        Self { cur_price: new_price, ..*self }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn magnitude(&self) -> u128 {
+         self.magnitude.magnitude()
+     }
+ 
+     pub fn price(&self) -> Ray {
+         self.cur_price

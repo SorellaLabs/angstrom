@@ -1,0 +1,24 @@
+--- crates/types/src/matching/tokens.rs
++++ replace <impl Sub for TokenQuantity>::sub -> Self::Output with Default::default()
+@@ -30,20 +30,17 @@
+         }
+     }
+ }
+ 
+ impl Sub<u128> for TokenQuantity {
+     type Output = Self;
+ 
+     fn sub(self, rhs: u128) -> Self::Output {
+-        match self {
+-            Self::Token0(q) => Self::Token0(q.sub(rhs)),
+-            Self::Token1(q) => Self::Token1(q.sub(rhs))
+-        }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl TokenQuantity {
+     /// A new quantity of Token0
+     pub fn zero<T: Into<u128>>(source: T) -> Self {
+         Self::Token0(source.into())
+     }

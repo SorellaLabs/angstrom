@@ -1,0 +1,21 @@
+--- crates/types/src/matching/math/mod.rs
++++ replace >= with < in amm_debt_same_move_solve
+@@ -84,17 +84,17 @@
+             Direction::SellingT0 => *i >= Integer::ZERO
+         })
+         .map(|i| resolve_precision(precision, i, RoundingMode::Ceiling))
+         .filter(|i| *i < quantity_moved)
+         .or(solution
+             .1
+             .filter(|i| match direction {
+                 Direction::BuyingT0 => *i <= Integer::ZERO,
+-                Direction::SellingT0 => *i >= Integer::ZERO
++                Direction::SellingT0 => *i < /* ~ changed by cargo-mutants ~ */ Integer::ZERO
+             })
+             .map(|i| resolve_precision(precision, i, RoundingMode::Ceiling))
+             .filter(|i| *i < quantity_moved))
+         // If nothing else works, we can presume it all goes to the AMM?
+         .unwrap_or(quantity_moved);
+     answer
+ }
+ 

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/liqrange.rs
++++ replace LiqRange::liquidity -> u128 with 1
+@@ -42,17 +42,17 @@
+         self.lower_tick
+     }
+ 
+     pub fn upper_tick(&self) -> i32 {
+         self.upper_tick
+     }
+ 
+     pub fn liquidity(&self) -> u128 {
+-        self.liquidity
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[derive(Copy, Clone)]
+ pub struct LiqRangeRef<'a> {
+     pub(super) pool_snap: &'a PoolSnapshot,
+     pub(super) range:     &'a LiqRange,
+     pub(super) range_idx: usize

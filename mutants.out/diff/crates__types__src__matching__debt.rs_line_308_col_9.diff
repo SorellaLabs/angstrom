@@ -1,0 +1,27 @@
+--- crates/types/src/matching/debt.rs
++++ replace Debt::dq_to_price -> u128 with 0
+@@ -300,23 +300,17 @@
+     pub fn flat_fill_t1(&self, q: u128) -> Self {
+         let new_t1 = self.magnitude - q;
+         Self { magnitude: new_t1, cur_price: self.cur_price }
+     }
+ 
+     /// Difference in t0 required to move the price from the current price to
+     /// the target price
+     pub fn dq_to_price(&self, target_price: &Ray) -> u128 {
+-        let final_t0 = self.magnitude.t0_at_price(*target_price);
+-        let current_t0: u128 = self.current_t0();
+-        if final_t0 > current_t0 {
+-            final_t0 - current_t0
+-        } else {
+-            current_t0 - final_t0
+-        }
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Given an AMM liquidity and a quantity of t0 being bought to or sold from
+     /// the AMM, returns the quantity that t0 will change to bring the price
+     /// of this debt to the same price as the AMM
+     pub fn calc_proportion(
+         &self,
+         amm_delta: u128,

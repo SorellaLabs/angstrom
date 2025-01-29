@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace == with != in PoolPrice<'a>::order_to_target
+@@ -262,17 +262,17 @@
+             (upper_tick_price, next_tick)
+         } else {
+             let lower_tick_price = get_sqrt_ratio_at_tick(pool.lower_tick)
+                 .ok()
+                 .map(SqrtPriceX96::from)?;
+             let next_tick = self.liq_range.range_idx.checked_add(1);
+             (lower_tick_price, next_tick)
+         };
+-        if self.price == tick_bound_price {
++        if self.price != /* ~ changed by cargo-mutants ~ */ tick_bound_price {
+             // We're at the tick bound, we need to look at the next pool!
+             new_range_idx = next_tick?;
+             pool = self.liq_range.pool_snap.ranges.get(new_range_idx)?;
+             tick_bound_price = if buy {
+                 get_sqrt_ratio_at_tick(pool.upper_tick)
+                     .ok()
+                     .map(SqrtPriceX96::from)?
+             } else {

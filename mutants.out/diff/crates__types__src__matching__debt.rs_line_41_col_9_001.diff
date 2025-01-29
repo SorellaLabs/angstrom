@@ -1,0 +1,24 @@
+--- crates/types/src/matching/debt.rs
++++ replace DebtType::round_up -> bool with true
+@@ -33,20 +33,17 @@
+     }
+ 
+     pub fn exact_out(q: u128) -> Self {
+         Self::ExactOut(q)
+     }
+ 
+     /// Whether or not price calculations for this debt type should round up
+     pub fn round_up(&self) -> bool {
+-        match self {
+-            Self::ExactIn(_) => false,
+-            Self::ExactOut(_) => true
+-        }
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn same_type(&self, q: u128) -> Self {
+         match self {
+             Self::ExactIn(_) => Self::ExactIn(q),
+             Self::ExactOut(_) => Self::ExactOut(q)
+         }
+     }

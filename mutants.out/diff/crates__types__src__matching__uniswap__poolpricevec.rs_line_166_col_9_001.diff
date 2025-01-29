@@ -1,0 +1,25 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace SwapStep<'a>::output -> u128 with 1
+@@ -158,21 +158,17 @@
+         if self.end_price > self.start_price {
+             self.d_t1
+         } else {
+             self.d_t0
+         }
+     }
+ 
+     pub fn output(&self) -> u128 {
+-        if self.end_price > self.start_price {
+-            self.d_t0
+-        } else {
+-            self.d_t1
+-        }
++        1 /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[derive(Debug)]
+ pub struct DonationResult {
+     pub tick_donations: HashMap<Tick, U256>,
+     pub final_price:    SqrtPriceX96,
+     pub total_donated:  u128,

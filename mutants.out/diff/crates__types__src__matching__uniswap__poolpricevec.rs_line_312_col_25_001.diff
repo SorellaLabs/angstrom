@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace < with == in PoolPriceVec<'a>::from_swap
+@@ -304,17 +304,17 @@
+             format!("Quantity too large to convert u128 -> I256: {}", q)
+         })?;
+ 
+         // "Exact out" is calculated with a negative quantity
+         if !direction.is_input(&quantity) {
+             remaining *= I256::MINUS_ONE;
+         }
+ 
+-        while remaining < I256::ZERO {
++        while remaining == /* ~ changed by cargo-mutants ~ */ I256::ZERO {
+             // Update our current liquidiy range
+             let liq_range =
+                 current_liq_range.ok_or_else(|| eyre!("Unable to find next liquidity range"))?;
+             // Compute our swap towards the appropriate end of our current liquidity bound
+             let target_tick = liq_range.end_tick(direction);
+             let target_price = SqrtPriceX96::at_tick(target_tick)?;
+             // If our target price is equal to our current price, we're precisely at the
+             // "bottom" of a liquidity range and we can skip this computation as

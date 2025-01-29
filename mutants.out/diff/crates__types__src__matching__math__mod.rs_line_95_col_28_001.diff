@@ -1,0 +1,21 @@
+--- crates/types/src/matching/math/mod.rs
++++ replace < with > in amm_debt_same_move_solve
+@@ -87,17 +87,17 @@
+         .filter(|i| *i < quantity_moved)
+         .or(solution
+             .1
+             .filter(|i| match direction {
+                 Direction::BuyingT0 => *i <= Integer::ZERO,
+                 Direction::SellingT0 => *i >= Integer::ZERO
+             })
+             .map(|i| resolve_precision(precision, i, RoundingMode::Ceiling))
+-            .filter(|i| *i < quantity_moved))
++            .filter(|i| *i > /* ~ changed by cargo-mutants ~ */ quantity_moved))
+         // If nothing else works, we can presume it all goes to the AMM?
+         .unwrap_or(quantity_moved);
+     answer
+ }
+ 
+ /// Given an AMM with a constant liquidity and a debt, this will find the
+ /// quantity of T0 you can buy from the AMM and feed into the debt such that
+ /// their prices end up as close as possible

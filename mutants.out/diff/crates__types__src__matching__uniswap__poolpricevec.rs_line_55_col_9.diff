@@ -1,0 +1,43 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace SwapStep<'a>::for_price_range -> eyre::Result<Self> with Ok(Default::default())
+@@ -47,39 +47,17 @@
+     ///
+     /// This method uses raw prices instead of PoolPrice references
+     pub fn for_price_range(
+         start: &SqrtPriceX96,
+         end: &SqrtPriceX96,
+         liq_range: &LiqRangeRef<'a>
+     ) -> eyre::Result<Self> {
+         // Sort our incoming prices into the low and high price
+-        let (low, high) = low_to_high(start, end);
+-        let low_tick = low.to_tick()?;
+-        let high_tick = high.to_tick()?;
+-
+-        // Make sure both of our price ticks are within bounds, otherwise return an
+-        // error
+-        if low_tick >= liq_range.upper_tick || high_tick < liq_range.lower_tick {
+-            return Err(eyre!("Ticks out of bounds, unable to construct step"))
+-        }
+-
+-        let start_price = if low_tick >= liq_range.lower_tick {
+-            *low
+-        } else {
+-            SqrtPriceX96::at_tick(liq_range.lower_tick)?
+-        };
+-
+-        let end_price = if high_tick < liq_range.upper_tick {
+-            *high
+-        } else {
+-            SqrtPriceX96::at_tick(liq_range.upper_tick)?
+-        };
+-
+-        Self::compute_info(start_price, end_price, *liq_range)
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Creates a SwapStep that goes from the price given to the edge of the
+     /// liquidity range that the price is associated with in the given Direction
+     pub fn to_bound(start: PoolPrice<'a>, direction: Direction) -> eyre::Result<Self> {
+         let end = start.liq_range.clone().end_price(direction);
+         Self::from_prices(start, end)
+     }

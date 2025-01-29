@@ -1,0 +1,21 @@
+--- crates/types/src/matching/sqrtprice.rs
++++ replace SqrtPriceX96::from_float_price -> Self with Default::default()
+@@ -27,17 +27,17 @@
+         let sqrt_price = Rational::from_naturals(numerator, denominator);
+         let price = sqrt_price.pow(2u64);
+         let (res, _) = price.rounding_into(malachite::rounding_modes::RoundingMode::Floor);
+         res
+     }
+ 
+     /// Convert a floating point price `P` into a SqrtPriceX96 `sqrt(P)`
+     pub fn from_float_price(price: f64) -> Self {
+-        SqrtPriceX96(U160::from(price.sqrt() * (2.0_f64.pow(96))))
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Produces the SqrtPriceX96 precisely at a given tick
+     pub fn at_tick(tick: i32) -> eyre::Result<Self> {
+         Ok(Self::from(get_sqrt_ratio_at_tick(tick)?))
+     }
+ 
+     /// Produces the maximum SqrtPriceX96 valid for a given tick before we step

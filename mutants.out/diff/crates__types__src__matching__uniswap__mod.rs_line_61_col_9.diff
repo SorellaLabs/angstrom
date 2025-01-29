@@ -1,0 +1,24 @@
+--- crates/types/src/matching/uniswap/mod.rs
++++ replace Direction::from_is_bid -> Self with Default::default()
+@@ -53,20 +53,17 @@
+     BuyingT0,
+     /// When selling T0, the price will go down and the tick number will
+     /// decrease
+     SellingT0
+ }
+ 
+ impl Direction {
+     pub fn from_is_bid(is_bid: bool) -> Self {
+-        match is_bid {
+-            true => Self::BuyingT0,
+-            false => Self::SellingT0
+-        }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn is_bid(&self) -> bool {
+         matches!(self, Self::BuyingT0)
+     }
+ 
+     /// Determine the direction of sale from a start and end price
+     pub fn from_prices<P: Ord>(start: P, end: P) -> Self {

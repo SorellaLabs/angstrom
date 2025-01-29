@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace + with - in <impl Add for DebtType>::add
+@@ -95,17 +95,17 @@
+ 
+ impl Add for DebtType {
+     type Output = Self;
+ 
+     fn add(self, rhs: Self) -> Self::Output {
+         match (self, rhs) {
+             // Like types accumulate
+             (Self::ExactIn(q_1), Self::ExactIn(q_2)) => Self::ExactIn(q_1 + q_2),
+-            (Self::ExactOut(q_1), Self::ExactOut(q_2)) => Self::ExactOut(q_1 + q_2),
++            (Self::ExactOut(q_1), Self::ExactOut(q_2)) => Self::ExactOut(q_1 - /* ~ changed by cargo-mutants ~ */ q_2),
+             // Different types annihilate or maybe flip
+             (Self::ExactIn(q_1), Self::ExactOut(q_2)) if q_2 > q_1 => Self::ExactOut(q_2 - q_1),
+             (Self::ExactIn(q_1), Self::ExactOut(q_2)) => Self::ExactIn(q_1 - q_2),
+             (Self::ExactOut(q_1), Self::ExactIn(q_2)) if q_2 > q_1 => Self::ExactIn(q_2 - q_1),
+             (Self::ExactOut(q_1), Self::ExactIn(q_2)) => Self::ExactOut(q_1 - q_2)
+         }
+     }
+ }

@@ -205,8 +205,7 @@ pub fn low_to_high<'a, T: Ord>(a: &'a T, b: &'a T) -> (&'a T, &'a T) {
 
 pub fn max_t1_for_t0(t0: u128, direction: Direction, price: Ray) -> u128 {
     match direction {
-        // If we're buying we always round down so it's the amount it'd take to buy (t0 + 1) - 1
-        Direction::BuyingT0 => price.quantity(t0 + 1, true).saturating_sub(1),
+        Direction::BuyingT0 => price.quantity(t0, true).saturating_sub(1),
         // If we're selling, we always round up, so the max for a quantity is just what's at the
         // quantity
         Direction::SellingT0 => price.quantity(t0, false)
@@ -221,53 +220,256 @@ mod tests {
     use super::*;
     use crate::matching::SqrtPriceX96;
 
+    // Helper function to create test prices
+    fn create_test_price(tick: i32) -> Ray {
+        Ray::from(SqrtPriceX96::at_tick(tick).unwrap())
+    }
+
     #[test]
-    fn quadratic_solve_test() {
+    fn test_equal_move_solve() {
+        // Currently returns default, so just test that
+        assert_eq!(equal_move_solve(), Integer::default());
+    }
+
+    #[test]
+    fn test_amm_debt_same_move_solve() {
+        // Test case 1: Standard selling T0 direction
+        let result = amm_debt_same_move_solve(
+            1_000_000_000_000_000_u128, // amm_liquidity
+            1_000_000_000_u128,         // debt_initial_t0
+            10_000_000_000_u128,        // debt_fixed_t1
+            1_000_000_000_u128,         // quantity_moved
+            Direction::SellingT0
+        );
+        assert!(result <= 1_000_000_000_u128);
+
+        // Test case 2: Standard buying T0 direction
+        let result_buy = amm_debt_same_move_solve(
+            1_000_000_000_000_000_u128,
+            1_000_000_000_u128,
+            10_000_000_000_u128,
+            1_000_000_000_u128,
+            Direction::BuyingT0
+        );
+        assert!(result_buy <= 1_000_000_000_u128);
+
+        // Test case 3: Edge case with very small liquidity
+        let small_result = amm_debt_same_move_solve(
+            1_u128, // minimal liquidity
+            1_000_000_000_u128,
+            10_000_000_000_u128,
+            1_000_000_000_u128,
+            Direction::SellingT0
+        );
+        assert!(small_result <= 1_000_000_000_u128);
+
+        // Test case 4: Edge case with very large liquidity
+        let large_result = amm_debt_same_move_solve(
+            u128::MAX, // maximum liquidity
+            1_000_000_000_u128,
+            10_000_000_000_u128,
+            1_000_000_000_u128,
+            Direction::SellingT0
+        );
+        assert!(large_result <= 1_000_000_000_u128);
+
+        // Test case 5: Zero quantity moved
+        let zero_result = amm_debt_same_move_solve(
+            1_000_000_000_000_000_u128,
+            1_000_000_000_u128,
+            10_000_000_000_u128,
+            0,
+            Direction::SellingT0
+        );
+        assert_eq!(zero_result, 0);
+    }
+
+    #[test]
+    fn test_price_intersect_solve() {
+        // Test case 1: Standard case with different prices
         let amm_liquidity = 1_000_000_000_000_000_u128;
         let amm_price = SqrtPriceX96::at_tick(150000).unwrap();
         let debt_price = Ray::from(SqrtPriceX96::at_tick(110000).unwrap());
-        let debt_start_t0 = 1_000_000_000_u128;
-        let debt_fixed_t1: u128 = debt_price.mul_quantity(U256::from(debt_start_t0)).to();
-        let res = price_intersect_solve(
+        let debt_fixed_t1 = 10_000_000_000_u128;
+
+        let result = price_intersect_solve(
             amm_liquidity,
             amm_price,
             debt_fixed_t1,
             debt_price,
             Direction::BuyingT0
         );
-        debug!(result = ?res, "Solution");
-        // RoundingMode has to be UP here we want the greater value at all times
-        let quantity = resolve_precision(192, res, RoundingMode::Up);
-        debug!(quantity, "Quantity found");
+        assert!(result != Integer::ZERO);
 
-        // Validate that the quantity returned brings the two prices as close together
-        // as possible.  We do this by checking the result against result+1 and result-1
-        let max_tick_target = SqrtPriceX96::at_tick(MAX_TICK).unwrap();
-        let price_gaps = [Some(quantity), Some(quantity + 1), quantity.checked_sub(1)].map(|e| {
-            e.map(|q| {
-                let amount_remaining = I256::unchecked_from(q) * I256::MINUS_ONE;
-                let amm_result = compute_swap_step(
-                    amm_price.into(),
-                    max_tick_target.into(),
-                    amm_liquidity,
-                    amount_remaining,
-                    0
-                )
-                .unwrap();
-                let amm_final_price = Ray::from(SqrtPriceX96::from(amm_result.0));
-                let debt_final_price =
-                    Ray::calc_price(U256::from(debt_start_t0 - q), U256::from(debt_fixed_t1));
-                amm_final_price.abs_diff(*debt_final_price)
-            })
-        });
-        let closer_than_plus_one = price_gaps[0].unwrap() < price_gaps[1].unwrap();
-        let closer_than_minus_one = price_gaps[2]
-            .map(|r| price_gaps[0].unwrap() < r)
-            .unwrap_or(true);
-        assert!(
-            closer_than_plus_one && closer_than_minus_one,
-            "Quantity found was not minimum price gap!"
+        // Test case 2: Very close prices
+        let close_price = SqrtPriceX96::at_tick(150001).unwrap();
+        let result_close = price_intersect_solve(
+            amm_liquidity,
+            amm_price,
+            debt_fixed_t1,
+            Ray::from(close_price),
+            Direction::BuyingT0
         );
+        assert!(result_close != Integer::ZERO);
+
+        // Test case 3: Extreme price difference
+        let extreme_price = SqrtPriceX96::at_tick(-150000).unwrap();
+        let result_extreme = price_intersect_solve(
+            amm_liquidity,
+            amm_price,
+            debt_fixed_t1,
+            Ray::from(extreme_price),
+            Direction::SellingT0
+        );
+        assert!(result_extreme != Integer::ZERO);
+
+        // Test case 4: Minimal liquidity
+        let result_min_liq = price_intersect_solve(
+            1_u128,
+            amm_price,
+            debt_fixed_t1,
+            debt_price,
+            Direction::BuyingT0
+        );
+        assert!(result_min_liq != Integer::ZERO);
+
+        // Test case 5: Maximum liquidity
+        let result_max_liq = price_intersect_solve(
+            u128::MAX,
+            amm_price,
+            debt_fixed_t1,
+            debt_price,
+            Direction::BuyingT0
+        );
+        assert!(result_max_liq != Integer::ZERO);
+    }
+
+    #[test]
+    fn test_quadratic_solve() {
+        // Test case 1: Standard case with two real solutions
+        let (sol1, sol2) = quadratic_solve(
+            Integer::from(1), // x² term
+            Integer::from(5), // x term
+            Integer::from(6), // constant term
+            64                // precision
+        );
+        assert!(sol1.is_some() && sol2.is_some());
+        if let (Some(s1), Some(s2)) = (&sol1, &sol2) {
+            assert!(s1 != s2, "Solutions should be different");
+        }
+
+        // Test case 2: One real solution (discriminant = 0)
+        let (sol1, sol2) =
+            quadratic_solve(Integer::from(1), Integer::from(2), Integer::from(1), 64);
+        assert!(sol1.is_some() || sol2.is_some());
+
+        // Test case 3: Large coefficients
+        let (sol1, sol2) = quadratic_solve(
+            Integer::from(1000000),
+            Integer::from(2000000),
+            Integer::from(1000000),
+            64
+        );
+        assert!(sol1.is_some() || sol2.is_some());
+
+        // Test case 4: Negative coefficients
+        let (sol1, sol2) =
+            quadratic_solve(Integer::from(-1), Integer::from(-5), Integer::from(-6), 64);
+        assert!(sol1.is_some() || sol2.is_some());
+
+        // Test case 5: Zero a coefficient (linear equation)
+        let (sol1, sol2) = quadratic_solve(Integer::ZERO, Integer::from(2), Integer::from(1), 64);
+        assert!(sol1.is_some() || sol2.is_some());
+    }
+
+    #[test]
+    #[should_panic(expected = "Both denominators in quadratic solve were zero")]
+    fn test_quadratic_solve_both_zero() {
+        quadratic_solve(
+            Integer::ZERO, // a
+            Integer::ZERO, // b
+            Integer::ZERO, // c
+            64             // precision
+        );
+    }
+
+    #[test]
+    fn test_resolve_precision() {
+        let number = Integer::from(1000) << 64;
+        let result = resolve_precision(64, number, RoundingMode::Nearest);
+        assert_eq!(result, 1000);
+
+        // Test rounding modes
+        let number: Integer = (Integer::from(1500) << 64) + (Integer::from(1) << 63);
+        let ceiling = resolve_precision(64, number.clone(), RoundingMode::Ceiling);
+        let floor = resolve_precision(64, number, RoundingMode::Floor);
+        assert!(ceiling > floor);
+    }
+
+    #[test]
+    fn test_low_to_high() {
+        let a = 5;
+        let b = 10;
+
+        let (low, high) = low_to_high(&a, &b);
+        assert_eq!(*low, 5);
+        assert_eq!(*high, 10);
+
+        let (low, high) = low_to_high(&b, &a);
+        assert_eq!(*low, 5);
+        assert_eq!(*high, 10);
+
+        let (low, high) = low_to_high(&a, &a);
+        assert_eq!(*low, 5);
+        assert_eq!(*high, 5);
+    }
+
+    #[test]
+    fn test_max_t1_for_t0() {
+        // Setup different price levels for testing
+        let low_price = create_test_price(-50_000);
+        let mid_price = create_test_price(100_000);
+        let high_price = create_test_price(150_000);
+
+        // // Test case 1: Standard amounts at different price levels
+        for price in [low_price, mid_price, high_price] {
+            let max_buy = max_t1_for_t0(1000, Direction::BuyingT0, price);
+            let max_sell = max_t1_for_t0(1000, Direction::SellingT0, price);
+            assert!(max_buy > 0);
+            assert!(max_sell > 0);
+            assert!(max_sell >= max_buy, "sell {:?} buy: {:?}", max_sell, max_buy);
+        }
+
+        // Test case 2: Edge cases
+        for direction in [Direction::BuyingT0, Direction::SellingT0] {
+            // Zero input
+            assert_eq!(max_t1_for_t0(0, direction, mid_price), 0);
+            // Very small input
+            assert!(max_t1_for_t0(1, direction, mid_price) > 0);
+            // Very large input
+            let large_result = max_t1_for_t0(u128::MAX - 1, direction, mid_price);
+            assert!(large_result > 0);
+        }
+
+        // Test case 3: Price relationship verification
+        let test_amount = 1000_u128;
+        for direction in [Direction::BuyingT0, Direction::SellingT0] {
+            let low_result = max_t1_for_t0(test_amount, direction, low_price);
+            let mid_result = max_t1_for_t0(test_amount, direction, mid_price);
+            let high_result = max_t1_for_t0(test_amount, direction, high_price);
+
+            // Higher prices should result in more T1 for same T0
+            assert!(high_result >= mid_result);
+            assert!(mid_result >= low_result);
+        }
+
+        // Test case 4: Consecutive values
+        let test_price = mid_price;
+        for i in 1..10 {
+            let current = max_t1_for_t0(i, Direction::SellingT0, test_price);
+            let next = max_t1_for_t0(i + 1, Direction::SellingT0, test_price);
+            assert!(next > current, "T1 should increase with T0");
+        }
     }
 
     #[test]

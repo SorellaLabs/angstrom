@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace * with / in Debt::calc_proportion
+@@ -329,17 +329,17 @@
+         let l = Natural::from(amm_liquidity);
+         let dx = Natural::from(amm_delta);
+ 
+         // Find our Sqrts that we're using, with extra precision baked in
+         let sqrt_t1_x96 = ((&t1 << 192) as Natural).floor_sqrt();
+         let sqrt_t0_start_x96 = ((&t0_start << 192) as Natural).floor_sqrt();
+ 
+         let a_num_portion_1 = &dx * &sqrt_t1_x96;
+-        let a_num_portion_2 = &l * &sqrt_t0_start_x96;
++        let a_num_portion_2 = &l / /* ~ changed by cargo-mutants ~ */ &sqrt_t0_start_x96;
+         let a_numerator_sum = if amm_positive_delta {
+             a_num_portion_1 + a_num_portion_2
+         } else {
+             a_num_portion_2 - a_num_portion_1
+         };
+ 
+         let (a_fraction, _) = (&a_numerator_sum).div_round(&l, RoundingMode::Nearest);
+         debug!(

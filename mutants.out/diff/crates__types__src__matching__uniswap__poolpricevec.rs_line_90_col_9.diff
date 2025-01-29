@@ -1,0 +1,23 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace SwapStep<'a>::whole_range -> eyre::Result<Self> with Ok(Default::default())
+@@ -82,19 +82,17 @@
+     pub fn to_bound(start: PoolPrice<'a>, direction: Direction) -> eyre::Result<Self> {
+         let end = start.liq_range.clone().end_price(direction);
+         Self::from_prices(start, end)
+     }
+ 
+     /// Creates a SwapStep that covers the entirety of the provided liquidity
+     /// range
+     pub fn whole_range(range: LiqRangeRef<'a>, direction: Direction) -> eyre::Result<Self> {
+-        let start = range.start_price(direction);
+-        let end = range.end_price(direction);
+-        Self::from_prices(start, end)
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Creates a SwapStep that covers the range between two prices, provided
+     /// those prices are both within the same liquidity range
+     pub fn from_prices(start: PoolPrice<'a>, end: PoolPrice<'a>) -> eyre::Result<Self> {
+         if start.liq_range != end.liq_range {
+             return Err(eyre!(
+                 "A SwapStep can only cover one liquidity range, provided prices are from \

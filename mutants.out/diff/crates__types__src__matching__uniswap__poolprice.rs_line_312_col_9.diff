@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolprice.rs
++++ replace PoolPrice<'a>::as_sqrtpricex96 -> SqrtPriceX96 with Default::default()
+@@ -304,17 +304,17 @@
+ 
+     /// Return the current price as a Ray
+     pub fn as_ray(&self) -> Ray {
+         Ray::from(self.price)
+     }
+ 
+     /// Return the current SqrtPriceX96 structure
+     pub fn as_sqrtpricex96(&self) -> SqrtPriceX96 {
+-        self.price
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Return the current price (NOT sqrt) as a float by calling SqrtPriceX86's
+     /// `as_f64` method
+     pub fn as_float(&self) -> f64 {
+         self.price.as_f64()
+     }
+ }

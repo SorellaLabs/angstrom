@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace && with || in SwapStep<'a>::compute_info
+@@ -113,17 +113,17 @@
+         // Make sure our prices are in the appropriate range.
+         let (low_price, high_price) = low_to_high(&start_price, &end_price);
+         // Low price is valid if it's within our liquidity range
+         let low_price_valid = liq_range.price_in_range(*low_price);
+         // High price is valid if it's either within our liquidity range or at the very
+         // top of the liquidity range
+         let high_price_valid = liq_range.price_in_range(*high_price)
+             || *high_price == SqrtPriceX96::at_tick(liq_range.upper_tick).unwrap();
+-        if !(low_price_valid && high_price_valid) {
++        if !(low_price_valid || /* ~ changed by cargo-mutants ~ */ high_price_valid) {
+             return Err(eyre!("Price outside liquidity range"))
+         }
+ 
+         let liquidity = liq_range.liquidity;
+         let (round_0, round_1) = match Direction::from_prices(start_price, end_price) {
+             Direction::BuyingT0 => (false, true),
+             Direction::SellingT0 => (true, false)
+         };

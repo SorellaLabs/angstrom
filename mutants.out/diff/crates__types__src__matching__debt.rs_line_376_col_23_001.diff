@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace + with * in <impl AddAssign for Option<Debt>>::add_assign
+@@ -368,17 +368,17 @@
+             None => Some(rhs),
+             Some(d) => d + rhs
+         }
+     }
+ }
+ 
+ impl AddAssign<Debt> for Option<Debt> {
+     fn add_assign(&mut self, rhs: Debt) {
+-        *self = *self + rhs
++        *self = *self * /* ~ changed by cargo-mutants ~ */ rhs
+     }
+ }
+ 
+ impl Add<Debt> for Debt {
+     type Output = Option<Debt>;
+ 
+     fn add(self, rhs: Debt) -> Self::Output {
+         let magnitude = self.magnitude + rhs.magnitude;

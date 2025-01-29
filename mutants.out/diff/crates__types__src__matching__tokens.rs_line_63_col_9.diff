@@ -1,0 +1,21 @@
+--- crates/types/src/matching/tokens.rs
++++ replace TokenQuantity::one_from_uint -> Self with Default::default()
+@@ -55,17 +55,17 @@
+ 
+     /// A quantity of Token0 from the U256 format specifically
+     pub fn zero_from_uint(source: U256) -> Self {
+         Self::Token0(source.to())
+     }
+ 
+     /// A quantity of Token1 from the U256 format specifically
+     pub fn one_from_uint(source: U256) -> Self {
+-        Self::Token1(source.to())
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn swap_at_price(&self, price: Ray) -> Self {
+         match self {
+             Self::Token0(q) => Self::Token1(price.mul_quantity(U256::from(*q)).to()),
+             Self::Token1(q) => Self::Token0(price.inverse_quantity(*q, true))
+         }
+     }

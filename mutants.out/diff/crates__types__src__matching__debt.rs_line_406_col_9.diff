@@ -1,0 +1,21 @@
+--- crates/types/src/matching/debt.rs
++++ replace <impl PartialEq for Debt>::eq -> bool with true
+@@ -398,17 +398,17 @@
+ 
+     fn add(self, rhs: DebtType) -> Self::Output {
+         Debt { cur_price: self.cur_price, magnitude: self.magnitude + rhs }
+     }
+ }
+ 
+ impl PartialEq<Ray> for Debt {
+     fn eq(&self, other: &Ray) -> bool {
+-        self.valid_for_price(*other)
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl PartialOrd<Ray> for Debt {
+     fn partial_cmp(&self, other: &Ray) -> Option<std::cmp::Ordering> {
+         if self == other {
+             Some(std::cmp::Ordering::Equal)
+         } else {

@@ -1,0 +1,38 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace PoolPriceVec<'a>::to_price_bound -> eyre::Result<Self> with Ok(Default::default())
+@@ -235,34 +235,17 @@
+             .iter()
+             .map(|liq_range| SwapStep::for_range(&start, &end, liq_range))
+             .collect::<eyre::Result<Vec<SwapStep>>>()?;
+ 
+         Self::from_steps(start, end, steps)
+     }
+ 
+     pub fn to_price_bound(start: PoolPrice<'a>, end: SqrtPriceX96) -> eyre::Result<Self> {
+-        let end_tick = end.to_tick()?;
+-        let steps = start
+-            .liq_range
+-            .pool_snap
+-            .ranges_for_ticks(start.tick, end_tick)?
+-            .iter()
+-            .map(|liq_range| {
+-                let (start, end) = low_to_high(&start.price, &end);
+-                SwapStep::for_price_range(start, end, liq_range)
+-            })
+-            .collect::<eyre::Result<Vec<SwapStep>>>()?;
+-        let end = if let Some(l) = steps.last() {
+-            let tick = l.end_price.to_tick()?;
+-            PoolPrice { liq_range: l.liq_range, price: l.end_price, tick }
+-        } else {
+-            return Err(eyre!("Unable to find actual end price"))
+-        };
+-        Self::from_steps(start, end, steps)
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn to_upper(start: PoolPrice<'a>) -> eyre::Result<Self> {
+         let end = if let Some(range) = start
+             .liq_range
+             .pool_snap
+             .get_range_for_tick(start.liq_range.upper_tick)
+         {

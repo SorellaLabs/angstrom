@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/poolpricevec.rs
++++ replace > with < in PoolPriceVec<'a>::output
+@@ -204,17 +204,17 @@
+         if self.end_bound.price > self.start_bound.price {
+             self.d_t1
+         } else {
+             self.d_t0
+         }
+     }
+ 
+     pub fn output(&self) -> u128 {
+-        if self.end_bound.price > self.start_bound.price {
++        if self.end_bound.price < /* ~ changed by cargo-mutants ~ */ self.start_bound.price {
+             self.d_t0
+         } else {
+             self.d_t1
+         }
+     }
+ 
+     pub fn steps(&self) -> Option<&Vec<SwapStep>> {
+         self.steps.as_ref()

@@ -1,0 +1,21 @@
+--- crates/types/src/matching/uniswap/flags.rs
++++ replace | with & in <impl BitOr for U160>::bitor
+@@ -86,17 +86,17 @@
+         Into::<U160>::into(self) | Into::<U160>::into(rhs)
+     }
+ }
+ 
+ impl BitOr<UniswapFlags> for U160 {
+     type Output = U160;
+ 
+     fn bitor(self, rhs: UniswapFlags) -> Self::Output {
+-        self | Into::<U160>::into(rhs)
++        self & /* ~ changed by cargo-mutants ~ */ Into::<U160>::into(rhs)
+     }
+ }
+ 
+ impl BitOr<U160> for UniswapFlags {
+     type Output = U160;
+ 
+     fn bitor(self, rhs: U160) -> Self::Output {
+         Into::<U160>::into(self) | rhs

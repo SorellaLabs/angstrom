@@ -346,33 +346,12 @@ mod test {
     use alloy_primitives::U160;
 
     use crate::matching::{
-        uniswap::{Direction, LiqRange, PoolSnapshot},
-        Debt, Ray, SqrtPriceX96
+        uniswap::{Direction, LiqRange, PoolPrice, PoolSnapshot, Quantity},
+        Debt, DebtType, Ray, SqrtPriceX96
     };
 
-    // #[test]
-    // fn intersects_with_debt() {
-    //     let debt_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
-    //     let debt =
-    // Debt::new(crate::matching::DebtType::ExactOut(1_000_000_000_u128),
-    // debt_price);     let amm = PoolSnapshot::new(
-    //         vec![LiqRange {
-    //             liquidity:  1_000_000_000_u128,
-    //             lower_tick: 99900,
-    //             upper_tick: 100100
-    //         }],
-    //         SqrtPriceX96::at_tick(100001).unwrap()
-    //     )
-    //     .unwrap();
-    //     let result = amm.current_price().intersect_with_debt(debt).unwrap();
-    //     println!("Result: {}", result);
-    //     let valid = debt.valid_for_price(amm.current_price().as_ray());
-    //     println!("Valid: {}", valid);
-    // }
-
-    #[test]
-    fn can_buy_and_sell_t0() {
-        let amm = PoolSnapshot::new(
+    fn setup_test_pool() -> PoolSnapshot {
+        PoolSnapshot::new(
             vec![
                 LiqRange {
                     liquidity:  1_000_000_000_000_u128,
@@ -387,15 +366,155 @@ mod test {
             ],
             SqrtPriceX96::at_tick(100100).unwrap()
         )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_intersects_with_debt() {
+        let debt_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let debt = Debt::new(DebtType::ExactOut(1_000_000_000_u128), debt_price);
+        let amm = PoolSnapshot::new(
+            vec![LiqRange {
+                liquidity:  1_000_000_000_u128,
+                lower_tick: 99900,
+                upper_tick: 100100
+            }],
+            SqrtPriceX96::at_tick(100001).unwrap()
+        )
         .unwrap();
+
+        let result = amm.current_price().intersect_with_debt(debt).unwrap();
+        assert!(result > 0, "Should require some tokens to intersect with debt");
+
+        // Verify the price after intersection is valid for the debt
+        let new_price = amm
+            .current_price()
+            .d_t0(result, Direction::BuyingT0)
+            .unwrap();
+        assert!(
+            debt.valid_for_price(new_price.as_ray()),
+            "Price should be valid for debt after intersection"
+        );
+    }
+
+    #[test]
+    fn test_can_buy_and_sell_t0() {
+        let amm = setup_test_pool();
         let cur_price = amm.current_price();
+
+        // Test buying T0
         let new_price = amm
             .current_price()
             .d_t0(1000000, Direction::BuyingT0)
             .unwrap();
         assert!(new_price.price > cur_price.price, "Price didn't move up when buying T0");
+
+        // Test selling T0
         let third_price = new_price.d_t0(1000000, Direction::SellingT0).unwrap();
         let diff = third_price.price.abs_diff(*cur_price.price);
         assert!(diff <= U160::from(1_u128), "Price didn't move back when selling T0");
+    }
+
+    #[test]
+    fn test_pool_price_creation() {
+        let amm = setup_test_pool();
+        let price = amm.current_price();
+
+        assert_eq!(price.tick(), 100100);
+        assert_eq!(price.liquidity(), 1_000_000_000_000_u128);
+        assert!(price.price == SqrtPriceX96::at_tick(100100).unwrap());
+    }
+
+    #[test]
+    fn test_zero_quantity_movement() {
+        let amm = setup_test_pool();
+        let original_price = amm.current_price();
+
+        let new_price = original_price.d_t0(0, Direction::BuyingT0).unwrap();
+        assert_eq!(
+            new_price.price, original_price.price,
+            "Price shouldn't change for zero quantity"
+        );
+    }
+
+    #[test]
+    fn test_price_conversions() {
+        let amm = setup_test_pool();
+        let price = amm.current_price();
+
+        // Test various price representation conversions
+        let _ray_price = price.as_ray();
+        let _sqrt_price = price.as_sqrtpricex96();
+        let float_price = price.as_float();
+
+        assert!(float_price > 0.0, "Float price should be positive");
+    }
+
+    #[test]
+    fn test_vec_to_target() {
+        let amm = setup_test_pool();
+        let price = amm.current_price();
+
+        // Test vector to higher price
+        let target_price = SqrtPriceX96::at_tick(100150).unwrap();
+        let vec_up = price.vec_to(target_price).unwrap();
+        assert!(vec_up.end_bound.price >= target_price);
+
+        // Test vector to lower price
+        let target_price = SqrtPriceX96::at_tick(100050).unwrap();
+        let vec_down = price.vec_to(target_price).unwrap();
+        assert!(vec_down.end_bound.price <= price.price);
+    }
+
+    #[test]
+    fn test_order_to_target() {
+        let amm = setup_test_pool();
+        let price = amm.current_price();
+
+        // Test buying order
+        let target_price = Some(SqrtPriceX96::at_tick(100150).unwrap());
+        let buy_vec = price.order_to_target(target_price, true);
+        assert!(buy_vec.is_some());
+
+        // Test selling order
+        let target_price = Some(SqrtPriceX96::at_tick(100050).unwrap());
+        let sell_vec = price.order_to_target(target_price, false);
+        assert!(sell_vec.is_some());
+    }
+
+    #[test]
+    fn test_add_sub_operations() {
+        let amm = setup_test_pool();
+        let price = amm.current_price();
+
+        // Test addition
+        let quantity = Quantity::Token0(1000000);
+        let add_result = (price.clone() + quantity).unwrap();
+        assert!(add_result.end_bound.price > price.price);
+
+        // Test subtraction
+        let sub_result = (price.clone() - quantity).unwrap();
+        assert!(sub_result.end_bound.price < price.price);
+    }
+
+    #[test]
+    fn test_price_comparison() {
+        let amm = setup_test_pool();
+        let price1 = amm.current_price();
+        let price2 = price1.d_t0(1000000, Direction::BuyingT0).unwrap();
+
+        assert!(price2 > price1, "Higher price should be greater");
+        assert!(price1 < price2, "Lower price should be less");
+        assert_ne!(price1, price2, "Different prices should not be equal");
+    }
+
+    #[test]
+    #[should_panic(expected = "Created PoolPrice with out of range tick")]
+    fn test_invalid_tick_creation() {
+        let amm = setup_test_pool();
+        let range = amm.current_price().liq_range;
+        let price = SqrtPriceX96::at_tick(98000).unwrap(); // tick outside range
+
+        PoolPrice::checked_new(range, price, 98000);
     }
 }

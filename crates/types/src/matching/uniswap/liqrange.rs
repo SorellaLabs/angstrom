@@ -140,3 +140,130 @@ impl<'a> Debug for LiqRangeRef<'a> {
         builder.finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::matching::uniswap::Direction;
+
+    #[test]
+    fn test_liq_range_creation() {
+        // Test valid range creation
+        let result = LiqRange::new(-1000, 1000, 100);
+        assert!(result.is_ok());
+        let range = result.unwrap();
+        assert_eq!(range.lower_tick(), -1000);
+        assert_eq!(range.upper_tick(), 1000);
+        assert_eq!(range.liquidity(), 100);
+
+        // Test invalid ranges
+        assert!(LiqRange::new(1000, -1000, 100).is_err()); // Upper < Lower
+        assert!(LiqRange::new(-887273, 1000, 100).is_err()); // Below MIN_TICK
+        assert!(LiqRange::new(-1000, 887273, 100).is_err()); // Above MAX_TICK
+        assert!(LiqRange::new(100, 100, 100).is_err()); // Equal bounds
+    }
+
+    #[test]
+    fn test_liq_range_getters() {
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+        assert_eq!(range.lower_tick(), -100);
+        assert_eq!(range.upper_tick(), 100);
+        assert_eq!(range.liquidity(), 1000);
+    }
+
+    #[test]
+    fn test_liq_range_ref_price_in_range() {
+        let pool_snap = PoolSnapshot::default();
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+        let range_ref = LiqRangeRef::new(&pool_snap, &range, 0);
+
+        // Test prices within range
+        let price_in = SqrtPriceX96::at_tick(0).unwrap();
+        assert!(range_ref.price_in_range(price_in));
+
+        // Test prices outside range
+        let price_below = SqrtPriceX96::at_tick(-150).unwrap();
+        let price_above = SqrtPriceX96::at_tick(150).unwrap();
+        assert!(!range_ref.price_in_range(price_below));
+        assert!(!range_ref.price_in_range(price_above));
+    }
+
+    #[test]
+    fn test_liq_range_ref_direction_ticks() {
+        let pool_snap = PoolSnapshot::default();
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+        let range_ref = LiqRangeRef::new(&pool_snap, &range, 0);
+
+        // Test buying direction
+        assert_eq!(range_ref.start_tick(Direction::BuyingT0), -100);
+        assert_eq!(range_ref.end_tick(Direction::BuyingT0), 100);
+
+        // Test selling direction
+        assert_eq!(range_ref.start_tick(Direction::SellingT0), 100);
+        assert_eq!(range_ref.end_tick(Direction::SellingT0), -100);
+    }
+
+    #[test]
+    fn test_liq_range_ref_prices() {
+        let pool_snap = PoolSnapshot::default();
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+        let range_ref = LiqRangeRef::new(&pool_snap, &range, 0);
+
+        // Test start prices
+        let start_price_buying = range_ref.start_price(Direction::BuyingT0);
+        let start_price_selling = range_ref.start_price(Direction::SellingT0);
+        assert_eq!(start_price_buying.tick, -100);
+        assert_eq!(start_price_selling.tick, 100);
+
+        // Test end prices
+        let end_price_buying = range_ref.end_price(Direction::BuyingT0);
+        let end_price_selling = range_ref.end_price(Direction::SellingT0);
+        assert_eq!(end_price_buying.tick, 100);
+        assert_eq!(end_price_selling.tick, -100);
+    }
+
+    #[test]
+    fn test_liq_range_ref_donate_tick() {
+        let pool_snap = PoolSnapshot::default();
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+        let range_ref = LiqRangeRef::new(&pool_snap, &range, 0);
+
+        assert_eq!(range_ref.donate_tick(), -100);
+    }
+
+    #[test]
+    fn test_liq_range_ref_equality() {
+        let pool_snap = PoolSnapshot::default();
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+
+        let ref1 = LiqRangeRef::new(&pool_snap, &range, 0);
+        let ref2 = LiqRangeRef::new(&pool_snap, &range, 0);
+        let ref3 = LiqRangeRef::new(&pool_snap, &range, 1);
+
+        assert_eq!(ref1, ref2);
+        assert_ne!(ref1, ref3);
+    }
+
+    #[test]
+    fn test_liq_range_ref_debug() {
+        let pool_snap = PoolSnapshot::default();
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+        let range_ref = LiqRangeRef::new(&pool_snap, &range, 0);
+
+        let debug_output = format!("{:?}", range_ref);
+        assert!(debug_output.contains("LiqRangeRef"));
+        assert!(debug_output.contains("range_idx: 0"));
+    }
+
+    #[test]
+    fn test_liq_range_ref_deref() {
+        let pool_snap = PoolSnapshot::default();
+        let range = LiqRange::new(-100, 100, 1000).unwrap();
+        let range_ref = LiqRangeRef::new(&pool_snap, &range, 0);
+
+        // Test deref functionality
+        assert_eq!(range_ref.lower_tick(), -100);
+        assert_eq!(range_ref.upper_tick(), 100);
+        assert_eq!(range_ref.liquidity(), 1000);
+    }
+}

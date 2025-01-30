@@ -1660,6 +1660,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uniswap_v3_math",
 ]
 

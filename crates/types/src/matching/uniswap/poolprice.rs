@@ -136,7 +136,7 @@ impl<'a> PoolPrice<'a> {
 
             // If we didn't hit our target and we didn't use all of our quantity then we've
             // hit a weird error
-            if new_price != sqrt_ratio_current_x_96 {
+            if new_price != sqrt_ratio_target_x_96 {
                 match direction {
                     Direction::BuyingT0 => {
                         if amount_out < cur_quantity {

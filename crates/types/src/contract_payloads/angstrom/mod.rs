@@ -14,9 +14,10 @@ use alloy::{
     transports::Transport
 };
 use alloy_primitives::I256;
+use base64::Engine;
 use dashmap::DashMap;
 use pade_macro::{PadeDecode, PadeEncode};
-use tracing::warn;
+use tracing::{debug, trace, warn};
 
 use super::{
     asset::builder::{AssetBuilder, AssetBuilderStage},
@@ -298,6 +299,7 @@ impl AngstromBundle {
         solutions: Vec<PoolSolution>,
         pools: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<Self> {
+        trace!("Starting for_gas_finalization");
         let mut top_of_block_orders = Vec::new();
         let mut pool_updates = Vec::new();
         let mut pairs = Vec::new();
@@ -368,6 +370,7 @@ impl AngstromBundle {
                 })
                 .unwrap_or_default();
             // Merge our net AMM order with the TOB swap
+            trace!(tob_swap = ?tob_swap, net_amm_order = ?net_amm_order, "Merging Net AMM with TOB Swap");
             let merged_amm_swap = match (net_amm_order, tob_swap) {
                 (Some(amm), Some(tob)) => {
                     if amm.0 == tob.0 {
@@ -384,6 +387,7 @@ impl AngstromBundle {
                 }
                 (net_amm_order, tob_swap) => net_amm_order.or(tob_swap)
             };
+            trace!(merged_swap = ?merged_amm_swap, "Merged AMM/TOB swap");
             // Unwrap our merged amm order or provide a zero default
             let (asset_in_index, asset_out_index, quantity_in, quantity_out) =
                 merged_amm_swap.unwrap_or((t0_idx, t1_idx, 0_u128, 0_u128));
@@ -532,6 +536,7 @@ impl AngstromBundle {
         gas_details: BundleGasDetails,
         pools: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<Self> {
+        trace!("Starting from_proposal");
         let mut top_of_block_orders = Vec::new();
         let mut pool_updates = Vec::new();
         let mut pairs = Vec::new();
@@ -564,7 +569,10 @@ impl AngstromBundle {
         // fetch gas used
         // Walk through our solutions to add them to the structure
         for solution in proposal.solutions.iter() {
-            println!("Processing solution");
+            // Output our book data so we can do stuff with it
+            let json = serde_json::to_string(&solution).unwrap();
+            let b64_output = base64::prelude::BASE64_STANDARD.encode(json.as_bytes());
+            trace!(data = b64_output, "Raw solution data");
             // Get the information for the pool or skip this solution if we can't find a
             // pool for it
             let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
@@ -576,7 +584,7 @@ impl AngstromBundle {
                 );
                 continue;
             };
-            println!("Processing pair {} - {}", t0, t1);
+            debug!(t0 = ?t0, t1 = ?t1, pool_id = ?solution.id, "Starting processing of solution");
 
             let conversion_rate_to_token0 =
                 gas_details.token_price_per_wei.get(&(*t0, *t1)).expect(
@@ -622,6 +630,7 @@ impl AngstromBundle {
                 })
                 .unwrap_or_default();
             // Merge our net AMM order with the TOB swap
+            trace!(tob_swap = ?tob_swap, net_amm_order = ?net_amm_order, "Merging Net AMM with TOB Swap");
             let merged_amm_swap = match (net_amm_order, tob_swap) {
                 (Some(amm), Some(tob)) => {
                     if amm.0 == tob.0 {
@@ -638,6 +647,7 @@ impl AngstromBundle {
                 }
                 (net_amm_order, tob_swap) => net_amm_order.or(tob_swap)
             };
+            trace!(merged_swap = ?merged_amm_swap, "Merged AMM/TOB swap");
             // Unwrap our merged amm order or provide a zero default
             let (asset_in_index, asset_out_index, quantity_in, quantity_out) =
                 merged_amm_swap.unwrap_or((t0_idx, t1_idx, 0_u128, 0_u128));

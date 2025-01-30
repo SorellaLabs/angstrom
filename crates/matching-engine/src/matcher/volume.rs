@@ -13,7 +13,7 @@ use angstrom_types::{
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 use base64::Engine;
-use tracing::{debug, info};
+use tracing::{trace, debug, info};
 
 use super::Solution;
 use crate::book::{order::OrderContainer, BookOrder, OrderBook};
@@ -141,7 +141,7 @@ impl<'a> VolumeFillMatcher<'a> {
         // Output our book data so we can do stuff with it
         let json = serde_json::to_string(self.book).unwrap();
         let b64_output = base64::prelude::BASE64_STANDARD.encode(json.as_bytes());
-        debug!(data = b64_output, "Raw book data");
+        trace!(data = b64_output, "Raw book data");
         // Run our match over and over until we get an end reason
         let mut i: usize = 0;
         loop {

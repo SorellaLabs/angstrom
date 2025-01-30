@@ -249,21 +249,23 @@ impl Debt {
     /// Returns the amount of T1 that needs to be reallocated for a given change
     /// in a debt's T0 value
     pub fn freed_t1(&self, t0_change: u128) -> u128 {
-        // The amount of T1 we can free from this is equal to the quantity of T1 used at
-        // this price plus our slack
-        if t0_change >= self.current_t0() {
-            self.magnitude()
-        } else {
-            let discriminant = if self.bid_side() { 1_u128 } else { 0_u128 };
-            let target_amount = t0_change.saturating_add(discriminant);
-            let round_up = self.bid_side();
-            std::cmp::min(
-                self.magnitude(),
-                self.price()
-                    .quantity(target_amount, round_up)
-                    .saturating_sub(discriminant)
-            )
+        let target_t0 = self.current_t0().saturating_sub(t0_change);
+        // If it's all of it, it's all of it
+        if target_t0 == 0 {
+            return self.magnitude();
         }
+        // Otherwise let's figure out the difference between the T1 we have and the T1
+        // we need to keep
+        let target_t1 = match self.bid_side() {
+            // The smallest quantity for a given T0 on the bid side is Price (x)
+            true => self.price().quantity(target_t0, true),
+            // The smallest quantity for a given T0 on the ask side is Price (x-1) + 1
+            false => self
+                .price()
+                .quantity(target_t0.saturating_sub(1), false)
+                .saturating_add(1)
+        };
+        self.magnitude().saturating_sub(target_t1)
     }
 
     /// Create a new Debt object based on the price change created by filling
@@ -435,8 +437,8 @@ impl<'a> PartialOrd<PoolPrice<'a>> for Debt {
 
 #[cfg(test)]
 mod test {
-    use super::{Debt, DebtType};
-    use crate::matching::Ray;
+    use super::Debt;
+    use crate::matching::{DebtType, Ray};
 
     #[test]
     fn test_debt_type_basics() {
@@ -572,6 +574,7 @@ mod test {
     fn test_debt_comparison() {
         let price1 = Ray::calc_price_generic(100u64, 200u64, false);
         let price2 = Ray::calc_price_generic(100u64, 300u64, false);
+
         let debt = Debt::new(DebtType::ExactIn(200), price1);
 
         // Test Ray comparisons
@@ -604,16 +607,59 @@ mod test {
 
     #[test]
     fn test_freed_amounts() {
+        // Test ExactIn (bid side) cases
         let price = Ray::calc_price_generic(100u64, 200u64, false);
         let debt = Debt::new(DebtType::ExactIn(200), price);
 
-        assert_eq!(debt.freed_t0(50), 25);
-        assert_eq!(debt.freed_t0(200), 100);
-        assert_eq!(debt.freed_t0(300), 100);
+        // Test freed_t0 with various T1 changes
+        assert_eq!(debt.freed_t0(0), 0, "No T1 change should free no T0");
+        assert_eq!(debt.freed_t0(50), 25, "Quarter T1 reduction should free quarter T0");
+        assert_eq!(debt.freed_t0(100), 50, "Half T1 reduction should free half T0");
+        assert_eq!(debt.freed_t0(200), 100, "Full T1 reduction should free all T0");
+        assert_eq!(debt.freed_t0(300), 100, "Excess T1 reduction should free all T0");
 
-        assert_eq!(debt.freed_t1(25), 50); // panics here, returns 51
-        assert_eq!(debt.freed_t1(100), 200);
-        assert_eq!(debt.freed_t1(150), 200);
+        // Test freed_t1 with various T0 changes
+        assert_eq!(debt.freed_t1(0), 0, "No T0 change should free no T1");
+        assert_eq!(debt.freed_t1(25), 50, "Quarter T0 reduction should free quarter T1");
+        assert_eq!(debt.freed_t1(50), 100, "Half T0 reduction should free half T1");
+        assert_eq!(debt.freed_t1(100), 200, "Full T0 reduction should free all T1");
+        assert_eq!(debt.freed_t1(150), 200, "Excess T0 reduction should free all T1");
+
+        // Test ExactOut (ask side) cases
+        let price_out = Ray::calc_price_generic(100u64, 200u64, true);
+        let debt_out = Debt::new(DebtType::ExactOut(200), price_out);
+
+        // Test freed_t0 for ExactOut
+        assert_eq!(debt_out.freed_t0(0), 0, "No T1 change should free no T0 (ask)");
+        assert_eq!(debt_out.freed_t0(50), 25, "Quarter T1 reduction should free quarter T0 (ask)");
+        assert_eq!(debt_out.freed_t0(100), 50, "Half T1 reduction should free half T0 (ask)");
+        assert_eq!(debt_out.freed_t0(200), 100, "Full T1 reduction should free all T0 (ask)");
+        assert_eq!(debt_out.freed_t0(300), 100, "Excess T1 reduction should free all T0 (ask)");
+
+        // Test freed_t1 for ExactOut
+        assert_eq!(debt_out.freed_t1(0), 0, "No T0 change should free no T1 (ask)");
+        assert_eq!(debt_out.freed_t1(25), 50, "Quarter T0 reduction should free quarter T1 (ask)");
+        assert_eq!(debt_out.freed_t1(50), 100, "Half T0 reduction should free half T1 (ask)");
+        assert_eq!(debt_out.freed_t1(100), 200, "Full T0 reduction should free all T1 (ask)");
+        assert_eq!(debt_out.freed_t1(150), 200, "Excess T0 reduction should free all T1 (ask)");
+
+        // Test edge cases
+        // Zero magnitude debt
+        let zero_debt = Debt::new(DebtType::ExactIn(0), price);
+        assert_eq!(zero_debt.freed_t0(100), 0, "Zero debt should free no T0");
+        assert_eq!(zero_debt.freed_t1(100), 0, "Zero debt should free no T1");
+
+        // Single unit tests
+        let unit_price = Ray::calc_price_generic(1u64, 1u64, false);
+        let unit_debt = Debt::new(DebtType::ExactIn(1), unit_price);
+        assert_eq!(unit_debt.freed_t0(1), 1, "Unit debt should free single T0");
+        assert_eq!(unit_debt.freed_t1(1), 1, "Unit debt should free single T1");
+
+        // Large number tests
+        let large_price = Ray::calc_price_generic(1_000_000u64, 2_000_000u64, false);
+        let large_debt = Debt::new(DebtType::ExactIn(2_000_000), large_price);
+        assert_eq!(large_debt.freed_t0(1_000_000), 500_000, "Large debt should handle big numbers");
+        assert_eq!(large_debt.freed_t1(500_000), 1_000_000, "Large debt should handle big numbers");
     }
 
     #[test]
@@ -650,5 +696,80 @@ mod test {
         // Test with zero liquidity should not panic
         let proportion = debt.calc_proportion(50, 0, true);
         assert_eq!(proportion, 0);
+    }
+
+    #[test]
+    fn test_slack_at_price() {
+        // Test ExactIn (bid side) cases
+        let debt_type = DebtType::exact_in(1000);
+
+        // Test with exact division price
+        let price = Ray::calc_price_generic(100u128, 1000u128, false); // 10:1 ratio
+        assert_eq!(
+            debt_type.slack_at_price(price),
+            0,
+            "ExactIn with exact division should have 0 slack"
+        );
+
+        // Test with price that creates remainder
+        let price = Ray::calc_price_generic(95u128, 1000u128, false); // ~10.53:1 ratio
+        assert!(
+            debt_type.slack_at_price(price) > 0,
+            "ExactIn with inexact division should have positive slack"
+        );
+
+        // Test with very small price
+        let price = Ray::calc_price_generic(1u128, 1000u128, false);
+        let slack = debt_type.slack_at_price(price);
+        assert!(
+            slack > 0,
+            "ExactIn with small price should have positive slack, {price:?} {slack:?}"
+        );
+
+        // Test ExactOut (ask side) cases
+        let debt_type = DebtType::exact_out(1000);
+
+        // Test with exact division price
+        let price = Ray::calc_price_generic(100u128, 1000u128, true); // 10:1 ratio
+        assert_eq!(
+            debt_type.slack_at_price(price),
+            u128::MAX,
+            "ExactOut with exact division should have max slack"
+        );
+
+        // Test with price that creates remainder
+        let price = Ray::calc_price_generic(95u128, 1000u128, true);
+        let slack = debt_type.slack_at_price(price);
+        assert!(
+            slack < u128::MAX,
+            "ExactOut with inexact division should have less than max slack"
+        );
+
+        // Test edge cases
+        // Test with zero amount
+        let debt_type = DebtType::exact_in(0);
+        let price = Ray::calc_price_generic(1u128, 1u128, false);
+        assert_eq!(debt_type.slack_at_price(price), 0, "Zero amount should have zero slack");
+
+        // Test with minimum price
+        let debt_type = DebtType::exact_in(1000);
+        let min_price = Ray::min_uniswap_price();
+        assert!(
+            debt_type.slack_at_price(min_price) > 0,
+            "Minimum price should have positive slack"
+        );
+
+        // Test with maximum price
+        let max_price = Ray::max_uniswap_price();
+        assert!(
+            debt_type.slack_at_price(max_price) > 0,
+            "Maximum price should have positive slack"
+        );
+
+        // Test ask side subtraction behavior
+        let debt_type = DebtType::exact_out(100);
+        let price = Ray::calc_price_generic(10u128, 100u128, true);
+        let slack = debt_type.slack_at_price(price);
+        assert_eq!(slack, u128::MAX, "Ask side should subtract 1 from raw slack calculation");
     }
 }

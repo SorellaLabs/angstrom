@@ -128,3 +128,161 @@ impl PoolSnapshot {
         self.get_range_for_tick(tick).map(|range| range.liquidity())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use eyre::Result;
+
+    use super::*;
+
+    fn create_basic_ranges() -> Vec<LiqRange> {
+        vec![
+            LiqRange { liquidity: 1_000_000_u128, lower_tick: 100, upper_tick: 200 },
+            LiqRange { liquidity: 2_000_000_u128, lower_tick: 200, upper_tick: 300 },
+            LiqRange { liquidity: 3_000_000_u128, lower_tick: 300, upper_tick: 400 },
+        ]
+    }
+
+    #[test]
+    fn test_new_pool_snapshot() -> Result<()> {
+        let ranges = create_basic_ranges();
+        let price = SqrtPriceX96::at_tick(250)?;
+
+        let snapshot = PoolSnapshot::new(ranges.clone(), price)?;
+
+        assert_eq!(snapshot.ranges, ranges);
+        assert_eq!(snapshot.sqrt_price_x96, price);
+        assert_eq!(snapshot.current_tick, 250);
+        assert_eq!(snapshot.cur_tick_idx, 1); // Should be in the second range
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_non_contiguous_ranges() {
+        let ranges = vec![
+            LiqRange { liquidity: 1_000_000_u128, lower_tick: 100, upper_tick: 200 },
+            LiqRange {
+                liquidity:  2_000_000_u128,
+                lower_tick: 300, // Gap between 200 and 300!
+                upper_tick: 400
+            },
+        ];
+        let price = SqrtPriceX96::at_tick(150).unwrap();
+
+        let result = PoolSnapshot::new(ranges, price);
+        assert!(result.is_err(), "Should fail with non-contiguous ranges");
+    }
+
+    #[test]
+    fn test_get_range_for_tick() -> Result<()> {
+        let ranges = create_basic_ranges();
+        let price = SqrtPriceX96::at_tick(250)?;
+        let snapshot = PoolSnapshot::new(ranges, price)?;
+
+        // Test tick in middle range
+        let range = snapshot.get_range_for_tick(250);
+        assert!(range.is_some());
+        assert_eq!(range.unwrap().range.liquidity, 2_000_000_u128);
+
+        // Test tick at range boundary
+        let range = snapshot.get_range_for_tick(200);
+        assert!(range.is_some());
+        assert_eq!(range.unwrap().range.liquidity, 2_000_000_u128);
+
+        // Test tick outside ranges
+        let range = snapshot.get_range_for_tick(50);
+        assert!(range.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ranges_for_ticks() -> Result<()> {
+        let ranges = create_basic_ranges();
+        let price = SqrtPriceX96::at_tick(250)?;
+        let snapshot = PoolSnapshot::new(ranges, price)?;
+
+        // Test getting multiple ranges
+        let ranges = snapshot.ranges_for_ticks(150, 350)?;
+        assert_eq!(ranges.len(), 3);
+        assert_eq!(ranges[0].range.liquidity, 1_000_000_u128);
+        assert_eq!(ranges[1].range.liquidity, 2_000_000_u128);
+        assert_eq!(ranges[2].range.liquidity, 3_000_000_u128);
+
+        // Test single range
+        let ranges = snapshot.ranges_for_ticks(220, 280)?;
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].range.liquidity, 2_000_000_u128);
+
+        // Test reversed ticks (should still work)
+        let ranges = snapshot.ranges_for_ticks(350, 150)?;
+        assert_eq!(ranges.len(), 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_current_price() -> Result<()> {
+        let ranges = create_basic_ranges();
+        let price = SqrtPriceX96::at_tick(250)?;
+        let snapshot = PoolSnapshot::new(ranges, price)?;
+
+        let current_price = snapshot.current_price();
+        assert_eq!(current_price.price, price);
+        assert_eq!(current_price.tick, 250);
+        assert_eq!(current_price.liq_range.range.liquidity, 2_000_000_u128);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_at_price() -> Result<()> {
+        let ranges = create_basic_ranges();
+        let init_price = SqrtPriceX96::at_tick(250)?;
+        let snapshot = PoolSnapshot::new(ranges, init_price)?;
+
+        let new_price = SqrtPriceX96::at_tick(350)?;
+        let price_point = snapshot.at_price(new_price)?;
+
+        assert_eq!(price_point.price, new_price);
+        assert_eq!(price_point.tick, 350);
+        assert_eq!(price_point.liq_range.range.liquidity, 3_000_000_u128);
+
+        // Test invalid price
+        let invalid_price = SqrtPriceX96::at_tick(50)?;
+        assert!(snapshot.at_price(invalid_price).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_at_tick() -> Result<()> {
+        let ranges = create_basic_ranges();
+        let price = SqrtPriceX96::at_tick(250)?;
+        let snapshot = PoolSnapshot::new(ranges, price)?;
+
+        let price_point = snapshot.at_tick(350)?;
+        assert_eq!(price_point.tick, 350);
+        assert_eq!(price_point.liq_range.range.liquidity, 3_000_000_u128);
+
+        // Test invalid tick
+        assert!(snapshot.at_tick(50).is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_liquidity_at_tick() -> Result<()> {
+        let ranges = create_basic_ranges();
+        let price = SqrtPriceX96::at_tick(250)?;
+        let snapshot = PoolSnapshot::new(ranges, price)?;
+
+        assert_eq!(snapshot.liquidity_at_tick(150), Some(1_000_000_u128));
+        assert_eq!(snapshot.liquidity_at_tick(250), Some(2_000_000_u128));
+        assert_eq!(snapshot.liquidity_at_tick(350), Some(3_000_000_u128));
+        assert_eq!(snapshot.liquidity_at_tick(50), None);
+
+        Ok(())
+    }
+}

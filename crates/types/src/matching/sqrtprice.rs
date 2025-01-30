@@ -97,17 +97,77 @@ impl From<Ray> for SqrtPriceX96 {
 
 #[cfg(test)]
 mod tests {
-    use uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio;
+    use alloy::primitives::{aliases::U320, U160, U256};
+    use uniswap_v3_math::tick_math::{get_tick_at_sqrt_ratio, MAX_TICK, MIN_TICK};
 
-    use super::SqrtPriceX96;
+    use super::{Ray, SqrtPriceX96};
+
+    #[test]
+    fn test_default() {
+        let default_price = SqrtPriceX96::default();
+        assert_eq!(*default_price, U160::ZERO);
+    }
+
+    #[test]
+    fn test_as_f64_conversion() {
+        // Test small values
+        let small_price = SqrtPriceX96::from(U160::from(1_000_000));
+        let small_f64 = small_price.as_f64();
+        assert!(small_f64 > 0.0);
+
+        // Test larger values
+        let large_price = SqrtPriceX96::from(U160::from(u64::MAX));
+        let large_f64 = large_price.as_f64();
+        assert!(large_f64 > small_f64);
+
+        // Test zero
+        let zero_price = SqrtPriceX96::default();
+        assert_eq!(zero_price.as_f64(), 0.0);
+    }
+
+    #[test]
+    fn test_from_float_price() {
+        // Test various float values
+        let test_prices = [0.0, 1.0, 1.5, 2.0, 10.0, 100.0];
+
+        for price in test_prices {
+            let sqrt_price = SqrtPriceX96::from_float_price(price);
+            let recovered_price = sqrt_price.as_f64();
+
+            // Allow for some floating point imprecision
+            let relative_error = ((recovered_price - price).abs() / price).abs();
+            if price != 0.0 {
+                assert!(relative_error < 0.01, "Price conversion error too large");
+            }
+        }
+    }
+
+    #[test]
+    fn test_tick_conversions() {
+        // Test various tick values
+        let test_ticks = [-100, -10, 0, 10, 100, 1000, 10000];
+
+        for tick in test_ticks {
+            let sqrt_price = SqrtPriceX96::at_tick(tick).unwrap();
+            let recovered_tick = sqrt_price.to_tick().unwrap();
+            assert_eq!(tick, recovered_tick, "Tick conversion mismatch");
+        }
+
+        // Test boundary ticks
+        assert!(SqrtPriceX96::at_tick(MIN_TICK - 1).is_err());
+        assert!(SqrtPriceX96::at_tick(MAX_TICK + 1).is_err());
+        assert!(SqrtPriceX96::at_tick(MIN_TICK).is_ok());
+        assert!(SqrtPriceX96::at_tick(MAX_TICK).is_ok());
+    }
 
     #[test]
     fn min_and_max_for_tick() {
-        let _min_at_tick = SqrtPriceX96::at_tick(100000).unwrap();
+        let min_at_tick = SqrtPriceX96::at_tick(100000).unwrap();
         let max_at_tick = SqrtPriceX96::max_at_tick(100000).unwrap();
         let next_tick = SqrtPriceX96::at_tick(100001).unwrap();
 
         assert!(next_tick != max_at_tick, "Max at tick is equal to next tick");
+        assert!(max_at_tick > min_at_tick, "Max not greater than min");
         assert!(
             get_tick_at_sqrt_ratio(max_at_tick.into()).unwrap() == 100000,
             "Max tick outside range"
@@ -116,5 +176,65 @@ mod tests {
             get_tick_at_sqrt_ratio(next_tick.into()).unwrap() == 100001,
             "Next tick outside range"
         );
+    }
+
+    #[test]
+    fn test_as_price_x192() {
+        let price = SqrtPriceX96::from(U160::from(1000));
+        let price_x192 = price.as_price_x192();
+        assert_eq!(price_x192, price.0.widening_mul(price.0));
+
+        // Test zero
+        let zero_price = SqrtPriceX96::default();
+        assert_eq!(zero_price.as_price_x192(), U320::from(0));
+    }
+
+    #[test]
+    fn test_from_ray_conversion() {
+        // Test zero
+        let zero_ray = Ray::default();
+        let zero_sqrt = SqrtPriceX96::from(zero_ray);
+        assert_eq!(*zero_sqrt, U160::ZERO);
+
+        // Test non-zero values
+        let ray = Ray::from(U256::from(1_000_000));
+        let sqrt_price = SqrtPriceX96::from(ray);
+        assert!(*sqrt_price > U160::ZERO);
+
+        // Test large values
+        let large_ray = Ray::from(U256::MAX);
+        let large_sqrt = SqrtPriceX96::from(large_ray);
+        assert!(*large_sqrt > U160::ZERO);
+    }
+
+    #[test]
+    fn test_conversions() {
+        // Test U160 conversion
+        let value = U160::from(12345);
+        let price = SqrtPriceX96::from(value);
+        assert_eq!(*price, value);
+
+        // Test U256 conversion
+        let value_256 = U256::from(12345u64);
+        let price = SqrtPriceX96::from(value_256);
+        assert_eq!(U256::from(*price), value_256);
+
+        // Test conversion from max values
+        let max_160 = U160::MAX;
+        let price = SqrtPriceX96::from(max_160);
+        assert_eq!(*price, max_160);
+    }
+
+    #[test]
+    fn test_ordering() {
+        let price1 = SqrtPriceX96::from(U160::from(100));
+        let price2 = SqrtPriceX96::from(U160::from(200));
+        let price3 = SqrtPriceX96::from(U160::from(200));
+
+        assert!(price1 < price2);
+        assert!(price2 > price1);
+        assert_eq!(price2, price3);
+        assert!(price2 >= price3);
+        assert!(price2 <= price3);
     }
 }

@@ -19,3 +19,5 @@ target/
 
 # compiler ice errors
 rustc-ice-*.txt
+
+mutants.*

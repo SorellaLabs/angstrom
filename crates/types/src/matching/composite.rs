@@ -214,6 +214,8 @@ impl<'a> CompositeOrder<'a> {
 #[cfg(test)]
 mod tests {
 
+    use alloy_primitives::U256;
+
     use super::*;
     use crate::matching::{
         uniswap::{LiqRange, PoolSnapshot},
@@ -286,5 +288,127 @@ mod tests {
         let debt = Debt::new(DebtType::exact_out(1_000_000_000), cur_price);
         let co = CompositeOrder::new(Some(debt), None, bound_price);
         assert!(co.quantity(target_price) == 0, "Quantity was not zero")
+    }
+
+    #[test]
+    fn test_negative_quantity() {
+        let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+        let amm = market.current_price();
+        let cur_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let debt = Debt::new(DebtType::exact_out(2_000_000_000), cur_price);
+        let target_price = Ray::from(SqrtPriceX96::at_tick(100010).unwrap());
+
+        // Test with both AMM and debt
+        let co = CompositeOrder::new(Some(debt), Some(amm), None);
+        let neg_q = co.negative_quantity(target_price);
+        assert!(neg_q > 0, "Should have negative quantity when debt exceeds AMM");
+    }
+
+    #[test]
+    fn test_negative_quantity_t1() {
+        let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+        let amm = market.current_price();
+        let cur_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let debt = Debt::new(DebtType::exact_out(2_000_000_000), cur_price);
+        let target_price = Ray::from(SqrtPriceX96::at_tick(100010).unwrap());
+
+        let co = CompositeOrder::new(Some(debt), Some(amm.clone()), None);
+        let neg_t1 = co.negative_quantity_t1(target_price);
+        assert!(neg_t1 > 0, "Should have negative t1 quantity");
+
+        // Test with no debt
+        let co_no_debt = CompositeOrder::new(None, Some(amm), None);
+        assert_eq!(co_no_debt.negative_quantity_t1(target_price), 0);
+    }
+
+    #[test]
+    fn test_partial_fill() {
+        let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+        let amm = market.current_price();
+        let cur_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let debt = Debt::new(DebtType::exact_out(1_000_000_000), cur_price);
+        let co = CompositeOrder::new(Some(debt.clone()), Some(amm.clone()), None);
+
+        // Test partial fill with both AMM and debt
+        let filled = co.partial_fill(500_000_000, Direction::BuyingT0);
+        assert!(filled.debt().is_some());
+        assert!(filled.amm().is_some());
+
+        // Test partial fill with only AMM
+        let co_amm = CompositeOrder::new(None, Some(amm), None);
+        let filled_amm = co_amm.partial_fill(500_000_000, Direction::BuyingT0);
+        assert!(filled_amm.amm().is_some());
+
+        // Test partial fill with only debt
+        let co_debt = CompositeOrder::new(Some(debt), None, None);
+        let filled_debt = co_debt.partial_fill(500_000_000, Direction::BuyingT0);
+        assert!(filled_debt.debt().is_some());
+    }
+
+    #[test]
+    fn test_t0_quantities() {
+        let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+        let amm = market.current_price();
+        let cur_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let debt = Debt::new(DebtType::exact_out(1_000_000_000), cur_price);
+        let co = CompositeOrder::new(Some(debt), Some(amm), None);
+
+        // Test with both AMM and debt
+        let (amm_q, debt_q) = co.t0_quantities(1_000_000_000, Direction::BuyingT0);
+        assert!(amm_q.is_some());
+        assert!(debt_q.is_some());
+        assert!(amm_q.unwrap() + debt_q.unwrap() == 1_000_000_000);
+
+        // Test with neither
+        let (none_amm, none_debt) =
+            CompositeOrder::new(None, None, None).t0_quantities(1_000_000_000, Direction::BuyingT0);
+        assert!(none_amm.is_none());
+        assert!(none_debt.is_none());
+    }
+
+    #[test]
+    fn test_start_price() {
+        let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+        let amm = market.current_price();
+        let cur_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let debt = Debt::new(DebtType::exact_out(1_000_000_000), cur_price);
+
+        // Test with both AMM and debt - should use AMM price
+        let co = CompositeOrder::new(Some(debt.clone()), Some(amm.clone()), None);
+        assert_eq!(co.start_price(), Ray::from(amm.price()));
+
+        // Test with only debt
+        let co_debt = CompositeOrder::new(Some(debt), None, None);
+        assert_eq!(co_debt.start_price(), cur_price);
+    }
+
+    #[test]
+    fn test_partial_fill_t1() {
+        let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+        let amm = market.current_price();
+        let cur_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+        let debt = Debt::new(DebtType::exact_out(1_000_000_000), cur_price);
+        let co = CompositeOrder::new(Some(debt), Some(amm), None);
+
+        let filled = co.partial_fill_t1(500_000_000);
+        assert_eq!(filled.debt(), co.debt());
+        assert_eq!(filled.amm(), co.amm());
+    }
+
+    #[test]
+    fn test_find_closest_bound() {
+        let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
+        let amm = market.current_price();
+
+        // Test with internal bound closer
+        let internal_bound = Ray::from(SqrtPriceX96::at_tick(100005).unwrap());
+        let external_bound = Ray::from(SqrtPriceX96::at_tick(100010).unwrap());
+        let co = CompositeOrder::new(None, Some(amm.clone()), Some(internal_bound));
+        assert_eq!(co.find_closest_bound(external_bound), internal_bound);
+
+        // Test with external bound closer
+        let internal_bound = Ray::from(SqrtPriceX96::at_tick(100015).unwrap());
+        let co = CompositeOrder::new(None, Some(amm), Some(internal_bound));
+        assert_eq!(co.find_closest_bound(external_bound), external_bound);
     }
 }

@@ -543,15 +543,109 @@ mod tests {
     use super::*;
     use crate::matching::uniswap::{LiqRange, PoolSnapshot};
 
-    #[test]
-    fn can_construct_pricevec() {
+    fn setup_test_pool() -> PoolSnapshot {
         let liquidity = 1_000_000_000_000_000_u128;
-        let pool = PoolSnapshot::new(
+        PoolSnapshot::new(
             vec![LiqRange { liquidity, lower_tick: 100000, upper_tick: 100100 }],
             SqrtPriceX96::at_tick(100050).unwrap()
         )
-        .unwrap();
-        PoolPriceVec::new(pool.current_price(), pool.current_price());
+        .unwrap()
+    }
+
+    fn setup_multi_range_pool() -> PoolSnapshot {
+        let seg_1_liq = 1_000_000_000_000_000_u128;
+        let seg_2_liq = 1_000_000_000_000_000_u128;
+        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
+        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
+        PoolSnapshot::new(vec![segment_1, segment_2], SqrtPriceX96::at_tick(100025).unwrap())
+            .unwrap()
+    }
+
+    #[test]
+    fn can_construct_pricevec() {
+        let pool = setup_test_pool();
+        let price_vec = PoolPriceVec::new(pool.current_price(), pool.current_price());
+        assert_eq!(price_vec.d_t0, 0);
+        assert_eq!(price_vec.d_t1, 0);
+    }
+
+    #[test]
+    fn test_donation_calculation() {
+        let pool = setup_test_pool();
+        let start_price = pool.current_price();
+        let end_price = pool
+            .at_price(SqrtPriceX96::at_tick(100060).unwrap())
+            .unwrap();
+        let price_vec = PoolPriceVec::from_price_range(start_price, end_price.clone()).unwrap();
+
+        let donation_amount = 1_000_000_u128;
+        let result = price_vec.donation(donation_amount);
+
+        assert!(!result.tick_donations.is_empty(), "Should have some tick donations");
+        assert!(result.total_donated > 0, "Should have donated some amount");
+        assert_eq!(result.final_price, end_price.price, "Final price should match end price");
+    }
+
+    #[test]
+    fn test_quantity_calculation() {
+        let pool = setup_test_pool();
+        let start_price = pool.current_price();
+        let end_price = pool
+            .at_price(SqrtPriceX96::at_tick(100060).unwrap())
+            .unwrap();
+        let price_vec = PoolPriceVec::from_price_range(start_price, end_price).unwrap();
+
+        let target_price = OrderPrice::from(SqrtPriceX96::at_tick(100055).unwrap());
+        let (d_t0, d_t1, result_price) = price_vec.quantity(target_price);
+
+        assert!(d_t0 > 0, "Should have some token0 quantity");
+        assert!(d_t1 > 0, "Should have some token1 quantity");
+        assert_eq!(result_price, target_price, "Result price should match target price");
+    }
+
+    #[test]
+    fn test_fill_calculation() {
+        let pool = setup_test_pool();
+        let start_price = pool.current_price();
+        let end_price = pool
+            .at_price(SqrtPriceX96::at_tick(100060).unwrap())
+            .unwrap();
+        let price_vec = PoolPriceVec::from_price_range(start_price, end_price).unwrap();
+
+        let fill_amount = 1_000_000_u128;
+        let filled_vec = price_vec.fill(fill_amount);
+
+        assert!(filled_vec.d_t0 > 0, "Should have some token0 quantity after fill");
+        assert!(filled_vec.d_t1 > 0, "Should have some token1 quantity after fill");
+        assert!(filled_vec.d_t0 <= price_vec.d_t0, "Fill amount should not exceed original");
+        assert!(filled_vec.d_t1 <= price_vec.d_t1, "Fill amount should not exceed original");
+    }
+
+    #[test]
+    fn test_from_swap() {
+        let pool = setup_test_pool();
+        let start_price = pool.current_price();
+
+        let quantity = Quantity::Token0(1_000_000_u128);
+        let price_vec =
+            PoolPriceVec::from_swap(start_price, Direction::BuyingT0, quantity).unwrap();
+
+        assert!(price_vec.d_t0 > 0, "Should have some token0 output");
+        assert!(price_vec.d_t1 > 0, "Should have some token1 input");
+        assert!(price_vec.steps.is_some(), "Should have generated swap steps");
+    }
+
+    #[test]
+    fn test_to_price_bound() {
+        let pool = setup_test_pool();
+        let start_price = pool.current_price();
+        let target_price = SqrtPriceX96::at_tick(100060).unwrap();
+
+        let price_vec = PoolPriceVec::to_price_bound(start_price, target_price).unwrap();
+
+        assert!(price_vec.d_t0 > 0, "Should have some token0 quantity");
+        assert!(price_vec.d_t1 > 0, "Should have some token1 quantity");
+        assert_eq!(price_vec.end_bound.price, target_price, "Should reach target price");
     }
 
     #[test]

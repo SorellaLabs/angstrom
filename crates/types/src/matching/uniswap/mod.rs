@@ -12,6 +12,7 @@ pub use poolsnapshot::PoolSnapshot;
 
 pub type Tick = i32;
 
+#[derive(Clone, Copy)]
 pub enum Quantity {
     Token0(u128),
     Token1(u128)

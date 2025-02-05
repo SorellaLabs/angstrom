@@ -26,7 +26,7 @@ immediately usable form on Ethereum L1.
 The contracts are split between "core" and "periphery". Where core is responsible for order
 validation & settlement, underlying AMM reward management and store for user deposits. 
 
-The periphery contracts (WIP 🚧) implement the finer details of acccess control, as well as managing
+The periphery contracts (WIP 🚧) implement the finer details of access control, as well as managing
 collection and distribution of node & referral fees.
 
 ### Assumptions
@@ -50,7 +50,7 @@ own *decrease* over time.
 Ethereum L1 Mainnet or canonical testnets with identical semantics.
 - **The `_controller` is sound:** The controller will maintain the approved set of nodes such that
 the _economic security assumption_ and _sufficiently staked assumption_ is maintained over time.
-Furthermore is will trustlessly verify that `pullFee` is only ever called for unclaimed amounts that
+Furthermore it will trustlessly verify that `pullFee` is only ever called for unclaimed amounts that
 have been committed to for later claiming via the fee summary events.
 - **Integrity of state dependencies:** Running off-chain the nodes of the Angstrom network expect to
   be tightly coupled with builders meaning roughly it can expect that *most of the time* the way it
@@ -110,7 +110,7 @@ The _solvency_ invariant it maintains for every asset $\alpha$ is:
 \text{TotalTokenBalance}_{\alpha}=\text{Delta}_{\alpha} + \sum^N_i \text{UserBalance}_{i,\alpha} + \sum^N_i \text{LPReward}_{i,\alpha}
 ```
 
-Here a visualization of how each action in a bundle is accountd for:
+Here a visualization of how each action in a bundle is accounted for:
 
 ![](./assets/angstrom-accounting.png)
 

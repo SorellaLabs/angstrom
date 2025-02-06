@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use alloy_rpc_types::Block;
 use parking_lot::RwLock;
-use reth_primitives::BlockExt;
+use reth_primitives::{RecoveredBlock, TransactionSigned};
 use reth_provider::{Chain, ExecutionOutcome};
 
 #[derive(Clone, Debug)]
@@ -21,17 +21,12 @@ impl AnvilConsensusCanonStateNotification {
     }
 
     pub fn new_block(&self, block: &Block) -> Arc<Chain> {
+        let mut recovered_block: RecoveredBlock<alloy::consensus::Block<TransactionSigned>> =
+            RecoveredBlock::default();
+        recovered_block.set_block_number(block.header.number);
+
         let mut chain = self.chain.write();
-
-        // the consensus only uses the block number so we can use default values for the
-        // rest of the block
-        let reth_block = reth_primitives::Block {
-            header: reth_primitives::Header { number: block.header.number, ..Default::default() },
-            ..Default::default()
-        };
-
-        let block_with_senders = reth_block.with_recovered_senders().unwrap().seal_slow();
-        chain.append_block(block_with_senders, ExecutionOutcome::default());
+        chain.append_block(recovered_block, ExecutionOutcome::default());
 
         Arc::new(chain.clone())
     }

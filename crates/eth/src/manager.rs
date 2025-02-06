@@ -6,7 +6,7 @@ use std::{
 };
 
 use alloy::{
-    consensus::Transaction,
+    consensus::{Block, Transaction},
     primitives::{aliases::I24, Address, BlockHash, BlockNumber, B256},
     sol_types::SolEvent
 };
@@ -22,7 +22,7 @@ use futures::Future;
 use futures_util::{FutureExt, StreamExt};
 use itertools::Itertools;
 use pade::PadeDecode;
-use reth_primitives::{Receipt, SealedBlockWithSenders, TransactionSigned};
+use reth_primitives::{Receipt, RecoveredBlock, TransactionSigned};
 use reth_provider::{CanonStateNotification, CanonStateNotifications, Chain};
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
@@ -145,8 +145,8 @@ where
         eoas.extend(self.get_eoa(new.clone()));
 
         // get all reorged orders
-        let old_filled: HashSet<_> = self.fetch_filled_order(&old).collect();
-        let new_filled: HashSet<_> = self.fetch_filled_order(&new).collect();
+        let old_filled: HashSet<_> = self.fetch_filled_order(&old).into_iter().collect();
+        let new_filled: HashSet<_> = self.fetch_filled_order(&new).into_iter().collect();
 
         let difference: Vec<_> = old_filled.difference(&new_filled).copied().collect();
         let reorged_orders = EthEvent::ReorgedOrders(difference, reorg);
@@ -168,7 +168,10 @@ where
         let tip = new.tip_number();
         self.block_sync.new_block(tip);
 
-        let filled_orders = self.fetch_filled_order(&new).collect::<Vec<_>>();
+        let filled_orders = self
+            .fetch_filled_order(&new)
+            .into_iter()
+            .collect::<Vec<_>>();
 
         let eoas = self.get_eoa(new.clone());
 
@@ -245,13 +248,11 @@ where
             });
     }
 
-    fn fetch_filled_order<'a>(
-        &'a self,
-        chain: &'a impl ChainExt
-    ) -> impl Iterator<Item = B256> + 'a {
+    fn fetch_filled_order(&self, chain: &impl ChainExt) -> Vec<B256> {
         chain
             .tip_transactions()
-            .filter(|tx| tx.transaction.to() == Some(self.angstrom_address))
+            .into_iter()
+            .filter(|tx| tx.to() == Some(self.angstrom_address))
             .filter_map(|transaction| {
                 let mut input: &[u8] = transaction.input();
                 AngstromBundle::pade_decode(&mut input, None).ok()
@@ -261,6 +262,7 @@ where
                     .get_order_hashes(chain.tip_number())
                     .collect::<Vec<_>>()
             })
+            .collect()
     }
 
     /// fetches all eoa addresses touched
@@ -335,9 +337,9 @@ pub trait ChainExt {
     fn tip_number(&self) -> BlockNumber;
     fn tip_hash(&self) -> BlockHash;
     fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>>;
-    fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_;
+    fn tip_transactions(&self) -> Vec<TransactionSigned>;
     fn reorged_range(&self, new: impl ChainExt) -> Option<RangeInclusive<u64>>;
-    fn blocks_iter(&self) -> impl Iterator<Item = &SealedBlockWithSenders> + '_;
+    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<Block<TransactionSigned>>> + '_;
 }
 
 impl ChainExt for Chain {
@@ -352,10 +354,10 @@ impl ChainExt for Chain {
 
         let mut range = self
             .blocks_iter()
-            .filter(|b| b.block.number >= start)
-            .zip(new.blocks_iter().filter(|b| b.block.number >= start))
-            .filter(|&(old, new)| (old.block.hash() != new.block.hash()))
-            .map(|(_, new)| new.block.number)
+            .filter(|b| b.number >= start)
+            .zip(new.blocks_iter().filter(|b| b.number >= start))
+            .filter(|&(old, new)| (old.hash() != new.hash()))
+            .map(|(_, new)| new.number)
             .collect::<Vec<_>>();
 
         match range.len() {
@@ -372,7 +374,7 @@ impl ChainExt for Chain {
         }
     }
 
-    fn blocks_iter(&self) -> impl Iterator<Item = &SealedBlockWithSenders> + '_ {
+    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<Block<TransactionSigned>>> + '_ {
         self.blocks_iter()
     }
 
@@ -384,8 +386,8 @@ impl ChainExt for Chain {
         self.receipts_by_block_hash(block_hash)
     }
 
-    fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
-        self.tip().transactions().iter()
+    fn tip_transactions(&self) -> Vec<TransactionSigned> {
+        self.tip().clone().into_transactions()
     }
 }
 
@@ -523,7 +525,7 @@ pub mod test {
 
         let mut mock_tx = TransactionSigned::default();
 
-        if let Transaction::Legacy(leg) = &mut mock_tx.transaction {
+        if let Transaction::Legacy(leg) = mock_tx.transaction_mut() {
             leg.to = TxKind::Call(angstrom_address);
             leg.input = angstrom_bundle_with_orders.pade_encode().into();
         }
@@ -997,7 +999,7 @@ pub mod test {
         let eth = setup_non_subscription_eth_manager(Some(angstrom_address));
 
         let mut mock_tx = TransactionSigned::default();
-        if let Transaction::Legacy(leg) = &mut mock_tx.transaction {
+        if let Transaction::Legacy(leg) = mock_tx.transaction_mut() {
             leg.to = TxKind::Call(angstrom_address);
             leg.input = vec![0, 1, 2, 3].into(); // Invalid input data
         }

@@ -1,11 +1,11 @@
 use std::{collections::HashMap, future::Future, sync::Arc};
 
 use alloy::{
+    network::Network,
     primitives::{aliases::I24, Address, BlockNumber, U256},
     providers::Provider,
     sol,
-    sol_types::{SolEvent, SolType},
-    transports::Transport
+    sol_types::{SolEvent, SolType}
 };
 use alloy_primitives::{Log, B256, I256};
 use angstrom_types::{
@@ -130,7 +130,7 @@ impl<A> DataLoader<A> {
 }
 
 pub trait PoolDataLoader<A>: Clone {
-    fn load_tick_data<P: Provider<T>, T: Transport + Clone>(
+    fn load_tick_data<P: Provider<N>, N: Network>(
         &self,
         current_tick: I24,
         zero_for_one: bool,
@@ -140,7 +140,7 @@ pub trait PoolDataLoader<A>: Clone {
         provider: Arc<P>
     ) -> impl Future<Output = Result<(Vec<TickData>, U256), PoolError>> + Send;
 
-    fn load_pool_data<P: Provider<T>, T: Transport + Clone>(
+    fn load_pool_data<P: Provider<N>, N: Network>(
         &self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
@@ -157,7 +157,7 @@ pub trait PoolDataLoader<A>: Clone {
 }
 
 impl PoolDataLoader<Address> for DataLoader<Address> {
-    async fn load_tick_data<P: Provider<T>, T: Transport + Clone>(
+    async fn load_tick_data<P: Provider<N>, N: Network>(
         &self,
         current_tick: I24,
         zero_for_one: bool,
@@ -185,7 +185,7 @@ impl PoolDataLoader<Address> for DataLoader<Address> {
         Ok((result.ticks, result.blockNumber))
     }
 
-    async fn load_pool_data<P: Provider<T>, T: Transport + Clone>(
+    async fn load_pool_data<P: Provider<N>, N: Network>(
         &self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
@@ -286,7 +286,7 @@ impl DataLoader<AngstromPoolId> {
 }
 
 impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
-    async fn load_pool_data<P: Provider<T>, T: Transport + Clone>(
+    async fn load_pool_data<P: Provider<N>, N: Network>(
         &self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
@@ -344,7 +344,7 @@ impl PoolDataLoader<AngstromPoolId> for DataLoader<AngstromPoolId> {
         })
     }
 
-    async fn load_tick_data<P: Provider<T>, T: Transport + Clone>(
+    async fn load_tick_data<P: Provider<N>, N: Network>(
         &self,
         current_tick: I24,
         zero_for_one: bool,

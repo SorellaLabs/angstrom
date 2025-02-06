@@ -99,7 +99,7 @@ where
     fn on_blockchain_state(&mut self, notification: CanonStateNotification, waker: Waker) {
         tracing::info!("got new block_chain state");
         let new_block = notification.tip();
-        self.current_height = new_block.block.number;
+        self.current_height = new_block.number;
         let round_leader = self
             .leader_selection
             .choose_proposer(self.current_height)

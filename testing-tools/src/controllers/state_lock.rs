@@ -8,7 +8,7 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy::{providers::Provider, transports::BoxTransport};
+use alloy::providers::Provider;
 use angstrom_network::StromNetworkManager;
 use angstrom_types::block_sync::GlobalBlockSync;
 use consensus::ConsensusManager;
@@ -41,7 +41,7 @@ where
         + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + 'static,
-    T: Provider<BoxTransport> + 'static
+    T: Provider + 'static
 {
     pub(crate) fn new(
         node_id: u64,

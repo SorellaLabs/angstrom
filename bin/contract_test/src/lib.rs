@@ -57,18 +57,16 @@ pub async fn spawn_local_anvil() -> eyre::Result<SpawnedProvider> {
 
 async fn do_contract_test<T, N, P>(provider: P) -> eyre::Result<()>
 where
-    T: Clone + Send + Sync + alloy::transports::Transport,
     N: alloy::providers::Network + Send + Sync,
-    P: alloy::providers::Provider<T, N>
+    P: alloy::providers::Provider< N>
 {
     Ok(())
 }
 
 async fn deploy_pool_manager<T, N, P>(provider: &P) -> eyre::Result<Address>
 where
-    T: Clone + Send + Sync + alloy::transports::Transport,
     N: alloy::providers::Network + Send + Sync,
-    P: alloy::providers::Provider<T, N>
+    P: alloy::providers::Provider< N>
 {
     let pool_manager = PoolManager::deploy(provider).await?;
     let pool_manager_address = pool_manager.address();

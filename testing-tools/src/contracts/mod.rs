@@ -1,7 +1,6 @@
 use std::{pin::pin, sync::OnceLock, time::Duration};
 
 use alloy::{
-    contract::CallBuilder,
     primitives::{address, Address, U256},
     providers::{
         ext::{AnvilApi, DebugApi},
@@ -12,6 +11,7 @@ use alloy::{
         GethDefaultTracingOptions
     }
 };
+use alloy_contract::CallBuilder;
 use alloy_primitives::TxHash;
 use angstrom_types::sol_bindings::testnet::{MockERC20, PoolManagerDeployer, TestnetHub};
 use anvil::WalletProviderRpc;
@@ -33,8 +33,7 @@ pub trait DebugTransaction {
 
 impl<T, P, D> DebugTransaction for CallBuilder<T, P, D>
 where
-    T: Clone + Send + Sync + alloy::transports::Transport,
-    P: alloy::providers::Provider<T> + Clone,
+    P: alloy::providers::Provider + Clone,
     D: alloy::contract::CallDecoder
 {
     async fn run_safe(self) -> eyre::Result<TxHash> {
@@ -204,7 +203,7 @@ pub async fn anvil_mine_delay<F0: Future + Unpin>(
         return v
     }
     provider
-        .anvil_mine(Some(U256::from(1)), None)
+        .anvil_mine(Some(1), None)
         .await
         .expect("anvil failed to mine");
 

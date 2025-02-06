@@ -43,9 +43,10 @@ impl PairsWithPrice {
             let block_num = new_cannon_chain.tip().number;
             new_cannon_chain
                 .tip()
-                .transactions()
-                .iter()
-                .filter(|tx| tx.transaction.to() == Some(angstrom_address))
+                .clone()
+                .into_transactions()
+                .into_iter()
+                .filter(|tx| tx.to() == Some(angstrom_address))
                 .filter_map(|transaction| {
                     let mut input: &[u8] = transaction.input();
                     AngstromBundle::pade_decode(&mut input, None).ok()

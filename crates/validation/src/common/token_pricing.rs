@@ -4,9 +4,9 @@ use std::{
 };
 
 use alloy::{
+    network::Network,
     primitives::{address, Address, U256},
-    providers::Provider,
-    transports::Transport
+    providers::Provider
 };
 use angstrom_types::{pair_with_price::PairsWithPrice, primitive::PoolId, sol_bindings::Ray};
 use futures::StreamExt;
@@ -35,7 +35,7 @@ pub struct TokenPriceGenerator {
 impl TokenPriceGenerator {
     /// is a bit of a pain as we need todo a look-back in-order to grab last 5
     /// blocks.
-    pub async fn new<P: Provider<T>, T: Transport + Clone, Loader>(
+    pub async fn new<P: Provider<N>, N: Network, Loader>(
         provider: Arc<P>,
         current_block: u64,
         uni: SyncedUniswapPools<PoolId, Loader>,

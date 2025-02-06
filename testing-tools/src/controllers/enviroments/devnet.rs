@@ -1,7 +1,6 @@
 use std::{collections::HashSet, pin::Pin};
 
 use alloy::providers::ext::AnvilApi;
-use alloy_primitives::U256;
 use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
 use futures::Future;
 use reth_chainspec::Hardforks;
@@ -85,10 +84,7 @@ where
                 let initial_state = provider.initialize_state().await?;
                 initial_angstrom_state = Some(initial_state);
 
-                initializer
-                    .rpc_provider()
-                    .anvil_mine(Some(U256::from(5)), None)
-                    .await?;
+                initializer.rpc_provider().anvil_mine(Some(5), None).await?;
                 initializer.into_state_provider()
             } else {
                 tracing::info!(?node_id, "default init");
@@ -100,10 +96,7 @@ where
                 )
                 .await?;
                 provider.set_state(state_bytes).await?;
-                provider
-                    .rpc_provider()
-                    .anvil_mine(Some(U256::from(5)), None)
-                    .await?;
+                provider.rpc_provider().anvil_mine(Some(5), None).await?;
                 provider
             };
             tracing::info!(node_id, "connected to state provider");

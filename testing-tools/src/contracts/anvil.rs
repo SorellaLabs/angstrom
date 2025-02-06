@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use alloy::{
-    contract::{RawCallBuilder, SolCallBuilder},
+    contract::{CallDecoder, RawCallBuilder, SolCallBuilder},
     network::{Ethereum, EthereumWallet, Network},
     node_bindings::{Anvil, AnvilInstance},
     providers::{
@@ -13,7 +13,7 @@ use alloy::{
         Identity, PendingTransaction, Provider, RootProvider
     },
     signers::local::PrivateKeySigner,
-    transports::{BoxTransport, Transport}
+    transports::Transport
 };
 use alloy_primitives::Address;
 use alloy_sol_types::SolCall;
@@ -26,8 +26,8 @@ pub type WalletProviderRpc = FillProvider<
         >,
         WalletFiller<EthereumWallet>
     >,
-    RootProvider<BoxTransport>,
-    BoxTransport,
+    RootProvider<Ethereum>,
+    // BoxTransport,
     Ethereum
 >;
 
@@ -48,8 +48,8 @@ pub type LocalAnvilRpc = alloy::providers::fillers::FillProvider<
         >,
         alloy::providers::fillers::WalletFiller<EthereumWallet>
     >,
-    RootProvider<BoxTransport>,
-    BoxTransport,
+    RootProvider<Ethereum>,
+    // BoxTransport,
     Ethereum
 >;
 
@@ -90,9 +90,9 @@ pub(crate) trait SafeDeployPending {
 
 impl<T, P, N> SafeDeployPending for RawCallBuilder<T, P, N>
 where
-    T: Transport + Clone,
-    P: Provider<T, N>,
-    N: Network
+    P: Provider<N>,
+    N: Network,
+    T: Send + Sync
 {
     async fn deploy_pending(self) -> eyre::Result<PendingTransaction> {
         Ok(self.gas(50e6 as u64).send().await?.register().await?)
@@ -116,10 +116,10 @@ where
 
 impl<T, P, C, N> SafeDeployPending for SolCallBuilder<T, P, C, N>
 where
-    T: Transport + Clone,
-    P: Provider<T, N> + Clone,
+    P: Provider<N> + Clone,
     C: SolCall + Send + Sync + Clone,
-    N: Network
+    N: Network,
+    T: Send + Sync
 {
     async fn deploy_pending(self) -> eyre::Result<PendingTransaction> {
         Ok(self.gas(50e6 as u64).send().await?.register().await?)

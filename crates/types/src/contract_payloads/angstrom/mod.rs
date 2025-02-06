@@ -10,8 +10,7 @@ use alloy::{
     network::Network,
     primitives::{keccak256, Address, FixedBytes, B256, U256},
     providers::Provider,
-    sol_types::SolValue,
-    transports::Transport
+    sol_types::SolValue
 };
 use alloy_primitives::I256;
 use base64::Engine;
@@ -751,15 +750,14 @@ pub struct AngstromPoolConfigStore {
 }
 
 impl AngstromPoolConfigStore {
-    pub async fn load_from_chain<T, N, P>(
+    pub async fn load_from_chain<N, P>(
         angstrom_contract: Address,
         block_id: BlockId,
         provider: &P
     ) -> Result<AngstromPoolConfigStore, String>
     where
-        T: Transport + Clone,
         N: Network,
-        P: Provider<T, N>
+        P: Provider<N>
     {
         // offset of 6 bytes
         let value = provider

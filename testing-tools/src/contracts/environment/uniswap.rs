@@ -1,7 +1,4 @@
-use alloy::{
-    primitives::{aliases::I24, Address, FixedBytes, U256},
-    transports::BoxTransport
-};
+use alloy::primitives::{aliases::I24, Address, FixedBytes, U256};
 use alloy_primitives::{address, TxHash};
 use angstrom_types::contract_bindings::{
     i_position_descriptor::IPositionDescriptor,
@@ -96,7 +93,7 @@ where
         Ok(position_manager_addr)
     }
 
-    pub fn pool_gate(&self) -> PoolGateInstance<BoxTransport, &E::P> {
+    pub fn pool_gate(&self) -> PoolGateInstance<(), &E::P> {
         PoolGateInstance::new(self.pool_gate, self.provider())
     }
 }

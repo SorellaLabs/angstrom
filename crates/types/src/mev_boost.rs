@@ -2,11 +2,11 @@ use std::{ops::Deref, pin::Pin, sync::Arc};
 
 use alloy::{
     eips::eip2718::Encodable2718,
-    network::TransactionBuilder,
+    network::{Ethereum, Network, TransactionBuilder},
     primitives::{Address, TxHash},
     providers::{Provider, ProviderBuilder, RootProvider},
     rpc::types::TransactionRequest,
-    transports::{http::reqwest::Url, Transport}
+    transports::http::reqwest::Url
 };
 use futures::{Future, FutureExt};
 
@@ -23,9 +23,9 @@ pub trait SubmitTx: Send + Sync {
 }
 
 // Default impl
-impl<T> SubmitTx for RootProvider<T>
+impl<N> SubmitTx for RootProvider<N>
 where
-    T: Transport + Clone
+    N: Network
 {
     fn submit_transaction<'a>(
         &'a self,
@@ -64,8 +64,9 @@ where
         let mev_boost_providers = urls
             .iter()
             .map(|url| {
-                Arc::new(Box::new(ProviderBuilder::<_, _, _>::default().on_http(url.clone()))
-                    as Box<dyn SubmitTx>)
+                let provider: RootProvider<Ethereum> =
+                    ProviderBuilder::default().on_http(url.clone());
+                Arc::new(Box::new(provider) as Box<dyn SubmitTx>)
             })
             .collect::<Vec<_>>();
 

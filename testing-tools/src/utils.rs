@@ -1,10 +1,6 @@
 use std::{future::Future, path::Path, pin::Pin, sync::Arc};
 
 use angstrom_types::testnet::InitialTestnetState;
-use reth_beacon_consensus::EthBeaconConsensus;
-use reth_blockchain_tree::{
-    BlockchainTree, BlockchainTreeConfig, ShareableBlockchainTree, TreeExternals
-};
 use reth_chainspec::MAINNET;
 use reth_db::{mdbx::DatabaseArguments, ClientVersion, DatabaseEnv};
 use reth_node_ethereum::EthereumNode;
@@ -41,18 +37,8 @@ provider failed"
     let provider_factory =
         ProviderFactory::new(db.clone(), Arc::clone(&chain), static_file_provider);
     let executor = reth_node_ethereum::EthExecutorProvider::ethereum(provider_factory.chain_spec());
-    let tree_externals = TreeExternals::new(
-        provider_factory.clone(),
-        Arc::new(EthBeaconConsensus::new(Arc::clone(&chain))),
-        executor
-    );
 
-    let tree_config = BlockchainTreeConfig::default();
-
-    let blockchain_tree =
-        ShareableBlockchainTree::new(BlockchainTree::new(tree_externals, tree_config).unwrap());
-
-    BlockchainProvider::new(provider_factory.clone(), Arc::new(blockchain_tree)).unwrap()
+    BlockchainProvider::new(provider_factory.clone()).unwrap()
 }
 
 pub fn workspace_dir() -> std::path::PathBuf {

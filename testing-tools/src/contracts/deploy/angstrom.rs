@@ -1,5 +1,6 @@
 use alloy::{
-    contract::RawCallBuilder, network::Ethereum, primitives::Address, sol_types::SolValue
+    contract::RawCallBuilder, network::Ethereum, primitives::Address, providers::Provider,
+    sol_types::SolValue, transports::BoxTransport
 };
 use alloy_sol_types::SolCall;
 use angstrom_types::contract_bindings::angstrom::Angstrom;
@@ -7,8 +8,8 @@ use angstrom_types::contract_bindings::angstrom::Angstrom;
 use super::{mine_create3_address, SUB_ZERO_FACTORY};
 
 pub async fn deploy_angstrom_create3<
-    T: alloy::contract::private::Transport + ::core::clone::Clone,
-    P: alloy::contract::private::Provider<T, Ethereum> + alloy::providers::WalletProvider<Ethereum>
+    // T: alloy::contract::private::Transport + ::core::clone::Clone,
+    P: Provider<Ethereum> + alloy::providers::WalletProvider<Ethereum>
 >(
     provider: &P,
     pool_manager: Address,
@@ -23,7 +24,7 @@ pub async fn deploy_angstrom_create3<
 
     let mint_call = _private::mintCall { to: owner, id: salt, nonce };
 
-    RawCallBuilder::new_raw(&provider, mint_call.abi_encode().into())
+    RawCallBuilder::<BoxTransport, _, _>::new_raw(provider, mint_call.abi_encode().into())
         .to(SUB_ZERO_FACTORY)
         .from(owner)
         .gas(50e6 as u64)
@@ -34,7 +35,7 @@ pub async fn deploy_angstrom_create3<
 
     let deploy_call = _private::deployCall { id: salt, initcode: code.into() };
 
-    RawCallBuilder::new_raw(&provider, deploy_call.abi_encode().into())
+    RawCallBuilder::<BoxTransport, _, _>::new_raw(provider, deploy_call.abi_encode().into())
         .from(owner)
         .gas(50e6 as u64)
         .to(SUB_ZERO_FACTORY)

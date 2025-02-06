@@ -3,7 +3,7 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 use alloy::{
     network::EthereumWallet,
     node_bindings::AnvilInstance,
-    primitives::{Address, U256},
+    primitives::Address,
     providers::{ext::AnvilApi, Provider, ProviderBuilder},
     signers::local::PrivateKeySigner
 };
@@ -18,7 +18,7 @@ pub mod uniswap;
 
 #[allow(async_fn_in_trait)]
 pub trait TestAnvilEnvironment: Clone {
-    type P: alloy::providers::Provider + alloy::providers::WalletProvider;
+    type P: Provider + alloy::providers::WalletProvider;
 
     fn provider(&self) -> &Self::P;
     fn controller(&self) -> Address;
@@ -28,14 +28,14 @@ pub trait TestAnvilEnvironment: Clone {
         // poll for 500 ms. if not resolves then we mine
         tokio::select! {
             o = &mut fut => {
-                let _ = self.provider().anvil_mine(Some(U256::from(1)), None).await;
+                let _ = self.provider().anvil_mine(Some(1), None).await;
                 return o
             },
             _ = tokio::time::sleep(Duration::from_millis(250)) => {
             }
         };
 
-        let mine_one_fut = self.provider().anvil_mine(Some(U256::from(1)), None);
+        let mine_one_fut = self.provider().anvil_mine(Some(1), None);
         let _ = mine_one_fut.await;
         fut.await
     }
@@ -100,7 +100,6 @@ impl LocalAnvil {
         .unwrap();
         let wallet = EthereumWallet::new(sk);
         let provider = ProviderBuilder::new()
-            .with_recommended_fillers()
             .wallet(wallet)
             .on_builtin(&url)
             .await

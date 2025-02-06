@@ -3,8 +3,7 @@ use std::{cmp::Ordering, collections::HashMap, fmt::Debug, marker::PhantomData, 
 use alloy::{
     hex,
     primitives::{aliases::I24, Address, BlockNumber, B256, I256, U256},
-    providers::Provider,
-    transports::Transport
+    providers::{Network, Provider}
 };
 use alloy_primitives::Log;
 use angstrom_types::matching::uniswap::{LiqRange, PoolSnapshot};
@@ -89,10 +88,10 @@ where
         self.data_loader.clone()
     }
 
-    pub async fn pool_data_for_block<T: Transport + Clone>(
+    pub async fn pool_data_for_block<N: Network>(
         &self,
         block_number: BlockNumber,
-        provider: Arc<impl Provider<T>>
+        provider: Arc<impl Provider<N>>
     ) -> Result<PoolData, PoolError> {
         self.data_loader
             .load_pool_data(Some(block_number), provider)
@@ -126,10 +125,10 @@ where
         Ok((self.token0, self.token1, PoolSnapshot::new(liq_ranges, self.sqrt_price.into())?))
     }
 
-    pub async fn initialize<T: Transport + Clone>(
+    pub async fn initialize<N: Network>(
         &mut self,
         block_number: Option<BlockNumber>,
-        provider: Arc<impl Provider<T>>
+        provider: Arc<impl Provider<N>>
     ) -> Result<(), PoolError> {
         tracing::trace!(?block_number, "populating pool data");
         self.populate_data(block_number, provider.clone()).await?;
@@ -147,7 +146,7 @@ where
         self.data_loader.address()
     }
 
-    async fn get_tick_data_batch_request<P: Provider<T>, T: Transport + Clone>(
+    async fn get_tick_data_batch_request<P: Provider<N>, N: Network>(
         &self,
         tick_start: I24,
         zero_for_one: bool,
@@ -190,7 +189,7 @@ where
             });
     }
 
-    pub async fn load_more_ticks<P: Provider<T>, T: Transport + Clone>(
+    pub async fn load_more_ticks<P: Provider<N>, N: Network>(
         &self,
         tick_data: TickRangeToLoad<A>,
         block_number: Option<BlockNumber>,
@@ -208,7 +207,7 @@ where
             .0)
     }
 
-    async fn sync_ticks<P: Provider<T>, T: Transport + Clone>(
+    async fn sync_ticks<P: Provider<N>, N: Network>(
         &mut self,
         block_number: Option<u64>,
         provider: Arc<P>
@@ -574,7 +573,7 @@ where
         Ok(())
     }
 
-    pub async fn populate_data<P: Provider<T>, T: Transport + Clone>(
+    pub async fn populate_data<P: Provider<N>, N: Network>(
         &mut self,
         block_number: Option<u64>,
         provider: Arc<P>
@@ -777,7 +776,7 @@ mod tests {
     struct MockLoader;
 
     impl<A> PoolDataLoader<A> for MockLoader {
-        async fn load_tick_data<P: Provider<T>, T: Transport + Clone>(
+        async fn load_tick_data<P: Provider<N>, N: Network>(
             &self,
             _: I24,
             _: bool,
@@ -789,7 +788,7 @@ mod tests {
             unimplemented!()
         }
 
-        async fn load_pool_data<P: Provider<T>, T: Transport + Clone>(
+        async fn load_pool_data<P: Provider<N>, N: Network>(
             &self,
             _: Option<BlockNumber>,
             _: Arc<P>

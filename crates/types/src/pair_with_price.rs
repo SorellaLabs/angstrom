@@ -1,4 +1,5 @@
-use alloy::{consensus::Transaction, primitives::Address};
+use alloy::primitives::Address;
+use alloy_consensus::transaction::Transaction;
 use futures::{Stream, StreamExt};
 use pade::PadeDecode;
 use reth_provider::CanonStateNotificationStream;

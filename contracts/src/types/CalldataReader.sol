@@ -131,6 +131,14 @@ library CalldataReaderLib {
         return (self, addr);
     }
 
+    function readU160(CalldataReader self) internal pure returns (CalldataReader, uint160 value) {
+        assembly ("memory-safe") {
+            value := shr(96, calldataload(self))
+            self := add(self, 20)
+        }
+        return (self, value);
+    }
+
     function readU256(CalldataReader self) internal pure returns (CalldataReader, uint256 value) {
         assembly ("memory-safe") {
             value := calldataload(self)

@@ -15,6 +15,7 @@ import {UserOrder, UserOrderLib} from "../_reference/UserOrder.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {PriceAB} from "src/types/Price.sol";
 import {RouterActor} from "test/_mocks/RouterActor.sol";
+import {RewardLib} from "../_helpers/RewardLib.sol";
 
 import {console} from "forge-std/console.sol";
 
@@ -107,7 +108,7 @@ contract FullBundleBenchmark is BaseTest {
             update.assetIn = asset1;
             update.assetOut = asset0;
             update.amountIn = 100.0e18;
-            update.rewardUpdate.onlyCurrent = true;
+            update.rewardUpdate = RewardLib.CurrentOnly(uni, poolId(angstrom, asset0, asset1), 0);
         }
 
         bundle.userOrders = new UserOrder[](total);
@@ -228,7 +229,7 @@ contract FullBundleBenchmark is BaseTest {
             update.assetIn = asset1;
             update.assetOut = asset0;
             update.amountIn = 100.0e18;
-            update.rewardUpdate.onlyCurrent = true;
+            update.rewardUpdate = RewardLib.CurrentOnly(uni, poolId(angstrom, asset0, asset1), 0);
         }
 
         bundle.userOrders = new UserOrder[](total);

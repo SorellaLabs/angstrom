@@ -188,11 +188,11 @@ contract PoolRewardsHandler is BaseTest {
 
         gate.setHook(address(0));
         // Do initial swap to price to get delta.
-        uint256 snapshot = vm.snapshot();
+        uint256 snapshot = vm.snapshotState();
         BalanceDelta delta =
             gate.swap(address(assetIn), address(assetOut), type(int256).min, targetSqrtPrice);
         if (delta.amount0() == 0 && delta.amount1() == 0) {
-            require(vm.revertTo(snapshot), "failed to revert");
+            require(vm.revertToState(snapshot), "failed to revert");
             return;
         }
         // Swap back to original price.

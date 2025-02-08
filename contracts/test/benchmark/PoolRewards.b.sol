@@ -94,15 +94,15 @@ contract PoolRewardsTest is BaseTest {
         MockERC20(asset1).mint(searcher.addr, 1e26);
         vm.stopPrank();
 
-        updatePoolZeroToOne(0.4e18, RewardLib.CurrentOnly(4.0e18));
+        updatePoolZeroToOne(0.4e18, RewardLib.CurrentOnly(uni, id, 4.0e18));
         console.log("tick: %s", uni.getSlot0(id).tick().toStr());
         bumpBlock();
 
-        updatePoolOneToZero(3.4e18, RewardLib.CurrentOnly(4.0e18));
+        updatePoolOneToZero(3.4e18, RewardLib.CurrentOnly(uni, id, 4.0e18));
         console.log("tick: %s", uni.getSlot0(id).tick().toStr());
         bumpBlock();
 
-        updatePoolZeroToOne(1.9e18, RewardLib.CurrentOnly(4.0e18));
+        updatePoolZeroToOne(1.9e18, RewardLib.CurrentOnly(uni, id, 4.0e18));
         console.log("tick: %s", uni.getSlot0(id).tick().toStr());
         bumpBlock();
     }
@@ -122,15 +122,15 @@ contract PoolRewardsTest is BaseTest {
     }
 
     function test_bench_rewardCurrent_swapWithin() public {
-        updatePoolZeroToOne(1e14, RewardLib.CurrentOnly(3.2e18));
+        updatePoolZeroToOne(1e14, RewardLib.CurrentOnly(uni, id, 3.2e18));
     }
 
     function test_bench_rewardCurrent_noSwap() public {
-        updatePoolZeroToOne(0, RewardLib.CurrentOnly(3.2e18));
+        updatePoolZeroToOne(0, RewardLib.CurrentOnly(uni, id, 3.2e18));
     }
 
     function test_bench_rewardCurrent_crossTick() public reportTickChange {
-        updatePoolZeroToOne(1.4e18, RewardLib.CurrentOnly(3.2e18));
+        updatePoolZeroToOne(1.4e18, RewardLib.CurrentOnly(uni, id, 3.2e18));
     }
 
     function test_bench_rewardMultiOneWord_swapWithin() public reportTickChange {

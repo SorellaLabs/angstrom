@@ -250,9 +250,9 @@ where
         &'a self,
         chain: &'a impl ChainExt
     ) -> impl Iterator<Item = B256> + 'a {
-        chain
-            .tip_transactions()
-            .cloned()
+        let tip_txs = chain.tip_transactions().cloned();
+
+        tip_txs
             .filter(|tx| tx.to() == Some(self.angstrom_address))
             .filter_map(|transaction| {
                 let mut input: &[u8] = transaction.input();
@@ -525,10 +525,11 @@ pub mod test {
             vec![finalized_user_order]
         );
 
-        let mut leg = TxLegacy::default();
-
-        leg.to = TxKind::Call(angstrom_address);
-        leg.input = angstrom_bundle_with_orders.pade_encode().into();
+        let leg = TxLegacy {
+            to: TxKind::Call(angstrom_address),
+            input: angstrom_bundle_with_orders.pade_encode().into(),
+            ..Default::default()
+        };
 
         let mock_tx = TransactionSigned::new_unhashed(leg.into(), Signature::test_signature());
         let mock_chain = MockChain { transactions: vec![mock_tx], ..Default::default() };
@@ -999,9 +1000,12 @@ pub mod test {
         let angstrom_address = Address::random();
         let eth = setup_non_subscription_eth_manager(Some(angstrom_address));
 
-        let mut leg = TxLegacy::default();
-        leg.to = TxKind::Call(angstrom_address);
-        leg.input = vec![0, 1, 2, 3].into(); // Invalid input data
+        let leg = TxLegacy {
+            to: TxKind::Call(angstrom_address),
+            // Invalid input data
+            input: vec![0, 1, 2, 3].into(),
+            ..Default::default()
+        };
 
         let mock_tx = TransactionSigned::new_unhashed(leg.into(), Signature::test_signature());
         let mock_chain = MockChain { transactions: vec![mock_tx], ..Default::default() };

@@ -74,9 +74,11 @@ contract Angstrom is
         reader = _updatePools(reader, pairs);
         console.log("updated pools");
         reader = _validateAndExecuteToBOrders(reader, pairs);
-        console.log("exectued tob");
+        console.log("executed tob");
         reader = _validateAndExecuteUserOrders(reader, pairs);
         console.log("executed user");
+        reader = _validateAndExecuteTWAPOrders(reader, pairs);
+        console.log("executed twap");
         reader.requireAtEndOf(data);
         _saveAndSettle(assets);
 
@@ -272,6 +274,8 @@ contract Angstrom is
         CalldataReader end;
         (reader, end) = reader.readU24End();
 
+        // Purposefully devolve into an endless loop if the specified length isn't exactly used s.t.
+        // `reader == end` at some point.
         while (reader != end) {
             reader = _validateAndExecuteTWAPOrder(reader, buffer, typedHasher, pairs);
         }

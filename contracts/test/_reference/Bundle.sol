@@ -19,7 +19,7 @@ struct Bundle {
     PoolUpdate[] poolUpdates;
     TopOfBlockOrder[] toBOrders;
     UserOrder[] userOrders;
-    // TimeWeightedAveragePriceOrder[] twapOrders;
+    TimeWeightedAveragePriceOrder[] twapOrders;
 }
 
 using BundleLib for Bundle global;
@@ -41,8 +41,8 @@ library BundleLib {
             self.pairs.encode(self.assets, configStore),
             self.poolUpdates.encode(self.pairs),
             self.toBOrders.encode(self.pairs),
-            self.userOrders.encode(self.pairs)
-            // self.twapOrders.encode(self.pairs)
+            self.userOrders.encode(self.pairs),
+            self.twapOrders.encode(self.pairs)
         );
     }
 

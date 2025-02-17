@@ -12,11 +12,11 @@ import {
     ExactStandingOrder as SignedExactStandingOrder,
     PartialFlashOrder as SignedPartialFlashOrder,
     ExactFlashOrder as SignedExactFlashOrder,
-    TopOfBlockOrder as SignedTopOfBlockOrder
+    TopOfBlockOrder as SignedTopOfBlockOrder,
+    TimeWeightedAveragePriceOrder as SignedTimeWeightedAveragePriceOrder
 } from "./SignedTypes.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-import {console} from "forge-std/console.sol";
 
 struct OrderMeta {
     bool isEcdsa;
@@ -109,12 +109,33 @@ struct TopOfBlockOrder {
     uint128 gasUsedAsset0;
 }
 
+struct TimeWeightedAveragePriceOrder {
+    uint32 refId;
+    bool exactIn;
+    uint128 amount;
+    uint128 maxExtraFeeAsset0;
+    uint256 minPrice;
+    bool useInternal;
+    address assetIn;
+    address assetOut;
+    address recipient;
+    address hook;
+    bytes hookPayload;
+    uint64 nonce;
+    uint40 startTime;
+    uint32 totalParts;
+    uint32 timeInterval;
+    OrderMeta meta;
+    uint128 extraFeeAsset0;
+}
+
 using OrdersLib for OrderMeta global;
 using OrdersLib for PartialStandingOrder global;
 using OrdersLib for ExactStandingOrder global;
 using OrdersLib for PartialFlashOrder global;
 using OrdersLib for ExactFlashOrder global;
 using OrdersLib for TopOfBlockOrder global;
+using OrdersLib for TimeWeightedAveragePriceOrder global;
 
 library OrdersLib {
     using PairLib for *;
@@ -197,6 +218,25 @@ library OrdersLib {
             order.assetOut,
             order.recipient,
             order.validForBlock
+        ).hash();
+    }
+
+    function hash(TimeWeightedAveragePriceOrder memory order) internal pure returns (bytes32) {
+        return SignedTimeWeightedAveragePriceOrder(
+            order.refId,
+            order.exactIn,
+            order.amount,
+            order.maxExtraFeeAsset0,
+            order.minPrice,
+            order.useInternal,
+            order.assetIn,
+            order.assetOut,
+            order.recipient,
+            _toHookData(order.hook, order.hookPayload),
+            order.nonce,
+            order.startTime,
+            order.totalParts,
+            order.timeInterval
         ).hash();
     }
 
@@ -376,6 +416,54 @@ library OrdersLib {
         );
     }
 
+    function encode(TimeWeightedAveragePriceOrder[] memory orders, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory b)
+    {
+        for (uint256 i = 0; i < orders.length; i++) {
+            b = bytes.concat(b, orders[i].encode(pairs));
+        }
+        b = bytes.concat(bytes3(b.length.toUint24()), b);
+    }
+
+    function toVariantMap(TimeWeightedAveragePriceOrder memory order, bool zeroForOne)
+        internal
+        pure
+        returns(uint8 varMap)
+    {
+        varMap = (order.useInternal ? 1 : 0) | (order.recipient != address(0) ? 2 : 0)
+            | (order.hook != address(0) ? 4 : 0) | (zeroForOne ? 8 : 0)
+            | (order.exactIn ? 16 : 0) | (order.meta.isEcdsa ? 32 : 0);
+    }
+
+    function encode(TimeWeightedAveragePriceOrder memory order, Pair[] memory pairs)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        (uint16 pairIndex, bool zeroForOne) = pairs.getIndex(order.assetIn, order.assetOut);
+
+        return bytes.concat(
+            bytes.concat(
+                bytes1(order.toVariantMap(zeroForOne)),
+                bytes4(order.refId),
+                bytes2(pairIndex),
+                bytes32(order.minPrice),
+                _encodeRecipient(order.recipient),
+                _encodeHookData(order.hook, order.hookPayload),
+                bytes8(order.nonce)
+            ),
+            bytes5(order.startTime),
+            bytes4(order.totalParts),
+            bytes4(order.timeInterval),
+            bytes16(order.amount),
+            bytes16(order.maxExtraFeeAsset0),
+            bytes16(order.extraFeeAsset0),
+            _encodeSig(order.meta)
+        );
+    }
+
     function toStr(PartialStandingOrder memory o) internal pure returns (string memory str) {
         str = string.concat(
             "PartialStandingOrder {",
@@ -506,6 +594,44 @@ library OrdersLib {
             o.hookPayload.toStr(),
             ",\n  validForBlock: ",
             o.validForBlock.toStr(),
+            ",\n  meta: ",
+            o.meta.toStr(),
+            "\n}"
+        );
+    }
+
+    function toStr(TimeWeightedAveragePriceOrder memory o) internal pure returns (string memory str) {
+        str = string.concat(
+            "ExactStandingOrder {",
+            "\n  exactIn: ",
+            o.exactIn.toStr(),
+            ",\n  amount: ",
+            o.amount.toStr(),
+            ",\n  minPrice: ",
+            o.minPrice.toStr(),
+            ",\n  useInternal: ",
+            o.useInternal.toStr(),
+            ",\n  assetIn: ",
+            o.assetIn.toStr(),
+            ",\n  assetOut: ",
+            o.assetOut.toStr()
+        );
+        str = string.concat(
+            str,
+            ",\n  recipient: ",
+            o.recipient.toStr(),
+            ",\n  hook: ",
+            o.hook.toStr(),
+            ",\n  hookPayload: ",
+            o.hookPayload.toStr(),
+            ",\n  nonce: ",
+            o.nonce.toStr(),
+            ",\n  startTime: ",
+            o.startTime.toStr(),
+            ",\n  totalParts: ",
+            o.totalParts.toStr(),
+            ",\n  timeInterval: ",
+            o.timeInterval.toStr(),
             ",\n  meta: ",
             o.meta.toStr(),
             "\n}"

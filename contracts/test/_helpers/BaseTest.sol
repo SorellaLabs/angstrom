@@ -110,7 +110,7 @@ contract BaseTest is Test, HookDeployer {
 
     function pythonRunCmd() internal pure returns (string[] memory args) {
         args = new string[](1);
-        args[0] = ".venv/bin/python3.12";
+        args[0] = ".venv/bin/python3.13";
     }
 
     function ffiPython(string[] memory args) internal returns (bytes memory) {

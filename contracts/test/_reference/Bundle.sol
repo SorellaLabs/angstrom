@@ -5,7 +5,11 @@ import {UserOrder, UserOrderLib} from "./UserOrder.sol";
 import {Asset, AssetLib} from "./Asset.sol";
 import {Pair, PairLib} from "./Pair.sol";
 import {PriceAB as Price10} from "src/types/Price.sol";
-import {TopOfBlockOrder, OrdersLib} from "./OrderTypes.sol";
+import {
+    TopOfBlockOrder,
+    TimeWeightedAveragePriceOrder,
+    OrdersLib
+} from "./OrderTypes.sol";
 import {PoolUpdate, PoolUpdateLib} from "./PoolUpdate.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 
@@ -15,6 +19,7 @@ struct Bundle {
     PoolUpdate[] poolUpdates;
     TopOfBlockOrder[] toBOrders;
     UserOrder[] userOrders;
+    // TimeWeightedAveragePriceOrder[] twapOrders;
 }
 
 using BundleLib for Bundle global;
@@ -22,6 +27,7 @@ using BundleLib for Bundle global;
 /// @author philogy <https://github.com/philogy>
 library BundleLib {
     using OrdersLib for TopOfBlockOrder[];
+    using OrdersLib for TimeWeightedAveragePriceOrder[];
     using UserOrderLib for UserOrder[];
     using AssetLib for Asset[];
     using PairLib for Pair[];
@@ -36,6 +42,7 @@ library BundleLib {
             self.poolUpdates.encode(self.pairs),
             self.toBOrders.encode(self.pairs),
             self.userOrders.encode(self.pairs)
+            // self.twapOrders.encode(self.pairs)
         );
     }
 

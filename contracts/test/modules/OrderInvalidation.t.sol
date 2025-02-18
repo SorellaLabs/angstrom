@@ -11,7 +11,9 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
 
     bytes4 internal constant NONCES_SLOT = bytes4(keccak256("angstrom-v1_0.unordered-nonces.slot"));
     uint256 private constant MAX_TWAP_INTERVAL = 0x1e187e0;
+    uint256 private constant MIN_TWAP_INTERVAL = 5;
     uint256 private constant MAX_TWAP_TOTAL_PARTS = 0x604e60;
+    uint256 private constant MAX_U32_VAL = type(uint32).max;
 
     function test_fuzzing_revertsUponReuse(address owner, uint64 nonce) public {
         _invalidateNonce(owner.brutalize(), nonce.brutalize());
@@ -25,10 +27,38 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
         this.invalidateTWAPNonce(nonce.brutalize());
     }
 
-    function test_fuzzing_revertsUponInvalidTWAPData(uint32 interval, uint32 tParts) public view {
-        interval = uint32(bound(uint256(interval), 1, MAX_TWAP_INTERVAL));
-        tParts = uint32(bound(uint256(tParts), 1, MAX_TWAP_TOTAL_PARTS));
-        _checkTWAPOrderData(interval.brutalizeU32(), tParts.brutalizeU32());
+    /// forge-config: default.allow_internal_expect_revert = true
+    function test_fuzzing_revertsUponInvalidTWAPData(uint32 interval, uint32 twapParts, uint32 window) public  {
+        interval = uint32(bound(uint256(interval), MIN_TWAP_INTERVAL, MAX_TWAP_INTERVAL));
+        twapParts = uint32(bound(uint256(twapParts), 1, MAX_TWAP_TOTAL_PARTS));
+        window = uint32(bound(uint256(interval), MIN_TWAP_INTERVAL, interval));
+        _checkTWAPOrderData(interval.brutalizeU32(), twapParts.brutalizeU32(), window.brutalizeU32());
+
+        interval = uint32(bound(uint256(interval), 0, MIN_TWAP_INTERVAL - 1));
+        vm.expectRevert(OrderInvalidation.InvalidTWAPOrder.selector);
+        _checkTWAPOrderData(interval.brutalizeU32(), twapParts.brutalizeU32(), window.brutalizeU32());
+        
+        interval = uint32(bound(uint256(interval), MIN_TWAP_INTERVAL + 1, MAX_U32_VAL));
+        vm.expectRevert(OrderInvalidation.InvalidTWAPOrder.selector);
+        _checkTWAPOrderData(interval.brutalizeU32(), twapParts.brutalizeU32(), window.brutalizeU32());
+
+        interval = uint32(bound(uint256(interval), MIN_TWAP_INTERVAL, MAX_TWAP_INTERVAL));
+        twapParts = uint32(bound(uint256(twapParts), MAX_TWAP_TOTAL_PARTS + 1, MAX_U32_VAL));
+        vm.expectRevert(OrderInvalidation.InvalidTWAPOrder.selector);
+        _checkTWAPOrderData(interval.brutalizeU32(), twapParts.brutalizeU32(), window.brutalizeU32());
+
+        twapParts = 0;
+        vm.expectRevert(OrderInvalidation.InvalidTWAPOrder.selector);
+        _checkTWAPOrderData(interval.brutalizeU32(), twapParts.brutalizeU32(), window.brutalizeU32());
+
+        twapParts = uint32(bound(uint256(twapParts), 1, MAX_TWAP_TOTAL_PARTS));
+        window = uint32(bound(uint256(interval), interval + 1, MAX_U32_VAL));
+        vm.expectRevert(OrderInvalidation.InvalidTWAPOrder.selector);
+        _checkTWAPOrderData(interval.brutalizeU32(), twapParts.brutalizeU32(), window.brutalizeU32());
+
+        window = uint32(bound(uint256(interval), 0, interval - 1));
+        vm.expectRevert(OrderInvalidation.InvalidTWAPOrder.selector);
+        _checkTWAPOrderData(interval.brutalizeU32(), twapParts.brutalizeU32(), window.brutalizeU32());
     }
 
     /// forge-config: default.allow_internal_expect_revert = true
@@ -36,30 +66,34 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
         address owner,
         uint64 nonce,
         uint32 interval, 
-        uint32 tParts
+        uint32 twapParts,
+        uint32 window
     ) public {
-        uint40 sTime = uint40(block.timestamp);
-        interval = uint32(bound(uint256(interval), 0, MAX_TWAP_INTERVAL));
-        tParts = uint32(bound(uint256(tParts), 0, 20));
+        uint40 startTime = uint40(block.timestamp);
+        interval = uint32(bound(uint256(interval), MIN_TWAP_INTERVAL, MAX_TWAP_INTERVAL));
+        twapParts = uint32(bound(uint256(twapParts), 0, 25));
+        window = uint32(bound(uint256(window), MIN_TWAP_INTERVAL, interval));
 
-        for(uint256 i = tParts; i != 0; i--){
+        for(uint256 i = twapParts; i != 0; i--){
             _invalidatePartTWAPNonceAndCheckDeadline(
                 owner.brutalize(), 
                 nonce.brutalize(), 
-                sTime.brutalizeU40(), 
+                startTime.brutalizeU40(), 
                 interval.brutalizeU32(), 
-                tParts.brutalizeU32()
+                twapParts.brutalizeU32(),
+                window.brutalizeU32()
             );
-            uint256 warpedTime = sTime + ((tParts-(i-1)) * interval);
+            uint256 warpedTime = startTime + ((twapParts-(i-1)) * interval);
             vm.warp(warpedTime);
         }
         vm.expectRevert(OrderInvalidation.TWAPNonceReuse.selector);
         _invalidatePartTWAPNonceAndCheckDeadline(
             owner.brutalize(), 
             nonce.brutalize(), 
-            sTime.brutalizeU40(), 
+            startTime.brutalizeU40(), 
             interval.brutalizeU32(), 
-            tParts.brutalizeU32()
+            twapParts.brutalizeU32(),
+            window.brutalizeU32()
         );
     }
 }

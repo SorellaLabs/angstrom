@@ -21,6 +21,7 @@ struct TWAPOrderBuffer {
     uint40 startTime;
     uint32 totalParts;
     uint32 timeInterval;
+    uint32 window;
 }
 
 using TWAPOrderBufferLib for TWAPOrderBuffer global;
@@ -29,7 +30,7 @@ using TWAPOrderBufferLib for TWAPOrderBuffer global;
 library TWAPOrderBufferLib {
     error GasAboveMax();
 
-    uint256 internal constant BUFFER_BYTES = 480;
+    uint256 internal constant BUFFER_BYTES = 512;
 
     uint256 internal constant VARIANT_MAP_BYTES = 1;
     /// @dev Destination offset for direct calldatacopy of 4-byte ref ID (therefore not word aligned).
@@ -43,6 +44,8 @@ library TWAPOrderBufferLib {
     uint256 internal constant PARTS_BYTES = 4;
     uint256 internal constant TIME_INTERVALS_MEM_OFFSET = 0x1c0;
     uint256 internal constant TIME_INTERVALS_BYTES = 4;
+    uint256 internal constant WINDOW_MEM_OFFSET = 0x1e0;
+    uint256 internal constant WINDOW_BYTES = 4;
 
     /// forgefmt: disable-next-item
     bytes32 internal constant TWAP_ORDER_TYPEHASH = keccak256(
@@ -60,7 +63,8 @@ library TWAPOrderBufferLib {
            "uint64 nonce,"
            "uint40 start_time,"
            "uint32 total_parts,"
-           "uint32 time_interval"
+           "uint32 time_interval,"
+           "uint32 window"
         ")"
     );
 
@@ -164,6 +168,12 @@ library TWAPOrderBufferLib {
                 TIME_INTERVALS_BYTES
             )
             reader := add(reader, TIME_INTERVALS_BYTES)
+            calldatacopy(
+                add(self, add(WINDOW_MEM_OFFSET, sub(0x20, WINDOW_BYTES))),
+                reader,
+                WINDOW_BYTES
+            )
+            reader := add(reader, WINDOW_BYTES)
         }
         return reader;
     }

@@ -36,7 +36,8 @@ contract TWAPOrderBufferTest is BaseTest {
                 bytes8(order.nonce),
                 bytes5(order.startTime),
                 bytes4(order.totalParts),
-                bytes4(order.timeInterval)
+                bytes4(order.timeInterval),
+                bytes4(order.window)
             )
         );
     }
@@ -68,7 +69,7 @@ contract TWAPOrderBufferTest is BaseTest {
     }
 
     function ffiPythonEIP712Hash(TimeWeightedAveragePriceOrder memory order) internal returns (bytes32) {
-        string[] memory args = new string[](16);
+        string[] memory args = new string[](17);
         args[0] = "test/_reference/eip712.py";
         args[1] = "test/_reference/SignedTypes.sol:TimeWeightedAveragePriceOrder";
         uint256 i = 2;
@@ -90,6 +91,7 @@ contract TWAPOrderBufferTest is BaseTest {
         args[i++] = vm.toString(order.startTime);
         args[i++] = vm.toString(order.totalParts);
         args[i++] = vm.toString(order.timeInterval);
+        args[i++] = vm.toString(order.window);
         return bytes32(ffiPython(args));
     }
 }

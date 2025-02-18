@@ -89,6 +89,7 @@ struct TimeWeightedAveragePriceOrder {
     uint40 start_time;
     uint32 total_parts;
     uint32 time_interval;
+    uint32 window;
 }
 
 using SignedTypesLib for ExactStandingOrder global;
@@ -210,6 +211,7 @@ library SignedTypesLib {
         uint40 start_time;
         uint32 total_parts;
         uint32 time_interval;
+        uint32 window;
     }
 
     function hash(TimeWeightedAveragePriceOrder memory self) internal pure returns (bytes32) {
@@ -228,7 +230,8 @@ library SignedTypesLib {
             nonce: self.nonce,
             start_time: self.start_time,
             total_parts: self.total_parts,
-            time_interval: self.time_interval
+            time_interval: self.time_interval,
+            window: self.window
         });
         return keccak256(abi.encode(orderToMem));
     }

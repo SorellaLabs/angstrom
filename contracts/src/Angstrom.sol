@@ -319,20 +319,22 @@ contract Angstrom is
         AmountOut amountOut;
         (reader, amountIn, amountOut) = buffer.loadAndComputeQuantity(reader, variantMap, price);
 
-        bytes32 orderHash = typedHasher.hashTypedData(buffer.hash());
-
         address from;
-        (reader, from) = variantMap.isEcdsa()
-            ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
-            : SignatureLib.readAndCheckERC1271(reader, orderHash);
+        {
+            bytes32 orderHash = typedHasher.hashTypedData(buffer.hash());
+            (reader, from) = variantMap.isEcdsa()
+                ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
+                : SignatureLib.readAndCheckERC1271(reader, orderHash);
+        }
 
-        _checkTWAPOrderData(buffer.timeInterval, buffer.totalParts);
+        _checkTWAPOrderData(buffer.timeInterval, buffer.totalParts, buffer.window);
         _invalidatePartTWAPNonceAndCheckDeadline(
             from, 
             buffer.nonce, 
             buffer.startTime, 
             buffer.timeInterval, 
-            buffer.totalParts
+            buffer.totalParts,
+            buffer.window
         );
 
         // Push before hook as a potential loan.

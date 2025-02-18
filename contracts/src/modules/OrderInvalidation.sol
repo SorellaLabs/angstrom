@@ -24,9 +24,11 @@ abstract contract OrderInvalidation {
     // type(uint232).max
     uint256 private constant MASK_U232 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
     // max twap nonce bit
-    uint256 private constant MAX_TWAP_NONCE_SIZE = 232;
-    // max upper limit of twap intervals = 365.25 days
+    uint256 private constant MAX_TWAP_NONCE_SIZE = 0xe8;
+    // max upper limit of twap intervals = 31557600 (365.25 days)
     uint256 private constant MAX_TWAP_INTERVAL = 0x1e187e0;
+    // min lower limit of twap intervals = 5 seconds
+    uint256 private constant MIN_TWAP_INTERVAL = 0x05;
     // max no. of order parts = 6311520 (365.25 days / 5 seconds)
     uint256 private constant MAX_TWAP_TOTAL_PARTS = 0x604e60;
 
@@ -62,12 +64,13 @@ abstract contract OrderInvalidation {
         }
     }
 
-    function _checkTWAPOrderData(uint32 interval, uint32 twapParts) internal pure {
-        bool validInterval = interval != 0 && interval <= MAX_TWAP_INTERVAL;
-        bool validTParts = twapParts != 0 && twapParts <= MAX_TWAP_TOTAL_PARTS;
+    function _checkTWAPOrderData(uint32 interval, uint32 twapParts, uint32 window) internal pure {
+        bool validInterval = interval < MIN_TWAP_INTERVAL || interval > MAX_TWAP_INTERVAL;
+        bool validTParts = twapParts == 0 || twapParts > MAX_TWAP_TOTAL_PARTS;
+        bool validWindow = window < MIN_TWAP_INTERVAL || window > interval;
 
         assembly("memory-safe") {
-            if iszero(and(validInterval, validTParts)){
+            if or(or(validInterval, validTParts), validWindow){
                 mstore(0x00, 0x51e490f3 /* InvalidTWAPOrder() */ )
                 revert(0x1c, 0x04)
             }
@@ -103,7 +106,8 @@ abstract contract OrderInvalidation {
         uint64 nonce, 
         uint40 startTime, 
         uint32 interval, 
-        uint32 twapParts
+        uint32 twapParts,
+        uint32 window
     ) 
         internal 
     {
@@ -145,7 +149,7 @@ abstract contract OrderInvalidation {
 
             let currentPartStart := add(and(startTime, MASK_U40), mul(_cachedFulfilledParts, and(interval, MASK_U32)))
             
-            if or(lt(timestamp(), currentPartStart), gt(timestamp(), add(currentPartStart, interval))) {
+            if or(lt(timestamp(), currentPartStart), gt(timestamp(), add(currentPartStart, and(window, MASK_U32)))) {
                 mstore(0x00, 0x982c606d /* TWAPExpired() */ )
                 revert(0x1c, 0x04)
             }

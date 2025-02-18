@@ -125,6 +125,7 @@ struct TimeWeightedAveragePriceOrder {
     uint40 startTime;
     uint32 totalParts;
     uint32 timeInterval;
+    uint32 window;
     OrderMeta meta;
     uint128 extraFeeAsset0;
 }
@@ -236,7 +237,8 @@ library OrdersLib {
             order.nonce,
             order.startTime,
             order.totalParts,
-            order.timeInterval
+            order.timeInterval,
+            order.window
         ).hash();
     }
 
@@ -457,6 +459,7 @@ library OrdersLib {
             bytes5(order.startTime),
             bytes4(order.totalParts),
             bytes4(order.timeInterval),
+            bytes4(order.window),
             bytes16(order.amount),
             bytes16(order.maxExtraFeeAsset0),
             bytes16(order.extraFeeAsset0),
@@ -632,6 +635,8 @@ library OrdersLib {
             o.totalParts.toStr(),
             ",\n  timeInterval: ",
             o.timeInterval.toStr(),
+            ",\n  window: ",
+            o.window.toStr(),
             ",\n  meta: ",
             o.meta.toStr(),
             "\n}"

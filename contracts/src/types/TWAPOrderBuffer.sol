@@ -102,8 +102,7 @@ library TWAPOrderBufferLib {
     ) internal pure returns (CalldataReader, AmountIn quantityIn, AmountOut quantityOut) {
         uint256 quantity;
         (reader, quantity) = reader.readU128();
-        // how is this actually used.
-        // self.exactIn = variant.exactIn();
+        self.exactIn = variant.exactIn();
         self.quantity = quantity;
 
         uint128 extraFeeAsset0;
@@ -113,13 +112,25 @@ library TWAPOrderBufferLib {
         if (extraFeeAsset0 > maxExtraFeeAsset0) revert GasAboveMax();
         self.maxExtraFeeAsset0 = maxExtraFeeAsset0;
 
-        quantityIn = AmountIn.wrap(quantity);
+
         if (variant.zeroForOne()) {
             AmountIn fee = AmountIn.wrap(extraFeeAsset0);
-            quantityOut = price.convertDown(quantityIn - fee);
+            if (variant.exactIn()) {
+                quantityIn = AmountIn.wrap(quantity);
+                quantityOut = price.convertDown(quantityIn - fee);
+            } else {
+                quantityOut = AmountOut.wrap(quantity);
+                quantityIn = price.convertUp(quantityOut) + fee;
+            }
         } else {
             AmountOut fee = AmountOut.wrap(extraFeeAsset0);
-            quantityOut = price.convertDown(quantityIn) - fee;
+            if (variant.exactIn()) {
+                quantityIn = AmountIn.wrap(quantity);
+                quantityOut = price.convertDown(quantityIn) - fee;
+            } else {
+                quantityOut = AmountOut.wrap(quantity);
+                quantityIn = price.convertUp(quantityOut + fee);
+            }
         }
 
         return (reader, quantityIn, quantityOut);

@@ -11,7 +11,7 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
 
     bytes4 internal constant NONCES_SLOT = bytes4(keccak256("angstrom-v1_0.unordered-nonces.slot"));
     uint256 private constant MAX_TWAP_INTERVAL = 0x1e187e0;
-    uint256 private constant MIN_TWAP_INTERVAL = 5;
+    uint256 private constant MIN_TWAP_INTERVAL = 12;
     uint256 private constant MAX_TWAP_TOTAL_PARTS = 0x604e60;
     uint256 private constant MAX_U32_VAL = type(uint32).max;
 

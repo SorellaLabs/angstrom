@@ -23,12 +23,12 @@ abstract contract OrderInvalidation {
     uint256 private constant MASK_U64 = 0xffffffffffffffff;
     // type(uint232).max
     uint256 private constant MASK_U232 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
-    // max twap nonce bit
+    // max twap nonce bit = 232
     uint256 private constant MAX_TWAP_NONCE_SIZE = 0xe8;
     // max upper limit of twap intervals = 31557600 (365.25 days)
     uint256 private constant MAX_TWAP_INTERVAL = 0x1e187e0;
-    // min lower limit of twap intervals = 5 seconds
-    uint256 private constant MIN_TWAP_INTERVAL = 0x05;
+    // min lower limit of twap intervals = 12 seconds
+    uint256 private constant MIN_TWAP_INTERVAL = 0x0c;
     // max no. of order parts = 6311520 (365.25 days / 5 seconds)
     uint256 private constant MAX_TWAP_TOTAL_PARTS = 0x604e60;
 
@@ -50,6 +50,8 @@ abstract contract OrderInvalidation {
             let twapNonce := iszero(and(updated, flag))
             let fulfilledParts := shr(MAX_TWAP_NONCE_SIZE, bitmapVal)
 
+            // Reverts if `fulfilledParts` is empty while `twapNonce` is not empty,
+            // or if `fulfilledParts` is not empty while `twapNonce` is empty.
             if xor(iszero(iszero(fulfilledParts)), twapNonce) {
                 mstore(0x00, 0xcfa42043 /* InvalidTWAPNonce() */ )
                 revert(0x1c, 0x04)
@@ -60,7 +62,7 @@ abstract contract OrderInvalidation {
                 revert(0x1c, 0x04)
             }
 
-            sstore(bitmapPtr, or(updated, shl(MAX_TWAP_NONCE_SIZE, 0xffffff)))
+            sstore(bitmapPtr, or(flag, shl(MAX_TWAP_NONCE_SIZE, 0xffffff)))
         }
     }
 
@@ -127,6 +129,8 @@ abstract contract OrderInvalidation {
             let fulfilledParts := shr(MAX_TWAP_NONCE_SIZE, bitmapVal)
             let _cachedFulfilledParts := fulfilledParts
 
+            // Reverts if `fulfilledParts` is empty while `twapNonce` is not empty,
+            // or if `fulfilledParts` is not empty while `twapNonce` is empty.
             if xor(iszero(iszero(fulfilledParts)), twapNonce) {
                 mstore(0x00, 0xcfa42043 /* InvalidTWAPNonce() */ )
                 revert(0x1c, 0x04)

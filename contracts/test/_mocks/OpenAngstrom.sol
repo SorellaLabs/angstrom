@@ -12,6 +12,8 @@ import {ToBOrderBuffer} from "src/types/ToBOrderBuffer.sol";
 import {ToBOrderVariantMap} from "src/types/ToBOrderVariantMap.sol";
 import {UserOrderBuffer} from "src/types/UserOrderBuffer.sol";
 import {UserOrderVariantMap} from "src/types/UserOrderVariantMap.sol";
+import {TWAPOrderBuffer} from "src/types/TWAPOrderBuffer.sol";
+import {TWAPOrderVariantMap} from "src/types/TWAPOrderVariantMap.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {Position} from "src/types/Positions.sol";
 import {PoolConfigStore} from "src/libraries/PoolConfigStore.sol";
@@ -81,6 +83,21 @@ contract OpenAngstrom is Angstrom {
 
         UserOrderBuffer memory buffer;
         reader = _validateAndExecuteUserOrder(reader, buffer, _erc712Hasher(), pairs);
+
+        reader.requireAtEndOf(userOrderPayload);
+    }
+
+    /// @custom:pade (List<Asset>, List<Pair>, UserOrder)
+    function validateAndExecuteTWAPOrder(bytes calldata userOrderPayload) public {
+        CalldataReader reader = CalldataReaderLib.from(userOrderPayload);
+
+        AssetArray assets;
+        (reader, assets) = AssetLib.readFromAndValidate(reader);
+        PairArray pairs;
+        (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
+
+        TWAPOrderBuffer memory buffer;
+        reader = _validateAndExecuteTWAPOrder(reader, buffer, _erc712Hasher(), pairs);
 
         reader.requireAtEndOf(userOrderPayload);
     }

@@ -23,6 +23,8 @@ abstract contract OrderInvalidation {
     uint256 private constant MASK_U64 = 0xffffffffffffffff;
     // type(uint232).max
     uint256 private constant MASK_U232 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+    // upper 24 bits mask
+    uint256 private constant UPPER_PART_MASK = 0xffffff0000000000000000000000000000000000000000000000000000000000;
     // max twap nonce bit = 232
     uint256 private constant MAX_TWAP_NONCE_SIZE = 0xe8;
     // max upper limit of twap intervals = 31557600 (365.25 days)
@@ -62,7 +64,7 @@ abstract contract OrderInvalidation {
                 revert(0x1c, 0x04)
             }
 
-            sstore(bitmapPtr, or(flag, shl(MAX_TWAP_NONCE_SIZE, 0xffffff)))
+            sstore(bitmapPtr, or(flag, UPPER_PART_MASK))
         }
     }
 
@@ -147,7 +149,7 @@ abstract contract OrderInvalidation {
             updated := or(shl(MAX_TWAP_NONCE_SIZE, fulfilledParts), flag)
 
             if iszero(sub(twapParts, fulfilledParts)) {
-                updated := or(updated, shl(MAX_TWAP_NONCE_SIZE, 0xffffff))
+                updated := or(updated, UPPER_PART_MASK)
             }
             sstore(bitmapPtr, updated)
 

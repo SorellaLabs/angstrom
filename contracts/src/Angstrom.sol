@@ -326,7 +326,7 @@ contract Angstrom is
                 ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
                 : SignatureLib.readAndCheckERC1271(reader, orderHash);
         }
-
+    
         _checkTWAPOrderData(buffer.timeInterval, buffer.totalParts, buffer.window);
         _invalidatePartTWAPNonceAndCheckDeadline(
             from, 
@@ -347,7 +347,7 @@ contract Angstrom is
         hook.tryTrigger(from);
 
         _settleOrderIn(from, buffer.assetIn, amountIn, buffer.useInternal);
-
+        console.log("end test");
         return reader;
     }
 

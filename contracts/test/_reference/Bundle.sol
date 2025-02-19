@@ -126,6 +126,23 @@ library BundleLib {
         return self;
     }
 
+    function addTwap(Bundle memory self, TimeWeightedAveragePriceOrder memory twap)
+        internal
+        pure
+        returns (Bundle memory)
+    {
+        // self.addPair(twap.assetIn, twap.assetOut);
+
+        TimeWeightedAveragePriceOrder[] memory newTwapOrders = new TimeWeightedAveragePriceOrder[](self.twapOrders.length + 1);
+        for (uint256 i = 0; i < self.twapOrders.length; i++) {
+            newTwapOrders[i] = self.twapOrders[i];
+        }
+        newTwapOrders[self.twapOrders.length] = twap;
+        self.twapOrders = newTwapOrders;
+
+        return self;
+    }
+
     function addDeltas(Bundle memory self, uint256 index0, uint256 index1, BalanceDelta deltas)
         internal
         pure

@@ -18,4 +18,21 @@ library Utils {
             bx := xor(shl(64, dirt), x)
         }
     }
+
+    // https://github.com/ethereum/solidity/issues/15144
+    function brutalizeU40(uint40 y) internal view returns (uint40 cx) {
+        assembly ("memory-safe") {
+            mstore(0x00, gas())
+            let dirt := keccak256(0, 32)
+            cx := xor(shl(40, dirt), y)
+        }
+    }
+
+    function brutalizeU32(uint32 z) internal view returns (uint32 dx) {
+        assembly ("memory-safe") {
+            mstore(0x00, gas())
+            let dirt := keccak256(0, 32)
+            dx := xor(shl(32, dirt), z)
+        }
+    }
 }

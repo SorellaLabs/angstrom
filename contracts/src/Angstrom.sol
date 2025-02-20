@@ -26,6 +26,8 @@ import {ToBOrderBuffer} from "./types/ToBOrderBuffer.sol";
 import {ToBOrderVariantMap} from "./types/ToBOrderVariantMap.sol";
 import {UserOrderBuffer} from "./types/UserOrderBuffer.sol";
 import {UserOrderVariantMap} from "./types/UserOrderVariantMap.sol";
+import {TWAPOrderBuffer} from "./types/TWAPOrderBuffer.sol";
+import {TWAPOrderVariantMap} from "./types/TWAPOrderVariantMap.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract Angstrom is
@@ -72,9 +74,11 @@ contract Angstrom is
         reader = _updatePools(reader, pairs);
         console.log("updated pools");
         reader = _validateAndExecuteToBOrders(reader, pairs);
-        console.log("exectued tob");
+        console.log("executed tob");
         reader = _validateAndExecuteUserOrders(reader, pairs);
         console.log("executed user");
+        reader = _validateAndExecuteTWAPOrders(reader, pairs);
+        console.log("executed twap");
         reader.requireAtEndOf(data);
         _saveAndSettle(assets);
 
@@ -257,6 +261,93 @@ contract Angstrom is
 
         _settleOrderIn(from, buffer.assetIn, amountIn, buffer.useInternal);
 
+        return reader;
+    }
+
+    function _validateAndExecuteTWAPOrders(CalldataReader reader, PairArray pairs)
+        internal
+        returns (CalldataReader)
+    {
+        TypedDataHasher typedHasher = _erc712Hasher();
+        TWAPOrderBuffer memory buffer;
+
+        CalldataReader end;
+        (reader, end) = reader.readU24End();
+
+        // Purposefully devolve into an endless loop if the specified length isn't exactly used s.t.
+        // `reader == end` at some point.
+        while (reader != end) {
+            reader = _validateAndExecuteTWAPOrder(reader, buffer, typedHasher, pairs);
+        }
+
+        return reader;
+    }
+
+    function _validateAndExecuteTWAPOrder(
+        CalldataReader reader,
+        TWAPOrderBuffer memory buffer,
+        TypedDataHasher typedHasher,
+        PairArray pairs
+    ) internal returns (CalldataReader) {
+        TWAPOrderVariantMap variantMap;
+        // Load variant map, ref id and set use internal.
+        (reader, variantMap) = buffer.init(reader);
+
+        // Load and lookup asset in/out and dependent values.
+        PriceOutVsIn price;
+        {
+            uint256 priceOutVsIn;
+            uint16 pairIndex;
+            (reader, pairIndex) = reader.readU16();
+            (buffer.assetIn, buffer.assetOut, priceOutVsIn) =
+                pairs.get(pairIndex).getSwapInfo(variantMap.zeroForOne());
+            price = PriceOutVsIn.wrap(priceOutVsIn);
+        }
+
+        (reader, buffer.minPrice) = reader.readU256();
+        if (price.into() < buffer.minPrice) revert LimitViolated();
+
+        (reader, buffer.recipient) =
+            variantMap.recipientIsSome() ? reader.readAddr() : (reader, address(0));
+
+        HookBuffer hook;
+        (reader, hook, buffer.hookDataHash) = HookBufferLib.readFrom(reader, variantMap.noHook());
+
+        reader = buffer.readOrderValidation(reader);
+
+        AmountIn amountIn;
+        AmountOut amountOut;
+        (reader, amountIn, amountOut) = buffer.loadAndComputeQuantity(reader, variantMap, price);
+
+        address from;
+        {
+            bytes32 orderHash = typedHasher.hashTypedData(buffer.hash());
+            (reader, from) = variantMap.isEcdsa()
+                ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
+                : SignatureLib.readAndCheckERC1271(reader, orderHash);
+        }
+    
+        _checkTWAPOrderData(buffer.timeInterval, buffer.totalParts, buffer.window);
+        _invalidatePartTWAPNonceAndCheckDeadline(
+            from, 
+            buffer.nonce, 
+            buffer.startTime, 
+            buffer.timeInterval, 
+            buffer.totalParts,
+            buffer.window
+        );
+
+        // Push before hook as a potential loan.
+        address to = buffer.recipient;
+        assembly ("memory-safe") {
+            to := or(mul(iszero(to), from), to)
+        }
+        _settleOrderOut(to, buffer.assetOut, amountOut, buffer.useInternal);
+
+        hook.tryTrigger(from);
+
+        _settleOrderIn(from, buffer.assetIn, amountIn, buffer.useInternal);
+        console.log("end test");
         return reader;
     }
 

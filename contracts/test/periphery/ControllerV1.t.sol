@@ -232,7 +232,7 @@ contract ControllerV1Test is BaseTest {
     function _isNode(address node) internal returns (bool) {
         bumpBlock();
         vm.prank(node);
-        try angstrom.execute(new bytes(15)) {
+        try angstrom.execute(new bytes(18)) {
             return true;
         } catch (bytes memory error) {
             require(keccak256(error) == keccak256(abi.encodePacked(TopLevelAuth.NotNode.selector)));

@@ -4,6 +4,7 @@ use alloy::{
     primitives::{keccak256, Address, U256},
     sol_types::SolValue
 };
+use angstrom_utils::FnResultOption;
 use dashmap::DashMap;
 use reth_revm::DatabaseRef;
 
@@ -28,19 +29,20 @@ impl Balances {
         token: Address,
         db: Arc<DB>,
         overrides: &HashMap<Address, HashMap<U256, U256>>
-    ) -> Option<U256>
+    ) -> eyre::Result<Option<U256>>
     where
         <DB as revm::DatabaseRef>::Error: Debug
     {
         // Existing code remains unchanged
-        self.tokens
+        let out = self
+            .tokens
             .get(&token)
-            .or_else(|| {
-                let slot = find_slot_offset_for_balance(&db, token);
+            .invert_or_else(|| {
+                let slot = find_slot_offset_for_balance(&db, token)?;
                 let slot = TokenBalanceSlot::new(token, slot as u8);
                 self.tokens.insert(token, slot);
-                self.tokens.get(&token)
-            })
+                Ok::<_, eyre::ErrReport>(self.tokens.get(&token))
+            })?
             .and_then(|slot| {
                 let slot_addr = slot.generate_slot(user).ok()?;
                 if let Some(address_slots) = overrides.get(&token) {
@@ -49,7 +51,9 @@ impl Balances {
                     }
                 }
                 db.storage_ref(token, slot_addr).ok()
-            })
+            });
+
+        Ok(out)
     }
 
     pub fn fetch_balance_for_token<DB: revm::DatabaseRef>(
@@ -57,20 +61,23 @@ impl Balances {
         user: Address,
         token: Address,
         db: &DB
-    ) -> U256
+    ) -> eyre::Result<U256>
     where
         <DB as DatabaseRef>::Error: Debug + Sync + Send + 'static
     {
-        self.tokens
+        let out = self
+            .tokens
             .get(&token)
-            .or_else(|| {
-                let slot = find_slot_offset_for_balance(db, token);
+            .invert_or_else(|| {
+                let slot = find_slot_offset_for_balance(db, token)?;
                 let slot = TokenBalanceSlot::new(token, slot as u8);
                 self.tokens.insert(token, slot);
-                self.tokens.get(&token)
-            })
+                Ok::<_, eyre::ErrReport>(self.tokens.get(&token))
+            })?
             .and_then(|slot| slot.load_balance(user, db).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        Ok(out)
     }
 
     pub fn fetch_balance_in_angstrom<DB: revm::DatabaseRef>(

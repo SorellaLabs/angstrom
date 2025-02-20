@@ -46,7 +46,11 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
         let respend = order.respend_avoidance_strategy();
         match respend {
             angstrom_types::sol_bindings::RespendAvoidanceMethod::Nonce(nonce) => {
-                if !self.fetch_utils.is_valid_nonce(user, nonce) {
+                if !self
+                    .fetch_utils
+                    .is_valid_nonce(user, nonce)
+                    .map_err(UserAccountVerificationError::CouldNotFetch)?
+                {
                     return Err(UserAccountVerificationError::DuplicateNonce(order_hash))
                 }
             }
@@ -75,12 +79,10 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
 
         // get the live state sorted up to the nonce, level, doesn't check orders above
         // that
-        let live_state = self.user_accounts.get_live_state_for_order(
-            user,
-            pool_info.token,
-            respend,
-            &self.fetch_utils
-        );
+        let live_state = self
+            .user_accounts
+            .get_live_state_for_order(user, pool_info.token, respend, &self.fetch_utils)
+            .map_err(UserAccountVerificationError::CouldNotFetch)?;
 
         // ensure that the current live state is enough to satisfy the order
         let (is_cur_valid, mut invalid_orders) = live_state
@@ -140,6 +142,8 @@ pub enum UserAccountVerificationError<O: RawPoolOrder> {
     OrderIsCancelled(B256),
     #[error("Nonce exists for a current order hash: {0:?}")]
     DuplicateNonce(B256),
+    #[error("Could not fetch: {0:?}")]
+    CouldNotFetch(eyre::ErrReport),
     #[error("block for flash order is not for next block. next_block: {0}, requested_block: {1}.")]
     BadBlock(u64, u64)
 }

@@ -171,6 +171,18 @@ pub trait OmitOrderMeta: SolStruct {
             .copy_from_slice(&<Self as OmitOrderMeta>::eip712_hash_struct(self)[..]);
         keccak256(digest_input)
     }
+
+    /// See [EIP-712 `signTypedData`](https://eips.ethereum.org/EIPS/eip-712#specification-of-the-eth_signtypeddata-json-rpc).
+    #[inline]
+    fn no_meta_eip712_signing_prehash(&self, domain: &Eip712Domain) -> alloy_primitives::Bytes {
+        let mut digest_input = [0u8; 2 + 32 + 32];
+        digest_input[0] = 0x19;
+        digest_input[1] = 0x01;
+        digest_input[2..34].copy_from_slice(&domain.hash_struct()[..]);
+        digest_input[34..66]
+            .copy_from_slice(&<Self as OmitOrderMeta>::eip712_hash_struct(self)[..]);
+        digest_input.into()
+    }
 }
 
 impl OmitOrderMeta for PartialStandingOrder {}

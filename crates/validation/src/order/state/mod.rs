@@ -87,7 +87,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
                     )
                 })
                 .unwrap_or_else(|e| {
-                    tracing::debug!(%e,"user acount tracker failed to validate order");
+                    tracing::debug!(%e,"user account tracker failed to validate order");
                     OrderValidationResults::Invalid(order_hash)
                 })
         })

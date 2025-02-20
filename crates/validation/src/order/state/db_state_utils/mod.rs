@@ -12,27 +12,31 @@ use angstrom_metrics::validation::ValidationMetrics;
 use self::{approvals::Approvals, balances::Balances, nonces::Nonces};
 
 pub trait StateFetchUtils: Clone + Send + Unpin {
-    fn is_valid_nonce(&self, user: Address, nonce: u64) -> bool;
+    fn is_valid_nonce(&self, user: Address, nonce: u64) -> eyre::Result<bool>;
 
     fn fetch_approval_balance_for_token_overrides(
         &self,
         user: Address,
         token: Address,
         overrides: &HashMap<Address, HashMap<U256, U256>>
-    ) -> Option<U256>;
+    ) -> eyre::Result<Option<U256>>;
 
-    fn fetch_approval_balance_for_token(&self, user: Address, token: Address) -> Option<U256>;
+    fn fetch_approval_balance_for_token(
+        &self,
+        user: Address,
+        token: Address
+    ) -> eyre::Result<Option<U256>>;
 
     fn fetch_balance_for_token_overrides(
         &self,
         user: Address,
         token: Address,
         overrides: &HashMap<Address, HashMap<U256, U256>>
-    ) -> Option<U256>;
+    ) -> eyre::Result<Option<U256>>;
 
-    fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256;
+    fn fetch_balance_for_token(&self, user: Address, token: Address) -> eyre::Result<U256>;
 
-    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256;
+    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> eyre::Result<U256>;
 }
 
 #[derive(Debug)]
@@ -60,9 +64,9 @@ where
     DB: revm::DatabaseRef + Clone + Sync + Send,
     <DB as revm::DatabaseRef>::Error: Sync + Send + 'static + Debug
 {
-    fn is_valid_nonce(&self, user: Address, nonce: u64) -> bool {
+    fn is_valid_nonce(&self, user: Address, nonce: u64) -> eyre::Result<bool> {
         let db = self.db.clone();
-        self.nonces.is_valid_nonce(user, nonce, db)
+        Ok(self.nonces.is_valid_nonce(user, nonce, db))
     }
 
     fn fetch_approval_balance_for_token_overrides(
@@ -70,7 +74,7 @@ where
         user: Address,
         token: Address,
         overrides: &HashMap<Address, HashMap<U256, U256>>
-    ) -> Option<U256> {
+    ) -> eyre::Result<Option<U256>> {
         let db = self.db.clone();
         self.metrics.loading_approvals(|| {
             self.approvals
@@ -78,18 +82,22 @@ where
         })
     }
 
-    fn fetch_approval_balance_for_token(&self, user: Address, token: Address) -> Option<U256> {
+    fn fetch_approval_balance_for_token(
+        &self,
+        user: Address,
+        token: Address
+    ) -> eyre::Result<Option<U256>> {
         self.metrics.loading_approvals(|| {
             self.approvals
                 .fetch_approval_balance_for_token(user, token, &self.db)
         })
     }
 
-    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256 {
-        self.metrics.loading_balances(|| {
+    fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> eyre::Result<U256> {
+        Ok(self.metrics.loading_balances(|| {
             self.balances
                 .fetch_balance_in_angstrom(user, token, &self.db)
-        })
+        }))
     }
 
     fn fetch_balance_for_token_overrides(
@@ -97,7 +105,7 @@ where
         user: Address,
         token: Address,
         overrides: &HashMap<Address, HashMap<U256, U256>>
-    ) -> Option<U256> {
+    ) -> eyre::Result<Option<U256>> {
         let db = self.db.clone();
         self.metrics.loading_balances(|| {
             self.balances
@@ -105,7 +113,7 @@ where
         })
     }
 
-    fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256 {
+    fn fetch_balance_for_token(&self, user: Address, token: Address) -> eyre::Result<U256> {
         self.metrics
             .loading_balances(|| self.balances.fetch_balance_for_token(user, token, &self.db))
     }
@@ -127,8 +135,8 @@ impl<DB: revm::DatabaseRef> FetchUtils<DB> {
 pub struct AutoMaxFetchUtils;
 
 impl StateFetchUtils for AutoMaxFetchUtils {
-    fn is_valid_nonce(&self, _: Address, _: u64) -> bool {
-        true
+    fn is_valid_nonce(&self, _: Address, _: u64) -> eyre::Result<bool> {
+        Ok(true)
     }
 
     fn fetch_approval_balance_for_token_overrides(
@@ -136,12 +144,16 @@ impl StateFetchUtils for AutoMaxFetchUtils {
         _: Address,
         _: Address,
         _: &HashMap<Address, HashMap<U256, U256>>
-    ) -> Option<U256> {
-        Some(U256::MAX)
+    ) -> eyre::Result<Option<U256>> {
+        Ok(Some(U256::MAX))
     }
 
-    fn fetch_approval_balance_for_token(&self, _: Address, _: Address) -> Option<U256> {
-        Some(U256::MAX)
+    fn fetch_approval_balance_for_token(
+        &self,
+        _: Address,
+        _: Address
+    ) -> eyre::Result<Option<U256>> {
+        Ok(Some(U256::MAX))
     }
 
     fn fetch_balance_for_token_overrides(
@@ -149,16 +161,16 @@ impl StateFetchUtils for AutoMaxFetchUtils {
         _: Address,
         _: Address,
         _: &HashMap<Address, HashMap<U256, U256>>
-    ) -> Option<U256> {
-        Some(U256::MAX)
+    ) -> eyre::Result<Option<U256>> {
+        Ok(Some(U256::MAX))
     }
 
-    fn fetch_balance_for_token(&self, _: Address, _: Address) -> U256 {
-        U256::MAX
+    fn fetch_balance_for_token(&self, _: Address, _: Address) -> eyre::Result<U256> {
+        Ok(U256::MAX)
     }
 
-    fn fetch_token_balance_in_angstrom(&self, _: Address, _: Address) -> U256 {
-        U256::MAX
+    fn fetch_token_balance_in_angstrom(&self, _: Address, _: Address) -> eyre::Result<U256> {
+        Ok(U256::MAX)
     }
 }
 
@@ -200,11 +212,16 @@ pub mod test_fetching {
     }
 
     impl StateFetchUtils for MockFetch {
-        fn is_valid_nonce(&self, user: alloy::primitives::Address, nonce: u64) -> bool {
-            self.used_nonces
+        fn is_valid_nonce(
+            &self,
+            user: alloy::primitives::Address,
+            nonce: u64
+        ) -> eyre::Result<bool> {
+            Ok(self
+                .used_nonces
                 .get(&user)
                 .map(|v| !v.value().contains(&nonce))
-                .unwrap_or(true)
+                .unwrap_or(true))
         }
 
         fn fetch_approval_balance_for_token_overrides(
@@ -212,14 +229,19 @@ pub mod test_fetching {
             _: Address,
             _: Address,
             _: &HashMap<Address, HashMap<U256, U256>>
-        ) -> Option<U256> {
+        ) -> eyre::Result<Option<U256>> {
             todo!("not implemented for mocker")
         }
 
-        fn fetch_approval_balance_for_token(&self, user: Address, token: Address) -> Option<U256> {
-            self.approval_values
+        fn fetch_approval_balance_for_token(
+            &self,
+            user: Address,
+            token: Address
+        ) -> eyre::Result<Option<U256>> {
+            Ok(self
+                .approval_values
                 .get(&user)
-                .and_then(|inner| inner.value().get(&token).cloned())
+                .and_then(|inner| inner.value().get(&token).cloned()))
         }
 
         fn fetch_balance_for_token_overrides(
@@ -227,22 +249,28 @@ pub mod test_fetching {
             _: Address,
             _: Address,
             _: &HashMap<Address, HashMap<U256, U256>>
-        ) -> Option<U256> {
+        ) -> eyre::Result<Option<U256>> {
             todo!("not implemented for mocker")
         }
 
-        fn fetch_balance_for_token(&self, user: Address, token: Address) -> U256 {
-            self.balance_values
+        fn fetch_balance_for_token(&self, user: Address, token: Address) -> eyre::Result<U256> {
+            Ok(self
+                .balance_values
                 .get(&user)
                 .and_then(|inner| inner.value().get(&token).cloned())
-                .unwrap_or_default()
+                .unwrap_or_default())
         }
 
-        fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> U256 {
-            self.angstrom_values
+        fn fetch_token_balance_in_angstrom(
+            &self,
+            user: Address,
+            token: Address
+        ) -> eyre::Result<U256> {
+            Ok(self
+                .angstrom_values
                 .get(&user)
                 .and_then(|inner| inner.value().get(&token).cloned())
-                .unwrap_or_default()
+                .unwrap_or_default())
         }
     }
 
@@ -259,11 +287,11 @@ pub mod test_fetching {
 
         // Test setting and fetching balance
         mock.set_balance_for_user(user, token, balance);
-        assert_eq!(mock.fetch_balance_for_token(user, token), balance);
+        assert_eq!(mock.fetch_balance_for_token(user, token).unwrap(), balance);
 
         // Test non-existent balance returns zero
         let other_token = address!("beefdeadbeefdeadbeefdeadbeefdeadbeefdead");
-        assert_eq!(mock.fetch_balance_for_token(user, other_token), U256::ZERO);
+        assert_eq!(mock.fetch_balance_for_token(user, other_token).unwrap(), U256::ZERO);
     }
 
     #[test]
@@ -275,11 +303,15 @@ pub mod test_fetching {
 
         // Test setting and fetching approval
         mock.set_approval_for_user(user, token, approval);
-        assert_eq!(mock.fetch_approval_balance_for_token(user, token), Some(approval));
+        assert_eq!(mock.fetch_approval_balance_for_token(user, token).unwrap(), Some(approval));
 
         // Test non-existent approval returns None
         let other_token = address!("beefdeadbeefdeadbeefdeadbeefdeadbeefdead");
-        assert_eq!(mock.fetch_approval_balance_for_token(user, other_token), None);
+        assert_eq!(
+            mock.fetch_approval_balance_for_token(user, other_token)
+                .unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -288,7 +320,7 @@ pub mod test_fetching {
         let user = address!("1234567890123456789012345678901234567890");
 
         // Test unused nonce is valid
-        assert!(mock.is_valid_nonce(user, 1));
+        assert!(mock.is_valid_nonce(user, 1).unwrap());
 
         // Set used nonces
         let mut used_nonces = HashSet::new();
@@ -297,11 +329,11 @@ pub mod test_fetching {
         mock.set_used_nonces(user, used_nonces);
 
         // Test used nonces are invalid
-        assert!(!mock.is_valid_nonce(user, 1));
-        assert!(!mock.is_valid_nonce(user, 2));
+        assert!(!mock.is_valid_nonce(user, 1).unwrap());
+        assert!(!mock.is_valid_nonce(user, 2).unwrap());
 
         // Test unused nonce is still valid
-        assert!(mock.is_valid_nonce(user, 3));
+        assert!(mock.is_valid_nonce(user, 3).unwrap());
     }
 
     #[test]
@@ -311,12 +343,16 @@ pub mod test_fetching {
         let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
         // Test default angstrom balance is zero
-        assert_eq!(mock.fetch_token_balance_in_angstrom(user, token), U256::ZERO);
+        assert_eq!(mock.fetch_token_balance_in_angstrom(user, token).unwrap(), U256::ZERO);
 
         // We can't directly set angstrom values as there's no public method,
         // but we can verify the default behavior
         let other_token = address!("beefdeadbeefdeadbeefdeadbeefdeadbeefdead");
-        assert_eq!(mock.fetch_token_balance_in_angstrom(user, other_token), U256::ZERO);
+        assert_eq!(
+            mock.fetch_token_balance_in_angstrom(user, other_token)
+                .unwrap(),
+            U256::ZERO
+        );
     }
 
     #[test]
@@ -328,7 +364,9 @@ pub mod test_fetching {
         let overrides = HashMap::new();
 
         // Verify that override methods panic with todo!()
-        mock.fetch_approval_balance_for_token_overrides(user, token, &overrides);
-        mock.fetch_balance_for_token_overrides(user, token, &overrides);
+        mock.fetch_approval_balance_for_token_overrides(user, token, &overrides)
+            .unwrap();
+        mock.fetch_balance_for_token_overrides(user, token, &overrides)
+            .unwrap();
     }
 }

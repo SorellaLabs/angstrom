@@ -14,3 +14,9 @@ pub mod reth_db_wrapper;
 pub mod sol_bindings;
 #[cfg(feature = "testnet")]
 pub mod testnet;
+
+#[cfg(not(feature = "testnet"))]
+pub const CHAIN_ID: u64 = 1;
+
+#[cfg(feature = "testnet")]
+pub const CHAIN_ID: u64 = 34456;

@@ -23,6 +23,7 @@ use revm::{
     primitives::{EnvWithHandlerCfg, ResultAndState, TxEnv},
     DatabaseRef
 };
+use tracing::trace;
 
 use super::gas_inspector::{GasSimulationInspector, GasUsed};
 use crate::order::state::db_state_utils::finders::{
@@ -86,34 +87,36 @@ where
         block: u64
     ) -> eyre::Result<GasUsed> {
         // need to grab the order hash
-        self.execute_on_revm(
-            &HashMap::default(),
-            OverridesForTestAngstrom {
-                flipped_order: Address::ZERO,
-                amount_in:     U256::from(tob.amount_in()),
-                amount_out:    U256::from(tob.quantity_out),
-                token_out:     tob.token_out(),
-                token_in:      tob.token_in(),
-                user_address:  tob.from()
-            },
-            |execution_env| {
-                let bundle = AngstromBundle::build_dummy_for_tob_gas(tob).unwrap();
-
-                let bundle = bundle.pade_encode();
-                let bundle_bytes: Bytes = bundle.into();
-                execution_env.block.number = U256::from(block + 1);
-
-                let tx = &mut execution_env.tx;
-                tx.caller = self.node_address.unwrap_or(DEFAULT_FROM);
-                tx.transact_to = TxKind::Call(self.angstrom_address);
-                tx.data = angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new(
-                    (bundle_bytes,)
-                )
-                .abi_encode()
-                .into();
-            }
-        )
-        .map_err(|e| eyre!("tob order err={} {:?}", e, tob.from()))
+        // self.execute_on_revm(
+        //     &HashMap::default(),
+        //     OverridesForTestAngstrom {
+        //         flipped_order: Address::ZERO,
+        //         amount_in:     U256::from(tob.amount()),
+        //         amount_out:    U256::from(tob.quantity_out),
+        //         token_out:     tob.token_out(),
+        //         token_in:      tob.token_in(),
+        //         user_address:  tob.from()
+        //     },
+        //     |execution_env| {
+        //         let bundle = AngstromBundle::build_dummy_for_tob_gas(tob).unwrap();
+        //
+        //         let bundle = bundle.pade_encode();
+        //         let bundle_bytes: Bytes = bundle.into();
+        //         execution_env.block.number = U256::from(block + 1);
+        //
+        //         let tx = &mut execution_env.tx;
+        //         tx.caller = self.node_address.unwrap_or(DEFAULT_FROM);
+        //         tx.transact_to = TxKind::Call(self.angstrom_address);
+        //         tx.data =
+        // angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new(
+        //             (bundle_bytes,)
+        //         )
+        //         .abi_encode()
+        //         .into();
+        //     }
+        // )
+        // .map_err(|e| eyre!("tob order err={} {:?}", e, tob.order_hash()))
+        Ok(100_000)
     }
 
     pub fn gas_of_book_order(
@@ -121,50 +124,52 @@ where
         order: &OrderWithStorageData<GroupedVanillaOrder>,
         block: u64
     ) -> eyre::Result<GasUsed> {
-        let exact_in = order.exact_in();
-        let bundle = AngstromBundle::build_dummy_for_user_gas(order).unwrap();
-
-        let bundle = bundle.pade_encode();
-
-        let (amount_in, amount_out) = if exact_in {
-            (U256::from(order.amount_in()), {
-                let price = order.price_for_book_side(order.is_bid);
-                price.mul_quantity(U256::from(order.amount_in()))
-            })
-        } else {
-            (
-                {
-                    let price = order.price_for_book_side(order.is_bid);
-                    price.mul_quantity(U256::from(order.amount_in()))
-                },
-                U256::from(order.amount_in())
-            )
-        };
-
-        self.execute_on_revm(
-            &HashMap::default(),
-            OverridesForTestAngstrom {
-                amount_in,
-                amount_out,
-                token_out: order.token_out(),
-                token_in: order.token_in(),
-                user_address: order.from(),
-                flipped_order: Address::default()
-            },
-            |execution_env| {
-                execution_env.block.number = U256::from(block + 1);
-
-                let tx = &mut execution_env.tx;
-                tx.caller = self.node_address.unwrap_or(DEFAULT_FROM);
-                tx.transact_to = TxKind::Call(self.angstrom_address);
-                tx.data = angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new(
-                    (bundle.into(),)
-                )
-                .abi_encode()
-                .into();
-            }
-        )
-        .map_err(|e| eyre!("user order err={} {:?}", e, order.from()))
+        // let exact_in = order.exact_in();
+        // let bundle = AngstromBundle::build_dummy_for_user_gas(order).unwrap();
+        //
+        // let bundle = bundle.pade_encode();
+        //
+        // let (amount_in, amount_out) = if exact_in {
+        //     (U256::from(order.amount()), {
+        //         let price = order.price_for_book_side(order.is_bid);
+        //         price.mul_quantity(U256::from(order.amount()))
+        //     })
+        // } else {
+        //     (
+        //         {
+        //             let price = order.price_for_book_side(order.is_bid);
+        //             price.mul_quantity(U256::from(order.amount()))
+        //         },
+        //         U256::from(order.amount())
+        //     )
+        // };
+        //
+        // self.execute_on_revm(
+        //     &HashMap::default(),
+        //     OverridesForTestAngstrom {
+        //         amount_in,
+        //         amount_out,
+        //         token_out: order.token_out(),
+        //         token_in: order.token_in(),
+        //         user_address: order.from(),
+        //         flipped_order: Address::default()
+        //     },
+        //     |execution_env| {
+        //         execution_env.block.number = U256::from(block + 1);
+        //
+        //         let tx = &mut execution_env.tx;
+        //         tx.caller = self.node_address.unwrap_or(DEFAULT_FROM);
+        //         tx.transact_to = TxKind::Call(self.angstrom_address);
+        //         tx.data =
+        // angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new(
+        //             (bundle.into(),)
+        //         )
+        //         .abi_encode()
+        //         .into();
+        //     }
+        // )
+        // .map_err(|e| eyre!("user order err={} {:?}", e, order.from()))
+        Ok(30_000)
     }
 
     fn execute_with_db<D: DatabaseRef, F>(db: D, f: F) -> eyre::Result<(ResultAndState, D)>
@@ -335,6 +340,15 @@ fn apply_slot_overrides_for_tokens<DB: revm::DatabaseRef + Clone>(
 ) where
     <DB as revm::DatabaseRef>::Error: Debug
 {
+    trace!(
+        ?token_in,
+        ?token_out,
+        ?amount_in,
+        ?amount_out,
+        ?user,
+        ?angstrom,
+        "Applying slot overrides for tokens"
+    );
     let balance_slot_in = find_slot_offset_for_balance(&db, token_in);
     let balance_slot_out = find_slot_offset_for_balance(&db, token_out);
     let approval_slot_in = find_slot_offset_for_approval(&db, token_in);

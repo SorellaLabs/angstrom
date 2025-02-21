@@ -1810,6 +1810,7 @@ dependencies = [
  "testing-tools",
  "tokio",
  "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -1938,6 +1939,7 @@ dependencies = [
  "alloy 0.11.1",
  "alloy-primitives 0.8.21",
  "alloy-rlp",
+ "angstrom-types",
  "anyhow",
  "auto_impl",
  "base64 0.22.1",

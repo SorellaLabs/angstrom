@@ -2,29 +2,39 @@ use std::{fmt::Debug, pin::Pin, sync::Arc};
 
 use alloy::{
     primitives::{Address, U256},
-    sol_types::SolCall
+    sol_types::{SolCall, SolValue}
 };
 use angstrom_metrics::validation::ValidationMetrics;
-use angstrom_types::contract_payloads::angstrom::{AngstromBundle, BundleGasDetails};
+use angstrom_types::{
+    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
+    primitive::TESTNET_POOL_MANAGER_ADDRESS
+};
 use eyre::eyre;
 use futures::Future;
 use pade::PadeEncode;
 use revm::{
+    db::CacheDB,
     inspector_handle_register,
-    primitives::{EnvWithHandlerCfg, TxKind}
+    primitives::{keccak256, EnvWithHandlerCfg, TxKind}
 };
 use tokio::runtime::Handle;
+use tracing::trace;
 
 use crate::{
     common::{key_split_threadpool::KeySplitThreadpool, TokenPriceGenerator},
-    order::sim::console_log::CallDataInspector
+    order::{
+        sim::console_log::CallDataInspector,
+        state::db_state_utils::finders::{
+            find_slot_offset_for_approval, find_slot_offset_for_balance
+        }
+    }
 };
 
 pub mod validator;
 pub use validator::*;
 
 pub struct BundleValidator<DB> {
-    db:               Arc<DB>,
+    db:               CacheDB<Arc<DB>>,
     angstrom_address: Address,
     /// the address associated with this node.
     /// this will ensure the  node has access and the simulation can pass
@@ -37,7 +47,33 @@ where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
     pub fn new(db: Arc<DB>, angstrom_address: Address, node_address: Address) -> Self {
-        Self { db, angstrom_address, node_address }
+        Self { db: CacheDB::new(db), angstrom_address, node_address }
+    }
+
+    fn apply_slot_overrides_for_token(
+        db: &mut CacheDB<Arc<DB>>,
+        token: Address,
+        quantity: U256,
+        uniswap: Address,
+        angstrom: Address
+    ) where
+        <DB as revm::DatabaseRef>::Error: Debug
+    {
+        // Find the slot for balance and approval for us to take from Uniswap
+        let balance_slot = find_slot_offset_for_balance(&db, token);
+        let approval_slot = find_slot_offset_for_approval(&db, token);
+
+        // first thing we will do is setup Uniswap's token balance.
+        let uniswap_balance_slot = keccak256((uniswap, balance_slot).abi_encode());
+        let uniswap_approval_slot =
+            keccak256((angstrom, keccak256((uniswap, approval_slot).abi_encode())).abi_encode());
+
+        // set Uniswap's balance on the token_in
+        db.insert_account_storage(token, uniswap_balance_slot.into(), U256::from(2) * quantity)
+            .unwrap();
+        // give angstrom approval
+        db.insert_account_storage(token, uniswap_approval_slot.into(), U256::from(2) * quantity)
+            .unwrap();
     }
 
     pub fn simulate_bundle(
@@ -55,14 +91,28 @@ where
     ) {
         let node_address = self.node_address;
         let angstrom_address = self.angstrom_address;
-        let db = self.db.clone();
+        let mut db = self.db.clone();
 
         let conversion_lookup = price_gen.generate_lookup_map();
 
         thread_pool.spawn_raw(Box::pin(async move {
+            let overrides = bundle.fetch_needed_overrides(number + 1);
+            for (token, slot, value) in overrides.into_slots_with_overrides(angstrom_address) {
+                trace!(?token, ?slot, ?value, "Inserting bundle override");
+                db.insert_account_storage(token, slot.into(), value).unwrap();
+            }
+            for asset in bundle.assets.iter() {
+                trace!(asset = ?asset.addr, quantity = ?asset.take, uniswap_addr = ?TESTNET_POOL_MANAGER_ADDRESS, ?angstrom_address, "Inserting asset override");
+                Self::apply_slot_overrides_for_token(
+                    &mut db,
+                    asset.addr,
+                    U256::from(asset.take),
+                    TESTNET_POOL_MANAGER_ADDRESS,
+                    angstrom_address
+                );
+            }
             metrics.simulate_bundle(|| {
                 let bundle = bundle.pade_encode();
-
                 let mut console_log_inspector = CallDataInspector {};
 
                 let mut evm = revm::Evm::builder()

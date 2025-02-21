@@ -72,7 +72,16 @@ impl NetAmmOrder {
         *my_quantity += quantity;
     }
 
-    fn get_directions(&self) -> (u128, u128) {
+    pub fn remove_quantity(&mut self, quantity: u128, cost: u128) {
+        let (my_quantity, my_cost) = match self {
+            Self::Buy(q, c) => (q, c),
+            Self::Sell(q, c) => (q, c)
+        };
+        *my_cost -= cost;
+        *my_quantity -= quantity;
+    }
+
+    pub fn get_directions(&self) -> (u128, u128) {
         match self {
             Self::Buy(amount_out, amount_in) => (*amount_in, *amount_out),
             Self::Sell(amount_in, amount_out) => (*amount_in, *amount_out)

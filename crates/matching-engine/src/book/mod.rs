@@ -1,8 +1,14 @@
 //! basic book impl so we can benchmark
+use std::{io::Write, time::UNIX_EPOCH};
+
+use alloy_primitives::U256;
 use angstrom_types::{
     matching::uniswap::PoolSnapshot,
     primitive::PoolId,
-    sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
+    sol_bindings::{
+        grouped_orders::{GroupedVanillaOrder, OrderWithStorageData},
+        Ray
+    }
 };
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +56,48 @@ impl OrderBook {
 
     pub fn amm(&self) -> Option<&PoolSnapshot> {
         self.amm.as_ref()
+    }
+
+    pub fn lowest_clearing_price(&self) -> Ray {
+        self.bids()
+            .iter()
+            .map(|bid| bid.bid_price())
+            .chain(self.asks().iter().map(|ask| ask.price()))
+            .min()
+            .unwrap_or_default()
+    }
+
+    pub fn highest_clearing_price(&self) -> Ray {
+        self.bids()
+            .iter()
+            .map(|bid| bid.bid_price())
+            .chain(self.asks().iter().map(|ask| ask.price()))
+            .max()
+            .unwrap_or(Ray::from(U256::MAX))
+    }
+
+    /// writes the book to the cwd + timestamp in seconds
+    pub fn save(&self, bisection_ucp: Ray, debt_ucp: Ray) -> eyre::Result<()> {
+        let jsond = serde_json::json!({
+            "bisection_ucp": bisection_ucp,
+            "debt_ucp": debt_ucp,
+            "book": &self
+        });
+
+        let strd = serde_json::to_string_pretty(&jsond)?;
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_millis();
+
+        let bi = *bisection_ucp;
+        let debt = *debt_ucp;
+        let mut file = std::fs::File::create_new(format!(
+            "book-with-ucp-timestamp-{timestamp}-bi-ucp-{bi:?}-debt-ucp-{debt:?}.json"
+        ))?;
+
+        write!(&mut file, "{strd}")?;
+
+        Ok(())
     }
 }
 

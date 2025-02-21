@@ -74,6 +74,60 @@ impl AMMSnapshotBuilder {
     }
 }
 
+pub fn generate_amm_with_liquidity(
+    tick_low: i32,
+    tick_high: i32,
+    liquidity: u128,
+    price: SqrtPriceX96
+) -> PoolSnapshot {
+    let ranges = vec![LiqRange::new(tick_low, tick_high, liquidity).unwrap()];
+    PoolSnapshot::new(ranges, price).unwrap()
+}
+
+/// Generates an AMM with multiple liquidity positions across a tick range
+///
+/// # Arguments
+/// * `tick_low` - Lower tick boundary
+/// * `tick_high` - Upper tick boundary
+/// * `tick_spacing` - Space between each tick range
+/// * `liquidity_range` - (min, max) range for random liquidity generation
+/// * `price` - Current price as SqrtPriceX96
+///
+/// # Returns
+/// * `PoolSnapshot` with multiple liquidity ranges
+pub fn generate_amm_with_distributed_liquidity(
+    tick_low: i32,
+    tick_high: i32,
+    tick_spacing: i32,
+    liquidity_range: (u128, u128),
+    price: SqrtPriceX96
+) -> PoolSnapshot {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+
+    let mut ranges = Vec::new();
+    let (min_liq, max_liq) = liquidity_range;
+
+    // Ensure tick_low and tick_high are aligned with tick_spacing
+    let aligned_low = (tick_low / tick_spacing) * tick_spacing;
+    let aligned_high = ((tick_high + tick_spacing - 1) / tick_spacing) * tick_spacing;
+
+    let mut current_tick = aligned_low;
+    while current_tick < aligned_high {
+        // Generate random liquidity amount within specified range
+        let liquidity = rng.gen_range(min_liq..=max_liq);
+
+        // Create range from current_tick to current_tick + tick_spacing
+        if let Ok(range) = LiqRange::new(current_tick, current_tick + tick_spacing, liquidity) {
+            ranges.push(range);
+        }
+
+        current_tick += tick_spacing;
+    }
+
+    PoolSnapshot::new(ranges, price).unwrap()
+}
+
 pub fn generate_single_position_amm_at_tick(mid: i32, width: i32, liquidity: u128) -> PoolSnapshot {
     let amm_price = SqrtPriceX96::from(get_sqrt_ratio_at_tick(mid + 1).unwrap());
     let lower_tick = mid - width;

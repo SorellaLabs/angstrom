@@ -1,15 +1,23 @@
 use std::{fmt::Debug, slice::Iter};
 
+use alloy::primitives::I256;
 use eyre::{eyre, Context, OptionExt};
 use serde::{Deserialize, Serialize};
-use uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio;
+use uniswap_v3_math::{
+    sqrt_price_math::{_get_amount_0_delta, _get_amount_1_delta},
+    swap_math::compute_swap_step,
+    tick_math::get_tick_at_sqrt_ratio
+};
 
 use super::{
     liqrange::{LiqRange, LiqRangeRef},
     poolprice::PoolPrice,
     Tick
 };
-use crate::matching::{math::low_to_high, SqrtPriceX96};
+use crate::{
+    matching::{math::low_to_high, SqrtPriceX96},
+    sol_bindings::Ray
+};
 
 /// Snapshot of a particular Uniswap pool and a map of its liquidity.
 #[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,5 +134,263 @@ impl PoolSnapshot {
 
     pub fn liquidity_at_tick(&self, tick: Tick) -> Option<u128> {
         self.get_range_for_tick(tick).map(|range| range.liquidity())
+    }
+
+    pub fn is_bid(&self, price: Ray) -> bool {
+        let end_price = SqrtPriceX96::from(price);
+        let start_price = self.sqrt_price_x96;
+
+        start_price < end_price
+    }
+
+    // pub fn get_quantity_to_price_start_price(
+    //     &self,
+    //     price: Ray,
+    //     start_price: SqrtPriceX96
+    // ) -> Option<u128> {
+    //     let end_price = SqrtPriceX96::from(price);
+    //
+    //     self.get_deltas(start_price, end_price)
+    // }
+
+    pub fn get_amm_swap(&self, price: Ray) -> Option<(u128, u128)> {
+        self.get_amm_swap_with_start(price, self.sqrt_price_x96)
+    }
+
+    pub fn get_amm_swap_with_start(
+        &self,
+        price: Ray,
+        start_price: SqrtPriceX96
+    ) -> Option<(u128, u128)> {
+        let end_price = SqrtPriceX96::from(price);
+        let is_bid = start_price < end_price;
+        // fetch ticks for ranges
+        let start_tick = get_tick_at_sqrt_ratio(start_price.into()).ok()?;
+        let end_tick = get_tick_at_sqrt_ratio(end_price.into()).ok()?;
+
+        // Get all affected liquidity ranges
+        let liq_range = self.ranges_for_ticks(start_tick, end_tick).ok()?;
+
+        let mut d_0 = 0u128;
+        let mut d_1 = 0u128;
+
+        for range in &liq_range {
+            let (range_start_price, range_end_price) = if is_bid {
+                let start = start_price.max(SqrtPriceX96::at_tick(range.lower_tick).ok()?);
+                let end = end_price.min(SqrtPriceX96::at_tick(range.upper_tick).ok()?);
+                (start, end)
+            } else {
+                let start = start_price.min(SqrtPriceX96::at_tick(range.upper_tick).ok()?);
+                let end = end_price.max(SqrtPriceX96::at_tick(range.lower_tick).ok()?);
+                (start, end)
+            };
+
+            // Skip if the range is not relevant
+            if (is_bid && range_start_price >= range_end_price)
+                || (!is_bid && range_start_price <= range_end_price)
+            {
+                continue;
+            }
+
+            d_0 += _get_amount_0_delta(
+                range_start_price.into(),
+                range_end_price.into(),
+                range.liquidity,
+                true
+            )
+            .ok()?
+            .to::<u128>();
+            d_1 += _get_amount_1_delta(
+                range_start_price.into(),
+                range_end_price.into(),
+                range.liquidity,
+                true
+            )
+            .ok()?
+            .to::<u128>();
+        }
+        Some((d_0, d_1))
+    }
+
+    fn get_deltas(&self, start_price: SqrtPriceX96, end_price: SqrtPriceX96) -> Option<u128> {
+        let is_bid = start_price < end_price;
+        // fetch ticks for ranges
+        let start_tick = get_tick_at_sqrt_ratio(start_price.into()).ok()?;
+        let end_tick = get_tick_at_sqrt_ratio(end_price.into()).ok()?;
+
+        // Get all affected liquidity ranges
+        let liq_range = self.ranges_for_ticks(start_tick, end_tick).ok()?;
+        let mut t_delta = 0u128;
+
+        for range in &liq_range {
+            let (range_start_price, range_end_price) = if is_bid {
+                let start = start_price.max(SqrtPriceX96::at_tick(range.lower_tick).ok()?);
+                let end = end_price.min(SqrtPriceX96::at_tick(range.upper_tick).ok()?);
+                (start, end)
+            } else {
+                let start = start_price.min(SqrtPriceX96::at_tick(range.upper_tick).ok()?);
+                let end = end_price.max(SqrtPriceX96::at_tick(range.lower_tick).ok()?);
+                (start, end)
+            };
+
+            // Skip if the range is not relevant
+            if (is_bid && range_start_price >= range_end_price)
+                || (!is_bid && range_start_price <= range_end_price)
+            {
+                continue;
+            }
+
+            let delta = if is_bid {
+                _get_amount_0_delta(
+                    range_start_price.into(),
+                    range_end_price.into(),
+                    range.liquidity,
+                    true
+                )
+                .ok()?
+                .to::<u128>()
+            } else {
+                _get_amount_1_delta(
+                    range_end_price.into(),
+                    range_start_price.into(),
+                    range.liquidity,
+                    true
+                )
+                .ok()?
+                .to::<u128>()
+            };
+            t_delta += delta
+
+            //
+            // total_in += amount_in.to::<u128>() + fee.to::<u128>();
+            // total_out += amount_out.to::<u128>();
+
+            // total_delta += delta;
+        }
+
+        Some(t_delta)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_basic_pool() -> PoolSnapshot {
+        // Create a simple pool with three tick ranges
+        let ranges = vec![
+            LiqRange { lower_tick: 0, upper_tick: 100, liquidity: 1000 },
+            LiqRange { lower_tick: 100, upper_tick: 200, liquidity: 2000 },
+            LiqRange { lower_tick: 200, upper_tick: 300, liquidity: 1500 },
+        ];
+
+        // Start price in the middle range (tick 150)
+        let sqrt_price_x96 = SqrtPriceX96::at_tick(150).unwrap();
+        PoolSnapshot::new(ranges, sqrt_price_x96).unwrap()
+    }
+
+    #[test]
+    fn test_get_deltas_bid_direction() {
+        let pool = setup_basic_pool();
+
+        // Test moving from tick 150 to tick 250 (upward/bid movement)
+        let start_price = SqrtPriceX96::at_tick(150).unwrap();
+        let end_price = SqrtPriceX96::at_tick(250).unwrap();
+
+        let delta = pool.get_deltas(start_price, end_price).unwrap();
+
+        // We should get a non-zero amount
+        assert!(delta > 0, "Delta should be positive for bid direction");
+
+        // Test the reverse direction to ensure it's different
+        let reverse_delta = pool.get_deltas(end_price, start_price).unwrap();
+        assert_ne!(delta, reverse_delta, "Bid and ask deltas should differ");
+    }
+
+    #[test]
+    fn test_get_deltas_within_same_range() {
+        let pool = setup_basic_pool();
+
+        // Test movement within the same tick range (150 to 180)
+        let start_price = SqrtPriceX96::at_tick(150).unwrap();
+        let end_price = SqrtPriceX96::at_tick(180).unwrap();
+
+        let delta = pool.get_deltas(start_price, end_price).unwrap();
+        assert!(delta > 0, "Delta should be positive within same range");
+
+        // Test a smaller price movement
+        let small_end_price = SqrtPriceX96::at_tick(160).unwrap();
+        let small_delta = pool.get_deltas(start_price, small_end_price).unwrap();
+        assert!(small_delta < delta, "Smaller price movement should result in smaller delta");
+    }
+
+    #[test]
+    fn test_get_deltas_cross_multiple_ranges() {
+        let pool = setup_basic_pool();
+
+        // Test movement across multiple ranges (50 to 250)
+        let start_price = SqrtPriceX96::at_tick(50).unwrap();
+        let end_price = SqrtPriceX96::at_tick(250).unwrap();
+
+        let delta = pool.get_deltas(start_price, end_price).unwrap();
+
+        // Test movement within a single range
+        let single_range_start = SqrtPriceX96::at_tick(120).unwrap();
+        let single_range_end = SqrtPriceX96::at_tick(180).unwrap();
+        let single_range_delta = pool
+            .get_deltas(single_range_start, single_range_end)
+            .unwrap();
+
+        assert!(
+            delta > single_range_delta,
+            "Cross-range delta should be larger than single range delta"
+        );
+    }
+
+    #[test]
+    fn test_get_deltas_edge_cases() {
+        let pool = setup_basic_pool();
+
+        // Test movement at range boundaries
+        let start_price = SqrtPriceX96::at_tick(100).unwrap(); // Exactly at a range boundary
+        let end_price = SqrtPriceX96::at_tick(200).unwrap(); // Another range boundary
+
+        let delta = pool.get_deltas(start_price, end_price);
+        assert!(delta.is_some(), "Should handle range boundary movements");
+
+        // Test minimal movement
+        let tiny_move_end = SqrtPriceX96::at_tick(151).unwrap();
+        let tiny_delta = pool.get_deltas(start_price, tiny_move_end).unwrap();
+        assert!(tiny_delta > 0, "Should handle minimal price movements");
+    }
+
+    #[test]
+    fn test_get_deltas_liquidity_impact() {
+        // Create two pools with different liquidity profiles
+        let high_liq_ranges = vec![
+            LiqRange {
+                lower_tick: 0,
+                upper_tick: 100,
+                liquidity:  10000 // 10x more liquidity
+            },
+            LiqRange { lower_tick: 100, upper_tick: 200, liquidity: 20000 },
+        ];
+
+        let low_liq_ranges = vec![
+            LiqRange { lower_tick: 0, upper_tick: 100, liquidity: 1000 },
+            LiqRange { lower_tick: 100, upper_tick: 200, liquidity: 2000 },
+        ];
+
+        let sqrt_price_x96 = SqrtPriceX96::at_tick(50).unwrap();
+        let high_liq_pool = PoolSnapshot::new(high_liq_ranges, sqrt_price_x96).unwrap();
+        let low_liq_pool = PoolSnapshot::new(low_liq_ranges, sqrt_price_x96).unwrap();
+
+        let start_price = SqrtPriceX96::at_tick(50).unwrap();
+        let end_price = SqrtPriceX96::at_tick(150).unwrap();
+
+        let high_liq_delta = high_liq_pool.get_deltas(start_price, end_price).unwrap();
+        let low_liq_delta = low_liq_pool.get_deltas(start_price, end_price).unwrap();
+
+        assert!(high_liq_delta > low_liq_delta, "Higher liquidity should result in larger delta");
     }
 }

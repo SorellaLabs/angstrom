@@ -3,7 +3,7 @@
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
     orders::OrderId,
-    sol_bindings::{ext::RawPoolOrder, grouped_orders::OrderWithStorageData}
+    sol_bindings::{ext::RawPoolOrder, grouped_orders::OrderWithStorageData, Ray}
 };
 use thiserror::Error;
 use user::UserAccounts;
@@ -115,7 +115,8 @@ pub trait StorageWithData: RawPoolOrder {
         OrderWithStorageData {
             priority_data: angstrom_types::orders::OrderPriorityData {
                 price:     self.limit_price(),
-                volume:    self.amount_in(),
+                // it is always t1. this is because we don't
+                volume:    self.amount(),
                 gas:       U256::ZERO,
                 gas_units: 0
             },
@@ -215,10 +216,10 @@ pub mod tests {
         println!("setting balances and approvals");
         processor
             .fetch_utils
-            .set_balance_for_user(user, token0, U256::from(order.amount_in()));
+            .set_balance_for_user(user, token0, U256::from(order.amount()));
         processor
             .fetch_utils
-            .set_approval_for_user(user, token0, U256::from(order.amount_in()));
+            .set_approval_for_user(user, token0, U256::from(order.amount()));
 
         println!("verifying orders");
         processor
@@ -258,12 +259,12 @@ pub mod tests {
         processor.fetch_utils.set_balance_for_user(
             user,
             token0,
-            U256::from(order.amount_in()) * U256::from(2)
+            U256::from(order.amount()) * U256::from(2)
         );
         processor.fetch_utils.set_approval_for_user(
             user,
             token0,
-            U256::from(order.amount_in()) * U256::from(2)
+            U256::from(order.amount()) * U256::from(2)
         );
 
         println!("finished first order config");
@@ -330,12 +331,12 @@ pub mod tests {
         processor.fetch_utils.set_balance_for_user(
             user,
             token0,
-            U256::from(order0.amount_in()) + U256::from(order1.amount_in()) - U256::from(10)
+            U256::from(order0.amount()) + U256::from(order1.amount()) - U256::from(10)
         );
         processor.fetch_utils.set_approval_for_user(
             user,
             token0,
-            U256::from(order0.amount_in()) + U256::from(order1.amount_in()) - U256::from(10)
+            U256::from(order0.amount()) + U256::from(order1.amount()) - U256::from(10)
         );
 
         let order0_hash = order0.hash();
@@ -395,10 +396,10 @@ pub mod tests {
 
         processor
             .fetch_utils
-            .set_balance_for_user(user, token0, U256::from(order.amount_in()));
+            .set_balance_for_user(user, token0, U256::from(order.amount()));
         processor
             .fetch_utils
-            .set_approval_for_user(user, token0, U256::from(order.amount_in()));
+            .set_approval_for_user(user, token0, U256::from(order.amount()));
 
         // Should succeed for current block 420 (order block is 421)
         processor
@@ -581,10 +582,10 @@ pub mod tests {
 
         processor
             .fetch_utils
-            .set_balance_for_user(user, token0, U256::from(order.amount_in()));
+            .set_balance_for_user(user, token0, U256::from(order.amount()));
         processor
             .fetch_utils
-            .set_approval_for_user(user, token0, U256::from(order.amount_in()));
+            .set_approval_for_user(user, token0, U256::from(order.amount()));
 
         // Add order
         processor
@@ -874,10 +875,10 @@ pub mod tests {
         // Set up proper balance and approval
         processor
             .fetch_utils
-            .set_balance_for_user(user, token0, U256::from(order.amount_in()));
+            .set_balance_for_user(user, token0, U256::from(order.amount()));
         processor
             .fetch_utils
-            .set_approval_for_user(user, token0, U256::from(order.amount_in()));
+            .set_approval_for_user(user, token0, U256::from(order.amount()));
 
         // Mark nonce as already used
         processor

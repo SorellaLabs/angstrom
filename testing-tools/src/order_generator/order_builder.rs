@@ -28,22 +28,33 @@ impl OrderBuilder {
         let price: U256 = SqrtPriceX96::from_float_price(cur_price).into();
         let price = price.clamp(MIN_SQRT_RATIO, MAX_SQRT_RATIO);
         let sqrt_price = pool.sqrt_price;
+        let float_price = SqrtPriceX96::from(sqrt_price).as_f64();
+        tracing::info!(?cur_price, ?float_price);
 
         let zfo = sqrt_price > price;
+        tracing::info!(?zfo, "generated tob order direction");
 
         let token0 = pool.token0;
         let token1 = pool.token1;
         // if zfo, sqrtprice < pool price
+        // always zero for 1
         let t_in = if zfo { token0 } else { token1 };
         let amount_specified = if zfo { I256::MAX - I256::ONE } else { I256::MIN + I256::ONE };
+        // if zero for 1, sqrt lowever
 
         let (amount_in, amount_out) = pool
             .simulate_swap(t_in, amount_specified, Some(price))
             .unwrap();
 
-        let amount_in = u128::try_from(amount_in.abs()).unwrap();
-        let amount_out = u128::try_from(amount_out.abs()).unwrap();
+        let mut amount_in = u128::try_from(amount_in.abs()).unwrap();
+        let mut amount_out = u128::try_from(amount_out.abs()).unwrap();
         let mut rng = rand::thread_rng();
+
+        if !zfo {
+            std::mem::swap(&mut amount_in, &mut amount_out);
+        }
+
+        amount_in += rng.gen_range(100..amount_in / 100);
 
         ToBOrderBuilder::new()
             .signing_key(self.keys.get(rng.gen_range(0..10)).cloned())
@@ -89,26 +100,31 @@ impl OrderBuilder {
             .simulate_swap(t_in, amount_specified, Some(price))
             .unwrap();
 
-        let amount_in = u128::try_from(amount_in.abs()).unwrap();
-        let _amount_out = u128::try_from(amount_out.abs()).unwrap();
+        // amount of token zero
 
-        // 50% amount range
-        let modifier = rng.gen_range(0.5..=1.5);
-        let amount = (amount_in as f64 * modifier) as u128;
-        let direction: bool = rng.gen();
+        let amount_in = u128::try_from(amount_in.abs()).unwrap();
+        let amount_out = u128::try_from(amount_out.abs()).unwrap();
+
+        let exact_in = rng.gen_bool(0.5);
+        // 5% amount range
+        let modifier = rng.gen_range(0.95..=1.05);
+
+        let amount = if exact_in { amount_in } else { amount_out };
+
+        let amount = (amount as f64 * modifier) as u128;
 
         // if the random direction changes the swap. inv the price
-        if direction != zfo {
-            unshifted_price.inv_ray_assign();
+        if !zfo {
+            unshifted_price.inv_ray_assign_round(true);
         }
 
         UserOrderBuilder::new()
             .signing_key(self.keys.get(rng.gen_range(0..10)).cloned())
             .is_exact(!is_partial)
-            .asset_in(if direction { token0 } else { token1 })
-            .asset_out(if !direction { token0 } else { token1 })
+            .asset_in(if zfo { token0 } else { token1 })
+            .asset_out(if !zfo { token0 } else { token1 })
             .is_standing(false)
-            .exact_in(rng.gen_bool(0.5))
+            .exact_in(exact_in)
             .min_price(unshifted_price)
             .block(block_number)
             .amount(amount)

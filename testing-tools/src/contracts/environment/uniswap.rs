@@ -3,14 +3,16 @@ use alloy_primitives::{address, TxHash};
 use angstrom_types::contract_bindings::{
     i_position_descriptor::IPositionDescriptor,
     pool_gate::PoolGate::{self, PoolGateInstance},
-    pool_manager::PoolManager,
     position_manager::PositionManager
 };
 use tracing::debug;
 use validation::common::WETH_ADDRESS;
 
 use super::TestAnvilEnvironment;
-use crate::{contracts::DebugTransaction, providers::WalletProvider};
+use crate::{
+    contracts::{deploy::angstrom::deploy_uni_create3, DebugTransaction},
+    providers::WalletProvider
+};
 
 const PERMIT2_ADDRESS: Address = address!("000000000022d473030f116ddee9f6b43ac78ba3");
 
@@ -51,10 +53,9 @@ where
 
     async fn deploy_pool_manager(inner: &E) -> eyre::Result<Address> {
         debug!("Deploying pool manager...");
-        let pool_manager_addr = *inner
-            .execute_then_mine(PoolManager::deploy(inner.provider(), inner.controller()))
-            .await?
-            .address();
+        let pool_manager_addr = inner
+            .execute_then_mine(deploy_uni_create3(inner.provider(), inner.controller()))
+            .await;
 
         debug!("Pool manager deployed at: {}", pool_manager_addr);
         Ok(pool_manager_addr)

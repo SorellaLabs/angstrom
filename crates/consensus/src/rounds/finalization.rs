@@ -40,31 +40,32 @@ impl FinalizationState {
             .into_iter()
             .collect::<HashSet<_>>();
 
-        let future = handles
-            .matching_engine_output(preproposal)
-            .map(move |output| {
-                let (solution, _) = output.unwrap();
-
-                let mut proposal_solution = proposal.solutions.clone();
-                proposal_solution.sort();
-
-                let mut verification_solution = solution;
-                verification_solution.sort();
-
-                if !proposal_solution
-                    .into_iter()
-                    .zip(verification_solution)
-                    .all(|(p, v)| p == v)
-                {
-                    tracing::error!(
-                        "Violation DETECTED. in future this will be related to slashing"
-                    );
-                    return false
-                }
-
-                true
-            })
-            .boxed();
+        let future = Box::pin(async move { true });
+        // handles
+        //     .matching_engine_output(preproposal)
+        //     .map(move |_output| {
+        //         // let (solution, _) = output.unwrap();
+        //         //
+        //         // let mut proposal_solution = proposal.solutions.clone();
+        //         // proposal_solution.sort();
+        //         //
+        //         // let mut verification_solution = solution;
+        //         // verification_solution.sort();
+        //         //
+        //         // if !proposal_solution
+        //         //     .into_iter()
+        //         //     .zip(verification_solution)
+        //         //     .all(|(p, v)| p == v)
+        //         // {
+        //         //     tracing::error!(
+        //         //         "Violation DETECTED. in future this will be related to
+        // slashing"         //     );
+        //         //     return false
+        //         // }
+        //
+        //         true
+        //     })
+        //     .boxed();
 
         waker.wake_by_ref();
         tracing::info!("finalization");

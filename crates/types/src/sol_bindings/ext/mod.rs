@@ -20,8 +20,13 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
     /// The order signer
     fn from(&self) -> Address;
 
-    /// Amount of tokens to sell
-    fn amount_in(&self) -> u128;
+    // the amount specified by the user. if the order is a partial, this is the max
+    // value
+    fn amount(&self) -> u128;
+
+    // the amount specified by the user. if the order is a partial, this is the min
+    // value. otherwise it is the same as amount
+    fn min_amount(&self) -> u128;
 
     /// Limit Price
     fn limit_price(&self) -> U256;

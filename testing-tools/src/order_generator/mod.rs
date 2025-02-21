@@ -99,7 +99,7 @@ impl<const N: usize> PriceDistribution<N> {
     /// updates the mean price
     pub fn generate_price(&mut self) -> f64 {
         let price_avg = self.last_prices.iter().sum::<f64>() / N as f64;
-        let normal = Normal::new(price_avg, price_avg / self.sd_factor).unwrap();
+        let normal = Normal::new(price_avg, price_avg * (self.sd_factor / 100.0)).unwrap();
         let mut rng = rand::thread_rng();
 
         let new_price = normal

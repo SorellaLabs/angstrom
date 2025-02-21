@@ -24,6 +24,15 @@ pub fn mine_create3_address(owner: Address) -> (Address, U256, u8) {
     (addr, salt, nonce)
 }
 
+pub fn mine_create3_address_uni(owner: Address) -> (Address, U256, u8) {
+    let mut salt = U256::from(Into::<U160>::into(owner));
+    let nonce = 0u8;
+    salt <<= 96;
+    salt += uint!(69420U256);
+    let addr = sub_zero_create3(salt.into(), nonce);
+    (addr, salt, nonce)
+}
+
 pub const SUB_ZERO_FACTORY: Address = address!("000000000000b361194cfe6312ee3210d53c15aa");
 const DEPLOY_PROXY_INITHASH: B256 =
     fixed_bytes!("1decbcf04b355d500cbc3bd83c892545b4df34bd5b2c9d91b9f7f8165e2095c3");

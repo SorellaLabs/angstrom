@@ -5,12 +5,14 @@ use pade_macro::{PadeDecode, PadeEncode};
 use crate::{
     contract_payloads::{Asset, Pair, Signature},
     orders::OrderOutcome,
+    primitive::ANGSTROM_DOMAIN,
     sol_bindings::{
         grouped_orders::{
             FlashVariants, GroupedVanillaOrder, OrderWithStorageData, StandingVariants
         },
         rpc_orders::{
-            ExactFlashOrder, ExactStandingOrder, PartialFlashOrder, PartialStandingOrder
+            ExactFlashOrder, ExactStandingOrder, OmitOrderMeta, PartialFlashOrder,
+            PartialStandingOrder
         },
         RawPoolOrder
     }
@@ -105,7 +107,7 @@ impl UserOrder {
                     // exact flash
                     ExactFlashOrder {
                         ref_id: self.ref_id,
-                        exact_in: true,
+                        exact_in: self.exact_in,
                         use_internal: self.use_internal,
                         asset_in: if self.zero_for_one {
                             asset[pair.index0 as usize].addr
@@ -183,6 +185,119 @@ impl UserOrder {
         }
     }
 
+    pub fn signing_hash(&self, pair: &[Pair], asset: &[Asset], block: u64) -> B256 {
+        let pair = &pair[self.pair_index as usize];
+        match self.order_quantities {
+            OrderQuantities::Exact { quantity } => {
+                if let Some(validation) = &self.standing_validation {
+                    // exact standing
+                    let recovered = ExactStandingOrder {
+                        ref_id: self.ref_id,
+                        exact_in: self.exact_in,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        nonce: validation.nonce,
+                        deadline: U40::from_limbs([validation.deadline]),
+                        amount: quantity,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    };
+                    recovered.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN)
+                } else {
+                    // exact flash
+                    let recovered = ExactFlashOrder {
+                        ref_id: self.ref_id,
+                        exact_in: self.exact_in,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        valid_for_block: block,
+                        amount: quantity,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    };
+
+                    recovered.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN)
+                }
+            }
+            OrderQuantities::Partial { min_quantity_in, max_quantity_in, .. } => {
+                if let Some(validation) = &self.standing_validation {
+                    let recovered = PartialStandingOrder {
+                        ref_id: self.ref_id,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        deadline: U40::from_limbs([validation.deadline]),
+                        nonce: validation.nonce,
+                        min_amount_in: min_quantity_in,
+                        max_amount_in: max_quantity_in,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    };
+                    recovered.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN)
+                } else {
+                    let recovered = PartialFlashOrder {
+                        ref_id: self.ref_id,
+                        use_internal: self.use_internal,
+                        asset_in: if self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        asset_out: if !self.zero_for_one {
+                            asset[pair.index0 as usize].addr
+                        } else {
+                            asset[pair.index1 as usize].addr
+                        },
+                        recipient: self.recipient.unwrap_or_default(),
+                        valid_for_block: block,
+                        max_amount_in: max_quantity_in,
+                        min_amount_in: min_quantity_in,
+                        min_price: self.min_price,
+                        hook_data: self.hook_data.clone().unwrap_or_default(),
+                        max_extra_fee_asset0: self.max_extra_fee_asset0,
+                        ..Default::default()
+                    };
+                    recovered.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN)
+                }
+            }
+        }
+    }
+
     pub fn from_internal_order(
         order: &OrderWithStorageData<GroupedVanillaOrder>,
         outcome: &OrderOutcome,
@@ -192,7 +307,7 @@ impl UserOrder {
         let (order_quantities, standing_validation, recipient) = match &order.order {
             GroupedVanillaOrder::KillOrFill(o) => match o {
                 FlashVariants::Exact(e) => {
-                    (OrderQuantities::Exact { quantity: order.amount_in() }, None, e.recipient)
+                    (OrderQuantities::Exact { quantity: order.amount() }, None, e.recipient)
                 }
                 FlashVariants::Partial(p_o) => (
                     OrderQuantities::Partial {
@@ -206,7 +321,7 @@ impl UserOrder {
             },
             GroupedVanillaOrder::Standing(o) => match o {
                 StandingVariants::Exact(e) => (
-                    OrderQuantities::Exact { quantity: order.amount_in() },
+                    OrderQuantities::Exact { quantity: order.amount() },
                     Some(StandingValidation { nonce: e.nonce, deadline: e.deadline.to() }),
                     e.recipient
                 ),
@@ -272,7 +387,7 @@ impl UserOrder {
         let (order_quantities, standing_validation, recipient) = match &order.order {
             GroupedVanillaOrder::KillOrFill(o) => match o {
                 FlashVariants::Exact(e) => {
-                    (OrderQuantities::Exact { quantity: order.amount_in() }, None, e.recipient)
+                    (OrderQuantities::Exact { quantity: order.amount() }, None, e.recipient)
                 }
                 FlashVariants::Partial(p_o) => (
                     OrderQuantities::Partial {
@@ -286,7 +401,7 @@ impl UserOrder {
             },
             GroupedVanillaOrder::Standing(o) => match o {
                 StandingVariants::Exact(e) => (
-                    OrderQuantities::Exact { quantity: order.amount_in() },
+                    OrderQuantities::Exact { quantity: order.amount() },
                     Some(StandingValidation { nonce: e.nonce, deadline: e.deadline.to() }),
                     e.recipient
                 ),
@@ -332,7 +447,7 @@ impl UserOrder {
             standing_validation,
             order_quantities,
             max_extra_fee_asset0: order.max_gas_token_0(),
-            extra_fee_asset0: order.max_gas_token_0(),
+            extra_fee_asset0: order.priority_data.gas.to(),
             exact_in: order.exact_in(),
             signature: Signature::from(decoded_signature)
         }

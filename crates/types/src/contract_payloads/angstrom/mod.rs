@@ -15,6 +15,7 @@ use alloy::{
 use alloy_primitives::I256;
 use base64::Engine;
 use dashmap::DashMap;
+use num_traits::cast::ToPrimitive;
 use pade_macro::{PadeDecode, PadeEncode};
 use tracing::{debug, trace, warn};
 
@@ -27,6 +28,7 @@ use super::{
 use crate::{
     consensus::{PreProposal, Proposal},
     contract_bindings::angstrom::Angstrom::PoolKey,
+    contract_payloads::rewards::RewardsUpdate,
     matching::{uniswap::PoolSnapshot, Ray},
     orders::{OrderFillState, OrderOutcome, PoolSolution},
     primitive::{PoolId, UniswapPoolRegistry},
@@ -59,8 +61,6 @@ impl AngstromBundle {
 
     #[cfg(feature = "testnet")]
     pub fn fetch_needed_overrides(&self, block_number: u64) -> TestnetStateOverrides {
-        use crate::primitive::TESTNET_ANGSTROM_ADDRESS;
-
         let mut approvals: HashMap<Address, HashMap<Address, u128>> = HashMap::new();
         let mut balances: HashMap<Address, HashMap<Address, u128>> = HashMap::new();
 
@@ -74,12 +74,49 @@ impl AngstromBundle {
             };
 
             // need to recover sender from signature
-            let hash = order.order_hash(&self.pairs, &self.assets, block_number);
+            let hash = order.signing_hash(&self.pairs, &self.assets, block_number);
             let address = order.signature.recover_signer(hash);
 
-            let qty = order.order_quantities.fetch_max_amount();
-            approvals.entry(token).or_default().insert(address, qty);
-            balances.entry(token).or_default().insert(address, qty);
+            // Grab the price because we need it most of the time
+            let price = Ray::from(self.pairs[order.pair_index as usize].price_1over0);
+            let qty = match (order.zero_for_one, order.exact_in) {
+                // Zero for one, exact in -> quantity on the order (t0).  Extra fee is deducted from
+                // this
+                (true, true) => order.order_quantities.fetch_max_amount(),
+                // Zero for one, exact out -> quantity needed to produce output amount (t0) + extra
+                // fee (t0)
+                (true, false) => {
+                    price.inverse_quantity(order.order_quantities.fetch_max_amount(), true)
+                        + order.extra_fee_asset0
+                }
+                // One for zero, exact in -> quantity on the order (t1) and fee is taken from the
+                // ouptut
+                (false, true) => order.order_quantities.fetch_max_amount(),
+                // One for zero, exact out -> quantity needed to produce the output amount + fee
+                // (t1)
+                (false, false) => price.quantity(
+                    order.order_quantities.fetch_max_amount() + order.extra_fee_asset0,
+                    true
+                )
+            };
+
+            tracing::info!(?token, from_address = ?address, qty, "Building user order override");
+            approvals
+                .entry(token)
+                .or_default()
+                .entry(address)
+                .and_modify(|q| {
+                    *q = q.saturating_add(qty);
+                })
+                .or_insert(qty);
+            balances
+                .entry(token)
+                .or_default()
+                .entry(address)
+                .and_modify(|q| {
+                    *q = q.saturating_add(qty);
+                })
+                .or_insert(qty);
         });
 
         // tob
@@ -92,21 +129,32 @@ impl AngstromBundle {
             };
 
             // need to recover sender from signature
-            let hash = order.order_hash(&self.pairs, &self.assets, block_number);
+            let hash = order.signing_hash(&self.pairs, &self.assets, block_number);
             let address = order.signature.recover_signer(hash);
 
-            let qty = order.quantity_in;
-            approvals.entry(token).or_default().insert(address, qty);
-            balances.entry(token).or_default().insert(address, qty);
-        });
+            let mut qty = order.quantity_in;
+            if order.zero_for_1 {
+                qty += order.gas_used_asset_0;
+            }
 
-        // approvals cuz diff map but same
-        for token in approvals.keys() {
-            balances
-                .entry(*token)
+            tracing::info!(?token, from_address = ?address, qty, "Building ToB order override");
+            approvals
+                .entry(token)
                 .or_default()
-                .insert(TESTNET_ANGSTROM_ADDRESS, u128::MAX - 1);
-        }
+                .entry(address)
+                .and_modify(|q| {
+                    *q = q.saturating_add(qty);
+                })
+                .or_insert(qty);
+            balances
+                .entry(token)
+                .or_default()
+                .entry(address)
+                .and_modify(|q| {
+                    *q = q.saturating_add(qty);
+                })
+                .or_insert(qty);
+        });
 
         TestnetStateOverrides { approvals, balances }
     }
@@ -167,7 +215,7 @@ impl AngstromBundle {
         user_order: &OrderWithStorageData<RpcTopOfBlockOrder>
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
-        let mut pool_updates = Vec::new();
+        let pool_updates = Vec::new();
         let mut pairs = Vec::new();
         let user_orders = Vec::new();
         let mut asset_builder = AssetBuilder::new();
@@ -204,13 +252,16 @@ impl AngstromBundle {
             user_order.quantity_in,
             user_order.quantity_out
         );
+        // is bid = true, false
 
-        pool_updates.push(PoolUpdate {
-            zero_for_one:     false,
-            pair_index:       0,
-            swap_in_quantity: user_order.quantity_out,
-            rewards_update:   super::rewards::RewardsUpdate::CurrentOnly { amount: 0 }
-        });
+        // works when false
+        // let zfo = !user_order.is_bid; // false works // true
+        // pool_updates.push(PoolUpdate {
+        //     zero_for_one:     user_order.is_bid,
+        //     pair_index:       0,
+        //     swap_in_quantity: user_order.quantity_out,
+        //     rewards_update:   super::rewards::RewardsUpdate::CurrentOnly { amount: 0
+        // } });
 
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of_max_gas(user_order, 0));
@@ -309,22 +360,6 @@ impl AngstromBundle {
             acc.entry(x.pool_id).or_default().insert(x.clone());
             acc
         });
-
-        // Break out our input orders into lists of orders by pool
-
-        // So we know that every solution has an associated pool, every pool has an
-        // associated pair and every pair is a pair of addresses With this we
-        // can create the data structs we need for the Angstrom payload
-        // Get the addresses from all solutions and check
-        // let new_solutions = solutions.iter().flat_map(|s| {
-        //     let Some((t0, t1, snapshot, store_index)) = pools.get(&s.id) else {
-        //         warn!(solution_id = ?s.id, pools = ?pools, "Skipped a solution as we
-        // couldn't find a pool for it");         return None;
-        //     };
-        //     None
-        // }).collect();
-        // Sort the solutions themselves by the pair idx so the pairs are added in the
-        // right order
 
         // Walk through our solutions to add them to the structure
         for solution in solutions.iter() {
@@ -441,6 +476,11 @@ impl AngstromBundle {
         let b64_output = base64::prelude::BASE64_STANDARD.encode(json.as_bytes());
         trace!(data = b64_output, "Raw solution data");
 
+        // sort
+        // if t1 < t0 {
+        //     std::mem::swap(&mut t1, &mut t0)
+        // };
+
         debug!(t0 = ?t0, t1 = ?t1, pool_id = ?solution.id, "Starting processing of solution");
 
         // Make sure the involved assets are in our assets array and we have the
@@ -467,17 +507,17 @@ impl AngstromBundle {
             .map(|tob| {
                 trace!(tob_order = ?tob, "Mapping TOB Swap");
                 let outcome = ToBOutcome::from_tob_and_snapshot(tob, snapshot).ok();
+                // tracing::info!(?outcome);
+
                 // Make sure the input for our swap is precisely what's used in the swap portion
-                let input = if let Some(ref o) = outcome {
-                    o.total_cost.clone().saturating_to()
-                } else {
-                    tob.quantity_in
-                };
-                let swap = if tob.is_bid {
-                    (t1_idx, t0_idx, input, tob.quantity_out)
-                } else {
-                    (t0_idx, t1_idx, input, tob.quantity_out)
-                };
+                let (input, output) = outcome
+                    .as_ref()
+                    .map(|o| (o.total_cost, o.total_swap_output))
+                    .unwrap_or((tob.quantity_in, tob.quantity_out));
+
+                let (in_idx, out_idx) =
+                    if tob.is_bid { (t1_idx, t0_idx) } else { (t0_idx, t1_idx) };
+                let swap = (in_idx, out_idx, input, output);
                 // We swallow an error here
                 (Some(swap), outcome)
             })
@@ -519,32 +559,55 @@ impl AngstromBundle {
             quantity_out
         );
         // Account for our reward
-        asset_builder.allocate(AssetBuilderStage::Reward, t0, tob_outcome.total_reward.to());
-        let rewards_update = tob_outcome.to_rewards_update();
-        // Push the pool update
+        asset_builder.allocate(AssetBuilderStage::Reward, t0, tob_outcome.total_reward);
+        let rewards_update = tob_outcome.rewards_update_range(
+            tob_outcome.start_tick,
+            tob_outcome.end_tick,
+            snapshot
+        );
+        // Account for our tribute
+        asset_builder.tribute(AssetBuilderStage::Reward, t0, tob_outcome.tribute);
+        // Let's do this stupidly for now and work on improving later
+        // Push our null swap with reward
+        pool_updates.push(PoolUpdate {
+            zero_for_one: false,
+            pair_index: pair_idx as u16,
+            swap_in_quantity: 0,
+            rewards_update
+        });
+        // Push the actual swap with no reward
         pool_updates.push(PoolUpdate {
             zero_for_one,
             pair_index: pair_idx as u16,
             swap_in_quantity: quantity_in,
-            rewards_update
+            rewards_update: RewardsUpdate::empty()
         });
 
         // Add the ToB order to our tob order list - This is currently converting
         // between two ToB order formats
         if let Some(tob) = solution.searcher.as_ref() {
             // Account for our ToB order
-            let (asset_in, asset_out) = if tob.is_bid { (t1, t0) } else { (t0, t1) };
-
             asset_builder.external_swap(
                 AssetBuilderStage::TopOfBlock,
-                asset_in,
-                asset_out,
+                tob.asset_in,
+                tob.asset_out,
                 tob.quantity_in,
                 tob.quantity_out
             );
             let contract_tob = if let Some(g) = shared_gas {
-                TopOfBlockOrder::of(tob, g, pair_idx as u16)?
+                let order = TopOfBlockOrder::of(tob, g, pair_idx as u16)?;
+                asset_builder.add_gas_fee(
+                    AssetBuilderStage::TopOfBlock,
+                    t0,
+                    order.gas_used_asset_0
+                );
+                order
             } else {
+                asset_builder.add_gas_fee(
+                    AssetBuilderStage::TopOfBlock,
+                    t0,
+                    tob.priority_data.gas.to()
+                );
                 TopOfBlockOrder::of_max_gas(tob, pair_idx as u16)
             };
             top_of_block_orders.push(contract_tob);
@@ -562,6 +625,8 @@ impl AngstromBundle {
             (false, false) => a.priority_data.cmp(&b.priority_data),
             (..) => b.is_bid.cmp(&a.is_bid)
         });
+
+        let mut map: HashMap<Address, i128> = HashMap::new();
         // Loop through our filled user orders, do accounting, and add them to our user
         // order list
         let ray_ucp = Ray::from(ucp);
@@ -571,39 +636,68 @@ impl AngstromBundle {
             .zip(order_list.iter())
             .filter(|(outcome, _)| outcome.is_filled())
         {
+            trace!(user_order = ?order, "Mapping User Order");
             // Calculate our final amounts based on whether the order is in T0 or T1 context
-            let inverse_order = order.is_bid() == order.exact_in();
             assert_eq!(outcome.id.hash, order.order_id.hash, "Order and outcome mismatched");
-            let (t0_moving, t1_moving) = if inverse_order {
-                let t1_moving = outcome.fill_amount(order.max_q());
-                let t0_moving = ray_ucp.inverse_quantity(t1_moving, !order.is_bid());
-                (U256::from(t0_moving), U256::from(t1_moving))
-            } else {
-                let t0_moving = U256::from(outcome.fill_amount(order.max_q()));
-                let t1_moving = Ray::from(ucp).mul_quantity(t0_moving);
-                (t0_moving, t1_moving)
-            };
 
-            let (quantity_in, quantity_out) =
-                if order.is_bid { (t1_moving, t0_moving) } else { (t0_moving, t1_moving) };
+            let fill_amount = outcome.fill_amount(order.max_q());
+
+            // we don't account for the gas here in these quantites as the order
+            let (quantity_in, quantity_out) = match (order.is_bid(), order.exact_in()) {
+                // fill_amount is the exact amount of T1 being input to get a T0 output
+                (true, true) => (
+                    // am in
+                    fill_amount,
+                    // am out - round down because we'll always try to give you less
+                    ray_ucp.inverse_quantity(fill_amount, false)
+                ),
+                // fill amount is the exact amount of T0 being output for a T1 input
+                (true, false) => {
+                    // Round up because we'll always ask you to pay more
+                    (ray_ucp.quantity(fill_amount, true), fill_amount)
+                }
+                // fill amount is the exact amount of T0 being input for a T1 output
+                (false, true) => {
+                    // Round down because we'll always try to give you less
+                    (fill_amount, ray_ucp.quantity(fill_amount, false))
+                }
+                // fill amount is the exact amount of T1 expected out for a given T0 input
+                (false, false) => (
+                    // Round up because we'll always ask you to pay more
+                    ray_ucp.inverse_quantity(fill_amount, true),
+                    fill_amount
+                )
+            };
+            *map.entry(order.token_in()).or_default() += quantity_in.to_i128().unwrap();
+            *map.entry(order.token_out()).or_default() -= quantity_out.to_i128().unwrap();
 
             trace!(quantity_in = ?quantity_in, quantity_out = ?quantity_out, is_bid = order.is_bid, exact_in = order.exact_in(), "Processing user order");
             // Account for our user order
-            let (asset_in, asset_out) = if order.is_bid { (t1, t0) } else { (t0, t1) };
             asset_builder.external_swap(
                 AssetBuilderStage::UserOrder,
-                asset_in,
-                asset_out,
-                quantity_in.to(),
-                quantity_out.to()
+                order.token_in(),
+                order.token_out(),
+                quantity_in,
+                quantity_out
             );
             let user_order = if let Some(g) = shared_gas {
-                UserOrder::from_internal_order(order, outcome, g, pair_idx as u16)?
+                let order = UserOrder::from_internal_order(order, outcome, g, pair_idx as u16)?;
+                asset_builder.add_gas_fee(AssetBuilderStage::UserOrder, t0, order.extra_fee_asset0);
+
+                order
             } else {
+                asset_builder.add_gas_fee(
+                    AssetBuilderStage::UserOrder,
+                    t0,
+                    order.priority_data.gas.to()
+                );
                 UserOrder::from_internal_order_max_gas(order, outcome, pair_idx as u16)
             };
             user_orders.push(user_order);
         }
+
+        tracing::info!("{:#?}", map);
+
         Ok(())
     }
 

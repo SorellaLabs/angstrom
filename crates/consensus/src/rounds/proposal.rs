@@ -33,7 +33,7 @@ type MatchingEngineFuture = BoxFuture<'static, eyre::Result<(Vec<PoolSolution>, 
 /// is no need for others to verify.
 pub struct ProposalState {
     matching_engine_future: Option<MatchingEngineFuture>,
-    submission_future:      Option<BoxFuture<'static, bool>>,
+    submission_future:      Option<BoxFuture<'static, Result<bool, tokio::task::JoinError>>>,
     pre_proposal_aggs:      Vec<PreProposalAggregation>,
     proposal:               Option<Proposal>,
     last_round_info:        Option<LastRoundInfo>,
@@ -122,37 +122,38 @@ impl ProposalState {
         let signer = handles.signer.clone();
 
         let submission_future = async move {
-            tracing::info!("building bundle");
-            provider
-                .populate_gas_nonce_chain_id(signer.address(), &mut tx)
-                .await;
-
-            let (hash, success) = provider.sign_and_send(signer, tx).await;
-            tracing::info!("submitted bundle");
-            if !success {
-                return false
-            }
-
-            // wait for next block. then see if transaction landed
-            provider
-                .watch_blocks()
-                .await
-                .unwrap()
-                .with_poll_interval(Duration::from_millis(10))
-                .into_stream()
-                .next()
-                .await;
-
-            provider
-                .get_transaction_by_hash(hash)
-                .await
-                .unwrap()
-                .is_some()
+            // tracing::info!("building bundle");
+            // provider
+            //     .populate_gas_nonce_chain_id(signer.address(), &mut tx)
+            //     .await;
+            //
+            // let (hash, success) = provider.sign_and_send(signer, tx).await;
+            // tracing::info!("submitted bundle");
+            // if !success {
+            //     return false
+            // }
+            //
+            // // wait for next block. then see if transaction landed
+            // provider
+            //     .watch_blocks()
+            //     .await
+            //     .unwrap()
+            //     .with_poll_interval(Duration::from_millis(10))
+            //     .into_stream()
+            //     .next()
+            //     .await;
+            //
+            // provider
+            //     .get_transaction_by_hash(hash)
+            //     .await
+            //     .unwrap()
+            //     .is_some()
+            true
         }
         .boxed();
 
         self.waker.wake_by_ref();
-        self.submission_future = Some(submission_future);
+        self.submission_future = Some(tokio::spawn(submission_future).boxed());
 
         true
     }
@@ -192,7 +193,7 @@ where
         if let Some(mut b_fut) = self.submission_future.take() {
             match b_fut.poll_unpin(cx) {
                 Poll::Ready(transaction_landed) => {
-                    if transaction_landed {
+                    if transaction_landed.unwrap_or_default() {
                         let proposal = self.proposal.take().unwrap();
                         handles
                             .messages

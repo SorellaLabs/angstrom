@@ -14,7 +14,6 @@ pub fn calculate_reward(
 
 #[cfg(test)]
 mod test {
-    use alloy::primitives::Uint;
     use angstrom_types::matching::{
         uniswap::{LiqRange, PoolSnapshot},
         SqrtPriceX96
@@ -50,7 +49,7 @@ mod test {
         let total_donations = result.total_donations();
         assert_eq!(
             total_donations + result.total_cost + result.tribute,
-            Uint::from(total_payment),
+            total_payment,
             "Total allocations do not add up to input payment"
         );
     }
@@ -97,7 +96,7 @@ mod test {
         );
         assert_eq!(
             total_donations + result.total_cost + result.tribute,
-            Uint::from(total_payment),
+            total_payment,
             "Total allocations do not add up to input payment"
         );
     }
@@ -119,19 +118,15 @@ mod test {
         let result = calculate_reward(&tob, &snapshot).expect("Error calculating tick donations");
         let total_donations = result.total_donations();
         assert_eq!(result.tick_donations.len(), 1, "Wrong number of donations");
-        assert!(result.tick_donations.contains_key(&99000), "Donation missing");
+        assert!(result.tick_donations.contains_key(&(99000, 101000)), "Donation missing");
         assert_eq!(
-            result
-                .tick_donations
-                .get(&99000)
-                .unwrap()
-                .saturating_to::<u128>(),
+            *result.tick_donations.get(&(99000, 101000)).unwrap(),
             partial_donation,
             "Donation of incorrect size"
         );
         assert_eq!(
             total_donations + result.total_cost + result.tribute,
-            Uint::from(total_payment),
+            total_payment,
             "Total allocations do not add up to input payment"
         );
     }
@@ -182,13 +177,14 @@ mod test {
             Some(100000000_u128)
         );
         let first_tick = 100000 - 1000;
+        let last_tick = 100000 + 1000;
         let result = calculate_reward(&tob, &snapshot).expect("Error calculating tick donations");
         assert!(
             result.tick_donations.len() == 1,
             "Too many donations - only one initialized tick in this market"
         );
         assert!(
-            result.tick_donations.contains_key(&first_tick),
+            result.tick_donations.contains_key(&(first_tick, last_tick)),
             "Donation not made to only initialized tick"
         );
     }

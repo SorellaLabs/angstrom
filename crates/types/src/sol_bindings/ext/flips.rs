@@ -50,7 +50,7 @@ impl GenerateFlippedOrder for PartialFlashOrder {
     {
         let new_signer = AngstromSigner::random();
         let price = Ray::from(self.min_price);
-        let amount_out_max = price.mul_quantity(U256::from(self.amount_in()));
+        let amount_out_max = price.mul_quantity(U256::from(self.amount()));
         let min = price.mul_quantity(U256::from(self.min_amount_in));
 
         let mut this = Self {
@@ -105,7 +105,7 @@ impl GenerateFlippedOrder for PartialStandingOrder {
     {
         let new_signer = AngstromSigner::random();
         let price = Ray::from(self.min_price);
-        let amount_out_max = price.mul_quantity(U256::from(self.amount_in()));
+        let amount_out_max = price.mul_quantity(U256::from(self.amount()));
         let min = price.mul_quantity(U256::from(self.min_amount_in));
 
         let mut this = Self {

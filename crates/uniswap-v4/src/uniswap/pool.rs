@@ -1,4 +1,6 @@
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{
+    cmp::Ordering, collections::HashMap, fmt::Debug, marker::PhantomData, ops::Rem, sync::Arc
+};
 
 use alloy::{
     hex,
@@ -9,6 +11,7 @@ use alloy::{
 use alloy_primitives::Log;
 use angstrom_types::matching::uniswap::{LiqRange, PoolSnapshot};
 use itertools::Itertools;
+use malachite::num::conversion::traits::SaturatingInto;
 use thiserror::Error;
 use uniswap_v3_math::{
     error::UniswapV3MathError,
@@ -112,16 +115,74 @@ where
             return Err(PoolError::PoolNotInitialized)
         }
 
-        let liq_ranges = self
+        // Get the information for our current position
+        let current_liquidity = self.liquidity;
+        let current_tick = self.tick;
+        let (less_than, more_than): (Vec<_>, Vec<_>) = self
             .ticks
             .iter()
-            .sorted_unstable_by(|a, b| a.0.cmp(b.0))
-            .map_windows(|[(tick_lower, _), (tick_upper, tick_inner_upper)]| {
+            .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
+            .partition(|t| *t.0 <= current_tick);
+
+        let current_range = LiqRange::new(
+            // Because they're already sorted low to high - we want the highest low and the lowest
+            // high
+            *less_than.last().expect("No lower bound to current range").0,
+            *more_than
+                .first()
+                .expect("No upper bound to corrent range")
+                .0,
+            current_liquidity
+        )
+        .unwrap();
+
+        let mut tracked_liq: i128 = current_liquidity.saturating_into();
+        let upper_ranges = more_than
+            .iter()
+            // Sort low to high
+            .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
+            .map_windows(|[(low_tick, low_tick_data), (high_tick, _)]| {
+                // We're walking upwards so we add the low tick's net
+                tracked_liq += low_tick_data.liquidity_net;
                 // ensure everything is spaced properly
-                assert_eq!((**tick_upper - **tick_lower).abs(), self.tick_spacing);
-                LiqRange::new(**tick_lower, **tick_upper, tick_inner_upper.liquidity_gross).unwrap()
+                assert!(low_tick.rem(self.tick_spacing) == 0, "Lower tick not aligned");
+                assert!(high_tick.rem(self.tick_spacing) == 0, "Upper tick not aligned");
+                assert!(
+                    tracked_liq >= 0,
+                    "Liquidity dropped below zero {} - {}",
+                    low_tick,
+                    high_tick
+                );
+                LiqRange::new(**low_tick, **high_tick, tracked_liq.unsigned_abs()).unwrap()
             })
             .collect::<Vec<_>>();
+
+        // Reset our tracked liquidity
+        tracked_liq = current_liquidity.saturating_into();
+        // Iterate downwards now
+        let lower_ranges = less_than
+            .iter()
+            // We want to walk our ranges high to low, so we reverse
+            .rev()
+            .map_windows(|[(high_tick, high_tick_data), (low_tick, _)]| {
+                // We're walking downwards now so we subtract the upper tick's net
+                tracked_liq -= high_tick_data.liquidity_net;
+                // ensure everything is spaced properly
+                assert!(low_tick.rem(self.tick_spacing) == 0, "Lower tick not aligned");
+                assert!(high_tick.rem(self.tick_spacing) == 0, "Upper tick not aligned");
+                assert!(
+                    tracked_liq >= 0,
+                    "Liquidity dropped below zero {} - {}",
+                    low_tick,
+                    high_tick
+                );
+                LiqRange::new(**low_tick, **high_tick, tracked_liq.unsigned_abs()).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // Put them all together - the PoolSnapshot constructor will sort this
+        let liq_ranges =
+            [[current_range].as_slice(), upper_ranges.as_slice(), lower_ranges.as_slice()].concat();
 
         Ok((self.token0, self.token1, PoolSnapshot::new(liq_ranges, self.sqrt_price.into())?))
     }
@@ -136,6 +197,16 @@ where
         tracing::trace!(?block_number, "populated pool data");
         self.sync_ticks(block_number, provider.clone()).await?;
         tracing::trace!(?block_number, "synced pool ticks");
+        Ok(())
+    }
+
+    pub async fn update_to_block<P: Provider<T>, T: Transport + Clone>(
+        &mut self,
+        block_number: Option<BlockNumber>,
+        provider: Arc<P>
+    ) -> Result<(), PoolError> {
+        self.populate_data(block_number, provider.clone()).await?;
+        self.sync_ticks(block_number, provider.clone()).await?;
         Ok(())
     }
 
@@ -155,7 +226,6 @@ where
         block_number: Option<BlockNumber>,
         provider: Arc<P>
     ) -> Result<(Vec<TickData>, U256), PoolError> {
-        tracing::info!(?tick_start,?num_ticks,addr=?self.address());
         let (tick_data, block_number) = self
             .data_loader
             .load_tick_data(
@@ -221,10 +291,15 @@ where
         self.tick_bitmap.clear();
 
         tracing::info!(?self.token0, ?self.token1,?self.tick, ?self.tick_spacing, ?self.liquidity,?self.liquidity_net);
+
+        let extra = (self.tick.rem(self.tick_spacing) == 0i32) as u8;
+
         let total_ticks_to_fetch = self.initial_ticks_per_side * 2;
         // current tick when loaded (init tick) - (half total tics * spacing);
 
-        let start_tick = self.tick - (total_ticks_to_fetch.div_ceil(2) as i32 * self.tick_spacing);
+        let start_tick = self.tick
+            - (total_ticks_to_fetch.div_ceil(2) as i32 * self.tick_spacing)
+            - (extra as i32);
 
         let end_tick = start_tick + (self.tick_spacing as u16 * total_ticks_to_fetch) as i32;
         tracing::info!(?start_tick, ?end_tick);
@@ -246,6 +321,13 @@ where
             .into_iter()
             .filter(|tick| tick.initialized)
             .for_each(|tick| {
+                tracing::trace!(
+                    initialized = tick.initialized,
+                    liq_gross = tick.liquidityGross,
+                    liq_net = tick.liquidityNet,
+                    tick = tick.tick.as_i32(),
+                    "Inserting tick"
+                );
                 self.ticks.insert(
                     tick.tick.as_i32(),
                     TickInfo {
@@ -266,25 +348,21 @@ where
 
         let shift = self.token0_decimals as i8 - self.token1_decimals as i8;
         // flipped to scale them properly with the token spacing
-        let price = match shift.cmp(&0) {
+        match shift.cmp(&0) {
             Ordering::Less => 1.0001_f64.powi(tick) * 10_f64.powi(-shift as i32),
             Ordering::Greater => 1.0001_f64.powi(tick) / 10_f64.powi(shift as i32),
             Ordering::Equal => 1.0001_f64.powi(tick)
-        };
-
-        1.0 / price
+        }
     }
 
     pub fn calculate_price(&self) -> f64 {
         let tick = uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio(self.sqrt_price).unwrap();
         let shift = self.token0_decimals as i8 - self.token1_decimals as i8;
-        let price = match shift.cmp(&0) {
+        match shift.cmp(&0) {
             Ordering::Less => 1.0001_f64.powi(tick) / 10_f64.powi(-shift as i32),
             Ordering::Greater => 1.0001_f64.powi(tick) * 10_f64.powi(shift as i32),
             Ordering::Equal => 1.0001_f64.powi(tick)
-        };
-
-        1.0 / price
+        }
     }
 
     /// Obvious doc: Sims the swap to get the state changes after applying it
@@ -1003,7 +1081,7 @@ mod tests {
         let mut pool = setup_basic_pool();
 
         // Add some ticks
-        pool.update_position(-120, -60, 1000);
+        pool.update_position(-180, -60, 1000);
         pool.update_position(-60, 0, 2000);
         pool.update_position(0, 60, 3000);
         // set the sqrt_liq at -120
@@ -1018,5 +1096,6 @@ mod tests {
         assert_eq!(token_a, pool.token0);
         assert_eq!(token_b, pool.token1);
         assert!(!snapshot.ranges.is_empty());
+        println!("Snapshot: {:#?}", snapshot);
     }
 }

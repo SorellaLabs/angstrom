@@ -34,6 +34,7 @@ alloy.workspace = true
 # misc
 anyhow.workspace = true
 auto_impl.workspace = true
+tracing.workspace =true
 
 [dev-dependencies]
 testing-tools.workspace = true

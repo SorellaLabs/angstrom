@@ -9,6 +9,19 @@ pub enum RewardsUpdate {
     CurrentOnly { amount: u128 }
 }
 
+impl RewardsUpdate {
+    pub fn empty() -> Self {
+        Self::CurrentOnly { amount: 0 }
+    }
+
+    pub fn quantities(&self) -> Vec<u128> {
+        match self {
+            Self::MultiTick { quantities, .. } => quantities.clone(),
+            Self::CurrentOnly { amount } => vec![*amount]
+        }
+    }
+}
+
 #[derive(Debug, PadeEncode, PadeDecode)]
 pub struct PoolUpdate {
     pub zero_for_one:     bool,

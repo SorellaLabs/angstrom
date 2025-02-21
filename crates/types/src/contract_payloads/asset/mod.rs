@@ -9,6 +9,7 @@ use super::Asset;
 
 /// Lets us easily track an array of assets and indexes into that array for
 /// contract transformation purposes
+#[derive(Debug)]
 pub struct AssetArray {
     assets:     Vec<Asset>,
     assets_idx: HashMap<Address, usize>

@@ -397,4 +397,34 @@ mod test {
         let diff = third_price.price.abs_diff(*cur_price.price);
         assert!(diff <= U160::from(1_u128), "Price didn't move back when selling T0");
     }
+
+    #[test]
+    fn rewards_and_things() {
+        let amm = PoolSnapshot::new(
+            vec![
+                LiqRange {
+                    liquidity:  1_000_000_000_000_u128,
+                    lower_tick: 99900,
+                    upper_tick: 100100
+                },
+                LiqRange {
+                    liquidity:  1_000_000_000_000_u128,
+                    lower_tick: 99900,
+                    upper_tick: 99900
+                },
+                LiqRange {
+                    liquidity:  1_000_000_000_000_u128,
+                    lower_tick: 99900,
+                    upper_tick: 99960
+                },
+                LiqRange {
+                    liquidity:  1_000_000_000_000_000_u128,
+                    lower_tick: 99960,
+                    upper_tick: 100020
+                },
+            ],
+            SqrtPriceX96::at_tick(100100).unwrap()
+        )
+        .unwrap();
+    }
 }

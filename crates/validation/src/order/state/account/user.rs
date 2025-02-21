@@ -32,7 +32,7 @@ impl LiveState {
         pool_info: &UserOrderPoolInfo
     ) -> Option<PendingUserAction> {
         assert_eq!(order.token_in(), self.token, "incorrect lives state for order");
-        let amount_in = U256::from(order.amount_in());
+        let amount_in = U256::from(order.amount());
 
         let (angstrom_delta, token_delta) = if order.use_internal() {
             if self.angstrom_balance < amount_in {

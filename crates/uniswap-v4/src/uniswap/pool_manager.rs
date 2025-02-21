@@ -394,6 +394,12 @@ where
             .expect("never fail");
         }
 
+        Self::pool_update_workaround(
+            chain_head_block_number,
+            self.pools.clone(),
+            self.provider.clone()
+        );
+
         self.latest_synced_block = chain_head_block_number;
 
         if is_reorg {
@@ -405,8 +411,20 @@ where
         }
     }
 
-    #[allow(clippy::await_holding_lock)]
-    async fn load_more_ticks(
+    fn pool_update_workaround(
+        block_number: u64,
+        pools: SyncedUniswapPools<A, Loader>,
+        provider: Arc<P>
+    ) {
+        tracing::info!("starting poll");
+        for pool in pools.pools.values() {
+            let mut l = pool.write().unwrap();
+            async_to_sync(l.update_to_block(Some(block_number), provider.provider())).unwrap();
+        }
+        tracing::info!("finished");
+    }
+
+    fn load_more_ticks(
         notifier: Arc<Notify>,
         pools: SyncedUniswapPools<A, Loader>,
         provider: Arc<P>,
@@ -416,10 +434,7 @@ where
         let mut pool = pools.get(&tick_req.pool_id).unwrap().write().unwrap();
 
         // given we force this to resolve, should'nt be problematic
-        let ticks = pool
-            .load_more_ticks(tick_req, None, node_provider)
-            .await
-            .unwrap();
+        let ticks = async_to_sync(pool.load_more_ticks(tick_req, None, node_provider)).unwrap();
 
         pool.apply_ticks(ticks);
 
@@ -444,17 +459,23 @@ where
         while let Poll::Ready(Some(Some(block_info))) = self.block_stream.poll_next_unpin(cx) {
             self.handle_new_block_info(block_info);
         }
-        while let Poll::Ready(Some((ticks, not))) = self.rx.poll_recv(cx) {
+        while let Poll::Ready(Some((mut ticks, not))) = self.rx.poll_recv(cx) {
             // hacky for now but only way to avoid lock problems
             let pools = self.pools.clone();
             let prov = self.provider.clone();
-            let mut f = Box::pin(Self::load_more_ticks(not, pools, prov, ticks));
 
-            while f.poll_unpin(cx).is_pending() {}
+            let addr = self.conversion_map.get(&ticks.pool_id).unwrap();
+            ticks.pool_id = addr.clone();
+            Self::load_more_ticks(not, pools, prov, ticks);
         }
 
         Poll::Pending
     }
+}
+
+pub fn async_to_sync<F: Future>(f: F) -> F::Output {
+    let handle = tokio::runtime::Handle::try_current().expect("No tokio runtime found");
+    tokio::task::block_in_place(|| handle.block_on(f))
 }
 
 #[derive(Debug)]

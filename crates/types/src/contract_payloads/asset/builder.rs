@@ -79,8 +79,16 @@ impl AssetBuilder {
             .external_swap(asset_in, asset_out, quantity_in, quantity_out);
     }
 
+    pub fn add_gas_fee(&mut self, stage: AssetBuilderStage, asset: Address, qty: u128) {
+        self.get_stage(stage).add_gas_fee(asset, qty);
+    }
+
     pub fn allocate(&mut self, stage: AssetBuilderStage, asset: Address, quantity: u128) {
         self.get_stage(stage).allocate(asset, quantity);
+    }
+
+    pub fn tribute(&mut self, stage: AssetBuilderStage, asset: Address, quantity: u128) {
+        self.get_stage(stage).tribute(asset, quantity);
     }
 
     pub fn add_or_get_asset(&mut self, asset: Address) -> usize {
@@ -88,11 +96,16 @@ impl AssetBuilder {
     }
 
     pub fn get_asset_array(&self) -> Vec<Asset> {
+        println!("---TRACKER---\n{:#?}\n-------------", self.swaps);
+        println!("---TRACKER---\n{:#?}\n-------------", self.top_of_block);
+        println!("---TRACKER---\n{:#?}\n-------------", self.user_orders);
+        println!("---TRACKER---\n{:#?}\n-------------", self.rewards);
         let combined_assets = self
             .swaps
             .and_then(&self.top_of_block)
             .and_then(&self.user_orders)
-            .and_then(&self.rewards);
+            .and_then(&self.rewards)
+            .collect_extra();
         self.assets
             .get_asset_array()
             .into_iter()
@@ -100,6 +113,7 @@ impl AssetBuilder {
                 if let Some(tracker) = combined_assets.get_asset(&asset.addr) {
                     asset.take = tracker.take;
                     asset.settle = tracker.settle;
+                    asset.save = tracker.save;
                 }
                 asset
             })

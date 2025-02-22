@@ -110,7 +110,7 @@ impl TopOfBlockOrder {
             alloy::primitives::PrimitiveSignature::pade_decode(&mut sig_bytes.as_slice(), None)
                 .unwrap();
         let signature = Signature::from(decoded_signature);
-        let used_gas: u128 = (internal.priority_data.gas + shared_gas).saturating_to();
+        let used_gas: u128 = (internal.priority_data.gas).saturating_to();
 
         if used_gas > internal.max_gas_asset0 {
             return Err(eyre::eyre!("order went over gas limit"))

@@ -123,6 +123,12 @@ impl From<U256> for Ray {
     }
 }
 
+impl From<u128> for Ray {
+    fn from(value: u128) -> Self {
+        Self(U256::from(value))
+    }
+}
+
 impl From<Ray> for U256 {
     fn from(value: Ray) -> Self {
         value.0

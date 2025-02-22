@@ -197,7 +197,7 @@ fn cmp_agent<'a>(
                             book.save(bisection.ucp, debt_engine.ucp).unwrap();
 
                             let r = BinarySearchMatcher::new(&book, Some(tob.clone()))
-                                .calculate_solver_move(debt_engine.ucp);
+                                .calculate_solver_move_t0(debt_engine.ucp);
                             println!("\n\n\n\n\n when using the debt engine ucp, we get: {:#?}", r);
                         }
 

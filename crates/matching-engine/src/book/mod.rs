@@ -61,8 +61,8 @@ impl OrderBook {
     pub fn lowest_clearing_price(&self) -> Ray {
         self.bids()
             .iter()
-            .map(|bid| bid.bid_price())
-            .chain(self.asks().iter().map(|ask| ask.price()))
+            .map(|bid| bid.bid_price() / U256::from(2))
+            .chain(self.asks().iter().map(|ask| ask.price() / U256::from(2)))
             .min()
             .unwrap_or_default()
     }
@@ -70,8 +70,8 @@ impl OrderBook {
     pub fn highest_clearing_price(&self) -> Ray {
         self.bids()
             .iter()
-            .map(|bid| bid.bid_price())
-            .chain(self.asks().iter().map(|ask| ask.price()))
+            .map(|bid| bid.bid_price() * U256::from(2))
+            .chain(self.asks().iter().map(|ask| ask.price() * U256::from(2)))
             .max()
             .unwrap_or(Ray::from(U256::MAX))
     }

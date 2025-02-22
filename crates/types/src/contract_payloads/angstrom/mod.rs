@@ -651,21 +651,29 @@ impl AngstromBundle {
                     fill_amount,
                     // am out - round down because we'll always try to give you less
                     ray_ucp.inverse_quantity(fill_amount, false)
+                        - order.priority_data.gas.to::<u128>()
                 ),
                 // fill amount is the exact amount of T0 being output for a T1 input
                 (true, false) => {
                     // Round up because we'll always ask you to pay more
-                    (ray_ucp.quantity(fill_amount, true), fill_amount)
+                    (
+                        ray_ucp.quantity(fill_amount + order.priority_data.gas.to::<u128>(), true),
+                        fill_amount
+                    )
                 }
                 // fill amount is the exact amount of T0 being input for a T1 output
                 (false, true) => {
                     // Round down because we'll always try to give you less
-                    (fill_amount, ray_ucp.quantity(fill_amount, false))
+                    (
+                        fill_amount,
+                        ray_ucp.quantity(fill_amount - order.priority_data.gas.to::<u128>(), false)
+                    )
                 }
                 // fill amount is the exact amount of T1 expected out for a given T0 input
                 (false, false) => (
                     // Round up because we'll always ask you to pay more
-                    ray_ucp.inverse_quantity(fill_amount, true),
+                    ray_ucp.inverse_quantity(fill_amount, true)
+                        + order.priority_data.gas.to::<u128>(),
                     fill_amount
                 )
             };
@@ -683,15 +691,8 @@ impl AngstromBundle {
             );
             let user_order = if let Some(g) = shared_gas {
                 let order = UserOrder::from_internal_order(order, outcome, g, pair_idx as u16)?;
-                asset_builder.add_gas_fee(AssetBuilderStage::UserOrder, t0, order.extra_fee_asset0);
-
                 order
             } else {
-                asset_builder.add_gas_fee(
-                    AssetBuilderStage::UserOrder,
-                    t0,
-                    order.priority_data.gas.to()
-                );
                 UserOrder::from_internal_order_max_gas(order, outcome, pair_idx as u16)
             };
             user_orders.push(user_order);
@@ -723,15 +724,9 @@ impl AngstromBundle {
             &orders_by_pool,
             &proposal.solutions
         );
-
         // this should never underflow. if it does. means that there is underlying
         // problem with the gas delegation module
-        assert!(
-            gas_details.total_gas_cost_wei > total_gas,
-            "Total gas cost '{}' greater than total gas '{}'",
-            gas_details.total_gas_cost_wei,
-            total_gas
-        );
+
         if total_swaps == 0 {
             return Err(eyre::eyre!("have a total swaps count of 0"));
         }

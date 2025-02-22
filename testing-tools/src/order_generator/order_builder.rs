@@ -106,8 +106,8 @@ impl OrderBuilder {
         let amount_out = u128::try_from(amount_out.abs()).unwrap();
 
         let exact_in = rng.gen_bool(0.5);
-        // 5% amount range
-        let modifier = rng.gen_range(0.95..=1.05);
+        // 1% amount range
+        let modifier = rng.gen_range(0.99..=1.01);
 
         let amount = if exact_in { amount_in } else { amount_out };
 

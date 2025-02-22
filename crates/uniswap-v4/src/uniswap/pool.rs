@@ -662,8 +662,6 @@ where
             .load_pool_data(block_number, provider)
             .await?;
 
-        tracing::error!(?pool_data, "POOL DATA");
-
         self.token0 = pool_data.tokenA;
         self.token0_decimals = pool_data.tokenADecimals;
         self.token1 = pool_data.tokenB;

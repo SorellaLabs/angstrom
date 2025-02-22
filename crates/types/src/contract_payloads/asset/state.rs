@@ -171,7 +171,6 @@ impl StageTracker {
             .map
             .iter()
             .map(|(addr, state)| {
-                println!("--- {:?} ---\n{:#?}\n----NEW STATE------", addr, state);
                 // Any liquidity we have over what it will take us to settle should be saved for
                 // our contract.  This should usually just be scraps and rounding errors
                 let extra_liquidity = state.contract_liquid.saturating_sub(state.settle);
@@ -181,7 +180,6 @@ impl StageTracker {
                     save:            state.save + extra_liquidity,
                     settle:          state.settle
                 };
-                println!("{:#?}\n------------", new_state);
                 (*addr, new_state)
             })
             .collect();

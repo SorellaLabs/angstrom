@@ -96,10 +96,6 @@ impl AssetBuilder {
     }
 
     pub fn get_asset_array(&self) -> Vec<Asset> {
-        println!("---TRACKER---\n{:#?}\n-------------", self.swaps);
-        println!("---TRACKER---\n{:#?}\n-------------", self.top_of_block);
-        println!("---TRACKER---\n{:#?}\n-------------", self.user_orders);
-        println!("---TRACKER---\n{:#?}\n-------------", self.rewards);
         let combined_assets = self
             .swaps
             .and_then(&self.top_of_block)

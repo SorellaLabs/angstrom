@@ -245,7 +245,11 @@ pub struct OrderWithStorageData<Order> {
 }
 
 impl<O: RawPoolOrder> OrderWithStorageData<O> {
-    pub fn fetch_supply_or_demand_contribution_with_fee(&self, price: Ray, pool_fee: u32) -> Ray {
+    pub fn fetch_supply_or_demand_contribution_with_fee_t0(
+        &self,
+        price: Ray,
+        pool_fee: u32
+    ) -> Ray {
         // priceOutVsIn * oneMinusFee / ONE_E6;
 
         match (self.is_bid, self.exact_in()) {
@@ -255,20 +259,23 @@ impl<O: RawPoolOrder> OrderWithStorageData<O> {
                 // .map(|bid|
                 // Ray::from(U256::from(bid.amount())).div_ray(price))
 
-                Ray::from(U256::from(price.inverse_quantity(self.amount(), false)))
+                Ray::from(price.inverse_quantity(self.amount(), false))
                     - Ray::from(self.priority_data.gas)
             }
             (true, false) => {
                 // quantityOut = AmountOut.wrap(quantity);
                 // quantityIn = price.convertUp(quantityOut + fee);
-                Ray::from(U256::from(self.amount()))
+
+                // one for zero with zero in
+                // add value here as that we get actual conversion
+                Ray::from(self.amount())
             }
             (false, true) => {
                 // quantityIn = AmountIn.wrap(quantity);
                 // quantityOut = price.convertDown(quantityIn - fee);
 
                 // .map(|ask| Ray::from(U256::from(ask.amount())))
-                Ray::from(U256::from(self.amount()))
+                Ray::from(self.amount())
             }
 
             (false, false) => {
@@ -276,13 +283,59 @@ impl<O: RawPoolOrder> OrderWithStorageData<O> {
                 // quantityIn = price.convertUp(quantityOut) + fee;
                 //
                 // .map(|ask|
-                Ray::from(U256::from(price.inverse_quantity(self.amount(), true)))
+                Ray::from(price.inverse_quantity(self.amount(), true))
                     + Ray::from(self.priority_data.gas)
             }
         }
     }
 
-    pub fn fetch_supply_or_demand_contribution_with_fee_partial(
+    pub fn fetch_supply_or_demand_contribution_with_fee_t1(
+        &self,
+        price: Ray,
+        pool_fee: u32
+    ) -> Ray {
+        // priceOutVsIn * oneMinusFee / ONE_E6;
+
+        match (self.is_bid, self.exact_in()) {
+            (true, true) => {
+                // quantityIn = AmountIn.wrap(quantity);
+                // quantityOut = price.convertDown(quantityIn) - fee;
+                // .map(|bid|
+                // Ray::from(U256::from(bid.amount())).div_ray(price))
+                Ray::from(self.amount())
+                // Ray::from(U256::from(price.inverse_quantity(self.amount(),
+                // false)))
+                //     - Ray::from(self.priority_data.gas)
+            }
+            // one for zero where amount() is zero
+            (true, false) => {
+                // quantityOut = AmountOut.wrap(quantity);
+                // quantityIn = price.convertUp(quantityOut + fee);
+                Ray::from(price.quantity(self.amount() + self.priority_data.gas.to::<u128>(), true))
+            }
+            // zfo and zero in
+            (false, true) => {
+                // quantityIn = AmountIn.wrap(quantity);
+                // quantityOut = price.convertDown(quantityIn - fee);
+
+                // .map(|ask| Ray::from(U256::from(ask.amount())))
+                Ray::from(
+                    price.quantity(self.amount() - self.priority_data.gas.to::<u128>(), false)
+                )
+            }
+
+            // one in
+            (false, false) => {
+                // quantityOut = AmountOut.wrap(quantity);
+                // quantityIn = price.convertUp(quantityOut) + fee;
+                //
+                // .map(|ask|
+                Ray::from(self.amount())
+            }
+        }
+    }
+
+    pub fn fetch_supply_or_demand_contribution_with_fee_partial_t0(
         &self,
         price: Ray,
         pool_fee: u32
@@ -297,18 +350,15 @@ impl<O: RawPoolOrder> OrderWithStorageData<O> {
 
         if limit_price == price {
             if self.is_bid {
-                let high = Ray::from(U256::from(price.inverse_quantity(max, false)))
+                let high = Ray::from(price.inverse_quantity(max, false))
                     - Ray::from(self.priority_data.gas);
 
-                let low = Ray::from(U256::from(price.inverse_quantity(min, false)))
+                let low = Ray::from(price.inverse_quantity(min, false))
                     - Ray::from(self.priority_data.gas);
 
                 (high, Some(high - low))
             } else {
-                let (max, min) = (
-                    Ray::from(U256::from(self.amount())),
-                    Ray::from(U256::from(self.min_amount()))
-                );
+                let (max, min) = (Ray::from(self.amount()), Ray::from(self.min_amount()));
                 (max, Some(max - min))
             }
         } else {
@@ -318,7 +368,41 @@ impl<O: RawPoolOrder> OrderWithStorageData<O> {
 
                 (high, None)
             } else {
-                (Ray::from(U256::from(self.amount())), None)
+                (Ray::from(self.amount()), None)
+            }
+        }
+    }
+
+    pub fn fetch_supply_or_demand_contribution_with_fee_partial_t1(
+        &self,
+        price: Ray,
+        pool_fee: u32
+    ) -> (Ray, Option<Ray>) {
+        let limit_price = if self.is_bid {
+            Ray::from(self.limit_price()).inv_ray_round(true)
+        } else {
+            Ray::from(self.limit_price())
+        };
+
+        let (max, min) = (self.amount(), self.min_amount());
+
+        if limit_price == price {
+            if self.is_bid {
+                let (max, min) = (Ray::from(self.amount()), Ray::from(self.min_amount()));
+                (max, Some(max - min))
+            } else {
+                let max =
+                    Ray::from(price.quantity(max - self.priority_data.gas.to::<u128>(), false));
+                let min =
+                    Ray::from(price.quantity(min - self.priority_data.gas.to::<u128>(), false));
+
+                (max, Some(max - min))
+            }
+        } else {
+            if self.is_bid {
+                (Ray::from(max), None)
+            } else {
+                (Ray::from(price.quantity(max - self.priority_data.gas.to::<u128>(), false)), None)
             }
         }
     }

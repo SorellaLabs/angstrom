@@ -3,7 +3,10 @@ use angstrom_types::{
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 
-use crate::{book::OrderBook, matcher::binary_search::BinarySearchMatcher};
+use crate::{
+    book::OrderBook,
+    matcher::{binary_search::BinarySearchMatcher, delta::DeltaMatcher}
+};
 
 pub struct BinarySearchStrategy {}
 
@@ -12,7 +15,7 @@ impl BinarySearchStrategy {
         book: &OrderBook,
         searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
     ) -> PoolSolution {
-        let mut matcher = BinarySearchMatcher::new(book, searcher.clone());
+        let mut matcher = DeltaMatcher::new(book, searcher.clone());
         matcher.solution(searcher)
     }
 }

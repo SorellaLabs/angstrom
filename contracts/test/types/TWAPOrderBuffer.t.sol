@@ -19,15 +19,17 @@ contract TWAPOrderBufferTest is BaseTest {
         assertEq(bufferHash(order), order.hash());
     }
 
-
     function test_ffi_fuzzing_bufferPythonEquivalence_TWAPOrder(
         TimeWeightedAveragePriceOrder memory order
     ) public {
         assertEq(bufferHash(order), ffiPythonEIP712Hash(order));
     }
 
-
-    function bufferHash(TimeWeightedAveragePriceOrder memory order) internal view returns (bytes32) {
+    function bufferHash(TimeWeightedAveragePriceOrder memory order)
+        internal
+        view
+        returns (bytes32)
+    {
         return this._bufferHashTWAPOrder(
             order,
             bytes.concat(
@@ -49,6 +51,7 @@ contract TWAPOrderBufferTest is BaseTest {
         CalldataReader reader = CalldataReaderLib.from(dataStart);
         TWAPOrderBuffer memory buffer;
         TWAPOrderVariantMap varMap;
+        buffer.setTypeHash();
         (reader, varMap) = buffer.init(reader);
 
         buffer.exactIn = order.exactIn;
@@ -64,11 +67,14 @@ contract TWAPOrderBufferTest is BaseTest {
                 ? new bytes(0)
                 : bytes.concat(bytes20(order.hook), order.hookPayload)
         );
-        buffer.readOrderValidation(reader);
+        buffer.readTWAPOrderValidation(reader);
         return buffer.hash();
     }
 
-    function ffiPythonEIP712Hash(TimeWeightedAveragePriceOrder memory order) internal returns (bytes32) {
+    function ffiPythonEIP712Hash(TimeWeightedAveragePriceOrder memory order)
+        internal
+        returns (bytes32)
+    {
         string[] memory args = new string[](17);
         args[0] = "test/_reference/eip712.py";
         args[1] = "test/_reference/SignedTypes.sol:TimeWeightedAveragePriceOrder";

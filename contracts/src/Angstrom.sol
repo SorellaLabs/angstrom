@@ -270,6 +270,7 @@ contract Angstrom is
     {
         TypedDataHasher typedHasher = _erc712Hasher();
         TWAPOrderBuffer memory buffer;
+        buffer.setTypeHash();
 
         CalldataReader end;
         (reader, end) = reader.readU24End();
@@ -292,6 +293,7 @@ contract Angstrom is
         TWAPOrderVariantMap variantMap;
         // Load variant map, ref id and set use internal.
         (reader, variantMap) = buffer.init(reader);
+        console.log("buffer_typehash: ", uint256(buffer.typeHash));
 
         // Load and lookup asset in/out and dependent values.
         PriceOutVsIn price;
@@ -313,7 +315,7 @@ contract Angstrom is
         HookBuffer hook;
         (reader, hook, buffer.hookDataHash) = HookBufferLib.readFrom(reader, variantMap.noHook());
 
-        reader = buffer.readOrderValidation(reader);
+        reader = buffer.readTWAPOrderValidation(reader);
 
         AmountIn amountIn;
         AmountOut amountOut;
@@ -325,17 +327,16 @@ contract Angstrom is
             (reader, from) = variantMap.isEcdsa()
                 ? SignatureLib.readAndCheckEcdsa(reader, orderHash)
                 : SignatureLib.readAndCheckERC1271(reader, orderHash);
+
+            _checkTWAPOrderData(buffer.timeInterval, buffer.totalParts, buffer.window);
+            _invalidatePartTWAPAndCheckDeadline(
+                _computeTWAPOrderSlot(orderHash, from),
+                buffer.startTime,
+                buffer.timeInterval,
+                buffer.totalParts,
+                buffer.window
+            );
         }
-    
-        _checkTWAPOrderData(buffer.timeInterval, buffer.totalParts, buffer.window);
-        _invalidatePartTWAPNonceAndCheckDeadline(
-            from, 
-            buffer.nonce, 
-            buffer.startTime, 
-            buffer.timeInterval, 
-            buffer.totalParts,
-            buffer.window
-        );
 
         // Push before hook as a potential loan.
         address to = buffer.recipient;
@@ -347,7 +348,7 @@ contract Angstrom is
         hook.tryTrigger(from);
 
         _settleOrderIn(from, buffer.assetIn, amountIn, buffer.useInternal);
-        console.log("end test");
+
         return reader;
     }
 

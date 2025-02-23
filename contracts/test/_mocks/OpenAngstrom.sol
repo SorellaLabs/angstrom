@@ -97,6 +97,7 @@ contract OpenAngstrom is Angstrom {
         (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
 
         TWAPOrderBuffer memory buffer;
+        buffer.setTypeHash();
         reader = _validateAndExecuteTWAPOrder(reader, buffer, _erc712Hasher(), pairs);
 
         reader.requireAtEndOf(userOrderPayload);

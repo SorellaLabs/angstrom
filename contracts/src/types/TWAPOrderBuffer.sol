@@ -68,6 +68,10 @@ library TWAPOrderBufferLib {
         ")"
     );
 
+    function setTypeHash(TWAPOrderBuffer memory self) internal pure {
+        self.typeHash = TWAP_ORDER_TYPEHASH;
+    }
+
     function init(TWAPOrderBuffer memory self, CalldataReader reader)
         internal
         pure
@@ -83,13 +87,10 @@ library TWAPOrderBufferLib {
             // Advance reader.
             reader := add(reader, REF_ID_BYTES)
         }
-        
-        self.typeHash = TWAP_ORDER_TYPEHASH;
-        
+
         self.useInternal = variantMap.useInternal();
 
         return (reader, variantMap);
-   
     }
 
     function hash(TWAPOrderBuffer memory self) internal pure returns (bytes32 orderHash) {
@@ -116,7 +117,6 @@ library TWAPOrderBufferLib {
         if (extraFeeAsset0 > maxExtraFeeAsset0) revert GasAboveMax();
         self.maxExtraFeeAsset0 = maxExtraFeeAsset0;
 
-
         if (variant.zeroForOne()) {
             AmountIn fee = AmountIn.wrap(extraFeeAsset0);
             if (variant.exactIn()) {
@@ -140,10 +140,11 @@ library TWAPOrderBufferLib {
         return (reader, quantityIn, quantityOut);
     }
 
-    function readOrderValidation(
-        TWAPOrderBuffer memory self,
-        CalldataReader reader
-    ) internal pure returns (CalldataReader) {
+    function readTWAPOrderValidation(TWAPOrderBuffer memory self, CalldataReader reader)
+        internal
+        pure
+        returns (CalldataReader)
+    {
         // Copy slices directly from calldata into memory.
         assembly ("memory-safe") {
             calldatacopy(
@@ -157,9 +158,7 @@ library TWAPOrderBufferLib {
             )
             reader := add(reader, START_TIME_BYTES)
             calldatacopy(
-                add(self, add(PARTS_MEM_OFFSET, sub(0x20, PARTS_BYTES))),
-                reader,
-                PARTS_BYTES
+                add(self, add(PARTS_MEM_OFFSET, sub(0x20, PARTS_BYTES))), reader, PARTS_BYTES
             )
             reader := add(reader, PARTS_BYTES)
             calldatacopy(
@@ -169,9 +168,7 @@ library TWAPOrderBufferLib {
             )
             reader := add(reader, TIME_INTERVALS_BYTES)
             calldatacopy(
-                add(self, add(WINDOW_MEM_OFFSET, sub(0x20, WINDOW_BYTES))),
-                reader,
-                WINDOW_BYTES
+                add(self, add(WINDOW_MEM_OFFSET, sub(0x20, WINDOW_BYTES))), reader, WINDOW_BYTES
             )
             reader := add(reader, WINDOW_BYTES)
         }

@@ -14,7 +14,6 @@ library TWAPOrderVariantMapLib {
     uint256 internal constant IS_EXACT_IN_BIT = 0x10;
     uint256 internal constant IS_ECDSA_BIT = 0x20;
 
-
     function useInternal(TWAPOrderVariantMap variant) internal pure returns (bool) {
         return TWAPOrderVariantMap.unwrap(variant) & USE_INTERNAL_BIT != 0;
     }

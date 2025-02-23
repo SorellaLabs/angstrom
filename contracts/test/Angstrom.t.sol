@@ -9,7 +9,7 @@ import {Asset, AssetLib} from "test/_reference/Asset.sol";
 import {Pair, PairLib} from "test/_reference/Pair.sol";
 import {UserOrder, UserOrderLib} from "test/_reference/UserOrder.sol";
 import {
-    PartialStandingOrder, 
+    PartialStandingOrder,
     ExactFlashOrder,
     TimeWeightedAveragePriceOrder
 } from "test/_reference/OrderTypes.sol";
@@ -143,7 +143,7 @@ contract AngstromTest is BaseTest {
         bundle.addAsset(asset0).addAsset(asset1).addPair(asset0, asset1, price);
 
         uint256 startTime = block.timestamp;
-        uint256 timeInterval; 
+        uint256 timeInterval;
 
         {
             TimeWeightedAveragePriceOrder memory order;
@@ -199,7 +199,7 @@ contract AngstromTest is BaseTest {
 
         // only one bundle per block.
         vm.roll(block.number + 2);
-        vm.warp(startTime + 2*(timeInterval));
+        vm.warp(startTime + 2 * (timeInterval));
         angstrom.execute(payload);
 
         vm.stopPrank();

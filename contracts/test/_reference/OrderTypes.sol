@@ -432,11 +432,11 @@ library OrdersLib {
     function toVariantMap(TimeWeightedAveragePriceOrder memory order, bool zeroForOne)
         internal
         pure
-        returns(uint8 varMap)
+        returns (uint8 varMap)
     {
         varMap = (order.useInternal ? 1 : 0) | (order.recipient != address(0) ? 2 : 0)
-            | (order.hook != address(0) ? 4 : 0) | (zeroForOne ? 8 : 0)
-            | (order.exactIn ? 16 : 0) | (order.meta.isEcdsa ? 32 : 0);
+            | (order.hook != address(0) ? 4 : 0) | (zeroForOne ? 8 : 0) | (order.exactIn ? 16 : 0)
+            | (order.meta.isEcdsa ? 32 : 0);
     }
 
     function encode(TimeWeightedAveragePriceOrder memory order, Pair[] memory pairs)
@@ -603,7 +603,11 @@ library OrdersLib {
         );
     }
 
-    function toStr(TimeWeightedAveragePriceOrder memory o) internal pure returns (string memory str) {
+    function toStr(TimeWeightedAveragePriceOrder memory o)
+        internal
+        pure
+        returns (string memory str)
+    {
         str = string.concat(
             "ExactStandingOrder {",
             "\n  exactIn: ",

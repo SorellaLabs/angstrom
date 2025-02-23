@@ -5,11 +5,7 @@ import {UserOrder, UserOrderLib} from "./UserOrder.sol";
 import {Asset, AssetLib} from "./Asset.sol";
 import {Pair, PairLib} from "./Pair.sol";
 import {PriceAB as Price10} from "src/types/Price.sol";
-import {
-    TopOfBlockOrder,
-    TimeWeightedAveragePriceOrder,
-    OrdersLib
-} from "./OrderTypes.sol";
+import {TopOfBlockOrder, TimeWeightedAveragePriceOrder, OrdersLib} from "./OrderTypes.sol";
 import {PoolUpdate, PoolUpdateLib} from "./PoolUpdate.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 
@@ -133,7 +129,8 @@ library BundleLib {
     {
         // self.addPair(twap.assetIn, twap.assetOut);
 
-        TimeWeightedAveragePriceOrder[] memory newTwapOrders = new TimeWeightedAveragePriceOrder[](self.twapOrders.length + 1);
+        TimeWeightedAveragePriceOrder[] memory newTwapOrders =
+            new TimeWeightedAveragePriceOrder[](self.twapOrders.length + 1);
         for (uint256 i = 0; i < self.twapOrders.length; i++) {
             newTwapOrders[i] = self.twapOrders[i];
         }

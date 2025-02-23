@@ -83,7 +83,7 @@ contract TWAPOrderBenchmarkTest is BaseTest {
         angstrom.validateAndExecuteTWAPOrder(payload);
         vm.warp(order.startTime + order.timeInterval);
         angstrom.validateAndExecuteTWAPOrder(payload);
-        vm.warp(order.startTime + 2*(order.timeInterval));
+        vm.warp(order.startTime + 2 * (order.timeInterval));
         angstrom.validateAndExecuteTWAPOrder(payload);
     }
 }

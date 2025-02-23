@@ -351,6 +351,7 @@ struct TwapOrder {
     hook_data: Option<List<bytes1>>,
     zero_for_one: bool,
     twap_data: TwapData,
+    order_quantities: u128,
     max_extra_fee_asset0: u128,
     extra_fee_asset0: u128,
     exact_in: bool,
@@ -378,6 +379,7 @@ struct TwapData {
 |`hook_data: Option<List<bytes1>>`|Optional hook for composable orders, consisting of the hook address concatenated to the hook extra data.|
 |`zero_for_one: bool`|Whether the order is swapping in the pair's `asset0` and getting out `asset1` (`true`) or the other way around (`false`)|
 |`twap_data: TwapData`|Specifies how the order will be executed over time.|
+|`order_quantities: u128`|Description of the quantities the order trades.|
 |`max_extra_fee_asset0: u128`|The maximum gas + referral fee the user accepts to be charged (in asset0 base units)|
 |`extra_fee_asset0: u128`|The actual extra fee the user ended up getting charged for their order (in asset0 base units)|
 |`exact_in: bool`|Whether the specified quantity is the input or output.|
@@ -386,8 +388,8 @@ struct TwapData {
 **`TwapData`**
 |Field|Description|
 |-----|-----------|
-|`nonce: u64`|The order's nonce (can only be used once but do not have to be used in order).|
+|`nonce: u64`|The Twap order's nonce (not strictly required to be unique, because order uniqueness is enforced using the order hash).|
 |`start_time: u40`|The unix timestamp from which the order becomes valid (or, after which the order is considered active). |
 |`total_parts: u32`| The maximum number of times the twap order can be executed. |
-|`time_interval: u32`| The required period between consecutive twap orders. |
-|`window: u32`| The specified period when twap orders can be executed. |
+|`time_interval: u32`| Specifies the required period between consecutive twap orders. |
+|`window: u32`| The bounded time interval, starting at each scheduled execution point during which twap orders can be executed, and attempts outside this window are treated as invalid. |

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity =0.8.26;
 
-import {console} from "forge-std/console.sol";
 import {EIP712} from "solady/src/utils/EIP712.sol";
 import {TopLevelAuth} from "./modules/TopLevelAuth.sol";
 import {Settlement} from "./modules/Settlement.sol";
@@ -50,7 +49,6 @@ contract Angstrom is
     }
 
     function execute(bytes calldata encoded) external {
-        console.log("testing we got here");
         _nodeBundleLock();
         if (encoded.length > 0) {
             UNI_V4.unlock(encoded);
@@ -67,18 +65,14 @@ contract Angstrom is
         PairArray pairs;
         (reader, pairs) = PairLib.readFromAndValidate(reader, assets, _configStore);
 
-        console.log("read pairs and assets");
         _takeAssets(assets);
-        console.log("took assets");
 
         reader = _updatePools(reader, pairs);
-        console.log("updated pools");
+
         reader = _validateAndExecuteToBOrders(reader, pairs);
-        console.log("executed tob");
         reader = _validateAndExecuteUserOrders(reader, pairs);
-        console.log("executed user");
         reader = _validateAndExecuteTWAPOrders(reader, pairs);
-        console.log("executed twap");
+
         reader.requireAtEndOf(data);
         _saveAndSettle(assets);
 
@@ -161,7 +155,6 @@ contract Angstrom is
             : SignatureLib.readAndCheckERC1271(reader, orderHash);
 
         _invalidateOrderHash(orderHash, from);
-        console.log(from);
 
         address to = buffer.recipient;
         assembly ("memory-safe") {
@@ -293,7 +286,6 @@ contract Angstrom is
         TWAPOrderVariantMap variantMap;
         // Load variant map, ref id and set use internal.
         (reader, variantMap) = buffer.init(reader);
-        console.log("buffer_typehash: ", uint256(buffer.typeHash));
 
         // Load and lookup asset in/out and dependent values.
         PriceOutVsIn price;

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {console} from "forge-std/console.sol";
 import {IAngstromAuth} from "../interfaces/IAngstromAuth.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {
@@ -99,7 +98,6 @@ contract ControllerV1 is Ownable2Step {
         pools[key] = Pool(asset0, asset1);
 
         emit PoolConfigured(asset0, asset1, tickSpacing, bundleFee, unlockedFee);
-        console.log("log this shit", uint256(0x10));
         ANGSTROM.configurePool(asset0, asset1, tickSpacing, bundleFee, unlockedFee);
     }
 

@@ -10,10 +10,11 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
     using Utils for *;
 
     bytes4 internal constant NONCES_SLOT = bytes4(keccak256("angstrom-v1_0.unordered-nonces.slot"));
+    bytes4 internal constant TWAP_NONCES_SLOT = 0x635a0808;
     uint256 private constant MAX_TWAP_INTERVAL = 31557600;
     uint256 private constant MIN_TWAP_INTERVAL = 12;
     uint256 private constant MAX_TWAP_TOTAL_PARTS = 6311520;
-    uint256 private constant MAX_U32_VAL = type(uint32).max;
+    uint256 private constant MAX_U32_VAL = 4294967295;
 
     function test_fuzzing_revertsUponReuse(address owner, uint64 nonce) public {
         _invalidateNonce(owner.brutalize(), nonce.brutalize());
@@ -21,7 +22,7 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
         _invalidateNonce(owner.brutalize(), nonce.brutalize());
     }
 
-    function test_fuzzing_revertsUponAlreadyExecutedOrder(uint64 nonce) public {
+    function test_fuzzing_revertsUponInvalidatedOrder(uint64 nonce) public {
         this.invalidateTWAPOrderNonce(nonce.brutalize());
         vm.expectRevert(OrderInvalidation.TWAPOrderNonceReuse.selector);
         this.invalidateTWAPOrderNonce(nonce.brutalize());
@@ -52,7 +53,6 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
         _checkTWAPOrderDeadline(fulfilledParts, startTime, interval, window);
     }
 
-    /// forge-config: default.allow_internal_expect_revert = true
     function test_fuzzing_revertsUponInvalidTWAPData(
         uint32 interval,
         uint32 twapParts,
@@ -90,8 +90,7 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
         _checkTWAPOrderData(interval, twapParts, window);
     }
 
-    /// forge-config: default.allow_internal_expect_revert = true
-    function test_fuzzing_revertsUponPartsResetTWAPNonce(
+    function test_fuzzing_revertsUponPartsTWAPNonceReuse(
         bytes32 orderHash,
         address owner,
         uint64 nonce,
@@ -103,10 +102,22 @@ contract InvalidationManagerTest is Test, OrderInvalidation {
             _invalidatePartTWAPNonce(
                 orderHash, owner.brutalize(), nonce.brutalize(), twapParts.brutalizeU32()
             );
+            bytes32 _orderHash = keccak256(abi.encode(orderHash));
+            vm.expectRevert(OrderInvalidation.TWAPOrderNonceReuse.selector);
+            _invalidatePartTWAPNonce(
+                _orderHash, owner.brutalize(), nonce.brutalize(), twapParts.brutalizeU32()
+            );
         }
-        vm.expectRevert(OrderInvalidation.TWAPOrderNonceReuse.selector);
-        _invalidatePartTWAPNonce(
-            orderHash, owner.brutalize(), nonce.brutalize(), twapParts.brutalizeU32()
-        );
+
+        uint256 part;
+        assembly ("memory-safe") {
+            mstore(12, nonce)
+            mstore(4, TWAP_NONCES_SLOT)
+            mstore(0, owner)
+            let partPtr := keccak256(12, 32)
+            part := sload(partPtr)
+        }
+
+        assertEq(part, 0);
     }
 }

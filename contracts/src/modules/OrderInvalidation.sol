@@ -96,7 +96,7 @@ abstract contract OrderInvalidation {
     function _invalidatePartTWAPNonce(
         bytes32 orderHash,
         address owner,
-        uint256 nonce,
+        uint64 nonce,
         uint32 twapParts
     ) internal returns (uint256 _cachedFulfilledParts) {
         uint256 bitmap;
@@ -107,7 +107,6 @@ abstract contract OrderInvalidation {
             mstore(0, owner)
             partPtr := keccak256(12, 32)
 
-            // part to fulfill
             bitmap := sload(partPtr)
 
             // the probability that two order hashes collide in their lower 232 bits is 1 in 2^232.

@@ -338,3 +338,58 @@ enum OrderQuantities {
 |-----|-----------|
 |`nonce: u64`|The order's nonce (can only be used once but do not have to be used in order).|
 |`deadline: u40`|The unix timestamp in seconds (inclusive) after which the order is considered invalid by the contract. |
+
+#### `TwapOrder`
+
+```rust
+struct TwapOrder {
+    ref_id: u32,
+    use_internal: bool,
+    pair_index: u16,
+    min_price: u256,
+    recipient: Option<address>,
+    hook_data: Option<List<bytes1>>,
+    zero_for_one: bool,
+    twap_data: TwapData,
+    order_quantities: u128,
+    max_extra_fee_asset0: u128,
+    extra_fee_asset0: u128,
+    exact_in: bool,
+    signature: Signature
+}
+
+struct TwapData {
+    nonce: u64,
+    start_time: u40,
+    total_parts: u32,
+    time_interval: u32,
+    window: u32
+}
+```
+
+**`TwapOrder`**
+
+|Field|Description|
+|-----|-----------|
+|`ref_id: uint32`|Opt-in tag for source of order flow. May opt the user into being charged extra fees beyond gas.|
+|`use_internal: bool`|Whether to use angstrom internal balance (`true`) or actual ERC20 balance (`false`) to settle|
+|`pair_index: u16`|The index into the `List<Pair>` array that the order is trading in.|
+|`min_price: u256`|The minimum price in asset out over asset in base units in RAY|
+|`recipient: Option<address>`|Recipient for order output, `None` implies signer.|
+|`hook_data: Option<List<bytes1>>`|Optional hook for composable orders, consisting of the hook address concatenated to the hook extra data.|
+|`zero_for_one: bool`|Whether the order is swapping in the pair's `asset0` and getting out `asset1` (`true`) or the other way around (`false`)|
+|`twap_data: TwapData`|Specifies how the order will be executed over time.|
+|`order_quantities: u128`|Description of the quantities the order trades.|
+|`max_extra_fee_asset0: u128`|The maximum gas + referral fee the user accepts to be charged (in asset0 base units)|
+|`extra_fee_asset0: u128`|The actual extra fee the user ended up getting charged for their order (in asset0 base units)|
+|`exact_in: bool`|Whether the specified quantity is the input or output.|
+|`signature: Signature`|The signature validating the order.|
+
+**`TwapData`**
+|Field|Description|
+|-----|-----------|
+|`nonce: u64`|The Twap order's nonce (it is expected to be unique; however, it may be reused if it is no longer active or has not been invalidated).|
+|`start_time: u40`|The unix timestamp from which the order becomes valid (or, after which the order is considered active). |
+|`total_parts: u32`| The maximum number of times the twap order can be executed. |
+|`time_interval: u32`| Specifies the required period between consecutive twap orders. |
+|`window: u32`| The bounded time interval, starting at each scheduled execution point during which twap orders can be executed, and attempts outside this window are treated as invalid. |

@@ -321,11 +321,10 @@ contract Angstrom is
                 : SignatureLib.readAndCheckERC1271(reader, orderHash);
 
             _checkTWAPOrderData(buffer.timeInterval, buffer.totalParts, buffer.window);
-            _invalidatePartTWAPAndCheckDeadline(
-                _computeTWAPOrderSlot(orderHash, from),
+            _checkTWAPOrderDeadline(
+                _invalidatePartTWAPNonce(orderHash, from, buffer.nonce, buffer.totalParts),
                 buffer.startTime,
                 buffer.timeInterval,
-                buffer.totalParts,
                 buffer.window
             );
         }

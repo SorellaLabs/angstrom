@@ -6,18 +6,18 @@ abstract contract OrderInvalidation {
     error NonceReuse();
     error OrderAlreadyExecuted();
     error Expired();
-    error TWAPOrderAlreadyExecuted();
     error TWAPExpired();
     error InvalidTWAPOrder();
+    error TWAPOrderNonceReuse();
 
     /// @dev `keccak256("angstrom-v1_0.unordered-nonces.slot")[0:4]`
     uint256 private constant UNORDERED_NONCES_SLOT = 0xdaa050e9;
-
+    /// @dev `keccak256("angstrom-v1_0.twap-unordered-nonces.slot")[0:4]`
+    uint256 private constant UNORDERED_TWAP_NONCES_SLOT = 0x635a0808;
+    // type(uint24).max
+    uint256 private constant MAX_U24 = 0xffffff;
     // type(uint32).max
-    uint256 private constant MASK_U32 = 0xffffffff;
-    // type(uint40).max
-    uint256 private constant MASK_U40 = 0xffffffffff;
-
+    uint256 private constant MAX_U32 = 0xffffffff;
     // max upper limit of twap intervals = 31557600 (365.25 days)
     uint256 private constant MAX_TWAP_INTERVAL = 31557600;
     // min lower limit of twap intervals = 12 seconds
@@ -29,39 +29,44 @@ abstract contract OrderInvalidation {
         _invalidateNonce(msg.sender, nonce);
     }
 
-    function invalidateTWAPOrder(bytes32 orderHash) external {
+    function invalidateTWAPOrderNonce(uint64 nonce) external {
         assembly ("memory-safe") {
-            mstore(20, caller())
-            mstore(0, orderHash)
-            let partPtr := keccak256(0, 52)
+            mstore(12, nonce)
+            mstore(4, UNORDERED_TWAP_NONCES_SLOT)
+            mstore(0, caller())
 
-            let fulfilledParts := sload(partPtr)
+            let partPtr := keccak256(12, 32)
+            let bitmap := sload(partPtr)
 
-            if eq(fulfilledParts, 0xffffff) {
-                mstore(0x00, 0xceb2041c /* TWAPOrderAlreadyExecuted() */ )
+            if eq(and(bitmap, MAX_U24), MAX_U24) {
+                mstore(0x00, 0x264a877f /* TWAPOrderNonceReuse() */ )
                 revert(0x1c, 0x04)
             }
 
-            sstore(partPtr, 0xffffff)
+            sstore(partPtr, MAX_U24)
         }
     }
 
     function _checkTWAPOrderData(uint32 interval, uint32 twapParts, uint32 window) internal pure {
-        assembly ("memory-safe") {
-            interval := and(interval, MASK_U32)
-            twapParts := and(twapParts, MASK_U32)
-            window := and(window, MASK_U32)
+        bool invalidInterval = (interval < MIN_TWAP_INTERVAL) || (interval > MAX_TWAP_INTERVAL);
+        bool invalidTwapParts = (twapParts == 0) || (twapParts > MAX_TWAP_TOTAL_PARTS);
+        bool invalidWindow = (window < MIN_TWAP_INTERVAL) || (window > interval);
 
-            let validInterval :=
-                or(lt(interval, MIN_TWAP_INTERVAL), gt(interval, MAX_TWAP_INTERVAL))
-            let validTwapParts := or(iszero(twapParts), gt(twapParts, MAX_TWAP_TOTAL_PARTS))
-            let validWindow := or(lt(window, MIN_TWAP_INTERVAL), gt(window, interval))
-
-            if or(or(validInterval, validTwapParts), validWindow) {
-                mstore(0x00, 0x51e490f3 /* InvalidTWAPOrder() */ )
-                revert(0x1c, 0x04)
-            }
+        if (invalidInterval || invalidTwapParts || invalidWindow) {
+            revert InvalidTWAPOrder();
         }
+    }
+
+    function _checkTWAPOrderDeadline(
+        uint256 fulfilledParts,
+        uint40 startTime,
+        uint32 interval,
+        uint32 window
+    ) internal view {
+        uint256 currentPartStart = startTime + (fulfilledParts * interval);
+        bool expired =
+            (block.timestamp < currentPartStart) || (block.timestamp > currentPartStart + window);
+        if (expired) revert TWAPExpired();
     }
 
     function _checkDeadline(uint256 deadline) internal view {
@@ -88,51 +93,43 @@ abstract contract OrderInvalidation {
         }
     }
 
-    function _computeTWAPOrderSlot(bytes32 orderHash, address owner)
-        internal
-        pure
-        returns (bytes32 partPtr)
-    {
+    function _invalidatePartTWAPNonce(
+        bytes32 orderHash,
+        address owner,
+        uint256 nonce,
+        uint32 twapParts
+    ) internal returns (uint256 _cachedFulfilledParts) {
+        uint256 bitmap;
+        uint256 partPtr;
         assembly ("memory-safe") {
-            mstore(20, owner)
-            mstore(0, orderHash)
-            partPtr := keccak256(0, 52)
-        }
-    }
+            mstore(12, nonce)
+            mstore(4, UNORDERED_TWAP_NONCES_SLOT)
+            mstore(0, owner)
+            partPtr := keccak256(12, 32)
 
-    function _invalidatePartTWAPAndCheckDeadline(
-        bytes32 partPtr,
-        uint40 startTime,
-        uint32 interval,
-        uint32 twapParts,
-        uint32 window
-    ) internal {
-        assembly ("memory-safe") {
             // part to fulfill
-            let fulfilledParts := sload(partPtr)
-            let _cachedFulfilledParts := fulfilledParts
+            bitmap := sload(partPtr)
 
-            fulfilledParts := add(fulfilledParts, 1)
-            twapParts := and(twapParts, MASK_U32)
+            // the probability that two order hashes collide in their lower 232 bits is 1 in 2^232.
+            // for orders tied to a specific address, the space of possible values is more limited,
+            // making the chance of collision even smaller.
+            if iszero(bitmap) { bitmap := shl(24, orderHash) }
+        }
 
-            if gt(fulfilledParts, twapParts) {
-                mstore(0x00, 0xceb2041c /* TWAPOrderAlreadyExecuted() */ )
-                revert(0x1c, 0x04)
-            }
+        uint256 lowerHashBits = uint232(uint256(orderHash)) ^ bitmap >> 24;
+        if (lowerHashBits != 0) revert TWAPOrderNonceReuse();
 
-            if eq(twapParts, fulfilledParts) { fulfilledParts := 0xffffff }
-            sstore(partPtr, fulfilledParts)
+        _cachedFulfilledParts = bitmap & MAX_U24;
+        uint256 fulfilledParts = _cachedFulfilledParts + 1;
 
-            let currentPartStart :=
-                add(and(startTime, MASK_U40), mul(_cachedFulfilledParts, and(interval, MASK_U32)))
+        if (fulfilledParts != twapParts) {
+            bitmap += 1;
+        } else {
+            bitmap = 0;
+        }
 
-            if or(
-                lt(timestamp(), currentPartStart),
-                gt(timestamp(), add(currentPartStart, and(window, MASK_U32)))
-            ) {
-                mstore(0x00, 0x982c606d /* TWAPExpired() */ )
-                revert(0x1c, 0x04)
-            }
+        assembly ("memory-safe") {
+            sstore(partPtr, bitmap)
         }
     }
 

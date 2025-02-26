@@ -388,7 +388,7 @@ struct TwapData {
 **`TwapData`**
 |Field|Description|
 |-----|-----------|
-|`nonce: u64`|The Twap order's nonce (not strictly required to be unique, because order uniqueness is enforced using the order hash).|
+|`nonce: u64`|The Twap order's nonce (it is expected to be unique; however, it may be reused if it is no longer active or has not been invalidated).|
 |`start_time: u40`|The unix timestamp from which the order becomes valid (or, after which the order is considered active). |
 |`total_parts: u32`| The maximum number of times the twap order can be executed. |
 |`time_interval: u32`| Specifies the required period between consecutive twap orders. |

@@ -4,7 +4,7 @@ use angstrom_eth::manager::ChainExt;
 use angstrom_rpc::{api::OrderApiClient, impls::OrderApi};
 use angstrom_types::{sol_bindings::grouped_orders::AllOrders, testnet::InitialTestnetState};
 use futures::{stream::FuturesUnordered, Future, StreamExt};
-use jsonrpsee::http_client::HttpClient;
+use jsonrpsee::{http_client::HttpClient, server::middleware::rpc::RpcLoggerLayer};
 use reth_provider::{test_utils::NoopProvider, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
 use testing_tools::{
@@ -61,7 +61,10 @@ fn end_to_end_agent<'a>(
         tokio::spawn(
             async move {
                 let rpc_address = format!("http://{}", agent_config.rpc_address);
-                let client = HttpClient::builder().build(rpc_address).unwrap();
+                let client = HttpClient::builder()
+                    .set_max_logging_length(1_000_000)
+                    .build(rpc_address)
+                    .unwrap();
                 tracing::info!("waiting for new block");
                 let mut pending_orders = FuturesUnordered::new();
 

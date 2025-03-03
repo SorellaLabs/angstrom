@@ -1,10 +1,12 @@
-use std::pin::Pin;
+use std::{collections::HashSet, pin::Pin};
 
 use angstrom_eth::manager::ChainExt;
 use angstrom_rpc::{api::OrderApiClient, impls::OrderApi};
 use angstrom_types::{sol_bindings::grouped_orders::AllOrders, testnet::InitialTestnetState};
 use futures::{stream::FuturesUnordered, Future, StreamExt};
-use jsonrpsee::{http_client::HttpClient, server::middleware::rpc::RpcLoggerLayer};
+use jsonrpsee::{
+    http_client::HttpClient, server::middleware::rpc::RpcLoggerLayer, ws_client::WsClientBuilder
+};
 use reth_provider::{test_utils::NoopProvider, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
 use testing_tools::{
@@ -60,16 +62,27 @@ fn end_to_end_agent<'a>(
 
         tokio::spawn(
             async move {
-                let rpc_address = format!("http://{}", agent_config.rpc_address);
-                let client = HttpClient::builder()
+                let rpc_address = format!("ws://{}", agent_config.rpc_address);
+
+                let client = WsClientBuilder::new()
                     .set_max_logging_length(1_000_000)
                     .build(rpc_address)
+                    .await
                     .unwrap();
+                let mut set = HashSet::new();
+                set.insert(angstrom_rpc::types::OrderSubscriptionKind::NewOrders);
+                let mut filters = HashSet::new();
+                filters.insert(angstrom_rpc::types::OrderSubscriptionFilter::None);
+                let mut r = client.subscribe_orders(set, filters).await.unwrap().boxed();
+
                 tracing::info!("waiting for new block");
                 let mut pending_orders = FuturesUnordered::new();
 
                 loop {
                     tokio::select! {
+                        Some(order) = r.next() => {
+                            tracing::info!("got order that we subscribed to");
+                        }
                         Some(block_number) = stream.next() => {
                             generator.new_block(block_number);
                             let new_orders = generator.generate_orders();

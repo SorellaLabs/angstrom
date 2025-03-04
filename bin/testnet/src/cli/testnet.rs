@@ -19,7 +19,10 @@ use reth_network_peers::pk2id;
 use secp256k1::{Secp256k1, SecretKey};
 use serde::Deserialize;
 use testing_tools::{
-    types::{config::TestnetConfig, initial_state::PartialConfigPoolKey},
+    types::{
+        config::TestnetConfig,
+        initial_state::{Erc20ToDeploy, InitialStateConfig, PartialConfigPoolKey}
+    },
     utils::workspace_dir
 };
 
@@ -38,21 +41,21 @@ pub struct TestnetCli {
     #[clap(short, long, default_value = "ws://localhost:8546")]
     pub eth_fork_url:           String,
     /// path to the toml file with the pool keys
-    #[clap(short, long, default_value = "./bin/testnet/pool_key_config.toml")]
+    #[clap(short, long, default_value = "./bin/testnet/testnet-config.toml")]
     pub pool_key_config:        PathBuf
 }
 
 impl TestnetCli {
     pub(crate) fn make_config(&self) -> eyre::Result<TestnetConfig> {
-        let pool_keys = AllPoolKeyInners::load_pool_keys(&self.pool_key_config)?;
+        let initial_state_config = AllPoolKeyInners::load_toml_config(&self.pool_key_config)?;
 
         Ok(TestnetConfig::new(
             self.nodes_in_network,
-            pool_keys,
             &self.eth_fork_url,
             self.mev_guard,
             self.leader_eth_rpc_port,
-            self.angstrom_base_rpc_port
+            self.angstrom_base_rpc_port,
+            initial_state_config
         ))
     }
 }
@@ -72,13 +75,36 @@ impl Default for TestnetCli {
     }
 }
 
+impl TryInto<InitialStateConfig> for AllPoolKeyInners {
+    type Error = eyre::ErrReport;
+
+    fn try_into(self) -> Result<InitialStateConfig, Self::Error> {
+        Ok(InitialStateConfig {
+            addresses_with_tokens: self
+                .addresses_with_tokens
+                .iter()
+                .map(|addr| Address::from_str(addr))
+                .collect::<Result<Vec<_>, _>>()?,
+            tokens_to_deploy:      self
+                .tokens_to_deploy
+                .clone()
+                .iter()
+                .map(|val| val.clone().try_into())
+                .collect::<Result<Vec<_>, _>>()?,
+            pool_keys:             self.try_into()?
+        })
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct AllPoolKeyInners {
-    pool_keys: Option<Vec<PoolKeyInner>>
+    addresses_with_tokens: Vec<String>,
+    tokens_to_deploy:      Vec<TokenToDeploy>,
+    pool_keys:             Option<Vec<PoolKeyInner>>
 }
 
 impl AllPoolKeyInners {
-    fn load_pool_keys(config_path: &PathBuf) -> eyre::Result<Vec<PartialConfigPoolKey>> {
+    fn load_toml_config(config_path: &PathBuf) -> eyre::Result<InitialStateConfig> {
         if !config_path.exists() {
             return Err(eyre::eyre!("pool key config file does not exist at {:?}", config_path));
         }
@@ -123,6 +149,27 @@ struct PoolKeyInner {
     tick:         i32
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct TokenToDeploy {
+    name:    String,
+    symbol:  String,
+    address: Option<String>
+}
+
+impl TryInto<Erc20ToDeploy> for TokenToDeploy {
+    type Error = eyre::ErrReport;
+
+    fn try_into(self) -> Result<Erc20ToDeploy, Self::Error> {
+        Ok(Erc20ToDeploy::new(
+            &self.name,
+            &self.symbol,
+            self.address
+                .map(|addr| Address::from_str(&addr))
+                .transpose()?
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{path::PathBuf, str::FromStr};
@@ -131,10 +178,10 @@ mod tests {
 
     #[test]
     fn test_read_config() {
-        let path = PathBuf::from_str("./pool_key_config.toml").unwrap();
+        let path = PathBuf::from_str("./testnet-config.toml").unwrap();
         println!("{:?}", path);
 
-        let config = AllPoolKeyInners::load_pool_keys(&path);
+        let config = AllPoolKeyInners::load_toml_config(&path);
         config.as_ref().unwrap();
         assert!(config.is_ok());
     }

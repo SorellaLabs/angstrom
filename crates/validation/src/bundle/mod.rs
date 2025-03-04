@@ -56,12 +56,13 @@ where
         quantity: U256,
         uniswap: Address,
         angstrom: Address
-    ) where
+    ) -> eyre::Result<()>
+    where
         <DB as revm::DatabaseRef>::Error: Debug
     {
         // Find the slot for balance and approval for us to take from Uniswap
-        let balance_slot = find_slot_offset_for_balance(&db, token);
-        let approval_slot = find_slot_offset_for_approval(&db, token);
+        let balance_slot = find_slot_offset_for_balance(&db, token)?;
+        let approval_slot = find_slot_offset_for_approval(&db, token)?;
 
         // first thing we will do is setup Uniswap's token balance.
         let uniswap_balance_slot = keccak256((uniswap, balance_slot).abi_encode());
@@ -70,10 +71,12 @@ where
 
         // set Uniswap's balance on the token_in
         db.insert_account_storage(token, uniswap_balance_slot.into(), U256::from(2) * quantity)
-            .unwrap();
+            .map_err(|e| eyre::eyre!("{e:?}"))?;
         // give angstrom approval
         db.insert_account_storage(token, uniswap_approval_slot.into(), U256::from(2) * quantity)
-            .unwrap();
+            .map_err(|e| eyre::eyre!("{e:?}"))?;
+
+        Ok(())
     }
 
     pub fn simulate_bundle(
@@ -109,7 +112,7 @@ where
                     U256::from(asset.take),
                     TESTNET_POOL_MANAGER_ADDRESS,
                     angstrom_address
-                );
+                ).unwrap();
             }
             metrics.simulate_bundle(|| {
                 let bundle = bundle.pade_encode();

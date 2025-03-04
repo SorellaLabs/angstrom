@@ -32,7 +32,7 @@ type SpawnedProvider = alloy::providers::fillers::FillProvider<
 pub async fn spawn_local_anvil() -> eyre::Result<SpawnedProvider> {
     // Spawn an Anvil instance
     let anvil = Anvil::new()
-        .chain_id(1)
+        .chain_id(CHAIN_ID)
         .arg("--ipc")
         .arg("--code-size-limit")
         .arg("393216")

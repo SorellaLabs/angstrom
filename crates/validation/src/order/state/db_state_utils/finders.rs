@@ -16,7 +16,10 @@ use revm::{
 };
 
 /// panics if we cannot find the slot for the given token
-pub fn find_slot_offset_for_balance<DB: revm::DatabaseRef>(db: &DB, token_address: Address) -> u64
+pub fn find_slot_offset_for_balance<DB: revm::DatabaseRef>(
+    db: &DB,
+    token_address: Address
+) -> eyre::Result<u64>
 where
     <DB as revm::DatabaseRef>::Error: Debug
 {
@@ -30,7 +33,7 @@ where
         // set balance
         let balance_slot = keccak256((probe_address, offset as u64).abi_encode());
         db.insert_account_storage(token_address, balance_slot.into(), U256::from(123456789))
-            .unwrap();
+            .map_err(|e| eyre::eyre!("{e:?}"))?;
         // execute revm to see if we hit the slot
         let mut evm = revm::Evm::builder()
             .with_ref_db(db.clone())
@@ -47,18 +50,27 @@ where
             })
             .build();
 
-        let output = evm.transact().unwrap().result.output().unwrap().to_vec();
-        let return_data = balanceOfCall::abi_decode_returns(&output, false).unwrap();
+        let output = evm
+            .transact()
+            .map_err(|e| eyre::eyre!("{e:?}"))?
+            .result
+            .output()
+            .unwrap()
+            .to_vec();
+        let return_data = balanceOfCall::abi_decode_returns(&output, false)?;
         if return_data._0 == U256::from(123456789) {
-            return offset as u64;
+            return Ok(offset as u64);
         }
     }
 
-    panic!("was not able to find balance offset");
+    Err(eyre::eyre!("was not able to find balance offset"))
 }
 
 /// panics if we cannot prove the slot for the given token
-pub fn find_slot_offset_for_approval<DB: revm::DatabaseRef>(db: &DB, token_address: Address) -> u64
+pub fn find_slot_offset_for_approval<DB: revm::DatabaseRef>(
+    db: &DB,
+    token_address: Address
+) -> eyre::Result<u64>
 where
     <DB as revm::DatabaseRef>::Error: Debug
 {
@@ -96,12 +108,18 @@ where
             })
             .build();
 
-        let output = evm.transact().unwrap().result.output().unwrap().to_vec();
-        let return_data = allowanceCall::abi_decode_returns(&output, false).unwrap();
+        let output = evm
+            .transact()
+            .map_err(|e| eyre::eyre!("{e:?}"))?
+            .result
+            .output()
+            .unwrap()
+            .to_vec();
+        let return_data = allowanceCall::abi_decode_returns(&output, false)?;
         if return_data._0 == U256::from(123456789) {
-            return offset as u64;
+            return Ok(offset as u64);
         }
     }
 
-    panic!("was not able to find approval offset");
+    Err(eyre::eyre!("was not able to find approval offset"))
 }

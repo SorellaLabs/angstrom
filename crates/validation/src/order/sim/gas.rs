@@ -5,6 +5,7 @@ use alloy::{
     sol_types::{SolCall, SolValue}
 };
 use angstrom_types::{
+    CHAIN_ID,
     contract_bindings::mintable_mock_erc_20::MintableMockERC20::{allowanceCall, balanceOfCall},
     matching::uniswap::UniswapFlags,
     sol_bindings::{
@@ -292,7 +293,7 @@ where
             overrides.amount_out,
             overrides.user_address,
             self.angstrom_address
-        );
+        )?;
 
         {
             let mut evm = revm::Evm::builder()
@@ -302,7 +303,7 @@ where
                 .append_handler_register(inspector_handle_register)
                 .modify_env(|env| {
                     env.cfg.disable_balance_check = true;
-                    env.cfg.chain_id = 1;
+                    env.cfg.chain_id = CHAIN_ID;
                 })
                 .build();
 
@@ -337,7 +338,8 @@ fn apply_slot_overrides_for_tokens<DB: revm::DatabaseRef + Clone>(
     amount_out: U256,
     user: Address,
     angstrom: Address
-) where
+) -> eyre::Result<()>
+where
     <DB as revm::DatabaseRef>::Error: Debug
 {
     trace!(
@@ -349,9 +351,9 @@ fn apply_slot_overrides_for_tokens<DB: revm::DatabaseRef + Clone>(
         ?angstrom,
         "Applying slot overrides for tokens"
     );
-    let balance_slot_in = find_slot_offset_for_balance(&db, token_in);
-    let balance_slot_out = find_slot_offset_for_balance(&db, token_out);
-    let approval_slot_in = find_slot_offset_for_approval(&db, token_in);
+    let balance_slot_in = find_slot_offset_for_balance(&db, token_in)?;
+    let balance_slot_out = find_slot_offset_for_balance(&db, token_out)?;
+    let approval_slot_in = find_slot_offset_for_approval(&db, token_in)?;
 
     // first thing we will do is setup the users token_in balance.
     let user_balance_slot = keccak256((user, balance_slot_in).abi_encode());
@@ -366,18 +368,20 @@ fn apply_slot_overrides_for_tokens<DB: revm::DatabaseRef + Clone>(
 
     // set the users balance on the token_in
     db.insert_account_storage(token_in, user_balance_slot.into(), U256::from(2) * amount_in)
-        .unwrap();
+        .map_err(|e| eyre::eyre!("{e:?}"))?;
     // give angstrom approval
     db.insert_account_storage(token_in, user_approval_slot.into(), U256::from(2) * amount_in)
-        .unwrap();
+        .map_err(|e| eyre::eyre!("{e:?}"))?;
     db.insert_account_storage(token_in, user_approval_slot2.into(), U256::from(2) * amount_in)
-        .unwrap();
+        .map_err(|e| eyre::eyre!("{e:?}"))?;
     // give angstrom funds on token_out
     db.insert_account_storage(token_out, angstrom_balance_out.into(), U256::from(2) * amount_out)
-        .unwrap();
+        .map_err(|e| eyre::eyre!("{e:?}"))?;
 
     // verify that everything is setup as we want
-    verify_overrides(db, token_in, token_out, amount_in, amount_out, user, angstrom);
+    verify_overrides(db, token_in, token_out, amount_in, amount_out, user, angstrom)?;
+
+    Ok(())
 }
 
 #[allow(unused)]
@@ -389,7 +393,8 @@ fn verify_overrides<DB: revm::DatabaseRef + Clone>(
     amount_out: U256,
     user: Address,
     angstrom: Address
-) where
+) -> eyre::Result<()>
+where
     <DB as revm::DatabaseRef>::Error: Debug
 {
     let evm_handler = EnvWithHandlerCfg::default();
@@ -457,8 +462,10 @@ fn verify_overrides<DB: revm::DatabaseRef + Clone>(
     let output = evm.transact().unwrap().result.output().unwrap().to_vec();
     let return_data = allowanceCall::abi_decode_returns(&output, false).unwrap();
     if return_data._0 != U256::from(2) * amount_in {
-        panic!("angstrom doesn't have proper allowance");
+        eyre::bail!("angstrom doesn't have proper allowance")
     }
+
+    Ok(())
 }
 
 struct ConfiguredRevm<DB> {

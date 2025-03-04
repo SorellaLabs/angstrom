@@ -31,7 +31,7 @@ use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvi
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use tracing::instrument;
 
-use super::internals::AngstromDevnetNodeInternals;
+use super::internals::AngstromNodeInternals;
 use crate::{
     agents::AgentConfig,
     contracts::anvil::WalletProviderRpc,
@@ -44,7 +44,7 @@ use crate::{
 pub struct TestnetNode<C, P> {
     testnet_node_id: u64,
     network:         TestnetNodeNetwork,
-    strom:           AngstromDevnetNodeInternals<P>,
+    strom:           AngstromNodeInternals<P>,
     state_lock:      TestnetStateFutureLock<C, WalletProviderRpc>
 }
 
@@ -89,7 +89,7 @@ where
         )
         .await;
 
-        let (strom, consensus, validation) = AngstromDevnetNodeInternals::new(
+        let (strom, consensus, validation) = AngstromNodeInternals::new(
             node_config.clone(),
             state_provider,
             strom_handles,

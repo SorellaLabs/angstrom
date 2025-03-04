@@ -1,5 +1,5 @@
 use super::TestingConfigKind;
-use crate::types::{GlobalTestingConfig, initial_state::PartialConfigPoolKey};
+use crate::types::{GlobalTestingConfig, initial_state::InitialStateConfig};
 
 #[derive(Debug, Clone)]
 pub struct DevnetConfig {
@@ -64,15 +64,15 @@ impl GlobalTestingConfig for DevnetConfig {
         self.intial_node_count
     }
 
-    fn pool_keys(&self) -> Vec<PartialConfigPoolKey> {
-        Vec::new()
-    }
-
     fn leader_eth_rpc_port(&self) -> u16 {
         unreachable!("only available in Testnet mode");
     }
 
     fn base_angstrom_rpc_port(&self) -> u16 {
         self.initial_rpc_port
+    }
+
+    fn initial_state_config(&self) -> InitialStateConfig {
+        InitialStateConfig::default()
     }
 }

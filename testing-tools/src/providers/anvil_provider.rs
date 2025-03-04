@@ -9,8 +9,8 @@ use alloy::{
 };
 use alloy_primitives::Bytes;
 use alloy_rpc_types::{BlockTransactionsKind, Header, Transaction};
-use angstrom_types::block_sync::GlobalBlockSync;
-use futures::{Stream, StreamExt, stream::FuturesUnordered};
+use angstrom_types::{CHAIN_ID, block_sync::GlobalBlockSync};
+use futures::{Stream, StreamExt, stream::FuturesOrdered};
 
 use super::{AnvilStateProvider, WalletProvider};
 use crate::{contracts::anvil::WalletProviderRpc, types::WithWalletProvider};
@@ -32,11 +32,9 @@ where
         let this =
             Self { provider: AnvilStateProvider::new(provider, block_sync), _instance: anvil };
         if testnet {
-            tokio::spawn(
-                this.provider
-                    .as_wallet_state_provider()
-                    .listen_to_new_blocks()
-            );
+            let handle = tokio::runtime::Handle::current().clone();
+            let sp = this.provider.as_wallet_state_provider();
+            std::thread::spawn(move || handle.block_on(sp.listen_to_new_blocks()));
         }
         Ok(this)
     }
@@ -129,7 +127,7 @@ impl AnvilProvider<WalletProvider> {
     pub async fn spawn_new_isolated(block_sync: GlobalBlockSync) -> eyre::Result<Self> {
         let anvil = Anvil::new()
             .block_time(12)
-            .chain_id(1)
+            .chain_id(CHAIN_ID)
             .arg("--ipc")
             .arg("--code-size-limit")
             .arg("393216")
@@ -161,7 +159,7 @@ impl AnvilProvider<WalletProvider> {
 struct StreamBlockProvider {
     provider:      WalletProviderRpc,
     header_stream: Pin<Box<dyn Stream<Item = Header> + Send>>,
-    futs:          FuturesUnordered<Pin<Box<dyn Future<Output = (u64, Vec<Transaction>)> + Send>>>
+    futs:          FuturesOrdered<Pin<Box<dyn Future<Output = (u64, Vec<Transaction>)> + Send>>>
 }
 
 impl StreamBlockProvider {
@@ -169,12 +167,12 @@ impl StreamBlockProvider {
         provider: WalletProviderRpc,
         header_stream: impl Stream<Item = Header> + Send + 'static
     ) -> Self {
-        Self { provider, header_stream: Box::pin(header_stream), futs: FuturesUnordered::new() }
+        Self { provider, header_stream: Box::pin(header_stream), futs: FuturesOrdered::new() }
     }
 
     fn new_block(&mut self, header: Header) {
         self.futs
-            .push(Box::pin(Self::make_block(self.provider.clone(), header.number)));
+            .push_back(Box::pin(Self::make_block(self.provider.clone(), header.number)));
     }
 
     async fn make_block(provider: WalletProviderRpc, number: u64) -> (u64, Vec<Transaction>) {
@@ -197,7 +195,7 @@ impl Stream for StreamBlockProvider {
     ) -> std::task::Poll<Option<Self::Item>> {
         let this = self.get_mut();
 
-        if let Poll::Ready(Some(header)) = this.header_stream.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(header)) = this.header_stream.poll_next_unpin(cx) {
             this.new_block(header);
         }
 

@@ -15,6 +15,7 @@ use alloy::{
 };
 use alloy_primitives::Address;
 use alloy_sol_types::SolCall;
+use angstrom_types::CHAIN_ID;
 
 pub type WalletProviderRpc = FillProvider<
     JoinFill<
@@ -51,7 +52,7 @@ pub type LocalAnvilRpc = alloy::providers::fillers::FillProvider<
 
 pub async fn spawn_anvil(anvil_key: usize) -> eyre::Result<(AnvilInstance, WalletProviderRpc)> {
     let anvil = Anvil::new()
-        .chain_id(1)
+        .chain_id(CHAIN_ID)
         .arg("--ipc")
         .arg("--code-size-limit")
         .arg("393216")

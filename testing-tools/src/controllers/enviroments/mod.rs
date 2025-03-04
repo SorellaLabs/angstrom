@@ -24,7 +24,7 @@ use tracing::{Instrument, Level, span};
 
 use crate::{
     controllers::strom::TestnetNode,
-    providers::{TestnetBlockProvider, utils::async_to_sync},
+    providers::{AnvilProvider, TestnetBlockProvider, utils::async_to_sync},
     types::{GlobalTestingConfig, WithWalletProvider}
 };
 
@@ -50,6 +50,13 @@ where
     G: GlobalTestingConfig,
     P: WithWalletProvider
 {
+    pub fn node_provider(&self, node_id: Option<u64>) -> &AnvilProvider<P> {
+        self.peers
+            .get(&node_id.unwrap_or_default())
+            .unwrap()
+            .state_provider()
+    }
+
     pub fn random_peer(&self) -> &TestnetNode<C, P> {
         let mut rng = rand::thread_rng();
         let peer = rng.gen_range(0..self.current_max_peer_id);

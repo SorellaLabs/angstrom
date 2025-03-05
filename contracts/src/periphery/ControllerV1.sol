@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IAngstromAuth} from "../interfaces/IAngstromAuth.sol";
-import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {Ownable} from "solady/src/auth/Ownable.sol";
 import {
     PoolConfigStore,
     PoolConfigStoreLib,
@@ -26,7 +26,7 @@ struct Asset {
 }
 
 /// @author philogy <https://github.com/philogy>
-contract ControllerV1 is Ownable2Step {
+contract ControllerV1 is Ownable {
     using AngstromView for IAngstromAuth;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeTransferLib for address;
@@ -62,14 +62,27 @@ contract ControllerV1 is Ownable2Step {
     }
 
     IAngstromAuth public immutable ANGSTROM;
+    bool internal immutable ALLOW_OWNER_TRANSFER;
 
     address public setController;
     EnumerableSet.AddressSet internal _nodes;
 
     mapping(StoreKey key => Pool) public pools;
 
-    constructor(IAngstromAuth angstrom, address initialOwner) Ownable(initialOwner) {
+    constructor(IAngstromAuth angstrom, address initialOwner, bool allowTransfer) {
+        _initializeOwner(initialOwner);
         ANGSTROM = angstrom;
+        ALLOW_OWNER_TRANSFER = allowTransfer;
+    }
+
+    function transferOwnership(address newOwner) public payable override {
+        require(ALLOW_OWNER_TRANSFER);
+        super.transferOwnership(newOwner);
+    }
+
+    function renounceOwnership() public payable override {
+        require(ALLOW_OWNER_TRANSFER);
+        super.renounceOwnership();
     }
 
     function setNewController(address newController) public {

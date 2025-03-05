@@ -28,24 +28,24 @@ contract ControllerV1Test is BaseTest {
     function setUp() public {
         uni = new PoolManager(pm_owner);
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, temp_controller));
-        controller = new ControllerV1(angstrom, controller_owner);
+        controller = new ControllerV1(angstrom, controller_owner, false);
         vm.prank(temp_controller);
         angstrom.setController(address(controller));
     }
 
     function test_fuzzing_initializesOwner(address startingOwner) public {
         vm.assume(startingOwner != address(0));
-        ControllerV1 c = new ControllerV1(angstrom, startingOwner);
+        ControllerV1 c = new ControllerV1(angstrom, startingOwner, false);
         assertEq(c.owner(), startingOwner);
     }
 
     function test_fuzzing_canTransferOwner(address newOwner) public {
         vm.assume(newOwner != address(0));
 
-        vm.prank(controller_owner);
-        controller.transferOwnership(newOwner);
         vm.prank(newOwner);
-        controller.acceptOwnership();
+        controller.requestOwnershipHandover();
+        vm.prank(controller_owner);
+        controller.completeOwnershipHandover(newOwner);
 
         assertEq(controller.owner(), newOwner);
 

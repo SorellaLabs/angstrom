@@ -34,8 +34,9 @@ contract AngstromScript is BaseTest, Script {
             executors: executors,
             admin: address(0)
         });
-        ControllerV1 controller =
-            new ControllerV1(IAngstromAuth(angstromAddress), address(timelock));
+        ControllerV1 controller = new ControllerV1(
+            IAngstromAuth(angstromAddress), address(timelock), block.chainid == 11155111
+        );
         VANITY_MARKET.deploy(
             angstromAddressTokenId,
             bytes.concat(type(Angstrom).creationCode, abi.encode(uniswap, controller))

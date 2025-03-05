@@ -10,7 +10,7 @@ import {
     STORE_HEADER_SIZE
 } from "../libraries/PoolConfigStore.sol";
 import {ConfigEntry, ENTRY_SIZE, KEY_MASK} from "../types/ConfigEntry.sol";
-import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {AddressSet} from "solady/src/utils/g/EnumerableSetLib.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {AngstromView} from "./AngstromView.sol";
 
@@ -28,7 +28,6 @@ struct Asset {
 /// @author philogy <https://github.com/philogy>
 contract ControllerV1 is Ownable {
     using AngstromView for IAngstromAuth;
-    using EnumerableSet for EnumerableSet.AddressSet;
     using SafeTransferLib for address;
 
     event NewControllerSet(address indexed newController);
@@ -55,6 +54,7 @@ contract ControllerV1 is Ownable {
     error NotNode();
     error NonexistentPool(address asset0, address asset1);
     error TotalNotDistributed();
+    error FunctionDisabled();
 
     struct Pool {
         address asset0;
@@ -62,27 +62,23 @@ contract ControllerV1 is Ownable {
     }
 
     IAngstromAuth public immutable ANGSTROM;
-    bool internal immutable ALLOW_OWNER_TRANSFER;
 
     address public setController;
-    EnumerableSet.AddressSet internal _nodes;
+    AddressSet internal _nodes;
 
     mapping(StoreKey key => Pool) public pools;
 
-    constructor(IAngstromAuth angstrom, address initialOwner, bool allowTransfer) {
+    constructor(IAngstromAuth angstrom, address initialOwner) {
         _initializeOwner(initialOwner);
         ANGSTROM = angstrom;
-        ALLOW_OWNER_TRANSFER = allowTransfer;
     }
 
-    function transferOwnership(address newOwner) public payable override {
-        require(ALLOW_OWNER_TRANSFER);
-        super.transferOwnership(newOwner);
+    function transferOwnership(address) public payable override {
+        revert FunctionDisabled();
     }
 
     function renounceOwnership() public payable override {
-        require(ALLOW_OWNER_TRANSFER);
-        super.renounceOwnership();
+        revert FunctionDisabled();
     }
 
     function setNewController(address newController) public {

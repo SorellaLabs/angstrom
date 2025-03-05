@@ -2,7 +2,7 @@
 solc = "0.8.26"
 bytecode_hash = "none"
 viaIR = false
-optimizer_runs = 0xffffffff
+optimizer_runs = 1_000_000
 verbosity = 3
 fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
 ast = true

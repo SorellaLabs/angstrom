@@ -268,12 +268,22 @@ contract RewardLibTest is BaseTest {
         pure
         returns (RewardsUpdate memory)
     {
+        return MultiTickReward(startTick, startLiquidity, quantities, 0);
+    }
+
+    function MultiTickReward(
+        int24 startTick,
+        uint128 startLiquidity,
+        uint128[] memory quantities,
+        uint72 rewardChecksum
+    ) internal pure returns (RewardsUpdate memory) {
         return RewardsUpdate({
             onlyCurrent: false,
             onlyCurrentQuantity: 0,
             startTick: startTick,
             startLiquidity: startLiquidity,
-            quantities: quantities
+            quantities: quantities,
+            rewardChecksum: rewardChecksum
         });
     }
 

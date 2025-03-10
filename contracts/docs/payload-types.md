@@ -171,10 +171,12 @@ enum RewardsUpdate {
     MultiTick {
         start_tick: i24,
         start_liquidity: u128,
-        quantities: List<u128>
+        quantities: List<u128>,
+        reward_checksum: u160
     },
     CurrentOnly {
-        amount: u128
+        amount: u128,
+        expected_liquidity: u128
     }
 }
 ```
@@ -195,9 +197,9 @@ as the loop progresses to ensure consistency of reward distribution.
 |`quantities: List<u128>`|The reward for each initialized tick range *including* the current tick in
 `asset0` base units.|
 
-**Reward Update Internals**
+**Reward Update Internals**ß
 
-To gain a better intuition over how parameters need to be set it's good to understand how the reward
+To gain a better intuition over how parameters need to be set it's good to understandßßßßßß how the reward
 update loop operates. The main purpose of the loop is to update the _internal_
 `reward_growth_outside` value of the ticks it passes. The "growth outside" values represent
 cumulative rewards in such a way where the total rewards accrued by a liquidity range can be
@@ -223,12 +225,14 @@ def update_rewards(
     start_tick: Tick,
     quantities: list[int],
     liquidity: int,
+    expected_checksum: int,
     below: bool
 ):
     cumulative_reward_growth: float = 0
 
     end_tick: Tick = get_current_tick()
     ticks: list[Tick] = initialized_tick_range(start_tick, end_tick, include_end=below)
+    reward_checksum: bytes32 = b'\x00' * 32
 
     for tick, quantity in zip(ticks, quantities):
         cumulative_reward_growth += quantity / liquidity
@@ -239,7 +243,15 @@ def update_rewards(
         else:
             liquidity -= tick.net_liquidity
 
+        reward_checksum = keccak256(abi_encode_packed(
+            (reward_checksum, 'bytes32'),
+            (liquidity, 'uint128'),
+            (tick, 'int24')
+        ))
+
     assert len(quantities) == len(ticks) + 1, 'Unused quantities'
+    checksum_bits = int.from_bytes(reward_checksum, 'big') >> (256 - 160)
+    assert checksum_bits == expected_checksum, 'Invalid checksum'
 
     current_tick_reward: int = quantities[len(ticks)]
     cumulative_reward_growth += current_tick_reward / liquidity

@@ -1,12 +1,20 @@
 use alloy::primitives::aliases::I24;
+use alloy_primitives::U160;
 use pade_macro::{PadeDecode, PadeEncode};
 
 use super::{Asset, Pair};
 
 #[derive(Debug, PadeEncode, PadeDecode)]
 pub enum RewardsUpdate {
-    MultiTick { start_tick: I24, start_liquidity: u128, quantities: Vec<u128> },
-    CurrentOnly { amount: u128 }
+    MultiTick {
+        start_tick:      I24,
+        start_liquidity: u128,
+        quantities:      Vec<u128>,
+        reward_checksum: U160
+    },
+    CurrentOnly {
+        amount: u128
+    }
 }
 
 impl RewardsUpdate {

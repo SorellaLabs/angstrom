@@ -19,6 +19,7 @@ struct RewardsUpdate {
     int24 startTick;
     uint128 startLiquidity;
     uint128[] quantities;
+    uint160 rewardChecksum;
 }
 
 using PoolUpdateLib for PoolUpdate global;
@@ -58,7 +59,7 @@ library PoolUpdateLib {
 
     function encode(RewardsUpdate memory self) internal pure returns (bytes memory) {
         if (self.onlyCurrent) {
-            return bytes.concat(bytes16(self.onlyCurrentQuantity));
+            return bytes.concat(bytes16(self.onlyCurrentQuantity), bytes16(self.startLiquidity));
         }
         bytes memory encodedQuantities;
         for (uint256 i = 0; i < self.quantities.length; i++) {
@@ -68,7 +69,10 @@ library PoolUpdateLib {
             bytes.concat(bytes3(encodedQuantities.length.toUint24()), encodedQuantities);
 
         return bytes.concat(
-            bytes3(uint24(self.startTick)), bytes16(self.startLiquidity), encodedQuantities
+            bytes3(uint24(self.startTick)),
+            bytes16(self.startLiquidity),
+            encodedQuantities,
+            bytes20(self.rewardChecksum)
         );
     }
 

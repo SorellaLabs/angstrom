@@ -26,7 +26,9 @@ contract FakeUni is PoolManager {
 
     function setCurrentTick(int24 tick) public {
         _pools[id].slot0 = _pools[id].slot0.setTick(tick);
-        _pools[id].liquidity = tickLiq[tick.normalizeUnchecked(TICK_SPACING)];
+        int24 norm = tick.normalizeUnchecked(TICK_SPACING);
+        uint128 newLiq = tickLiq[norm];
+        _pools[id].liquidity = newLiq;
     }
 
     function liq() public view returns (uint128) {
@@ -47,6 +49,10 @@ contract FakeUni is PoolManager {
         for (tick = lowerTick; tick < upperTick; tick += TICK_SPACING) {
             tickLiq[tick] += liquidity;
         }
+    }
+
+    function liqNet(int24 tick) public view returns (int128) {
+        return _pools[id].ticks[tick].liquidityNet;
     }
 
     function _initialize(int24 tick) internal {
@@ -205,9 +211,10 @@ contract RewardLibTest is BaseTest {
         uint128 amount3
     ) public {
         uni.setCurrentTick(tick = -30);
+        TickReward[] memory rewards =
+            re(TickReward(120, amount1), TickReward(0, amount2), TickReward(-120, amount3));
         assertCreatesUpdates(
-            re(TickReward(120, amount1), TickReward(0, amount2), TickReward(-120, amount3)),
-            MultiTickReward(120, uni.tickLiq(120), [amount1, 0, amount2, amount3].into())
+            rewards, MultiTickReward(120, uni.tickLiq(120), [amount1, 0, amount2, amount3].into())
         );
     }
 
@@ -273,7 +280,8 @@ contract RewardLibTest is BaseTest {
             onlyCurrentQuantity: 0,
             startTick: startTick,
             startLiquidity: startLiquidity,
-            quantities: quantities
+            quantities: quantities,
+            rewardChecksum: 0
         });
     }
 

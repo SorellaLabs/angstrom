@@ -14,12 +14,17 @@ library AngstromView {
     uint256 constant UNLOCKED_FEE_PACKED_SET_SLOT = 2;
 
     uint256 constant LAST_BLOCK_CONFIG_STORE_SLOT = 3;
+    uint256 constant LAST_BLOCK_BIT_OFFSET = 64;
     uint256 constant STORE_BIT_OFFSET = 64;
 
     uint256 constant BALANCES_SLOT = 5;
 
     function controller(IAngstromAuth self) internal view returns (address) {
         return address(uint160(self.extsload(CONTROLLER_SLOT)));
+    }
+
+    function lastBlockUpdated(IAngstromAuth self) internal view returns (uint64) {
+        return uint64(self.extsload(LAST_BLOCK_CONFIG_STORE_SLOT) >> LAST_BLOCK_BIT_OFFSET);
     }
 
     function configStore(IAngstromAuth self) internal view returns (PoolConfigStore addr) {

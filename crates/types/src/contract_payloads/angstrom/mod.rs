@@ -906,6 +906,10 @@ impl TryFrom<&[u8]> for AngstromPoolConfigStore {
     type Error = String;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        if value.is_empty() {
+            return Ok(Self::default());
+        }
+
         if value.first() != Some(&0) {
             return Err("Invalid encoded entries: must start with a safety byte of 0".to_string());
         }

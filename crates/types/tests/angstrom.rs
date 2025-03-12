@@ -2,14 +2,19 @@
 
 mod solutionlib;
 
+use alloy_primitives::I256;
 use angstrom_types::{
     contract_payloads::{angstrom::AngstromBundle, asset::builder::AssetBuilder},
-    matching::uniswap::{Direction, PoolPriceVec, PoolSnapshot, Quantity},
+    matching::{
+        SqrtPriceX96,
+        uniswap::{Direction, PoolPriceVec, PoolSnapshot, Quantity}
+    },
     orders::PoolSolution
 };
 use base64::Engine;
 use solutionlib::{DIVIDE_BY_ZERO, NEW_BAD};
 use tracing::Level;
+use uniswap_v3_math::swap_math::compute_swap_step;
 
 pub fn with_tracing<T>(f: impl FnOnce() -> T) -> T {
     let subscriber = tracing_subscriber::fmt()
@@ -34,6 +39,29 @@ fn build_bundle() {
             _
         ) = serde_json::from_slice(&bytes).unwrap();
 
+        let sqrt_ratio_current_x_96 = SqrtPriceX96::at_tick(100000).unwrap();
+        let sqrt_ratio_target_x_96 = SqrtPriceX96::at_tick(90000).unwrap();
+        let liquidity = 1_000_000_000_000_000_000_u128;
+        let amount_remaining = I256::unchecked_from(4000_u128).saturating_neg();
+        let fee_pips = 0;
+        let output = compute_swap_step(
+            sqrt_ratio_current_x_96.into(),
+            sqrt_ratio_target_x_96.into(),
+            liquidity,
+            amount_remaining,
+            fee_pips
+        )
+        .unwrap();
+        println!("-----COMPUTE OUTPUT------\n{:#?}\n---------------", output);
+        let input = compute_swap_step(
+            sqrt_ratio_current_x_96.into(),
+            sqrt_ratio_target_x_96.into(),
+            liquidity,
+            I256::ONE,
+            fee_pips
+        )
+        .unwrap();
+        println!("-----COMPUTE INPUT------\n{:#?}\n---------------", input);
         let vec_one = (snapshot.current_price() + Quantity::Token0(663457929968124)).unwrap();
         let vec_two = (vec_one.end_bound.clone() + Quantity::Token1(17509420022687840846)).unwrap();
         // Vec by pulling T0 instead of adding T1

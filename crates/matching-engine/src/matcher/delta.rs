@@ -3,7 +3,7 @@ use angstrom_types::{
     contract_payloads::tob::generate_current_price_adjusted_for_donation,
     matching::{
         SqrtPriceX96, get_quantities_at_price,
-        uniswap::{Direction, PoolPrice, PoolPriceVec}
+        uniswap::{Direction, PoolPrice, PoolPriceVec, Quantity}
     },
     orders::{NetAmmOrder, OrderFillState, OrderId, OrderOutcome, PoolSolution},
     sol_bindings::{
@@ -35,7 +35,7 @@ impl<'a> DeltaMatcher<'a> {
         solve_for_t0: bool
     ) -> Self {
         // Dump the book
-        let json = serde_json::to_string(&book).unwrap();
+        let json = serde_json::to_string(&(book, &tob)).unwrap();
         let b64_output = base64::prelude::BASE64_STANDARD.encode(json.as_bytes());
         trace!(data = b64_output, "Raw book data");
 
@@ -49,7 +49,15 @@ impl<'a> DeltaMatcher<'a> {
                 None
             }
         } else {
-            book.amm().map(|f| f.current_price())
+            book.amm().map(|f| {
+                let cost = (f.current_price() - Quantity::Token1(3852639724582632135_u128))
+                    .unwrap()
+                    .d_t0;
+                // But then we have to operate in the right direction to calculate how much T1
+                // we ACTUALLY get out
+                let pricevec = (f.current_price() + Quantity::Token0(cost)).unwrap();
+                pricevec.end_bound
+            })
         };
 
         Self { book, amm_start_price, fee, solve_for_t0 }
@@ -330,6 +338,13 @@ impl<'a> DeltaMatcher<'a> {
                         // If we're solving for T1, this is all in T1 so no need to flip
                         abs_partial_am
                     };
+                    trace!(
+                        self.solve_for_t0,
+                        min_amount = bid.min_amount(),
+                        partial_amount,
+                        abs_partial_am,
+                        "Finding bid order partial amount"
+                    );
 
                     OrderFillState::PartialFill(bid.min_amount() + partial_amount)
                 } else if fetch.ucp <= bid.price().inv_ray_round(true) {
@@ -350,6 +365,14 @@ impl<'a> DeltaMatcher<'a> {
                         // If we're solving for T1, we need to flip our partial amount from T1 to T0
                         fetch.ucp.inverse_quantity(abs_partial_am, true)
                     };
+
+                    trace!(
+                        self.solve_for_t0,
+                        min_amount = ask.min_amount(),
+                        partial_amount,
+                        abs_partial_am,
+                        "Finding ask order partial amount"
+                    );
 
                     OrderFillState::PartialFill(ask.min_amount() + partial_amount)
                 } else if fetch.ucp >= ask.price() {

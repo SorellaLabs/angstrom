@@ -43,7 +43,7 @@ where
             Ok(receipt.transaction_hash)
         } else {
             let default_options = GethDebugTracingOptions::default();
-            let _call_options = GethDebugTracingOptions {
+            let call_options = GethDebugTracingOptions {
                 config: GethDefaultTracingOptions {
                     disable_storage: Some(false),
                     disable_stack: Some(false),
@@ -57,7 +57,7 @@ where
                 ..Default::default()
             };
             let result = provider
-                .debug_trace_transaction(receipt.transaction_hash, default_options)
+                .debug_trace_transaction(receipt.transaction_hash, call_options)
                 .await?;
 
             println!("TRACE: {result:?}");

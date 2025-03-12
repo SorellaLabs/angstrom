@@ -9,6 +9,7 @@ use booklib::{
     AMM_SIDE_BOOK, DEBT_WRONG_SIDE, DELTA_BOOK_TEST, GOOD_BOOK, MATH_ZERO, WEIRD_BOOK,
     ZERO_ASK_BOOK
 };
+use testing_tools::type_generator::orders::ToBOrderBuilder;
 use tracing::Level;
 
 pub fn with_tracing<T>(f: impl FnOnce() -> T) -> T {
@@ -71,6 +72,5 @@ fn delta_matcher_test() {
         let book: OrderBook = serde_json::from_slice(&bytes).unwrap();
         let mut matcher = DeltaMatcher::new(&book, None, 0, false);
         let solution = matcher.solution(None);
-        println!("Solution: {:#?}", solution);
     })
 }

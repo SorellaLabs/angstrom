@@ -83,6 +83,12 @@ impl From<U160> for SqrtPriceX96 {
     }
 }
 
+impl From<SqrtPriceX96> for U160 {
+    fn from(value: SqrtPriceX96) -> Self {
+        value.0
+    }
+}
+
 impl From<Ray> for SqrtPriceX96 {
     fn from(value: Ray) -> Self {
         let numerator = Natural::from_limbs_asc(value.as_limbs()) * const_2_192();

@@ -1,45 +1,45 @@
-#[cfg(feature = "anvil")]
-use {
-    alloy::{providers::Provider, signers::local::PrivateKeySigner},
-    alloy_primitives::{
-        Address, Bytes, FixedBytes, U256,
-        aliases::{I24, U24}
-    },
-    angstrom_types::{
-        contract_bindings::{
-            angstrom::Angstrom::{AngstromInstance, PoolKey},
-            mintable_mock_erc_20::MintableMockERC20,
-            pool_gate::PoolGate::PoolGateInstance
-        },
-        contract_payloads::{
-            Asset, Pair, Signature,
-            angstrom::{
-                AngstromBundle, BundleGasDetails, OrderQuantities, TopOfBlockOrder, UserOrder
-            },
-            rewards::PoolUpdate
-        },
-        matching::{Ray, SqrtPriceX96, uniswap::LiqRange},
-        primitive::AngstromSigner
-    },
-    pade::PadeEncode,
-    std::{collections::HashMap, str::FromStr},
-    testing_tools::{
-        contracts::{
-            DebugTransaction,
-            environment::{
-                LocalAnvil, SpawnedAnvil, TestAnvilEnvironment,
-                angstrom::AngstromEnv,
-                uniswap::{TestUniswapEnv, UniswapEnv}
-            }
-        },
-        type_generator::{
-            amm::AMMSnapshotBuilder,
-            consensus::{pool::Pool, proposal::ProposalBuilder}
+use std::{collections::HashMap, io::Read, str::FromStr};
+
+use alloy::{providers::Provider, signers::local::PrivateKeySigner, sol_types::SolInterface};
+use alloy_primitives::{
+    Address, Bytes, FixedBytes, I256, U256,
+    aliases::{I24, U24}
+};
+use angstrom_types::{
+    contract_bindings::{
+        angstrom::Angstrom::AngstromInstance,
+        controller_v_1::ControllerV1::ControllerV1Instance,
+        mintable_mock_erc_20::MintableMockERC20,
+        pool_gate::PoolGate::PoolGateInstance,
+        pool_manager::{
+            IPoolManager::ModifyLiquidityParams,
+            PoolManager::{PoolKey, PoolManagerErrors, PoolManagerInstance}
         }
+    },
+    contract_payloads::{
+        Asset, Pair, Signature,
+        angstrom::{AngstromBundle, BundleGasDetails, OrderQuantities, TopOfBlockOrder, UserOrder},
+        rewards::PoolUpdate
+    },
+    matching::{Ray, SqrtPriceX96, uniswap::LiqRange},
+    primitive::AngstromSigner
+};
+use pade::PadeEncode;
+use testing_tools::{
+    contracts::{
+        DebugTransaction,
+        environment::{
+            LocalAnvil, SpawnedAnvil, TestAnvilEnvironment,
+            angstrom::AngstromEnv,
+            uniswap::{TestUniswapEnv, UniswapEnv}
+        }
+    },
+    type_generator::{
+        amm::AMMSnapshotBuilder,
+        consensus::{pool::Pool, proposal::ProposalBuilder}
     }
 };
 
-#[cfg(feature = "anvil")]
 fn raw_bundle(t0: Address, t1: Address) -> AngstromBundle {
     AngstromBundle {
         assets:              vec![
@@ -351,8 +351,8 @@ fn raw_bundle(t0: Address, t1: Address) -> AngstromBundle {
 }
 
 #[tokio::test]
-#[cfg(feature = "anvil")]
 async fn use_raw_bundle() {
+    // Setup our environment and get our contract interface objects
     let anvil = LocalAnvil::new("http://127.0.0.1:8545".to_owned())
         .await
         .unwrap();
@@ -360,22 +360,127 @@ async fn use_raw_bundle() {
     let uniswap = UniswapEnv::new(anvil).await.unwrap();
     let env = AngstromEnv::new(uniswap, vec![controller]).await.unwrap();
     let ang_instance = AngstromInstance::new(env.angstrom(), env.provider());
-    // Make our addresses and sort them to be low address first
-    // let a0 = Address::random();
-    // let a1 = Address::random();
-    // let (t0, t1) = match a0.cmp(&a1) {
-    //     std::cmp::Ordering::Greater => (a1, a0),
-    //     _ => (a0, a1)
-    // };
-    let raw_c0 = MintableMockERC20::deploy(env.provider()).await.unwrap();
+    let controller_v1 = ControllerV1Instance::new(env.controller_v1(), env.provider().clone());
+    let pool_gate = PoolGateInstance::new(env.pool_gate(), env.provider());
 
+    // setup the two tokens we'll be working with as T0 and T1
+    let raw_c0 = MintableMockERC20::deploy(env.provider()).await.unwrap();
     let raw_c1 = MintableMockERC20::deploy(env.provider()).await.unwrap();
     let (currency0, currency1) = match raw_c0.address().cmp(raw_c1.address()) {
         std::cmp::Ordering::Greater => (*raw_c1.address(), *raw_c0.address()),
         _ => (*raw_c0.address(), *raw_c1.address())
     };
 
-    let _pool_gate = PoolGateInstance::new(env.pool_gate(), env.provider());
+    // Setup our Uniswap pool parameters
+    let pool_manager = PoolManagerInstance::new(env.pool_manager(), env.provider());
+    let fee = U24::ZERO;
+    let tickSpacing = I24::unchecked_from(60);
+    let hooks = env.angstrom();
+    let key = PoolKey { currency0, currency1, fee, tickSpacing, hooks };
+    let start_price = SqrtPriceX96::at_tick(100040).unwrap();
+
+    // Configure the pool via the Controller
+    controller_v1
+        .configurePool(
+            key.currency0,
+            key.currency1,
+            key.tickSpacing.as_i32() as u16,
+            key.fee,
+            key.fee
+        )
+        .from(controller)
+        .run_safe()
+        .await
+        .unwrap();
+    println!("Configured pool");
+
+    ang_instance
+        .initializePool(key.currency0, key.currency1, U256::ZERO, start_price.into())
+        .from(controller)
+        .run_safe()
+        .await
+        .unwrap();
+    println!("Ansgstrom initialized pool");
+
+    pool_gate.tickSpacing(tickSpacing).run_safe().await.unwrap();
+    println!("PoolGate given tick spacing");
+
+    // Define our liquidity range
+    let tickLower = I24::unchecked_from(100020);
+    let tickUpper = I24::unchecked_from(100080);
+    let liquidityDelta = U256::from(1_000_000_000_000_000_000_u128);
+
+    pool_gate
+        .addLiquidity(
+            key.currency0,
+            key.currency1,
+            tickLower,
+            tickUpper,
+            liquidityDelta,
+            FixedBytes::default()
+        )
+        .run_safe()
+        .await
+        .unwrap();
+
+    // let params =
+    //     ModifyLiquidityParams { tickLower, tickUpper, liquidityDelta, salt:
+    // FixedBytes::random() };
+
+    // pool_manager
+    //     .modifyLiquidity(key.clone(), params,
+    // alloy::primitives::Bytes::default())     .run_safe()
+    //     .await
+    //     .unwrap();
+
+    /*
+    pool_gate
+        .mint_0(currency0, U256::from(1_000_000_000_000_000_000_u128))
+        .run_safe()
+        .await
+        .unwrap();
+    pool_gate
+        .mint_0(currency1, U256::from(1_000_000_000_000_000_000_u128))
+        .run_safe()
+        .await
+        .unwrap();
+        */
+
+    let err = pool_gate
+        .addLiquidity(
+            currency0,
+            currency1,
+            tickLower,
+            tickUpper,
+            liquidityDelta,
+            FixedBytes::random()
+        )
+        .call()
+        .await
+        .unwrap_err();
+    let revert_data = if let alloy::contract::Error::TransportError(e) = err {
+        e.as_error_resp().and_then(|e| e.as_revert_data())
+    } else {
+        None
+    }
+    .unwrap();
+    println!("Decoding revert data: {:?}", revert_data);
+
+    let decoded_err = PoolManagerErrors::abi_decode(&revert_data, false).ok();
+    println!("Decoded error: {decoded_err:?}");
+
+    pool_gate
+        .addLiquidity(
+            currency0,
+            currency1,
+            tickLower,
+            tickUpper,
+            liquidityDelta,
+            FixedBytes::random()
+        )
+        .run_safe()
+        .await
+        .unwrap();
 
     let encoded = alloy_primitives::Bytes::from(raw_bundle(currency0, currency1).pade_encode());
     ang_instance.execute(encoded).run_safe().await.unwrap();

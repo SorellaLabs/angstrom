@@ -8,6 +8,7 @@ To get started read the [Overview](./overview.md)
 - [Known Issues - Known, Low Severity / Non-Issues](./known-issues.md)
 - [Pool Config Store](./pool-config-store.md)
 - [Deployment instructions](./deployment.md)
+- ["RAY" - What is Ray](./ray.md)
 
 ## Architecture
 

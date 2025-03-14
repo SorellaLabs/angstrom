@@ -6,14 +6,17 @@ use std::path::PathBuf;
 
 use alloy::signers::local::PrivateKeySigner;
 use angstrom_metrics::METRICS_ENABLED;
-use angstrom_network::AngstromNetworkBuilder;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::primitive::AngstromSigner;
 use clap::Parser;
 use cli::AngstromConfig;
-use reth::{chainspec::EthereumChainSpecParser, cli::Cli};
-use reth_node_builder::{Node, NodeHandle};
-use reth_node_ethereum::{EthereumNode, node::EthereumAddOns};
+use reth::{
+    chainspec::EthereumChainSpecParser,
+    cli::Cli,
+    network::{NetworkProtocols, protocol::IntoRlpxSubProtocol}
+};
+use reth_node_builder::NodeHandle;
+use reth_node_ethereum::EthereumNode;
 use validation::validator::ValidationClient;
 
 use crate::components::{
@@ -48,14 +51,9 @@ pub fn run() -> eyre::Result<()> {
         let pool = channels.get_pool_handle();
         let executor_clone = executor.clone();
         let validation_client = ValidationClient(channels.validator_tx.clone());
+
         let NodeHandle { node, node_exit_future } = builder
-            .with_types::<EthereumNode>()
-            .with_components(
-                EthereumNode::default()
-                    .components_builder()
-                    .network(AngstromNetworkBuilder::new(protocol_handle))
-            )
-            .with_add_ons::<EthereumAddOns<_>>(Default::default())
+            .node(EthereumNode::default())
             .extend_rpc_modules(move |rpc_context| {
                 let order_api = OrderApi::new(pool.clone(), executor_clone, validation_client);
                 rpc_context.modules.merge_configured(order_api.into_rpc())?;
@@ -64,6 +62,9 @@ pub fn run() -> eyre::Result<()> {
             })
             .launch()
             .await?;
+
+        node.network
+            .add_rlpx_sub_protocol(protocol_handle.into_rlpx_sub_protocol());
 
         initialize_strom_components(args, secret_key, channels, network, node, &executor).await;
 

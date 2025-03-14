@@ -106,7 +106,10 @@ pub fn init_tracing(verbosity: u8) {
         .with_target(true);
 
     if let Some(f) = envfilter {
-        tracing_subscriber::registry().with(format).with(f).init();
+        let _ = tracing_subscriber::registry()
+            .with(format)
+            .with(f)
+            .try_init();
     } else {
         let filter = filter::Targets::new()
             .with_target("testnet", level)
@@ -120,10 +123,10 @@ pub fn init_tracing(verbosity: u8) {
             .with_target("consensus", level)
             .with_target("validation", level)
             .with_target("order_pool", level);
-        tracing_subscriber::registry()
+        let _ = tracing_subscriber::registry()
             .with(format)
             .with(filter)
-            .init();
+            .try_init();
     }
 }
 

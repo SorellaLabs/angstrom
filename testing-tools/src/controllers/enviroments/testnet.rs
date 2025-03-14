@@ -8,7 +8,7 @@ use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
 use futures::{Future, StreamExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
-use reth_tasks::TaskExecutor;
+use reth_tasks::TaskSpawner;
 
 use super::AngstromTestnet;
 use crate::{
@@ -57,11 +57,11 @@ where
         Ok(this)
     }
 
-    pub async fn run_to_completion(mut self, executor: TaskExecutor) {
+    pub async fn run_to_completion<TP: TaskSpawner>(mut self, executor: TP) {
         let all_peers = std::mem::take(&mut self.peers).into_values().map(|peer| {
             executor.spawn_critical_blocking(
                 format!("testnet node {}", peer.testnet_node_id()).leak(),
-                peer.testnet_future()
+                Box::pin(peer.testnet_future())
             )
         });
 

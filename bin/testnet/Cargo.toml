@@ -59,6 +59,7 @@ angstrom-metrics.workspace = true
 matching-engine.workspace = true
 
 # Other
+pade.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
 tokio-util.workspace = true

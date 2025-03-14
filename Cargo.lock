@@ -11248,6 +11248,7 @@ dependencies = [
  "local-ip-address",
  "matching-engine",
  "order-pool",
+ "pade",
  "parking_lot",
  "rand 0.8.5",
  "reth",

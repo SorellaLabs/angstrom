@@ -56,7 +56,7 @@ impl<P: WithWalletProvider> AnvilStateProvider<P> {
         &self.provider
     }
 
-    pub(crate) fn provider_mut(&mut self) -> &mut P {
+    pub fn provider_mut(&mut self) -> &mut P {
         &mut self.provider
     }
 

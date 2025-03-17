@@ -40,12 +40,12 @@ use crate::{
 };
 
 pub struct AnvilInitializer {
-    provider:      WalletProvider,
-    angstrom_env:  AngstromEnv<UniswapEnv<WalletProvider>>,
-    controller_v1: ControllerV1Instance<(), WalletProviderRpc>,
-    angstrom:      AngstromInstance<(), WalletProviderRpc>,
-    pool_gate:     PoolGateInstance<(), WalletProviderRpc>,
-    pending_state: PendingDeployedPools
+    pub provider:      WalletProvider,
+    pub angstrom_env:  AngstromEnv<UniswapEnv<WalletProvider>>,
+    pub controller_v1: ControllerV1Instance<(), WalletProviderRpc>,
+    pub angstrom:      AngstromInstance<(), WalletProviderRpc>,
+    pub pool_gate:     PoolGateInstance<(), WalletProviderRpc>,
+    pub pending_state: PendingDeployedPools
 }
 
 impl AnvilInitializer {

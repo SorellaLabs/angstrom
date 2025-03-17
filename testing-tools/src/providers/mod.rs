@@ -34,7 +34,7 @@ impl WalletProvider {
         config.spawn_anvil_rpc().await
     }
 
-    pub(crate) fn new_with_provider(
+    pub fn new_with_provider(
         provider: WalletProviderRpc,
         controller_secret_key: PrivateKeySigner
     ) -> Self {

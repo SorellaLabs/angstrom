@@ -1,5 +1,6 @@
 use std::{
     future::Future,
+    path::PathBuf,
     pin::Pin,
     sync::{Arc, atomic::AtomicUsize},
     task::{Context, Poll}
@@ -12,15 +13,33 @@ use angstrom_types::{
     primitive::PeerId
 };
 use futures::StreamExt;
+use once_cell::unsync::Lazy;
 use reth_eth_wire::DisconnectReason;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::error;
 
-use crate::{NetworkOrderEvent, StromMessage, StromNetworkHandleMsg, Swarm, SwarmEvent};
+use crate::{
+    CachedPeer, NetworkOrderEvent, StromMessage, StromNetworkHandleMsg, Swarm, SwarmEvent
+};
 #[allow(unused_imports)]
 use crate::{StromNetworkConfig, StromNetworkHandle, StromSessionManager};
+
+// use a thread local lazy to avoid synchronization overhead since path is
+// always the same
+thread_local! {
+    static CACHED_PEERS_TOML_PATH: Lazy<PathBuf> = Lazy::new(|| {
+        let mut path = PathBuf::new();
+        path.push(
+            homedir::my_home()
+                .unwrap()
+                .expect("Failed to get home directory. Please set the HOME environment variable.")
+        );
+        path.push(".angstrom_cached_peers.toml");
+        path
+    });
+}
 
 #[allow(dead_code)]
 pub struct StromNetworkManager<DB> {
@@ -41,12 +60,24 @@ pub struct StromNetworkManager<DB> {
 
 impl<DB: Unpin> StromNetworkManager<DB> {
     pub fn new(
-        swarm: Swarm<DB>,
+        mut swarm: Swarm<DB>,
         eth_handle: UnboundedReceiver<EthEvent>,
         to_pool_manager: Option<UnboundedMeteredSender<NetworkOrderEvent>>,
         to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>
     ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Load cached peers
+        let cached_peers = Self::load_known_peers();
+        for peer in cached_peers {
+            tracing::info!("Reconnecting to cached peer {}", peer.enr());
+
+            // Attempt reconnection
+            /*swarm
+            .state_mut()
+            .connect_to_peer(peer.peer_id, peer.addr, peer.enr);*/
+            // TODO: connect to peer somehow here
+        }
 
         let peers = Arc::new(AtomicUsize::default());
         let handle =
@@ -62,6 +93,38 @@ impl<DB: Unpin> StromNetworkManager<DB> {
             to_consensus_manager,
             event_listeners: Vec::new()
         }
+    }
+
+    pub fn load_known_peers() -> Vec<CachedPeer> {
+        CACHED_PEERS_TOML_PATH.with(|toml_path| {
+            match std::fs::read_to_string(toml_path.as_path()) {
+                Ok(data) => toml::from_str(&data).unwrap_or_default(),
+                Err(_) => {
+                    tracing::warn!(
+                        "Known peers file not found at {}, creating peers list from scratch",
+                        toml_path.display()
+                    );
+                    Vec::new()
+                }
+            }
+        })
+    }
+
+    pub fn save_known_peers(peers: &[CachedPeer]) {
+        CACHED_PEERS_TOML_PATH.with(|toml_path| match toml::to_string(peers) {
+            Ok(serialized) => {
+                if let Err(err) = std::fs::write(toml_path.as_path(), serialized) {
+                    tracing::error!(
+                        "Failed to save known peers to {}: {}",
+                        toml_path.display(),
+                        err
+                    );
+                }
+            }
+            Err(err) => {
+                tracing::error!("Failed to serialize known peers to TOML: {}", err);
+            }
+        });
     }
 
     pub fn install_consensus_manager(&mut self, tx: UnboundedMeteredSender<StromConsensusEvent>) {
@@ -119,13 +182,22 @@ impl<DB: Unpin> StromNetworkManager<DB> {
                 self.swarm.sessions_mut().send_message(&peer_id, msg)
             }
             StromNetworkHandleMsg::Shutdown(tx) => {
-                // Disconnect all active connections
+                let peers = self
+                    .swarm
+                    .sessions_mut()
+                    .active_sessions
+                    .iter()
+                    .map(|(_, session)| CachedPeer {
+                        peer_id: session.remote_id,
+                        addr:    session.socket_addr
+                    })
+                    .collect::<Vec<_>>();
+
+                Self::save_known_peers(&peers);
+
                 self.swarm
                     .sessions_mut()
                     .disconnect_all(Some(DisconnectReason::ClientQuitting));
-
-                // drop pending connections
-
                 let _ = tx.send(());
             }
             StromNetworkHandleMsg::RemovePeer(peer_id) => {

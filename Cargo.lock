@@ -1416,11 +1416,13 @@ dependencies = [
  "enr",
  "eyre",
  "futures",
+ "homedir",
  "humantime-serde",
  "k256",
  "linked-hash-map",
  "linked_hash_set",
  "metrics 0.21.1",
+ "once_cell",
  "order-pool",
  "parking_lot",
  "pin-project",
@@ -1456,6 +1458,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "toml",
  "tracing",
  "validation",
 ]
@@ -2658,7 +2661,7 @@ dependencies = [
  "hidapi-rusb",
  "js-sys",
  "log",
- "nix",
+ "nix 0.26.4",
  "once_cell",
  "thiserror 1.0.69",
  "tokio",
@@ -4378,6 +4381,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "homedir"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bdbbd5bc8c5749697ccaa352fa45aff8730cf21c68029c0eef1ffed7c3d6ba2"
+dependencies = [
+ "cfg-if",
+ "nix 0.29.0",
+ "widestring",
+ "windows 0.57.0",
+]
+
+[[package]]
 name = "hostname"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6031,6 +6046,18 @@ dependencies = [
  "libc",
  "memoffset 0.7.1",
  "pin-utils",
+]
+
+[[package]]
+name = "nix"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
+dependencies = [
+ "bitflags 2.9.0",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
 ]
 
 [[package]]

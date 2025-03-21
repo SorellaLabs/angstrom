@@ -1,6 +1,7 @@
 use std::{
     collections::VecDeque,
     fmt::Debug,
+    net::SocketAddr,
     ops::Deref,
     pin::Pin,
     time::{SystemTime, UNIX_EPOCH}
@@ -77,18 +78,26 @@ pub struct StromSession {
     /// Used to reserve a slot to guarantee that the termination message is
     /// delivered
     pub(crate) terminate_message: Option<(PollSender<StromSessionMessage>, StromSessionMessage)>,
+
+    /// The peer's IP and port.
+    pub(crate) remote_addr: SocketAddr,
+    /// The peer's ENR record, if available.
+    pub(crate) enr:         Option<String>,
+
     /// has a value until verification has been completed.
     pub verification_sidecar: VerificationSidecar,
     /// has sent the handle to the receiver
-    pending_handle: Option<StromSessionHandle>,
+    pending_handle:           Option<StromSessionHandle>,
     /// buffer for pending messages
-    outbound_buffer: VecDeque<StromSessionMessage>
+    outbound_buffer:          VecDeque<StromSessionMessage>
 }
 
 impl StromSession {
     pub fn new(
         conn: ProtocolConnection,
         peer_id: PeerId,
+        remote_addr: SocketAddr,
+        enr: Option<String>,
         commands_rx: ReceiverStream<SessionCommand>,
         to_session_manager: MeteredPollSender<StromSessionMessage>,
         protocol_breach_request_timeout: Duration,
@@ -96,6 +105,8 @@ impl StromSession {
         handle: StromSessionHandle
     ) -> Self {
         Self {
+            remote_addr,
+            enr,
             verification_sidecar,
             conn,
             remote_peer_id: peer_id,

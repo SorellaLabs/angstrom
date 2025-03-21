@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use angstrom_types::primitive::PeerId;
 use reth_network::Direction;
 use tokio::{sync::mpsc, time::Instant};
@@ -29,7 +31,8 @@ pub struct StromSessionHandle {
     pub(crate) established:         Instant,
     /// Sender half of the command channel used send commands _to_ the spawned
     /// session
-    pub(crate) commands_to_session: mpsc::Sender<SessionCommand>
+    pub(crate) commands_to_session: mpsc::Sender<SessionCommand>,
+    pub(crate) socket_addr:         SocketAddr
 }
 
 impl StromSessionHandle {

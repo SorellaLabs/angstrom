@@ -30,7 +30,6 @@ reth-tasks.workspace = true
 # alloy  
 alloy.workspace = true
 
-
 # misc
 anyhow.workspace = true
 auto_impl.workspace = true

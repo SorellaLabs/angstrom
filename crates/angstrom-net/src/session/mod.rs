@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 pub mod handle;
@@ -30,15 +31,36 @@ use tracing::warn;
 
 use crate::{StromMessage, StromProtocolMessage, errors::StromStreamError};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CachedPeer {
+    pub peer_id: PeerId,
+    pub addr:    SocketAddr
+}
+
+impl CachedPeer {
+    pub const fn new(peer_id: PeerId, addr: SocketAddr) -> Self {
+        Self { peer_id, addr }
+    }
+
+    pub fn enr(&self) -> String {
+        format!(
+            "enode://{:?}@{}:{}?discport=30303", // TODO: get discport?
+            self.peer_id,
+            self.addr.ip(),
+            self.addr.port()
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct StromSessionManager {
     // All active sessions that are ready to exchange messages.
-    active_sessions: HashMap<PeerId, StromSessionHandle>,
+    pub(crate) active_sessions: HashMap<PeerId, StromSessionHandle>,
 
     /// Channel to receive the session handle upon initialization from the
     /// connection handler This channel is also used to receive messages
     /// from the session
-    from_sessions: mpsc::Receiver<StromSessionMessage>
+    pub(crate) from_sessions: mpsc::Receiver<StromSessionMessage>
 }
 
 impl StromSessionManager {
@@ -93,19 +115,23 @@ impl StromSessionManager {
                 StromSessionMessage::Established { handle } => {
                     if self.active_sessions.contains_key(&handle.remote_id) {
                         warn!(peer_id=?handle.remote_id, "got duplicate connection");
-                        // disconnect
                         handle.disconnect(None);
-
                         return None;
                     }
+
+                    /*let peer_data =
+                        CachedPeer { peer_id: handle.remote_id, addr: handle.socket_addr };
+
+                    self.save_peer_connection_info(peer_data);*/
+                    // TODO: maybe save peer connection info here?
 
                     let event = SessionEvent::SessionEstablished {
                         peer_id:   handle.remote_id,
                         direction: handle.direction,
                         timeout:   Arc::new(AtomicU64::new(40))
                     };
-                    self.active_sessions.insert(handle.remote_id, handle);
 
+                    self.active_sessions.insert(handle.remote_id, handle);
                     Some(event)
                 }
                 StromSessionMessage::ClosedOnConnectionError { peer_id, error } => {

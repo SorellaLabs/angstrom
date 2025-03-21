@@ -88,6 +88,9 @@ eyre.workspace = true
 enr = { workspace = true, features = ["rust-secp256k1"], optional = true }
 tempfile = { workspace = true, optional = true }
 k256.workspace = true
+homedir.workspace = true
+once_cell.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 testing-tools.workspace = true
@@ -109,6 +112,7 @@ secp256k1.workspace = true
 # misc
 serial_test.workspace = true
 tempfile.workspace = true
+toml.workspace = true
 
 [features]
 default = ["serde"]

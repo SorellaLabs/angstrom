@@ -21,6 +21,7 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 
+use super::CachedPeer;
 use crate::{
     StromSession, VerificationSidecar,
     errors::StromStreamError,
@@ -81,6 +82,7 @@ impl ConnectionHandler for StromConnectionHandler {
         peer_id: PeerId,
         conn: ProtocolConnection
     ) -> Self::Connection {
+        let remote_addr = self.socket_addr;
         let hash = keccak256(peer_id);
         let validator_address = Address::from_slice(&hash[12..]);
         if !self.validator_set.contains(&validator_address) {
@@ -93,12 +95,17 @@ impl ConnectionHandler for StromConnectionHandler {
             direction,
             remote_id: peer_id,
             established: Instant::now(),
-            commands_to_session: tx
+            commands_to_session: tx,
+            socket_addr: self.socket_addr
         };
+
+        let cached_peer = CachedPeer { peer_id, addr: remote_addr };
 
         PossibleStromSession::Session(StromSession::new(
             conn,
             peer_id,
+            remote_addr,
+            Some(cached_peer.enr()),
             ReceiverStream::new(rx),
             self.to_session_manager,
             self.protocol_breach_request_timeout,

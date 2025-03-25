@@ -13,14 +13,14 @@ use cli::AngstromConfig;
 use reth::{
     chainspec::EthereumChainSpecParser,
     cli::Cli,
-    network::{NetworkProtocols, protocol::IntoRlpxSubProtocol}
+    network::{NetworkProtocols, protocol::IntoRlpxSubProtocol},
 };
 use reth_node_builder::NodeHandle;
 use reth_node_ethereum::EthereumNode;
 use validation::validator::ValidationClient;
 
 use crate::components::{
-    init_network_builder, initialize_strom_components, initialize_strom_handles
+    init_network_builder, initialize_strom_components, initialize_strom_handles,
 };
 
 pub mod cli;
@@ -43,9 +43,6 @@ pub fn run() -> eyre::Result<()> {
         let secret_key = get_secret_key(&args.secret_key_location)?;
 
         let mut channels = initialize_strom_handles();
-        let mut network =
-            init_network_builder(secret_key.clone(), channels.eth_handle_rx.take().unwrap())?;
-        let protocol_handle = network.build_protocol_handler();
 
         // for rpc
         let pool = channels.get_pool_handle();
@@ -63,6 +60,14 @@ pub fn run() -> eyre::Result<()> {
             .launch()
             .await?;
 
+        let mut network = init_network_builder(
+            secret_key.clone(),
+            channels.eth_handle_rx.take().unwrap(),
+            node.network,
+        )?;
+
+        let protocol_handle = network.build_protocol_handler();
+
         node.network
             .add_rlpx_sub_protocol(protocol_handle.into_rlpx_sub_protocol());
 
@@ -73,7 +78,7 @@ pub fn run() -> eyre::Result<()> {
             network,
             &node,
             executor,
-            node_exit_future
+            node_exit_future,
         )
         .await
     })
@@ -87,6 +92,6 @@ fn get_secret_key(sk_path: &PathBuf) -> eyre::Result<AngstromSigner> {
             let contents = std::fs::read_to_string(sk_path)?;
             Ok(AngstromSigner::new(contents.trim().parse::<PrivateKeySigner>()?))
         }
-        _ => Err(eyre::eyre!("no secret_key was found at {:?}", sk_path))
+        _ => Err(eyre::eyre!("no secret_key was found at {:?}", sk_path)),
     }
 }

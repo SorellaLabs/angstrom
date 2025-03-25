@@ -17,30 +17,35 @@ use tokio_util::sync::PollSender;
 use crate::{
     NetworkOrderEvent, Status, StromNetworkHandle, StromNetworkManager, StromProtocolHandler,
     StromSessionManager, StromSessionMessage, Swarm, VerificationSidecar,
-    manager::StromConsensusEvent, state::StromState, types::status::StatusState
+    manager::StromConsensusEvent, state::StromState, types::status::StatusState,
 };
 
 pub struct NetworkBuilder<P: Peers + Default> {
-    to_pool_manager:      Option<UnboundedMeteredSender<NetworkOrderEvent>>,
+    to_pool_manager: Option<UnboundedMeteredSender<NetworkOrderEvent>>,
     to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>,
-    session_manager_rx:   Option<Receiver<StromSessionMessage>>,
-    eth_handle:           UnboundedReceiver<EthEvent>,
-    reth_handle:          P,
+    session_manager_rx: Option<Receiver<StromSessionMessage>>,
+    eth_handle: UnboundedReceiver<EthEvent>,
+    reth_handle: P,
 
     validator_set: Arc<RwLock<HashSet<Address>>>,
-    verification:  VerificationSidecar
+    verification: VerificationSidecar,
 }
 
 impl NetworkBuilder {
-    pub fn new(verification: VerificationSidecar, eth_handle: UnboundedReceiver<EthEvent>) -> Self {
+    pub fn new(
+        verification: VerificationSidecar,
+        eth_handle: UnboundedReceiver<EthEvent>,
+        reth_handle: P,
+    ) -> Self {
         Self {
+            reth_handle,
             verification,
             to_pool_manager: None,
             to_consensus_manager: None,
             session_manager_rx: None,
             eth_handle,
             validator_set: Default::default(),
-            reth_handle: Default::default()
+            reth_handle: Default::default(),
         }
     }
 
@@ -51,7 +56,7 @@ impl NetworkBuilder {
 
     pub fn with_consensus_manager(
         mut self,
-        tx: UnboundedMeteredSender<StromConsensusEvent>
+        tx: UnboundedMeteredSender<StromConsensusEvent>,
     ) -> Self {
         self.to_consensus_manager = Some(tx);
         self
@@ -72,7 +77,7 @@ impl NetworkBuilder {
         let protocol = StromProtocolHandler::new(
             MeteredPollSender::new(PollSender::new(session_manager_tx), "session manager"),
             self.verification.clone(),
-            self.validator_set.clone()
+            self.validator_set.clone(),
         );
         self.session_manager_rx = Some(session_manager_rx);
 
@@ -85,7 +90,7 @@ impl NetworkBuilder {
     pub fn build_handle<TP: TaskSpawner, DB: Send + Unpin + 'static>(
         mut self,
         tp: TP,
-        db: DB
+        db: DB,
     ) -> StromNetworkHandle {
         let state = StromState::new(db, self.validator_set.clone());
         let sessions = StromSessionManager::new(self.session_manager_rx.take().unwrap());
@@ -95,7 +100,7 @@ impl NetworkBuilder {
             swarm,
             self.eth_handle,
             self.to_pool_manager,
-            self.to_consensus_manager
+            self.to_consensus_manager,
         );
 
         let handle = network.get_handle();
@@ -108,7 +113,7 @@ impl NetworkBuilder {
 /// Builder for [`Status`] messages.
 #[derive(Debug)]
 pub struct StatusBuilder {
-    state: StatusState
+    state: StatusState,
 }
 
 impl StatusBuilder {

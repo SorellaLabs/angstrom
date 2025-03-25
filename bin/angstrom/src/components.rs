@@ -41,6 +41,7 @@ use reth::{
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
+use reth_network::Peers;
 use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns};
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
@@ -166,11 +167,13 @@ where
     AddOns: NodeAddOns<Node> + RethRpcAddOns<Node>,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
         TryIntoHistoricalStateProvider + ReceiptProvider,
-    <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider: BlockNumReader
+    <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider: BlockNumReader,
+    <Node as FullNodeTypes>::Network: Peers
 {
     let node_config = NodeConfig::load_from_config(Some(config.node_config)).unwrap();
 
     let node_address = signer.address();
+    let network = node.network;
 
     // NOTE:
     // no key is installed and this is strictly for internal usage. Realsically, we

@@ -9,6 +9,7 @@ use angstrom_types::primitive::{AngstromSigner, PeerId};
 use futures::FutureExt;
 use parking_lot::RwLock;
 use reth_metrics::common::mpsc::{MeteredPollSender, UnboundedMeteredSender};
+use reth_network::{NetworkHandle, Peers};
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver};
 use tokio_util::sync::PollSender;
@@ -19,11 +20,12 @@ use crate::{
     manager::StromConsensusEvent, state::StromState, types::status::StatusState
 };
 
-pub struct NetworkBuilder {
+pub struct NetworkBuilder<P: Peers + Default> {
     to_pool_manager:      Option<UnboundedMeteredSender<NetworkOrderEvent>>,
     to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>,
     session_manager_rx:   Option<Receiver<StromSessionMessage>>,
     eth_handle:           UnboundedReceiver<EthEvent>,
+    reth_handle:          P,
 
     validator_set: Arc<RwLock<HashSet<Address>>>,
     verification:  VerificationSidecar
@@ -37,8 +39,14 @@ impl NetworkBuilder {
             to_consensus_manager: None,
             session_manager_rx: None,
             eth_handle,
-            validator_set: Default::default()
+            validator_set: Default::default(),
+            reth_handle: Default::default()
         }
+    }
+
+    pub fn with_reth(mut self, reth_handle: P) -> Self {
+        self.reth_handle = reth_handle;
+        self
     }
 
     pub fn with_consensus_manager(

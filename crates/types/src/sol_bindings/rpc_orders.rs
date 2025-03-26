@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use alloy::{
     primitives::{Address, B256, keccak256},
     sol,
-    sol_types::{Eip712Domain, SolStruct}
+    sol_types::{Eip712Domain, SolStruct},
 };
 use serde::{Deserialize, Serialize};
 
@@ -122,7 +122,7 @@ pub trait OmitOrderMeta: SolStruct {
     fn eip712_encode_type(&self) -> Cow<'static, str> {
         fn eip712_encode_types(
             root_type: Cow<'static, str>,
-            mut components: Vec<Cow<'static, str>>
+            mut components: Vec<Cow<'static, str>>,
         ) -> Cow<'static, str> {
             if components.is_empty() {
                 return root_type;
@@ -132,7 +132,7 @@ pub trait OmitOrderMeta: SolStruct {
             components.dedup();
 
             let mut s = String::with_capacity(
-                root_type.len() + components.iter().map(|s| s.len()).sum::<usize>()
+                root_type.len() + components.iter().map(|s| s.len()).sum::<usize>(),
             );
             s.push_str(&root_type);
             for component in components {
@@ -141,10 +141,12 @@ pub trait OmitOrderMeta: SolStruct {
             Cow::Owned(s)
         }
 
-        eip712_encode_types(
+        let data = eip712_encode_types(
             <Self as OmitOrderMeta>::eip712_root_type(self),
-            <Self as OmitOrderMeta>::eip712_components(self)
-        )
+            <Self as OmitOrderMeta>::eip712_components(self),
+        );
+        println!("{data}");
+        data
     }
 
     #[inline]

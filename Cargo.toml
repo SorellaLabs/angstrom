@@ -15,6 +15,7 @@ members = [
   "crates/metrics",
   "crates/uniswap-v4",
 ]
+default-memebers = ["bin/angstrom"]
 
 resolver = "2"
 

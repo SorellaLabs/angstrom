@@ -85,6 +85,7 @@ impl TestnetNodeNetwork {
 
         let (eth_tx, eth_rx) = tokio::sync::mpsc::unbounded_channel();
 
+        // TODO: wire it in so that eth_peer handle gets passed in new args
         let strom_network =
             StromNetworkManager::new(swarm, eth_rx, to_pool_manager, to_consensus_manager);
 

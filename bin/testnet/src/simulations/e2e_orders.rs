@@ -13,8 +13,8 @@ use testing_tools::{
     order_generator::{GeneratedPoolOrders, OrderGenerator},
     types::{
         actions::WithAction, checked_actions::WithCheckedAction, checks::WithCheck,
-        config::DevnetConfig
-    }
+        config::DevnetConfig,
+    },
 };
 use tracing::{Instrument, Level, debug, info, span};
 
@@ -40,7 +40,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
 
 fn end_to_end_agent<'a>(
     t: &'a InitialTestnetState,
-    agent_config: AgentConfig
+    agent_config: AgentConfig,
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting e2e agent");
@@ -48,7 +48,7 @@ fn end_to_end_agent<'a>(
             agent_config.uniswap_pools.clone(),
             agent_config.current_block,
             5..10,
-            0.7..0.9
+            0.7..0.9,
         );
 
         let mut stream =
@@ -57,7 +57,7 @@ fn end_to_end_agent<'a>(
                 .canonical_state_stream()
                 .map(|node| match node {
                     reth_provider::CanonStateNotification::Commit { new }
-                    | reth_provider::CanonStateNotification::Reorg { new, .. } => new.tip_number()
+                    | reth_provider::CanonStateNotification::Reorg { new, .. } => new.tip_number(),
                 });
 
         t.ex.spawn(
@@ -85,14 +85,19 @@ fn end_to_end_agent<'a>(
                                  pending_orders.push(client.send_orders(all_orders));
                             }
                         }
-                        Some(resolved_order) = pending_orders.next() => {
+                        Some(Ok(resolved_order)) = pending_orders.next() => {
+                            for order in resolved_order {
+                                if order.is_err() {
+                                    tracing::info!(?order);
+                                }
+                            }
                             tracing::info!("orders resolved");
                         }
 
                     }
                 }
             }
-            .instrument(span!(Level::ERROR, "order builder", ?agent_config.agent_id))
+            .instrument(span!(Level::ERROR, "order builder", ?agent_config.agent_id)),
         );
 
         Ok(())
@@ -107,7 +112,7 @@ pub mod test {
     use alloy::{consensus::BlockHeader, providers::Provider, sol_types::SolCall};
     use alloy_rpc_types::{BlockTransactionsKind, TransactionTrait};
     use angstrom_types::{
-        contract_payloads::angstrom::AngstromBundle, primitive::TESTNET_ANGSTROM_ADDRESS
+        contract_payloads::angstrom::AngstromBundle, primitive::TESTNET_ANGSTROM_ADDRESS,
     };
     use futures::{FutureExt, StreamExt};
     use pade::PadeDecode;
@@ -120,7 +125,7 @@ pub mod test {
 
     fn testing_end_to_end_agent<'a>(
         _: &'a InitialTestnetState,
-        agent_config: AgentConfig
+        agent_config: AgentConfig,
     ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
         Box::pin(async move {
             tracing::info!("starting e2e agent");
@@ -128,7 +133,7 @@ pub mod test {
                 agent_config.uniswap_pools.clone(),
                 agent_config.current_block,
                 10..20,
-                0.8..0.9
+                0.8..0.9,
             );
 
             let mut stream = agent_config
@@ -136,7 +141,7 @@ pub mod test {
                 .canonical_state_stream()
                 .map(|node| match node {
                     reth_provider::CanonStateNotification::Commit { new }
-                    | reth_provider::CanonStateNotification::Reorg { new, .. } => new.tip_number()
+                    | reth_provider::CanonStateNotification::Reorg { new, .. } => new.tip_number(),
                 });
 
             tokio::spawn(
@@ -171,7 +176,7 @@ pub mod test {
                         }
                     }
                 }
-                .instrument(span!(Level::ERROR, "order builder", ?agent_config.agent_id))
+                .instrument(span!(Level::ERROR, "order builder", ?agent_config.agent_id)),
             );
 
             Ok(())
@@ -199,7 +204,7 @@ pub mod test {
                 NoopProvider::default(),
                 config,
                 agents,
-                ctx.task_executor.clone()
+                ctx.task_executor.clone(),
             )
             .await
             .expect("failed to start angstrom testnet");
@@ -209,7 +214,7 @@ pub mod test {
 
             let task = ctx.task_executor.spawn_critical(
                 "testnet",
-                testnet.run_to_completion(ctx.task_executor.clone()).boxed()
+                testnet.run_to_completion(ctx.task_executor.clone()).boxed(),
             );
 
             tracing::info!("waiting for valid block");

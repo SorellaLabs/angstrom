@@ -1,8 +1,10 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use alloy::primitives::{I256, U256};
 use angstrom_types::{
     matching::{Ray, SqrtPriceX96},
     primitive::AngstromSigner,
-    sol_bindings::{grouped_orders::GroupedVanillaOrder, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::GroupedVanillaOrder, rpc_orders::TopOfBlockOrder},
 };
 use rand::Rng;
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
@@ -11,9 +13,9 @@ use uniswap_v4::uniswap::pool_manager::SyncedUniswapPool;
 use crate::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 
 pub struct OrderBuilder {
-    keys:      Vec<AngstromSigner>,
+    keys: Vec<AngstromSigner>,
     /// pools to based orders off of
-    pool_data: SyncedUniswapPool
+    pool_data: SyncedUniswapPool,
 }
 
 impl OrderBuilder {
@@ -71,7 +73,7 @@ impl OrderBuilder {
         &self,
         cur_price: f64,
         block_number: u64,
-        partial_pct: f64
+        partial_pct: f64,
     ) -> GroupedVanillaOrder {
         let mut rng = rand::thread_rng();
         let is_partial = rng.gen_bool(partial_pct);
@@ -79,7 +81,7 @@ impl OrderBuilder {
         let pool = self.pool_data.read().unwrap();
 
         let mut unshifted_price = Ray::from(
-            pool.calculate_price_unshifted(SqrtPriceX96::from_float_price(cur_price).into())
+            pool.calculate_price_unshifted(SqrtPriceX96::from_float_price(cur_price).into()),
         );
         // if the pool price > than price we want. given t1 / t0 -> more t0 less t1 ->
         // cur_price
@@ -117,13 +119,18 @@ impl OrderBuilder {
         if !zfo {
             unshifted_price.inv_ray_assign_round(true);
         }
+        let timestamp = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+            + Duration::from_secs(600))
+        .as_secs();
 
         UserOrderBuilder::new()
             .signing_key(self.keys.get(rng.gen_range(0..10)).cloned())
             .is_exact(!is_partial)
             .asset_in(if zfo { token0 } else { token1 })
             .asset_out(if !zfo { token0 } else { token1 })
-            .is_standing(false)
+            .is_standing(rng.gen_bool(0.5))
+            .nonce(rng.r#gen())
+            .deadline(U256::from(timestamp))
             .exact_in(exact_in)
             .min_price(unshifted_price)
             .block(block_number)

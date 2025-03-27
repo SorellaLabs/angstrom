@@ -2,15 +2,16 @@ mod fillstate;
 mod origin;
 use alloy::{
     primitives::{Address, B256, FixedBytes, PrimitiveSignature, keccak256},
+    signers::{Signer, SignerSync, local::PrivateKeySigner},
     sol_types::SolValue
 };
 pub mod orderpool;
 
-use alloy_primitives::{Bytes, I256};
+use alloy_primitives::{Bytes, I256, utils::eip191_message};
 pub use fillstate::*;
 pub use orderpool::*;
 pub use origin::*;
-use pade::PadeDecode;
+use pade::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 
 pub type BookID = u128;
@@ -181,6 +182,15 @@ pub struct CancelOrderRequest {
 impl CancelOrderRequest {
     fn signing_payload(&self) -> FixedBytes<32> {
         keccak256((self.user_address, self.order_id).abi_encode())
+    }
+
+    // for testing
+    pub fn sign(&self, s: &PrivateKeySigner) -> PrimitiveSignature {
+        let hash = self.signing_payload();
+        let message = eip191_message(hash.as_slice());
+        let bytes: Bytes = message.into();
+        println!("{bytes:?}");
+        s.sign_message_sync(hash.as_slice()).unwrap()
     }
 
     pub fn is_valid(&self) -> bool {

@@ -167,6 +167,10 @@ where
     /// all of our evidence.
     #[allow(unused)]
     async fn cleanup(mut self) {}
+
+    pub async fn fetch_current_leader(&self) -> Address {
+        todo!()
+    }
 }
 
 impl<P, Matching, BlockSync> Future for ConsensusManager<P, Matching, BlockSync>

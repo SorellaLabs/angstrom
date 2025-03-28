@@ -1183,7 +1183,7 @@ mod tests {
             }))
             .unwrap();
 
-        let hash = keccak256((from, order_hash).abi_encode());
+        let hash = (from, order_hash).abi_encode_packed();
         let sig = signer.sign_message_sync(hash.as_slice()).unwrap();
 
         // Cancel the order

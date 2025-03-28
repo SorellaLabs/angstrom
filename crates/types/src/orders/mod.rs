@@ -180,8 +180,8 @@ pub struct CancelOrderRequest {
 }
 
 impl CancelOrderRequest {
-    fn signing_payload(&self) -> FixedBytes<32> {
-        keccak256((self.user_address, self.order_id).abi_encode())
+    fn signing_payload(&self) -> Vec<u8> {
+        (self.user_address, self.order_id).abi_encode_packed()
     }
 
     // for testing

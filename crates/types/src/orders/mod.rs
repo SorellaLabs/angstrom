@@ -153,7 +153,10 @@ pub struct PoolSolution {
     pub amm_quantity: Option<NetAmmOrder>,
     /// IDs of limit orders to be executed - it might be easier to just use
     /// hashes here
-    pub limit:        Vec<OrderOutcome>
+    pub limit:        Vec<OrderOutcome>,
+    /// Any additional reward quantity to be taken out of excess T0 after all
+    /// other operations
+    pub reward_t0:    u128
 }
 
 impl PartialOrd for PoolSolution {

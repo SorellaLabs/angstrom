@@ -3,8 +3,8 @@ use alloy_primitives::U160;
 use itertools::Itertools;
 use pade_macro::{PadeDecode, PadeEncode};
 
-use super::{Asset, Pair, tob::MissingTickLiquidityError};
-use crate::{contract_payloads::tob::compute_reward_checksum, matching::uniswap::PoolPriceVec};
+use super::{Asset, Pair};
+use crate::matching::uniswap::{DonationResult, PoolPriceVec, PoolSnapshot};
 
 #[derive(Debug, PadeEncode, PadeDecode)]
 pub enum RewardsUpdate {
@@ -21,68 +21,55 @@ pub enum RewardsUpdate {
 }
 
 impl RewardsUpdate {
-    pub fn from_vec(
-        pricevec: &PoolPriceVec,
-        total_donation: u128
-    ) -> Result<Self, MissingTickLiquidityError> {
-        let range_tick = pricevec.end_bound.tick;
-        let current_tick = pricevec.start_bound.tick;
-        let snapshot = pricevec.snapshot();
-
-        let vec_donations = pricevec.t0_donation_to_end_price(total_donation);
-        let from_above = range_tick > current_tick;
+    pub fn from_data(
+        current_tick: i32,
+        bound_tick: i32,
+        snapshot: &PoolSnapshot,
+        donation_data: &DonationResult
+    ) -> eyre::Result<Self> {
+        // If our bound is a higher tick value, we're doing this the `from_above` way,
+        // otherwise we're coming from below the current tick
+        let from_above = bound_tick > current_tick;
         let (low, high) =
-            if from_above { (&current_tick, &range_tick) } else { (&range_tick, &current_tick) };
-        let mut quantities = vec_donations
+            if from_above { (&current_tick, &bound_tick) } else { (&bound_tick, &current_tick) };
+        let quantities = donation_data
             .tick_donations
             .iter()
-            .filter(|((low_tick, high_tick), _)| *high_tick > *low && *low_tick <= *high)
-            // Sorts from the lowest tick to the highest tick
-            .sorted_by_key(|f| f.0)
-            .map(|f| *f.1)
+            // Filter for only ranges within our provided bounds
+            .filter(|((l, h), _)| *h > *low && *l <= *high)
+            // Sort to put them in order by low bound tick - high-to-low if from_above, low-to-high
+            // otherwise
+            .sorted_by(|((a, _), _), ((b, _), _)| if from_above { b.cmp(a) } else { a.cmp(b) })
+            // Map to the quantity
+            .map(|(_, q)| *q)
             .collect::<Vec<_>>();
 
-        // If we're coming from above we have to reverse, we want highest tick to lowest
-        // tick
-        if from_above {
-            quantities.reverse();
-        }
-
         let (start_tick, start_liquidity) = snapshot
-            .get_range_for_tick(range_tick)
+            .get_range_for_tick(bound_tick)
             .map(|r| (if from_above { r.lower_tick() } else { r.upper_tick() }, r.liquidity()))
             .unwrap_or_default();
-
-        tracing::trace!(
-            start_tick,
-            start_liquidity,
-            current_tick,
-            ?quantities,
-            quantities_len = quantities.len(),
-            "Rewards update range dump"
-        );
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {
                 amount:             quantities.first().copied().unwrap_or_default(),
                 expected_liquidity: start_liquidity
             }),
-            len => {
-                let reward_checksum = compute_reward_checksum(
-                    start_tick,
-                    start_liquidity,
-                    snapshot,
-                    from_above,
-                    len
-                )?;
-                Ok(Self::MultiTick {
-                    start_tick: I24::try_from(start_tick).unwrap_or_default(),
-                    start_liquidity,
-                    quantities,
-                    reward_checksum
-                })
-            }
+            _ => Ok(Self::MultiTick {
+                start_tick: I24::try_from(start_tick).unwrap_or_default(),
+                start_liquidity,
+                quantities,
+                reward_checksum: snapshot.checksum_from_ticks(bound_tick, current_tick)?
+            })
         }
+    }
+
+    pub fn from_vec(pricevec: &PoolPriceVec, total_donation: u128) -> eyre::Result<Self> {
+        Self::from_data(
+            pricevec.start_bound.tick,
+            pricevec.end_bound.tick,
+            pricevec.snapshot(),
+            &pricevec.t0_donation(total_donation)
+        )
     }
 
     pub fn empty() -> Self {

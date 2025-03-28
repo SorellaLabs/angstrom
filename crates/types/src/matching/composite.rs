@@ -223,7 +223,7 @@ mod tests {
         let lower_tick = mid - width;
         let upper_tick = mid + width;
         let ranges = vec![LiqRange::new(lower_tick, upper_tick, liquidity).unwrap()];
-        PoolSnapshot::new(ranges, amm_price).unwrap()
+        PoolSnapshot::new(width, ranges, amm_price).unwrap()
     }
 
     #[test]

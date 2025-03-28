@@ -70,7 +70,7 @@ impl AMMSnapshotBuilder {
             let liquidity = self.default_position_liquidity.unwrap_or(1);
             vec![LiqRange::new(lower_tick, upper_tick, liquidity).unwrap()]
         };
-        PoolSnapshot::new(ranges, self.price).unwrap()
+        PoolSnapshot::new(1, ranges, self.price).unwrap()
     }
 }
 
@@ -81,7 +81,7 @@ pub fn generate_amm_with_liquidity(
     price: SqrtPriceX96
 ) -> PoolSnapshot {
     let ranges = vec![LiqRange::new(tick_low, tick_high, liquidity).unwrap()];
-    PoolSnapshot::new(ranges, price).unwrap()
+    PoolSnapshot::new(1, ranges, price).unwrap()
 }
 
 /// Generates an AMM with multiple liquidity positions across a tick range
@@ -125,7 +125,7 @@ pub fn generate_amm_with_distributed_liquidity(
         current_tick += tick_spacing;
     }
 
-    PoolSnapshot::new(ranges, price).unwrap()
+    PoolSnapshot::new(tick_spacing, ranges, price).unwrap()
 }
 
 pub fn generate_single_position_amm_at_tick(mid: i32, width: i32, liquidity: u128) -> PoolSnapshot {
@@ -133,14 +133,14 @@ pub fn generate_single_position_amm_at_tick(mid: i32, width: i32, liquidity: u12
     let lower_tick = mid - width;
     let upper_tick = mid + width;
     let ranges = vec![LiqRange::new(lower_tick, upper_tick, liquidity).unwrap()];
-    PoolSnapshot::new(ranges, amm_price).unwrap()
+    PoolSnapshot::new(1, ranges, amm_price).unwrap()
 }
 
 pub fn generate_amm_market(target_tick: i32) -> PoolSnapshot {
     let range = LiqRange::new(target_tick - 100, target_tick + 100, 100_000_000).unwrap();
     let ranges = vec![range];
     let sqrt_price_x96 = SqrtPriceX96::from(get_sqrt_ratio_at_tick(target_tick).unwrap());
-    PoolSnapshot::new(ranges, sqrt_price_x96).unwrap()
+    PoolSnapshot::new(1, ranges, sqrt_price_x96).unwrap()
 }
 
 #[derive(Debug, Default)]

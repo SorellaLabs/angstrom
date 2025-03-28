@@ -11,5 +11,5 @@ pub fn single_position_amm(middle_tick: i32, width: i32, liquidity: u128) -> Opt
     let lower_tick = middle_tick - width;
     let upper_tick = middle_tick + width;
     let ranges = vec![LiqRange::new(lower_tick, upper_tick, liquidity).unwrap()];
-    PoolSnapshot::new(ranges, amm_price).ok()
+    PoolSnapshot::new(width, ranges, amm_price).ok()
 }

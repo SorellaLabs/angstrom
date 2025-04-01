@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+import {console} from "forge-std/console.sol";
 import {IAngstromAuth, ConfigEntryUpdate} from "../interfaces/IAngstromAuth.sol";
 import {UniConsumer} from "./UniConsumer.sol";
 import {EIP712} from "solady/src/utils/EIP712.sol";
@@ -68,11 +69,13 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
         uint24 bundleFee,
         uint24 unlockedFee
     ) external {
+        console.log("cnt");
         _onlyController();
 
         if (asset0 >= asset1) revert AssetsUnordered();
-
+        console.log("store key");
         StoreKey key = StoreKeyLib.keyFromAssetsUnchecked(asset0, asset1);
+        console.log("update config store");
 
         ConfigBuffer memory buffer = _configStore.read_to_buffer(1);
         uint256 i = 0;
@@ -94,9 +97,12 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
         }
 
         _configStore = PoolConfigStoreLib.store_from_buffer(buffer);
+        console.log("validating");
 
         unlockedFee.validate();
+        console.log("setUnlockedFee");
         _setUnlockedFee(key, unlockedFee);
+        console.log("res", asset0, asset1);
     }
 
     function initializePool(

@@ -24,6 +24,7 @@ where
     DataLoader: PoolDataLoader
 {
     pub fn new(provider: Arc<P>, registry: UniswapPoolRegistry, pool_manager: Address) -> Self {
+        tracing::info!(?registry);
         Self { provider, registry, pool_manager }
     }
 

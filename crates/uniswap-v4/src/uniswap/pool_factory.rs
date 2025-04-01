@@ -39,6 +39,7 @@ where
             pool.initialize(Some(block), self.provider.clone())
                 .await
                 .expect("failed to init pool");
+            tracing::info!(?pool);
             pool
         }))
         .await

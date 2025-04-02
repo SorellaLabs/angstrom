@@ -23,6 +23,7 @@ pub struct GasEstimateResponse {
 
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "angstrom"))]
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "angstrom"))]
+#[async_trait::async_trait]
 pub trait OrderApi {
     /// Submit any type of order
     #[method(name = "sendOrder")]
@@ -158,6 +159,6 @@ pub trait OrderApi {
 
     #[method(name = "FetchCurrentLeader")]
     async fn fetch_current_leader(&self) -> RpcResult<Address> {
-        Ok(Address::default())
+        Ok(Address::zero())
     }
 }

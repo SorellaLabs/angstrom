@@ -31,6 +31,7 @@ impl<OrderPool, Spawner, Validator> OrderApi<OrderPool, Spawner, Validator> {
     }
 }
 
+#[async_trait::async_trait]
 impl<OrderPool, Spawner, Validator> OrderApiServer for OrderApi<OrderPool, Spawner, Validator>
 where
     OrderPool: OrderPoolHandle,

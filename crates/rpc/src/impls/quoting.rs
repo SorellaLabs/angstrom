@@ -10,6 +10,7 @@ pub struct QuotesApi<OrderPool, Spawner> {
     _task_spawner: Spawner
 }
 
+#[async_trait::async_trait]
 impl<OrderPool, Spawner> QuotingApiServer for QuotesApi<OrderPool, Spawner>
 where
     OrderPool: Send + Sync + 'static,

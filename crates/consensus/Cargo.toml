@@ -24,6 +24,7 @@ alloy.workspace = true
 reth-metrics.workspace = true
 reth-provider.workspace = true
 tracing.workspace = true
+async-trait.workspace = true
 serde.workspace = true
 anyhow.workspace = true
 url.workspace = true

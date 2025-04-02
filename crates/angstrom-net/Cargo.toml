@@ -78,6 +78,7 @@ aquamarine.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
 parking_lot.workspace = true
+async-trait.workspace = true
 linked_hash_set = "0"
 linked-hash-map = "0"
 rand.workspace = true

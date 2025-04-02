@@ -83,6 +83,7 @@ pade = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
 pade-macro = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
 
 ## async
+async-trait = "0"
 futures = "0"
 pin-project = "1"
 futures-util = "0"

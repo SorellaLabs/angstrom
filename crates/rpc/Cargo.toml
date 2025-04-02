@@ -33,6 +33,7 @@ serde_json.workspace = true
 serde.workspace = true
 alloy-primitives = { workspace = true, features = ["serde"] }
 alloy-sol-types.workspace = true
+async-trait.workspace = true
 thiserror.workspace = true
 metrics.workspace = true
 tracing.workspace = true

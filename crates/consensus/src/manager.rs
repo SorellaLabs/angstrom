@@ -220,3 +220,9 @@ impl ManagerNetworkDeps {
         Self { network, canonical_block_stream, strom_consensus_event }
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LeadershipState {
+    pub current_leader: Address,
+    pub current_height: BlockNumber
+}

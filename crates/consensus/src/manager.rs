@@ -167,6 +167,10 @@ where
     /// all of our evidence.
     #[allow(unused)]
     async fn cleanup(mut self) {}
+
+    pub fn current_leader(&self) -> Address {
+        self.consensus_round_state.current_leader()
+    }
 }
 
 impl<P, Matching, BlockSync> Future for ConsensusManager<P, Matching, BlockSync>
@@ -215,4 +219,10 @@ impl ManagerNetworkDeps {
     ) -> Self {
         Self { network, canonical_block_stream, strom_consensus_event }
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LeadershipState {
+    pub current_leader: Address,
+    pub current_height: BlockNumber
 }

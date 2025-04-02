@@ -156,4 +156,7 @@ pub trait OrderApi {
             .flatten()
             .collect())
     }
+
+    #[method(name = "FetchCurrentLeader")]
+    async fn fetch_current_leader(&self) -> RpcResult<Address>;
 }

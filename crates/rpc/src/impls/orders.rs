@@ -120,6 +120,10 @@ where
 
         Ok(())
     }
+
+    async fn fetch_current_leader(&self) -> RpcResult<Address> {
+        Ok(Default::default())
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

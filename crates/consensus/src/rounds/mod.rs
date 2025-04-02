@@ -114,6 +114,10 @@ where
         self.current_state
             .on_consensus_message(&mut self.shared_state, event);
     }
+
+    pub fn current_leader(&self) -> Address {
+        self.shared_state.current_leader()
+    }
 }
 
 impl<P, Matching> Stream for RoundStateMachine<P, Matching>
@@ -333,6 +337,10 @@ where
         } else {
             tracing::trace!(peer=?peer_id,"got a duplicate consensus message");
         }
+    }
+
+    pub fn current_leader(&self) -> Address {
+        self.round_leader
     }
 }
 

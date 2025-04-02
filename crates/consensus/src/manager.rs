@@ -168,8 +168,8 @@ where
     #[allow(unused)]
     async fn cleanup(mut self) {}
 
-    pub async fn fetch_current_leader(&self) -> Address {
-        todo!()
+    pub fn current_leader(&self) -> Address {
+        self.consensus_round_state.current_leader()
     }
 }
 

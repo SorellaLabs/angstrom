@@ -1,9 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, ops::Deref, sync::Arc};
 
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
     primitive::{UserAccountVerificationError, UserOrderPoolInfo},
-    sol_bindings::{Ray, RespendAvoidanceMethod, ext::RawPoolOrder}
+    sol_bindings::{OrderValidationPriority, Ray, RespendAvoidanceMethod, ext::RawPoolOrder}
 };
 use angstrom_utils::FnResultOption;
 use dashmap::DashMap;
@@ -76,8 +76,12 @@ impl LiveState {
         };
 
         Ok(PendingUserAction {
-            order_hash: order.order_hash(),
-            respend: order.respend_avoidance_strategy(),
+            order_priority: OrderValidationPriority {
+                order_hash: order.order_hash(),
+                is_partial: order.is_partial(),
+                is_tob:     order.is_tob(),
+                respend:    order.respend_avoidance_strategy()
+            },
             token_address: pool_info.token,
             token_delta,
             angstrom_delta,
@@ -92,7 +96,7 @@ impl LiveState {
     ///
     /// one is an one for zero(bid) swap where we specify exact out.
     ///
-    ///  one is a zero for 1 swap with an exact out specified
+    /// one is a zero for 1 swap with an exact out specified
     fn fetch_amount_in<O: RawPoolOrder>(&self, order: &O) -> U256 {
         let ray_price = Ray::from(order.limit_price());
         U256::from(if order.is_bid() && !order.exact_in() {
@@ -108,11 +112,12 @@ impl LiveState {
 }
 
 /// deltas to be applied to the base user action
+/// We need to update this ordering such that we prioritize
+/// TOB -> Partial Orders -> Book Orders.
 #[derive(Clone, Debug)]
 pub struct PendingUserAction {
-    /// hash of order
-    pub order_hash:     B256,
-    pub respend:        RespendAvoidanceMethod,
+    pub order_priority: OrderValidationPriority,
+    // TODO: easier to properly encode this stuff
     // for each order, there will be two different deltas
     pub token_address:  TokenAddress,
     // although we have deltas for two tokens, we only
@@ -124,6 +129,14 @@ pub struct PendingUserAction {
     pub angstrom_delta: Amount,
 
     pub pool_info: UserOrderPoolInfo
+}
+
+impl Deref for PendingUserAction {
+    type Target = OrderValidationPriority;
+
+    fn deref(&self) -> &Self::Target {
+        &self.order_priority
+    }
 }
 
 pub struct UserAccounts {
@@ -201,14 +214,14 @@ impl UserAccounts {
         &self,
         user: UserAddress,
         token: TokenAddress,
-        respend: RespendAvoidanceMethod,
+        order_priority: OrderValidationPriority,
         utils: &S
     ) -> eyre::Result<LiveState> {
         let out = self
-            .try_fetch_live_pending_state(user, token, respend)
+            .try_fetch_live_pending_state(user, token, order_priority)
             .invert_map_or_else(|| {
                 self.load_state_for(user, token, utils)?;
-                self.try_fetch_live_pending_state(user, token, respend)
+                self.try_fetch_live_pending_state(user, token, order_priority)
                     .ok_or(eyre::eyre!(
                         "after loading state for a address, the state wasn't found. this should \
                          be impossible"
@@ -251,7 +264,8 @@ impl UserAccounts {
         let value = entry.value_mut();
 
         value.push(action);
-        value.sort_unstable_by_key(|k| k.respend.get_ord_for_pending_orders());
+        // sorts them descending by priority
+        value.sort_unstable_by(|f, s| s.is_higher_priority(f));
         drop(entry);
 
         // iterate through all vales collected the orders that
@@ -304,7 +318,7 @@ impl UserAccounts {
         &self,
         user: UserAddress,
         token: TokenAddress,
-        respend: RespendAvoidanceMethod
+        order_priority: OrderValidationPriority
     ) -> Option<LiveState> {
         let baseline = self.last_known_state.get(&user)?;
         let baseline_approval = *baseline.token_approval.get(&token)?;
@@ -319,8 +333,8 @@ impl UserAccounts {
                 val.iter()
                     .filter(|state| state.token_address == token)
                     .take_while(|state| {
-                        state.respend.get_ord_for_pending_orders()
-                            <= respend.get_ord_for_pending_orders()
+                        // needs to be greater
+                        state.is_higher_priority(&order_priority) == Ordering::Greater
                     })
                     .fold(
                         (Amount::default(), Amount::default(), Amount::default()),
@@ -363,11 +377,17 @@ mod tests {
         token_delta: U256,
         angstrom_delta: U256,
         token_approval: U256,
-        nonce: u64
+        nonce: u64,
+        is_tob: bool,
+        is_partial: bool
     ) -> PendingUserAction {
         PendingUserAction {
-            order_hash: B256::random(),
-            respend: RespendAvoidanceMethod::Nonce(nonce),
+            order_priority: OrderValidationPriority {
+                order_hash: B256::random(),
+                is_tob,
+                is_partial,
+                respend: RespendAvoidanceMethod::Nonce(nonce)
+            },
             token_address: token,
             token_delta,
             token_approval,
@@ -384,10 +404,24 @@ mod tests {
         let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
         // Add some pending actions
-        let action1 =
-            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
-        let action2 =
-            create_test_pending_action(token, U256::from(200), U256::from(0), U256::from(200), 2);
+        let action1 = create_test_pending_action(
+            token,
+            U256::from(100),
+            U256::from(0),
+            U256::from(100),
+            1,
+            true,
+            true
+        );
+        let action2 = create_test_pending_action(
+            token,
+            U256::from(200),
+            U256::from(0),
+            U256::from(200),
+            2,
+            true,
+            true
+        );
 
         accounts.insert_pending_user_action(user1, action1.clone());
         accounts.insert_pending_user_action(user2, action2.clone());
@@ -416,8 +450,15 @@ mod tests {
         let user = address!("1234567890123456789012345678901234567890");
         let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
-        let action =
-            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
+        let action = create_test_pending_action(
+            token,
+            U256::from(100),
+            U256::from(0),
+            U256::from(100),
+            1,
+            true,
+            true
+        );
         let order_hash = action.order_hash;
 
         accounts.insert_pending_user_action(user, action);
@@ -448,12 +489,33 @@ mod tests {
         assert!(conflicts.is_empty(), "Should return empty vec when no actions exist");
 
         // Create actions with same nonce
-        let action1 =
-            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
-        let action2 =
-            create_test_pending_action(token, U256::from(200), U256::from(0), U256::from(200), 1);
-        let action3 =
-            create_test_pending_action(token, U256::from(300), U256::from(0), U256::from(300), 2);
+        let action1 = create_test_pending_action(
+            token,
+            U256::from(100),
+            U256::from(0),
+            U256::from(100),
+            1,
+            true,
+            true
+        );
+        let action2 = create_test_pending_action(
+            token,
+            U256::from(200),
+            U256::from(0),
+            U256::from(200),
+            1,
+            true,
+            true
+        );
+        let action3 = create_test_pending_action(
+            token,
+            U256::from(300),
+            U256::from(0),
+            U256::from(300),
+            2,
+            true,
+            true
+        );
 
         // Insert actions one by one and verify
         accounts.insert_pending_user_action(user, action1.clone());
@@ -487,17 +549,40 @@ mod tests {
         accounts.last_known_state.insert(user, baseline);
 
         // Add pending actions
-        let action1 =
-            create_test_pending_action(token, U256::from(100), U256::from(50), U256::from(100), 1);
-        let action2 =
-            create_test_pending_action(token, U256::from(200), U256::from(100), U256::from(200), 2);
+        let action1 = create_test_pending_action(
+            token,
+            U256::from(100),
+            U256::from(50),
+            U256::from(100),
+            1,
+            true,
+            true
+        );
+        let action2 = create_test_pending_action(
+            token,
+            U256::from(200),
+            U256::from(100),
+            U256::from(200),
+            3,
+            true,
+            true
+        );
 
         accounts.insert_pending_user_action(user, action1);
         accounts.insert_pending_user_action(user, action2);
 
         // Test live state for different nonces
         let live_state = accounts
-            .try_fetch_live_pending_state(user, token, RespendAvoidanceMethod::Nonce(1))
+            .try_fetch_live_pending_state(
+                user,
+                token,
+                OrderValidationPriority {
+                    order_hash: B256::random(),
+                    is_tob:     true,
+                    is_partial: true,
+                    respend:    RespendAvoidanceMethod::Nonce(2)
+                }
+            )
             .unwrap();
 
         assert_eq!(live_state.approval, U256::from(900)); // 1000 - 100
@@ -505,7 +590,16 @@ mod tests {
         assert_eq!(live_state.angstrom_balance, U256::from(950)); // 1000 - 50
 
         let live_state = accounts
-            .try_fetch_live_pending_state(user, token, RespendAvoidanceMethod::Nonce(2))
+            .try_fetch_live_pending_state(
+                user,
+                token,
+                OrderValidationPriority {
+                    order_hash: B256::random(),
+                    is_tob:     true,
+                    is_partial: true,
+                    respend:    RespendAvoidanceMethod::Nonce(4)
+                }
+            )
             .unwrap();
 
         assert_eq!(live_state.approval, U256::from(700)); // 1000 - 100 - 200
@@ -528,13 +622,27 @@ mod tests {
         accounts.last_known_state.insert(user, baseline);
 
         // Add action that consumes most of the balance
-        let action1 =
-            create_test_pending_action(token, U256::from(900), U256::from(0), U256::from(900), 1);
+        let action1 = create_test_pending_action(
+            token,
+            U256::from(900),
+            U256::from(0),
+            U256::from(900),
+            1,
+            true,
+            true
+        );
         accounts.insert_pending_user_action(user, action1);
 
         // Add action that would overflow the balance
-        let action2 =
-            create_test_pending_action(token, U256::from(200), U256::from(0), U256::from(200), 2);
+        let action2 = create_test_pending_action(
+            token,
+            U256::from(200),
+            U256::from(0),
+            U256::from(200),
+            2,
+            true,
+            true
+        );
         let invalidated = accounts.insert_pending_user_action(user, action2.clone());
 
         // The second action should be invalidated due to insufficient balance
@@ -562,8 +670,15 @@ mod tests {
         let user = address!("1234567890123456789012345678901234567890");
         let token = address!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
-        let action =
-            create_test_pending_action(token, U256::from(100), U256::from(0), U256::from(100), 1);
+        let action = create_test_pending_action(
+            token,
+            U256::from(100),
+            U256::from(0),
+            U256::from(100),
+            1,
+            true,
+            true
+        );
         accounts.insert_pending_user_action(user, action);
 
         let conflicts = accounts.respend_conflicts(user, RespendAvoidanceMethod::Block(1));
@@ -588,22 +703,39 @@ mod tests {
         accounts.last_known_state.insert(user, baseline);
 
         // Add pending actions for different tokens
-        let action1 =
-            create_test_pending_action(token1, U256::from(100), U256::from(50), U256::from(100), 1);
+        let action1 = create_test_pending_action(
+            token1,
+            U256::from(100),
+            U256::from(50),
+            U256::from(100),
+            1,
+            true,
+            true
+        );
         let action2 = create_test_pending_action(
             token2,
             U256::from(200),
             U256::from(100),
             U256::from(200),
-            1
+            1,
+            true,
+            true
         );
 
         accounts.insert_pending_user_action(user, action1);
         accounts.insert_pending_user_action(user, action2);
 
-        // Check live state for token1
         let live_state = accounts
-            .try_fetch_live_pending_state(user, token1, RespendAvoidanceMethod::Nonce(1))
+            .try_fetch_live_pending_state(
+                user,
+                token1,
+                OrderValidationPriority {
+                    order_hash: B256::random(),
+                    is_tob:     false,
+                    is_partial: false,
+                    respend:    RespendAvoidanceMethod::Nonce(1)
+                }
+            )
             .unwrap();
         assert_eq!(live_state.approval, U256::from(900));
         assert_eq!(live_state.balance, U256::from(900));
@@ -611,7 +743,16 @@ mod tests {
 
         // Check live state for token2
         let live_state = accounts
-            .try_fetch_live_pending_state(user, token2, RespendAvoidanceMethod::Nonce(1))
+            .try_fetch_live_pending_state(
+                user,
+                token2,
+                OrderValidationPriority {
+                    order_hash: B256::random(),
+                    is_tob:     false,
+                    is_partial: false,
+                    respend:    RespendAvoidanceMethod::Nonce(1)
+                }
+            )
             .unwrap();
         assert_eq!(live_state.approval, U256::from(1800));
         assert_eq!(live_state.balance, U256::from(1800));
@@ -632,12 +773,20 @@ mod tests {
         accounts.last_known_state.insert(user, baseline);
 
         // Add action that would cause overflow
-        let action = create_test_pending_action(token, U256::MAX, U256::MAX, U256::MAX, 1);
+        let action =
+            create_test_pending_action(token, U256::MAX, U256::MAX, U256::MAX, 1, true, true);
         accounts.insert_pending_user_action(user, action.clone());
 
         // Add another action that should be invalidated
-        let action2 =
-            create_test_pending_action(token, U256::from(1), U256::from(1), U256::from(1), 2);
+        let action2 = create_test_pending_action(
+            token,
+            U256::from(1),
+            U256::from(1),
+            U256::from(1),
+            2,
+            true,
+            true
+        );
         accounts.insert_pending_user_action(user, action2.clone());
 
         let invalidated = accounts.fetch_all_invalidated_orders(user, token);

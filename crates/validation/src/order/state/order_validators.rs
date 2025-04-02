@@ -1,9 +1,5 @@
-use alloy::primitives::U256;
 use amount_set::EnsureAmountSet;
-use angstrom_types::{
-    primitive::OrderValidationError,
-    sol_bindings::{RawPoolOrder, Ray}
-};
+use angstrom_types::{primitive::OrderValidationError, sol_bindings::RawPoolOrder};
 use gas_set::EnsureGasSet;
 use max_gas_lt_min::EnsureMaxGasLessThanMinAmount;
 use price_set::EnsurePriceSet;
@@ -39,21 +35,12 @@ impl<'a, O: RawPoolOrder> OrderValidationState<'a, O> {
         if let Some(min_qty) = self.min_qty {
             min_qty
         } else {
-            let order = self.order;
-            let min_qty = if !order.is_bid() {
-                if order.exact_in() {
-                    order.min_amount()
-                } else {
-                    Ray::from(order.limit_price()).inverse_quantity(order.min_amount(), true)
-                }
-            } else if order.exact_in() {
-                Ray::from(order.limit_price())
-                    .mul_quantity(U256::from(order.min_amount()))
-                    .to::<u128>()
-            } else {
-                order.min_amount()
-            };
+            let min_qty = self
+                .order
+                .min_qty_t0()
+                .expect("amount and price checks should of been done before this was called");
             self.min_qty = Some(min_qty);
+
             min_qty
         }
     }
@@ -92,7 +79,11 @@ impl OrderValidation for OrderValidator {
 
 #[cfg(test)]
 pub fn make_base_order() -> angstrom_types::sol_bindings::grouped_orders::GroupedVanillaOrder {
-    use angstrom_types::sol_bindings::grouped_orders::{GroupedVanillaOrder, StandingVariants};
+    use alloy::primitives::U256;
+    use angstrom_types::sol_bindings::{
+        Ray,
+        grouped_orders::{GroupedVanillaOrder, StandingVariants}
+    };
     use testing_tools::type_generator::orders::UserOrderBuilder;
 
     let mut order = match UserOrderBuilder::new()

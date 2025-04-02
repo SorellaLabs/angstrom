@@ -30,6 +30,8 @@ pub enum OrderValidationError {
     NoGasSpecified,
     #[error("no price was specified for this order")]
     NoPriceSpecified,
+    #[error("order was cancelled")]
+    CancelledOrder,
     #[error("unknown")]
     Unknown(String)
 }

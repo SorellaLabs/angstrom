@@ -72,7 +72,7 @@ impl ConnectionHandler for StromConnectionHandler {
         _direction: Direction,
         _peer_id: PeerId
     ) -> OnNotSupported {
-        OnNotSupported::Disconnect
+        OnNotSupported::KeepAlive
     }
 
     // this occurs after the eth handshake occured

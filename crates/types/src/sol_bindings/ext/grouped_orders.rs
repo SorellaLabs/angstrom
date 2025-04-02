@@ -386,7 +386,7 @@ impl<Order> OrderWithStorageData<Order> {
             is_currently_valid: self.is_currently_valid,
             is_valid:           self.is_valid,
             order_id:           self.order_id,
-            tob_reward:         U256::ZERO
+            tob_reward:         self.tob_reward
         })
     }
 }
@@ -776,6 +776,10 @@ impl GroupedComposableOrder {
 
 impl RawPoolOrder for TopOfBlockOrder {
     fn exact_in(&self) -> bool {
+        true
+    }
+
+    fn is_tob(&self) -> bool {
         true
     }
 
@@ -1177,6 +1181,10 @@ impl RawPoolOrder for ExactFlashOrder {
 }
 
 impl RawPoolOrder for AllOrders {
+    fn is_tob(&self) -> bool {
+        matches!(self, AllOrders::TOB(_))
+    }
+
     fn has_hook(&self) -> bool {
         match self {
             AllOrders::Standing(p) => p.has_hook(),

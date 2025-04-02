@@ -334,7 +334,7 @@ pub enum EthEvent {
     RemovedNode(Address)
 }
 
-#[auto_impl::auto_impl(&,Arc)]
+#[auto_impl::auto_impl(&, Arc)]
 pub trait ChainExt {
     fn tip_number(&self) -> BlockNumber;
     fn tip_hash(&self) -> BlockHash;

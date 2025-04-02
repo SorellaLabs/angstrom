@@ -26,9 +26,7 @@ use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender, error::SendError, unbounded_channel}
 };
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
-use validation::order::{
-    OrderValidationResults, OrderValidatorHandle, state::pools::AngstromPoolsTracker
-};
+use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
 use crate::{LruCache, NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
 
@@ -182,7 +180,6 @@ where
         task_spawner: TP,
         tx: UnboundedSender<OrderCommand>,
         rx: UnboundedReceiver<OrderCommand>,
-        pool_storage: AngstromPoolsTracker,
         pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
         block_number: u64
     ) -> PoolHandle {
@@ -196,8 +193,7 @@ where
             self.validator.clone(),
             order_storage.clone(),
             block_number,
-            pool_manager_tx.clone(),
-            pool_storage
+            pool_manager_tx.clone()
         );
         self.global_sync.register(MODULE_NAME);
 
@@ -218,11 +214,7 @@ where
         handle
     }
 
-    pub fn build<TP: TaskSpawner>(
-        self,
-        pool_storage: AngstromPoolsTracker,
-        task_spawner: TP
-    ) -> PoolHandle {
+    pub fn build<TP: TaskSpawner>(self, task_spawner: TP) -> PoolHandle {
         let (tx, rx) = unbounded_channel();
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -235,8 +227,7 @@ where
             self.validator.clone(),
             order_storage.clone(),
             0,
-            pool_manager_tx.clone(),
-            pool_storage
+            pool_manager_tx.clone()
         );
 
         task_spawner.spawn_critical(

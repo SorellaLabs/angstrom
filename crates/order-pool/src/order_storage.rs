@@ -108,6 +108,38 @@ impl OrderStorage {
         }
     }
 
+    pub fn get_orders_by_pool(&self, pool_id: PoolId, location: OrderLocation) -> Vec<AllOrders> {
+        match location {
+            OrderLocation::Limit => self
+                .limit_orders
+                .lock()
+                .expect("lock poisoned")
+                .get_all_orders_from_pool(pool_id),
+            OrderLocation::Searcher => self
+                .searcher_orders
+                .lock()
+                .expect("lock poisoned")
+                .get_all_orders_from_pool(pool_id)
+        }
+    }
+
+    pub fn get_order_from_id(&self, order_id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
+        match order_id.location {
+            OrderLocation::Limit => self
+                .limit_orders
+                .lock()
+                .expect("lock poisoned")
+                .get_order(order_id)
+                .and_then(|order| order.try_map_inner(|inner| Ok(inner.into())).ok()),
+            OrderLocation::Searcher => self
+                .searcher_orders
+                .lock()
+                .expect("lock poisoned")
+                .get_order(order_id.pool_id, order_id.hash)
+                .and_then(|order| order.try_map_inner(|inner| Ok(AllOrders::TOB(inner))).ok())
+        }
+    }
+
     pub fn cancel_order(&self, order_id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
         if self
             .pending_finalization_orders
@@ -265,6 +297,17 @@ impl OrderStorage {
 
         self.metrics.decr_pending_finalization_orders(orders.len());
         orders
+    }
+
+    pub fn remove_order(&self, id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
+        match id.location {
+            OrderLocation::Limit => self.remove_limit_order(id),
+            OrderLocation::Searcher => self.remove_searcher_order(id)
+        }
+    }
+
+    pub fn remove_parked_order(&self, id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {
+        self.remove_order(id)
     }
 
     pub fn remove_searcher_order(&self, id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {

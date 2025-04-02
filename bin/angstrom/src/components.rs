@@ -53,7 +53,6 @@ use uniswap_v4::{configure_uniswap_manager, fetch_angstrom_pools};
 use validation::{
     common::TokenPriceGenerator,
     init_validation,
-    order::state::pools::AngstromPoolsTracker,
     validator::{ValidationClient, ValidationRequest}
 };
 
@@ -204,7 +203,6 @@ where
     tracing::info!(target: "angstrom::startup-sequence", "new block detected. initializing all modules");
 
     let block_id = querying_provider.get_block_number().await.unwrap();
-    tracing::info!(?block_id, "starting up with block");
 
     let pool_config_store = Arc::new(
         AngstromPoolConfigStore::load_from_chain(
@@ -227,13 +225,18 @@ where
     .await;
     tracing::info!("found pools");
 
-    let _ = sub.recv().await.expect("first block");
-
     // re-fetch given the fetch pools takes awhile. given this, we do techincally
     // have a gap in which a pool is deployed durning startup. This isn't
     // critical but we will want to fix this down the road.
-    let block_id = querying_provider.get_block_number().await.unwrap();
+    // let block_id = querying_provider.get_block_number().await.unwrap();
+    let block_id = match sub.recv().await.expect("first block") {
+        CanonStateNotification::Commit { new } => new.tip().number,
+        CanonStateNotification::Reorg { new, .. } => new.tip().number
+    };
+
+    tracing::info!(?block_id, "starting up with block");
     let eth_data_sub = node.provider.subscribe_to_canonical_state();
+
     let global_block_sync = GlobalBlockSync::new(block_id);
 
     // this right here problem
@@ -250,7 +253,6 @@ where
         ._0
         .into_iter()
         .collect::<HashSet<_>>();
-    tokio::time::sleep(Duration::from_secs(3)).await;
     tracing::info!(?node_set, "got node set");
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
@@ -284,7 +286,6 @@ where
     )
     .await;
 
-    tokio::time::sleep(Duration::from_secs(3)).await;
     tracing::info!("uniswap manager start");
 
     let uniswap_pools = uniswap_pool_manager.pools();
@@ -318,7 +319,6 @@ where
     );
 
     let validation_handle = ValidationClient(handles.validator_tx.clone());
-    tokio::time::sleep(Duration::from_secs(3)).await;
     tracing::info!("validation manager start");
 
     let network_handle = network_builder
@@ -330,8 +330,6 @@ where
 
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
-    let angstrom_pool_tracker =
-        AngstromPoolsTracker::new(node_config.angstrom_address, pool_config_store.clone());
 
     let _pool_handle = PoolManagerBuilder::new(
         validation_handle.clone(),
@@ -346,7 +344,6 @@ where
         executor.clone(),
         handles.orderpool_tx,
         handles.orderpool_rx,
-        angstrom_pool_tracker,
         handles.pool_manager_tx,
         block_id
     );
@@ -355,7 +352,6 @@ where
         // use same weight for all validators
         .map(|addr| AngstromValidator::new(addr, 100))
         .collect::<Vec<_>>();
-    tokio::time::sleep(Duration::from_secs(3)).await;
     tracing::info!("pool manager start");
 
     // spinup matching engine
@@ -397,9 +393,9 @@ async fn handle_init_block_spam(
 
     loop {
         tokio::select! {
-            // if we can go 9s without a update, we know that all of the pending cannon
+            // if we can go 10.5s without a update, we know that all of the pending cannon
             // state notifications have been processed and we are at the tip.
-            _ = tokio::time::sleep(Duration::from_secs(9)) => {
+            _ = tokio::time::sleep(Duration::from_millis(1050)) => {
                 break;
             }
             Ok(_) = canon.recv() => {

@@ -41,7 +41,6 @@ alloy.workspace = true
 
 
 # async/futures
-async-trait.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
 tokio = { workspace = true, default-features = false, features = ["sync"] }

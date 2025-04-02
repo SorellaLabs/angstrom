@@ -1,5 +1,6 @@
 use std::{fmt::Debug, slice::Iter};
 
+use alloy_primitives::{U160, U256, aliases::I24, utils::keccak256};
 use eyre::{Context, OptionExt, eyre};
 use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio;
@@ -28,20 +29,57 @@ pub struct PoolSnapshot {
     pub(crate) current_tick:   Tick,
     /// Index into the 'ranges' vector for the PoolRange that includes the tick
     /// our current price lives at/in
-    pub(crate) cur_tick_idx:   usize
+    pub(crate) cur_tick_idx:   usize,
+    /// Tick spacing of our pool
+    pub(crate) tick_spacing:   i32
 }
 
 impl PoolSnapshot {
-    pub fn new(mut ranges: Vec<LiqRange>, sqrt_price_x96: SqrtPriceX96) -> eyre::Result<Self> {
+    pub fn new(
+        tick_spacing: i32,
+        mut ranges: Vec<LiqRange>,
+        sqrt_price_x96: SqrtPriceX96
+    ) -> eyre::Result<Self> {
         // Sort our ranges
         ranges.sort_by(|a, b| a.lower_tick.cmp(&b.lower_tick));
 
-        // Ensure the ranges are contiguous
-        if !ranges
-            .windows(2)
-            .all(|w| w[0].upper_tick == w[1].lower_tick)
-        {
-            return Err(eyre!("Tick windows not contiguous, cannot create snapshot"));
+        // Tick spacing must be a positive integer
+        if tick_spacing <= 0 {
+            return Err(eyre!("Invalid tick spacing: {tick_spacing}"));
+        }
+
+        // Ensure the ranges are contiguous and all ticks are aligned on spacing
+        for items in ranges.windows(2) {
+            // These are always valid because we know `windows()` works this way
+            let left = items[0];
+            let right = items[1];
+
+            if left.upper_tick != right.lower_tick {
+                return Err(eyre!(
+                    "Ranges not aligned - upper tick {} != lower tick {}",
+                    left.upper_tick,
+                    right.lower_tick
+                ));
+            }
+            for t in [left.lower_tick, left.upper_tick, right.upper_tick] {
+                if t % tick_spacing != 0 {
+                    return Err(eyre!(
+                        "Provided tick '{t}' not aligned with tick spacing {tick_spacing}"
+                    ));
+                }
+            }
+        }
+
+        // If we had only a single range, then `windows` wouldn't have iterated at all
+        // so let's check that quick
+        if ranges.len() == 1 {
+            for t in [ranges[0].lower_tick, ranges[0].upper_tick] {
+                if t % tick_spacing != 0 {
+                    return Err(eyre!(
+                        "Provided tick '{t}' not aligned with tick spacing {tick_spacing}"
+                    ));
+                }
+            }
         }
 
         // Get our current tick from our current price
@@ -61,7 +99,7 @@ impl PoolSnapshot {
             ));
         };
 
-        Ok(Self { ranges, sqrt_price_x96, current_tick, cur_tick_idx })
+        Ok(Self { ranges, sqrt_price_x96, current_tick, cur_tick_idx, tick_spacing })
     }
 
     /// Find the PoolRange in this market snapshot that the provided tick lies
@@ -75,14 +113,16 @@ impl PoolSnapshot {
     }
 
     /// Returns a list of references to all liquidity ranges including and
-    /// between the given Ticks.  These ranges will be continuous in order.
+    /// between the given Ticks.  These ranges will be continuous in order, and
+    /// in the order specified from the range for start_tick to the range for
+    /// end_tick
     pub fn ranges_for_ticks(
         &self,
         start_tick: Tick,
         end_tick: Tick
     ) -> eyre::Result<Vec<LiqRangeRef>> {
         let (low, high) = low_to_high(&start_tick, &end_tick);
-        let output = self
+        let mut output = self
             .ranges
             .iter()
             .enumerate()
@@ -93,8 +133,50 @@ impl PoolSnapshot {
                     None
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        // If we're going high to low, reverse our solution
+        if start_tick > end_tick {
+            output.reverse();
+        }
+
         Ok(output)
+    }
+
+    /// Returns a vec of LiqRangeRef describing the liquidity ranges from the
+    /// given start tick to the snapshot's current tick.  The ranges returned
+    /// will be ordered so that they start at the range associated with the
+    /// start tick and end at the range of the snapshot's current tick
+    pub fn ranges_from_tick(&self, start_tick: i32) -> eyre::Result<Vec<LiqRangeRef>> {
+        self.ranges_for_ticks(start_tick, self.current_tick)
+    }
+
+    pub fn checksum_from_ticks(&self, start_tick: Tick, end_tick: Tick) -> eyre::Result<U160> {
+        let from_above = start_tick > end_tick;
+        let (ticks, liquidity): (Vec<_>, Vec<_>) = self
+            .ranges_for_ticks(start_tick, end_tick)?
+            .iter()
+            .map(|r| {
+                let target_tick = if from_above { r.lower_tick } else { r.upper_tick };
+                (target_tick, r.liquidity)
+            })
+            .unzip();
+        // We want to skip the last tick (representing the current range) but skip the
+        // first liquidity (representing start_liquidity)
+        let checksum_bytes = ticks
+            .iter()
+            .take(ticks.len() - 1)
+            .zip(liquidity.iter().skip(1))
+            .fold([0u8; 32], |acc, (tick, liquidity)| {
+                let tick_bytes: [u8; 3] = I24::unchecked_from(*tick).to_be_bytes();
+                let hash_input = [acc.as_slice(), &liquidity.to_be_bytes(), &tick_bytes].concat();
+                *keccak256(&hash_input)
+            });
+        Ok(U160::from(U256::from_be_bytes(checksum_bytes) >> 96))
+    }
+
+    pub fn checksum_from(&self, bound_tick: Tick) -> eyre::Result<U160> {
+        self.checksum_from_ticks(bound_tick, self.current_tick)
     }
 
     /// Return a read-only iterator over the liquidity ranges in this snapshot
@@ -136,61 +218,6 @@ impl PoolSnapshot {
         let start_price = self.sqrt_price_x96;
 
         start_price < end_price
-    }
-
-    /// Gets the tick spacing for this [`PoolSnapshot`].
-    ///
-    /// This is the difference between the upper and lower ticks of the first
-    /// range in the snapshot, but should be the same for all ranges in the
-    /// snapshot.
-    ///
-    /// Panics if there are no ranges, but this should never happen
-    pub fn tick_spacing(&self) -> i32 {
-        let Some(first_range) = self.ranges.first() else {
-            unreachable!("at least one range must be defined");
-        };
-        (first_range.upper_tick - first_range.lower_tick).abs()
-    }
-
-    /// Finds the next initialized tick **greater than** the given `tick` while
-    /// enforcing tick spacing.
-    ///
-    /// This **perfectly matches** the Solidity function:
-    /// `(initialized, rewardTick) = UNI_V4.getNextTickGt(pool.id, rewardTick,
-    /// pool.tickSpacing);`
-    ///
-    /// - If an initialized tick exists that is greater than `tick` and aligned
-    ///   to `tick_spacing`, it is returned.
-    /// - If no valid tick exists, returns `None`.
-    pub fn get_next_tick_gt(&self, tick: i32) -> Option<i32> {
-        // Find the next initialized tick that is a multiple of tick_spacing
-        let tick_spacing = self.tick_spacing();
-        self.ranges
-            .iter()
-            .map(|r| r.lower_tick)
-            .filter(|&t| t > tick && t % tick_spacing == 0) // Only ticks aligned with spacing
-            .min() // Get the closest **next initialized tick**
-    }
-
-    /// Finds the next initialized tick **less than** the given `tick` while
-    /// enforcing tick spacing.
-    ///
-    /// This **perfectly matches** the Solidity function:
-    /// `(initialized, rewardTick) = UNI_V4.getNextTickLt(pool.id, rewardTick,
-    /// pool.tickSpacing);`
-    ///
-    /// - If an initialized tick exists that is less than `tick` and aligned to
-    ///   `tick_spacing`, it is returned.
-    /// - If no valid tick exists, returns `None`.
-    pub fn get_next_tick_lt(&self, tick: i32) -> Option<i32> {
-        let tick_spacing = self.tick_spacing();
-        // Find the next initialized tick that is a multiple of tick_spacing
-        self.ranges
-            .iter()
-            .rev()
-            .map(|r| r.upper_tick)
-            .filter(|&t| t < tick && t % tick_spacing == 0) // Only ticks aligned with spacing
-            .max() // Get the closest **next initialized tick**
     }
 }
 
@@ -271,7 +298,7 @@ mod tests {
 
         // Start price in the middle range (tick 150)
         let sqrt_price_x96 = SqrtPriceX96::at_tick(150).unwrap();
-        PoolSnapshot::new(ranges, sqrt_price_x96).unwrap()
+        PoolSnapshot::new(10, ranges, sqrt_price_x96).unwrap()
     }
 
     #[test]
@@ -367,8 +394,8 @@ mod tests {
         ];
 
         let sqrt_price_x96 = SqrtPriceX96::at_tick(50).unwrap();
-        let high_liq_pool = PoolSnapshot::new(high_liq_ranges, sqrt_price_x96).unwrap();
-        let low_liq_pool = PoolSnapshot::new(low_liq_ranges, sqrt_price_x96).unwrap();
+        let high_liq_pool = PoolSnapshot::new(10, high_liq_ranges, sqrt_price_x96).unwrap();
+        let low_liq_pool = PoolSnapshot::new(10, low_liq_ranges, sqrt_price_x96).unwrap();
 
         let start_price = SqrtPriceX96::at_tick(50).unwrap();
         let end_price = SqrtPriceX96::at_tick(150).unwrap();

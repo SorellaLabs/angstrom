@@ -186,7 +186,11 @@ where
         let liq_ranges =
             [[current_range].as_slice(), upper_ranges.as_slice(), lower_ranges.as_slice()].concat();
 
-        Ok((self.token0, self.token1, PoolSnapshot::new(liq_ranges, self.sqrt_price.into())?))
+        Ok((
+            self.token0,
+            self.token1,
+            PoolSnapshot::new(self.tick_spacing, liq_ranges, self.sqrt_price.into())?
+        ))
     }
 
     pub async fn initialize(

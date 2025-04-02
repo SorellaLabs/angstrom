@@ -365,6 +365,7 @@ mod test {
         let debt_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
         let debt = Debt::new(crate::matching::DebtType::ExactOut(1_000_000_000_u128), debt_price);
         let amm = PoolSnapshot::new(
+            10,
             vec![LiqRange {
                 liquidity:  1_000_000_000_u128,
                 lower_tick: 99900,
@@ -382,6 +383,7 @@ mod test {
     #[test]
     fn can_buy_and_sell_t0() {
         let amm = PoolSnapshot::new(
+            10,
             vec![
                 LiqRange {
                     liquidity:  1_000_000_000_000_u128,

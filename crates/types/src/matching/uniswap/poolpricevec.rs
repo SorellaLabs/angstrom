@@ -7,7 +7,9 @@ use uniswap_v3_math::{
     swap_math::compute_swap_step
 };
 
-use super::{Direction, LiqRangeRef, PoolSnapshot, Quantity, Tick, poolprice::PoolPrice};
+use super::{
+    Direction, DonationResult, LiqRangeRef, PoolSnapshot, Quantity, Tick, poolprice::PoolPrice
+};
 use crate::matching::{Ray, SqrtPriceX96, math::low_to_high};
 
 #[derive(Clone, Debug)]
@@ -175,18 +177,6 @@ impl<'a> SwapStep<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct DonationResult {
-    /// HashMap from liquidity range bounds `(lower_tick, upper_tick)` to
-    /// donation quantity in T0
-    pub tick_donations: HashMap<(Tick, Tick), u128>,
-    pub final_price:    SqrtPriceX96,
-    /// Total amount of donation in T0
-    pub total_donated:  u128,
-    /// Total amount of "tribute" taken by Angstrom in T0
-    pub tribute:        u128
-}
-
 #[derive(Clone, Debug)]
 pub struct PoolPriceVec<'a> {
     pub start_bound: PoolPrice<'a>,
@@ -220,6 +210,24 @@ impl<'a> PoolPriceVec<'a> {
 
     pub fn output(&self) -> u128 {
         if self.zero_for_one() { self.d_t1 } else { self.d_t0 }
+    }
+
+    /// Returns the amount of T0 exchanged over this swap with a sign attached,
+    /// negative if performing this swap consumes T0 (T0 is the input quantity
+    /// for the described swap) and positive if performing this swap provides T0
+    /// (T0 is the output quantity for the described swap)
+    pub fn t0_signed(&self) -> I256 {
+        let val = I256::unchecked_from(self.d_t0);
+        if self.zero_for_one() { val.neg() } else { val }
+    }
+
+    /// Returns the amount of T1 exchanged over this swap with a sign attached,
+    /// negative if performing this swap consumes T1 (T1 is the input quantity
+    /// for the described swap) and positive if performing this swap provides T1
+    /// (T1 is the output quantity for the described swap)
+    pub fn t1_signed(&self) -> I256 {
+        let val = I256::unchecked_from(self.d_t1);
+        if self.zero_for_one() { val } else { val.neg() }
     }
 
     /// Returns a boolean indicating whether this PoolPriceVec is
@@ -379,13 +387,15 @@ impl<'a> PoolPriceVec<'a> {
         Ok(Self { start_bound: start, end_bound, d_t0, d_t1, steps: Some(steps) })
     }
 
-    /// Builds a DonationResult based on the goal of making sure that the net
-    /// price for all sections of this swap is as close to the final price as
-    /// possible.  All donations are T0.
-    pub fn t0_donation_to_end_price(&self, total_donation: u128) -> DonationResult {
+    /// Builds a DonationResult based on the goal of first donating to liquidity
+    /// ranges along this PriceVec until all liquidity ranges have effectively
+    /// been swapped at the most beneficial price in the PriceVec, then
+    /// distributing any remaining donation equally across all ranges in the
+    /// PriceVec
+    pub fn t0_donation(&self, total_donation: u128) -> DonationResult {
         tracing::trace!(total_donation, "Performing donation to end price");
         // If we have no steps we can just short-circuit this whole thing and take the
-        // whole donation as tribute
+        // whole donation as tribute.  This will likely never happen.
         let Some(steps) = self.steps.as_ref() else {
             return DonationResult {
                 tick_donations: HashMap::new(),
@@ -491,8 +501,8 @@ impl<'a> PoolPriceVec<'a> {
                 };
                 remaining_donation -= reward;
                 total_donated += reward;
-                // We always donate to the lower tick of our liquidity range as that is the
-                // appropriate initialized tick to target
+                // We associate a reward with a specific liquidity range and we will extract the
+                // lower or upper tick depending on the direction of our rewards
                 ((step.liq_range.lower_tick(), step.liq_range.upper_tick()), reward)
             })
             .collect();
@@ -500,7 +510,9 @@ impl<'a> PoolPriceVec<'a> {
 
         DonationResult {
             tick_donations,
-            final_price: self.end_bound.as_sqrtpricex96(),
+            final_price: filled_price
+                .map(|p| p.into())
+                .unwrap_or_else(|| self.end_bound.as_sqrtpricex96()),
             total_donated,
             tribute
         }
@@ -516,6 +528,7 @@ mod tests {
     fn can_construct_pricevec() {
         let liquidity = 1_000_000_000_000_000_u128;
         let pool = PoolSnapshot::new(
+            10,
             vec![LiqRange { liquidity, lower_tick: 100000, upper_tick: 100100 }],
             SqrtPriceX96::at_tick(100050).unwrap()
         )
@@ -531,7 +544,7 @@ mod tests {
         let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
         let cur_price = SqrtPriceX96::at_tick(100025).unwrap();
         let end_price = SqrtPriceX96::at_tick(100075).unwrap();
-        let pool = PoolSnapshot::new(vec![segment_1, segment_2], cur_price).unwrap();
+        let pool = PoolSnapshot::new(10, vec![segment_1, segment_2], cur_price).unwrap();
         let start_bound = pool.current_price();
         let end_bound = pool.at_price(end_price).unwrap();
         let pricevec = PoolPriceVec::from_price_range(start_bound, end_bound).unwrap();
@@ -598,7 +611,8 @@ mod tests {
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
-            PoolSnapshot::new(vec![segment_1, segment_2, segment_3, segment_4], cur_price).unwrap();
+            PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price)
+                .unwrap();
         let low_start = pool.at_price(end_price).unwrap();
         let high_start = pool.current_price();
 
@@ -634,7 +648,8 @@ mod tests {
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
-            PoolSnapshot::new(vec![segment_1, segment_2, segment_3, segment_4], cur_price).unwrap();
+            PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price)
+                .unwrap();
         let start_bound = pool.current_price();
         let end_bound = pool.at_price(end_price).unwrap();
         let pricevec = PoolPriceVec::from_price_range(start_bound.clone(), end_bound).unwrap();
@@ -667,6 +682,7 @@ mod tests {
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool = PoolSnapshot::new(
+            10,
             vec![segment_1, segment_2, segment_3, segment_4, segment_5],
             cur_price
         )
@@ -710,6 +726,7 @@ mod tests {
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool = PoolSnapshot::new(
+            10,
             vec![segment_1, segment_2, segment_3, segment_4, segment_5],
             cur_price
         )

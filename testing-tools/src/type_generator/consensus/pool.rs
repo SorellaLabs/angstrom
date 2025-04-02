@@ -82,7 +82,7 @@ impl PoolBuilder {
     fn random_snapshot() -> PoolSnapshot {
         let price = SqrtPriceX96::at_tick(100000).unwrap();
         let ranges = vec![LiqRange::new(99000, 101000, 1_000_000_000_000_000_000_u128).unwrap()];
-        PoolSnapshot::new(ranges, price).unwrap()
+        PoolSnapshot::new(10, ranges, price).unwrap()
     }
 
     pub fn with_key(self, key: PoolKey) -> Self {

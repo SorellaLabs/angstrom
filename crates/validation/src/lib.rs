@@ -49,7 +49,7 @@ pub fn init_validation<
 {
     let current_block = Arc::new(AtomicU64::new(current_block));
     let revm_lru = Arc::new(db);
-    let fetch = FetchUtils::new(Address::default(), revm_lru.clone());
+    let fetch = FetchUtils::new(angstrom_address, revm_lru.clone());
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()

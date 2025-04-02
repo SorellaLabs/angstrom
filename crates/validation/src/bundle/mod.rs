@@ -9,7 +9,7 @@ use eyre::eyre;
 use futures::Future;
 use pade::PadeEncode;
 use revm::{
-    Context, ExecuteEvm, Journal, MainBuilder,
+    Context, InspectEvm, Journal, MainBuilder,
     context::{BlockEnv, CfgEnv, TxEnv},
     database::CacheDB,
     primitives::{TxKind, hardfork::SpecId}
@@ -148,7 +148,8 @@ where
                     }).build_mainnet_with_inspector(console_log_inspector);
 
 
-                let result = match evm.replay()
+                // TODO:  Put this on a feature flag so we use `replay()` when not needing debug inspection
+                let result = match evm.inspect_replay()
                     .map_err(|e| eyre!("failed to transact with revm - {e:?}"))
                 {
                     Ok(r) => r,

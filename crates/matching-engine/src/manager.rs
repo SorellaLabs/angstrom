@@ -178,6 +178,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 // s.solution(searcher))
             });
         });
+        tracing::info!("got book solution");
         let mut solutions = Vec::new();
         while let Some(res) = solution_set.join_next().await {
             if let Ok(Some(r)) = res {

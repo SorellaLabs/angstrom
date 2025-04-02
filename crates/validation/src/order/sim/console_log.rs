@@ -4,7 +4,7 @@ use alloy::{
     primitives::{Address, Selector},
     sol_types::SolInterface
 };
-use revm::{Database, Inspector, primitives::address};
+use revm::{Inspector, primitives::address};
 
 #[rustfmt::skip]
 #[allow(clippy::module_inception)]
@@ -24,10 +24,7 @@ const CONSOLE_LOG_ADDR: Address = address!("000000000000000000636F6e736F6c652e6c
 /// Inspector that monitors and prints calldata for specific address calls
 pub struct CallDataInspector;
 
-impl<DB, CTX> Inspector<CTX, DB> for CallDataInspector
-where
-    DB: Database + revm::interpreter::InterpreterTypes
-{
+impl<CTX> Inspector<CTX> for CallDataInspector {
     fn call(
         &mut self,
         _context: &mut CTX,

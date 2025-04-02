@@ -2,7 +2,7 @@ use std::cmp::{Ordering, min};
 
 use alloy_primitives::{I256, U256};
 use angstrom_types::{
-    contract_payloads::tob::generate_current_price_adjusted_for_donation,
+    contract_payloads::angstrom::TopOfBlockOrder as ContractTopOfBlockOrder,
     matching::{
         SqrtPriceX96, get_quantities_at_price,
         uniswap::{Direction, PoolPrice, PoolPriceVec, Quantity}
@@ -14,7 +14,6 @@ use angstrom_types::{
         rpc_orders::TopOfBlockOrder
     }
 };
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -58,23 +57,14 @@ pub struct DeltaMatcher<'a> {
 
 impl<'a> DeltaMatcher<'a> {
     pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB, fee: u128, solve_for_t0: bool) -> Self {
-        // Dump the book
-        let json = serde_json::to_string(&(book, &tob)).unwrap();
-        let b64_output = base64::prelude::BASE64_STANDARD.encode(json.as_bytes());
-        trace!(data = b64_output, "Raw book data");
-
         let amm_start_price = match tob {
             // If we have an order, apply that to the AMM start price
-            DeltaMatcherToB::Order(o) => {
-                if let Some(a) = book.amm() {
-                    let end = generate_current_price_adjusted_for_donation(&o, a)
-                        .expect("order structure should be valid here and never fail");
-
-                    Some(end)
-                } else {
-                    None
-                }
-            }
+            DeltaMatcherToB::Order(ref tob) => book.amm().map(|snapshot| {
+                ContractTopOfBlockOrder::calc_vec_and_reward(tob, snapshot)
+                    .expect("Order structure should be valid and never fail")
+                    .0
+                    .end_bound
+            }),
             // If we have a fixed shift, apply that to the AMM start price (Not yet operational)
             DeltaMatcherToB::FixedShift(q, is_bid) => book.amm().and_then(|f| {
                 PoolPriceVec::from_swap(f.current_price(), Direction::from_is_bid(!is_bid), q)
@@ -297,7 +287,7 @@ impl<'a> DeltaMatcher<'a> {
         // We need our absolute excess in all cases here
         let abs_excess = excess_liquidity.unsigned_abs().to::<u128>();
         // Option<(bid_partial_fill, ask_partial_fill)
-        let (bid_fill_q, ask_fill_q) = if excess_liquidity.is_negative() {
+        let (bid_fill_q, ask_fill_q, reward_t0) = if excess_liquidity.is_negative() {
             // If our available fill is not enough to resolve our excess liquidity, we can
             // end here
             let Some(remaining_add) = available_add.checked_sub(abs_excess) else {
@@ -307,14 +297,58 @@ impl<'a> DeltaMatcher<'a> {
             let additional_fillable = min(remaining_add, available_drain);
             if self.solve_for_t0 {
                 // If I'm solving for T0, asks are providing me the extra T0 I need and bids are
-                // matched with my additional_fillable
-                (price.quantity(additional_fillable, false), abs_excess + additional_fillable)
+                // matched with my additional_fillable.
+
+                // For T0 solve we do not expect to have excess T0 to donate so `reward_t0` is
+                // just zero.
+
+                (price.quantity(additional_fillable, false), abs_excess + additional_fillable, 0)
             } else {
-                // If I'm solving for T1, bids are providing me the extra T1 I need and asks are
-                // matched with my additional_fillable
+                // For T1 swap, we want to figure out how much excess T0 we have, which will
+                // become our `reward_t0`.  We can assume that we will be swapping all of our
+                // excess T1 (`abs_excess`) for T0 and that will be the amount of extra T0 we
+                // have to give as a reward. `additional_fillable` is based on orders that have
+                // been matched against each other, so its effect on our net balances should be
+                // zero and it is allocated to partial orders on both sides of the book.
+
+                // `abs_excess` is in T1 and on this path it is an underflow (negative
+                // quantity), we will be getting our additional T1 from bid orders.  We should
+                // also have an excess of T0 at this point that we're selling to those bid
+                // orders, so we need to calculate how much of our T0 excess will be leaving
+                // before we allocate the rest to rewards.  We would like to overestimate this
+                // sum if possible to make sure we never have rounding errors.
+
+                // We know that each bid order will round its output down, so if we convert
+                // `abs_excess` to T0 at our UCP, we can also round down.  We can presume that
+                // there will be at least 1 bid order accepting the T0 (also rounding down),
+                // and if there is more than one order we will get multiple round-downs which
+                // will mean that the actual output can only be lower than this estimate and we
+                // can only successfully overestimate.
+
+                // This is our overestimation of how much T0 we are sending out to bids
+                let excess_t0_cost = price.inv_ray().inverse_quantity(abs_excess, false);
+                // If we already have a surplus of T0 in the balance, find out how much we will
+                // have left after we settle the bids providing our excess T1.  That's our
+                // reward quantity. (If `t0_sum` is already negative we are in a bad place
+                // overall and surely have nothing to donate to rewards)
+                let reward_t0 = if t0_sum.is_positive() {
+                    t0_sum
+                        .unsigned_abs()
+                        .to::<u128>()
+                        .saturating_sub(excess_t0_cost)
+                } else {
+                    0_u128
+                };
+
                 (
+                    // Bids are providing the extra T1 I need, and we add the amount of T1 our
+                    // partials matched as `additional_fillable`
                     abs_excess + additional_fillable,
-                    price.inverse_quantity(additional_fillable, false)
+                    // Asks are only needed to provide the reciprocal match for
+                    // `additional_fillable` (flipped because they are exact_in in T0)
+                    price.inverse_quantity(additional_fillable, false),
+                    // And our rewards
+                    reward_t0
                 )
             }
         } else {
@@ -323,20 +357,64 @@ impl<'a> DeltaMatcher<'a> {
             };
             let additional_drainable = min(remaining_drain, available_add);
             if self.solve_for_t0 {
-                // If I'm solving for T0, asks are draining my extra T0 and bids are matched
+                // If I'm solving for T0, bids are draining my excess T0 and asks are matched
                 // with my additional_fillable
-                (price.quantity(abs_excess + additional_drainable, false), additional_drainable)
-            } else {
-                // If I'm solving for T1, bids are draining my extra T1 and asks are matched
-                // with my additional_fillable
+
+                // For T0 solve we do not expect to have excess T0 to donate so `reward_t0` is
+                // just zero.
                 (
+                    price.quantity(abs_excess + additional_drainable, false),
                     additional_drainable,
-                    price.inverse_quantity(abs_excess + additional_drainable, false)
+                    0_u128
+                )
+            } else {
+                // This is very similar to above but we're going to logic it through in the
+                // opposite direction.
+
+                // `abs_excess` is in T1 and on this path it is an overflow (positive
+                // quantity), we will be draining our excess T1 using ask orders.  We should
+                // also have an underflow of T0 at this point that we're buying from those ask
+                // orders, so we need to calculate how much we will overflow our T0 defecit to
+                // know how much we can allocate to rewards.  We would like to underestimate
+                // this sum if possible to make sure we never have rounding errors.
+
+                // We know that each ask order will round its input up, so if we convert
+                // `abs_excess` to T0 at our UCP, we can also round up.  We can presume that
+                // there will be at least 1 ask order providing the T0 (also rounding up),
+                // and if there is more than one order we will get multiple round-ups which
+                // will mean that the actual input can only be higher than this estimate and we
+                // can only successfully underestimate.
+
+                // This is our underestimation of how much T0 we are getting in from asks
+                let excess_t0_gain = price.inverse_quantity(abs_excess, true);
+                // We should already have a defecit of T0 in the balance and this sale should
+                // bring it positive.  If `t0_sum` is already positive...that's weird, but we
+                // can still do this math.  So we see where we stand after our gain and donate
+                // whatever positive value we have.
+                let final_t0 = t0_sum + I256::unchecked_from(excess_t0_gain);
+                let reward_t0 = if final_t0.is_positive() {
+                    final_t0.unsigned_abs().to::<u128>()
+                } else {
+                    0_u128
+                };
+
+                // Bids will round up so if we round-down for bids we will only have extra in
+                // For asks we already know how much new T0 we're getting in with no change
+                (
+                    // Bids are only needed to provide the reciprocal match for
+                    // `additional_fillable` (not flipped because they are exact_in in T1)
+                    additional_drainable,
+                    // Asks are draining the extra T1 I have, and we add the amount of T1 our
+                    // partials matched as `additional_fillable`.  We need to flip this because
+                    // asks are exact_in in T0.
+                    price.inverse_quantity(abs_excess + additional_drainable, false),
+                    // And our rewards
+                    reward_t0
                 )
             }
         };
 
-        SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q }
+        SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 }
     }
 
     /// calculates given the supply, demand, optional supply and optional demand
@@ -472,7 +550,8 @@ impl<'a> DeltaMatcher<'a> {
             ucp: price_and_partial_solution.ucp,
             amm_quantity: amm,
             limit,
-            searcher
+            searcher,
+            reward_t0: price_and_partial_solution.reward_t0
         }
     }
 
@@ -501,13 +580,18 @@ impl<'a> DeltaMatcher<'a> {
                 (SupplyDemandResult::NaturallyEqual, _) => {
                     println!("solved based on sup, demand no partials");
 
-                    return Some(UcpSolution { ucp: p_mid, partial_fills: None });
-                }
-                (SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q }, _) => {
-                    println!("solved based on sup, demand with partial order");
                     return Some(UcpSolution {
                         ucp:           p_mid,
-                        partial_fills: Some((bid_fill_q, ask_fill_q))
+                        partial_fills: None,
+                        reward_t0:     0_u128
+                    });
+                }
+                (SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 }, _) => {
+                    println!("solved based on sup, demand with partial order");
+                    return Some(UcpSolution {
+                        ucp: p_mid,
+                        partial_fills: Some((bid_fill_q, ask_fill_q)),
+                        reward_t0
                     });
                 }
             }
@@ -522,7 +606,9 @@ struct UcpSolution {
     /// Solved uniform clearing price in T1/T0 format
     ucp:           Ray,
     /// Partial fill quantities in format `Option<(bid_partial, ask_partial)>`
-    partial_fills: Option<(u128, u128)>
+    partial_fills: Option<(u128, u128)>,
+    /// Extra T0 that should be added to rewards
+    reward_t0:     u128
 }
 
 #[derive(Debug)]
@@ -530,5 +616,5 @@ pub enum SupplyDemandResult {
     MoreSupply,
     MoreDemand,
     NaturallyEqual,
-    PartialFillEq { bid_fill_q: u128, ask_fill_q: u128 }
+    PartialFillEq { bid_fill_q: u128, ask_fill_q: u128, reward_t0: u128 }
 }

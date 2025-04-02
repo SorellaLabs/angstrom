@@ -772,7 +772,8 @@ impl<'a> VolumeFillMatcher<'a> {
             ucp,
             amm_quantity: self.amm_outcome.clone(),
             searcher,
-            limit
+            limit,
+            reward_t0: 0
         }
     }
 }

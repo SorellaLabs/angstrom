@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 pub mod angstrom;
 pub mod asset;
 pub mod rewards;
-pub mod tob;
 
 pub const CONFIG_STORE_SLOT: u32 = 3;
 pub const POOL_CONFIG_STORE_ENTRY_SIZE: usize = 32;

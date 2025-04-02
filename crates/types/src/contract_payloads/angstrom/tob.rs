@@ -144,9 +144,10 @@ impl TopOfBlockOrder {
         // First let's simulate the actual ToB swap and use that to determine what our
         // leftover T0 is for rewards
         if tob.is_bid {
-            // If I'm a bid, I'm buying T0.  In order to reward I will offer in more T1 than
-            // needed, and I should compare the T0 I get out with the T0 I expect back in
-            // order to determine the reward quantity
+            // If ToB is a bid, it's buying T0.  To reward, it will offer in more T1
+            // than needed, but the entire input will be swapped through the AMM.
+            // Therefore, our input quantity is simple - the entire input amount from
+            // the order.
             let pricevec = (snapshot.current_price() + Quantity::Token1(tob.quantity_in))?;
 
             let leftover = pricevec
@@ -155,9 +156,12 @@ impl TopOfBlockOrder {
                 .ok_or_else(|| eyre!("Not enough output to cover the transaction"))?;
             Ok((pricevec, leftover))
         } else {
-            // If I'm an ask, I'm selling T0.  In order to reward I will offer in more T0
-            // than needed and I should compare the T0 I offer to the T0 needed to produce
-            // the T1 I expect to get back
+            // If ToB is an Ask, it's inputting T0.  We will take the reward T0 first
+            // before swapping the remaining T0 with the AMM, so we need to determine
+            // how much T0 will actually get to the AMM.  To do this, we determine how
+            // much T0 is required to produce the quantity of T1 the order expects to
+            // receive as output.  This quantity is our input which moves the AMM.
+
             // First we find the amount of T0 in it would take to at least hit our quantity
             // out
             let cost = (snapshot.current_price() - Quantity::Token1(tob.quantity_out))?.d_t0;
@@ -167,7 +171,6 @@ impl TopOfBlockOrder {
                 .checked_sub(cost)
                 .ok_or_else(|| eyre!("Not enough input to cover the transaction"))?;
 
-            tracing::info!(?cost,?tob.quantity_out,?tob.quantity_in);
             // But then we have to operate in the right direction to calculate how much T1
             // we ACTUALLY get out
             let pricevec = (snapshot.current_price() + Quantity::Token0(cost))?;
@@ -189,7 +192,7 @@ mod test {
             LiqRange::new(target_tick - 1000, target_tick + 1000, 100_000_000_000_000).unwrap();
         let ranges = vec![range];
         let sqrt_price_x96 = SqrtPriceX96::from(get_sqrt_ratio_at_tick(target_tick).unwrap());
-        PoolSnapshot::new(ranges, sqrt_price_x96).unwrap()
+        PoolSnapshot::new(10, ranges, sqrt_price_x96).unwrap()
     }
 
     // #[test]

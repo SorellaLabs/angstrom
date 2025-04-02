@@ -158,7 +158,5 @@ pub trait OrderApi {
     }
 
     #[method(name = "FetchCurrentLeader")]
-    async fn fetch_current_leader(&self) -> RpcResult<Address> {
-        Ok(Address::default())
-    }
+    async fn fetch_current_leader(&self) -> RpcResult<Address>;
 }

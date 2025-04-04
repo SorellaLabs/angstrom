@@ -343,7 +343,6 @@ where
     }
 
     fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
-        tracing::info!(?event);
         match event {
             NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
                 orders.into_iter().for_each(|order| {
@@ -431,7 +430,6 @@ where
             })
             .collect::<Vec<_>>();
 
-        tracing::info!(?valid_orders, "broadcasting orders");
         self.broadcast_orders_to_peers(valid_orders);
     }
 

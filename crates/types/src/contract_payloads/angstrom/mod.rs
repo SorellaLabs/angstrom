@@ -529,7 +529,7 @@ impl AngstromBundle {
         let mut order_list: HashMap<OrderId, &OrderWithStorageData<GroupedVanillaOrder>> =
             orders_by_pool
                 .get(&solution.id)
-                .map(|o| o.into_iter().map(|order| (order.order_id, order)).collect())
+                .map(|o| o.iter().map(|order| (order.order_id, order)).collect())
                 .unwrap_or_else(|| d);
         // Sort the user order list so we can properly associate it with our
         // OrderOutcomes.  First bids by price then asks by price.

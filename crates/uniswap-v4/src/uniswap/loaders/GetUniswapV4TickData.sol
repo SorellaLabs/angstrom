@@ -7,8 +7,6 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {IUniV4} from "core/src/interfaces/IUniV4.sol";
 
 contract GetUniswapV4TickData {
-    using TickLib for uint256;
-
     struct TickData {
         bool initialized;
         int24 tick;

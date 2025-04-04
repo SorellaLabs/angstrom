@@ -14,7 +14,7 @@ use super::{pool::EnhancedUniswapPool, pool_data_loader::PoolDataLoader};
 use crate::DataLoader;
 
 #[derive(Clone)]
-pub struct V4PoolFactory<P, const TICKS: u16 = 200> {
+pub struct V4PoolFactory<P, const TICKS: u16 = 400> {
     provider:     Arc<P>,
     registry:     UniswapPoolRegistry,
     pool_manager: Address

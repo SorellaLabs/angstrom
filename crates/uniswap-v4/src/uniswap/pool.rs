@@ -257,20 +257,17 @@ where
     pub fn apply_ticks(&mut self, mut fetched_ticks: Vec<TickData>) {
         fetched_ticks.sort_by_key(|k| k.tick);
 
-        fetched_ticks
-            .into_iter()
-            .filter(|tick| tick.initialized)
-            .for_each(|tick| {
-                self.ticks.insert(
-                    tick.tick.as_i32(),
-                    TickInfo {
-                        initialized:     tick.initialized,
-                        liquidity_gross: tick.liquidityGross,
-                        liquidity_net:   tick.liquidityNet
-                    }
-                );
-                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
-            });
+        fetched_ticks.into_iter().unique().for_each(|tick| {
+            self.ticks.insert(
+                tick.tick.as_i32(),
+                TickInfo {
+                    initialized:     tick.initialized,
+                    liquidity_gross: tick.liquidityGross,
+                    liquidity_net:   tick.liquidityNet
+                }
+            );
+            self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
+        });
     }
 
     pub async fn load_more_ticks<P: Provider>(
@@ -351,27 +348,24 @@ where
 
         fetched_ticks.sort_by_key(|k| k.tick);
 
-        fetched_ticks
-            .into_iter()
-            .filter(|tick| tick.initialized)
-            .for_each(|tick| {
-                tracing::trace!(
-                    initialized = tick.initialized,
-                    liq_gross = tick.liquidityGross,
-                    liq_net = tick.liquidityNet,
-                    tick = tick.tick.as_i32(),
-                    "Inserting tick"
-                );
-                self.ticks.insert(
-                    tick.tick.as_i32(),
-                    TickInfo {
-                        initialized:     tick.initialized,
-                        liquidity_gross: tick.liquidityGross,
-                        liquidity_net:   tick.liquidityNet
-                    }
-                );
-                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
-            });
+        fetched_ticks.into_iter().unique().for_each(|tick| {
+            tracing::trace!(
+                initialized = tick.initialized,
+                liq_gross = tick.liquidityGross,
+                liq_net = tick.liquidityNet,
+                tick = tick.tick.as_i32(),
+                "Inserting tick"
+            );
+            self.ticks.insert(
+                tick.tick.as_i32(),
+                TickInfo {
+                    initialized:     tick.initialized,
+                    liquidity_gross: tick.liquidityGross,
+                    liquidity_net:   tick.liquidityNet
+                }
+            );
+            self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
+        });
 
         Ok(())
     }

@@ -68,7 +68,7 @@ impl AMMSnapshotBuilder {
             let lower_tick = self.lower_tick.saturating_sub(width);
             let upper_tick = self.upper_tick.saturating_add(width);
             let liquidity = self.default_position_liquidity.unwrap_or(1);
-            vec![LiqRange::new(lower_tick, upper_tick, liquidity).unwrap()]
+            vec![LiqRange::new_init(lower_tick, upper_tick, liquidity).unwrap()]
         };
         PoolSnapshot::new(1, ranges, self.price).unwrap()
     }
@@ -80,7 +80,7 @@ pub fn generate_amm_with_liquidity(
     liquidity: u128,
     price: SqrtPriceX96
 ) -> PoolSnapshot {
-    let ranges = vec![LiqRange::new(tick_low, tick_high, liquidity).unwrap()];
+    let ranges = vec![LiqRange::new_init(tick_low, tick_high, liquidity).unwrap()];
     PoolSnapshot::new(1, ranges, price).unwrap()
 }
 
@@ -118,7 +118,8 @@ pub fn generate_amm_with_distributed_liquidity(
         let liquidity = rng.gen_range(min_liq..=max_liq);
 
         // Create range from current_tick to current_tick + tick_spacing
-        if let Ok(range) = LiqRange::new(current_tick, current_tick + tick_spacing, liquidity) {
+        if let Ok(range) = LiqRange::new_init(current_tick, current_tick + tick_spacing, liquidity)
+        {
             ranges.push(range);
         }
 
@@ -132,12 +133,12 @@ pub fn generate_single_position_amm_at_tick(mid: i32, width: i32, liquidity: u12
     let amm_price = SqrtPriceX96::from(get_sqrt_ratio_at_tick(mid + 1).unwrap());
     let lower_tick = mid - width;
     let upper_tick = mid + width;
-    let ranges = vec![LiqRange::new(lower_tick, upper_tick, liquidity).unwrap()];
+    let ranges = vec![LiqRange::new_init(lower_tick, upper_tick, liquidity).unwrap()];
     PoolSnapshot::new(1, ranges, amm_price).unwrap()
 }
 
 pub fn generate_amm_market(target_tick: i32) -> PoolSnapshot {
-    let range = LiqRange::new(target_tick - 100, target_tick + 100, 100_000_000).unwrap();
+    let range = LiqRange::new_init(target_tick - 100, target_tick + 100, 100_000_000).unwrap();
     let ranges = vec![range];
     let sqrt_price_x96 = SqrtPriceX96::from(get_sqrt_ratio_at_tick(target_tick).unwrap());
     PoolSnapshot::new(1, ranges, sqrt_price_x96).unwrap()
@@ -174,6 +175,6 @@ fn generate_pool_distribution(
         .collect();
     (0..tick_count)
         .zip(liq_values)
-        .map(|(count, l)| LiqRange::new(start_tick + count, start_tick + count + 1, l))
+        .map(|(count, l)| LiqRange::new_init(start_tick + count, start_tick + count + 1, l))
         .collect()
 }

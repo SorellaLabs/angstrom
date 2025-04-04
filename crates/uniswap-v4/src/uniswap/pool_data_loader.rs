@@ -43,7 +43,7 @@ sol! {
         int128 liquidityNet;
     }
 
-    #[derive(Debug, Hash, PartialEq, Eq)]
+    #[derive(Debug, Hash, PartialEq, Eq,Copy)]
     struct TickData {
         bool initialized;
         int24 tick;

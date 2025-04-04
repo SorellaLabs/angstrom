@@ -48,28 +48,6 @@ impl PoolSnapshot {
             return Err(eyre!("Invalid tick spacing: {tick_spacing}"));
         }
 
-        // // Ensure the ranges are contiguous and all ticks are aligned on spacing
-        // for items in ranges.windows(2) {
-        //     // These are always valid because we know `windows()` works this way
-        //     let left = items[0];
-        //     let right = items[1];
-        //
-        //     if left.upper_tick != right.lower_tick {
-        //         return Err(eyre!(
-        //             "Ranges not aligned - upper tick {} != lower tick {}",
-        //             left.upper_tick,
-        //             right.lower_tick
-        //         ));
-        //     }
-        //     for t in [left.lower_tick, left.upper_tick, right.upper_tick] {
-        //         if t % tick_spacing != 0 {
-        //             return Err(eyre!(
-        //                 "Provided tick '{t}' not aligned with tick spacing
-        // {tick_spacing}"             ));
-        //         }
-        //     }
-        // }
-
         // If we had only a single range, then `windows` wouldn't have iterated at all
         // so let's check that quick
         if ranges.len() == 1 {

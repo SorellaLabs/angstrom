@@ -12,15 +12,17 @@ use crate::matching::SqrtPriceX96;
 #[derive(Default, Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize)]
 pub struct LiqRange {
     /// Lower tick for this range
-    pub(super) lower_tick: Tick,
+    pub(super) lower_tick:     Tick,
     /// Upper tick for this range
-    pub(super) upper_tick: Tick,
+    pub(super) upper_tick:     Tick,
     /// Total liquidity within this range
-    pub(super) liquidity:  u128
+    pub(super) liquidity:      u128,
+    pub(super) is_tick_edge:   bool,
+    pub(super) is_initialized: bool
 }
 
 impl LiqRange {
-    pub fn new(lower_tick: Tick, upper_tick: Tick, liquidity: u128) -> eyre::Result<Self> {
+    pub fn new_init(lower_tick: Tick, upper_tick: Tick, liquidity: u128) -> eyre::Result<Self> {
         // Validate our inputs
         if upper_tick <= lower_tick {
             return Err(eyre!(
@@ -35,7 +37,31 @@ impl LiqRange {
         if lower_tick < MIN_TICK {
             return Err(eyre!("Proposed lower tick '{}' out of valid tick range", lower_tick));
         }
-        Ok(Self { lower_tick, upper_tick, liquidity })
+        Ok(Self { lower_tick, upper_tick, liquidity, is_tick_edge: false, is_initialized: true })
+    }
+
+    pub fn new_uninit(
+        lower_tick: Tick,
+        upper_tick: Tick,
+        liquidity: u128,
+        is_tick_edge: bool,
+        is_initialized: bool
+    ) -> eyre::Result<Self> {
+        // Validate our inputs
+        if upper_tick <= lower_tick {
+            return Err(eyre!(
+                "Upper tick bound less than or equal to lower tick bound for range ({}, {})",
+                lower_tick,
+                upper_tick
+            ));
+        }
+        if upper_tick > MAX_TICK {
+            return Err(eyre!("Proposed upper tick '{}' out of valid tick range", upper_tick));
+        }
+        if lower_tick < MIN_TICK {
+            return Err(eyre!("Proposed lower tick '{}' out of valid tick range", lower_tick));
+        }
+        Ok(Self { lower_tick, upper_tick, liquidity, is_tick_edge, is_initialized })
     }
 
     pub fn lower_tick(&self) -> i32 {

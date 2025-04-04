@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Rem, sync::Arc};
 
+// use std::iter::
 use alloy::{
     hex,
     primitives::{Address, B256, BlockNumber, I256, U256, aliases::I24},
@@ -38,7 +39,8 @@ pub struct SwapResult {
 pub struct TickInfo {
     pub liquidity_gross: u128,
     pub liquidity_net:   i128,
-    pub initialized:     bool
+    pub initialized:     bool,
+    pub is_edge:         bool
 }
 
 // at around 190 is when "max code size exceeded" comes up
@@ -128,13 +130,19 @@ where
         // Get the information for our current position
         let current_liquidity = self.liquidity;
         let current_tick = self.tick;
+
+        // we need to pad out ticks here. Any ticks that are in the tick map are either
+        // initalized or not and on a tick boundry. In order to match uniswap
+        // with this, what we need to do is fill in empty ticks that aren't
+        // initalized and not on a tick bound and mark this.
+
         let (less_than, more_than): (Vec<_>, Vec<_>) = self
             .ticks
             .iter()
             .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
             .partition(|t| *t.0 <= current_tick);
 
-        let current_range = LiqRange::new(
+        let current_range = LiqRange::new_init(
             // Because they're already sorted low to high - we want the highest low and the lowest
             // high
             self.next_tick_lte(self.tick - 1),
@@ -161,7 +169,15 @@ where
                     low_tick,
                     high_tick
                 );
-                LiqRange::new(**low_tick, **high_tick, tracked_liq.unsigned_abs()).unwrap()
+
+                LiqRange::new_uninit(
+                    **low_tick,
+                    **high_tick,
+                    tracked_liq.unsigned_abs(),
+                    low_tick_data.is_edge,
+                    low_tick_data.initialized
+                )
+                .unwrap()
             })
             .collect::<Vec<_>>();
 
@@ -185,7 +201,14 @@ where
                     low_tick,
                     high_tick
                 );
-                LiqRange::new(**low_tick, **high_tick, tracked_liq.unsigned_abs()).unwrap()
+                LiqRange::new_uninit(
+                    **low_tick,
+                    **high_tick,
+                    tracked_liq.unsigned_abs(),
+                    high_tick_data.is_edge,
+                    high_tick_data.initialized
+                )
+                .unwrap()
             })
             .collect::<Vec<_>>();
 
@@ -257,17 +280,22 @@ where
     pub fn apply_ticks(&mut self, mut fetched_ticks: Vec<TickData>) {
         fetched_ticks.sort_by_key(|k| k.tick);
 
-        fetched_ticks.into_iter().unique().for_each(|tick| {
-            self.ticks.insert(
-                tick.tick.as_i32(),
-                TickInfo {
-                    initialized:     tick.initialized,
-                    liquidity_gross: tick.liquidityGross,
-                    liquidity_net:   tick.liquidityNet
-                }
-            );
-            self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
-        });
+        fetched_ticks
+            .into_iter()
+            .unique()
+            .fill_in_missing_ticks_higher(self.tick_spacing)
+            .for_each(|(is_edge, tick)| {
+                self.ticks.insert(
+                    tick.tick.as_i32(),
+                    TickInfo {
+                        initialized: tick.initialized,
+                        liquidity_gross: tick.liquidityGross,
+                        liquidity_net: tick.liquidityNet,
+                        is_edge
+                    }
+                );
+                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
+            });
     }
 
     pub async fn load_more_ticks<P: Provider>(
@@ -348,24 +376,29 @@ where
 
         fetched_ticks.sort_by_key(|k| k.tick);
 
-        fetched_ticks.into_iter().unique().for_each(|tick| {
-            tracing::trace!(
-                initialized = tick.initialized,
-                liq_gross = tick.liquidityGross,
-                liq_net = tick.liquidityNet,
-                tick = tick.tick.as_i32(),
-                "Inserting tick"
-            );
-            self.ticks.insert(
-                tick.tick.as_i32(),
-                TickInfo {
-                    initialized:     tick.initialized,
-                    liquidity_gross: tick.liquidityGross,
-                    liquidity_net:   tick.liquidityNet
-                }
-            );
-            self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
-        });
+        fetched_ticks
+            .into_iter()
+            .unique()
+            .fill_in_missing_ticks_higher(self.tick_spacing)
+            .for_each(|(is_edge, tick)| {
+                tracing::trace!(
+                    initialized = tick.initialized,
+                    liq_gross = tick.liquidityGross,
+                    liq_net = tick.liquidityNet,
+                    tick = tick.tick.as_i32(),
+                    "Inserting tick"
+                );
+                self.ticks.insert(
+                    tick.tick.as_i32(),
+                    TickInfo {
+                        initialized: tick.initialized,
+                        liquidity_gross: tick.liquidityGross,
+                        liquidity_net: tick.liquidityNet,
+                        is_edge
+                    }
+                );
+                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
+            });
 
         Ok(())
     }
@@ -837,6 +870,45 @@ pub enum PoolError {
     ConversionError(#[from] ConversionError),
     #[error(transparent)]
     Eyre(#[from] eyre::Error)
+}
+
+impl<I: Iterator<Item = TickData>> TickSpaceFill for I {}
+
+pub trait TickSpaceFill: Iterator<Item = TickData> {
+    fn fill_in_missing_ticks_higher(
+        mut self,
+        tick_spacing: i32
+    ) -> impl Iterator<Item = (bool, TickData)>
+    where
+        Self: Sized + Iterator<Item = TickData>
+    {
+        let mut result = Vec::new();
+        // now that we grabbed start, what we want to do is
+        let Some(mut current) = self.next() else { return result.into_iter() };
+        result.push((!current.initialized, current));
+
+        while let Some(next_tick) = self.next() {
+            let mut diff = (next_tick.tick - current.tick).as_i32();
+            // until we hit the tick spacing we want to create new ticks.
+            let mut cnt = tick_spacing;
+            while diff != tick_spacing {
+                let new_tick = TickData {
+                    tick:           current.tick + I24::unchecked_from(cnt),
+                    initialized:    false,
+                    liquidityGross: 0,
+                    liquidityNet:   0
+                };
+                result.push((false, new_tick));
+
+                cnt += tick_spacing;
+                diff -= tick_spacing;
+            }
+            result.push((!next_tick.initialized, next_tick));
+            current = next_tick;
+        }
+
+        result.into_iter()
+    }
 }
 
 #[cfg(test)]

@@ -70,7 +70,7 @@ impl ProposalBuilder {
                 };
                 let amm = AMMSnapshotBuilder::new(SqrtPriceX96::at_tick(100000).unwrap())
                     .with_positions(vec![
-                        LiqRange::new(99000, 101000, 1_000_000_000_000_000_u128).unwrap(),
+                        LiqRange::new_init(99000, 101000, 1_000_000_000_000_000_u128).unwrap(),
                     ])
                     .build();
                 Pool::new(key, amm, Address::random())

@@ -155,6 +155,7 @@ impl StromSessionManager {
                     Some(event)
                 }
                 StromSessionMessage::ClosedOnConnectionError { peer_id, error } => {
+                    self.remove_session(&peer_id);
                     Some(SessionEvent::OutgoingConnectionError { peer_id, error })
                 }
                 StromSessionMessage::ValidMessage { peer_id, message } => {

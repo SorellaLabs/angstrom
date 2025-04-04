@@ -33,7 +33,7 @@ use crate::{
         Ray, get_quantities_at_price,
         uniswap::{Direction, PoolPriceVec, PoolSnapshot, Quantity}
     },
-    orders::{OrderFillState, OrderOutcome, PoolSolution},
+    orders::{OrderFillState, OrderId, OrderOutcome, PoolSolution},
     primitive::{PoolId, UniswapPoolRegistry},
     sol_bindings::{
         RawPoolOrder,
@@ -524,30 +524,34 @@ impl AngstromBundle {
             top_of_block_orders.push(contract_tob);
         }
 
+        let d = HashMap::new();
         // Get our list of user orders, if we have any
-        let mut order_list: Vec<&OrderWithStorageData<GroupedVanillaOrder>> = orders_by_pool
-            .get(&solution.id)
-            .map(|order_set| order_set.iter().collect())
-            .unwrap_or_default();
+        let mut order_list: HashMap<OrderId, &OrderWithStorageData<GroupedVanillaOrder>> =
+            orders_by_pool
+                .get(&solution.id)
+                .map(|o| o.into_iter().map(|order| (order.order_id, order)).collect())
+                .unwrap_or_else(|| d);
         // Sort the user order list so we can properly associate it with our
         // OrderOutcomes.  First bids by price then asks by price.
-        order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
-            (true, true) => a.priority_data.cmp(&b.priority_data),
-            (false, false) => a.priority_data.cmp(&b.priority_data),
-            (..) => b.is_bid.cmp(&a.is_bid)
-        });
+        // order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
+        //     (true, true) => a.priority_data.cmp(&b.priority_data),
+        //     (false, false) => a.priority_data.cmp(&b.priority_data),
+        //     (..) => b.is_bid.cmp(&a.is_bid),
+        // });
 
         // Loop through our filled user orders, do accounting, and add them to our user
         // order list
         let mut total_user_fees: u128 = 0;
         // We need to calculate our bids with this inverse ray
+
         for (outcome, order) in solution
             .limit
             .iter()
-            .zip(order_list.iter())
-            .filter(|(outcome, _)| outcome.is_filled())
+            .map(|order| (order, order_list.remove(&order.id)))
+            .filter(|(outcome, o)| outcome.is_filled() && o.is_some())
         {
             trace!(user_order = ?order, "Mapping User Order");
+            let order = order.unwrap();
             // Calculate our final amounts based on whether the order is in T0 or T1 context
             assert_eq!(outcome.id.hash, order.order_id.hash, "Order and outcome mismatched");
 

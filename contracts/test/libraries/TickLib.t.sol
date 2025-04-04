@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {TickLib} from "../../src/libraries/TickLib.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
-import {TickBitmap} from "v4-core/src/libraries/TickBitMap.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract TickLibTest is Test {

@@ -13,7 +13,7 @@ use angstrom_types::{
     consensus::{PreProposal, PreProposalAggregation, Proposal},
     primitive::PeerId
 };
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use once_cell::unsync::Lazy;
 use reth_eth_wire::DisconnectReason;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
@@ -282,6 +282,7 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                 cx.waker().wake_by_ref();
                 break;
             }
+            let _ = self.not_future.poll_unpin(cx);
 
             match self.from_handle_rx.poll_next_unpin(cx) {
                 Poll::Ready(Some(msg)) => self.on_handle_message(msg),

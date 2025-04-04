@@ -3,7 +3,8 @@ use std::{
     path::PathBuf,
     pin::Pin,
     sync::{Arc, atomic::AtomicUsize},
-    task::{Context, Poll}
+    task::{Context, Poll},
+    time::Duration
 };
 
 use alloy::primitives::{Address, BlockNumber, FixedBytes};
@@ -59,7 +60,9 @@ pub struct StromNetworkManager<DB: Unpin, P: Peers + Unpin> {
     /// [`NetworkHandle`] Updated by the `NetworkWorker` and loaded by the
     /// `NetworkService`.
     num_active_peers: Arc<AtomicUsize>,
-    reth_network:     P
+    reth_network:     P,
+    // for debuging
+    not_future:       Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>
 }
 
 impl<DB: Unpin, P: Peers + Unpin> Drop for StromNetworkManager<DB, P> {
@@ -102,6 +105,7 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
         }
 
         let peers = Arc::new(AtomicUsize::default());
+        let cpeers = peers.clone();
         let handle =
             StromNetworkHandle::new(peers.clone(), UnboundedMeteredSender::new(tx, "strom handle"));
 
@@ -114,7 +118,14 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
             to_pool_manager,
             to_consensus_manager,
             event_listeners: Vec::new(),
-            reth_network
+            reth_network,
+            not_future: Box::pin(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    let peers = cpeers.load(std::sync::atomic::Ordering::SeqCst);
+                    tracing::info!(angstrom_peers = peers, "angstrom network peers");
+                }
+            })
         }
     }
 
@@ -340,6 +351,8 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                         }
                     }
                     SwarmEvent::Disconnected { peer_id } => {
+                        self.num_active_peers
+                            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                         self.notify_listeners(StromNetworkEvent::SessionClosed {
                             peer_id,
                             reason: None

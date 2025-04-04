@@ -24,9 +24,9 @@ const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
 /// The amount of the difference we scale by to reach
 const SCALING_REM_ADJUSTMENT: u32 = 3;
 /// Minimum wait time before consensus starts (in seconds)
-const MIN_WAIT_DURATION: f64 = ETH_BLOCK_TIME.as_secs() as f64 - 1.905;
+const MIN_WAIT_DURATION: f64 = ETH_BLOCK_TIME.as_secs() as f64 - 2.905;
 /// Maximum wait time before consensus starts (in seconds)
-const MAX_WAIT_DURATION: f64 = ETH_BLOCK_TIME.as_secs() as f64 - 1.305;
+const MAX_WAIT_DURATION: f64 = ETH_BLOCK_TIME.as_secs() as f64 - 2.305;
 
 /// When we should trigger to build our pre-proposals
 /// this is very important for maximizing how long we can
@@ -142,6 +142,9 @@ fn sigmoid_clamp(x: Duration) -> Duration {
     let x_secs = x.as_secs_f64();
     let adjusted = MIN_WAIT_DURATION
         + (MAX_WAIT_DURATION - MIN_WAIT_DURATION) / (1.0 + (-K * (x_secs - X_O)).exp());
+
+    // its starting way early still
+    let adjusted = adjusted.clamp(MIN_WAIT_DURATION, MAX_WAIT_DURATION);
 
     Duration::from_secs_f64(adjusted)
 }

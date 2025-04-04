@@ -21,7 +21,10 @@ pub type OrderPrice = MatchingPrice;
 use crate::{
     matching::{MatchingPrice, Ray, uniswap::Direction},
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{
+        grouped_orders::{AllOrders, OrderWithStorageData},
+        rpc_orders::TopOfBlockOrder
+    }
 };
 
 #[derive(Debug)]
@@ -30,9 +33,23 @@ pub struct OrderSet<Limit, Searcher> {
     pub searcher: Vec<OrderWithStorageData<Searcher>>
 }
 
-impl<Limit, Searcher> OrderSet<Limit, Searcher> {
+impl<Limit, Searcher> OrderSet<Limit, Searcher>
+where
+    Limit: Clone,
+    Searcher: Clone,
+    AllOrders: From<Searcher> + From<Limit>
+{
     pub fn total_orders(&self) -> usize {
         self.limit.len() + self.searcher.len()
+    }
+
+    pub fn into_all_orders(&self) -> Vec<AllOrders> {
+        self.limit
+            .clone()
+            .into_iter()
+            .map(|o| o.order.into())
+            .chain(self.searcher.clone().into_iter().map(|o| o.order.into()))
+            .collect()
     }
 }
 

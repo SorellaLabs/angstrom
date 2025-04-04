@@ -382,6 +382,8 @@ where
                         )
                     }
                 );
+                let all_orders = self.order_indexer.get_all_orders().into_all_orders();
+                self.broadcast_orders_to_peers(all_orders);
             }
             StromNetworkEvent::SessionClosed { peer_id, .. } => {
                 // remove the peer

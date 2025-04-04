@@ -24,7 +24,7 @@ pub struct NetworkBuilder<P: Peers + Unpin> {
     to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>,
     session_manager_rx:   Option<Receiver<StromSessionMessage>>,
     eth_handle:           UnboundedReceiver<EthEvent>,
-    reth_handle:          P,
+    reth_handle:          Option<P>,
 
     validator_set: Arc<RwLock<HashSet<Address>>>,
     verification:  VerificationSidecar
@@ -34,21 +34,21 @@ impl<P: Peers + Unpin + 'static> NetworkBuilder<P> {
     pub fn new(
         verification: VerificationSidecar,
         eth_handle: UnboundedReceiver<EthEvent>,
-        reth_handle: P
+        validator_set: Arc<RwLock<HashSet<Address>>>
     ) -> Self {
         Self {
-            reth_handle,
+            reth_handle: None,
             verification,
             to_pool_manager: None,
             to_consensus_manager: None,
             session_manager_rx: None,
             eth_handle,
-            validator_set: Default::default()
+            validator_set
         }
     }
 
     pub fn with_reth(mut self, reth_handle: P) -> Self {
-        self.reth_handle = reth_handle;
+        self.reth_handle = Some(reth_handle);
         self
     }
 
@@ -99,7 +99,7 @@ impl<P: Peers + Unpin + 'static> NetworkBuilder<P> {
             self.eth_handle,
             self.to_pool_manager,
             self.to_consensus_manager,
-            self.reth_handle
+            self.reth_handle.expect("reth handle not set in builder")
         );
 
         let handle = network.get_handle();

@@ -5,6 +5,7 @@ use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
 use alloy::{
     self,
     eips::{BlockId, BlockNumberOrTag},
+    primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
@@ -20,7 +21,6 @@ use angstrom_network::{
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
-    contract_bindings::controller_v_1::ControllerV1,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     mev_boost::MevBoostProvider,
     primitive::{AngstromSigner, UniswapPoolRegistry},
@@ -31,6 +31,7 @@ use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
+use parking_lot::RwLock;
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -41,7 +42,7 @@ use reth::{
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
-use reth_network::Peers;
+use reth_network::{NetworkHandle, Peers};
 use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns};
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
@@ -58,11 +59,11 @@ use validation::{
 
 use crate::{AngstromConfig, cli::NodeConfig};
 
-pub fn init_network_builder<P: Peers + Unpin + 'static>(
+pub fn init_network_builder(
     secret_key: AngstromSigner,
     eth_handle: UnboundedReceiver<EthEvent>,
-    reth_handle: P
-) -> eyre::Result<StromNetworkBuilder<P>> {
+    validator_set: Arc<RwLock<HashSet<Address>>>
+) -> eyre::Result<StromNetworkBuilder<NetworkHandle>> {
     let public_key = secret_key.id();
 
     let state = StatusState {
@@ -75,7 +76,7 @@ pub fn init_network_builder<P: Peers + Unpin + 'static>(
     let verification =
         VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
 
-    Ok(StromNetworkBuilder::new(verification, eth_handle, reth_handle))
+    Ok(StromNetworkBuilder::new(verification, eth_handle, validator_set))
 }
 
 pub type DefaultPoolHandle = PoolHandle;
@@ -154,7 +155,9 @@ pub async fn initialize_strom_components<Node, AddOns, P: Peers + Unpin + 'stati
     network_builder: StromNetworkBuilder<P>,
     node: &FullNode<Node, AddOns>,
     executor: TaskExecutor,
-    exit: NodeExitFuture
+    exit: NodeExitFuture,
+    node_set: HashSet<Address>,
+    node_config: NodeConfig
 ) -> eyre::Result<()>
 where
     Node: FullNodeComponents
@@ -169,8 +172,6 @@ where
         TryIntoHistoricalStateProvider + ReceiptProvider,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider: BlockNumReader
 {
-    let node_config = NodeConfig::load_from_config(Some(config.node_config)).unwrap();
-
     let node_address = signer.address();
 
     // NOTE:
@@ -243,17 +244,6 @@ where
     let uniswap_registry: UniswapPoolRegistry = pools.into();
     let uni_ang_registry =
         UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
-
-    let periphery_c = ControllerV1::new(node_config.periphery_address, querying_provider.clone());
-    let node_set = periphery_c
-        .nodes()
-        .call()
-        .await
-        .unwrap()
-        ._0
-        .into_iter()
-        .collect::<HashSet<_>>();
-    tracing::info!(?node_set, "got node set");
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
     // created

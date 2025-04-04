@@ -1327,6 +1327,7 @@ dependencies = [
  "futures",
  "matching-engine",
  "order-pool",
+ "parking_lot",
  "rayon",
  "reth",
  "reth-cli-util",

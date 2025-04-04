@@ -2,25 +2,30 @@
 //!
 //! ## Feature Flags
 
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
-use alloy::signers::local::PrivateKeySigner;
+use alloy::{
+    providers::{ProviderBuilder, network::Ethereum},
+    signers::local::PrivateKeySigner
+};
 use angstrom_metrics::METRICS_ENABLED;
+use angstrom_network::AngstromNetworkBuilder;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
-use angstrom_types::primitive::{ANGSTROM_DOMAIN, AngstromSigner};
+use angstrom_types::{
+    contract_bindings::controller_v_1::ControllerV1,
+    primitive::{ANGSTROM_DOMAIN, AngstromSigner}
+};
 use clap::Parser;
 use cli::AngstromConfig;
-use reth::{
-    chainspec::EthereumChainSpecParser,
-    cli::Cli,
-    network::{NetworkProtocols, protocol::IntoRlpxSubProtocol}
-};
-use reth_node_builder::NodeHandle;
-use reth_node_ethereum::EthereumNode;
+use parking_lot::RwLock;
+use reth::{chainspec::EthereumChainSpecParser, cli::Cli};
+use reth_node_builder::{Node, NodeHandle};
+use reth_node_ethereum::node::{EthereumAddOns, EthereumNode};
 use validation::validator::ValidationClient;
 
-use crate::components::{
-    init_network_builder, initialize_strom_components, initialize_strom_handles
+use crate::{
+    cli::NodeConfig,
+    components::{init_network_builder, initialize_strom_components, initialize_strom_handles}
 };
 
 pub mod cli;
@@ -51,8 +56,43 @@ pub fn run() -> eyre::Result<()> {
         let executor_clone = executor.clone();
         let validation_client = ValidationClient(channels.validator_tx.clone());
 
+        // get provider and node set for startup, we need this so when reth startup
+        // happens, we directly can connect to the nodes.
+
+        let startup_provider = ProviderBuilder::<_, _, Ethereum>::default()
+            .with_recommended_fillers()
+            .connect(&args.boot_node)
+            .await
+            .unwrap();
+
+        let node_config = NodeConfig::load_from_config(Some(args.node_config.clone())).unwrap();
+
+        let periphery_c = ControllerV1::new(node_config.periphery_address, startup_provider);
+        let node_set = periphery_c
+            .nodes()
+            .call()
+            .await
+            .unwrap()
+            ._0
+            .into_iter()
+            .collect::<HashSet<_>>();
+
+        let mut network = init_network_builder(
+            secret_key.clone(),
+            channels.eth_handle_rx.take().unwrap(),
+            Arc::new(RwLock::new(node_set.clone()))
+        )?;
+
+        let protocol_handle = network.build_protocol_handler();
+
         let NodeHandle { node, node_exit_future } = builder
-            .node(EthereumNode::default())
+            .with_types::<EthereumNode>()
+            .with_components(
+                EthereumNode::default()
+                    .components_builder()
+                    .network(AngstromNetworkBuilder::new(protocol_handle))
+            )
+            .with_add_ons::<EthereumAddOns<_>>(Default::default())
             .extend_rpc_modules(move |rpc_context| {
                 let order_api = OrderApi::new(pool.clone(), executor_clone, validation_client);
                 rpc_context.modules.merge_configured(order_api.into_rpc())?;
@@ -62,17 +102,6 @@ pub fn run() -> eyre::Result<()> {
             .launch()
             .await?;
 
-        let mut network = init_network_builder(
-            secret_key.clone(),
-            channels.eth_handle_rx.take().unwrap(),
-            node.network.clone()
-        )?;
-
-        let protocol_handle = network.build_protocol_handler();
-
-        node.network
-            .add_rlpx_sub_protocol(protocol_handle.into_rlpx_sub_protocol());
-
         initialize_strom_components(
             args,
             secret_key,
@@ -80,7 +109,9 @@ pub fn run() -> eyre::Result<()> {
             network,
             &node,
             executor,
-            node_exit_future
+            node_exit_future,
+            node_set,
+            node_config
         )
         .await
     })

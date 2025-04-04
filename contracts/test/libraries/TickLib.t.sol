@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {TickLib} from "../../src/libraries/TickLib.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {TickBitmap} from "v4-core/src/libraries/TickBitMap.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract TickLibTest is Test {
@@ -24,22 +25,33 @@ contract TickLibTest is Test {
     }
 
     function test_fuzzing_findNextGte(uint256 word, uint8 bitPos) public pure {
-        (bool libInitialized, uint8 libPos) = TickLib.nextBitPosGte(word, bitPos);
+        (bool libInitialized, uint8 libPos) = TickLib.nextBitPosGte(
+            word,
+            bitPos
+        );
         (uint8 cmpPos, bool cmpInitialized) = _findNextGte(word, bitPos);
         assertEq(libPos, cmpPos);
         assertEq(libInitialized, cmpInitialized);
     }
 
     function test_fuzzing_findNextLte(uint256 word, uint8 bitPos) public pure {
-        (bool libInitialized, uint8 libPos) = TickLib.nextBitPosLte(word, bitPos);
+        (bool libInitialized, uint8 libPos) = TickLib.nextBitPosLte(
+            word,
+            bitPos
+        );
         (uint8 cmpPos, bool cmpInitialized) = _findNextLte(word, bitPos);
         assertEq(libPos, cmpPos);
         assertEq(libInitialized, cmpInitialized);
     }
 
     function test_fuzzing_compress(int24 tick, int24 tickSpacing) public pure {
-        tickSpacing =
-            int24(bound(tickSpacing, TickMath.MIN_TICK_SPACING, TickMath.MAX_TICK_SPACING));
+        tickSpacing = int24(
+            bound(
+                tickSpacing,
+                TickMath.MIN_TICK_SPACING,
+                TickMath.MAX_TICK_SPACING
+            )
+        );
         // Assumption: Tick spacing is always a positive non-negative value.
         int24 libCompressed = TickLib.compress(tick, tickSpacing);
 
@@ -49,33 +61,36 @@ contract TickLibTest is Test {
         assertEq(libCompressed, safeCompressed);
     }
 
-    function test_fuzzing_tickRecreatedFromPositionToTick(int24 tick, int24 tickSpacing)
-        public
-        pure
-    {
-        tickSpacing =
-            int24(bound(tickSpacing, TickMath.MIN_TICK_SPACING, TickMath.MAX_TICK_SPACING));
+    function test_fuzzing_tickRecreatedFromPositionToTick(
+        int24 tick,
+        int24 tickSpacing
+    ) public pure {
+        tickSpacing = int24(
+            bound(
+                tickSpacing,
+                TickMath.MIN_TICK_SPACING,
+                TickMath.MAX_TICK_SPACING
+            )
+        );
         (int16 wordPos, uint8 bitPos) = TickLib.position(tick / tickSpacing);
         int24 outTick = TickLib.toTick(wordPos, bitPos, tickSpacing);
         assertEq(tick - (tick % tickSpacing), outTick);
     }
 
-    function _findNextGte(uint256 word, uint8 bitPos)
-        internal
-        pure
-        returns (uint8 nextBitPos, bool initialized)
-    {
+    function _findNextGte(
+        uint256 word,
+        uint8 bitPos
+    ) internal pure returns (uint8 nextBitPos, bool initialized) {
         for (uint256 i = bitPos; i < 256; i++) {
             if (word & (1 << i) != 0) return (uint8(i), true);
         }
         return (type(uint8).max, false);
     }
 
-    function _findNextLte(uint256 word, uint8 bitPos)
-        internal
-        pure
-        returns (uint8 nextBitPos, bool initialized)
-    {
+    function _findNextLte(
+        uint256 word,
+        uint8 bitPos
+    ) internal pure returns (uint8 nextBitPos, bool initialized) {
         while (true) {
             if (word & (1 << bitPos) != 0) return (uint8(bitPos), true);
             if (bitPos == 0) break;

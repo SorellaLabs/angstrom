@@ -211,14 +211,19 @@ where
             // if we are a bid. we flip the price
             clearing_price.inv_ray_assign_round(true);
         }
+        let deadline = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+            + Duration::from_secs(399))
+        .as_secs();
 
         Ok(UserOrderBuilder::new()
             .signing_key(Some(key.clone()))
             .is_exact(!is_partial)
             .asset_in(if zfo { self.pool.token0 } else { self.pool.token1 })
             .asset_out(if !zfo { self.pool.token0 } else { self.pool.token1 })
-            .is_standing(false)
+            .is_standing(true)
             .gas_price_asset_zero(gas.to())
+            .deadline(U256::from(deadline))
+            .nonce(deadline)
             .exact_in(exact_in)
             .min_price(clearing_price)
             .block(self.block_number + 1)
@@ -277,16 +282,16 @@ where
         let amount = if exact_in {
             // exact in will swap 1/6 of the balance
             I256::unchecked_from(if zfo {
-                token0_bal.balance / U256::from(10)
+                token0_bal.balance / U256::from(50)
             } else {
-                token1_bal.balance / U256::from(10)
+                token1_bal.balance / U256::from(50)
             })
         } else {
             // exact out
             I256::unchecked_from(if zfo {
-                t1_with_current_price / U256::from(10)
+                t1_with_current_price / U256::from(50)
             } else {
-                token1_bal.balance / U256::from(10)
+                token1_bal.balance / U256::from(50)
             })
             .wrapping_neg()
         };

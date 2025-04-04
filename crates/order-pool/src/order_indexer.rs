@@ -289,6 +289,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 self.order_tracker
                     .park_orders(&valid.invalidates, &self.order_storage);
 
+                tracing::info!(?valid, "inserting order into pool");
                 if let Err(e) = self.insert_order(valid) {
                     tracing::error!(%e, "failed to insert valid order");
                 }

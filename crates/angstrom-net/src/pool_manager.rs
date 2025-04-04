@@ -428,6 +428,7 @@ where
             })
             .collect::<Vec<_>>();
 
+        tracing::info!(?valid_orders, "broadcasting orders");
         self.broadcast_orders_to_peers(valid_orders);
     }
 

@@ -59,6 +59,7 @@ where
         signer: AngstromSigner,
         validators: Vec<AngstromValidator>,
         order_storage: Arc<OrderStorage>,
+        deploy_block: BlockNumber,
         current_height: BlockNumber,
         angstrom_address: Address,
         pool_registry: UniswapAngstromRegistry,
@@ -70,7 +71,7 @@ where
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
         tracing::info!(?validators, "setting up with validators");
-        let mut leader_selection = WeightedRoundRobin::new(validators.clone(), current_height);
+        let mut leader_selection = WeightedRoundRobin::new(validators.clone(), deploy_block);
         let leader = leader_selection.choose_proposer(current_height).unwrap();
         block_sync.register(MODULE_NAME);
 

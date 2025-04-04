@@ -262,6 +262,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             initial_validators,
             order_storage.clone(),
             block_number,
+            block_number,
             inital_angstrom_state.angstrom_addr,
             pool_registry,
             uniswap_pools.clone(),

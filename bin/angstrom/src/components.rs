@@ -356,6 +356,7 @@ where
         signer,
         validators,
         order_storage.clone(),
+        node_config.angstrom_deploy_block,
         block_height,
         node_config.angstrom_address,
         uni_ang_registry,

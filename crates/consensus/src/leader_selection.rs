@@ -34,12 +34,12 @@ pub struct WeightedRoundRobin {
 }
 
 impl WeightedRoundRobin {
-    pub fn new(validators: Vec<AngstromValidator>, block_number: BlockNumber) -> Self {
+    pub fn new(validators: Vec<AngstromValidator>, start_block: BlockNumber) -> Self {
         WeightedRoundRobin {
-            validators: HashSet::from_iter(validators),
+            validators:                HashSet::from_iter(validators),
             new_joiner_penalty_factor: PENALTY_FACTOR,
-            block_number,
-            last_proposer: None
+            block_number:              start_block,
+            last_proposer:             None
         }
     }
 

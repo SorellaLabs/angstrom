@@ -170,6 +170,10 @@ impl<'a> SwapStep<'a> {
         if self.end_price > self.start_price { self.d_t0 } else { self.d_t1 }
     }
 
+    pub fn is_initialized(&self) -> bool {
+        self.liq_range.is_initialized
+    }
+
     /// An empty step has no motion in t0 or t1, but is sometimes present to
     /// make sure we record a price that started precisely on a tick boundary
     pub fn empty(&self) -> bool {
@@ -414,7 +418,7 @@ impl<'a> PoolPriceVec<'a> {
 
         let mut current_blob: Option<(u128, u128)> = None;
 
-        let steps_iter = steps.iter().filter(|s| !s.empty());
+        let steps_iter = steps.iter().filter(|s| !s.empty() && s.is_initialized());
 
         for step in steps_iter {
             // If our current blob is empty, we can just insert the current step's stats

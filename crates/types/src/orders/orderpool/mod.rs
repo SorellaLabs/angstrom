@@ -64,6 +64,10 @@ impl PartialOrd for OrderPriorityData {
 }
 
 impl Ord for OrderPriorityData {
+    /// This implements the "default" sort which is to sort first by price, then
+    /// by volume, then gas, then gas_units
+    /// We might want to remove this given that our sorts are more complicated
+    /// than this
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.price
             .cmp(&other.price)

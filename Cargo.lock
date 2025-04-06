@@ -1419,6 +1419,7 @@ dependencies = [
  "futures",
  "homedir",
  "humantime-serde",
+ "itertools 0.10.5",
  "k256",
  "linked-hash-map",
  "linked_hash_set",

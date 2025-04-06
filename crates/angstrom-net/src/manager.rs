@@ -14,6 +14,7 @@ use angstrom_types::{
     primitive::PeerId
 };
 use futures::{FutureExt, StreamExt};
+use itertools::Itertools;
 use once_cell::unsync::Lazy;
 use reth_eth_wire::DisconnectReason;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
@@ -158,12 +159,15 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
     /// `swarm.sessions_mut`.
     pub fn save_known_peers(&self) {
         tracing::info!("saving known peers for node_id={}", self.node_pubkey());
+        let current_map = Self::load_known_peers(&self.node_pubkey());
         let peers = self
             .swarm
             .sessions()
             .active_sessions
             .values()
             .map(|session| CachedPeer { peer_id: session.remote_id, addr: session.socket_addr })
+            .chain(current_map.peers)
+            .unique()
             .collect::<Vec<_>>();
         let peers: CachedPeers = peers.into();
         let toml_path = Self::known_peers_toml_path(&self.node_pubkey());

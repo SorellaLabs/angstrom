@@ -32,7 +32,7 @@ use tracing::warn;
 
 use crate::{StromMessage, StromProtocolMessage, errors::StromStreamError};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct CachedPeer {
     pub peer_id: PeerId,
     pub addr:    SocketAddr

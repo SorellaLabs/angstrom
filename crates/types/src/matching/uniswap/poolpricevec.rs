@@ -476,6 +476,7 @@ impl<'a> PoolPriceVec<'a> {
         // donation, we want to distribute it ALL to the blob to get to the best price
         // possible.
         if let Some((c_t0, _)) = current_blob.as_mut() {
+            tracing::info!(?c_t0, ?remaining_donation, ?price_dropping);
             if price_dropping {
                 *c_t0 += remaining_donation
             } else {

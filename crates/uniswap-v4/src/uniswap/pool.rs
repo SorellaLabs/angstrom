@@ -231,7 +231,6 @@ where
         // Put them all together - the PoolSnapshot constructor will sort this
         let liq_ranges =
             [[current_range].as_slice(), upper_ranges.as_slice(), lower_ranges.as_slice()].concat();
-        tracing::info!("{liq_ranges:#?}");
 
         Ok((
             self.token0,

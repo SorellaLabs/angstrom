@@ -62,15 +62,16 @@ where
 
         // first thing we will do is setup Uniswap's token balance.
         let uniswap_balance_slot = keccak256((uniswap, balance_slot).abi_encode());
-        let uniswap_approval_slot =
-            keccak256((angstrom, keccak256((uniswap, approval_slot).abi_encode())).abi_encode());
+        // let uniswap_approval_slot =
+        //     keccak256((angstrom, keccak256((uniswap,
+        // approval_slot).abi_encode())).abi_encode());
 
         // set Uniswap's balance on the token_in
         db.insert_account_storage(token, uniswap_balance_slot.into(), U256::from(2) * quantity)
             .map_err(|e| eyre::eyre!("{e:?}"))?;
         // give angstrom approval
-        db.insert_account_storage(token, uniswap_approval_slot.into(), U256::from(2) * quantity)
-            .map_err(|e| eyre::eyre!("{e:?}"))?;
+        // db.insert_account_storage(token, uniswap_approval_slot.into(), U256::from(2)
+        // * quantity)     .map_err(|e| eyre::eyre!("{e:?}"))?;
 
         Ok(())
     }
@@ -150,26 +151,26 @@ where
 
 
                 // TODO:  Put this on a feature flag so we use `replay()` when not needing debug inspection
-                let result = match evm.inspect_replay()
-                    .map_err(|e| eyre!("failed to transact with revm - {e:?}"))
-                {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let _ = sender.send(Err(eyre!(
-                            "transaction simulation failed - failed to transaction with revm - \
-                             {e:?}"
-                        )));
-                        return;
-                    }
-                };
+                // let result = match evm.inspect_replay()
+                //     .map_err(|e| eyre!("failed to transact with revm - {e:?}"))
+                // {
+                //     Ok(r) => r,
+                //     Err(e) => {
+                //         let _ = sender.send(Err(eyre!(
+                //             "transaction simulation failed - failed to transaction with revm - \
+                //              {e:?}"
+                //         )));
+                //         return;
+                //     }
+                // };
 
-                if !result.result.is_success() {
-                    tracing::warn!(?result.result);
-                    let _ = sender.send(Err(eyre!("transaction simulation failed")));
-                    return;
-                }
+                // if !result.result.is_success() {
+                //     tracing::warn!(?result.result);
+                //     let _ = sender.send(Err(eyre!("transaction simulation failed")));
+                //     return;
+                // }
 
-                let res = BundleGasDetails::new(conversion_lookup, result.result.gas_used());
+                let res = BundleGasDetails::new(conversion_lookup, 0);
                 let _ = sender.send(Ok(res));
             });
         }))

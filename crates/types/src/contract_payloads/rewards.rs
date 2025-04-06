@@ -12,11 +12,11 @@ pub enum RewardsUpdate {
         start_tick:      I24,
         start_liquidity: u128,
         quantities:      Vec<u128>
-        // reward_checksum: U160
+        // reward_checksum: U160,
     },
     CurrentOnly {
         amount: u128
-        // expected_liquidity: u128
+        // expected_liquidity: u128,
     }
 }
 

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use reth::{chainspec::ChainSpec, transaction_pool::TransactionPool};
 use reth_network::{
     EthNetworkPrimitives, NetworkHandle, NetworkManager, PeersInfo, protocol::IntoRlpxSubProtocol
@@ -37,6 +39,10 @@ where
     ) -> eyre::Result<NetworkHandle> {
         let mut network_config = ctx.network_config()?;
         network_config.extra_protocols.push(self.custom_protocol);
+        // try to dial outbound 5x quicker
+        network_config.peers_config = network_config
+            .peers_config
+            .with_refill_slots_interval(Duration::from_secs(1));
 
         let network = NetworkManager::builder(network_config).await?;
         let handle = ctx.start_network(network, pool);

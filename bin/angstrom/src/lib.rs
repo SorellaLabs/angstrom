@@ -93,7 +93,6 @@ pub fn run() -> eyre::Result<()> {
                     .network(AngstromNetworkBuilder::new(protocol_handle))
             )
             .with_add_ons::<EthereumAddOns<_>>(Default::default())
-            .map_add_ons(|add| add.components())
             .extend_rpc_modules(move |rpc_context| {
                 let order_api = OrderApi::new(pool.clone(), executor_clone, validation_client);
                 rpc_context.modules.merge_configured(order_api.into_rpc())?;

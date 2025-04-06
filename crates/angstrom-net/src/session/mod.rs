@@ -48,7 +48,7 @@ impl CachedPeer {
             "enode://{:?}@{}:{}?discport=30303", // TODO: get discport?
             self.peer_id,
             self.addr.ip(),
-            self.addr.port()
+            30303 // self.addr.port()
         )
     }
 }

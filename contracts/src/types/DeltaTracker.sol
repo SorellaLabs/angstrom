@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
+import {console} from "forge-std/console.sol";
 import {MixedSignLib} from "../libraries/MixedSignLib.sol";
 import {tint256} from "transient-goodies/TransientPrimitives.sol";
 
@@ -16,6 +17,7 @@ using DeltaTrackerLib for DeltaTracker global;
 /// funds to use for payouts of different kinds.
 library DeltaTrackerLib {
     function add(DeltaTracker storage self, address asset, uint256 amount) internal {
+        console.log("Adding to delta: ", asset, amount);
         tint256 storage delta = self.deltas[asset];
         delta.set(MixedSignLib.add(delta.get(), amount));
     }
@@ -24,6 +26,7 @@ library DeltaTrackerLib {
         internal
         returns (int256 newDelta)
     {
+        console.log("Subtracting from delta: ", asset, amount);
         tint256 storage delta = self.deltas[asset];
         delta.set(newDelta = MixedSignLib.sub(delta.get(), amount));
     }

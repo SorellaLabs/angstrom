@@ -100,6 +100,11 @@ impl AssetBuilder {
     }
 
     pub fn get_asset_array(&self) -> Vec<Asset> {
+        println!(
+            "--- SWAPS ---\n{:#?}\n--- TOP OF BLOCK ---\n{:#?}\n--- USER ORDERS ---\n{:#?}\n--- \
+             REWARDS ---\n{:#?}",
+            self.swaps, self.top_of_block, self.user_orders, self.rewards
+        );
         let combined_assets = self
             .swaps
             .and_then(&self.top_of_block)

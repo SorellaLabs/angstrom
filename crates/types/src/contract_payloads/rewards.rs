@@ -49,6 +49,13 @@ impl RewardsUpdate {
             .get_range_for_tick(bound_tick)
             .map(|r| (if from_above { r.lower_tick() } else { r.upper_tick() }, r.liquidity()))
             .unwrap_or_default();
+        tracing::warn!(
+            current_tick,
+            bound_tick,
+            start_tick,
+            start_liquidity,
+            "Assembling rewards update"
+        );
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
+import {console} from "forge-std/console.sol";
 import {GrowthOutsideUpdater} from "./GrowthOutsideUpdater.sol";
 import {UniConsumer} from "./UniConsumer.sol";
 import {Settlement} from "./Settlement.sol";
@@ -192,6 +193,7 @@ abstract contract PoolUpdates is
         int24 currentTick;
         if (amountIn > 0) {
             int24 tickBefore = UNI_V4.getSlot0(id).tick();
+            console.log("tick before", tickBefore);
             swapCall.amountSpecified = SignedUnsignedLib.neg(amountIn);
             // The swap delta is tracked on Uniswap's side so we don't need to here. It's accounted for in the asset
             // take & settle steps.
@@ -205,6 +207,8 @@ abstract contract PoolUpdates is
         } else {
             currentTick = UNI_V4.getSlot0(id).tick();
         }
+
+        console.log("current tick", currentTick);
 
         uint256 rewardTotal;
         (reader, rewardTotal) = _decodeAndReward(

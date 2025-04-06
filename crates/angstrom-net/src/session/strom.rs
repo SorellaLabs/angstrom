@@ -276,7 +276,6 @@ impl StromSession {
     fn try_send_outbound(&mut self, cx: &mut Context<'_>) {
         while let Poll::Ready(Ok(_)) = self.to_session_manager.poll_reserve(cx) {
             if let Some(item) = self.outbound_buffer.pop_front() {
-                tracing::info!("sending message to manager");
                 self.to_session_manager.send_item(item).unwrap();
             } else {
                 return;

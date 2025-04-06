@@ -41,6 +41,7 @@ impl RewardsUpdate {
             // otherwise
             .sorted_by(|((a, _), _), ((b, _), _)| if from_above { b.cmp(a) } else { a.cmp(b) })
             // Map to the quantity
+            .filter(|f| *f.1 != 0)
             .map(|(_, q)| *q)
             .collect::<Vec<_>>();
 
@@ -51,7 +52,7 @@ impl RewardsUpdate {
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {
-                amount:             quantities.first().copied().unwrap_or_default(),
+                amount:             quantities.first().copied().unwrap_or(donation_data.tribute),
                 expected_liquidity: start_liquidity
             }),
             _ => Ok(Self::MultiTick {

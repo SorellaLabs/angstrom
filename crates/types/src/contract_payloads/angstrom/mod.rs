@@ -102,7 +102,6 @@ impl AngstromBundle {
                 )
             };
 
-            tracing::info!(?token, from_address = ?address, qty, "Building user order override");
             approvals
                 .entry(token)
                 .or_default()
@@ -139,7 +138,6 @@ impl AngstromBundle {
                 qty += order.gas_used_asset_0;
             }
 
-            tracing::info!(?token, from_address = ?address, qty, "Building ToB order override");
             approvals
                 .entry(token)
                 .or_default()
@@ -634,11 +632,13 @@ impl AngstromBundle {
 
         // Build the rewards structure for the AMM swap
         let book_swap_rewards = book_swap_vec.t0_donation(solution.reward_t0);
+        tracing::info!("book: {book_swap_rewards:#?}");
 
         // If we have a TOB swap, let's get the rewards and combine them - otherwise we
         // continue to use just the rewards we got from the AMM swap
         let total_rewards = if let Some((tob_vec, tob_donation)) = tob_swap_info.as_ref() {
             let tob_rewards = tob_vec.t0_donation(*tob_donation);
+            tracing::info!("tob: {tob_rewards:#?}");
             book_swap_rewards.combine(&tob_rewards)?
         } else {
             book_swap_rewards

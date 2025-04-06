@@ -89,10 +89,10 @@ impl<S: Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> AnvilEt
         }
 
         // find angstrom tx
-        let Some(angstrom_tx) = txes.into_iter().find(|tx| {
-            tracing::info!(?tx, "angstrom tx");
-            tx.to() == Some(self.angstrom_contract)
-        }) else {
+        let Some(angstrom_tx) = txes
+            .into_iter()
+            .find(|tx| tx.to() == Some(self.angstrom_contract))
+        else {
             tracing::info!("No angstrom txs found!!!!!!!!!!");
             self.send_events(EthEvent::NewBlockTransitions {
                 block_number:      block.0,

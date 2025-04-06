@@ -112,16 +112,6 @@ where
         *self.ticks.keys().max().unwrap()
     }
 
-    fn next_tick_lte(&self, tick: i32) -> i32 {
-        let extra = tick % self.tick_spacing;
-        tick - extra
-    }
-
-    fn next_tick_gte(&self, tick: i32) -> i32 {
-        let extra = tick % self.tick_spacing;
-        tick + (self.tick_spacing - extra)
-    }
-
     pub fn fetch_pool_snapshot(&self) -> Result<(Address, Address, PoolSnapshot), PoolError> {
         if !self.data_is_populated() {
             return Err(PoolError::PoolNotInitialized);
@@ -142,12 +132,18 @@ where
             .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
             .partition(|t| *t.0 <= current_tick);
 
-        let current_range = LiqRange::new_init(
+        let lower = *less_than.last().expect("No lower bound to current range");
+        let current_range = LiqRange::new_uninit(
             // Because they're already sorted low to high - we want the highest low and the lowest
             // high
-            self.next_tick_lte(self.tick - 1),
-            self.next_tick_gte(self.tick),
-            current_liquidity
+            *lower.0,
+            *more_than
+                .first()
+                .expect("No upper bound to corrent range")
+                .0,
+            current_liquidity,
+            lower.1.is_edge,
+            lower.1.initialized
         )
         .unwrap();
 

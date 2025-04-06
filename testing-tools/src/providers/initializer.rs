@@ -18,7 +18,6 @@ use angstrom_types::{
     matching::SqrtPriceX96,
     testnet::InitialTestnetState
 };
-use rand::{Rng, thread_rng};
 use reth_tasks::TaskExecutor;
 
 use super::WalletProvider;
@@ -263,31 +262,27 @@ impl AnvilInitializer {
         tracing::debug!("success: pool_gate");
         self.pending_state.add_pending_tx(pool_gate);
 
-        let mut rng = thread_rng();
-
         let tick = price.to_tick()?;
-        for i in 0..400 {
-            let lower = I24::unchecked_from(tick - (pool_key.tickSpacing.as_i32() * (200 - i)));
-            let upper = lower + pool_key.tickSpacing;
-            let liquidity = U256::from(rng.gen_range(liquidity / 2..liquidity));
+        let lowest_tick = I24::unchecked_from(tick - (pool_key.tickSpacing.as_i32() * 1000));
+        let highest_tick = I24::unchecked_from(tick + (pool_key.tickSpacing.as_i32() * 1000));
+        tracing::info!(?lowest_tick, ?highest_tick, "initalizing single range at");
 
-            let add_liq = self
-                .pool_gate
-                .addLiquidity(
-                    pool_key.currency0,
-                    pool_key.currency1,
-                    lower,
-                    upper,
-                    liquidity,
-                    FixedBytes::<32>::default()
-                )
-                .from(self.provider.controller())
-                .nonce(nonce + 3 + (i as u64))
-                .deploy_pending()
-                .await?;
-            self.pending_state.add_pending_tx(add_liq);
-            tracing::trace!(lower_tick = ?lower, upper_tick = ?upper, ?liquidity, "Adding liquidity to pool");
-        }
+        let add_liq = self
+            .pool_gate
+            .addLiquidity(
+                pool_key.currency0,
+                pool_key.currency1,
+                lowest_tick,
+                highest_tick,
+                U256::from(liquidity),
+                FixedBytes::<32>::default()
+            )
+            .from(self.provider.controller())
+            .nonce(nonce + 3)
+            .deploy_pending()
+            .await?;
+
+        self.pending_state.add_pending_tx(add_liq);
 
         Ok(())
     }

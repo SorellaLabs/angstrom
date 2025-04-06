@@ -134,6 +134,7 @@ impl PoolSnapshot {
         let (ticks, liquidity): (Vec<_>, Vec<_>) = self
             .ranges_for_ticks(start_tick, end_tick)?
             .iter()
+            .filter(|tick| tick.is_initialized)
             .map(|r| {
                 let target_tick = if from_above { r.lower_tick } else { r.upper_tick };
                 (target_tick, r.liquidity)

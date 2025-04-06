@@ -92,6 +92,7 @@ impl DonationResult {
         let (within_vec, mut outside): (HashMap<_, _>, HashMap<_, _>) = self
             .tick_donations
             .iter()
+            .filter(|t| *t.1 != 0)
             // Copy our data so we can store it in new structures
             .map(|((l, h), q)| ((*l, *h), *q))
             // Low tick of the vec is less than the segment's high bound, and the high tick of the
@@ -106,7 +107,7 @@ impl DonationResult {
                 final_price:    self.final_price,
                 tick_donations: outside,
                 total_donated:  self.total_donated,
-                tribute:        0_u128
+                tribute:        self.tribute
             })
         } else {
             None
@@ -116,7 +117,7 @@ impl DonationResult {
             final_price:    self.final_price,
             tick_donations: within_vec,
             total_donated:  self.total_donated,
-            tribute:        0_u128
+            tribute:        self.tribute
         };
         (first_swap, second_swap)
     }

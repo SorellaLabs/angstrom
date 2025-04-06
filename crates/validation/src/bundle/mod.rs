@@ -93,6 +93,7 @@ where
         let angstrom_address = self.angstrom_address;
         let mut db = self.db.clone();
 
+        tracing::info!("{bundle:#?}");
         let conversion_lookup = price_gen.generate_lookup_map();
 
         thread_pool.spawn_raw(Box::pin(async move {

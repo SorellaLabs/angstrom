@@ -216,7 +216,6 @@ where
                 tracing::info!(?key, "getting snapshot");
                 let (token_a, token_b, snapshot) =
                     pool.read().unwrap().fetch_pool_snapshot().unwrap();
-                tracing::info!("{:#?}", snapshot);
                 let entry = self.pool_registry.get_ang_entry(key).unwrap();
 
                 (*key, (token_a, token_b, snapshot, entry.store_index as u16))

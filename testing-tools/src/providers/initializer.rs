@@ -2,13 +2,11 @@ use alloy::{
     node_bindings::AnvilInstance,
     primitives::{
         Address,
-        aliases::{I24, U24},
-        keccak256
+        aliases::{I24, U24}
     },
     providers::{Provider, ext::AnvilApi}
 };
 use alloy_primitives::{FixedBytes, U256};
-use alloy_sol_types::SolValue;
 use angstrom_types::{
     contract_bindings::{
         angstrom::Angstrom::{AngstromInstance, PoolKey},
@@ -18,6 +16,7 @@ use angstrom_types::{
     matching::SqrtPriceX96,
     testnet::InitialTestnetState
 };
+use itertools::Itertools;
 use reth_tasks::TaskExecutor;
 
 use super::WalletProvider;
@@ -95,20 +94,21 @@ impl AnvilInitializer {
         pool_keys: Vec<PartialConfigPoolKey>
     ) -> eyre::Result<()> {
         for (i, key) in pool_keys.into_iter().enumerate() {
-            let (cur0, cur1) = self.deploy_currencies(&key).await?;
-            self.deploy_pool_full(
-                key.make_pool_key(*self.angstrom.address(), cur0, cur1),
-                key.initial_liquidity(),
-                key.sqrt_price(),
-                U256::from(i)
-            )
-            .await?
+            for (j, (cur0, cur1)) in self.deploy_currencies(&key).await?.into_iter().enumerate() {
+                self.deploy_pool_full(
+                    key.make_pool_key(*self.angstrom.address(), cur0, cur1),
+                    key.initial_liquidity(),
+                    key.sqrt_price(),
+                    U256::from(i + j)
+                )
+                .await?
+            }
         }
 
         Ok(())
     }
 
-    async fn deploy_tokens(&mut self, nonce: &mut u64) -> eyre::Result<(Address, Address)> {
+    async fn deploy_tokens(&mut self, nonce: &mut u64) -> eyre::Result<Vec<(Address, Address)>> {
         // deploys the tokens
         let mut tokens_with_meta = Vec::new();
         for token_to_deploy in &self.initial_state_config.tokens_to_deploy {
@@ -143,9 +143,14 @@ impl AnvilInitializer {
             tokens.push(*token_addr);
         }
         self.pending_state.finalize_pending_txs().await?;
-
-        let (token0, token1) = (tokens[0], tokens[1]);
-        let tokens = if token0 < token1 { (token0, token1) } else { (token1, token0) };
+        let tokens = tokens
+            .into_iter()
+            .tuple_windows()
+            .map(|(t0, t1)| {
+                let (token0, token1) = (t0, t1);
+                if token0 < token1 { (token0, token1) } else { (token1, token0) }
+            })
+            .collect_vec();
 
         self.rpc_provider().anvil_mine(Some(1), None).await?;
 
@@ -155,53 +160,26 @@ impl AnvilInitializer {
     pub async fn deploy_currencies(
         &mut self,
         c: &PartialConfigPoolKey
-    ) -> eyre::Result<(Address, Address)> {
+    ) -> eyre::Result<Vec<(Address, Address)>> {
         let mut nonce = self
             .provider
             .provider
             .get_transaction_count(self.provider.controller())
             .await?;
 
-        let (currency0, currency1) = self.deploy_tokens(&mut nonce).await?;
+        let cur = self.deploy_tokens(&mut nonce).await?;
+        for (currency0, currency1) in &cur {
+            let pool_key = PoolKey {
+                currency0:   *currency0,
+                currency1:   *currency1,
+                fee:         U24::from(c.fee),
+                tickSpacing: I24::unchecked_from(c.tick_spacing),
+                hooks:       *self.angstrom.address()
+            };
+            self.pending_state.add_pool_key(pool_key.clone());
+        }
 
-        let pool_key = PoolKey {
-            currency0,
-            currency1,
-            fee: U24::from(c.fee),
-            tickSpacing: I24::unchecked_from(c.tick_spacing),
-            hooks: *self.angstrom.address()
-        };
-        self.pending_state.add_pool_key(pool_key.clone());
-
-        Ok((currency0, currency1))
-    }
-
-    /// deploys tokens, a uniV4 pool, angstrom pool
-    pub async fn deploy_default_pool_full(&mut self) -> eyre::Result<()> {
-        let mut nonce = self
-            .provider
-            .provider
-            .get_transaction_count(self.provider.controller())
-            .await?;
-
-        let (currency0, currency1) = self.deploy_tokens(&mut nonce).await?;
-
-        let pool_key = PoolKey {
-            currency0,
-            currency1,
-            fee: U24::ZERO,
-            tickSpacing: I24::unchecked_from(60),
-            hooks: *self.angstrom.address()
-        };
-        self.pending_state.add_pool_key(pool_key.clone());
-
-        let liquidity = u128::MAX - 1;
-        let price = SqrtPriceX96::at_tick(100_020)?;
-
-        self.deploy_pool_full(pool_key, liquidity, price, U256::ZERO)
-            .await?;
-
-        Ok(())
+        Ok(cur)
     }
 
     /// deploys tokens, a uniV4 pool, angstrom pool
@@ -220,8 +198,6 @@ impl AnvilInitializer {
             .await?;
 
         self.pending_state.add_pool_key(pool_key.clone());
-        let encoded = keccak256(pool_key.abi_encode());
-        tracing::info!(?pool_key, ?encoded, ?price);
 
         tracing::debug!("configuring pool");
         let controller_configure_pool = self
@@ -283,6 +259,7 @@ impl AnvilInitializer {
             .await?;
 
         self.pending_state.add_pending_tx(add_liq);
+        self.rpc_provider().anvil_mine(Some(1), None).await?;
 
         Ok(())
     }

@@ -11270,6 +11270,7 @@ dependencies = [
  "enr",
  "eyre",
  "futures",
+ "itertools 0.10.5",
  "jsonrpsee",
  "matching-engine",
  "order-pool",

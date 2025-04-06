@@ -303,7 +303,7 @@ where
 
         let process_tick_lower = |s: I24, tick: &TickData| {
             let tick = tick.tick;
-            (tick > s).then(|| TickData {
+            (tick > s).then_some(TickData {
                 initialized:    false,
                 tick:           s,
                 liquidityNet:   0,
@@ -313,7 +313,7 @@ where
 
         let process_tick_higher = |e: I24, tick: &TickData| {
             let tick = tick.tick;
-            (tick < e).then(|| TickData {
+            (tick < e).then_some(TickData {
                 initialized:    false,
                 tick:           e,
                 liquidityNet:   0,
@@ -980,7 +980,7 @@ pub trait TickSpaceFill: Iterator<Item = TickData> {
         let Some(mut current) = self.next() else { return result.into_iter() };
         result.push((!current.initialized, current));
 
-        while let Some(next_tick) = self.next() {
+        for next_tick in self {
             let mut diff = (next_tick.tick - current.tick).as_i32();
             // until we hit the tick spacing we want to create new ticks.
             let mut cnt = tick_spacing;

@@ -169,6 +169,7 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
             .chain(current_map.peers)
             .unique()
             .collect::<Vec<_>>();
+
         let peers: CachedPeers = peers.into();
         let toml_path = Self::known_peers_toml_path(&self.node_pubkey());
         match toml::to_string(&peers) {

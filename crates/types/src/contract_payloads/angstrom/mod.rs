@@ -15,6 +15,7 @@ use alloy::{
 use alloy_primitives::I256;
 use base64::Engine;
 use dashmap::DashMap;
+use itertools::Itertools;
 use pade_macro::{PadeDecode, PadeEncode};
 use tracing::{debug, trace, warn};
 
@@ -346,8 +347,32 @@ impl AngstromBundle {
             acc
         });
 
-        // Walk through our solutions to add them to the structure
+        // what we need to do is go through and first add all the tokens,
+        // then sort them and change the offests before we index all orders
         for solution in solutions.iter() {
+            let Some((t0, t1, ..)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!(
+                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
+                    pools, solution.id
+                );
+                continue;
+            };
+            asset_builder.add_or_get_asset(*t0);
+            asset_builder.add_or_get_asset(*t1);
+        }
+        asset_builder.order_assets_properly();
+
+        // Walk through our solutions to add them to the structure
+        for solution in solutions.iter().sorted_unstable_by_key(|k| {
+            let Some((_, _, _, store_index)) = pools.get(&k.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                return 0u16;
+            };
+            *store_index
+        }) {
             println!("Processing solution");
             // Get the information for the pool or skip this solution if we can't find a
             // pool for it
@@ -376,6 +401,7 @@ impl AngstromBundle {
                 None
             )?;
         }
+        pairs.sort_unstable_by_key(|k| k.store_index);
         Ok(Self::new(
             asset_builder.get_asset_array(),
             pairs,
@@ -470,10 +496,15 @@ impl AngstromBundle {
 
         debug!(t0 = ?t0, t1 = ?t1, pool_id = ?solution.id, "Starting processing of solution");
 
+        // if t0 > t1 {
+        //     std::mem::swap(&mut t0, &mut t1);
+        // }
+
         // Make sure the involved assets are in our assets array and we have the
         // appropriate asset index for them
         let t0_idx = asset_builder.add_or_get_asset(t0) as u16;
         let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
+        tracing::info!(?t0, ?t1, ?t0_idx, ?t1_idx);
 
         // Build our Pair featuring our uniform clearing price
         // This price is in Ray format as requested.
@@ -744,9 +775,33 @@ impl AngstromBundle {
             return Err(eyre::eyre!("have a total swaps count of 0"));
         }
 
+        // what we need to do is go through and first add all the tokens,
+        // then sort them and change the offests before we index all orders
+        for solution in proposal.solutions.iter() {
+            let Some((t0, t1, ..)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!(
+                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
+                    pools, solution.id
+                );
+                continue;
+            };
+            asset_builder.add_or_get_asset(*t0);
+            asset_builder.add_or_get_asset(*t1);
+        }
+        asset_builder.order_assets_properly();
+
         // fetch gas used
         // Walk through our solutions to add them to the structure
-        for solution in proposal.solutions.iter() {
+        for solution in proposal.solutions.iter().sorted_unstable_by_key(|k| {
+            let Some((_, _, _, store_index)) = pools.get(&k.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                return 0u16;
+            };
+            *store_index
+        }) {
             // Get the information for the pool or skip this solution if we can't find a
             // pool for it
             let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
@@ -775,6 +830,8 @@ impl AngstromBundle {
                 Some(U256::ZERO)
             )?;
         }
+
+        pairs.sort_unstable_by_key(|k| k.store_index);
         Ok(Self::new(
             asset_builder.get_asset_array(),
             pairs,

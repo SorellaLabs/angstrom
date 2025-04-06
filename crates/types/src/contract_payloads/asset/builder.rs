@@ -1,5 +1,4 @@
 use alloy::primitives::Address;
-use itertools::Itertools;
 
 use super::{AssetArray, state::StageTracker};
 use crate::contract_payloads::Asset;
@@ -31,6 +30,10 @@ impl AssetBuilder {
             AssetBuilderStage::TopOfBlock => &mut self.top_of_block,
             AssetBuilderStage::UserOrder => &mut self.user_orders
         }
+    }
+
+    pub fn order_assets_properly(&mut self) {
+        self.assets.order_assets_properly();
     }
 
     /// Uniswap swap, we 'take' everything from this
@@ -114,7 +117,6 @@ impl AssetBuilder {
                 }
                 asset
             })
-            .sorted_by_key(|a| a.addr)
             .collect()
     }
 }

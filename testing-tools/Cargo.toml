@@ -44,6 +44,7 @@ revm.workspace = true
 reth-chainspec.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
 alloy-chains.workspace = true
+itertools.workspace =true
 
 
 # reth

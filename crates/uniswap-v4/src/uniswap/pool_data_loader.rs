@@ -8,10 +8,11 @@ use alloy::{
 };
 use alloy_primitives::{B256, I256, Log};
 use angstrom_types::{
-    matching::Ray,
+    matching::{Ray, SqrtPriceX96},
     primitive::{PoolId as AngstromPoolId, UniswapPoolRegistry}
 };
 use itertools::Itertools;
+use uniswap_v3_math::tick_math::{MAX_TICK, MIN_TICK};
 
 use super::loaders::{
     get_uniswap_v_4_pool_data::GetUniswapV4PoolData,
@@ -43,7 +44,7 @@ sol! {
         int128 liquidityNet;
     }
 
-    #[derive(Debug, Hash, PartialEq, Eq,Copy)]
+    #[derive(Debug, Hash, PartialEq, Eq, Copy, Default)]
     struct TickData {
         bool initialized;
         int24 tick;
@@ -57,7 +58,16 @@ sol! {
         uint256 blockNumber;
     }
 }
-use angstrom_types::matching::SqrtPriceX96;
+
+impl TickData {
+    pub fn default_lowest() -> Self {
+        Self { tick: I24::unchecked_from(MIN_TICK), ..Default::default() }
+    }
+
+    pub fn default_highest() -> Self {
+        Self { tick: I24::unchecked_from(MAX_TICK), ..Default::default() }
+    }
+}
 
 impl PoolData {
     /// converts the loaded sqrt_price_x96 into the limit price that is used

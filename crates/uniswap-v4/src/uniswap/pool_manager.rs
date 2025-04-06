@@ -50,6 +50,16 @@ pub struct TickRangeToLoad {
     pub tick_count: u16
 }
 
+impl TickRangeToLoad {
+    pub fn end_tick(&self, spacing: i32) -> i32 {
+        if self.zfo {
+            self.start_tick - (self.tick_count as i32 * spacing)
+        } else {
+            self.start_tick + (self.tick_count as i32 * spacing)
+        }
+    }
+}
+
 type PoolMap = Arc<DashMap<PoolId, Arc<RwLock<EnhancedUniswapPool<DataLoader>>>>>;
 
 #[derive(Clone)]
@@ -311,9 +321,7 @@ where
         let mut pool = binding.write().unwrap();
 
         // given we force this to resolve, should'nt be problematic
-        let ticks = async_to_sync(pool.load_more_ticks(tick_req, None, node_provider)).unwrap();
-
-        pool.apply_ticks(ticks);
+        async_to_sync(pool.load_more_ticks(tick_req, None, node_provider)).unwrap();
 
         // notify we have updated the liquidity
         notifier.notify_one();

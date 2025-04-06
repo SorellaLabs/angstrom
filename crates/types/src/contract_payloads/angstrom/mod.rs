@@ -248,17 +248,6 @@ impl AngstromBundle {
             user_order.quantity_in,
             user_order.quantity_out
         );
-        // is bid = true, false
-
-        // works when false
-        // let zfo = !user_order.is_bid; // false works // true
-        // pool_updates.push(PoolUpdate {
-        //     zero_for_one:     user_order.is_bid,
-        //     pair_index:       0,
-        //     swap_in_quantity: user_order.quantity_out,
-        //     rewards_update:   super::rewards::RewardsUpdate::CurrentOnly { amount: 0
-        // } });
-
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of_max_gas(user_order, 0));
 
@@ -677,12 +666,10 @@ impl AngstromBundle {
         // Account for our total reward and fees
         // We might want to split this in some way in the future
         let total_reward = total_rewards.total_donated + total_user_fees;
-        let tribute = 0_u128;
 
         // Allocate the reward quantity
         asset_builder.allocate(AssetBuilderStage::Reward, t0, total_reward);
         // Account for our tribute
-        asset_builder.tribute(AssetBuilderStage::Reward, t0, tribute);
 
         // Build our PoolUpdate structures to actually report to the client
         let (net_result, additional_result) = total_rewards.donate_and_remainder(&net_pool_vec);

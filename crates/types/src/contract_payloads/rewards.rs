@@ -41,8 +41,8 @@ impl RewardsUpdate {
             // otherwise
             .sorted_by(|((a, _), _), ((b, _), _)| if from_above { b.cmp(a) } else { a.cmp(b) })
             // Map to the quantity
-            .filter(|f| *f.1 != 0)
-            .map(|(_, q)| *q)
+            .filter(|f| f.1.0)
+            .map(|(_, q)| q.1)
             .collect::<Vec<_>>();
 
         let (start_tick, start_liquidity) = snapshot
@@ -52,7 +52,7 @@ impl RewardsUpdate {
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {
-                amount:             quantities.first().copied().unwrap_or(donation_data.tribute),
+                amount:             quantities.first().copied().unwrap_or(0),
                 expected_liquidity: start_liquidity
             }),
             _ => Ok(Self::MultiTick {

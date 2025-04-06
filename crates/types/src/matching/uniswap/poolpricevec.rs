@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::Neg};
+use std::{
+    collections::HashMap,
+    ops::{Deref, Neg}
+};
 
 use alloy::primitives::{I256, U256, Uint};
 use eyre::{Context, eyre};
@@ -19,6 +22,14 @@ pub struct SwapStep<'a> {
     d_t0:        u128,
     d_t1:        u128,
     liq_range:   LiqRangeRef<'a>
+}
+
+impl<'a> Deref for SwapStep<'a> {
+    type Target = LiqRangeRef<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.liq_range
+    }
 }
 
 impl<'a> SwapStep<'a> {
@@ -168,10 +179,6 @@ impl<'a> SwapStep<'a> {
 
     pub fn output(&self) -> u128 {
         if self.end_price > self.start_price { self.d_t0 } else { self.d_t1 }
-    }
-
-    pub fn is_initialized(&self) -> bool {
-        self.liq_range.is_initialized
     }
 
     /// An empty step has no motion in t0 or t1, but is sometimes present to
@@ -401,11 +408,12 @@ impl<'a> PoolPriceVec<'a> {
         // If we have no steps we can just short-circuit this whole thing and take the
         // whole donation as tribute.  This will likely never happen.
         let Some(steps) = self.steps.as_ref() else {
+            // in the case we don't cross any ticks
             return DonationResult {
+                current_tick:   total_donation,
                 tick_donations: HashMap::new(),
                 final_price:    self.end_bound.price,
-                total_donated:  0,
-                tribute:        total_donation
+                total_donated:  0
             };
         };
 
@@ -418,7 +426,7 @@ impl<'a> PoolPriceVec<'a> {
 
         let mut current_blob: Option<(u128, u128)> = None;
 
-        let steps_iter = steps.iter().filter(|s| !s.empty() && s.is_initialized());
+        let steps_iter = steps.iter().filter(|s| !s.empty() && s.is_initialized);
 
         for step in steps_iter {
             // If our current blob is empty, we can just insert the current step's stats
@@ -485,8 +493,9 @@ impl<'a> PoolPriceVec<'a> {
         // We can start remaining_donation over
         remaining_donation = total_donation;
         let mut total_donated = 0_u128;
-        let tick_donations: HashMap<(Tick, Tick), u128> = steps
+        let tick_donations: HashMap<(Tick, Tick), (bool, u128)> = steps
             .iter()
+            .filter(|step| step.is_initialized)
             .map(|step| {
                 let reward = if let Some(f) = filled_price {
                     // T1 is constant, so we need to know how much t0 we need
@@ -507,18 +516,17 @@ impl<'a> PoolPriceVec<'a> {
                 total_donated += reward;
                 // We associate a reward with a specific liquidity range and we will extract the
                 // lower or upper tick depending on the direction of our rewards
-                ((step.liq_range.lower_tick(), step.liq_range.upper_tick()), reward)
+                ((step.liq_range.lower_tick(), step.liq_range.upper_tick()), (true, reward))
             })
             .collect();
-        let tribute = total_donation.saturating_sub(total_donated);
 
         DonationResult {
+            current_tick: remaining_donation,
             tick_donations,
             final_price: filled_price
                 .map(|p| p.into())
                 .unwrap_or_else(|| self.end_bound.as_sqrtpricex96()),
-            total_donated,
-            tribute
+            total_donated
         }
     }
 }

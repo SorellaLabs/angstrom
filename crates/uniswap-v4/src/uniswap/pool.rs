@@ -157,8 +157,18 @@ where
                 // We're walking upwards so we add the low tick's net
                 tracked_liq += low_tick_data.liquidity_net;
                 // ensure everything is spaced properly
-                assert!(low_tick.rem(self.tick_spacing) == 0, "Lower tick not aligned");
-                assert!(high_tick.rem(self.tick_spacing) == 0, "Upper tick not aligned");
+                assert!(
+                    low_tick.rem(self.tick_spacing) == 0,
+                    "Lower tick not aligned {} spacing {}",
+                    low_tick,
+                    self.tick_spacing
+                );
+                assert!(
+                    high_tick.rem(self.tick_spacing) == 0,
+                    "Upper tick not aligned {} spacing {}",
+                    high_tick,
+                    self.tick_spacing
+                );
                 assert!(
                     tracked_liq >= 0,
                     "Liquidity dropped below zero {} - {}",
@@ -189,8 +199,18 @@ where
                 // We're walking downwards now so we subtract the upper tick's net
                 tracked_liq -= high_tick_data.liquidity_net;
                 // ensure everything is spaced properly
-                assert!(low_tick.rem(self.tick_spacing) == 0, "Lower tick not aligned");
-                assert!(high_tick.rem(self.tick_spacing) == 0, "Upper tick not aligned");
+                assert!(
+                    low_tick.rem(self.tick_spacing) == 0,
+                    "Lower tick not aligned {} spacing {}",
+                    low_tick,
+                    self.tick_spacing
+                );
+                assert!(
+                    high_tick.rem(self.tick_spacing) == 0,
+                    "Upper tick not aligned {} spacing {}",
+                    high_tick,
+                    self.tick_spacing
+                );
                 assert!(
                     tracked_liq >= 0,
                     "Liquidity dropped below zero {} - {}",
@@ -273,13 +293,89 @@ where
         Ok((tick_data, block_number))
     }
 
-    pub fn apply_ticks(&mut self, mut fetched_ticks: Vec<TickData>) {
+    pub fn apply_ticks(
+        &mut self,
+        mut fetched_ticks: Vec<TickData>,
+        lower_tick: Option<I24>,
+        higher_tick: Option<I24>
+    ) {
         fetched_ticks.sort_by_key(|k| k.tick);
+
+        let process_tick_lower = |s: I24, tick: &TickData| {
+            let tick = tick.tick;
+            (tick > s).then(|| TickData {
+                initialized:    false,
+                tick:           s,
+                liquidityNet:   0,
+                liquidityGross: 0
+            })
+        };
+
+        let process_tick_higher = |e: I24, tick: &TickData| {
+            let tick = tick.tick;
+            (tick < e).then(|| TickData {
+                initialized:    false,
+                tick:           e,
+                liquidityNet:   0,
+                liquidityGross: 0
+            })
+        };
+
+        // if we have a optional start or end tick. what we will do is
+        // create these ticks if they don't exist. this so that we can
+        // mark the end of a range within our model.
+        match (lower_tick, higher_tick) {
+            (Some(l), Some(h)) => {
+                // lower tick
+                let new_lower = fetched_ticks
+                    .first()
+                    .map(|tick| process_tick_lower(l, tick))
+                    .unwrap_or_else(|| process_tick_lower(l, &TickData::default_highest()));
+
+                let new_upper = fetched_ticks
+                    .last()
+                    .map(|tick| process_tick_higher(h, tick))
+                    .unwrap_or_else(|| process_tick_higher(h, &TickData::default_lowest()));
+
+                if let Some(new_upper) = new_upper {
+                    fetched_ticks.push(new_upper);
+                }
+
+                if let Some(new_lower) = new_lower {
+                    let mut lower = vec![new_lower];
+                    lower.extend(fetched_ticks);
+                    fetched_ticks = lower;
+                }
+            }
+            (None, Some(h)) => {
+                let new_upper = fetched_ticks
+                    .last()
+                    .map(|tick| process_tick_higher(h, tick))
+                    .unwrap_or_else(|| process_tick_higher(h, &TickData::default_lowest()));
+
+                if let Some(new_upper) = new_upper {
+                    fetched_ticks.push(new_upper);
+                }
+            }
+            (Some(l), None) => {
+                let new_lower = fetched_ticks
+                    .first()
+                    .map(|tick| process_tick_lower(l, tick))
+                    .unwrap_or_else(|| process_tick_lower(l, &TickData::default_highest()));
+
+                if let Some(new_lower) = new_lower {
+                    let mut lower = vec![new_lower];
+                    lower.extend(fetched_ticks);
+                    fetched_ticks = lower;
+                }
+            }
+            _ => {}
+        }
 
         fetched_ticks
             .into_iter()
             .unique()
-            .fill_in_missing_ticks_higher(self.tick_spacing)
+            .map(|tick| (!tick.initialized, tick))
             .for_each(|(is_edge, tick)| {
                 self.ticks.insert(
                     tick.tick.as_i32(),
@@ -295,12 +391,12 @@ where
     }
 
     pub async fn load_more_ticks<P: Provider>(
-        &self,
+        &mut self,
         tick_data: TickRangeToLoad,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
-    ) -> Result<Vec<TickData>, PoolError> {
-        Ok(self
+    ) -> Result<(), PoolError> {
+        let ticks = self
             .get_tick_data_batch_request(
                 i32_to_i24(tick_data.start_tick)?,
                 tick_data.zfo,
@@ -309,7 +405,28 @@ where
                 provider
             )
             .await?
-            .0)
+            .0;
+        let end_tick = tick_data.end_tick(self.tick_spacing);
+
+        // if we are zero for one, means that we need a new end tick.
+        if tick_data.zfo {
+            self.apply_ticks(ticks, Some(self.align_lower(I24::unchecked_from(end_tick))), None);
+        } else {
+            self.apply_ticks(ticks, None, Some(self.align_upper(I24::unchecked_from(end_tick))));
+        }
+
+        Ok(())
+    }
+
+    // finds the tick lower to the current and moves to it
+    fn align_lower(&self, tick: I24) -> I24 {
+        let diff = tick.as_i32() % self.tick_spacing;
+        tick - I24::unchecked_from(diff)
+    }
+
+    fn align_upper(&self, tick: I24) -> I24 {
+        let diff = tick.as_i32() % self.tick_spacing;
+        tick + I24::unchecked_from(diff)
     }
 
     async fn sync_ticks<P: Provider>(
@@ -370,31 +487,11 @@ where
             fetched_ticks.extend(batch_ticks);
         }
 
-        fetched_ticks.sort_by_key(|k| k.tick);
-
-        fetched_ticks
-            .into_iter()
-            .unique()
-            .fill_in_missing_ticks_higher(self.tick_spacing)
-            .for_each(|(is_edge, tick)| {
-                tracing::trace!(
-                    initialized = tick.initialized,
-                    liq_gross = tick.liquidityGross,
-                    liq_net = tick.liquidityNet,
-                    tick = tick.tick.as_i32(),
-                    "Inserting tick"
-                );
-                self.ticks.insert(
-                    tick.tick.as_i32(),
-                    TickInfo {
-                        initialized: tick.initialized,
-                        liquidity_gross: tick.liquidityGross,
-                        liquidity_net: tick.liquidityNet,
-                        is_edge
-                    }
-                );
-                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
-            });
+        self.apply_ticks(
+            fetched_ticks,
+            Some(self.align_lower(I24::unchecked_from(start_tick))),
+            Some(self.align_upper(I24::unchecked_from(end_tick)))
+        );
 
         Ok(())
     }

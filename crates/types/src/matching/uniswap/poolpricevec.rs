@@ -427,6 +427,7 @@ impl<'a> PoolPriceVec<'a> {
         let mut current_blob: Option<(u128, u128)> = None;
 
         let steps_iter = steps.iter().filter(|s| !s.empty() && s.is_initialized);
+        tracing::info!(?steps_iter);
 
         for step in steps_iter {
             // If our current blob is empty, we can just insert the current step's stats
@@ -481,6 +482,7 @@ impl<'a> PoolPriceVec<'a> {
                 *c_t0 = c_t0.saturating_sub(remaining_donation)
             }
         }
+        tracing::info!(?current_blob);
         // Now we can find our filled price - if the price is dropping we want to round
         // down otherwise we want to round up.  Note that this diverges from other
         // rounding being done.

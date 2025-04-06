@@ -154,28 +154,8 @@ impl<'a> LiqRangeRef<'a> {
     /// to properly mirror the uniswap swap logic
     pub fn next(&self, direction: Direction) -> Option<Self> {
         match direction {
-            Direction::BuyingT0 => {
-                let mut tick = self.range.upper_tick;
-                loop {
-                    let onext = self.pool_snap.get_range_for_tick(tick);
-                    let Some(next) = onext else { return None };
-                    if next.is_initialized || next.is_tick_edge {
-                        return Some(next);
-                    }
-                    tick = next.range.upper_tick;
-                }
-            }
-            Direction::SellingT0 => {
-                let mut tick = self.range.lower_tick - 1;
-                loop {
-                    let onext = self.pool_snap.get_range_for_tick(tick);
-                    let Some(next) = onext else { return None };
-                    if next.is_initialized || next.is_tick_edge {
-                        return Some(next);
-                    }
-                    tick = next.range.lower_tick - 1;
-                }
-            }
+            Direction::BuyingT0 => self.pool_snap.get_range_for_tick(self.range.upper_tick),
+            Direction::SellingT0 => self.pool_snap.get_range_for_tick(self.range.lower_tick - 1)
         }
     }
 }

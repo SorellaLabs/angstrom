@@ -480,7 +480,10 @@ impl<'a> PoolPriceVec<'a> {
             if price_dropping {
                 *c_t0 += remaining_donation
             } else {
-                *c_t0 = c_t0.saturating_sub(remaining_donation)
+                *c_t0 = c_t0.saturating_sub(remaining_donation);
+                if *c_t0 == 0 {
+                    *c_t0 += 1;
+                }
             }
         }
         tracing::info!(?current_blob);

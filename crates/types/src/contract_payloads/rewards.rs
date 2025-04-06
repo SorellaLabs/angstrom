@@ -52,7 +52,10 @@ impl RewardsUpdate {
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {
-                amount:             quantities.first().copied().unwrap_or(0),
+                amount:             quantities
+                    .first()
+                    .copied()
+                    .unwrap_or(donation_data.current_tick),
                 expected_liquidity: start_liquidity
             }),
             _ => Ok(Self::MultiTick {

@@ -57,6 +57,10 @@ pub struct AngstromBundle {
 }
 
 impl AngstromBundle {
+    pub fn has_book(&self) -> bool {
+        !self.user_orders.is_empty()
+    }
+
     pub fn get_prices_per_pair(&self) -> &[Pair] {
         &self.pairs
     }
@@ -665,7 +669,7 @@ impl AngstromBundle {
 
         // Account for our total reward and fees
         // We might want to split this in some way in the future
-        let total_reward = total_rewards.total_donated + total_user_fees;
+        let total_reward = total_rewards.get_total_donated() + total_user_fees;
 
         // Allocate the reward quantity
         asset_builder.allocate(AssetBuilderStage::Reward, t0, total_reward);

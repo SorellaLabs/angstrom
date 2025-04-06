@@ -72,6 +72,11 @@ impl DonationResult {
             .copied()
     }
 
+    pub fn get_total_donated(&self) -> u128 {
+        // if we have ranges.
+        if self.tick_donations.is_empty() { self.current_tick } else { self.total_donated }
+    }
+
     pub fn far_tick(&self, start_tick: Tick) -> Option<Tick> {
         let mut all_ranges = self.tick_donations.keys().collect::<Vec<_>>();
         all_ranges.sort_by_key(|(l, _)| *l);

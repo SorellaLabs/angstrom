@@ -119,7 +119,7 @@ impl DonationResult {
             outside.insert((cur_low, cur_high), (true, 0));
 
             Some(Self {
-                current_tick:   self.total_donated,
+                current_tick:   0,
                 final_price:    self.final_price,
                 tick_donations: outside,
                 total_donated:  self.total_donated

@@ -153,7 +153,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<(Vec<PoolSolution>, BundleGasDetails)> {
-        tracing::info!("starting to build proposal");
+        tracing::info!("starting to build proposal\n {searcher:#?}");
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
         let books = Self::build_non_proposal_books(limit.clone(), &pool_snapshots);
@@ -178,6 +178,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 // s.solution(searcher))
             });
         });
+        tracing::info!("{solution_set:#?} solutions.");
         tracing::info!("got book solution");
         let mut solutions = Vec::new();
         while let Some(res) = solution_set.join_next().await {
@@ -220,6 +221,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         let mut solution_set = JoinSet::new();
         books.into_iter().for_each(|b| {
             let searcher = searcher_orders.get(&b.id()).cloned();
+            tracing::info!(?searcher);
             // Using spawn-blocking here is not BAD but it might be suboptimal as it allows
             // us to spawn many more tasks that the CPu has threads.  Better solution is a
             // dedicated threadpool and some suggest the `rayon` crate.  This is probably
@@ -236,7 +238,6 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 solutions.push(r);
             }
         }
-        tracing::info!("{solutions:#?}");
 
         let bundle =
             AngstromBundle::for_gas_finalization(limit, solutions.clone(), &pool_snapshots)?;

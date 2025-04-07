@@ -88,31 +88,31 @@ impl BundleLander {
                     })
                     .collect::<Vec<_>>();
 
-                loop {
-                    let new_block = pinned.next().await;
-                    match new_block {
-                        Some(Ok(Some(block))) => {
-                            tracing::info!("new block");
-                            futures::stream::iter(&mut processors)
-                                .for_each(|processor| async move {
-                                    processor
-                                        .new_block(block)
-                                        .await
-                                        .expect("failed to process new block in pool");
-                                    processor
-                                        .submit_new_orders_to_angstrom()
-                                        .await
-                                        .expect("failed to send angstrom orders");
-                                })
-                                .await;
-                            tracing::info!(%block, "all orders submitted for block");
-                        }
-                        _ => {
-                            tracing::error!("failed to get new block number");
-                            break;
-                        }
+                // loop {
+                let new_block = pinned.next().await;
+                match new_block {
+                    Some(Ok(Some(block))) => {
+                        tracing::info!("new block");
+                        futures::stream::iter(&mut processors)
+                            .for_each(|processor| async move {
+                                processor
+                                    .new_block(block)
+                                    .await
+                                    .expect("failed to process new block in pool");
+                                processor
+                                    .submit_new_orders_to_angstrom()
+                                    .await
+                                    .expect("failed to send angstrom orders");
+                            })
+                            .await;
+                        tracing::info!(%block, "all orders submitted for block");
+                    }
+                    _ => {
+                        tracing::error!("failed to get new block number");
+                        // break;
                     }
                 }
+                // }
             })
             .await?;
 

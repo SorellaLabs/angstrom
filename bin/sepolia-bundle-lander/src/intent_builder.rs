@@ -71,7 +71,8 @@ where
     }
 
     async fn generate_orders_for_block(&self) -> eyre::Result<Vec<AllOrders>> {
-        let mut all_orders = self.generate_book_intents().await?;
+        // let mut all_orders = self.generate_book_intents().await?;
+        let mut all_orders = vec![];
         all_orders.push(self.generate_tob_intent().await?);
 
         Ok(all_orders)
@@ -90,6 +91,8 @@ where
         }
 
         let key = &self.keys[0];
+        let addr = key.address();
+        tracing::info!(?addr, "signing tob with");
 
         let (amount, zfo) = self
             .fetch_direction_and_amounts(key, &pool_price, true)
@@ -134,6 +137,8 @@ where
             .valid_block(self.block_number + 1)
             .build()
             .into();
+
+        tracing::info!(?order);
 
         Ok(order)
     }

@@ -528,7 +528,7 @@ impl<'a> DeltaMatcher<'a> {
         let Some(price_and_partial_solution) = self.solve_clearing_price() else {
             let id = Some(self.book.id())
                 .filter(|b| !b.is_zero())
-                .or_else(|| searcher.map(|s| s.pool_id))
+                .or_else(|| searcher.as_ref().map(|s| s.pool_id))
                 .unwrap_or_default();
 
             return PoolSolution {

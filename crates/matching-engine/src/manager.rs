@@ -164,9 +164,11 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
             });
 
         let mut solution_set = JoinSet::new();
+
         if books.is_empty() {
             for searcher in searcher_orders.values().cloned() {
-                let book = OrderBook::default();
+                let mut book = OrderBook::default();
+                book.id = searcher.pool_id;
                 solution_set.spawn_blocking(move || {
                     Some(BinarySearchStrategy::run(&book, Some(searcher), 0))
                 });
@@ -189,6 +191,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 solutions.push(r);
             }
         }
+        tracing::info!("{solutions:#?}");
 
         // generate bundle without final gas known.
         trace!("Building bundle for gas finalization");

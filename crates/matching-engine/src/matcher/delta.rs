@@ -526,10 +526,8 @@ impl<'a> DeltaMatcher<'a> {
         searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
     ) -> PoolSolution {
         let Some(price_and_partial_solution) = self.solve_clearing_price() else {
-            let id = searcher.as_ref().map(|s| s.pool_id).unwrap_or_default();
-
             return PoolSolution {
-                id,
+                id: self.book.id(),
                 searcher,
                 limit: self
                     .book

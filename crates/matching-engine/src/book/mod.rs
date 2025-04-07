@@ -21,10 +21,10 @@ pub mod sort;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct OrderBook {
-    id:   PoolId,
-    amm:  Option<PoolSnapshot>,
-    bids: Vec<BookOrder>,
-    asks: Vec<BookOrder>
+    pub id: PoolId,
+    amm:    Option<PoolSnapshot>,
+    bids:   Vec<BookOrder>,
+    asks:   Vec<BookOrder>
 }
 
 impl OrderBook {

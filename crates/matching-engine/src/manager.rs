@@ -236,9 +236,11 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 solutions.push(r);
             }
         }
+        tracing::info!("{solutions:#?}");
 
         let bundle =
             AngstromBundle::for_gas_finalization(limit, solutions.clone(), &pool_snapshots)?;
+
         let _gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
 
         todo!()

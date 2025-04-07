@@ -11,12 +11,10 @@ pub enum RewardsUpdate {
     MultiTick {
         start_tick:      I24,
         start_liquidity: u128,
-        quantities:      Vec<u128>
-        // reward_checksum: U160
+        quantities:      Vec<u128> // reward_checksum: U160
     },
     CurrentOnly {
-        amount: u128
-        // expected_liquidity: u128
+        amount: u128 // expected_liquidity: u128
     }
 }
 
@@ -62,14 +60,13 @@ impl RewardsUpdate {
                 amount: quantities
                     .first()
                     .copied()
-                    .unwrap_or(donation_data.current_tick)
-                // expected_liquidity: start_liquidity
+                    .unwrap_or(donation_data.current_tick) // expected_liquidity: start_liquidity
             }),
             _ => Ok(Self::MultiTick {
                 start_tick: I24::try_from(start_tick).unwrap_or_default(),
                 start_liquidity,
-                quantities
-                // reward_checksum: snapshot.checksum_from_ticks(bound_tick, current_tick)?
+                quantities /* reward_checksum: snapshot.checksum_from_ticks(bound_tick,
+                            * current_tick)? */
             })
         }
     }

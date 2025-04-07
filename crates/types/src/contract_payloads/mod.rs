@@ -2,7 +2,7 @@ use alloy::{
     primitives::{Address, Bytes, FixedBytes, U256},
     sol
 };
-use alloy_primitives::B256;
+use alloy_primitives::{B256, normalize_v};
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +45,7 @@ impl Signature {
                 let sig = alloy::primitives::PrimitiveSignature::new(
                     U256::from_be_slice(&**r),
                     U256::from_be_slice(&**s),
-                    *v == 28
+                    normalize_v(*v as u64).unwrap()
                 );
                 sig.recover_address_from_prehash(&hash).unwrap()
             }

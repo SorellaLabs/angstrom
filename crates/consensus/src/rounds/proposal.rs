@@ -111,9 +111,9 @@ impl ProposalState {
             return false;
         };
 
-        if !bundle.has_book() {
-            return false;
-        }
+        // if !bundle.has_book() {
+        //     return false;
+        // }
 
         let encoded = Angstrom::executeCall::new((bundle.pade_encode().into(),)).abi_encode();
 

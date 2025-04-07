@@ -97,6 +97,7 @@ impl ProposalState {
             self.pre_proposal_aggs.clone(),
             pool_solution
         );
+        tracing::info!(?proposal);
 
         self.proposal = Some(proposal.clone());
         let snapshot = handles.fetch_pool_snapshot();

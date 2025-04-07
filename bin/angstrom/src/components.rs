@@ -189,8 +189,11 @@ where
         .unwrap()
         .into();
 
-    let mev_boost_provider =
-        MevBoostProvider::new_from_urls(querying_provider.clone(), &config.mev_boost_endpoints);
+    let mev_boost_provider = MevBoostProvider::new_from_urls(
+        querying_provider.clone(),
+        &config.mev_boost_endpoints,
+        &config.normal_nodes
+    );
 
     tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
         this is done to ensure all modules start on the same state and we don't hit the rare  \

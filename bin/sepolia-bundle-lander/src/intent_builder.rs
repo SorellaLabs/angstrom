@@ -14,8 +14,8 @@ use alloy_rpc_types::TransactionRequest;
 use angstrom_rpc::api::OrderApiClient;
 use angstrom_types::{
     matching::{Ray, SqrtPriceX96},
-    primitive::AngstromSigner,
-    sol_bindings::grouped_orders::AllOrders
+    primitive::{ANGSTROM_DOMAIN, AngstromSigner},
+    sol_bindings::{RawPoolOrder, grouped_orders::AllOrders, rpc_orders::OmitOrderMeta}
 };
 use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 use uniswap_v4::uniswap::pool::{EnhancedUniswapPool, SwapResult};
@@ -123,11 +123,10 @@ where
         if !zfo {
             std::mem::swap(&mut amount_in, &mut amount_out);
         }
-
         let range = (amount_in / 100).max(101);
         amount_in += self.gen_range(100, range);
 
-        let order: AllOrders = ToBOrderBuilder::new()
+        let order = ToBOrderBuilder::new()
             .signing_key(Some(key.clone()))
             .asset_in(if zfo { self.pool.token0 } else { self.pool.token1 })
             .asset_out(if !zfo { self.pool.token0 } else { self.pool.token1 })
@@ -135,12 +134,11 @@ where
             .max_gas(gas.to())
             .quantity_out(amount_out)
             .valid_block(self.block_number + 1)
-            .build()
-            .into();
+            .build();
+        let recovery_order_hash = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
+        tracing::info!(?order, ?recovery_order_hash);
 
-        tracing::info!(?order);
-
-        Ok(order)
+        Ok(order.into())
     }
 
     /// based on the users distribution of tokens in the pool, will generate

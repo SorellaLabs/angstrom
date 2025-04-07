@@ -47,6 +47,7 @@ const SEND_NORMAL: bool = cfg!(feature = "testnet-sepolia");
 
 pub struct MevBoostProvider<P> {
     mev_boost_providers: Vec<Arc<Box<dyn SubmitTx>>>,
+    default_providers:   Vec<Arc<Box<dyn SubmitTx>>>,
     node_provider:       Arc<P>
 }
 
@@ -58,10 +59,10 @@ where
         node_provider: Arc<P>,
         mev_boost_providers: Vec<Arc<Box<dyn SubmitTx>>>
     ) -> Self {
-        Self { node_provider, mev_boost_providers }
+        Self { node_provider, mev_boost_providers, default_providers: vec![] }
     }
 
-    pub fn new_from_urls(node_provider: Arc<P>, urls: &[Url]) -> Self {
+    pub fn new_from_urls(node_provider: Arc<P>, urls: &[Url], default_urls: &[Url]) -> Self {
         let mev_boost_providers = urls
             .iter()
             .map(|url| {
@@ -69,8 +70,15 @@ where
                     as Box<dyn SubmitTx>)
             })
             .collect::<Vec<_>>();
+        let default = default_urls
+            .iter()
+            .map(|url| {
+                Arc::new(Box::new(ProviderBuilder::<_, _, _>::default().on_http(url.clone()))
+                    as Box<dyn SubmitTx>)
+            })
+            .collect::<Vec<_>>();
 
-        Self { mev_boost_providers, node_provider }
+        Self { mev_boost_providers, node_provider, default_providers: default }
     }
 
     pub async fn populate_gas_nonce_chain_id(&self, tx_from: Address, tx: &mut TransactionRequest) {
@@ -107,10 +115,18 @@ where
             let (hash, sent) = self
                 .node_provider
                 .root()
-                .submit_transaction(&signer, tx)
+                .submit_transaction(&signer, tx.clone())
                 .await;
             phash = Some(hash);
             submitted &= sent;
+
+            for default_provider in &self.default_providers {
+                let (hash, sent) = default_provider
+                    .submit_transaction(&signer, tx.clone())
+                    .await;
+                phash = Some(hash);
+                submitted &= sent;
+            }
         }
 
         (phash.expect("no mev boost endpoint was set"), submitted)

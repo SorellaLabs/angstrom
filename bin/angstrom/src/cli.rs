@@ -24,7 +24,19 @@ pub struct AngstromConfig {
     /// needed to properly setup the node as we need some chain state before
     /// starting the internal reth node
     #[clap(short, long, default_value = "https://eth.drpc.org")]
-    pub boot_node:           String
+    pub boot_node:           String,
+    #[clap(
+        short,
+        long,
+        default_value = "[
+    https://ethereum-sepolia.rpc.subquery.network/public,
+https://endpoints.omniatech.io/v1/eth/sepolia/public,\
+                         
+https://sepolia.gateway.tenderly.co,
+https://1rpc.io/sepolia
+    ]"
+    )]
+    pub normal_nodes:        Vec<Url>
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -525,7 +525,7 @@ impl<'a> DeltaMatcher<'a> {
         &mut self,
         searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
     ) -> PoolSolution {
-        let Some(price_and_partial_solution) = self.solve_clearing_price() else {
+        let Some(mut price_and_partial_solution) = self.solve_clearing_price() else {
             return PoolSolution {
                 id: self.book.id(),
                 searcher,
@@ -544,6 +544,11 @@ impl<'a> DeltaMatcher<'a> {
         let limit = self.fetch_orders_at_ucp(&price_and_partial_solution);
 
         let amm = self.fetch_amm_movement_at_ucp(price_and_partial_solution.ucp);
+
+        // get weird overflow values
+        if limit.is_empty() {
+            price_and_partial_solution.ucp = Ray::default();
+        }
 
         PoolSolution {
             id: self.book.id(),

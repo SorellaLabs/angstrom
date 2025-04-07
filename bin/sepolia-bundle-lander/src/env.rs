@@ -16,15 +16,18 @@ use angstrom_types::{
         angstrom::Angstrom::PoolKey,
         controller_v_1::ControllerV1::{PoolConfigured, PoolRemoved}
     },
-    primitive::{AngstromSigner, UniswapPoolRegistry}
+    primitive::{ANGSTROM_DOMAIN, AngstromSigner, UniswapPoolRegistry},
+    sol_bindings::{grouped_orders::GroupedVanillaOrder, rpc_orders::OmitOrderMeta}
 };
 use futures::{StreamExt, stream::FuturesUnordered};
 use itertools::Itertools;
+use testing_tools::type_generator::orders::UserOrderBuilder;
 use uniswap_v4::uniswap::{pool::EnhancedUniswapPool, pool_data_loader::DataLoader};
 
 use crate::{
-    approveCall,
-    cli::{BundleLander, JsonPKs}
+    SEPOLIA_SIG_CHECK, approveCall,
+    cli::{BundleLander, JsonPKs},
+    isValidSignatureNowCall
 };
 
 pub type ProviderType = FillProvider<
@@ -85,10 +88,61 @@ impl BundleWashTraderEnv {
             .unique()
             .collect::<Vec<_>>();
 
+        // Self::verify_proper_signing_angstrom(&keys, provider.clone()).await?;
         Self::approve_max_tokens_to_angstrom(cli.angstrom_address, all_tokens, &keys, &provider)
             .await?;
 
         Ok(Self { keys, provider, pools: ang_pools })
+    }
+
+    async fn verify_proper_signing_angstrom(
+        users: &[AngstromSigner],
+        provider: Arc<ProviderType>
+    ) -> eyre::Result<()> {
+        let basic_order = UserOrderBuilder::default().bid().exact().amount(100);
+        let fees = provider.estimate_eip1559_fees().await.unwrap();
+        let chain_id = provider.get_chain_id().await.unwrap();
+
+        for user in users {
+            let order = basic_order.clone().signing_key(Some(user.clone())).build();
+            let GroupedVanillaOrder::KillOrFill(
+                angstrom_types::sol_bindings::grouped_orders::FlashVariants::Exact(order)
+            ) = order
+            else {
+                panic!()
+            };
+
+            let signature = order.meta.signature.clone();
+            let signer = user.address();
+            let digest = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
+
+            let call = isValidSignatureNowCall::new((signer, digest, signature)).abi_encode();
+
+            let mut tx = TransactionRequest::default()
+                .with_from(user.address())
+                .with_kind(alloy_primitives::TxKind::Call(SEPOLIA_SIG_CHECK))
+                .with_input(call);
+
+            let next_nonce = provider
+                .get_transaction_count(user.address())
+                .await
+                .unwrap();
+
+            tx.set_nonce(next_nonce);
+            tx.set_gas_limit(30_000_000);
+            tx.set_max_fee_per_gas(fees.max_fee_per_gas + 1e9 as u128);
+            tx.set_max_priority_fee_per_gas(fees.max_priority_fee_per_gas + 1e9 as u128);
+
+            tx.set_chain_id(chain_id);
+            let res = provider.call(tx).await.unwrap();
+            assert!(
+                isValidSignatureNowCall::abi_decode_returns(&res, true)
+                    .unwrap()
+                    ._0
+            );
+        }
+
+        Ok(())
     }
 
     #[allow(unused)]

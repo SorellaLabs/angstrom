@@ -3,9 +3,17 @@ pub mod env;
 pub mod intent_builder;
 use clap::Parser;
 
+const SEPOLIA_SIG_CHECK: alloy::primitives::Address =
+    alloy::primitives::address!("0x91082B61b9d3C5DFAeF489dB7FF82ae7cfc62cB3");
+
 alloy::sol!(
     function approve(address _spender, uint256 _value) public returns (bool success);
     function balanceOf(address _owner) public view returns (uint256 balance);
+    function isValidSignatureNow(
+            address signer,
+            bytes32 digest,
+            bytes memory signature
+        ) external view returns (bool);
 );
 
 #[inline]

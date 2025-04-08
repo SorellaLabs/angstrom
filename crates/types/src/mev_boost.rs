@@ -22,13 +22,16 @@ pub trait SubmitTx: Send + Sync {
         tx: TransactionRequest
     ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>>;
 
-    /// uses the flashbot endpoint of "eth_sendPrivateTransaction"
+    /// uses the flashbots endpoint of "eth_sendPrivateTransaction". if not
+    /// implemented, reverts to default endpoint
     fn submit_transaction_private<'a>(
         &'a self,
         signer: &'a AngstromSigner,
         tx: TransactionRequest,
-        target_block_number: u64
-    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>>;
+        _: u64
+    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
+        self.submit_transaction(signer, tx)
+    }
 }
 
 // Default impl
@@ -68,9 +71,9 @@ impl<P: Provider> SubmitTx for P {
                     "eth_sendPrivateTransaction".into(),
                     (private_tx,)
                 )
-                .await
-                .is_ok();
-            (hash, submitted)
+                .await;
+            tracing::info!(?submitted);
+            (hash, submitted.is_ok())
         }
         .boxed()
     }

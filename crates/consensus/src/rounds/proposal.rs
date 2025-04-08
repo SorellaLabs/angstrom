@@ -124,6 +124,7 @@ impl ProposalState {
 
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();
+        let target_block = handles.block_height + 1;
 
         let submission_future = async move {
             tracing::info!("building bundle");
@@ -131,7 +132,7 @@ impl ProposalState {
                 .populate_gas_nonce_chain_id(signer.address(), &mut tx)
                 .await;
 
-            let (hash, success) = provider.sign_and_send(signer, tx).await;
+            let (hash, success) = provider.sign_and_send(signer, tx, target_block).await;
             if !success {
                 tracing::info!("submission failed");
                 return false;

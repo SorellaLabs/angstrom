@@ -3,9 +3,9 @@ use std::{ops::Deref, pin::Pin, str::FromStr, sync::Arc};
 use alloy::{
     eips::eip2718::Encodable2718,
     network::TransactionBuilder,
-    primitives::{Address, TxHash},
-    providers::{Provider, ProviderBuilder, RootProvider},
-    rpc::types::TransactionRequest,
+    primitives::{Address, B256, TxHash},
+    providers::{Provider, ProviderBuilder},
+    rpc::types::{TransactionRequest, mev::PrivateTransactionRequest},
     transports::http::reqwest::Url
 };
 use futures::{Future, FutureExt};
@@ -15,15 +15,24 @@ use crate::primitive::AngstromSigner;
 /// Allows for us to have a look at the angstrom payload to ensure that we can
 /// set balances properly for when the transaction is submitted
 pub trait SubmitTx: Send + Sync {
+    /// submits a regular transaction using default eth endpoint
     fn submit_transaction<'a>(
         &'a self,
         signer: &'a AngstromSigner,
         tx: TransactionRequest
     ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>>;
+
+    /// uses the flashbot endpoint of "eth_sendPrivateTransaction"
+    fn submit_transaction_private<'a>(
+        &'a self,
+        signer: &'a AngstromSigner,
+        tx: TransactionRequest,
+        target_block_number: u64
+    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>>;
 }
 
 // Default impl
-impl SubmitTx for RootProvider {
+impl<P: Provider> SubmitTx for P {
     fn submit_transaction<'a>(
         &'a self,
         signer: &'a AngstromSigner,
@@ -39,11 +48,37 @@ impl SubmitTx for RootProvider {
         }
         .boxed()
     }
+
+    fn submit_transaction_private<'a>(
+        &'a self,
+        signer: &'a AngstromSigner,
+        tx: TransactionRequest,
+        target_block_number: u64
+    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
+        async move {
+            let tx = tx.build(&signer).await.unwrap();
+            let hash = *tx.tx_hash();
+            let private_tx = PrivateTransactionRequest::new(&tx)
+                .max_block_number(target_block_number)
+                .with_preferences(
+                    reth::rpc::types::mev::PrivateTransactionPreferences::default().into_fast()
+                );
+            let submitted = self
+                .raw_request::<(PrivateTransactionRequest,), B256>(
+                    "eth_sendPrivateTransaction".into(),
+                    (private_tx,)
+                )
+                .await
+                .is_ok();
+            (hash, submitted)
+        }
+        .boxed()
+    }
 }
 
 /// On sepolia, there is a low frequency of mev-boost. This is
 /// so that hopefully we can have bundles land frequently
-const SEND_NORMAL: bool = cfg!(feature = "testnet-sepolia");
+const SEND_NORMAL: bool = false;
 
 pub struct MevBoostProvider<P> {
     mev_boost_providers: Vec<Arc<Box<dyn SubmitTx>>>,
@@ -103,19 +138,22 @@ where
     pub async fn sign_and_send(
         &self,
         signer: AngstromSigner,
-        tx: TransactionRequest
+        tx: TransactionRequest,
+        target_block: u64
     ) -> (TxHash, bool) {
         let mut submitted = true;
         let mut phash = None;
         for provider in self.mev_boost_providers.clone() {
-            let (hash, sent) = provider.submit_transaction(&signer, tx.clone()).await;
+            let (hash, sent) = provider
+                .submit_transaction_private(&signer, tx.clone(), target_block)
+                .await;
             phash = Some(hash);
             submitted &= sent;
         }
+
         if SEND_NORMAL {
             let (hash, sent) = self
                 .node_provider
-                .root()
                 .submit_transaction(&signer, tx.clone())
                 .await;
             phash = Some(hash);

@@ -792,6 +792,7 @@ dependencies = [
  "alloy-rpc-types-anvil",
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth 0.12.6",
+ "alloy-rpc-types-mev",
  "alloy-rpc-types-trace",
  "alloy-rpc-types-txpool",
  "alloy-serde 0.12.6",
@@ -1361,7 +1362,7 @@ dependencies = [
  "auto_impl",
  "futures",
  "futures-util",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "pade",
  "rand 0.8.5",
  "reth-ethereum-primitives",
@@ -1419,7 +1420,7 @@ dependencies = [
  "futures",
  "homedir",
  "humantime-serde",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "k256",
  "linked-hash-map",
  "linked_hash_set",
@@ -1488,11 +1489,11 @@ dependencies = [
  "reth-tasks",
  "serde",
  "serde_json",
- "strum 0.26.3",
+ "strum 0.27.1",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tower 0.4.13",
+ "tower 0.5.2",
  "tower-http",
  "tracing",
  "validation",
@@ -1508,7 +1509,7 @@ dependencies = [
  "angstrom-types",
  "anyhow",
  "auto_impl",
- "base64 0.21.7",
+ "base64 0.22.1",
  "bincode",
  "bitmaps",
  "bytes",
@@ -1519,7 +1520,7 @@ dependencies = [
  "foldhash",
  "futures",
  "hex-literal",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "k256",
  "malachite",
  "num-traits",
@@ -1986,7 +1987,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -2745,7 +2746,7 @@ dependencies = [
  "eyre",
  "futures",
  "hex-literal",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "matching-engine",
  "order-pool",
  "pade",
@@ -3212,7 +3213,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18e4fdb82bd54a12e42fb58a800dcae6b9e13982238ce2296dc3570b92148e1f"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -5335,7 +5336,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -5640,14 +5641,14 @@ dependencies = [
  "angstrom-types",
  "angstrom-utils",
  "arraydeque",
- "base64 0.21.7",
+ "base64 0.22.1",
  "base64-serde",
  "clap",
  "criterion",
  "eyre",
  "futures",
  "futures-util",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "malachite",
  "malachite-q",
  "num-bigfloat",
@@ -6506,7 +6507,7 @@ name = "pade-macro"
 version = "0.1.0"
 source = "git+https://github.com/SorellaLabs/pade#131e59ef14be3b870ca3daf94df94b9e4a7e4f50"
 dependencies = [
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.100",
@@ -10646,7 +10647,7 @@ dependencies = [
  "consensus",
  "eyre",
  "futures",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "jsonrpsee",
  "matching-engine",
  "order-pool",
@@ -11270,14 +11271,14 @@ dependencies = [
  "enr",
  "eyre",
  "futures",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "jsonrpsee",
  "matching-engine",
  "order-pool",
  "pade",
  "parking_lot",
  "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand_chacha 0.9.0",
  "rand_distr",
  "reth-chainspec",
  "reth-codecs",
@@ -11704,11 +11705,16 @@ checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
+ "hdrhistogram",
+ "indexmap 2.8.0",
  "pin-project-lite",
+ "slab",
  "sync_wrapper",
  "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -12063,7 +12069,7 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "malachite",
  "malachite-q",
  "num-bigfloat",
@@ -12493,7 +12499,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

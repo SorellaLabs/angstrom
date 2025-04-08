@@ -1,5 +1,4 @@
 use alloy::primitives::aliases::I24;
-use alloy_primitives::U160;
 use itertools::Itertools;
 use pade_macro::{PadeDecode, PadeEncode};
 

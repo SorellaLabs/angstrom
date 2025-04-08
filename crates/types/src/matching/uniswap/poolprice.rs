@@ -367,9 +367,11 @@ mod test {
         let amm = PoolSnapshot::new(
             10,
             vec![LiqRange {
-                liquidity:  1_000_000_000_u128,
-                lower_tick: 99900,
-                upper_tick: 100100
+                liquidity:      1_000_000_000_u128,
+                lower_tick:     99900,
+                upper_tick:     100100,
+                is_tick_edge:   false,
+                is_initialized: true
             }],
             SqrtPriceX96::at_tick(100001).unwrap()
         )
@@ -386,14 +388,18 @@ mod test {
             10,
             vec![
                 LiqRange {
-                    liquidity:  1_000_000_000_000_u128,
-                    lower_tick: 99900,
-                    upper_tick: 100100
+                    liquidity:      1_000_000_000_000_u128,
+                    lower_tick:     99900,
+                    upper_tick:     100100,
+                    is_tick_edge:   false,
+                    is_initialized: true
                 },
                 LiqRange {
-                    liquidity:  1_000_000_000_000_000_u128,
-                    lower_tick: 100100,
-                    upper_tick: 100200
+                    liquidity:      1_000_000_000_000_000_u128,
+                    lower_tick:     100100,
+                    upper_tick:     100200,
+                    is_tick_edge:   false,
+                    is_initialized: true
                 },
             ],
             SqrtPriceX96::at_tick(100100).unwrap()

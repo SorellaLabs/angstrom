@@ -547,7 +547,13 @@ mod tests {
         let liquidity = 1_000_000_000_000_000_u128;
         let pool = PoolSnapshot::new(
             10,
-            vec![LiqRange { liquidity, lower_tick: 100000, upper_tick: 100100 }],
+            vec![LiqRange {
+                liquidity,
+                lower_tick: 100000,
+                upper_tick: 100100,
+                is_tick_edge: false,
+                is_initialized: true
+            }],
             SqrtPriceX96::at_tick(100050).unwrap()
         )
         .unwrap();
@@ -558,8 +564,20 @@ mod tests {
     fn will_span_segments() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
         let cur_price = SqrtPriceX96::at_tick(100025).unwrap();
         let end_price = SqrtPriceX96::at_tick(100075).unwrap();
         let pool = PoolSnapshot::new(10, vec![segment_1, segment_2], cur_price).unwrap();
@@ -622,10 +640,34 @@ mod tests {
     fn swaps_in_both_directions() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
@@ -659,10 +701,34 @@ mod tests {
     fn will_include_all_steps() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
@@ -692,11 +758,41 @@ mod tests {
     fn asset_swap_to_sqrt_works_t0() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
-        let segment_5 = LiqRange { liquidity: seg_2_liq, lower_tick: 100200, upper_tick: 100250 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_5 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100200,
+            upper_tick:     100250,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool = PoolSnapshot::new(
@@ -736,11 +832,41 @@ mod tests {
     fn asset_swap_to_sqrt_works_t1() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
-        let segment_5 = LiqRange { liquidity: seg_2_liq, lower_tick: 100200, upper_tick: 100250 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
+        let segment_5 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100200,
+            upper_tick:     100250,
+            is_tick_edge:   false,
+            is_initialized: true
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool = PoolSnapshot::new(

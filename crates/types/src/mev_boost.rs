@@ -132,7 +132,7 @@ where
             .iter()
             .map(|url| {
                 Arc::new(Box::new(
-                    ProviderBuilder::<_, _, _>::default().on_http(Url::from_str(&url).unwrap())
+                    ProviderBuilder::<_, _, _>::default().on_http(Url::from_str(url).unwrap())
                 ) as Box<dyn SubmitTx>)
             })
             .collect::<Vec<_>>();

@@ -94,8 +94,7 @@ impl BundleLander {
                             if block
                                 .into_transactions_vec()
                                 .into_iter()
-                                .find(|tx| tx.to() == Some(TESTNET_ANGSTROM_ADDRESS))
-                                .is_some()
+                                .any(|tx| tx.to() == Some(TESTNET_ANGSTROM_ADDRESS))
                             {
                                 break;
                             }

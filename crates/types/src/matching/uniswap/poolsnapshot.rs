@@ -270,9 +270,27 @@ mod tests {
     fn setup_basic_pool() -> PoolSnapshot {
         // Create a simple pool with three tick ranges
         let ranges = vec![
-            LiqRange { lower_tick: 0, upper_tick: 100, liquidity: 1000 },
-            LiqRange { lower_tick: 100, upper_tick: 200, liquidity: 2000 },
-            LiqRange { lower_tick: 200, upper_tick: 300, liquidity: 1500 },
+            LiqRange {
+                lower_tick:     0,
+                upper_tick:     100,
+                liquidity:      1000,
+                is_tick_edge:   false,
+                is_initialized: true
+            },
+            LiqRange {
+                lower_tick:     100,
+                upper_tick:     200,
+                liquidity:      2000,
+                is_tick_edge:   false,
+                is_initialized: true
+            },
+            LiqRange {
+                lower_tick:     200,
+                upper_tick:     300,
+                liquidity:      1500,
+                is_tick_edge:   false,
+                is_initialized: true
+            },
         ];
 
         // Start price in the middle range (tick 150)
@@ -360,16 +378,36 @@ mod tests {
         // Create two pools with different liquidity profiles
         let high_liq_ranges = vec![
             LiqRange {
-                lower_tick: 0,
-                upper_tick: 100,
-                liquidity:  10000 // 10x more liquidity
+                lower_tick:     0,
+                upper_tick:     100,
+                liquidity:      10000, // 10x more liquidity
+                is_tick_edge:   false,
+                is_initialized: true
             },
-            LiqRange { lower_tick: 100, upper_tick: 200, liquidity: 20000 },
+            LiqRange {
+                lower_tick:     100,
+                upper_tick:     200,
+                liquidity:      20000,
+                is_tick_edge:   false,
+                is_initialized: true
+            },
         ];
 
         let low_liq_ranges = vec![
-            LiqRange { lower_tick: 0, upper_tick: 100, liquidity: 1000 },
-            LiqRange { lower_tick: 100, upper_tick: 200, liquidity: 2000 },
+            LiqRange {
+                lower_tick:     0,
+                upper_tick:     100,
+                liquidity:      1000,
+                is_tick_edge:   false,
+                is_initialized: true
+            },
+            LiqRange {
+                lower_tick:     100,
+                upper_tick:     200,
+                liquidity:      2000,
+                is_tick_edge:   false,
+                is_initialized: true
+            },
         ];
 
         let sqrt_price_x96 = SqrtPriceX96::at_tick(50).unwrap();

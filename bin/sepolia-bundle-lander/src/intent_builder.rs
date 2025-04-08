@@ -15,12 +15,12 @@ use angstrom_rpc::api::OrderApiClient;
 use angstrom_types::{
     matching::{Ray, SqrtPriceX96},
     primitive::{ANGSTROM_DOMAIN, AngstromSigner},
-    sol_bindings::{RawPoolOrder, grouped_orders::AllOrders, rpc_orders::OmitOrderMeta}
+    sol_bindings::{grouped_orders::AllOrders, rpc_orders::OmitOrderMeta}
 };
 use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 use uniswap_v4::uniswap::pool::{EnhancedUniswapPool, SwapResult};
 
-use crate::{balanceOfCall, env::ProviderType};
+use crate::env::ProviderType;
 
 /// given a pool and a user, looks at balances of the user and generates trades
 /// based off of this.
@@ -70,8 +70,9 @@ where
     }
 
     async fn generate_orders_for_block(&self) -> eyre::Result<Vec<AllOrders>> {
-        // let mut all_orders = self.generate_book_intents().await?;
-        let mut all_orders = vec![];
+        tokio::time::sleep(Duration::from_millis(15)).await;
+        let mut all_orders = self.generate_book_intents().await?;
+        // let mut all_orders = vec![];
         all_orders.push(self.generate_tob_intent().await?);
 
         Ok(all_orders)
@@ -214,8 +215,8 @@ where
             clearing_price.inv_ray_assign_round(true);
         }
         let deadline = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
-            // 11 blocks
-            + Duration::from_secs(120))
+            // 3 blocks
+            + Duration::from_secs(36))
         .as_secs();
 
         Ok(UserOrderBuilder::new()

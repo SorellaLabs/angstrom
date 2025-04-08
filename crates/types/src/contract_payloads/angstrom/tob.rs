@@ -187,8 +187,6 @@ mod test {
     };
     use uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick;
 
-    use crate::matching::uniswap::LiqRange;
-
     fn _generate_amm_market(target_tick: i32) -> PoolSnapshot {
         let range = LiqRange::new_init(target_tick - 1000, target_tick + 1000, 100_000_000_000_000)
             .unwrap();

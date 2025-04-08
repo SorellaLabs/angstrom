@@ -72,6 +72,7 @@ impl<P: Provider> SubmitTx for P {
         target_block_number: u64
     ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
         async move {
+            tracing::info!("{tx:#?}");
             let tx = tx.build(&signer).await.unwrap();
             let hash = *tx.tx_hash();
             let private_tx = PrivateTransactionRequest::new(&tx)
@@ -96,7 +97,7 @@ pub struct MevBoostTransport {}
 
 /// On sepolia, there is a low frequency of mev-boost. This is
 /// so that hopefully we can have bundles land frequently
-const SEND_NORMAL: bool = false;
+const SEND_NORMAL: bool = cfg!(feature = "testnet-sepolia");
 
 pub struct MevBoostProvider<P> {
     mev_boost_providers: Vec<Arc<Box<dyn SubmitTx>>>,

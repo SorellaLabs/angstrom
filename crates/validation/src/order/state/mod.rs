@@ -64,6 +64,10 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
             .prepare_for_new_block(address_changes, completed_orders)
     }
 
+    pub fn cancel_order(&self, user: Address, hash: B256) {
+        self.user_account_tracker.cancel_order(user, hash);
+    }
+
     pub fn validate<O: RawPoolOrder>(&self, order: &O) -> Result<(), OrderValidationError> {
         let mut state = OrderValidationState::new(order);
 

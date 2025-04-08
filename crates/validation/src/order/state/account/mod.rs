@@ -32,6 +32,10 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
         self.user_accounts.new_block(users, orders);
     }
 
+    pub fn cancel_order(&self, user: Address, hash: B256) {
+        self.user_accounts.cancel_order(&user, &hash);
+    }
+
     pub fn verify_order<O: RawPoolOrder>(
         &self,
         order: O,
@@ -81,10 +85,8 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
         }
         tracing::trace!(?conflicting_orders);
 
-        // if new order has lower hash cancel all orders with the same nonce
-        //
-        // TODO: given we are cancelling here. We should notify the user that this
-        // order will never be included
+        // we cancel here because of the respend conflict which makes the actual
+        // order invalid
         conflicting_orders.iter().for_each(|order| {
             self.user_accounts.cancel_order(&user, &order.order_hash);
         });

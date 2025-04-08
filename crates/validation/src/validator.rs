@@ -35,6 +35,11 @@ pub enum ValidationRequest {
         sender:       tokio::sync::oneshot::Sender<u64>,
         user_address: Address
     },
+    /// NOTE: this cancel order should already be verified
+    CancelOrder {
+        user:       Address,
+        order_hash: B256
+    },
     GasEstimation {
         sender:  tokio::sync::oneshot::Sender<eyre::Result<U256>>,
         is_book: bool,
@@ -71,6 +76,9 @@ where
 
     fn on_new_validation_request(&mut self, req: ValidationRequest) {
         match req {
+            ValidationRequest::CancelOrder { user, order_hash } => {
+                self.order_validator.cancel_order(user, order_hash);
+            }
             ValidationRequest::Order(order) => self.order_validator.validate_order(
                 order,
                 self.utils.token_pricing_snapshot(),

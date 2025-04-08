@@ -57,6 +57,17 @@ where
         Self::RegularProcessing { validator, remaining_futures: FuturesUnordered::new() }
     }
 
+    pub fn cancel_order(&self, user: Address, order_hash: B256) {
+        match self {
+            OrderValidator::InformState { validator, .. }
+            | OrderValidator::RegularProcessing { validator, .. }
+            | Self::WaitingForStorageCleanup { validator, .. }
+            | Self::ClearingForNewBlock { validator, .. } => {
+                validator.cancel_order(user, order_hash);
+            }
+        }
+    }
+
     pub fn on_new_block(
         &mut self,
         block_number: u64,

@@ -434,10 +434,6 @@ where
         block_number: Option<u64>,
         provider: Arc<P>
     ) -> Result<(), PoolError> {
-        if !self.data_is_populated() {
-            return Err(PoolError::PoolAlreadyInitialized);
-        }
-
         self.ticks.clear();
         self.tick_bitmap.clear();
 

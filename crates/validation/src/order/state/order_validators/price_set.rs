@@ -1,4 +1,7 @@
-use angstrom_types::{primitive::OrderValidationError, sol_bindings::RawPoolOrder};
+use angstrom_types::{
+    primitive::OrderValidationError,
+    sol_bindings::{RawPoolOrder, Ray}
+};
 
 use super::{OrderValidation, OrderValidationState};
 
@@ -12,6 +15,8 @@ impl OrderValidation for EnsurePriceSet {
     ) -> Result<(), OrderValidationError> {
         if state.order().limit_price().is_zero() {
             Err(OrderValidationError::NoPriceSpecified)
+        } else if !Ray::from(state.order().limit_price()).within_sqrt_price_bounds() {
+            Err(OrderValidationError::PriceOutOfPoolBounds)
         } else {
             Ok(())
         }

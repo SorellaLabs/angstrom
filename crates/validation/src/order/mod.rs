@@ -196,6 +196,8 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
 
     fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order) -> ValidationFuture;
 
+    fn cancel_order(&self, user: Address, order_hash: B256);
+
     /// Validates a batch of orders.
     ///
     /// Must return all outcomes for the given orders in the same order.
@@ -228,6 +230,12 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
 
 impl OrderValidatorHandle for ValidationClient {
     type Order = AllOrders;
+
+    fn cancel_order(&self, user: Address, order_hash: B256) {
+        let _ = self
+            .0
+            .send(ValidationRequest::CancelOrder { user, order_hash });
+    }
 
     fn new_block(
         &self,

@@ -68,6 +68,10 @@ where
         }
     }
 
+    pub fn cancel_order(&self, user: Address, hash: B256) {
+        self.state.cancel_order(user, hash);
+    }
+
     pub fn on_new_block(
         &mut self,
         block_number: BlockNumber,

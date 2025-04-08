@@ -42,6 +42,8 @@ impl MockValidator {
 impl OrderValidatorHandle for MockValidator {
     type Order = AllOrders;
 
+    fn cancel_order(&self, _: Address, _: alloy_primitives::B256) {}
+
     fn new_block(
         &self,
         _: u64,

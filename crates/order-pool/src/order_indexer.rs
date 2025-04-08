@@ -118,6 +118,9 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             return true;
         }
 
+        self.validator
+            .cancel_order(request.user_address, request.order_id);
+
         if let Some(pool_id) = self.order_tracker.cancel_order(
             request.user_address,
             request.order_id,

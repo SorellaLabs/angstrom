@@ -164,8 +164,9 @@ pub mod fuzz_uniswap {
         reth_db_wrapper::DBError
     };
     use futures::StreamExt;
+    use rand::Rng;
     use revm::{
-        Context, Database, DatabaseRef, ExecuteEvm, InspectEvm, Journal, MainBuilder,
+        Context, DatabaseRef, ExecuteEvm, Journal, MainBuilder,
         context::{BlockEnv, CfgEnv, TxEnv},
         database::CacheDB,
         primitives::{TxKind, hardfork::SpecId}
@@ -237,17 +238,12 @@ pub mod fuzz_uniswap {
     }
 
     // uint256 internal constant SWAP_EXACT_OUT_SINGLE = 0x08;
-    fn build_exact_out_swap_calldata(
-        pool_key: PoolKey,
-        zfo: bool,
-        amount_out: u128,
-        amount_in_max: u128
-    ) -> Bytes {
+    fn build_exact_out_swap_calldata(pool_key: PoolKey, zfo: bool, amount_out: u128) -> Bytes {
         let arg = ExactOutputSingleParams {
             poolKey:         pool_key,
             zeroForOne:      zfo,
             amountOut:       amount_out,
-            amountInMaximum: amount_in_max,
+            amountInMaximum: u128::MAX - 1,
             hookData:        Bytes::new()
         };
         let params = vec![Bytes::from_iter(arg.abi_encode())];
@@ -263,17 +259,12 @@ pub mod fuzz_uniswap {
     }
 
     // uint256 internal constant SWAP_EXACT_IN_SINGLE = 0x06;
-    fn build_exact_in_swap_calldata(
-        pool_key: PoolKey,
-        zfo: bool,
-        amount_in: u128,
-        amount_out_min: u128
-    ) -> Bytes {
+    fn build_exact_in_swap_calldata(pool_key: PoolKey, zfo: bool, amount_in: u128) -> Bytes {
         let arg = ExactInputSingleParams {
             poolKey:          pool_key,
             zeroForOne:       zfo,
             amountIn:         amount_in,
-            amountOutMinimum: amount_out_min,
+            amountOutMinimum: 0,
             hookData:         Bytes::new()
         };
         let params = vec![Bytes::from_iter(arg.abi_encode())];
@@ -363,6 +354,7 @@ pub mod fuzz_uniswap {
 
         let (block, pools) = init_uniswap_pools(&*provider).await;
         let target_block = block + 1;
+        let database = Arc::new(provider);
 
         for _ in 0..100 {
             for pool in &pools {
@@ -375,20 +367,54 @@ pub mod fuzz_uniswap {
                     tickSpacing: I24::unchecked_from(pool.tick_spacing),
                     hooks:       TESTNET_ANGSTROM_ADDRESS
                 };
-                assert!(am_check_exact_in(snapshot, pool_key));
-                assert!(am_check_exact_out(snapshot, pool_key, out_decimals));
+                assert!(am_check_exact_in(
+                    target_block,
+                    database.clone(),
+                    snapshot.clone(),
+                    pool_key.clone(),
+                    pool.token0_decimals,
+                    pool.token1_decimals
+                ));
+                assert!(am_check_exact_out(
+                    target_block,
+                    database.clone(),
+                    snapshot,
+                    pool_key,
+                    pool.token0_decimals,
+                    pool.token1_decimals
+                ));
             }
         }
     }
 
-    fn am_check_exact_out(snap: PoolSnapshot, key: PoolKey) -> bool {
+    fn am_check_exact_out<DB: DatabaseRef>(
+        target_block: u64,
+        db: Arc<DB>,
+        snap: PoolSnapshot,
+        key: PoolKey,
+        t0_dec: u8,
+        t1_dec: u8
+    ) -> bool {
         let mut rng = rand::thread_rng();
+
+        let amount: u128 = rng.gen_range(30..1000);
+        let zfo: bool = rng.r#gen();
+        let amount = if zfo { amount.pow(t1_dec as u32) } else { amount.pow(t0_dec as u32) };
+
+        // calldata
 
         // let amount_out_rand = rng.
 
         true
     }
-    fn am_check_exact_in(snap: PoolSnapshot, key: PoolKey) -> bool {
+    fn am_check_exact_in<DB: DatabaseRef>(
+        target_block: u64,
+        db: Arc<DB>,
+        snap: PoolSnapshot,
+        key: PoolKey,
+        t0_dec: u8,
+        t1_dec: u8
+    ) -> bool {
         true
     }
 

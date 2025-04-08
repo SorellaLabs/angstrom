@@ -47,6 +47,12 @@ clap.workspace = true
 pade.workspace = true
 pade-macro.workspace = true
 testing-tools.workspace = true
+revm.workspace = true
+revm-bytecode.workspace = true
+revm-database.workspace = true
+revm-state.workspace = true
+revm-primitives.workspace = true
+
 divan.workspace = true
 tokio-stream.workspace = true
 

@@ -100,7 +100,6 @@ impl BundleLander {
                                 break;
                             }
                             futures::stream::iter(&mut processors)
-                                .take(1)
                                 .for_each(|processor| async move {
                                     processor
                                         .new_block(block_num)

@@ -1,12 +1,25 @@
-use std::{ops::Deref, pin::Pin, str::FromStr, sync::Arc};
+use std::{
+    fmt::Debug,
+    ops::Deref,
+    pin::Pin,
+    str::FromStr,
+    sync::Arc,
+    task::{Context, Poll}
+};
 
 use alloy::{
     eips::eip2718::Encodable2718,
+    hex,
     network::TransactionBuilder,
-    primitives::{Address, B256, TxHash},
+    primitives::{Address, B256, TxHash, keccak256},
     providers::{Provider, ProviderBuilder},
-    rpc::types::{TransactionRequest, mev::PrivateTransactionRequest},
-    transports::http::reqwest::Url
+    rpc::{
+        client::ClientBuilder,
+        json_rpc::{RequestPacket, ResponsePacket},
+        types::{TransactionRequest, mev::PrivateTransactionRequest}
+    },
+    signers::{Signer, local::PrivateKeySigner},
+    transports::{TransportError, TransportErrorKind, TransportFut, http::reqwest::Url}
 };
 use futures::{Future, FutureExt};
 
@@ -79,6 +92,8 @@ impl<P: Provider> SubmitTx for P {
     }
 }
 
+pub struct MevBoostTransport {}
+
 /// On sepolia, there is a low frequency of mev-boost. This is
 /// so that hopefully we can have bundles land frequently
 const SEND_NORMAL: bool = false;
@@ -93,6 +108,7 @@ impl<P> MevBoostProvider<P>
 where
     P: Provider + 'static
 {
+    /// NOTE: this will not send to flashbots.
     pub fn new_from_raw(
         node_provider: Arc<P>,
         mev_boost_providers: Vec<Arc<Box<dyn SubmitTx>>>
@@ -104,10 +120,13 @@ where
         let mev_boost_providers = urls
             .iter()
             .map(|url| {
-                Arc::new(Box::new(ProviderBuilder::<_, _, _>::default().on_http(url.clone()))
+                let transport = MevHttp::new_flashbots(url.clone());
+                let client = ClientBuilder::default().transport(transport, false);
+                Arc::new(Box::new(ProviderBuilder::<_, _, _>::default().on_client(client))
                     as Box<dyn SubmitTx>)
             })
             .collect::<Vec<_>>();
+
         let default = default_urls
             .iter()
             .map(|url| {
@@ -180,5 +199,107 @@ impl<P> Deref for MevBoostProvider<P> {
 
     fn deref(&self) -> &Self::Target {
         &self.node_provider
+    }
+}
+
+/// A [`Signer`] wrapper to sign bundles.
+#[derive(Clone)]
+pub struct BundleSigner {
+    /// The header name on which set the signature.
+    pub header: String,
+    /// The signer used to sign the bundle.
+    pub signer: Arc<dyn Signer + Send + Sync>
+}
+
+impl BundleSigner {
+    /// Creates a new [`BundleSigner`]
+    pub fn new<S>(header: String, signer: S) -> Self
+    where
+        S: Signer + Send + Sync + 'static
+    {
+        Self { header, signer: Arc::new(signer) }
+    }
+
+    /// Creates a [`BundleSigner`] set up to add the Flashbots header.
+    pub fn flashbots<S>(signer: S) -> Self
+    where
+        S: Signer + Send + Sync + 'static
+    {
+        Self { header: "X-Flashbots-Signature".to_string(), signer: Arc::new(signer) }
+    }
+
+    /// Returns the signer address.
+    pub fn address(&self) -> Address {
+        self.signer.address()
+    }
+}
+
+impl Debug for BundleSigner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BundleSigner")
+            .field("header", &self.header)
+            .field("signer_address", &self.signer.address())
+            .finish()
+    }
+}
+
+#[derive(Clone)]
+struct MevHttp {
+    endpoint: Url,
+    signer:   BundleSigner,
+    http:     reqwest::Client
+}
+
+impl MevHttp {
+    pub fn new_flashbots(endpoint: Url) -> Self {
+        let bundle_signer = PrivateKeySigner::random();
+        let signer = BundleSigner::flashbots(bundle_signer);
+        Self { signer, endpoint, http: reqwest::Client::new() }
+    }
+
+    fn send_request(&self, req: RequestPacket) -> TransportFut<'static> {
+        let this = self.clone();
+
+        Box::pin(async move {
+            let body = serde_json::to_vec(&req).map_err(TransportError::ser_err)?;
+
+            let signature = this
+                .signer
+                .signer
+                .sign_message(format!("{:?}", keccak256(&body)).as_bytes())
+                .await
+                .map_err(TransportErrorKind::custom)?;
+
+            this.http
+                .post(this.endpoint)
+                .header(
+                    &this.signer.header,
+                    format!("{:?}:0x{}", this.signer.address(), hex::encode(signature.as_bytes()))
+                )
+                .body(body)
+                .send()
+                .await
+                .map_err(TransportErrorKind::custom)?
+                .json()
+                .await
+                .map_err(TransportErrorKind::custom)
+        })
+    }
+}
+
+use tower::Service;
+impl Service<RequestPacket> for MevHttp {
+    type Error = TransportError;
+    type Future = TransportFut<'static>;
+    type Response = ResponsePacket;
+
+    #[inline]
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    #[inline]
+    fn call(&mut self, req: RequestPacket) -> Self::Future {
+        self.send_request(req)
     }
 }

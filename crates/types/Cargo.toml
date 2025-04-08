@@ -49,6 +49,8 @@ revm-bytecode.workspace = true
 revm-database.workspace = true
 revm-state.workspace = true
 revm-primitives.workspace = true
+tower = "0.5.2"
+reqwest = { version = "0.10.10", features = ["json"] }
 
 [build-dependencies]
 convert_case.workspace = true

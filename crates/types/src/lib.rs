@@ -23,7 +23,7 @@ pub mod testnet;
 pub const CHAIN_ID: u64 = 1;
 
 #[cfg(all(feature = "testnet", not(feature = "testnet-sepolia")))]
-pub const CHAIN_ID: u64 = 31337;
+pub const CHAIN_ID: u64 = 1;
 
 #[cfg(all(feature = "testnet-sepolia", not(feature = "testnet")))]
 pub const CHAIN_ID: u64 = 11155111;

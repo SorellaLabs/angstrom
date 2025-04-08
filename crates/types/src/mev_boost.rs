@@ -1,4 +1,4 @@
-use std::{ops::Deref, pin::Pin, sync::Arc};
+use std::{ops::Deref, pin::Pin, str::FromStr, sync::Arc};
 
 use alloy::{
     eips::eip2718::Encodable2718,
@@ -62,7 +62,7 @@ where
         Self { node_provider, mev_boost_providers, default_providers: vec![] }
     }
 
-    pub fn new_from_urls(node_provider: Arc<P>, urls: &[Url], default_urls: &[Url]) -> Self {
+    pub fn new_from_urls(node_provider: Arc<P>, urls: &[Url], default_urls: &[String]) -> Self {
         let mev_boost_providers = urls
             .iter()
             .map(|url| {
@@ -73,8 +73,9 @@ where
         let default = default_urls
             .iter()
             .map(|url| {
-                Arc::new(Box::new(ProviderBuilder::<_, _, _>::default().on_http(url.clone()))
-                    as Box<dyn SubmitTx>)
+                Arc::new(Box::new(
+                    ProviderBuilder::<_, _, _>::default().on_http(Url::from_str(&url).unwrap())
+                ) as Box<dyn SubmitTx>)
             })
             .collect::<Vec<_>>();
 

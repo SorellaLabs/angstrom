@@ -28,9 +28,9 @@ pub struct AngstromConfig {
     #[clap(
         short,
         long,
-        default_value = "[https://ethereum-sepolia.rpc.subquery.network/public,https://endpoints.omniatech.io/v1/eth/sepolia/public,https://sepolia.gateway.tenderly.co,https://1rpc.io/sepolia]"
+        default_values_t = ["https://ethereum-sepolia.rpc.subquery.network/public".to_string(),"https://endpoints.omniatech.io/v1/eth/sepolia/public".to_string(),"https://sepolia.gateway.tenderly.co,https://1rpc.io/sepolia".to_string()]
     )]
-    pub normal_nodes:        Vec<Url>
+    pub normal_nodes:        Vec<String>
 }
 
 #[derive(Debug, Clone, Deserialize)]

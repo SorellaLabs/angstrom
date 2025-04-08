@@ -7,8 +7,10 @@ use alloy::{
 use alloy_primitives::{Address, U256};
 use angstrom_types::{CHAIN_ID, primitive::AngstromSigner};
 use consensus::AngstromValidator;
-use rand::{RngCore, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+use rand_chacha::{
+    ChaCha20Rng,
+    rand_core::{SeedableRng, TryRngCore}
+};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 
 use super::TestingConfigKind;
@@ -46,7 +48,7 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             seed[0..8].copy_from_slice(&node_id.to_le_bytes());
             let mut rng = ChaCha20Rng::from_seed(seed);
             let mut sk_bytes = [0u8; 32];
-            rng.fill_bytes(&mut sk_bytes);
+            rng.try_fill_bytes(&mut sk_bytes).unwrap();
             SecretKey::from_slice(&sk_bytes).unwrap()
         };
 

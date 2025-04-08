@@ -155,26 +155,26 @@ where
 
 
                 // TODO:  Put this on a feature flag so we use `replay()` when not needing debug inspection
-                let result = match evm.inspect_replay()
-                    .map_err(|e| eyre!("failed to transact with revm - {e:?}"))
-                {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let _ = sender.send(Err(eyre!(
-                            "transaction simulation failed - failed to transaction with revm - \
-                             {e:?}"
-                        )));
-                        return;
-                    }
-                };
+                // let result = match evm.inspect_replay()
+                //     .map_err(|e| eyre!("failed to transact with revm - {e:?}"))
+                // {
+                //     Ok(r) => r,
+                //     Err(e) => {
+                //         let _ = sender.send(Err(eyre!(
+                //             "transaction simulation failed - failed to transaction with revm - \
+                //              {e:?}"
+                //         )));
+                //         return;
+                //     }
+                // };
+                //
+                // if !result.result.is_success() {
+                //     tracing::warn!(?result.result);
+                //     let _ = sender.send(Err(eyre!("transaction simulation failed")));
+                //     return;
+                // }
 
-                if !result.result.is_success() {
-                    tracing::warn!(?result.result);
-                    let _ = sender.send(Err(eyre!("transaction simulation failed")));
-                    return;
-                }
-
-                let res = BundleGasDetails::new(conversion_lookup,result.result.gas_used());
+                let res = BundleGasDetails::new(conversion_lookup,0);
                 let _ = sender.send(Ok(res));
             });
         }))

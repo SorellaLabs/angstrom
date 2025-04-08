@@ -79,4 +79,13 @@ impl SubmitTx for AnvilSubmissionProvider {
         }
         .boxed()
     }
+
+    fn submit_transaction_private<'a>(
+        &'a self,
+        signer: &'a AngstromSigner,
+        tx: TransactionRequest,
+        _: u64
+    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
+        self.submit_transaction(signer, tx)
+    }
 }

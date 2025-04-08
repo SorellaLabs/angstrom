@@ -119,7 +119,6 @@ impl BundleLander {
                             break;
                         }
                     }
-                    break;
                 }
             })
             .await?;

@@ -1,4 +1,4 @@
-use alloy::primitives::aliases::I24;
+use alloy::primitives::{U160, aliases::I24};
 use itertools::Itertools;
 use pade_macro::{PadeDecode, PadeEncode};
 
@@ -10,10 +10,12 @@ pub enum RewardsUpdate {
     MultiTick {
         start_tick:      I24,
         start_liquidity: u128,
-        quantities:      Vec<u128> // reward_checksum: U160
+        quantities:      Vec<u128>,
+        reward_checksum: U160
     },
     CurrentOnly {
-        amount: u128 // expected_liquidity: u128
+        amount:             u128,
+        expected_liquidity: u128
     }
 }
 
@@ -56,16 +58,17 @@ impl RewardsUpdate {
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {
-                amount: quantities
+                amount:             quantities
                     .first()
                     .copied()
-                    .unwrap_or(donation_data.current_tick) // expected_liquidity: start_liquidity
+                    .unwrap_or(donation_data.current_tick),
+                expected_liquidity: start_liquidity
             }),
             _ => Ok(Self::MultiTick {
                 start_tick: I24::try_from(start_tick).unwrap_or_default(),
                 start_liquidity,
-                quantities /* reward_checksum: snapshot.checksum_from_ticks(bound_tick,
-                            * current_tick)? */
+                quantities,
+                reward_checksum: snapshot.checksum_from_ticks(bound_tick, current_tick)?
             })
         }
     }
@@ -80,7 +83,7 @@ impl RewardsUpdate {
     }
 
     pub fn empty() -> Self {
-        Self::CurrentOnly { amount: 0 }
+        Self::CurrentOnly { amount: 0, expected_liquidity: 0 }
     }
 
     pub fn quantities(&self) -> Vec<u128> {

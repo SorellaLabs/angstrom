@@ -191,7 +191,6 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 solutions.push(r);
             }
         }
-        tracing::info!("{solutions:#?}");
 
         // generate bundle without final gas known.
         trace!("Building bundle for gas finalization");

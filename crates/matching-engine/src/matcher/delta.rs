@@ -542,12 +542,12 @@ impl<'a> DeltaMatcher<'a> {
         };
 
         let limit = self.fetch_orders_at_ucp(&price_and_partial_solution);
-
-        let amm = self.fetch_amm_movement_at_ucp(price_and_partial_solution.ucp);
+        let mut amm = self.fetch_amm_movement_at_ucp(price_and_partial_solution.ucp);
 
         // get weird overflow values
         if limit.is_empty() {
             price_and_partial_solution.ucp = Ray::default();
+            amm = None;
         }
 
         PoolSolution {

@@ -70,7 +70,8 @@ where
     }
 
     async fn generate_orders_for_block(&self) -> eyre::Result<Vec<AllOrders>> {
-        let mut all_orders = self.generate_book_intents().await?;
+        // let mut all_orders = self.generate_book_intents().await?;
+        let mut all_orders = vec![];
         all_orders.push(self.generate_tob_intent().await?);
 
         Ok(all_orders)
@@ -213,7 +214,8 @@ where
             clearing_price.inv_ray_assign_round(true);
         }
         let deadline = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
-            + Duration::from_secs(399))
+            // 11 blocks
+            + Duration::from_secs(120))
         .as_secs();
 
         Ok(UserOrderBuilder::new()

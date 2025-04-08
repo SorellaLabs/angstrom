@@ -140,6 +140,7 @@ where
                     })
                     .modify_block_chained(|block| {
                         block.number = number + 1;
+                        tracing::info!(?block.number, "simulating block on");
                     })
                     .modify_tx_chained(|tx| {
                         tx.caller = node_address;

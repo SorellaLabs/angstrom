@@ -1,7 +1,8 @@
 use std::{path::PathBuf, pin::pin, sync::Arc, time::Duration};
 
 use alloy::{primitives::Address, providers::Provider};
-use angstrom_types::primitive::ANGSTROM_DOMAIN;
+use alloy_rpc_types::TransactionTrait;
+use angstrom_types::primitive::{ANGSTROM_DOMAIN, TESTNET_ANGSTROM_ADDRESS};
 use futures::StreamExt;
 use jsonrpsee::http_client::HttpClientBuilder;
 use reth::tasks::TaskExecutor;
@@ -59,12 +60,7 @@ impl BundleLander {
                     .flat_map(futures::stream::iter)
                     .then(|hash| {
                         let provider_c = provider.clone();
-                        async move {
-                            provider_c
-                                .get_block_by_hash(hash)
-                                .await
-                                .map(|block_o| block_o.map(|block| block.header.number))
-                        }
+                        async move { provider_c.get_block_by_hash(hash).full().await }
                     });
 
                 let http_client =
@@ -80,7 +76,7 @@ impl BundleLander {
                     .map(|pool| {
                         PoolIntentBundler::new(
                             pool,
-                            current_block,
+                            current_block.header.number,
                             keys.clone(),
                             provider.clone(),
                             http_client.clone()
@@ -88,32 +84,42 @@ impl BundleLander {
                     })
                     .collect::<Vec<_>>();
 
-                // loop {
-                let new_block = pinned.next().await;
-                match new_block {
-                    Some(Ok(Some(block))) => {
-                        tracing::info!("new block");
-                        futures::stream::iter(&mut processors)
-                            .take(1)
-                            .for_each(|processor| async move {
-                                processor
-                                    .new_block(block)
-                                    .await
-                                    .expect("failed to process new block in pool");
-                                processor
-                                    .submit_new_orders_to_angstrom()
-                                    .await
-                                    .expect("failed to send angstrom orders");
-                            })
-                            .await;
-                        tracing::info!(%block, "all orders submitted for block");
-                    }
-                    _ => {
-                        tracing::error!("failed to get new block number");
-                        // break;
+                loop {
+                    let new_block = pinned.next().await;
+                    match new_block {
+                        Some(Ok(Some(block))) => {
+                            tracing::info!("new block");
+                            // if we had and angstrom bundle, stop
+                            let block_num = block.header.number;
+                            if block
+                                .into_transactions_vec()
+                                .into_iter()
+                                .find(|tx| tx.to() == Some(TESTNET_ANGSTROM_ADDRESS))
+                                .is_some()
+                            {
+                                break;
+                            }
+                            futures::stream::iter(&mut processors)
+                                .take(1)
+                                .for_each(|processor| async move {
+                                    processor
+                                        .new_block(block_num)
+                                        .await
+                                        .expect("failed to process new block in pool");
+                                    processor
+                                        .submit_new_orders_to_angstrom()
+                                        .await
+                                        .expect("failed to send angstrom orders");
+                                })
+                                .await;
+                            tracing::info!(%block_num, "all orders submitted for block");
+                        }
+                        _ => {
+                            tracing::error!("failed to get new block number");
+                            break;
+                        }
                     }
                 }
-                // }
             })
             .await?;
 

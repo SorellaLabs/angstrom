@@ -5,7 +5,7 @@ use std::{
 
 use alloy::{
     network::TransactionBuilder,
-    primitives::{I256, U256},
+    primitives::{Address, I256, U256},
     providers::Provider,
     sol_types::SolCall
 };
@@ -180,12 +180,12 @@ where
 
         let target_price = if zfo {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick - (30 * self.pool.tick_spacing)
+                self.pool.tick - (10 * self.pool.tick_spacing)
             )
             .unwrap()
         } else {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick + (30 * self.pool.tick_spacing)
+                self.pool.tick + (10 * self.pool.tick_spacing)
             )
             .unwrap()
         };
@@ -235,6 +235,20 @@ where
             .into())
     }
 
+    async fn make_call<TY: SolCall>(&self, from: Address, target: Address, call: TY) -> TY::Return {
+        let bytes = self
+            .provider
+            .call(
+                TransactionRequest::default()
+                    .with_from(from)
+                    .with_kind(TxKind::Call(target))
+                    .with_input(call.abi_encode())
+            )
+            .await
+            .unwrap();
+        TY::abi_decode_returns(&bytes, true).unwrap()
+    }
+
     // (amount, zfo)
     async fn fetch_direction_and_amounts(
         &self,
@@ -242,30 +256,12 @@ where
         pool_price: &Ray,
         exact_in: bool
     ) -> (I256, bool) {
-        let bytes = self
-            .provider
-            .call(
-                TransactionRequest::default()
-                    .with_from(key.address())
-                    .with_kind(TxKind::Call(self.pool.token0))
-                    .with_input(crate::balanceOfCall::new((key.address(),)).abi_encode())
-            )
-            .await
-            .unwrap();
-
-        let token0_bal = balanceOfCall::abi_decode_returns(&bytes, true).unwrap();
-        let bytes = self
-            .provider
-            .call(
-                TransactionRequest::default()
-                    .with_from(key.address())
-                    .with_kind(TxKind::Call(self.pool.token1))
-                    .with_input(crate::balanceOfCall::new((key.address(),)).abi_encode())
-            )
-            .await
-            .unwrap();
-
-        let token1_bal = balanceOfCall::abi_decode_returns(&bytes, true).unwrap();
+        let token0_bal = self
+            .make_call(key.address(), self.pool.token0, crate::balanceOfCall::new((key.address(),)))
+            .await;
+        let token1_bal = self
+            .make_call(key.address(), self.pool.token1, crate::balanceOfCall::new((key.address(),)))
+            .await;
 
         if token0_bal.balance.is_zero() || token1_bal.balance.is_zero() {
             panic!(

@@ -9,6 +9,7 @@ const SEPOLIA_SIG_CHECK: alloy::primitives::Address =
 alloy::sol!(
     function approve(address _spender, uint256 _value) public returns (bool success);
     function balanceOf(address _owner) public view returns (uint256 balance);
+    function decimals() public view virtual returns (uint8);
     function isValidSignatureNow(
             address signer,
             bytes32 digest,

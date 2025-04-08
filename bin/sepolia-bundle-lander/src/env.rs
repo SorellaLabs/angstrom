@@ -70,7 +70,7 @@ impl BundleWashTraderEnv {
                 uniswap_registry.clone(),
                 cli.pool_manager_address
             );
-            let mut pool = EnhancedUniswapPool::new(data_loader, 400);
+            let mut pool = EnhancedUniswapPool::new(data_loader, 100);
             pool.initialize(None, provider.root().into()).await?;
             tracing::info!("{:#?}", pool);
             ang_pools.push(pool);

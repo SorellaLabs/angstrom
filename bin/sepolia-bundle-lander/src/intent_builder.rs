@@ -58,7 +58,6 @@ where
     }
 
     pub async fn submit_new_orders_to_angstrom(&self) -> eyre::Result<()> {
-        tokio::time::sleep(Duration::from_secs(2)).await;
         tracing::info!("building orders for block");
         let orders = self.generate_orders_for_block().await?;
         tracing::info!("orders for block {:#?}", orders);

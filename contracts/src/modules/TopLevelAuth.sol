@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {IAngstromAuth} from "../interfaces/IAngstromAuth.sol";
 import {UniConsumer} from "./UniConsumer.sol";
+import {EIP712} from "solady/src/utils/EIP712.sol";
 
 import {PoolConfigStore, PoolConfigStoreLib, StoreKey} from "../libraries/PoolConfigStore.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
@@ -10,9 +11,10 @@ import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
+import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
 
 /// @author philogy <https://github.com/philogy>
-abstract contract TopLevelAuth is UniConsumer, IAngstromAuth {
+abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
     using LPFeeLibrary for uint24;
     using SafeTransferLib for address;
 
@@ -21,6 +23,11 @@ abstract contract TopLevelAuth is UniConsumer, IAngstromAuth {
     error OnlyOncePerBlock();
     error NotNode();
     error IndexMayHaveChanged();
+    error InvalidSignature();
+
+    /// @dev `keccak256("AttestAngstromBlockEmpty(uint64 block_number)")`
+    uint256 internal constant ATTEST_EMPTY_BLOCK_TYPE_HASH =
+        0x3f25e551746414ff93f076a7dd83828ff53735b39366c74015637e004fcb0223;
 
     /// @dev Contract that manages all special privileges for contract (setting new nodes,
     /// configuring pools, pulling fees).
@@ -96,6 +103,25 @@ abstract contract TopLevelAuth is UniConsumer, IAngstromAuth {
             address node = nodes[i];
             _isNode[node] = !_isNode[node];
         }
+    }
+
+    function unlockWithEmptyAttestation(address node, bytes calldata signature) public {
+        if (_isUnlocked()) revert OnlyOncePerBlock();
+        if (!_isNode[node]) revert NotNode();
+
+        bytes32 attestationStructHash;
+        assembly ("memory-safe") {
+            mstore(0x00, ATTEST_EMPTY_BLOCK_TYPE_HASH)
+            mstore(0x20, number())
+            attestationStructHash := keccak256(0x00, 0x40)
+        }
+
+        bytes32 digest = _hashTypedData(attestationStructHash);
+        if (!SignatureCheckerLib.isValidSignatureNowCalldata(node, digest, signature)) {
+            revert InvalidSignature();
+        }
+
+        _lastBlockUpdated = SafeCastLib.toUint64(block.number);
     }
 
     function _isUnlocked() internal view returns (bool) {

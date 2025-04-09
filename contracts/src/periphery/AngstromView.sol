@@ -14,7 +14,7 @@ library AngstromView {
     uint256 constant UNLOCKED_FEE_PACKED_SET_SLOT = 2;
 
     uint256 constant LAST_BLOCK_CONFIG_STORE_SLOT = 3;
-    uint256 constant LAST_BLOCK_BIT_OFFSET = 64;
+    uint256 constant LAST_BLOCK_BIT_OFFSET = 0;
     uint256 constant STORE_BIT_OFFSET = 64;
 
     uint256 constant BALANCES_SLOT = 5;

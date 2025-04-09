@@ -222,4 +222,8 @@ library PoolConfigStoreLib {
             key := shl(HASH_TO_STORE_KEY_SHIFT, keccak256(0x00, 0x40))
         }
     }
+
+    function into(PoolConfigStore self) internal pure returns (address) {
+        return PoolConfigStore.unwrap(self);
+    }
 }

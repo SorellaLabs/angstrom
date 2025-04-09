@@ -12104,6 +12104,7 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
+ "hex",
  "itertools 0.14.0",
  "malachite",
  "malachite-q",

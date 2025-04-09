@@ -42,6 +42,7 @@ once_cell.workspace = true
 rayon = "1"
 # Using clap for our bookgen command-line tool
 clap.workspace = true
+hex = "0.4.3"
 
 [dev-dependencies]
 pade.workspace = true

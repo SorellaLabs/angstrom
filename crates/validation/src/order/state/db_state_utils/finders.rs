@@ -7,8 +7,9 @@ use alloy::{
     primitives::{Address, U256, keccak256},
     sol_types::*
 };
-use angstrom_types::contract_bindings::mintable_mock_erc_20::MintableMockERC20::{
-    allowanceCall, balanceOfCall
+use angstrom_types::{
+    CHAIN_ID,
+    contract_bindings::mintable_mock_erc_20::MintableMockERC20::{allowanceCall, balanceOfCall}
 };
 // use revm::{
 //     db::CacheDB,
@@ -52,18 +53,21 @@ where
         .with_ref_db(db.clone())
         .modify_cfg_chained(|cfg| {
             cfg.disable_balance_check = true;
+            cfg.chain_id = CHAIN_ID;
         })
         .modify_tx_chained(|tx| {
             tx.caller = probe_address;
             tx.kind = TxKind::Call(token_address);
             tx.data = balanceOfCall::new((probe_address,)).abi_encode().into();
+            tx.chain_id = Some(CHAIN_ID);
             tx.value = U256::from(0);
         })
         .build_mainnet();
 
         let output = evm
             .replay()
-            .map_err(|e| eyre::eyre!("{e:?}"))?
+            .unwrap()
+            // .map_err(|e| eyre::eyre!("{e:?}"))?
             .result
             .output()
             .unwrap()
@@ -112,11 +116,13 @@ where
         .with_ref_db(db.clone())
         .modify_cfg_chained(|cfg| {
             cfg.disable_balance_check = true;
+            cfg.chain_id = CHAIN_ID;
         })
         .modify_tx_chained(|tx| {
             tx.caller = probe_user_address;
             tx.kind = TxKind::Call(token_address);
 
+            tx.chain_id = Some(CHAIN_ID);
             tx.data = allowanceCall::new((probe_user_address, probe_contract_address))
                 .abi_encode()
                 .into();

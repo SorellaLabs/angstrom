@@ -301,21 +301,21 @@ where
     ) {
         fetched_ticks.sort_by_key(|k| k.tick);
 
-        let process_tick_lower = |s: I24, tick: &TickData| {
+        let process_tick_lower = |l: I24, tick: &TickData| {
             let tick = tick.tick;
-            (tick > s).then_some(TickData {
+            (tick > l).then_some(TickData {
                 initialized:    false,
-                tick:           s,
+                tick:           l,
                 liquidityNet:   0,
                 liquidityGross: 0
             })
         };
 
-        let process_tick_higher = |e: I24, tick: &TickData| {
+        let process_tick_higher = |h: I24, tick: &TickData| {
             let tick = tick.tick;
-            (tick < e).then_some(TickData {
+            (tick < h).then_some(TickData {
                 initialized:    false,
-                tick:           e,
+                tick:           h,
                 liquidityNet:   0,
                 liquidityGross: 0
             })

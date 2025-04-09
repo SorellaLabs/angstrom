@@ -177,11 +177,9 @@ pub mod fuzz_uniswap {
 
     use crate::{
         DataLoader, PoolConfigured, PoolKey, PoolRemoved, UniswapPoolRegistry,
-        uniswap::pool::EnhancedUniswapPool
+        uniswap::pool::{EnhancedUniswapPool, U256_1}
     };
 
-    const UNIVERSAL_ROUTER_SEPOLIA: Address =
-        address!("0x3a9d48ab9751398bbfa63ad67599bb04e4bdf98b");
     pub type ProviderType = FillProvider<
         JoinFill<
             Identity,
@@ -190,10 +188,8 @@ pub mod fuzz_uniswap {
         RootProvider
     >;
 
-    const SETTLE: u8 = 0x0b;
-
     alloy::sol!(
-        function execute(bytes calldata commands, bytes[] calldata inputs) public payable override;
+        function executeExactInput(bytes calldata args) public;
 
         /// @dev equivalent to: abi.decode(params, (IV4Router.ExactInputSingleParams))
         struct ExactInputSingleParams {
@@ -227,7 +223,7 @@ pub mod fuzz_uniswap {
         );
     );
 
-    // const LAST_BLOCK_SLOT_ANGSTROM: U256 = U256[;
+    const HOOK_EXECUTOR: Address = address!("0xE31934E08e214F16646F843bCAb98cC0fC10ae5");
     const LAST_BLOCK_SLOT_ANGSTROM: U256 = U256::from_limbs([3, 0, 0, 0]);
     const TEST_ORDER_ADDR: Address = address!("0x3193C77CD2c0cE208356Dc8B0F96159F8181a3f2");
 
@@ -243,9 +239,26 @@ pub mod fuzz_uniswap {
         }
     }
 
+    // uint256 internal constant SWAP_EXACT_IN_SINGLE = 0x06;
+    fn build_exact_in_swap_calldata(pool_key: PoolKey, zfo: bool, amount_in: u128) -> Bytes {
+        let arg = ExactInputSingleParams {
+            poolKey:          pool_key,
+            zeroForOne:       zfo,
+            amountIn:         amount_in,
+            amountOutMinimum: 1,
+            hookData:         Bytes::new()
+        };
+
+        let flag = U256::ZERO;
+        let data = (flag, arg).abi_encode_params();
+
+        executeExactInputCall::new((data.into(),))
+            .abi_encode()
+            .into()
+    }
+
     // uint256 internal constant SWAP_EXACT_OUT_SINGLE = 0x08;
     fn build_exact_out_swap_calldata(pool_key: PoolKey, zfo: bool, amount_out: u128) -> Bytes {
-        let token_out = if zfo { pool_key.currency1 } else { pool_key.currency0 };
         let arg = ExactOutputSingleParams {
             poolKey:         pool_key,
             zeroForOne:      zfo,
@@ -253,42 +266,10 @@ pub mod fuzz_uniswap {
             amountInMaximum: u128::MAX - 1,
             hookData:        Bytes::new()
         };
-        let params = vec![
-            Bytes::from_iter(arg.abi_encode()),
-            Bytes::from_iter((token_out, amount_out, true).abi_encode()),
-        ];
-        let argument = Bytes::from_iter(vec![0x08u8, SETTLE]);
+        let flag = U256_1;
+        let data = (flag, arg).abi_encode_params();
 
-        // abi.decode(data, (bytes, bytes[]));
-        let unlock_calldata = Bytes::from_iter((argument, params).abi_encode());
-
-        let v4_swap_param = Bytes::from_iter(vec![0x10]);
-        executeCall::new((v4_swap_param, vec![unlock_calldata]))
-            .abi_encode()
-            .into()
-    }
-
-    // uint256 internal constant SWAP_EXACT_IN_SINGLE = 0x06;
-    fn build_exact_in_swap_calldata(pool_key: PoolKey, zfo: bool, amount_in: u128) -> Bytes {
-        let token_in = if zfo { pool_key.currency0 } else { pool_key.currency1 };
-        let arg = ExactInputSingleParams {
-            poolKey:          pool_key,
-            zeroForOne:       zfo,
-            amountIn:         amount_in,
-            amountOutMinimum: 0,
-            hookData:         Bytes::new()
-        };
-        let params = vec![
-            Bytes::from_iter(arg.abi_encode()),
-            Bytes::from_iter((token_in, amount_in, true).abi_encode()),
-        ];
-        let argument = Bytes::from_iter(vec![0x06u8, SETTLE]);
-
-        // abi.decode(data, (bytes, bytes[]));
-        let unlock_calldata = Bytes::from_iter((argument, params).abi_encode());
-
-        let v4_swap_param = Bytes::from_iter(vec![0x10]);
-        executeCall::new((v4_swap_param, vec![unlock_calldata]))
+        executeExactInputCall::new((data.into(),))
             .abi_encode()
             .into()
     }
@@ -328,22 +309,28 @@ pub mod fuzz_uniswap {
         .modify_cfg_chained(|cfg| {
             cfg.disable_nonce_check = true;
             cfg.disable_balance_check = true;
+            cfg.chain_id = CHAIN_ID;
         })
         .modify_block_chained(|block| {
             block.number = target_block;
-            tracing::info!(?block.number, "simulating block on");
         })
         .modify_tx_chained(|tx| {
-            tx.kind = TxKind::Call(UNIVERSAL_ROUTER_SEPOLIA);
+            tx.kind = TxKind::Call(HOOK_EXECUTOR);
             tx.chain_id = Some(CHAIN_ID);
-            tx.caller = TESTNET_ANGSTROM_ADDRESS;
+            tx.caller = TEST_ORDER_ADDR;
             tx.data = router_calldata
         })
         .build_mainnet();
         let result = evm.replay().unwrap();
         if !result.result.is_success() {
-            tracing::info!("replay failed");
+            panic!(
+                "replay failed {:?} gas: {} logs: {:#?}",
+                result.result.output(),
+                result.result.gas_used(),
+                result.result.logs()
+            );
         }
+
         result
             .result
             .into_logs()
@@ -416,7 +403,11 @@ pub mod fuzz_uniswap {
 
         let amount: u128 = rng.gen_range(1..10000);
         let zfo: bool = rng.r#gen();
-        let amount = if zfo { amount.pow(t1_dec as u32) } else { amount.pow(t0_dec as u32) };
+        let amount = if zfo {
+            amount * 10u128.pow(t1_dec as u32)
+        } else {
+            amount * 10u128.pow(t0_dec as u32)
+        };
 
         let call_bytecode = build_exact_out_swap_calldata(key, zfo, amount);
         let revm_swap_output = execute_calldata(target_block, call_bytecode, db);
@@ -460,7 +451,11 @@ pub mod fuzz_uniswap {
 
         let amount: u128 = rng.gen_range(1..10000);
         let zfo: bool = rng.r#gen();
-        let amount = if zfo { amount.pow(t0_dec as u32) } else { amount.pow(t1_dec as u32) };
+        let amount = if zfo {
+            amount * 10u128.pow(t0_dec as u32)
+        } else {
+            amount * 10u128.pow(t1_dec as u32)
+        };
 
         let call_bytecode = build_exact_in_swap_calldata(key, zfo, amount);
         let revm_swap_output = execute_calldata(target_block, call_bytecode, db);
@@ -526,8 +521,7 @@ pub mod fuzz_uniswap {
         for token in tokens {
             let ap_slot: u64 = find_slot_offset_for_approval(db, token).unwrap();
             let approval_location = keccak256(
-                (UNIVERSAL_ROUTER_SEPOLIA, keccak256((TEST_ORDER_ADDR, ap_slot).abi_encode()))
-                    .abi_encode()
+                (HOOK_EXECUTOR, keccak256((TEST_ORDER_ADDR, ap_slot).abi_encode())).abi_encode()
             );
             db.insert_account_storage(
                 token,
@@ -641,8 +635,10 @@ pub mod fuzz_uniswap {
             &self,
             address: Address
         ) -> Result<Option<revm::state::AccountInfo>, Self::Error> {
-            let acc = async_to_sync(self.0.get_account(address).latest().into_future())?;
-            let code = async_to_sync(self.0.get_code_at(address).latest().into_future())?;
+            let acc = async_to_sync(self.0.get_account(address).latest().into_future())
+                .unwrap_or_default();
+            let code = async_to_sync(self.0.get_code_at(address).latest().into_future())
+                .unwrap_or_default();
             let code = Some(Bytecode::new_raw(code));
 
             Ok(Some(revm::state::AccountInfo {

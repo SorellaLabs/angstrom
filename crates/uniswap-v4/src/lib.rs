@@ -138,7 +138,8 @@ pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer>(
     UniswapPoolManager::new(factory, current_block, notifier, block_sync, update_stream).await
 }
 
-#[cfg(all(test, feature = "testnet-sepolia"))]
+// #[cfg(all(test, feature = "testnet-sepolia"))]
+#[cfg(test)]
 pub mod fuzz_uniswap {
     use std::{collections::HashSet, ops::Deref, sync::Arc};
 
@@ -353,7 +354,7 @@ pub mod fuzz_uniswap {
             .data
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_fuzzing_of_uniswap() {
         let node_endpoint =
             std::env::var("NODE_URL").unwrap_or_else(|_| "https://1rpc.io/sepolia".to_string());
@@ -364,6 +365,7 @@ pub mod fuzz_uniswap {
                 .await
                 .unwrap()
         ));
+        println!("starting to look for uinswap pools");
         let database = Arc::new(provider);
         let mut cache_db = CacheDB::new(database.clone());
 
@@ -434,6 +436,15 @@ pub mod fuzz_uniswap {
         assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");
         assert_eq!(t1_delta_local, t1_delta_revm, "amount: {amount} zfo: {zfo}");
         assert_eq!(sqrt_price_local, sqrt_price_revm, "amount: {amount} zfo: {zfo}");
+        println!(
+            "{}-{} {}-{} {:?}-{:?}",
+            t0_delta_local,
+            t0_delta_revm,
+            t1_delta_local,
+            t1_delta_revm,
+            sqrt_price_local,
+            sqrt_price_revm
+        );
 
         // let amount_out_rand = rng.
     }
@@ -469,6 +480,15 @@ pub mod fuzz_uniswap {
         assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");
         assert_eq!(t1_delta_local, t1_delta_revm, "amount: {amount} zfo: {zfo}");
         assert_eq!(sqrt_price_local, sqrt_price_revm, "amount: {amount} zfo: {zfo}");
+        println!(
+            "{}-{} {}-{} {:?}-{:?}",
+            t0_delta_local,
+            t0_delta_revm,
+            t1_delta_local,
+            t1_delta_revm,
+            sqrt_price_local,
+            sqrt_price_revm
+        );
     }
 
     /// initializes the new uniswap pools on most recent sepolia block
@@ -501,6 +521,7 @@ pub mod fuzz_uniswap {
             tokens.insert(pool.token1);
             ang_pools.push(pool);
         }
+        println!("{:#?}", ang_pools);
 
         for token in tokens {
             let ap_slot: u64 = find_slot_offset_for_approval(db, token).unwrap();
@@ -548,7 +569,7 @@ pub mod fuzz_uniswap {
                 break;
             }
 
-            tracing::info!(?deploy_block, ?this_end_block);
+            println!("{:?} {:?}", deploy_block, this_end_block);
             let filter = Filter::new()
                 .from_block(deploy_block as u64)
                 .to_block(this_end_block as u64)
@@ -573,7 +594,6 @@ pub mod fuzz_uniswap {
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        tracing::info!(?logs);
 
         logs.into_iter()
             .fold(HashSet::new(), |mut set, log| {

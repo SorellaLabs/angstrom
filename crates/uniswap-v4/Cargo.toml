@@ -63,4 +63,4 @@ itertools.workspace = true
 
 [features]
 default = []
-testnet-sepolia = ["angstrom-types/testnet-sepolia"]
+testnet-sepolia = ["angstrom-types/testnet-sepolia", "testing-tools/testnet-sepolia", "validation/testnet-sepolia"]

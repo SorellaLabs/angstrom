@@ -53,6 +53,7 @@ revm-database.workspace = true
 revm-state.workspace = true
 revm-primitives.workspace = true
 
+validation.workspace = true
 divan.workspace = true
 tokio-stream.workspace = true
 

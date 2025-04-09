@@ -12129,6 +12129,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uniswap_v3_math",
+ "validation",
 ]
 
 [[package]]

@@ -19,6 +19,9 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validator::Validator;
 
+pub use crate::order::state::db_state_utils::finders::{
+    find_slot_offset_for_approval, find_slot_offset_for_balance
+};
 use crate::{
     common::{TokenPriceGenerator, key_split_threadpool::KeySplitThreadpool},
     order::{

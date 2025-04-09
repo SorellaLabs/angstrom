@@ -138,8 +138,7 @@ pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer>(
     UniswapPoolManager::new(factory, current_block, notifier, block_sync, update_stream).await
 }
 
-// #[cfg(all(test, feature = "testnet-sepolia")]
-#[cfg(test)]
+#[cfg(all(test, feature = "testnet-sepolia"))]
 pub mod fuzz_uniswap {
     use std::{collections::HashSet, ops::Deref, sync::Arc};
 
@@ -157,9 +156,10 @@ pub mod fuzz_uniswap {
         rpc::types::{BlockNumberOrTag, Filter},
         sol_types::{SolCall, SolEvent, SolValue}
     };
+    use alloy_primitives::keccak256;
     use angstrom_types::{
         CHAIN_ID,
-        matching::uniswap::PoolSnapshot,
+        matching::uniswap::{PoolSnapshot, Quantity},
         primitive::{TESTNET_ANGSTROM_ADDRESS, TESTNET_POOL_MANAGER_ADDRESS},
         reth_db_wrapper::DBError
     };
@@ -172,6 +172,7 @@ pub mod fuzz_uniswap {
         primitives::{TxKind, hardfork::SpecId}
     };
     use revm_bytecode::Bytecode;
+    use validation::{find_slot_offset_for_approval, find_slot_offset_for_balance};
 
     use crate::{
         DataLoader, PoolConfigured, PoolKey, PoolRemoved, UniswapPoolRegistry,
@@ -187,6 +188,8 @@ pub mod fuzz_uniswap {
         >,
         RootProvider
     >;
+
+    const SETTLE: u8 = 0x0b;
 
     alloy::sol!(
         function execute(bytes calldata commands, bytes[] calldata inputs) public payable override;
@@ -224,8 +227,10 @@ pub mod fuzz_uniswap {
     );
 
     // const LAST_BLOCK_SLOT_ANGSTROM: U256 = U256[;
-    pub const LAST_BLOCK_SLOT_ANGSTROM: U256 = U256::from_limbs([3, 0, 0, 0]);
+    const LAST_BLOCK_SLOT_ANGSTROM: U256 = U256::from_limbs([3, 0, 0, 0]);
+    const TEST_ORDER_ADDR: Address = address!("0x3193C77CD2c0cE208356Dc8B0F96159F8181a3f2");
 
+    #[derive(Clone)]
     #[repr(transparent)]
     pub struct InnerProvider(Arc<ProviderType>);
 
@@ -239,6 +244,7 @@ pub mod fuzz_uniswap {
 
     // uint256 internal constant SWAP_EXACT_OUT_SINGLE = 0x08;
     fn build_exact_out_swap_calldata(pool_key: PoolKey, zfo: bool, amount_out: u128) -> Bytes {
+        let token_out = if zfo { pool_key.currency1 } else { pool_key.currency0 };
         let arg = ExactOutputSingleParams {
             poolKey:         pool_key,
             zeroForOne:      zfo,
@@ -246,8 +252,11 @@ pub mod fuzz_uniswap {
             amountInMaximum: u128::MAX - 1,
             hookData:        Bytes::new()
         };
-        let params = vec![Bytes::from_iter(arg.abi_encode())];
-        let argument = Bytes::from_iter(vec![0x08u8]);
+        let params = vec![
+            Bytes::from_iter(arg.abi_encode()),
+            Bytes::from_iter((token_out, amount_out, true).abi_encode()),
+        ];
+        let argument = Bytes::from_iter(vec![0x08u8, SETTLE]);
 
         // abi.decode(data, (bytes, bytes[]));
         let unlock_calldata = Bytes::from_iter((argument, params).abi_encode());
@@ -260,6 +269,7 @@ pub mod fuzz_uniswap {
 
     // uint256 internal constant SWAP_EXACT_IN_SINGLE = 0x06;
     fn build_exact_in_swap_calldata(pool_key: PoolKey, zfo: bool, amount_in: u128) -> Bytes {
+        let token_in = if zfo { pool_key.currency0 } else { pool_key.currency1 };
         let arg = ExactInputSingleParams {
             poolKey:          pool_key,
             zeroForOne:       zfo,
@@ -267,8 +277,11 @@ pub mod fuzz_uniswap {
             amountOutMinimum: 0,
             hookData:         Bytes::new()
         };
-        let params = vec![Bytes::from_iter(arg.abi_encode())];
-        let argument = Bytes::from_iter(vec![0x06u8]);
+        let params = vec![
+            Bytes::from_iter(arg.abi_encode()),
+            Bytes::from_iter((token_in, amount_in, true).abi_encode()),
+        ];
+        let argument = Bytes::from_iter(vec![0x06u8, SETTLE]);
 
         // abi.decode(data, (bytes, bytes[]));
         let unlock_calldata = Bytes::from_iter((argument, params).abi_encode());
@@ -322,7 +335,7 @@ pub mod fuzz_uniswap {
         .modify_tx_chained(|tx| {
             tx.kind = TxKind::Call(UNIVERSAL_ROUTER_SEPOLIA);
             tx.chain_id = Some(CHAIN_ID);
-            tx.caller = Address::random();
+            tx.caller = TESTNET_ANGSTROM_ADDRESS;
             tx.data = router_calldata
         })
         .build_mainnet();
@@ -351,12 +364,14 @@ pub mod fuzz_uniswap {
                 .await
                 .unwrap()
         ));
-
-        let (block, pools) = init_uniswap_pools(&*provider).await;
-        let target_block = block + 1;
         let database = Arc::new(provider);
+        let mut cache_db = CacheDB::new(database.clone());
 
-        for _ in 0..100 {
+        let deref = &**database;
+        let (block, pools) = init_uniswap_pools(deref, &mut cache_db).await;
+        let target_block = block + 1;
+
+        for _ in 0..10_000 {
             for pool in &pools {
                 let snapshot = pool.fetch_pool_snapshot().unwrap().2;
 
@@ -367,59 +382,100 @@ pub mod fuzz_uniswap {
                     tickSpacing: I24::unchecked_from(pool.tick_spacing),
                     hooks:       TESTNET_ANGSTROM_ADDRESS
                 };
-                assert!(am_check_exact_in(
+                am_check_exact_in(
                     target_block,
-                    database.clone(),
+                    cache_db.clone(),
                     snapshot.clone(),
                     pool_key.clone(),
                     pool.token0_decimals,
                     pool.token1_decimals
-                ));
-                assert!(am_check_exact_out(
+                );
+                am_check_exact_out(
                     target_block,
-                    database.clone(),
+                    cache_db.clone(),
                     snapshot,
                     pool_key,
                     pool.token0_decimals,
                     pool.token1_decimals
-                ));
+                );
             }
         }
     }
 
     fn am_check_exact_out<DB: DatabaseRef>(
         target_block: u64,
-        db: Arc<DB>,
+        db: CacheDB<Arc<DB>>,
         snap: PoolSnapshot,
         key: PoolKey,
         t0_dec: u8,
         t1_dec: u8
-    ) -> bool {
+    ) {
         let mut rng = rand::thread_rng();
 
-        let amount: u128 = rng.gen_range(30..1000);
+        let amount: u128 = rng.gen_range(1..10000);
         let zfo: bool = rng.r#gen();
         let amount = if zfo { amount.pow(t1_dec as u32) } else { amount.pow(t0_dec as u32) };
 
-        // calldata
+        let call_bytecode = build_exact_out_swap_calldata(key, zfo, amount);
+        let revm_swap_output = execute_calldata(target_block, call_bytecode, db);
+
+        let amount_i = if zfo { Quantity::Token1(amount) } else { Quantity::Token0(amount) };
+
+        // local calculations
+        let local_swap_output = (snap.current_price() - amount_i).unwrap();
+        let t0_delta_local = local_swap_output.d_t0;
+        let t1_delta_local = local_swap_output.d_t1;
+        let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
+
+        let t0_delta_revm = revm_swap_output.amount0.abs() as u128;
+        let t1_delta_revm = revm_swap_output.amount1.abs() as u128;
+        let sqrt_price_revm = revm_swap_output.sqrtPriceX96;
+
+        assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");
+        assert_eq!(t1_delta_local, t1_delta_revm, "amount: {amount} zfo: {zfo}");
+        assert_eq!(sqrt_price_local, sqrt_price_revm, "amount: {amount} zfo: {zfo}");
 
         // let amount_out_rand = rng.
-
-        true
     }
     fn am_check_exact_in<DB: DatabaseRef>(
         target_block: u64,
-        db: Arc<DB>,
+        db: CacheDB<Arc<DB>>,
         snap: PoolSnapshot,
         key: PoolKey,
         t0_dec: u8,
         t1_dec: u8
-    ) -> bool {
-        true
+    ) {
+        let mut rng = rand::thread_rng();
+
+        let amount: u128 = rng.gen_range(1..10000);
+        let zfo: bool = rng.r#gen();
+        let amount = if zfo { amount.pow(t0_dec as u32) } else { amount.pow(t1_dec as u32) };
+
+        let call_bytecode = build_exact_in_swap_calldata(key, zfo, amount);
+        let revm_swap_output = execute_calldata(target_block, call_bytecode, db);
+
+        let amount_i = if zfo { Quantity::Token0(amount) } else { Quantity::Token1(amount) };
+
+        // local calculations
+        let local_swap_output = (snap.current_price() + amount_i).unwrap();
+        let t0_delta_local = local_swap_output.d_t0;
+        let t1_delta_local = local_swap_output.d_t1;
+        let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
+
+        let t0_delta_revm = revm_swap_output.amount0.abs() as u128;
+        let t1_delta_revm = revm_swap_output.amount1.abs() as u128;
+        let sqrt_price_revm = revm_swap_output.sqrtPriceX96;
+
+        assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");
+        assert_eq!(t1_delta_local, t1_delta_revm, "amount: {amount} zfo: {zfo}");
+        assert_eq!(sqrt_price_local, sqrt_price_revm, "amount: {amount} zfo: {zfo}");
     }
 
     /// initializes the new uniswap pools on most recent sepolia block
-    async fn init_uniswap_pools<P: Provider>(provider: &P) -> (u64, Vec<EnhancedUniswapPool>) {
+    async fn init_uniswap_pools<P: Provider, DB: DatabaseRef>(
+        provider: &P,
+        db: &mut CacheDB<Arc<DB>>
+    ) -> (u64, Vec<EnhancedUniswapPool>) {
         let block = provider.get_block_number().await.unwrap();
 
         let pools =
@@ -429,6 +485,7 @@ pub mod fuzz_uniswap {
         let uniswap_registry: UniswapPoolRegistry = pools.into();
 
         let mut ang_pools = Vec::new();
+        let mut tokens = HashSet::new();
 
         for pool_priv_key in uniswap_registry.private_keys() {
             let data_loader = DataLoader::new_with_registry(
@@ -440,7 +497,32 @@ pub mod fuzz_uniswap {
             pool.initialize(Some(block), provider.root().into())
                 .await
                 .unwrap();
+            tokens.insert(pool.token0);
+            tokens.insert(pool.token1);
             ang_pools.push(pool);
+        }
+
+        for token in tokens {
+            let ap_slot: u64 = find_slot_offset_for_approval(db, token).unwrap();
+            let approval_location = keccak256(
+                (UNIVERSAL_ROUTER_SEPOLIA, keccak256((TEST_ORDER_ADDR, ap_slot).abi_encode()))
+                    .abi_encode()
+            );
+            db.insert_account_storage(
+                token,
+                U256::from_be_bytes(*approval_location),
+                U256::from(u128::MAX)
+            )
+            .unwrap();
+
+            let bal_slot: u64 = find_slot_offset_for_balance(db, token).unwrap();
+            let bal_location = keccak256((TEST_ORDER_ADDR, bal_slot).abi_encode());
+            db.insert_account_storage(
+                token,
+                U256::from_be_bytes(*bal_location),
+                U256::from(u128::MAX)
+            )
+            .unwrap();
         }
 
         (block, ang_pools)

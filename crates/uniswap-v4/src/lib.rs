@@ -173,6 +173,7 @@ pub mod fuzz_uniswap {
         primitives::{TxKind, hardfork::SpecId}
     };
     use revm_bytecode::Bytecode;
+    use revm_primitives::I256;
     use validation::{find_slot_offset_for_approval, find_slot_offset_for_balance};
 
     use crate::{
@@ -372,6 +373,7 @@ pub mod fuzz_uniswap {
                     hooks:       TESTNET_ANGSTROM_ADDRESS
                 };
                 am_check_exact_in(
+                    &pool,
                     target_block,
                     cache_db.clone(),
                     snapshot.clone(),
@@ -380,6 +382,7 @@ pub mod fuzz_uniswap {
                     pool.token1_decimals
                 );
                 am_check_exact_out(
+                    &pool,
                     target_block,
                     cache_db.clone(),
                     snapshot,
@@ -392,6 +395,7 @@ pub mod fuzz_uniswap {
     }
 
     fn am_check_exact_out<DB: DatabaseRef>(
+        pool: &EnhancedUniswapPool,
         target_block: u64,
         db: CacheDB<Arc<DB>>,
         snap: PoolSnapshot,
@@ -414,12 +418,25 @@ pub mod fuzz_uniswap {
         let revm_swap_output = execute_calldata(target_block, call_bytecode, db);
 
         let amount_i = if zfo { Quantity::Token1(amount) } else { Quantity::Token0(amount) };
+        let (t0, t1) = pool
+            .simulate_swap(
+                if zfo { pool.token1 } else { pool.token0 },
+                I256::unchecked_from(amount).wrapping_neg(),
+                None
+            )
+            .unwrap();
+
+        let t0 = t0.abs().into_raw().to::<u128>();
+        let t1 = t1.abs().into_raw().to::<u128>();
 
         // local calculations
         let local_swap_output = (snap.current_price() - amount_i).unwrap();
         let t0_delta_local = local_swap_output.d_t0;
         let t1_delta_local = local_swap_output.d_t1;
         let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
+
+        assert_eq!(t0, t0_delta_local, "pool.sim_swap != poolsnap sim");
+        assert_eq!(t1, t1_delta_local, "pool.sim_swap != poolsnap sim");
 
         let t0_delta_revm = revm_swap_output.amount0.abs() as u128;
         let t1_delta_revm = revm_swap_output.amount1.abs() as u128;
@@ -441,6 +458,7 @@ pub mod fuzz_uniswap {
         // let amount_out_rand = rng.
     }
     fn am_check_exact_in<DB: DatabaseRef>(
+        pool: &EnhancedUniswapPool,
         target_block: u64,
         db: CacheDB<Arc<DB>>,
         snap: PoolSnapshot,
@@ -464,10 +482,26 @@ pub mod fuzz_uniswap {
 
         let amount_i = if zfo { Quantity::Token0(amount) } else { Quantity::Token1(amount) };
 
+        // try different sim
+        let (t0, t1) = pool
+            .simulate_swap(
+                if zfo { pool.token0 } else { pool.token1 },
+                I256::unchecked_from(amount),
+                None
+            )
+            .unwrap();
+
+        let t0 = t0.abs().into_raw().to::<u128>();
+        let t1 = t1.abs().into_raw().to::<u128>();
+
         // local calculations
         let local_swap_output = (snap.current_price() + amount_i).unwrap();
         let t0_delta_local = local_swap_output.d_t0;
         let t1_delta_local = local_swap_output.d_t1;
+
+        assert_eq!(t0, t0_delta_local, "pool.sim_swap != poolsnap sim");
+        assert_eq!(t1, t1_delta_local, "pool.sim_swap != poolsnap sim");
+
         let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
 
         let t0_delta_revm = revm_swap_output.amount0.abs() as u128;

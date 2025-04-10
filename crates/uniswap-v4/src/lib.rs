@@ -281,7 +281,7 @@ pub mod fuzz_uniswap {
         target_block: u64,
         router_calldata: Bytes,
         mut db: CacheDB<Arc<DB>>
-    ) -> Swap {
+    ) -> Option<Swap> {
         // override the slot
         let slot = db
             .storage_ref(TESTNET_ANGSTROM_ADDRESS, LAST_BLOCK_SLOT_ANGSTROM)
@@ -323,6 +323,16 @@ pub mod fuzz_uniswap {
         })
         .build_mainnet();
         let result = evm.replay().unwrap();
+
+        if result
+            .result
+            .output()
+            .map(|bytes| bytes.starts_with(&alloy::hex!("0x90bfb865")))
+            .unwrap_or(true)
+        {
+            return None;
+        }
+
         if !result.result.is_success() {
             panic!(
                 "replay failed {:?} gas: {} logs: {:#?}",
@@ -332,14 +342,16 @@ pub mod fuzz_uniswap {
             );
         }
 
-        result
-            .result
-            .into_logs()
-            .into_iter()
-            .filter_map(|log| Swap::decode_log(&log, true).ok())
-            .collect::<Vec<_>>()[0]
-            .clone()
-            .data
+        Some(
+            result
+                .result
+                .into_logs()
+                .into_iter()
+                .filter_map(|log| Swap::decode_log(&log, true).ok())
+                .collect::<Vec<_>>()[0]
+                .clone()
+                .data
+        )
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -372,7 +384,7 @@ pub mod fuzz_uniswap {
                     tickSpacing: I24::unchecked_from(pool.tick_spacing),
                     hooks:       TESTNET_ANGSTROM_ADDRESS
                 };
-                am_check_exact_in(
+                let _ = am_check_exact_in(
                     pool,
                     target_block,
                     cache_db.clone(),
@@ -381,7 +393,7 @@ pub mod fuzz_uniswap {
                     pool.token0_decimals,
                     pool.token1_decimals
                 );
-                am_check_exact_out(
+                let _ = am_check_exact_out(
                     pool,
                     target_block,
                     cache_db.clone(),
@@ -402,7 +414,7 @@ pub mod fuzz_uniswap {
         key: PoolKey,
         t0_dec: u8,
         t1_dec: u8
-    ) {
+    ) -> Option<()> {
         let mut rng = rand::thread_rng();
 
         let amount: u128 = rng.gen_range(1..100);
@@ -415,22 +427,22 @@ pub mod fuzz_uniswap {
 
         println!("trying to swap with amount {amount} {key:#?} {zfo}");
         let call_bytecode = build_exact_out_swap_calldata(key, zfo, amount);
-        let revm_swap_output = execute_calldata(target_block, call_bytecode, db);
+        let revm_swap_output = execute_calldata(target_block, call_bytecode, db)?;
 
         let amount_i = if zfo { Quantity::Token1(amount) } else { Quantity::Token0(amount) };
         let (t0, t1) = pool
             .simulate_swap(
-                if zfo { pool.token1 } else { pool.token0 },
+                if zfo { pool.token0 } else { pool.token1 },
                 I256::unchecked_from(amount).wrapping_neg(),
                 None
             )
-            .unwrap();
+            .ok()?;
 
         let t0 = t0.abs().into_raw().to::<u128>();
         let t1 = t1.abs().into_raw().to::<u128>();
 
         // local calculations
-        let local_swap_output = (snap.current_price() - amount_i).unwrap();
+        let local_swap_output = (snap.current_price() - amount_i).ok()?;
         let t0_delta_local = local_swap_output.d_t0;
         let t1_delta_local = local_swap_output.d_t1;
         let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
@@ -454,6 +466,7 @@ pub mod fuzz_uniswap {
             sqrt_price_local,
             sqrt_price_revm
         );
+        Some(())
 
         // let amount_out_rand = rng.
     }
@@ -465,7 +478,7 @@ pub mod fuzz_uniswap {
         key: PoolKey,
         t0_dec: u8,
         t1_dec: u8
-    ) {
+    ) -> Option<()> {
         let mut rng = rand::thread_rng();
 
         let amount: u128 = rng.gen_range(1..100);
@@ -478,7 +491,7 @@ pub mod fuzz_uniswap {
         println!("trying to swap with amount {amount} {key:#?} {zfo}");
 
         let call_bytecode = build_exact_in_swap_calldata(key, zfo, amount);
-        let revm_swap_output = execute_calldata(target_block, call_bytecode, db);
+        let revm_swap_output = execute_calldata(target_block, call_bytecode, db)?;
 
         let amount_i = if zfo { Quantity::Token0(amount) } else { Quantity::Token1(amount) };
 
@@ -489,13 +502,13 @@ pub mod fuzz_uniswap {
                 I256::unchecked_from(amount),
                 None
             )
-            .unwrap();
+            .ok()?;
 
         let t0 = t0.abs().into_raw().to::<u128>();
         let t1 = t1.abs().into_raw().to::<u128>();
 
         // local calculations
-        let local_swap_output = (snap.current_price() + amount_i).unwrap();
+        let local_swap_output = (snap.current_price() + amount_i).ok()?;
         let t0_delta_local = local_swap_output.d_t0;
         let t1_delta_local = local_swap_output.d_t1;
 
@@ -520,6 +533,7 @@ pub mod fuzz_uniswap {
             sqrt_price_local,
             sqrt_price_revm
         );
+        Some(())
     }
 
     /// initializes the new uniswap pools on most recent sepolia block

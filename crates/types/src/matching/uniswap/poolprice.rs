@@ -79,11 +79,6 @@ impl<'a> PoolPrice<'a> {
         Self { liq_range, price, tick, fee }
     }
 
-    pub fn tob(mut self) -> Self {
-        self.fee = 0;
-        self
-    }
-
     pub fn tick(&self) -> Tick {
         self.tick
     }
@@ -149,7 +144,7 @@ impl<'a> PoolPrice<'a> {
                 sqrt_ratio_target_x_96,
                 cur_liq_range.liquidity(),
                 amount_remaining,
-                self.fee
+                0
             )?;
 
             // If we didn't hit our target and we didn't use all of our quantity then we've

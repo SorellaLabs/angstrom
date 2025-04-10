@@ -86,7 +86,7 @@ fn delta_matcher_test() {
             post_match.end_bound.as_ray()
         );
 
-        let mut matcher = DeltaMatcher::new(&book, tob, 0, false);
+        let mut matcher = DeltaMatcher::new(&book, tob, false);
         let solution = matcher.solution(None);
         let end_price = amm.at_price(solution.ucp.into()).unwrap();
         let mid_map = PoolPriceVec::from_price_range(amm.current_price(), end_price).unwrap();

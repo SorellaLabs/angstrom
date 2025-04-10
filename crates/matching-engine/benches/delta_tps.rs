@@ -246,7 +246,7 @@ pub fn tps(c: &mut Criterion) {
         let (book, tob) = setup_inputs(set, &pool);
 
         group.bench_function(BenchmarkId::from_parameter(bucket), |bench| {
-            bench.iter(|| black_box(BinarySearchStrategy::run(&book, Some(tob.clone()), 0)));
+            bench.iter(|| black_box(BinarySearchStrategy::run(&book, Some(tob.clone()))));
         });
     }
     group.finish();

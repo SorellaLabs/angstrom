@@ -273,7 +273,7 @@ fn delta_matcher_test() {
             Some(matching_engine::book::sort::SortStrategy::ByPriceByVolume)
         );
         println!("{:#?}", book);
-        let mut matcher = DeltaMatcher::new(&book, DeltaMatcherToB::None, 0, true);
+        let mut matcher = DeltaMatcher::new(&book, DeltaMatcherToB::None, true);
         let solution = matcher.solution(None);
         println!("{:?}", solution);
         // Because it's a partial fill, our price should end at our ask price

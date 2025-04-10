@@ -308,7 +308,7 @@ impl<'a> PoolPriceVec<'a> {
         direction: Direction,
         quantity: Quantity
     ) -> eyre::Result<Self> {
-        let fee_pips = start.fee;
+        let fee_pips = 0;
         let mut total_in = U256::ZERO;
         let mut total_out = U256::ZERO;
         let mut current_price = start.price;

@@ -56,7 +56,7 @@ pub struct DeltaMatcher<'a> {
 }
 
 impl<'a> DeltaMatcher<'a> {
-    pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB, fee: u128, solve_for_t0: bool) -> Self {
+    pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB, solve_for_t0: bool) -> Self {
         let amm_start_price = match tob {
             // If we have an order, apply that to the AMM start price
             DeltaMatcherToB::Order(ref tob) => book.amm().map(|snapshot| {
@@ -74,6 +74,7 @@ impl<'a> DeltaMatcher<'a> {
             // If we have no order or shift, we just use the AMM start price as-is
             DeltaMatcherToB::None => book.amm().map(|f| f.current_price())
         };
+        let fee = book.amm().map(|amm| amm.get_fee()).unwrap_or_default() as u128;
 
         Self { book, amm_start_price, fee, solve_for_t0 }
     }

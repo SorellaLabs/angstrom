@@ -548,6 +548,7 @@ pub mod fuzz_uniswap {
             pool.initialize(Some(block), provider.root().into())
                 .await
                 .unwrap();
+            pool.book_fee = 5;
             tokens.insert(pool.token0);
             tokens.insert(pool.token1);
             ang_pools.push(pool);

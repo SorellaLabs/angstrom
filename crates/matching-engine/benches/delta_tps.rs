@@ -216,7 +216,8 @@ fn setup_inputs(
         tob_reward: U256::ZERO
     };
 
-    let book = OrderBook::new(pool_id, Some(amm), bids, asks, Some(SortStrategy::ByPriceByVolume));
+    let book =
+        OrderBook::new(pool_id, Some(amm), bids, asks, Some(SortStrategy::PricePartialVolume));
 
     (book, tob)
 }

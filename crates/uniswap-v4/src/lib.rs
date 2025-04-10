@@ -435,16 +435,16 @@ pub mod fuzz_uniswap {
         let t1_delta_local = local_swap_output.d_t1;
         let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
 
-        assert_eq!(t0, t0_delta_local, "pool.sim_swap != poolsnap sim");
-        assert_eq!(t1, t1_delta_local, "pool.sim_swap != poolsnap sim");
+        assert_eq!(t0, t0_delta_local, "t0 pool.sim_swap != poolsnap sim");
+        assert_eq!(t1, t1_delta_local, "t1 pool.sim_swap != poolsnap sim");
 
         let t0_delta_revm = revm_swap_output.amount0.unsigned_abs();
         let t1_delta_revm = revm_swap_output.amount1.unsigned_abs();
         let sqrt_price_revm = revm_swap_output.sqrtPriceX96;
 
-        assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");
-        assert_eq!(t1_delta_local, t1_delta_revm, "amount: {amount} zfo: {zfo}");
-        assert_eq!(sqrt_price_local, sqrt_price_revm, "amount: {amount} zfo: {zfo}");
+        assert_eq!(t0_delta_local, t0_delta_revm, "t0 failure amount: {amount} zfo: {zfo}");
+        assert_eq!(t1_delta_local, t1_delta_revm, "t1 failure amount: {amount} zfo: {zfo}");
+        assert_eq!(sqrt_price_local, sqrt_price_revm, "sqrtprice amount: {amount} zfo: {zfo}");
         println!(
             "{}-{} {}-{} {:?}-{:?}",
             t0_delta_local,
@@ -499,8 +499,8 @@ pub mod fuzz_uniswap {
         let t0_delta_local = local_swap_output.d_t0;
         let t1_delta_local = local_swap_output.d_t1;
 
-        assert_eq!(t0, t0_delta_local, "pool.sim_swap != poolsnap sim");
-        assert_eq!(t1, t1_delta_local, "pool.sim_swap != poolsnap sim");
+        assert_eq!(t0, t0_delta_local, "t0 pool.sim_swap != poolsnap sim");
+        assert_eq!(t1, t1_delta_local, "t1 pool.sim_swap != poolsnap sim");
 
         let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
 
@@ -508,9 +508,9 @@ pub mod fuzz_uniswap {
         let t1_delta_revm = revm_swap_output.amount1.unsigned_abs();
         let sqrt_price_revm = revm_swap_output.sqrtPriceX96;
 
-        assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");
-        assert_eq!(t1_delta_local, t1_delta_revm, "amount: {amount} zfo: {zfo}");
-        assert_eq!(sqrt_price_local, sqrt_price_revm, "amount: {amount} zfo: {zfo}");
+        assert_eq!(t0_delta_local, t0_delta_revm, "t0 failure amount: {amount} zfo: {zfo}");
+        assert_eq!(t1_delta_local, t1_delta_revm, "t1 failure amount: {amount} zfo: {zfo}");
+        assert_eq!(sqrt_price_local, sqrt_price_revm, "sqrtprice amount: {amount} zfo: {zfo}");
         println!(
             "{}-{} {}-{} {:?}-{:?}",
             t0_delta_local,

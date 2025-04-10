@@ -38,7 +38,9 @@ pub struct PoolPrice<'a> {
     /// Tick number within the current PoolRange that we're working with
     pub(crate) tick:      Tick,
     /// The ratio between Token0 and Token1
-    pub(crate) price:     SqrtPriceX96
+    pub(crate) price:     SqrtPriceX96,
+    /// the fee to swap on the pool
+    pub(crate) fee:       u32
 }
 
 impl Eq for PoolPrice<'_> {}
@@ -62,14 +64,24 @@ impl Ord for PoolPrice<'_> {
 }
 
 impl<'a> PoolPrice<'a> {
-    pub fn checked_new(liq_range: LiqRangeRef<'a>, price: SqrtPriceX96, tick: i32) -> Self {
+    pub fn checked_new(
+        liq_range: LiqRangeRef<'a>,
+        price: SqrtPriceX96,
+        tick: i32,
+        fee: u32
+    ) -> Self {
         if tick < liq_range.lower_tick || tick > liq_range.upper_tick {
             panic!("Created PoolPrice with out of range tick!");
         }
         if get_tick_at_sqrt_ratio(price.into()).unwrap() != tick {
             panic!("Created PoolPrice with price that doesn't match the given tick!");
         }
-        Self { liq_range, price, tick }
+        Self { liq_range, price, tick, fee }
+    }
+
+    pub fn tob(mut self) -> Self {
+        self.fee = 0;
+        self
     }
 
     pub fn tick(&self) -> Tick {
@@ -137,7 +149,7 @@ impl<'a> PoolPrice<'a> {
                 sqrt_ratio_target_x_96,
                 cur_liq_range.liquidity(),
                 amount_remaining,
-                0
+                self.fee
             )?;
 
             // If we didn't hit our target and we didn't use all of our quantity then we've
@@ -172,7 +184,7 @@ impl<'a> PoolPrice<'a> {
             eyre!("Somehow have no active liquidity range despite iterationg - should never happen")
         })?;
         debug!(final_price = ?price, "Final price");
-        let new_price = PoolPrice::checked_new(liq_range, price, tick);
+        let new_price = PoolPrice::checked_new(liq_range, price, tick, self.fee);
         Ok(new_price)
     }
 
@@ -303,7 +315,8 @@ impl<'a> PoolPrice<'a> {
         let end_bound = Self {
             liq_range: LiqRangeRef { range: pool, range_idx: new_range_idx, ..self.liq_range },
             price:     closest_price,
-            tick:      get_tick_at_sqrt_ratio(closest_price.into()).ok()?
+            tick:      get_tick_at_sqrt_ratio(closest_price.into()).ok()?,
+            fee:       self.fee
         };
         Some(PoolPriceVec::new(self.clone(), end_bound))
     }
@@ -371,9 +384,11 @@ mod test {
                 lower_tick:     99900,
                 upper_tick:     100100,
                 is_tick_edge:   false,
-                is_initialized: true
+                is_initialized: true,
+                fee:            0
             }],
-            SqrtPriceX96::at_tick(100001).unwrap()
+            SqrtPriceX96::at_tick(100001).unwrap(),
+            0
         )
         .unwrap();
         let result = amm.current_price().intersect_with_debt(debt).unwrap();
@@ -392,17 +407,20 @@ mod test {
                     lower_tick:     99900,
                     upper_tick:     100100,
                     is_tick_edge:   false,
-                    is_initialized: true
+                    is_initialized: true,
+                    fee:            0
                 },
                 LiqRange {
                     liquidity:      1_000_000_000_000_000_u128,
                     lower_tick:     100100,
                     upper_tick:     100200,
                     is_tick_edge:   false,
-                    is_initialized: true
+                    is_initialized: true,
+                    fee:            0
                 },
             ],
-            SqrtPriceX96::at_tick(100100).unwrap()
+            SqrtPriceX96::at_tick(100100).unwrap(),
+            0
         )
         .unwrap();
         let cur_price = amm.current_price();

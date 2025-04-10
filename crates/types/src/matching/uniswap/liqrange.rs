@@ -18,34 +18,16 @@ pub struct LiqRange {
     /// Total liquidity within this range
     pub(super) liquidity:      u128,
     pub(super) is_tick_edge:   bool,
-    pub(super) is_initialized: bool
+    pub(super) is_initialized: bool,
+    pub(super) fee:            u32
 }
 
 impl LiqRange {
-    pub fn new_init(lower_tick: Tick, upper_tick: Tick, liquidity: u128) -> eyre::Result<Self> {
-        // Validate our inputs
-        if upper_tick <= lower_tick {
-            return Err(eyre!(
-                "Upper tick bound less than or equal to lower tick bound for range ({}, {})",
-                lower_tick,
-                upper_tick
-            ));
-        }
-        if upper_tick > MAX_TICK {
-            return Err(eyre!("Proposed upper tick '{}' out of valid tick range", upper_tick));
-        }
-        if lower_tick < MIN_TICK {
-            return Err(eyre!("Proposed lower tick '{}' out of valid tick range", lower_tick));
-        }
-        Ok(Self { lower_tick, upper_tick, liquidity, is_tick_edge: false, is_initialized: true })
-    }
-
-    pub fn new_uninit(
+    pub fn new_init(
         lower_tick: Tick,
         upper_tick: Tick,
         liquidity: u128,
-        is_tick_edge: bool,
-        is_initialized: bool
+        fee: u32
     ) -> eyre::Result<Self> {
         // Validate our inputs
         if upper_tick <= lower_tick {
@@ -61,7 +43,39 @@ impl LiqRange {
         if lower_tick < MIN_TICK {
             return Err(eyre!("Proposed lower tick '{}' out of valid tick range", lower_tick));
         }
-        Ok(Self { lower_tick, upper_tick, liquidity, is_tick_edge, is_initialized })
+        Ok(Self {
+            lower_tick,
+            upper_tick,
+            liquidity,
+            is_tick_edge: false,
+            is_initialized: true,
+            fee
+        })
+    }
+
+    pub fn new_uninit(
+        lower_tick: Tick,
+        upper_tick: Tick,
+        liquidity: u128,
+        is_tick_edge: bool,
+        is_initialized: bool,
+        fee: u32
+    ) -> eyre::Result<Self> {
+        // Validate our inputs
+        if upper_tick <= lower_tick {
+            return Err(eyre!(
+                "Upper tick bound less than or equal to lower tick bound for range ({}, {})",
+                lower_tick,
+                upper_tick
+            ));
+        }
+        if upper_tick > MAX_TICK {
+            return Err(eyre!("Proposed upper tick '{}' out of valid tick range", upper_tick));
+        }
+        if lower_tick < MIN_TICK {
+            return Err(eyre!("Proposed lower tick '{}' out of valid tick range", lower_tick));
+        }
+        Ok(Self { lower_tick, upper_tick, liquidity, is_tick_edge, is_initialized, fee })
     }
 
     pub fn lower_tick(&self) -> i32 {
@@ -135,13 +149,23 @@ impl<'a> LiqRangeRef<'a> {
     /// PoolPrice representing the start price of this liquidity bound
     pub fn start_price(&self, direction: Direction) -> PoolPrice<'a> {
         let tick = self.start_tick(direction);
-        PoolPrice { tick, liq_range: *self, price: SqrtPriceX96::at_tick(tick).unwrap() }
+        PoolPrice {
+            tick,
+            liq_range: *self,
+            price: SqrtPriceX96::at_tick(tick).unwrap(),
+            fee: self.fee
+        }
     }
 
     /// PoolPrice representing the end price of this liquidity bound
     pub fn end_price(&self, direction: Direction) -> PoolPrice<'a> {
         let tick = self.end_tick(direction);
-        PoolPrice { tick, liq_range: *self, price: SqrtPriceX96::at_tick(tick).unwrap() }
+        PoolPrice {
+            tick,
+            liq_range: *self,
+            price: SqrtPriceX96::at_tick(tick).unwrap(),
+            fee: self.fee
+        }
     }
 
     /// Returns the appropriate tick to donate to in order to reward LPs in this

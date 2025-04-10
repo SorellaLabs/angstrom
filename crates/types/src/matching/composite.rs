@@ -222,8 +222,8 @@ mod tests {
         let amm_price = SqrtPriceX96::at_tick(mid).unwrap();
         let lower_tick = mid - width;
         let upper_tick = mid + width;
-        let ranges = vec![LiqRange::new_init(lower_tick, upper_tick, liquidity).unwrap()];
-        PoolSnapshot::new(width, ranges, amm_price).unwrap()
+        let ranges = vec![LiqRange::new_init(lower_tick, upper_tick, liquidity, 0).unwrap()];
+        PoolSnapshot::new(width, ranges, amm_price, 0).unwrap()
     }
 
     #[test]

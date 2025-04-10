@@ -61,7 +61,7 @@ pub struct EnhancedUniswapPool<Loader: PoolDataLoader = DataLoader> {
     pub liquidity:          u128,
     pub liquidity_net:      i128,
     pub sqrt_price:         U256,
-    pub fee:                u32,
+    pub book_fee:           u32,
     pub tick:               i32,
     pub tick_spacing:       i32,
     pub tick_bitmap:        HashMap<i16, U256>,
@@ -142,7 +142,8 @@ where
                 .0,
             current_liquidity,
             lower.1.is_edge,
-            lower.1.initialized
+            lower.1.initialized,
+            self.book_fee
         )
         .unwrap();
 
@@ -180,7 +181,8 @@ where
                     **high_tick,
                     tracked_liq.unsigned_abs(),
                     low_tick_data.is_edge,
-                    low_tick_data.initialized
+                    low_tick_data.initialized,
+                    self.book_fee
                 )
                 .unwrap()
             })
@@ -221,7 +223,8 @@ where
                     **high_tick,
                     tracked_liq.unsigned_abs(),
                     high_tick_data.is_edge,
-                    high_tick_data.initialized
+                    high_tick_data.initialized,
+                    self.book_fee
                 )
                 .unwrap()
             })
@@ -234,7 +237,12 @@ where
         Ok((
             self.token0,
             self.token1,
-            PoolSnapshot::new(self.tick_spacing, liq_ranges, self.sqrt_price.into())?
+            PoolSnapshot::new(
+                self.tick_spacing,
+                liq_ranges,
+                self.sqrt_price.into(),
+                self.book_fee
+            )?
         ))
     }
 
@@ -605,7 +613,7 @@ where
                     target_sqrt_ratio,
                     liquidity,
                     amount_specified_remaining,
-                    self.fee
+                    self.book_fee
                 )?;
 
             sqrt_price_x_96 = new_sqrt_price_x_96;
@@ -696,9 +704,11 @@ where
         self.sqrt_price = U256::from(pool_data.sqrtPrice);
         self.tick = pool_data.tick.as_i32();
         self.tick_spacing = pool_data.tickSpacing.as_i32();
-        let mut bytes = [0u8; 4];
-        bytes[..3].copy_from_slice(&pool_data.fee.to_le_bytes::<3>());
-        self.fee = u32::from_le_bytes(bytes);
+        // ignore as this will be dynamic
+        //
+        // let mut bytes = [0u8; 4];
+        // bytes[..3].copy_from_slice(&pool_data.fee.to_le_bytes::<3>());
+        // self.fee = u32::from_le_bytes(bytes);
         self.liquidity_net = pool_data.liquidityNet;
         Ok(())
     }
@@ -960,7 +970,7 @@ mod tests {
         pool.token1_decimals = 18;
         pool.liquidity = 1_000_000;
         pool.sqrt_price = U256::from(1004968906420141727126888u128);
-        pool.fee = 3000;
+        pool.book_fee = 3000;
         pool.tick = 1000;
         pool.tick_spacing = 60;
         pool

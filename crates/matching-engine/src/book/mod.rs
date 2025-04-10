@@ -126,8 +126,9 @@ mod test {
         let asks = vec![];
         let amm = PoolSnapshot::new(
             10,
-            vec![LiqRange::new_init(90000, 110000, 10).unwrap()],
-            SqrtPriceX96::at_tick(100000).unwrap()
+            vec![LiqRange::new_init(90000, 110000, 10, 0).unwrap()],
+            SqrtPriceX96::at_tick(100000).unwrap(),
+            0
         )
         .unwrap();
         OrderBook::new(FixedBytes::<32>::random(), Some(amm), bids, asks, None);

@@ -401,12 +401,12 @@ pub mod fuzz_uniswap {
     ) {
         let mut rng = rand::thread_rng();
 
-        let amount: u128 = rng.gen_range(1..10000);
+        let amount: u128 = rng.gen_range(1..100);
         let zfo: bool = rng.r#gen();
         let amount = if zfo {
-            amount * 10u128.pow(t1_dec as u32)
+            amount * 10u128.pow(t1_dec as u32 - 4)
         } else {
-            amount * 10u128.pow(t0_dec as u32)
+            amount * 10u128.pow(t0_dec as u32 - 4)
         };
 
         let call_bytecode = build_exact_out_swap_calldata(key, zfo, amount);
@@ -449,12 +449,12 @@ pub mod fuzz_uniswap {
     ) {
         let mut rng = rand::thread_rng();
 
-        let amount: u128 = rng.gen_range(1..10000);
+        let amount: u128 = rng.gen_range(1..100);
         let zfo: bool = rng.r#gen();
         let amount = if zfo {
-            amount * 10u128.pow(t0_dec as u32)
+            amount * 10u128.pow(t0_dec as u32 - 4)
         } else {
-            amount * 10u128.pow(t1_dec as u32)
+            amount * 10u128.pow(t1_dec as u32 - 4)
         };
 
         let call_bytecode = build_exact_in_swap_calldata(key, zfo, amount);

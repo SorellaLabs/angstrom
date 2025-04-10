@@ -95,6 +95,11 @@ impl<'a> PoolPrice<'a> {
         self.liq_range.pool_snap
     }
 
+    pub fn no_fees(mut self) -> Self {
+        self.fee = 0;
+        self
+    }
+
     /// Presuming a transaction in T0, return a new PoolPrice.  We error
     /// if we're not able to move enough in the direction we want to.
     pub fn d_t0(&self, quantity: u128, direction: Direction) -> eyre::Result<Self> {

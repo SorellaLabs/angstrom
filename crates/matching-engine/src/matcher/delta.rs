@@ -57,6 +57,7 @@ pub struct DeltaMatcher<'a> {
 
 impl<'a> DeltaMatcher<'a> {
     pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB, solve_for_t0: bool) -> Self {
+        let fee = book.amm().map(|amm| amm.get_fee()).unwrap_or_default() as u128;
         let amm_start_price = match tob {
             // If we have an order, apply that to the AMM start price
             DeltaMatcherToB::Order(ref tob) => book.amm().map(|snapshot| {
@@ -67,23 +68,33 @@ impl<'a> DeltaMatcher<'a> {
             }),
             // If we have a fixed shift, apply that to the AMM start price (Not yet operational)
             DeltaMatcherToB::FixedShift(q, is_bid) => book.amm().and_then(|f| {
-                PoolPriceVec::from_swap(f.current_price(), Direction::from_is_bid(!is_bid), q)
-                    .ok()
-                    .map(|v| v.end_bound)
+                PoolPriceVec::from_swap(
+                    f.current_price().no_fees(),
+                    Direction::from_is_bid(!is_bid),
+                    q
+                )
+                .ok()
+                .map(|v| v.end_bound)
             }),
             // If we have no order or shift, we just use the AMM start price as-is
             DeltaMatcherToB::None => book.amm().map(|f| f.current_price())
         };
-        let fee = book.amm().map(|amm| amm.get_fee()).unwrap_or_default() as u128;
 
         Self { book, amm_start_price, fee, solve_for_t0 }
     }
 
     fn fetch_concentrated_liquidity(&self, price: Ray) -> (I256, I256) {
-        let Some(start_price) = self.amm_start_price.clone() else { return Default::default() };
-        let Ok(end_price) = start_price.snapshot().at_price(SqrtPriceX96::from(price)) else {
+        let Some(start_price) = self.amm_start_price.clone().map(|s| s.no_fees()) else {
             return Default::default();
         };
+        let Ok(end_price) = start_price
+            .snapshot()
+            .at_price(SqrtPriceX96::from(price))
+            .map(|e| e.no_fees())
+        else {
+            return Default::default();
+        };
+
         let start_sqrt = start_price.as_sqrtpricex96();
         let end_sqrt = SqrtPriceX96::from(price);
 
@@ -91,14 +102,9 @@ impl<'a> DeltaMatcher<'a> {
         // the contract.  An order that purchases T0 from the contract is a bid
         let is_bid = start_sqrt >= end_sqrt;
 
-        // let direction = Direction::from_is_bid(is_bid);
-
         let Ok(res) = PoolPriceVec::from_price_range(start_price, end_price) else {
             return Default::default();
         };
-        // let Ok(res) = PoolPriceVec::swap_to_price(start_price.clone(), end_sqrt,
-        // direction) else {     return Default::default();
-        // };
 
         trace!(?start_sqrt, ?end_sqrt, ?price, res.d_t0, res.d_t1, is_bid, "AMM swap calc");
         if is_bid {

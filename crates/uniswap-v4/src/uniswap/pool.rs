@@ -7,7 +7,6 @@ use alloy::{
     providers::Provider,
     transports::Transport
 };
-use alloy_primitives::Log;
 use angstrom_types::{
     matching::uniswap::{LiqRange, PoolSnapshot},
     primitive::PoolId
@@ -23,7 +22,7 @@ use uniswap_v3_math::{
 use super::{pool_data_loader::PoolData, pool_manager::TickRangeToLoad};
 use crate::uniswap::{
     ConversionError, i32_to_i24,
-    pool_data_loader::{DataLoader, ModifyPositionEvent, PoolDataLoader, TickData}
+    pool_data_loader::{DataLoader, PoolDataLoader, TickData}
 };
 
 #[derive(Default)]
@@ -679,124 +678,6 @@ where
         Ok((swap_result.amount0, swap_result.amount1))
     }
 
-    pub fn simulate_swap_mut(
-        &mut self,
-        token_in: Address,
-        amount_specified: I256,
-        sqrt_price_limit_x96: Option<U256>
-    ) -> Result<(I256, I256), SwapSimulationError> {
-        let swap_result = self._simulate_swap(token_in, amount_specified, sqrt_price_limit_x96)?;
-
-        self.liquidity = swap_result.liquidity;
-        self.sqrt_price = swap_result.sqrt_price_x_96;
-        self.tick = swap_result.tick;
-
-        Ok((swap_result.amount0, swap_result.amount1))
-    }
-
-    pub fn sync_from_swap_log(&mut self, log: Log) -> Result<(), PoolError> {
-        if self.sync_swap_with_sim {
-            self.sync_swap_with_sim(log)
-        } else {
-            self._sync_from_swap_log(log)
-        }
-    }
-
-    fn sync_swap_with_sim(&mut self, log: Log) -> Result<(), PoolError> {
-        let swap_event = Loader::decode_swap_event(&log)?;
-
-        tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.data_loader.address(), "pool before");
-        tracing::debug!(swap_tick=swap_event.tick, swap_price=?swap_event.sqrt_price_x96, swap_liquidity=?swap_event.liquidity, swap_amount0=?swap_event.amount0, swap_amount1=?swap_event.amount1, "swap event");
-
-        let combinations = [
-            (self.token1, swap_event.amount1),
-            (self.token0, swap_event.amount0),
-            (self.token0, swap_event.amount1),
-            (self.token1, swap_event.amount0)
-        ];
-
-        let mut simulation_failed = true;
-        for (token_in, amount_in) in combinations.iter() {
-            let sqrt_price_limit_x96 = Some(U256::from(swap_event.sqrt_price_x96));
-            if let Ok((amount0, amount1)) =
-                self.simulate_swap(*token_in, *amount_in, sqrt_price_limit_x96)
-            {
-                if swap_event.amount0 == amount0 && swap_event.amount1 == amount1 {
-                    // will not fail
-                    let (..) =
-                        self.simulate_swap_mut(*token_in, *amount_in, sqrt_price_limit_x96)?;
-                    simulation_failed = false;
-                    break;
-                }
-            }
-        }
-
-        if simulation_failed {
-            tracing::error!(
-                pool_address = ?self.data_loader.address(),
-                pool_price = ?self.sqrt_price,
-                pool_liquidity = ?self.liquidity,
-                pool_tick = ?self.tick,
-                swap_price = ?swap_event.sqrt_price_x96,
-                swap_tick = swap_event.tick,
-                swap_liquidity = ?swap_event.liquidity,
-                swap_amount0 = ?swap_event.amount0,
-                swap_amount1 = ?swap_event.amount1,
-                "Swap simulation failed"
-            );
-            return Err(PoolError::SwapSimulationFailed);
-        } else {
-            tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.data_loader.address(), "pool after");
-        }
-
-        Ok(())
-    }
-
-    pub fn sync_from_log(&mut self, log: Log) -> Result<(), PoolError> {
-        if Loader::is_swap_event(&log) {
-            self._sync_from_swap_log(log)?;
-        } else if Loader::is_modify_position_event(&log) {
-            self.sync_from_modify_position(log)?;
-        } else {
-            Err(PoolError::InvalidEventSignature(log.topics().to_vec()))?
-        }
-
-        Ok(())
-    }
-
-    pub fn sync_from_modify_position(&mut self, log: Log) -> Result<(), PoolError> {
-        let modify_position_event = Loader::decode_modify_position_event(&log)?;
-        let ModifyPositionEvent { tick_lower, tick_upper, liquidity_delta, .. } =
-            modify_position_event;
-
-        self.update_position(tick_lower, tick_upper, liquidity_delta);
-
-        if liquidity_delta != 0 && self.tick > tick_lower && self.tick < tick_upper {
-            self.liquidity = if liquidity_delta < 0 {
-                self.liquidity - (liquidity_delta.unsigned_abs())
-            } else {
-                // > 0 so we can just
-                self.liquidity + (liquidity_delta.unsigned_abs())
-            }
-        }
-
-        tracing::debug!(?modify_position_event, address = ?self.data_loader.address(), sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "modify position event");
-
-        Ok(())
-    }
-
-    pub fn _sync_from_swap_log(&mut self, log: Log) -> Result<(), PoolError> {
-        let swap_event = Loader::decode_swap_event(&log)?;
-
-        self.sqrt_price = U256::from(swap_event.sqrt_price_x96);
-        self.liquidity = swap_event.liquidity;
-        self.tick = swap_event.tick;
-
-        tracing::debug!(?swap_event, address = ?self.data_loader.address(), sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "swap event");
-
-        Ok(())
-    }
-
     pub async fn populate_data<P: Provider>(
         &mut self,
         block_number: Option<u64>,
@@ -826,12 +707,8 @@ where
         !(self.token0.is_zero() || self.token1.is_zero())
     }
 
-    pub(crate) fn update_position(
-        &mut self,
-        tick_lower: i32,
-        tick_upper: i32,
-        liquidity_delta: i128
-    ) {
+    #[cfg(test)]
+    pub fn update_position(&mut self, tick_lower: i32, tick_upper: i32, liquidity_delta: i128) {
         let mut flipped_lower = false;
         let mut flipped_upper = false;
 
@@ -1004,6 +881,7 @@ pub trait TickSpaceFill: Iterator<Item = TickData> {
 mod tests {
     use std::sync::Once;
 
+    use alloy::primitives::Log;
     use tracing_subscriber::{EnvFilter, fmt};
     use uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick;
 
@@ -1070,10 +948,6 @@ mod tests {
         }
 
         fn decode_swap_event(_: &Log) -> Result<pool_data_loader::SwapEvent, PoolError> {
-            unimplemented!()
-        }
-
-        fn decode_modify_position_event(_: &Log) -> Result<ModifyPositionEvent, PoolError> {
             unimplemented!()
         }
     }

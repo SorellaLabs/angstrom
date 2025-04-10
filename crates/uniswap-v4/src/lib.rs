@@ -373,7 +373,7 @@ pub mod fuzz_uniswap {
                     hooks:       TESTNET_ANGSTROM_ADDRESS
                 };
                 am_check_exact_in(
-                    &pool,
+                    pool,
                     target_block,
                     cache_db.clone(),
                     snapshot.clone(),
@@ -382,7 +382,7 @@ pub mod fuzz_uniswap {
                     pool.token1_decimals
                 );
                 am_check_exact_out(
-                    &pool,
+                    pool,
                     target_block,
                     cache_db.clone(),
                     snapshot,
@@ -438,8 +438,8 @@ pub mod fuzz_uniswap {
         assert_eq!(t0, t0_delta_local, "pool.sim_swap != poolsnap sim");
         assert_eq!(t1, t1_delta_local, "pool.sim_swap != poolsnap sim");
 
-        let t0_delta_revm = revm_swap_output.amount0.abs() as u128;
-        let t1_delta_revm = revm_swap_output.amount1.abs() as u128;
+        let t0_delta_revm = revm_swap_output.amount0.unsigned_abs();
+        let t1_delta_revm = revm_swap_output.amount1.unsigned_abs();
         let sqrt_price_revm = revm_swap_output.sqrtPriceX96;
 
         assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");
@@ -504,8 +504,8 @@ pub mod fuzz_uniswap {
 
         let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
 
-        let t0_delta_revm = revm_swap_output.amount0.abs() as u128;
-        let t1_delta_revm = revm_swap_output.amount1.abs() as u128;
+        let t0_delta_revm = revm_swap_output.amount0.unsigned_abs();
+        let t1_delta_revm = revm_swap_output.amount1.unsigned_abs();
         let sqrt_price_revm = revm_swap_output.sqrtPriceX96;
 
         assert_eq!(t0_delta_local, t0_delta_revm, "amount: {amount} zfo: {zfo}");

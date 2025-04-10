@@ -18,7 +18,7 @@ use super::loaders::{
     get_uniswap_v_4_pool_data::GetUniswapV4PoolData,
     get_uniswap_v_4_tick_data::GetUniswapV4TickData
 };
-use crate::uniswap::{i128_to_i256, i256_to_i128, pool::PoolError};
+use crate::uniswap::{i128_to_i256, pool::PoolError};
 
 sol! {
     #[derive(Debug)]
@@ -160,7 +160,6 @@ pub trait PoolDataLoader: Clone {
     fn is_swap_event(log: &Log) -> bool;
     fn is_modify_position_event(log: &Log) -> bool;
     fn decode_swap_event(log: &Log) -> Result<SwapEvent, PoolError>;
-    fn decode_modify_position_event(log: &Log) -> Result<ModifyPositionEvent, PoolError>;
 }
 
 impl DataLoader {
@@ -311,18 +310,6 @@ impl PoolDataLoader for DataLoader {
             sqrt_price_x96: U256::from(swap_event.sqrtPriceX96),
             liquidity:      swap_event.liquidity,
             tick:           swap_event.tick.as_i32()
-        })
-    }
-
-    fn decode_modify_position_event(log: &Log) -> Result<ModifyPositionEvent, PoolError> {
-        let modify_event = IUniswapV4Pool::ModifyLiquidity::decode_log(log, true)?;
-        Ok(ModifyPositionEvent {
-            sender:          modify_event.sender,
-            tick_lower:      modify_event.tickLower.as_i32(),
-            tick_upper:      modify_event.tickUpper.as_i32(),
-            // v4-core seems to be doing the same so it's ok
-            // contracts/lib/v4-core/src/PoolManager.sol:160
-            liquidity_delta: i256_to_i128(modify_event.liquidityDelta)?
         })
     }
 }

@@ -223,7 +223,7 @@ pub mod fuzz_uniswap {
         );
     );
 
-    const HOOK_EXECUTOR: Address = address!("0xE31934E08e214F16646F843bCAb98cC0fC10ae5");
+    const HOOK_EXECUTOR: Address = address!("0xD7d2f2A4E117fAb1611accB599a0717959d83588");
     const LAST_BLOCK_SLOT_ANGSTROM: U256 = U256::from_limbs([3, 0, 0, 0]);
     const TEST_ORDER_ADDR: Address = address!("0x3193C77CD2c0cE208356Dc8B0F96159F8181a3f2");
 

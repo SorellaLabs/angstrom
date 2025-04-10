@@ -508,7 +508,7 @@ pub mod fuzz_uniswap {
                 uniswap_registry.clone(),
                 TESTNET_POOL_MANAGER_ADDRESS
             );
-            let mut pool = EnhancedUniswapPool::new(data_loader, 100);
+            let mut pool = EnhancedUniswapPool::new(data_loader, 1000);
             pool.initialize(Some(block), provider.root().into())
                 .await
                 .unwrap();

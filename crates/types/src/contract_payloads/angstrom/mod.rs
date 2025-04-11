@@ -637,7 +637,9 @@ impl AngstromBundle {
 
         let fill_amount = outcome.fill_amount(order.max_q());
 
+        // TODO: this needs to be properly set
         let fee = 0;
+
         let gas = order.priority_data.gas.to::<u128>();
         let (t1, t0_net, t0_fee) =
             get_quantities_at_price(order.is_bid(), order.exact_in(), fill_amount, gas, fee, ucp);

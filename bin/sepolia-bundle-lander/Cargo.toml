@@ -15,6 +15,7 @@ alloy-rpc-types.workspace = true
 alloy-primitives.workspace = true
 alloy.workspace = true
 
+uniswap_v3_math.workspace = true
 
 # Reth
 reth.workspace = true

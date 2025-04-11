@@ -41,6 +41,7 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
             TickInfo {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 300_000_000,
+                is_edge:         false,
                 initialized:     true
             }
         ),
@@ -49,6 +50,7 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
             TickInfo {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 400_000_000,
+                is_edge:         false,
                 initialized:     true
             }
         ),
@@ -57,6 +59,7 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
             TickInfo {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 500_000_000,
+                is_edge:         false,
                 initialized:     true
             }
         ),
@@ -65,6 +68,7 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
             TickInfo {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 600_000_000,
+                is_edge:         false,
                 initialized:     true
             }
         ),
@@ -73,6 +77,7 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
             TickInfo {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 700_000_000,
+                is_edge:         false,
                 initialized:     true
             }
         ),
@@ -81,6 +86,7 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
             TickInfo {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 800_000_000,
+                is_edge:         false,
                 initialized:     true
             }
         ),
@@ -89,6 +95,7 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
             TickInfo {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 900_000_000,
+                is_edge:         false,
                 initialized:     true
             }
         ),
@@ -239,7 +246,7 @@ pub fn tps(c: &mut Criterion) {
         let (book, tob) = setup_inputs(set, &pool);
 
         group.bench_function(BenchmarkId::from_parameter(bucket), |bench| {
-            bench.iter(|| black_box(BinarySearchStrategy::run(&book, Some(tob.clone()), 0)));
+            bench.iter(|| black_box(BinarySearchStrategy::run(&book, Some(tob.clone()))));
         });
     }
     group.finish();

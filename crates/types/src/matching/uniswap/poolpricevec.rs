@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::Neg};
+use std::{
+    collections::HashMap,
+    ops::{Deref, Neg}
+};
 
 use alloy::primitives::{I256, U256, Uint};
 use eyre::{Context, eyre};
@@ -19,6 +22,14 @@ pub struct SwapStep<'a> {
     d_t0:        u128,
     d_t1:        u128,
     liq_range:   LiqRangeRef<'a>
+}
+
+impl<'a> Deref for SwapStep<'a> {
+    type Target = LiqRangeRef<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.liq_range
+    }
 }
 
 impl<'a> SwapStep<'a> {
@@ -183,7 +194,8 @@ pub struct PoolPriceVec<'a> {
     pub end_bound:   PoolPrice<'a>,
     pub d_t0:        u128,
     pub d_t1:        u128,
-    pub steps:       Option<Vec<SwapStep<'a>>>
+    pub steps:       Option<Vec<SwapStep<'a>>>,
+    pub fee:         u32
 }
 
 impl<'a> PoolPriceVec<'a> {
@@ -196,6 +208,7 @@ impl<'a> PoolPriceVec<'a> {
         Self::from_price_range(start.clone(), end.clone())
             .ok()
             .unwrap_or(Self {
+                fee:         start.fee,
                 start_bound: start,
                 end_bound:   end,
                 d_t0:        0,
@@ -280,7 +293,14 @@ impl<'a> PoolPriceVec<'a> {
         let (d_t0, d_t1) = steps.iter().fold((0_u128, 0_u128), |(t0, t1), step| {
             (t0.saturating_add(step.d_t0), t1.saturating_add(step.d_t1))
         });
-        Ok(Self { start_bound: start, end_bound: end, d_t0, d_t1, steps: Some(steps) })
+        Ok(Self {
+            fee: start.fee,
+            start_bound: start,
+            end_bound: end,
+            d_t0,
+            d_t1,
+            steps: Some(steps)
+        })
     }
 
     pub fn from_swap(
@@ -288,7 +308,7 @@ impl<'a> PoolPriceVec<'a> {
         direction: Direction,
         quantity: Quantity
     ) -> eyre::Result<Self> {
-        let fee_pips = 0;
+        let fee_pips = start.fee;
         let mut total_in = U256::ZERO;
         let mut total_out = U256::ZERO;
         let mut current_price = start.price;
@@ -384,7 +404,7 @@ impl<'a> PoolPriceVec<'a> {
 
         let (d_t0, d_t1) = direction.sort_tokens(total_in.to(), total_out.to());
         let end_bound = start.liq_range.pool_snap.at_price(current_price)?;
-        Ok(Self { start_bound: start, end_bound, d_t0, d_t1, steps: Some(steps) })
+        Ok(Self { fee: start.fee, start_bound: start, end_bound, d_t0, d_t1, steps: Some(steps) })
     }
 
     /// Builds a DonationResult based on the goal of first donating to liquidity
@@ -397,11 +417,12 @@ impl<'a> PoolPriceVec<'a> {
         // If we have no steps we can just short-circuit this whole thing and take the
         // whole donation as tribute.  This will likely never happen.
         let Some(steps) = self.steps.as_ref() else {
+            // in the case we don't cross any ticks
             return DonationResult {
+                current_tick:   total_donation,
                 tick_donations: HashMap::new(),
                 final_price:    self.end_bound.price,
-                total_donated:  0,
-                tribute:        total_donation
+                total_donated:  0
             };
         };
 
@@ -413,8 +434,7 @@ impl<'a> PoolPriceVec<'a> {
         let round_up = price_dropping;
 
         let mut current_blob: Option<(u128, u128)> = None;
-
-        let steps_iter = steps.iter().filter(|s| !s.empty());
+        let steps_iter = steps.iter().filter(|s| !s.empty() && s.is_initialized);
 
         for step in steps_iter {
             // If our current blob is empty, we can just insert the current step's stats
@@ -466,7 +486,10 @@ impl<'a> PoolPriceVec<'a> {
             if price_dropping {
                 *c_t0 += remaining_donation
             } else {
-                *c_t0 = c_t0.saturating_sub(remaining_donation)
+                *c_t0 = c_t0.saturating_sub(remaining_donation);
+                if *c_t0 == 0 {
+                    *c_t0 += 1;
+                }
             }
         }
         // Now we can find our filled price - if the price is dropping we want to round
@@ -481,8 +504,9 @@ impl<'a> PoolPriceVec<'a> {
         // We can start remaining_donation over
         remaining_donation = total_donation;
         let mut total_donated = 0_u128;
-        let tick_donations: HashMap<(Tick, Tick), u128> = steps
+        let tick_donations: HashMap<(Tick, Tick), (bool, u128)> = steps
             .iter()
+            .filter(|step| step.is_initialized)
             .map(|step| {
                 let reward = if let Some(f) = filled_price {
                     // T1 is constant, so we need to know how much t0 we need
@@ -503,18 +527,17 @@ impl<'a> PoolPriceVec<'a> {
                 total_donated += reward;
                 // We associate a reward with a specific liquidity range and we will extract the
                 // lower or upper tick depending on the direction of our rewards
-                ((step.liq_range.lower_tick(), step.liq_range.upper_tick()), reward)
+                ((step.liq_range.lower_tick(), step.liq_range.upper_tick()), (true, reward))
             })
             .collect();
-        let tribute = total_donation.saturating_sub(total_donated);
 
         DonationResult {
+            current_tick: remaining_donation,
             tick_donations,
             final_price: filled_price
                 .map(|p| p.into())
                 .unwrap_or_else(|| self.end_bound.as_sqrtpricex96()),
-            total_donated,
-            tribute
+            total_donated
         }
     }
 }
@@ -529,8 +552,16 @@ mod tests {
         let liquidity = 1_000_000_000_000_000_u128;
         let pool = PoolSnapshot::new(
             10,
-            vec![LiqRange { liquidity, lower_tick: 100000, upper_tick: 100100 }],
-            SqrtPriceX96::at_tick(100050).unwrap()
+            vec![LiqRange {
+                liquidity,
+                lower_tick: 100000,
+                upper_tick: 100100,
+                is_tick_edge: false,
+                is_initialized: true,
+                fee: 0
+            }],
+            SqrtPriceX96::at_tick(100050).unwrap(),
+            0
         )
         .unwrap();
         PoolPriceVec::new(pool.current_price(), pool.current_price());
@@ -540,11 +571,25 @@ mod tests {
     fn will_span_segments() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
         let cur_price = SqrtPriceX96::at_tick(100025).unwrap();
         let end_price = SqrtPriceX96::at_tick(100075).unwrap();
-        let pool = PoolSnapshot::new(10, vec![segment_1, segment_2], cur_price).unwrap();
+        let pool = PoolSnapshot::new(10, vec![segment_1, segment_2], cur_price, 0).unwrap();
         let start_bound = pool.current_price();
         let end_bound = pool.at_price(end_price).unwrap();
         let pricevec = PoolPriceVec::from_price_range(start_bound, end_bound).unwrap();
@@ -604,14 +649,42 @@ mod tests {
     fn swaps_in_both_directions() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
-            PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price)
+            PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price, 0)
                 .unwrap();
         let low_start = pool.at_price(end_price).unwrap();
         let high_start = pool.current_price();
@@ -641,14 +714,42 @@ mod tests {
     fn will_include_all_steps() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
-            PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price)
+            PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price, 0)
                 .unwrap();
         let start_bound = pool.current_price();
         let end_bound = pool.at_price(end_price).unwrap();
@@ -674,17 +775,53 @@ mod tests {
     fn asset_swap_to_sqrt_works_t0() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
-        let segment_5 = LiqRange { liquidity: seg_2_liq, lower_tick: 100200, upper_tick: 100250 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_5 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100200,
+            upper_tick:     100250,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool = PoolSnapshot::new(
             10,
             vec![segment_1, segment_2, segment_3, segment_4, segment_5],
-            cur_price
+            cur_price,
+            0
         )
         .unwrap();
 
@@ -718,17 +855,53 @@ mod tests {
     fn asset_swap_to_sqrt_works_t1() {
         let seg_1_liq = 1_000_000_000_000_000_u128;
         let seg_2_liq = 1_000_000_000_000_u128;
-        let segment_1 = LiqRange { liquidity: seg_1_liq, lower_tick: 100000, upper_tick: 100050 };
-        let segment_2 = LiqRange { liquidity: seg_2_liq, lower_tick: 100050, upper_tick: 100100 };
-        let segment_3 = LiqRange { liquidity: seg_1_liq, lower_tick: 100100, upper_tick: 100150 };
-        let segment_4 = LiqRange { liquidity: seg_2_liq, lower_tick: 100150, upper_tick: 100200 };
-        let segment_5 = LiqRange { liquidity: seg_2_liq, lower_tick: 100200, upper_tick: 100250 };
+        let segment_1 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100000,
+            upper_tick:     100050,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_2 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100050,
+            upper_tick:     100100,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_3 = LiqRange {
+            liquidity:      seg_1_liq,
+            lower_tick:     100100,
+            upper_tick:     100150,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_4 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100150,
+            upper_tick:     100200,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
+        let segment_5 = LiqRange {
+            liquidity:      seg_2_liq,
+            lower_tick:     100200,
+            upper_tick:     100250,
+            is_tick_edge:   false,
+            is_initialized: true,
+            fee:            0
+        };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool = PoolSnapshot::new(
             10,
             vec![segment_1, segment_2, segment_3, segment_4, segment_5],
-            cur_price
+            cur_price,
+            0
         )
         .unwrap();
 

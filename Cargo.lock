@@ -792,6 +792,7 @@ dependencies = [
  "alloy-rpc-types-anvil",
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth 0.12.6",
+ "alloy-rpc-types-mev",
  "alloy-rpc-types-trace",
  "alloy-rpc-types-txpool",
  "alloy-serde 0.12.6",
@@ -1361,7 +1362,7 @@ dependencies = [
  "auto_impl",
  "futures",
  "futures-util",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "pade",
  "rand 0.8.5",
  "reth-ethereum-primitives",
@@ -1419,6 +1420,7 @@ dependencies = [
  "futures",
  "homedir",
  "humantime-serde",
+ "itertools 0.14.0",
  "k256",
  "linked-hash-map",
  "linked_hash_set",
@@ -1487,11 +1489,11 @@ dependencies = [
  "reth-tasks",
  "serde",
  "serde_json",
- "strum 0.26.3",
+ "strum 0.27.1",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tower 0.4.13",
+ "tower 0.5.2",
  "tower-http",
  "tracing",
  "validation",
@@ -1507,7 +1509,7 @@ dependencies = [
  "angstrom-types",
  "anyhow",
  "auto_impl",
- "base64 0.21.7",
+ "base64 0.22.1",
  "bincode",
  "bitmaps",
  "bytes",
@@ -1518,13 +1520,14 @@ dependencies = [
  "foldhash",
  "futures",
  "hex-literal",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "k256",
  "malachite",
  "num-traits",
  "pade",
  "pade-macro",
  "rand 0.8.5",
+ "reqwest",
  "reth",
  "reth-chainspec",
  "reth-ethereum-primitives",
@@ -1545,6 +1548,7 @@ dependencies = [
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
+ "tower 0.5.2",
  "tracing",
  "tracing-subscriber",
  "uniswap_v3_math",
@@ -1985,7 +1989,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -2744,7 +2748,7 @@ dependencies = [
  "eyre",
  "futures",
  "hex-literal",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "matching-engine",
  "order-pool",
  "pade",
@@ -3211,7 +3215,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18e4fdb82bd54a12e42fb58a800dcae6b9e13982238ce2296dc3570b92148e1f"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.100",
 ]
 
 [[package]]
@@ -3610,6 +3614,15 @@ name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
+
+[[package]]
+name = "encoding_rs"
+version = "0.8.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
+dependencies = [
+ "cfg-if",
+]
 
 [[package]]
 name = "endian-type"
@@ -5334,7 +5347,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -5639,14 +5652,14 @@ dependencies = [
  "angstrom-types",
  "angstrom-utils",
  "arraydeque",
- "base64 0.21.7",
+ "base64 0.22.1",
  "base64-serde",
  "clap",
  "criterion",
  "eyre",
  "futures",
  "futures-util",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "malachite",
  "malachite-q",
  "num-bigfloat",
@@ -6505,7 +6518,7 @@ name = "pade-macro"
 version = "0.1.0"
 source = "git+https://github.com/SorellaLabs/pade#131e59ef14be3b870ca3daf94df94b9e4a7e4f50"
 dependencies = [
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.100",
@@ -7390,9 +7403,11 @@ checksum = "d19c46a6fdd48bc4dab94b6103fccc55d34c67cc0ad04653aad4ea2a07cd7bbb"
 dependencies = [
  "base64 0.22.1",
  "bytes",
+ "encoding_rs",
  "futures-channel",
  "futures-core",
  "futures-util",
+ "h2",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -7417,6 +7432,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
+ "system-configuration",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls",
@@ -10645,7 +10661,7 @@ dependencies = [
  "consensus",
  "eyre",
  "futures",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "jsonrpsee",
  "matching-engine",
  "order-pool",
@@ -10670,6 +10686,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uniswap-v4",
+ "uniswap_v3_math",
  "url",
  "validation",
 ]
@@ -11212,6 +11229,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-configuration"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c879d448e9d986b661742763247d3693ed13609438cf3d006f51f5368a5ba6b"
+dependencies = [
+ "bitflags 2.9.0",
+ "core-foundation 0.9.4",
+ "system-configuration-sys",
+]
+
+[[package]]
+name = "system-configuration-sys"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e1d1b10ced5ca923a1fcb8d03e96b8d3268065d724548c0211415ff6ac6bac4"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
 name = "tagptr"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11268,13 +11306,14 @@ dependencies = [
  "enr",
  "eyre",
  "futures",
+ "itertools 0.14.0",
  "jsonrpsee",
  "matching-engine",
  "order-pool",
  "pade",
  "parking_lot",
  "rand 0.8.5",
- "rand_chacha 0.3.1",
+ "rand_chacha 0.9.0",
  "rand_distr",
  "reth-chainspec",
  "reth-codecs",
@@ -11701,11 +11740,16 @@ checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
+ "hdrhistogram",
+ "indexmap 2.8.0",
  "pin-project-lite",
+ "slab",
  "sync_wrapper",
  "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -12060,7 +12104,8 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
- "itertools 0.11.0",
+ "hex",
+ "itertools 0.14.0",
  "malachite",
  "malachite-q",
  "num-bigfloat",
@@ -12072,6 +12117,11 @@ dependencies = [
  "rayon",
  "reth-provider",
  "reth-tasks",
+ "revm",
+ "revm-bytecode",
+ "revm-database",
+ "revm-primitives",
+ "revm-state",
  "serde",
  "testing-tools",
  "thiserror 1.0.69",
@@ -12080,6 +12130,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uniswap_v3_math",
+ "validation",
 ]
 
 [[package]]
@@ -12490,7 +12541,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

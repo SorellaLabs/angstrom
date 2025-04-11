@@ -15,6 +15,7 @@ use alloy::{
 use alloy_primitives::I256;
 use base64::Engine;
 use dashmap::DashMap;
+use itertools::Itertools;
 use pade_macro::{PadeDecode, PadeEncode};
 use tracing::{debug, trace, warn};
 
@@ -33,7 +34,7 @@ use crate::{
         Ray, get_quantities_at_price,
         uniswap::{Direction, PoolPriceVec, PoolSnapshot, Quantity}
     },
-    orders::{OrderFillState, OrderOutcome, PoolSolution},
+    orders::{OrderFillState, OrderId, OrderOutcome, PoolSolution},
     primitive::{PoolId, UniswapPoolRegistry},
     sol_bindings::{
         RawPoolOrder,
@@ -57,6 +58,10 @@ pub struct AngstromBundle {
 }
 
 impl AngstromBundle {
+    pub fn has_book(&self) -> bool {
+        !self.user_orders.is_empty()
+    }
+
     pub fn get_prices_per_pair(&self) -> &[Pair] {
         &self.pairs
     }
@@ -102,7 +107,6 @@ impl AngstromBundle {
                 )
             };
 
-            tracing::info!(?token, from_address = ?address, qty, "Building user order override");
             approvals
                 .entry(token)
                 .or_default()
@@ -139,7 +143,6 @@ impl AngstromBundle {
                 qty += order.gas_used_asset_0;
             }
 
-            tracing::info!(?token, from_address = ?address, qty, "Building ToB order override");
             approvals
                 .entry(token)
                 .or_default()
@@ -250,17 +253,6 @@ impl AngstromBundle {
             user_order.quantity_in,
             user_order.quantity_out
         );
-        // is bid = true, false
-
-        // works when false
-        // let zfo = !user_order.is_bid; // false works // true
-        // pool_updates.push(PoolUpdate {
-        //     zero_for_one:     user_order.is_bid,
-        //     pair_index:       0,
-        //     swap_in_quantity: user_order.quantity_out,
-        //     rewards_update:   super::rewards::RewardsUpdate::CurrentOnly { amount: 0
-        // } });
-
         // Get our list of user orders, if we have any
         top_of_block_orders.push(TopOfBlockOrder::of_max_gas(user_order, 0));
 
@@ -324,67 +316,6 @@ impl AngstromBundle {
             ));
         }
 
-        Ok(Self::new(
-            asset_builder.get_asset_array(),
-            pairs,
-            pool_updates,
-            top_of_block_orders,
-            user_orders
-        ))
-    }
-
-    // builds a bundle where orders are set to max allocated gas to ensure a fully
-    // passing env. with the gas details from the response, can properly
-    // allocate order gas amounts.
-    pub fn for_gas_finalization(
-        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
-        solutions: Vec<PoolSolution>,
-        pools: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
-    ) -> eyre::Result<Self> {
-        let mut top_of_block_orders = Vec::new();
-        let mut pool_updates = Vec::new();
-        let mut pairs = Vec::new();
-        let mut user_orders = Vec::new();
-        let mut asset_builder = AssetBuilder::new();
-
-        let orders_by_pool: HashMap<
-            alloy_primitives::FixedBytes<32>,
-            HashSet<OrderWithStorageData<GroupedVanillaOrder>>
-        > = limit.iter().fold(HashMap::new(), |mut acc, x| {
-            acc.entry(x.pool_id).or_default().insert(x.clone());
-            acc
-        });
-
-        // Walk through our solutions to add them to the structure
-        for solution in solutions.iter() {
-            println!("Processing solution");
-            // Get the information for the pool or skip this solution if we can't find a
-            // pool for it
-            let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
-                // This should never happen but let's handle it as gracefully as possible -
-                // right now will skip the pool, not produce an error
-                warn!(
-                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
-                    pools, solution.id
-                );
-                continue;
-            };
-            // Call our processing function with a fixed amount of shared gas
-            Self::process_solution(
-                &mut pairs,
-                &mut asset_builder,
-                &mut user_orders,
-                &orders_by_pool,
-                &mut top_of_block_orders,
-                &mut pool_updates,
-                solution,
-                snapshot,
-                *t0,
-                *t1,
-                *store_index,
-                None
-            )?;
-        }
         Ok(Self::new(
             asset_builder.get_asset_array(),
             pairs,
@@ -483,6 +414,7 @@ impl AngstromBundle {
         // appropriate asset index for them
         let t0_idx = asset_builder.add_or_get_asset(t0) as u16;
         let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
+        tracing::info!(?t0, ?t1, ?t0_idx, ?t1_idx);
 
         // Build our Pair featuring our uniform clearing price
         // This price is in Ray format as requested.
@@ -524,81 +456,49 @@ impl AngstromBundle {
             top_of_block_orders.push(contract_tob);
         }
 
+        ///////////////////////////////
+        //// handling user orders ////
+        /////////////////////////////
+
+        let default = HashMap::new();
         // Get our list of user orders, if we have any
-        let mut order_list: Vec<&OrderWithStorageData<GroupedVanillaOrder>> = orders_by_pool
-            .get(&solution.id)
-            .map(|order_set| order_set.iter().collect())
-            .unwrap_or_default();
-        // Sort the user order list so we can properly associate it with our
-        // OrderOutcomes.  First bids by price then asks by price.
-        order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
-            (true, true) => a.priority_data.cmp(&b.priority_data),
-            (false, false) => a.priority_data.cmp(&b.priority_data),
-            (..) => b.is_bid.cmp(&a.is_bid)
-        });
+        let mut order_list: HashMap<OrderId, &OrderWithStorageData<GroupedVanillaOrder>> =
+            orders_by_pool
+                .get(&solution.id)
+                .map(|o| o.iter().map(|order| (order.order_id, order)).collect())
+                .unwrap_or_else(|| default);
 
         // Loop through our filled user orders, do accounting, and add them to our user
         // order list
         let mut total_user_fees: u128 = 0;
-        // We need to calculate our bids with this inverse ray
         for (outcome, order) in solution
             .limit
             .iter()
-            .zip(order_list.iter())
-            .filter(|(outcome, _)| outcome.is_filled())
+            .map(|order| (order, order_list.remove(&order.id)))
+            .filter(|(outcome, o)| {
+                if outcome.is_filled() && o.is_none() {
+                    tracing::error!(?outcome, "lost a order");
+                }
+                outcome.is_filled() && o.is_some()
+            })
         {
-            trace!(user_order = ?order, "Mapping User Order");
-            // Calculate our final amounts based on whether the order is in T0 or T1 context
-            assert_eq!(outcome.id.hash, order.order_id.hash, "Order and outcome mismatched");
-
-            let fill_amount = outcome.fill_amount(order.max_q());
-
-            let fee = 0;
-            let gas = order.priority_data.gas.to::<u128>();
-            let (t1, t0_net, t0_fee) = get_quantities_at_price(
-                order.is_bid(),
-                order.exact_in(),
-                fill_amount,
-                gas,
-                fee,
-                solution.ucp
-            );
-
-            // Add the contract fee to our total user fees
-            total_user_fees = total_user_fees.saturating_add(t0_fee);
-
-            // we don't account for the gas here in these quantites as the order
-            let (quantity_in, quantity_out) = if order.is_bid() {
-                // If the order is a bid, we're getting all our T1 in and we're sending t0_net
-                // back to the contract
-                (t1, t0_net)
-            } else {
-                // If the order is an ask, we're getting t0_net + t0_fee + gas in and we're
-                // sending t1 back to the contract
-                (t0_net + t0_fee + gas, t1)
-            };
-
-            trace!(quantity_in = ?quantity_in, quantity_out = ?quantity_out, is_bid = order.is_bid, exact_in = order.exact_in(), "Processing user order");
-            // Account for our user order
-            asset_builder.external_swap(
-                AssetBuilderStage::UserOrder,
-                order.token_in(),
-                order.token_out(),
-                quantity_in,
-                quantity_out
-            );
-
-            let user_order = if let Some(g) = shared_gas {
-                UserOrder::from_internal_order(order, outcome, g, pair_idx as u16)?
-            } else {
-                UserOrder::from_internal_order_max_gas(order, outcome, pair_idx as u16)
-            };
-            user_orders.push(user_order);
+            total_user_fees += total_user_fees.saturating_add(Self::apply_user_order(
+                outcome,
+                order,
+                solution.ucp,
+                shared_gas,
+                pair_idx,
+                asset_builder,
+                user_orders
+            )?);
         }
+
+        ///////////////////////////////
+        //// handling donate merge ////
+        //////////////////////////////
 
         // Now it's time to figure out what's happening with our AMM swap and pool
         // rewards
-
         // Let's get our swap and reward data out of our ToB order, if it exists
         let tob_swap_info = solution
             .searcher
@@ -630,11 +530,13 @@ impl AngstromBundle {
 
         // Build the rewards structure for the AMM swap
         let book_swap_rewards = book_swap_vec.t0_donation(solution.reward_t0);
+        tracing::info!("book: {book_swap_vec:#?}\n\n{book_swap_rewards:#?}");
 
         // If we have a TOB swap, let's get the rewards and combine them - otherwise we
         // continue to use just the rewards we got from the AMM swap
         let total_rewards = if let Some((tob_vec, tob_donation)) = tob_swap_info.as_ref() {
             let tob_rewards = tob_vec.t0_donation(*tob_donation);
+            tracing::info!("tob: {tob_rewards:#?}");
             book_swap_rewards.combine(&tob_rewards)?
         } else {
             book_swap_rewards
@@ -655,6 +557,7 @@ impl AngstromBundle {
         } else {
             book_swap_vec
         };
+        tracing::info!("pool: {net_pool_vec:#?}");
 
         // Account for our net_pool_vec
         let (asset_in_index, asset_out_index) =
@@ -672,13 +575,11 @@ impl AngstromBundle {
 
         // Account for our total reward and fees
         // We might want to split this in some way in the future
-        let total_reward = total_rewards.total_donated + total_user_fees;
-        let tribute = 0_u128;
+        let total_reward = total_rewards.get_total_donated() + total_user_fees;
 
         // Allocate the reward quantity
         asset_builder.allocate(AssetBuilderStage::Reward, t0, total_reward);
         // Account for our tribute
-        asset_builder.tribute(AssetBuilderStage::Reward, t0, tribute);
 
         // Build our PoolUpdate structures to actually report to the client
         let (net_result, additional_result) = total_rewards.donate_and_remainder(&net_pool_vec);
@@ -721,6 +622,65 @@ impl AngstromBundle {
         Ok(())
     }
 
+    fn apply_user_order(
+        outcome: &OrderOutcome,
+        order: Option<&OrderWithStorageData<GroupedVanillaOrder>>,
+        ucp: Ray,
+        shared_gas: Option<U256>,
+        pair_idx: usize,
+        asset_builder: &mut AssetBuilder,
+        user_orders: &mut Vec<UserOrder>
+    ) -> eyre::Result<u128> {
+        trace!(user_order = ?order, "Mapping User Order");
+        let order = order.unwrap();
+        // Calculate our final amounts based on whether the order is in T0 or T1 context
+        assert_eq!(outcome.id.hash, order.order_id.hash, "Order and outcome mismatched");
+
+        let fill_amount = outcome.fill_amount(order.max_q());
+
+        // TODO: this needs to be properly set
+        let fee = 0;
+
+        let gas = order.priority_data.gas.to::<u128>();
+        let (t1, t0_net, t0_fee) =
+            get_quantities_at_price(order.is_bid(), order.exact_in(), fill_amount, gas, fee, ucp);
+
+        // we don't account for the gas here in these quantites as the order
+        let (quantity_in, quantity_out) = if order.is_bid() {
+            // one for zero
+
+            // If the order is a bid, we're getting all our T1 in and we're sending t0_net
+            // back to the contract
+            (t1, t0_net)
+        } else {
+            // If the order is an ask, we're getting t0_net + t0_fee + gas in and we're
+            // sending t1 back to the contract
+            // zero for one
+            (t0_net + t0_fee + gas, t1)
+        };
+
+        trace!(quantity_in = ?quantity_in, quantity_out = ?quantity_out, is_bid = order.is_bid, exact_in = order.exact_in(), "Processing user order");
+        let token_in = order.token_in();
+        let token_out = order.token_out();
+
+        let user_order = if let Some(g) = shared_gas {
+            UserOrder::from_internal_order(order, outcome, g, pair_idx as u16)?
+        } else {
+            UserOrder::from_internal_order_max_gas(order, outcome, pair_idx as u16)
+        };
+
+        // we add once we are past anything that can error.
+        asset_builder.external_swap(
+            AssetBuilderStage::UserOrder,
+            token_in,
+            token_out,
+            quantity_in,
+            quantity_out
+        );
+        user_orders.push(user_order);
+        Ok(t0_fee)
+    }
+
     pub fn from_proposal(
         proposal: &Proposal,
         _gas_details: BundleGasDetails,
@@ -749,9 +709,33 @@ impl AngstromBundle {
             return Err(eyre::eyre!("have a total swaps count of 0"));
         }
 
+        // what we need to do is go through and first add all the tokens,
+        // then sort them and change the offests before we index all orders
+        for solution in proposal.solutions.iter() {
+            let Some((t0, t1, ..)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!(
+                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
+                    pools, solution.id
+                );
+                continue;
+            };
+            asset_builder.add_or_get_asset(*t0);
+            asset_builder.add_or_get_asset(*t1);
+        }
+        asset_builder.order_assets_properly();
+
         // fetch gas used
         // Walk through our solutions to add them to the structure
-        for solution in proposal.solutions.iter() {
+        for solution in proposal.solutions.iter().sorted_unstable_by_key(|k| {
+            let Some((_, _, _, store_index)) = pools.get(&k.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                return 0u16;
+            };
+            *store_index
+        }) {
             // Get the information for the pool or skip this solution if we can't find a
             // pool for it
             let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
@@ -780,6 +764,96 @@ impl AngstromBundle {
                 Some(U256::ZERO)
             )?;
         }
+
+        // shouldn't need
+        // pairs.sort_unstable_by_key(|k| k.store_index);
+        Ok(Self::new(
+            asset_builder.get_asset_array(),
+            pairs,
+            pool_updates,
+            top_of_block_orders,
+            user_orders
+        ))
+    }
+
+    /// builds a bundle where orders are set to max allocated gas to ensure a
+    /// fully passing env. with the gas details from the response, can
+    /// properly allocate order gas amounts.
+    pub fn for_gas_finalization(
+        limit: Vec<OrderWithStorageData<GroupedVanillaOrder>>,
+        solutions: Vec<PoolSolution>,
+        pools: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+    ) -> eyre::Result<Self> {
+        let mut top_of_block_orders = Vec::new();
+        let mut pool_updates = Vec::new();
+        let mut pairs = Vec::new();
+        let mut user_orders = Vec::new();
+        let mut asset_builder = AssetBuilder::new();
+
+        let orders_by_pool: HashMap<
+            alloy_primitives::FixedBytes<32>,
+            HashSet<OrderWithStorageData<GroupedVanillaOrder>>
+        > = limit.iter().fold(HashMap::new(), |mut acc, x| {
+            acc.entry(x.pool_id).or_default().insert(x.clone());
+            acc
+        });
+
+        // what we need to do is go through and first add all the tokens,
+        // then sort them and change the offests before we index all orders
+        for solution in solutions.iter() {
+            let Some((t0, t1, ..)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!(
+                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
+                    pools, solution.id
+                );
+                continue;
+            };
+            asset_builder.add_or_get_asset(*t0);
+            asset_builder.add_or_get_asset(*t1);
+        }
+        asset_builder.order_assets_properly();
+
+        // Walk through our solutions to add them to the structure
+        for solution in solutions.iter().sorted_unstable_by_key(|k| {
+            let Some((_, _, _, store_index)) = pools.get(&k.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                return 0u16;
+            };
+            *store_index
+        }) {
+            println!("Processing solution");
+            // Get the information for the pool or skip this solution if we can't find a
+            // pool for it
+            let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!(
+                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
+                    pools, solution.id
+                );
+                continue;
+            };
+            // Call our processing function with a fixed amount of shared gas
+            Self::process_solution(
+                &mut pairs,
+                &mut asset_builder,
+                &mut user_orders,
+                &orders_by_pool,
+                &mut top_of_block_orders,
+                &mut pool_updates,
+                solution,
+                snapshot,
+                *t0,
+                *t1,
+                *store_index,
+                None
+            )?;
+        }
+        // don't think this is needed as we sort before by this.
+        // pairs.sort_unstable_by_key(|k| k.store_index);
         Ok(Self::new(
             asset_builder.get_asset_array(),
             pairs,

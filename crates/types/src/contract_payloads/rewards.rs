@@ -1,5 +1,4 @@
-use alloy::primitives::aliases::I24;
-use alloy_primitives::U160;
+use alloy::primitives::{U160, aliases::I24};
 use itertools::Itertools;
 use pade_macro::{PadeDecode, PadeEncode};
 
@@ -41,17 +40,28 @@ impl RewardsUpdate {
             // otherwise
             .sorted_by(|((a, _), _), ((b, _), _)| if from_above { b.cmp(a) } else { a.cmp(b) })
             // Map to the quantity
-            .map(|(_, q)| *q)
+            .filter(|f| f.1.0)
+            .map(|(_, q)| q.1)
             .collect::<Vec<_>>();
 
         let (start_tick, start_liquidity) = snapshot
             .get_range_for_tick(bound_tick)
             .map(|r| (if from_above { r.lower_tick() } else { r.upper_tick() }, r.liquidity()))
             .unwrap_or_default();
+        tracing::warn!(
+            current_tick,
+            bound_tick,
+            start_tick,
+            start_liquidity,
+            "Assembling rewards update"
+        );
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {
-                amount:             quantities.first().copied().unwrap_or_default(),
+                amount:             quantities
+                    .first()
+                    .copied()
+                    .unwrap_or(donation_data.current_tick),
                 expected_liquidity: start_liquidity
             }),
             _ => Ok(Self::MultiTick {

@@ -4,7 +4,10 @@ use std::{fmt::Debug, pin::Pin, sync::Arc};
 use alloy::primitives::U256;
 use alloy::{primitives::Address, sol_types::SolCall};
 use angstrom_metrics::validation::ValidationMetrics;
-use angstrom_types::contract_payloads::angstrom::{AngstromBundle, BundleGasDetails};
+use angstrom_types::{
+    CHAIN_ID,
+    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails}
+};
 use eyre::eyre;
 use futures::Future;
 use pade::PadeEncode;
@@ -46,8 +49,7 @@ where
         db: &mut CacheDB<Arc<DB>>,
         token: Address,
         quantity: U256,
-        uniswap: Address,
-        angstrom: Address
+        uniswap: Address
     ) -> eyre::Result<()>
     where
         <DB as revm::DatabaseRef>::Error: Debug
@@ -58,19 +60,17 @@ where
         use crate::order::state::db_state_utils::finders::*;
         // Find the slot for balance and approval for us to take from Uniswap
         let balance_slot = find_slot_offset_for_balance(&db, token)?;
-        let approval_slot = find_slot_offset_for_approval(&db, token)?;
 
         // first thing we will do is setup Uniswap's token balance.
         let uniswap_balance_slot = keccak256((uniswap, balance_slot).abi_encode());
-        let uniswap_approval_slot =
-            keccak256((angstrom, keccak256((uniswap, approval_slot).abi_encode())).abi_encode());
+        // let uniswap_approval_slot =
+        //     keccak256((angstrom, keccak256((uniswap,
+        // approval_slot).abi_encode())).abi_encode());
 
         // set Uniswap's balance on the token_in
         db.insert_account_storage(token, uniswap_balance_slot.into(), U256::from(2) * quantity)
             .map_err(|e| eyre::eyre!("{e:?}"))?;
         // give angstrom approval
-        db.insert_account_storage(token, uniswap_approval_slot.into(), U256::from(2) * quantity)
-            .map_err(|e| eyre::eyre!("{e:?}"))?;
 
         Ok(())
     }
@@ -113,7 +113,6 @@ where
                         asset.addr,
                         U256::from(asset.take),
                         TESTNET_POOL_MANAGER_ADDRESS,
-                        angstrom_address
                     ).unwrap();
                 }
             }
@@ -125,20 +124,22 @@ where
                  let mut evm = Context {
                         tx: TxEnv::default(),
                         block: BlockEnv::default(),
-                        cfg: CfgEnv::<SpecId>::default(), journaled_state: Journal::<CacheDB<Arc<DB>>>::new(SpecId::LATEST, db.clone()),
+                        cfg: CfgEnv::<SpecId>::default().with_chain_id(CHAIN_ID),
+                        journaled_state: Journal::<CacheDB<Arc<DB>>>::new(SpecId::LATEST, db.clone()),
                         chain: (),
                         error: Ok(()),
                     }
                     .modify_cfg_chained(|cfg| {
-                        cfg.disable_balance_check = true;
                         cfg.disable_nonce_check = true;
                     })
                     .modify_block_chained(|block| {
                         block.number = number + 1;
+                        tracing::info!(?block.number, "simulating block on");
                     })
                     .modify_tx_chained(|tx| {
                         tx.caller = node_address;
                         tx.kind= TxKind::Call(angstrom_address);
+                        tx.chain_id = Some(CHAIN_ID);
                         tx.data =
                         angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new((
                             bundle.into(),
@@ -168,7 +169,7 @@ where
                     return;
                 }
 
-                let res = BundleGasDetails::new(conversion_lookup, result.result.gas_used());
+                let res = BundleGasDetails::new(conversion_lookup,result.result.gas_used());
                 let _ = sender.send(Ok(res));
             });
         }))

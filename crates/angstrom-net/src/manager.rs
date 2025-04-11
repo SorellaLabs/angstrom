@@ -3,7 +3,8 @@ use std::{
     path::PathBuf,
     pin::Pin,
     sync::{Arc, atomic::AtomicUsize},
-    task::{Context, Poll}
+    task::{Context, Poll},
+    time::Duration
 };
 
 use alloy::primitives::{Address, BlockNumber, FixedBytes};
@@ -12,7 +13,8 @@ use angstrom_types::{
     consensus::{PreProposal, PreProposalAggregation, Proposal},
     primitive::PeerId
 };
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
+use itertools::Itertools;
 use once_cell::unsync::Lazy;
 use reth_eth_wire::DisconnectReason;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
@@ -59,7 +61,9 @@ pub struct StromNetworkManager<DB: Unpin, P: Peers + Unpin> {
     /// [`NetworkHandle`] Updated by the `NetworkWorker` and loaded by the
     /// `NetworkService`.
     num_active_peers: Arc<AtomicUsize>,
-    reth_network:     P
+    reth_network:     P,
+    // for debuging
+    not_future:       Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>
 }
 
 impl<DB: Unpin, P: Peers + Unpin> Drop for StromNetworkManager<DB, P> {
@@ -89,19 +93,19 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         let node_pubkey = reth_network.local_node_record().id.to_pubkey().unwrap();
-        tracing::info!("StromNetworkManager for node_id={} starting...", node_pubkey);
 
         // Load cached peers
-        tracing::info!("Currently connected to {} peers", reth_network.num_connected_peers());
-        let cached_peers = Self::load_known_peers(&node_pubkey);
-        tracing::info!("Connecting to {} cached peers...", cached_peers.len());
-        for peer in cached_peers.peers {
-            tracing::info!("Adding cached peer {}", peer.enr());
-            //reth_network.connect_peer(peer.peer_id, peer.addr);
-            reth_network.add_peer(peer.peer_id, peer.addr);
-        }
+        // tracing::info!("Currently connected to {} peers",
+        // reth_network.num_connected_peers()); let cached_peers =
+        // Self::load_known_peers(&node_pubkey); tracing::info!("Connecting to
+        // {} cached peers...", cached_peers.len()); for peer in
+        // cached_peers.peers {     tracing::info!("Adding cached peer {}",
+        // peer.enr());     //reth_network.connect_peer(peer.peer_id,
+        // peer.addr);     reth_network.add_peer(peer.peer_id, peer.addr);
+        // }
 
         let peers = Arc::new(AtomicUsize::default());
+        let cpeers = peers.clone();
         let handle =
             StromNetworkHandle::new(peers.clone(), UnboundedMeteredSender::new(tx, "strom handle"));
 
@@ -114,7 +118,14 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
             to_pool_manager,
             to_consensus_manager,
             event_listeners: Vec::new(),
-            reth_network
+            reth_network,
+            not_future: Box::pin(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    let peers = cpeers.load(std::sync::atomic::Ordering::SeqCst);
+                    tracing::info!(angstrom_peers = peers, "angstrom network peers");
+                }
+            })
         }
     }
 
@@ -147,13 +158,17 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
     /// `swarm.sessions_mut`.
     pub fn save_known_peers(&self) {
         tracing::info!("saving known peers for node_id={}", self.node_pubkey());
+        let current_map = Self::load_known_peers(&self.node_pubkey());
         let peers = self
             .swarm
             .sessions()
             .active_sessions
             .values()
             .map(|session| CachedPeer { peer_id: session.remote_id, addr: session.socket_addr })
+            .chain(current_map.peers)
+            .unique()
             .collect::<Vec<_>>();
+
         let peers: CachedPeers = peers.into();
         let toml_path = Self::known_peers_toml_path(&self.node_pubkey());
         match toml::to_string(&peers) {
@@ -271,6 +286,7 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                 cx.waker().wake_by_ref();
                 break;
             }
+            let _ = self.not_future.poll_unpin(cx);
 
             match self.from_handle_rx.poll_next_unpin(cx) {
                 Poll::Ready(Some(msg)) => self.on_handle_message(msg),
@@ -340,6 +356,8 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                         }
                     }
                     SwarmEvent::Disconnected { peer_id } => {
+                        self.num_active_peers
+                            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                         self.notify_listeners(StromNetworkEvent::SessionClosed {
                             peer_id,
                             reason: None

@@ -21,10 +21,10 @@ pub mod sort;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct OrderBook {
-    id:   PoolId,
-    amm:  Option<PoolSnapshot>,
-    bids: Vec<BookOrder>,
-    asks: Vec<BookOrder>
+    pub id: PoolId,
+    amm:    Option<PoolSnapshot>,
+    bids:   Vec<BookOrder>,
+    asks:   Vec<BookOrder>
 }
 
 impl OrderBook {
@@ -126,8 +126,9 @@ mod test {
         let asks = vec![];
         let amm = PoolSnapshot::new(
             10,
-            vec![LiqRange::new(90000, 110000, 10).unwrap()],
-            SqrtPriceX96::at_tick(100000).unwrap()
+            vec![LiqRange::new_init(90000, 110000, 10, 0).unwrap()],
+            SqrtPriceX96::at_tick(100000).unwrap(),
+            0
         )
         .unwrap();
         OrderBook::new(FixedBytes::<32>::random(), Some(amm), bids, asks, None);

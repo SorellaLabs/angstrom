@@ -153,7 +153,6 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
     ) -> eyre::Result<(Vec<PoolSolution>, BundleGasDetails)> {
-        tracing::info!("starting to build proposal");
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
         let books = Self::build_non_proposal_books(limit.clone(), &pool_snapshots);
@@ -165,20 +164,25 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
             });
 
         let mut solution_set = JoinSet::new();
-        books.into_iter().for_each(|b| {
-            let searcher = searcher_orders.get(&b.id()).cloned();
-            // Using spawn-blocking here is not BAD but it might be suboptimal as it allows
-            // us to spawn many more tasks that the CPu has threads.  Better solution is a
-            // dedicated threadpool and some suggest the `rayon` crate.  This is probably
-            // not a problem while I'm testing, but leaving this note here as it may be
-            // important for future efficiency gains
-            solution_set.spawn_blocking(move || {
-                Some(BinarySearchStrategy::run(&b, searcher, 0))
-                // SimpleCheckpointStrategy::run(&b).map(|s|
-                // s.solution(searcher))
+
+        if books.is_empty() {
+            for searcher in searcher_orders.values().cloned() {
+                let mut book = OrderBook::default();
+                book.id = searcher.pool_id;
+                solution_set
+                    .spawn_blocking(move || Some(BinarySearchStrategy::run(&book, Some(searcher))));
+            }
+        } else {
+            books.into_iter().for_each(|b| {
+                let searcher = searcher_orders.get(&b.id()).cloned();
+                // Using spawn-blocking here is not BAD but it might be suboptimal as it allows
+                // us to spawn many more tasks that the CPu has threads.  Better solution is a
+                // dedicated threadpool and some suggest the `rayon` crate.  This is probably
+                // not a problem while I'm testing, but leaving this note here as it may be
+                // important for future efficiency gains
+                solution_set.spawn_blocking(move || Some(BinarySearchStrategy::run(&b, searcher)));
             });
-        });
-        tracing::info!("got book solution");
+        }
         let mut solutions = Vec::new();
         while let Some(res) = solution_set.join_next().await {
             if let Ok(Some(r)) = res {
@@ -220,6 +224,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         let mut solution_set = JoinSet::new();
         books.into_iter().for_each(|b| {
             let searcher = searcher_orders.get(&b.id()).cloned();
+            tracing::info!(?searcher);
             // Using spawn-blocking here is not BAD but it might be suboptimal as it allows
             // us to spawn many more tasks that the CPu has threads.  Better solution is a
             // dedicated threadpool and some suggest the `rayon` crate.  This is probably
@@ -239,6 +244,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
 
         let bundle =
             AngstromBundle::for_gas_finalization(limit, solutions.clone(), &pool_snapshots)?;
+
         let _gas_response = self.validation_handle.fetch_gas_for_bundle(bundle).await?;
 
         todo!()

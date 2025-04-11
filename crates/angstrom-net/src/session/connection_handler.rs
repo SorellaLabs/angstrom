@@ -86,6 +86,7 @@ impl ConnectionHandler for StromConnectionHandler {
         let hash = keccak256(peer_id);
         let validator_address = Address::from_slice(&hash[12..]);
         if !self.validator_set.contains(&validator_address) {
+            tracing::error!("got someone try to connect that wasn't a validator");
             return PossibleStromSession::Invalid(futures::stream::empty());
         }
 

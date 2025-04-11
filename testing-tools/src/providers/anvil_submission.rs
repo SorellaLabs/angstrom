@@ -21,7 +21,6 @@ impl SubmitTx for AnvilSubmissionProvider {
         tx: TransactionRequest
     ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
         async move {
-            tracing::debug!(?tx);
             // decoded encoded payload, then apply all mock approvals + balances for the
             // given token
 
@@ -79,5 +78,14 @@ impl SubmitTx for AnvilSubmissionProvider {
             (hash, submitted)
         }
         .boxed()
+    }
+
+    fn submit_transaction_private<'a>(
+        &'a self,
+        signer: &'a AngstromSigner,
+        tx: TransactionRequest,
+        _: u64
+    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
+        self.submit_transaction(signer, tx)
     }
 }

@@ -1,12 +1,12 @@
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Rem, sync::Arc};
 
+// use std::iter::
 use alloy::{
     hex,
     primitives::{Address, B256, BlockNumber, I256, U256, aliases::I24},
     providers::Provider,
     transports::Transport
 };
-use alloy_primitives::Log;
 use angstrom_types::{
     matching::uniswap::{LiqRange, PoolSnapshot},
     primitive::PoolId
@@ -22,7 +22,7 @@ use uniswap_v3_math::{
 use super::{pool_data_loader::PoolData, pool_manager::TickRangeToLoad};
 use crate::uniswap::{
     ConversionError, i32_to_i24,
-    pool_data_loader::{DataLoader, ModifyPositionEvent, PoolDataLoader, TickData}
+    pool_data_loader::{DataLoader, PoolDataLoader, TickData}
 };
 
 #[derive(Default)]
@@ -38,7 +38,8 @@ pub struct SwapResult {
 pub struct TickInfo {
     pub liquidity_gross: u128,
     pub liquidity_net:   i128,
-    pub initialized:     bool
+    pub initialized:     bool,
+    pub is_edge:         bool
 }
 
 // at around 190 is when "max code size exceeded" comes up
@@ -60,7 +61,7 @@ pub struct EnhancedUniswapPool<Loader: PoolDataLoader = DataLoader> {
     pub liquidity:          u128,
     pub liquidity_net:      i128,
     pub sqrt_price:         U256,
-    pub fee:                u32,
+    pub book_fee:           u32,
     pub tick:               i32,
     pub tick_spacing:       i32,
     pub tick_bitmap:        HashMap<i16, U256>,
@@ -110,16 +111,6 @@ where
         *self.ticks.keys().max().unwrap()
     }
 
-    fn next_tick_lte(&self, tick: i32) -> i32 {
-        let extra = tick % self.tick_spacing;
-        tick - extra
-    }
-
-    fn next_tick_gte(&self, tick: i32) -> i32 {
-        let extra = tick % self.tick_spacing;
-        tick + (self.tick_spacing - extra)
-    }
-
     pub fn fetch_pool_snapshot(&self) -> Result<(Address, Address, PoolSnapshot), PoolError> {
         if !self.data_is_populated() {
             return Err(PoolError::PoolNotInitialized);
@@ -128,18 +119,31 @@ where
         // Get the information for our current position
         let current_liquidity = self.liquidity;
         let current_tick = self.tick;
+
+        // we need to pad out ticks here. Any ticks that are in the tick map are either
+        // initalized or not and on a tick boundry. In order to match uniswap
+        // with this, what we need to do is fill in empty ticks that aren't
+        // initalized and not on a tick bound and mark this.
+
         let (less_than, more_than): (Vec<_>, Vec<_>) = self
             .ticks
             .iter()
             .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
             .partition(|t| *t.0 <= current_tick);
 
-        let current_range = LiqRange::new(
+        let lower = *less_than.last().expect("No lower bound to current range");
+        let current_range = LiqRange::new_uninit(
             // Because they're already sorted low to high - we want the highest low and the lowest
             // high
-            self.next_tick_lte(self.tick - 1),
-            self.next_tick_gte(self.tick),
-            current_liquidity
+            *lower.0,
+            *more_than
+                .first()
+                .expect("No upper bound to current range")
+                .0,
+            current_liquidity,
+            lower.1.is_edge,
+            lower.1.initialized,
+            self.book_fee
         )
         .unwrap();
 
@@ -153,15 +157,34 @@ where
                 // We're walking upwards so we add the low tick's net
                 tracked_liq += low_tick_data.liquidity_net;
                 // ensure everything is spaced properly
-                assert!(low_tick.rem(self.tick_spacing) == 0, "Lower tick not aligned");
-                assert!(high_tick.rem(self.tick_spacing) == 0, "Upper tick not aligned");
+                assert!(
+                    low_tick.rem(self.tick_spacing) == 0,
+                    "Lower tick not aligned {} spacing {}",
+                    low_tick,
+                    self.tick_spacing
+                );
+                assert!(
+                    high_tick.rem(self.tick_spacing) == 0,
+                    "Upper tick not aligned {} spacing {}",
+                    high_tick,
+                    self.tick_spacing
+                );
                 assert!(
                     tracked_liq >= 0,
                     "Liquidity dropped below zero {} - {}",
                     low_tick,
                     high_tick
                 );
-                LiqRange::new(**low_tick, **high_tick, tracked_liq.unsigned_abs()).unwrap()
+
+                LiqRange::new_uninit(
+                    **low_tick,
+                    **high_tick,
+                    tracked_liq.unsigned_abs(),
+                    low_tick_data.is_edge,
+                    low_tick_data.initialized,
+                    self.book_fee
+                )
+                .unwrap()
             })
             .collect::<Vec<_>>();
 
@@ -177,15 +200,33 @@ where
                 // We're walking downwards now so we subtract the upper tick's net
                 tracked_liq -= high_tick_data.liquidity_net;
                 // ensure everything is spaced properly
-                assert!(low_tick.rem(self.tick_spacing) == 0, "Lower tick not aligned");
-                assert!(high_tick.rem(self.tick_spacing) == 0, "Upper tick not aligned");
+                assert!(
+                    low_tick.rem(self.tick_spacing) == 0,
+                    "Lower tick not aligned {} spacing {}",
+                    low_tick,
+                    self.tick_spacing
+                );
+                assert!(
+                    high_tick.rem(self.tick_spacing) == 0,
+                    "Upper tick not aligned {} spacing {}",
+                    high_tick,
+                    self.tick_spacing
+                );
                 assert!(
                     tracked_liq >= 0,
                     "Liquidity dropped below zero {} - {}",
                     low_tick,
                     high_tick
                 );
-                LiqRange::new(**low_tick, **high_tick, tracked_liq.unsigned_abs()).unwrap()
+                LiqRange::new_uninit(
+                    **low_tick,
+                    **high_tick,
+                    tracked_liq.unsigned_abs(),
+                    high_tick_data.is_edge,
+                    high_tick_data.initialized,
+                    self.book_fee
+                )
+                .unwrap()
             })
             .collect::<Vec<_>>();
 
@@ -196,7 +237,12 @@ where
         Ok((
             self.token0,
             self.token1,
-            PoolSnapshot::new(self.tick_spacing, liq_ranges, self.sqrt_price.into())?
+            PoolSnapshot::new(
+                self.tick_spacing,
+                liq_ranges,
+                self.sqrt_price.into(),
+                self.book_fee
+            )?
         ))
     }
 
@@ -254,29 +300,111 @@ where
         Ok((tick_data, block_number))
     }
 
-    pub fn apply_ticks(&mut self, mut fetched_ticks: Vec<TickData>) {
+    pub fn apply_ticks(
+        &mut self,
+        mut fetched_ticks: Vec<TickData>,
+        lower_tick: Option<I24>,
+        higher_tick: Option<I24>
+    ) {
         fetched_ticks.sort_by_key(|k| k.tick);
 
-        fetched_ticks.into_iter().for_each(|tick| {
-            self.ticks.insert(
-                tick.tick.as_i32(),
-                TickInfo {
-                    initialized:     tick.initialized,
-                    liquidity_gross: tick.liquidityGross,
-                    liquidity_net:   tick.liquidityNet
+        let process_tick_lower = |l: I24, tick: &TickData| {
+            let tick = tick.tick;
+            (tick > l).then_some(TickData {
+                initialized:    false,
+                tick:           l,
+                liquidityNet:   0,
+                liquidityGross: 0
+            })
+        };
+
+        let process_tick_higher = |h: I24, tick: &TickData| {
+            let tick = tick.tick;
+            (tick < h).then_some(TickData {
+                initialized:    false,
+                tick:           h,
+                liquidityNet:   0,
+                liquidityGross: 0
+            })
+        };
+
+        // if we have a optional start or end tick. what we will do is
+        // create these ticks if they don't exist. this so that we can
+        // mark the end of a range within our model.
+        match (lower_tick, higher_tick) {
+            (Some(l), Some(h)) => {
+                // lower tick
+                let new_lower = fetched_ticks
+                    .first()
+                    .map(|tick| process_tick_lower(l, tick))
+                    .unwrap_or_else(|| process_tick_lower(l, &TickData::default_highest()));
+
+                let new_upper = fetched_ticks
+                    .last()
+                    .map(|tick| process_tick_higher(h, tick))
+                    .unwrap_or_else(|| process_tick_higher(h, &TickData::default_lowest()));
+
+                if let Some(new_upper) = new_upper {
+                    fetched_ticks.push(new_upper);
                 }
-            );
-            self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
-        });
+
+                if let Some(new_lower) = new_lower {
+                    let mut lower = vec![new_lower];
+                    lower.extend(fetched_ticks);
+                    fetched_ticks = lower;
+                }
+            }
+            (None, Some(h)) => {
+                let new_upper = fetched_ticks
+                    .last()
+                    .map(|tick| process_tick_higher(h, tick))
+                    .unwrap_or_else(|| process_tick_higher(h, &TickData::default_lowest()));
+
+                if let Some(new_upper) = new_upper {
+                    fetched_ticks.push(new_upper);
+                }
+            }
+            (Some(l), None) => {
+                let new_lower = fetched_ticks
+                    .first()
+                    .map(|tick| process_tick_lower(l, tick))
+                    .unwrap_or_else(|| process_tick_lower(l, &TickData::default_highest()));
+
+                if let Some(new_lower) = new_lower {
+                    let mut lower = vec![new_lower];
+                    lower.extend(fetched_ticks);
+                    fetched_ticks = lower;
+                }
+            }
+            _ => {}
+        }
+
+        fetched_ticks
+            .into_iter()
+            .unique()
+            .map(|tick| (!tick.initialized, tick))
+            .for_each(|(is_edge, tick)| {
+                tracing::info!(?tick);
+                self.ticks.insert(
+                    tick.tick.as_i32(),
+                    TickInfo {
+                        initialized: tick.initialized,
+                        liquidity_gross: tick.liquidityGross,
+                        liquidity_net: tick.liquidityNet,
+                        is_edge
+                    }
+                );
+                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
+            });
     }
 
     pub async fn load_more_ticks<P: Provider>(
-        &self,
+        &mut self,
         tick_data: TickRangeToLoad,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
-    ) -> Result<Vec<TickData>, PoolError> {
-        Ok(self
+    ) -> Result<(), PoolError> {
+        let ticks = self
             .get_tick_data_batch_request(
                 i32_to_i24(tick_data.start_tick)?,
                 tick_data.zfo,
@@ -285,7 +413,28 @@ where
                 provider
             )
             .await?
-            .0)
+            .0;
+        let end_tick = tick_data.end_tick(self.tick_spacing);
+
+        // if we are zero for one, means that we need a new end tick.
+        if tick_data.zfo {
+            self.apply_ticks(ticks, Some(self.align_lower(I24::unchecked_from(end_tick))), None);
+        } else {
+            self.apply_ticks(ticks, None, Some(self.align_upper(I24::unchecked_from(end_tick))));
+        }
+
+        Ok(())
+    }
+
+    // finds the tick lower to the current and moves to it
+    fn align_lower(&self, tick: I24) -> I24 {
+        let diff = tick.as_i32() % self.tick_spacing;
+        tick - I24::unchecked_from(diff)
+    }
+
+    fn align_upper(&self, tick: I24) -> I24 {
+        let diff = tick.as_i32() % self.tick_spacing;
+        tick + I24::unchecked_from(diff)
     }
 
     async fn sync_ticks<P: Provider>(
@@ -293,10 +442,6 @@ where
         block_number: Option<u64>,
         provider: Arc<P>
     ) -> Result<(), PoolError> {
-        if !self.data_is_populated() {
-            return Err(PoolError::PoolAlreadyInitialized);
-        }
-
         self.ticks.clear();
         self.tick_bitmap.clear();
 
@@ -329,12 +474,12 @@ where
                 break;
             }
 
-            tracing::debug!(?current_tick, ?batch_size, batch_idx, "Fetching tick batch");
+            tracing::info!(?current_tick, ?batch_size, batch_idx, "Fetching tick batch");
 
             let batch_ticks = self
                 .get_tick_data_batch_request(
                     i32_to_i24(current_tick)?,
-                    false,
+                    true,
                     batch_size,
                     block_number,
                     provider.clone()
@@ -346,26 +491,11 @@ where
             fetched_ticks.extend(batch_ticks);
         }
 
-        fetched_ticks.sort_by_key(|k| k.tick);
-
-        fetched_ticks.into_iter().for_each(|tick| {
-            tracing::trace!(
-                initialized = tick.initialized,
-                liq_gross = tick.liquidityGross,
-                liq_net = tick.liquidityNet,
-                tick = tick.tick.as_i32(),
-                "Inserting tick"
-            );
-            self.ticks.insert(
-                tick.tick.as_i32(),
-                TickInfo {
-                    initialized:     tick.initialized,
-                    liquidity_gross: tick.liquidityGross,
-                    liquidity_net:   tick.liquidityNet
-                }
-            );
-            self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
-        });
+        self.apply_ticks(
+            fetched_ticks,
+            Some(self.align_lower(I24::unchecked_from(start_tick))),
+            Some(self.align_upper(I24::unchecked_from(end_tick)))
+        );
 
         Ok(())
     }
@@ -484,7 +614,7 @@ where
                     target_sqrt_ratio,
                     liquidity,
                     amount_specified_remaining,
-                    self.fee
+                    self.book_fee
                 )?;
 
             sqrt_price_x_96 = new_sqrt_price_x_96;
@@ -557,124 +687,6 @@ where
         Ok((swap_result.amount0, swap_result.amount1))
     }
 
-    pub fn simulate_swap_mut(
-        &mut self,
-        token_in: Address,
-        amount_specified: I256,
-        sqrt_price_limit_x96: Option<U256>
-    ) -> Result<(I256, I256), SwapSimulationError> {
-        let swap_result = self._simulate_swap(token_in, amount_specified, sqrt_price_limit_x96)?;
-
-        self.liquidity = swap_result.liquidity;
-        self.sqrt_price = swap_result.sqrt_price_x_96;
-        self.tick = swap_result.tick;
-
-        Ok((swap_result.amount0, swap_result.amount1))
-    }
-
-    pub fn sync_from_swap_log(&mut self, log: Log) -> Result<(), PoolError> {
-        if self.sync_swap_with_sim {
-            self.sync_swap_with_sim(log)
-        } else {
-            self._sync_from_swap_log(log)
-        }
-    }
-
-    fn sync_swap_with_sim(&mut self, log: Log) -> Result<(), PoolError> {
-        let swap_event = Loader::decode_swap_event(&log)?;
-
-        tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.data_loader.address(), "pool before");
-        tracing::debug!(swap_tick=swap_event.tick, swap_price=?swap_event.sqrt_price_x96, swap_liquidity=?swap_event.liquidity, swap_amount0=?swap_event.amount0, swap_amount1=?swap_event.amount1, "swap event");
-
-        let combinations = [
-            (self.token1, swap_event.amount1),
-            (self.token0, swap_event.amount0),
-            (self.token0, swap_event.amount1),
-            (self.token1, swap_event.amount0)
-        ];
-
-        let mut simulation_failed = true;
-        for (token_in, amount_in) in combinations.iter() {
-            let sqrt_price_limit_x96 = Some(U256::from(swap_event.sqrt_price_x96));
-            if let Ok((amount0, amount1)) =
-                self.simulate_swap(*token_in, *amount_in, sqrt_price_limit_x96)
-            {
-                if swap_event.amount0 == amount0 && swap_event.amount1 == amount1 {
-                    // will not fail
-                    let (..) =
-                        self.simulate_swap_mut(*token_in, *amount_in, sqrt_price_limit_x96)?;
-                    simulation_failed = false;
-                    break;
-                }
-            }
-        }
-
-        if simulation_failed {
-            tracing::error!(
-                pool_address = ?self.data_loader.address(),
-                pool_price = ?self.sqrt_price,
-                pool_liquidity = ?self.liquidity,
-                pool_tick = ?self.tick,
-                swap_price = ?swap_event.sqrt_price_x96,
-                swap_tick = swap_event.tick,
-                swap_liquidity = ?swap_event.liquidity,
-                swap_amount0 = ?swap_event.amount0,
-                swap_amount1 = ?swap_event.amount1,
-                "Swap simulation failed"
-            );
-            return Err(PoolError::SwapSimulationFailed);
-        } else {
-            tracing::trace!(pool_tick = ?self.tick, pool_price = ?self.sqrt_price, pool_liquidity = ?self.liquidity, pool_address = ?self.data_loader.address(), "pool after");
-        }
-
-        Ok(())
-    }
-
-    pub fn sync_from_log(&mut self, log: Log) -> Result<(), PoolError> {
-        if Loader::is_swap_event(&log) {
-            self._sync_from_swap_log(log)?;
-        } else if Loader::is_modify_position_event(&log) {
-            self.sync_from_modify_position(log)?;
-        } else {
-            Err(PoolError::InvalidEventSignature(log.topics().to_vec()))?
-        }
-
-        Ok(())
-    }
-
-    pub fn sync_from_modify_position(&mut self, log: Log) -> Result<(), PoolError> {
-        let modify_position_event = Loader::decode_modify_position_event(&log)?;
-        let ModifyPositionEvent { tick_lower, tick_upper, liquidity_delta, .. } =
-            modify_position_event;
-
-        self.update_position(tick_lower, tick_upper, liquidity_delta);
-
-        if liquidity_delta != 0 && self.tick > tick_lower && self.tick < tick_upper {
-            self.liquidity = if liquidity_delta < 0 {
-                self.liquidity - (liquidity_delta.unsigned_abs())
-            } else {
-                // > 0 so we can just
-                self.liquidity + (liquidity_delta.unsigned_abs())
-            }
-        }
-
-        tracing::debug!(?modify_position_event, address = ?self.data_loader.address(), sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "modify position event");
-
-        Ok(())
-    }
-
-    pub fn _sync_from_swap_log(&mut self, log: Log) -> Result<(), PoolError> {
-        let swap_event = Loader::decode_swap_event(&log)?;
-
-        self.sqrt_price = U256::from(swap_event.sqrt_price_x96);
-        self.liquidity = swap_event.liquidity;
-        self.tick = swap_event.tick;
-
-        tracing::debug!(?swap_event, address = ?self.data_loader.address(), sqrt_price = ?self.sqrt_price, liquidity = ?self.liquidity, tick = ?self.tick, "swap event");
-
-        Ok(())
-    }
-
     pub async fn populate_data<P: Provider>(
         &mut self,
         block_number: Option<u64>,
@@ -693,9 +705,11 @@ where
         self.sqrt_price = U256::from(pool_data.sqrtPrice);
         self.tick = pool_data.tick.as_i32();
         self.tick_spacing = pool_data.tickSpacing.as_i32();
-        let mut bytes = [0u8; 4];
-        bytes[..3].copy_from_slice(&pool_data.fee.to_le_bytes::<3>());
-        self.fee = u32::from_le_bytes(bytes);
+        // ignore as this will be dynamic
+        //
+        // let mut bytes = [0u8; 4];
+        // bytes[..3].copy_from_slice(&pool_data.fee.to_le_bytes::<3>());
+        // self.fee = u32::from_le_bytes(bytes);
         self.liquidity_net = pool_data.liquidityNet;
         Ok(())
     }
@@ -704,12 +718,8 @@ where
         !(self.token0.is_zero() || self.token1.is_zero())
     }
 
-    pub(crate) fn update_position(
-        &mut self,
-        tick_lower: i32,
-        tick_upper: i32,
-        liquidity_delta: i128
-    ) {
+    #[cfg(test)]
+    pub fn update_position(&mut self, tick_lower: i32, tick_upper: i32, liquidity_delta: i128) {
         let mut flipped_lower = false;
         let mut flipped_upper = false;
 
@@ -839,10 +849,50 @@ pub enum PoolError {
     Eyre(#[from] eyre::Error)
 }
 
+impl<I: Iterator<Item = TickData>> TickSpaceFill for I {}
+
+pub trait TickSpaceFill: Iterator<Item = TickData> {
+    fn fill_in_missing_ticks_higher(
+        mut self,
+        tick_spacing: i32
+    ) -> impl Iterator<Item = (bool, TickData)>
+    where
+        Self: Sized + Iterator<Item = TickData>
+    {
+        let mut result = Vec::new();
+        // now that we grabbed start, what we want to do is
+        let Some(mut current) = self.next() else { return result.into_iter() };
+        result.push((!current.initialized, current));
+
+        for next_tick in self {
+            let mut diff = (next_tick.tick - current.tick).as_i32();
+            // until we hit the tick spacing we want to create new ticks.
+            let mut cnt = tick_spacing;
+            while diff != tick_spacing {
+                let new_tick = TickData {
+                    tick:           current.tick + I24::unchecked_from(cnt),
+                    initialized:    false,
+                    liquidityGross: 0,
+                    liquidityNet:   0
+                };
+                result.push((false, new_tick));
+
+                cnt += tick_spacing;
+                diff -= tick_spacing;
+            }
+            result.push((!next_tick.initialized, next_tick));
+            current = next_tick;
+        }
+
+        result.into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Once;
 
+    use alloy::primitives::Log;
     use tracing_subscriber::{EnvFilter, fmt};
     use uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick;
 
@@ -911,10 +961,6 @@ mod tests {
         fn decode_swap_event(_: &Log) -> Result<pool_data_loader::SwapEvent, PoolError> {
             unimplemented!()
         }
-
-        fn decode_modify_position_event(_: &Log) -> Result<ModifyPositionEvent, PoolError> {
-            unimplemented!()
-        }
     }
 
     fn setup_basic_pool() -> EnhancedUniswapPool<MockLoader> {
@@ -925,7 +971,7 @@ mod tests {
         pool.token1_decimals = 18;
         pool.liquidity = 1_000_000;
         pool.sqrt_price = U256::from(1004968906420141727126888u128);
-        pool.fee = 3000;
+        pool.book_fee = 3000;
         pool.tick = 1000;
         pool.tick_spacing = 60;
         pool

@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 
 use alloy_primitives::{I256, aliases::I24};
 use malachite::num::arithmetic::traits::Sign;
-use once_cell::sync::Lazy;
 use thiserror::Error;
 
 pub mod loaders;
@@ -15,12 +14,6 @@ pub mod tob;
 
 const MIN_I24: i32 = -8_388_608_i32;
 const MAX_I24: i32 = 8_388_607_i32;
-
-static MIN_I128: Lazy<I256> =
-    Lazy::new(|| I256::from_dec_str(i128::MIN.to_string().as_str()).unwrap());
-
-static MAX_I128: Lazy<I256> =
-    Lazy::new(|| I256::from_dec_str(i128::MAX.to_string().as_str()).unwrap());
 
 fn i32_to_i24(val: i32) -> Result<I24, ConversionError> {
     if !(MIN_I24..=MAX_I24).contains(&val) {
@@ -49,16 +42,6 @@ fn i128_to_i256(value: i128) -> I256 {
     I256::from_be_bytes(bytes)
 }
 
-fn i256_to_i128(value: I256) -> Result<i128, ConversionError> {
-    if value < *MIN_I128 || value > *MAX_I128 {
-        return Err(ConversionError::OverflowErrorI28(value));
-    }
-    let value_bytes: [u8; I256::BYTES] = value.to_be_bytes();
-    let mut bytes = [0u8; 16];
-    bytes.copy_from_slice(&value_bytes[16..]);
-    Ok(i128::from_be_bytes(bytes))
-}
-
 #[derive(Error, Debug)]
 pub enum ConversionError {
     #[error("overflow from i32 to i24 {0:?}")]
@@ -69,48 +52,9 @@ pub enum ConversionError {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{I256, aliases::I24};
+    use alloy_primitives::aliases::I24;
 
-    use crate::uniswap::{MAX_I24, MIN_I24, i32_to_i24, i128_to_i256, i256_to_i128};
-
-    #[test]
-    fn test_i256_to_i128_overflow() {
-        let test_values = [
-            (
-                I256::from_dec_str("-170141183460469231731687303715884105729").unwrap(),
-                "Expected overflow error for I256 to i128 conversion"
-            ),
-            (
-                I256::from_dec_str("170141183460469231731687303715884105728").unwrap(),
-                "Expected underflow error for I256 to i128 conversion"
-            )
-        ];
-
-        for (value, message) in test_values.iter() {
-            let result = i256_to_i128(*value);
-            assert!(result.is_err(), "{}", message);
-        }
-    }
-
-    #[test]
-    fn test_i128_to_i256_and_back() {
-        let test_values = [
-            i128::MIN,
-            i128::MAX,
-            -170141183460469231731687303715884105720_i128,
-            170141183460469231731687303715884105727_i128
-        ];
-        for &original in test_values.iter() {
-            let converted = i128_to_i256(original);
-            assert_eq!(
-                converted,
-                I256::from_dec_str(format!("{}", original).as_str()).unwrap(),
-                "i128 to I256 conversion failed"
-            );
-            let back_to_original = i256_to_i128(converted).unwrap();
-            assert_eq!(original, back_to_original, "i128 to I256 conversion failed");
-        }
-    }
+    use crate::uniswap::{MAX_I24, MIN_I24, i32_to_i24};
 
     #[test]
     #[ignore]

@@ -91,6 +91,7 @@ k256.workspace = true
 homedir.workspace = true
 once_cell.workspace = true
 toml.workspace = true
+itertools.workspace = true
 
 [dev-dependencies]
 testing-tools.workspace = true

@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 const CONTRACT_LOCATION: &str = "contracts/";
 const OUT_DIRECTORY: &str = "contracts/out/";
-const SRC_DIRECTORY: &str = "contracts/src";
+const SRC_DIRECTORY: &str = "crates/uniswap-v4/src/loaders/";
 const BINDINGS_PATH: &str = "/src/uniswap/loaders/mod.rs";
 
 const WANTED_CONTRACTS: [&str; 2] = ["GetUniswapV4PoolData.sol", "GetUniswapV4TickData.sol"];

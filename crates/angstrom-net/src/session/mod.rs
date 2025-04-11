@@ -32,7 +32,7 @@ use tracing::warn;
 
 use crate::{StromMessage, StromProtocolMessage, errors::StromStreamError};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct CachedPeer {
     pub peer_id: PeerId,
     pub addr:    SocketAddr
@@ -48,7 +48,7 @@ impl CachedPeer {
             "enode://{:?}@{}:{}?discport=30303", // TODO: get discport?
             self.peer_id,
             self.addr.ip(),
-            self.addr.port()
+            30303 // self.addr.port()
         )
     }
 }
@@ -132,7 +132,6 @@ impl StromSessionManager {
 
     fn poll_session_msg(&mut self, cx: &mut Context<'_>) -> Poll<Option<SessionEvent>> {
         self.from_sessions.poll_recv(cx).map(|msg| {
-            tracing::trace!(?msg, "got msg from session");
             msg.and_then(|msg_inner| match msg_inner {
                 StromSessionMessage::Disconnected { peer_id } => {
                     self.remove_session(&peer_id);
@@ -155,6 +154,7 @@ impl StromSessionManager {
                     Some(event)
                 }
                 StromSessionMessage::ClosedOnConnectionError { peer_id, error } => {
+                    self.remove_session(&peer_id);
                     Some(SessionEvent::OutgoingConnectionError { peer_id, error })
                 }
                 StromSessionMessage::ValidMessage { peer_id, message } => {

@@ -33,7 +33,18 @@ impl AssetArray {
             .unwrap_or_default()
     }
 
+    pub fn order_assets_properly(&mut self) {
+        self.assets.sort_unstable_by_key(|k| k.addr);
+        self.assets.iter().enumerate().for_each(|(i, s)| {
+            // or default should never be hit
+            *self.assets_idx.entry(s.addr).or_default() = i;
+        })
+    }
+
     pub fn add_or_get_asset_idx(&mut self, asset: Address) -> usize {
+        // because assets need to be properly ordered from lowest to highest,
+        // we will bump asset indexes
+
         *self.assets_idx.entry(asset).or_insert_with(|| {
             self.assets
                 .push(Asset { addr: asset, take: 0, save: 0, settle: 0 });

@@ -42,11 +42,19 @@ once_cell.workspace = true
 rayon = "1"
 # Using clap for our bookgen command-line tool
 clap.workspace = true
+hex = "0.4.3"
 
 [dev-dependencies]
 pade.workspace = true
 pade-macro.workspace = true
 testing-tools.workspace = true
+revm.workspace = true
+revm-bytecode.workspace = true
+revm-database.workspace = true
+revm-state.workspace = true
+revm-primitives.workspace = true
+
+validation.workspace = true
 divan.workspace = true
 tokio-stream.workspace = true
 
@@ -56,4 +64,4 @@ itertools.workspace = true
 
 [features]
 default = []
-testnet-sepolia = ["angstrom-types/testnet-sepolia"]
+testnet-sepolia = ["angstrom-types/testnet-sepolia", "testing-tools/testnet-sepolia", "validation/testnet-sepolia"]

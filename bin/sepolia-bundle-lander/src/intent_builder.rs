@@ -1,11 +1,11 @@
 use std::{
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH}
+    time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
 use alloy::{
     network::TransactionBuilder,
-    primitives::{I256, U256},
+    primitives::{Address, I256, U256},
     providers::Provider,
     sol_types::SolCall
 };
@@ -14,13 +14,13 @@ use alloy_rpc_types::TransactionRequest;
 use angstrom_rpc::api::OrderApiClient;
 use angstrom_types::{
     matching::{Ray, SqrtPriceX96},
-    primitive::AngstromSigner,
-    sol_bindings::grouped_orders::AllOrders
+    primitive::{ANGSTROM_DOMAIN, AngstromSigner},
+    sol_bindings::{grouped_orders::AllOrders, rpc_orders::OmitOrderMeta}
 };
 use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 use uniswap_v4::uniswap::pool::{EnhancedUniswapPool, SwapResult};
 
-use crate::{balanceOfCall, env::ProviderType};
+use crate::env::ProviderType;
 
 /// given a pool and a user, looks at balances of the user and generates trades
 /// based off of this.
@@ -60,17 +60,19 @@ where
     pub async fn submit_new_orders_to_angstrom(&self) -> eyre::Result<()> {
         tracing::info!("building orders for block");
         let orders = self.generate_orders_for_block().await?;
-        tracing::info!(?orders, "orders for block");
+        tracing::info!("orders for block {:#?}", orders);
         let res = self.angstrom_client.send_orders(orders).await?;
         for order in res {
             tracing::info!(?order);
-            // let _ = order.unwrap();
         }
+
         Ok(())
     }
 
     async fn generate_orders_for_block(&self) -> eyre::Result<Vec<AllOrders>> {
+        tokio::time::sleep(Duration::from_millis(15)).await;
         let mut all_orders = self.generate_book_intents().await?;
+        // let mut all_orders = vec![];
         all_orders.push(self.generate_tob_intent().await?);
 
         Ok(all_orders)
@@ -89,12 +91,31 @@ where
         }
 
         let key = &self.keys[0];
+        let addr = key.address();
+        tracing::info!(?addr, "signing tob with");
 
         let (amount, zfo) = self
             .fetch_direction_and_amounts(key, &pool_price, true)
             .await;
+
+        // limit to crossing 30 ticks a swap
+        let target_price = if zfo {
+            uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
+                self.pool.tick - (5 * self.pool.tick_spacing)
+            )
+            .unwrap()
+        } else {
+            uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
+                self.pool.tick + (5 * self.pool.tick_spacing)
+            )
+            .unwrap()
+        };
+
         let t_in = if zfo { self.pool.token0 } else { self.pool.token1 };
-        let (amount_in, amount_out) = self.pool.simulate_swap(t_in, amount, None).unwrap();
+        let (amount_in, amount_out) = self
+            .pool
+            .simulate_swap(t_in, amount, Some(target_price))
+            .unwrap();
 
         let mut amount_in = u128::try_from(amount_in.abs()).unwrap();
         let mut amount_out = u128::try_from(amount_out.abs()).unwrap();
@@ -102,11 +123,10 @@ where
         if !zfo {
             std::mem::swap(&mut amount_in, &mut amount_out);
         }
-
         let range = (amount_in / 100).max(101);
         amount_in += self.gen_range(100, range);
 
-        let order: AllOrders = ToBOrderBuilder::new()
+        let order = ToBOrderBuilder::new()
             .signing_key(Some(key.clone()))
             .asset_in(if zfo { self.pool.token0 } else { self.pool.token1 })
             .asset_out(if !zfo { self.pool.token0 } else { self.pool.token1 })
@@ -114,10 +134,11 @@ where
             .max_gas(gas.to())
             .quantity_out(amount_out)
             .valid_block(self.block_number + 1)
-            .build()
-            .into();
+            .build();
+        let recovery_order_hash = order.no_meta_eip712_signing_hash(&ANGSTROM_DOMAIN);
+        tracing::info!(?order, ?recovery_order_hash);
 
-        Ok(order)
+        Ok(order.into())
     }
 
     /// based on the users distribution of tokens in the pool, will generate
@@ -158,8 +179,20 @@ where
 
         let t_in = if zfo { self.pool.token0 } else { self.pool.token1 };
 
+        let target_price = if zfo {
+            uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
+                self.pool.tick - (10 * self.pool.tick_spacing)
+            )
+            .unwrap()
+        } else {
+            uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
+                self.pool.tick + (10 * self.pool.tick_spacing)
+            )
+            .unwrap()
+        };
+
         let SwapResult { amount0, amount1, sqrt_price_x_96, .. } =
-            self.pool._simulate_swap(t_in, amount, None)?;
+            self.pool._simulate_swap(t_in, amount, Some(target_price))?;
 
         let mut clearing_price = Ray::from(SqrtPriceX96::from(sqrt_price_x_96));
         // how much we want to reduce our price from as we don't need the exact.
@@ -181,20 +214,40 @@ where
             // if we are a bid. we flip the price
             clearing_price.inv_ray_assign_round(true);
         }
+        let deadline = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+            // 3 blocks
+            + Duration::from_secs(36))
+        .as_secs();
 
         Ok(UserOrderBuilder::new()
             .signing_key(Some(key.clone()))
             .is_exact(!is_partial)
             .asset_in(if zfo { self.pool.token0 } else { self.pool.token1 })
             .asset_out(if !zfo { self.pool.token0 } else { self.pool.token1 })
-            .is_standing(false)
+            .is_standing(true)
             .gas_price_asset_zero(gas.to())
+            .deadline(U256::from(deadline))
+            .nonce(deadline)
             .exact_in(exact_in)
             .min_price(clearing_price)
             .block(self.block_number + 1)
             .amount(amount)
             .build()
             .into())
+    }
+
+    async fn make_call<TY: SolCall>(&self, from: Address, target: Address, call: TY) -> TY::Return {
+        let bytes = self
+            .provider
+            .call(
+                TransactionRequest::default()
+                    .with_from(from)
+                    .with_kind(TxKind::Call(target))
+                    .with_input(call.abi_encode())
+            )
+            .await
+            .unwrap();
+        TY::abi_decode_returns(&bytes, true).unwrap()
     }
 
     // (amount, zfo)
@@ -204,30 +257,12 @@ where
         pool_price: &Ray,
         exact_in: bool
     ) -> (I256, bool) {
-        let bytes = self
-            .provider
-            .call(
-                TransactionRequest::default()
-                    .with_from(key.address())
-                    .with_kind(TxKind::Call(self.pool.token0))
-                    .with_input(crate::balanceOfCall::new((key.address(),)).abi_encode())
-            )
-            .await
-            .unwrap();
-
-        let token0_bal = balanceOfCall::abi_decode_returns(&bytes, true).unwrap();
-        let bytes = self
-            .provider
-            .call(
-                TransactionRequest::default()
-                    .with_from(key.address())
-                    .with_kind(TxKind::Call(self.pool.token1))
-                    .with_input(crate::balanceOfCall::new((key.address(),)).abi_encode())
-            )
-            .await
-            .unwrap();
-
-        let token1_bal = balanceOfCall::abi_decode_returns(&bytes, true).unwrap();
+        let token0_bal = self
+            .make_call(key.address(), self.pool.token0, crate::balanceOfCall::new((key.address(),)))
+            .await;
+        let token1_bal = self
+            .make_call(key.address(), self.pool.token1, crate::balanceOfCall::new((key.address(),)))
+            .await;
 
         if token0_bal.balance.is_zero() || token1_bal.balance.is_zero() {
             panic!(
@@ -247,16 +282,16 @@ where
         let amount = if exact_in {
             // exact in will swap 1/6 of the balance
             I256::unchecked_from(if zfo {
-                token0_bal.balance / U256::from(6)
+                token0_bal.balance / U256::from(50)
             } else {
-                token1_bal.balance / U256::from(6)
+                token1_bal.balance / U256::from(50)
             })
         } else {
             // exact out
             I256::unchecked_from(if zfo {
-                t1_with_current_price / U256::from(6)
+                t1_with_current_price / U256::from(50)
             } else {
-                token1_bal.balance / U256::from(6)
+                token1_bal.balance / U256::from(50)
             })
             .wrapping_neg()
         };

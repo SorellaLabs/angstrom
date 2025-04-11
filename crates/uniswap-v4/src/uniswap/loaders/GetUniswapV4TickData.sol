@@ -34,7 +34,7 @@ contract GetUniswapV4TickData {
 
         while (counter < numTicks) {
             (bool initialized, int24 nextTick) = zeroForOne
-                ? IUniV4.getNextTickLt(
+                ? IUniV4.getNextTickLe(
                     IPoolManager(poolManager),
                     poolId,
                     currentTick,
@@ -52,15 +52,15 @@ contract GetUniswapV4TickData {
 
             //Make sure not to overshoot the max/min tick
             //If we do, break the loop, and set the last initialized tick to the max/min tick=
-            if (currentTick < TickMath.MIN_TICK) {
+            if (nextTick < TickMath.MIN_TICK) {
                 tickData[counter].initialized = initialized;
-                tickData[counter].tick = nextTick;
+                tickData[counter].tick = TickMath.MIN_TICK;
                 tickData[counter].liquidityGross = liquidityGross;
                 tickData[counter].liquidityNet = liquidityNet;
                 break;
-            } else if (currentTick > TickMath.MAX_TICK) {
+            } else if (nextTick >= TickMath.MAX_TICK) {
                 tickData[counter].initialized = initialized;
-                tickData[counter].tick = nextTick;
+                tickData[counter].tick = TickMath.MAX_TICK;
                 tickData[counter].liquidityGross = liquidityGross;
                 tickData[counter].liquidityNet = liquidityNet;
                 break;
@@ -73,10 +73,10 @@ contract GetUniswapV4TickData {
 
             counter++;
 
-            // Set the current tick to the next tick and repeat
-            currentTick =
-                currentTick +
-                (zeroForOne ? -tickSpacing : tickSpacing);
+            currentTick = nextTick;
+            if (zeroForOne) {
+                --currentTick;
+            }
         }
 
         TicksWithBlock memory ticksWithBlock = TicksWithBlock({

@@ -384,6 +384,7 @@ where
             .unique()
             .map(|tick| (!tick.initialized, tick))
             .for_each(|(is_edge, tick)| {
+                tracing::info!(?tick);
                 self.ticks.insert(
                     tick.tick.as_i32(),
                     TickInfo {
@@ -473,12 +474,12 @@ where
                 break;
             }
 
-            tracing::debug!(?current_tick, ?batch_size, batch_idx, "Fetching tick batch");
+            tracing::info!(?current_tick, ?batch_size, batch_idx, "Fetching tick batch");
 
             let batch_ticks = self
                 .get_tick_data_batch_request(
                     i32_to_i24(current_tick)?,
-                    false,
+                    true,
                     batch_size,
                     block_number,
                     provider.clone()

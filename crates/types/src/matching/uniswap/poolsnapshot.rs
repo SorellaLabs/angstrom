@@ -196,6 +196,7 @@ impl PoolSnapshot {
         Ok(PoolPrice { liq_range: range, tick, price, fee: self.fee })
     }
 
+    #[cfg(test)]
     pub fn at_tick(&self, tick: i32) -> eyre::Result<PoolPrice> {
         let price = SqrtPriceX96::at_tick(tick)?;
         let range = self
@@ -204,6 +205,7 @@ impl PoolSnapshot {
         Ok(PoolPrice { liq_range: range, tick, price, fee: self.fee })
     }
 
+    #[cfg(test)]
     pub fn liquidity_at_tick(&self, tick: Tick) -> Option<u128> {
         self.get_range_for_tick(tick).map(|range| range.liquidity())
     }

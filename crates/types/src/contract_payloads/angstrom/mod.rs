@@ -530,7 +530,7 @@ impl AngstromBundle {
 
         // Build the rewards structure for the AMM swap
         let book_swap_rewards = book_swap_vec.t0_donation(solution.reward_t0);
-        tracing::info!("book: {book_swap_rewards:#?}");
+        tracing::info!("book: {book_swap_vec:#?}\n\n{book_swap_rewards:#?}");
 
         // If we have a TOB swap, let's get the rewards and combine them - otherwise we
         // continue to use just the rewards we got from the AMM swap

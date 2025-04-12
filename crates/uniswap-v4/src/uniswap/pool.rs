@@ -306,6 +306,7 @@ where
         lower_tick: Option<I24>,
         higher_tick: Option<I24>
     ) {
+        tracing::info!(?lower_tick, ?higher_tick);
         fetched_ticks.sort_by_key(|k| k.tick);
 
         let process_tick_lower = |l: I24, tick: &TickData| {
@@ -433,7 +434,7 @@ where
     }
 
     fn align_upper(&self, tick: I24) -> I24 {
-        let diff = tick.as_i32() % self.tick_spacing;
+        let diff = self.tick_spacing - (tick.as_i32() % self.tick_spacing);
         tick + I24::unchecked_from(diff)
     }
 

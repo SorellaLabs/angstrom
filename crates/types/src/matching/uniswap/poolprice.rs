@@ -388,6 +388,24 @@ mod test {
                     is_tick_edge:   false,
                     is_initialized: true,
                     fee:            0,
+                    direction:      false
+                },
+                LiqRange {
+                    liquidity:      1_000_000_000_000_000_u128,
+                    lower_tick:     100100,
+                    upper_tick:     100200,
+                    is_tick_edge:   false,
+                    is_initialized: true,
+                    fee:            0,
+                    direction:      false
+                },
+                LiqRange {
+                    liquidity:      1_000_000_000_000_u128,
+                    lower_tick:     99900,
+                    upper_tick:     100100,
+                    is_tick_edge:   false,
+                    is_initialized: true,
+                    fee:            0,
                     direction:      true
                 },
                 LiqRange {
@@ -404,9 +422,9 @@ mod test {
             0
         )
         .unwrap();
-        let cur_price = amm.current_price(true);
+        let cur_price = amm.current_price(false);
         let new_price = amm
-            .current_price(true)
+            .current_price(false)
             .d_t0(1000000, Direction::BuyingT0)
             .unwrap();
         assert!(new_price.price > cur_price.price, "Price didn't move up when buying T0");

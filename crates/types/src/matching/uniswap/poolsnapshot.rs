@@ -345,6 +345,33 @@ mod tests {
                 fee:            0,
                 direction:      true
             },
+            LiqRange {
+                lower_tick:     0,
+                upper_tick:     100,
+                liquidity:      1000,
+                is_tick_edge:   false,
+                is_initialized: true,
+                fee:            0,
+                direction:      false
+            },
+            LiqRange {
+                lower_tick:     100,
+                upper_tick:     200,
+                liquidity:      2000,
+                is_tick_edge:   false,
+                is_initialized: true,
+                fee:            0,
+                direction:      false
+            },
+            LiqRange {
+                lower_tick:     200,
+                upper_tick:     300,
+                liquidity:      1500,
+                is_tick_edge:   false,
+                is_initialized: true,
+                fee:            0,
+                direction:      false
+            },
         ];
 
         // Start price in the middle range (tick 150)
@@ -449,6 +476,24 @@ mod tests {
                 fee:            0,
                 direction:      true
             },
+            LiqRange {
+                lower_tick:     0,
+                upper_tick:     100,
+                liquidity:      10000, // 10x more liquidity
+                is_tick_edge:   false,
+                is_initialized: true,
+                fee:            0,
+                direction:      false
+            },
+            LiqRange {
+                lower_tick:     100,
+                upper_tick:     200,
+                liquidity:      20000,
+                is_tick_edge:   false,
+                is_initialized: true,
+                fee:            0,
+                direction:      false
+            },
         ];
 
         let low_liq_ranges = vec![
@@ -469,6 +514,24 @@ mod tests {
                 is_initialized: true,
                 fee:            0,
                 direction:      true
+            },
+            LiqRange {
+                lower_tick:     0,
+                upper_tick:     100,
+                liquidity:      1000,
+                is_tick_edge:   false,
+                is_initialized: true,
+                fee:            0,
+                direction:      false
+            },
+            LiqRange {
+                lower_tick:     100,
+                upper_tick:     200,
+                liquidity:      2000,
+                is_tick_edge:   false,
+                is_initialized: true,
+                fee:            0,
+                direction:      false
             },
         ];
 

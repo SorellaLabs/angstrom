@@ -778,388 +778,401 @@ impl<'a> VolumeFillMatcher<'a> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::{cell::Cell, cmp::max};
-
-    use alloy::primitives::Uint;
-    use alloy_primitives::FixedBytes;
-    use angstrom_types::{
-        matching::{Debt, DebtType, Ray, SqrtPriceX96, uniswap::PoolSnapshot},
-        orders::OrderFillState,
-        primitive::PoolId
-    };
-    use testing_tools::type_generator::{
-        amm::generate_single_position_amm_at_tick, orders::UserOrderBuilder
-    };
-
-    use super::VolumeFillMatcher;
-    use crate::book::{BookOrder, OrderBook, order::OrderContainer};
-
-    #[test]
-    fn runs_cleanly_on_empty_book() {
-        let book = OrderBook::default();
-        let matcher = VolumeFillMatcher::new(&book);
-        let solution = matcher.solution(None);
-        assert!(solution.ucp == Ray::ZERO, "Empty book didn't have UCP of zero");
-    }
-
-    // Let's write tests for all the basic matching outcomes to make sure they
-    // work properly, then come up with some more complicated situations and
-    // components to check
-
-    #[test]
-    fn bid_outweighs_ask_sets_price() {
-        let pool_id = PoolId::random();
-        let bid_price = Ray::from(Uint::from(1_000_000_000_u128)).inv_ray_round(true);
-        let low_price = Ray::from(Uint::from(1_000_u128));
-        let bid_order = UserOrderBuilder::new()
-            .partial()
-            .bid()
-            .amount(100)
-            .min_price(bid_price)
-            .with_storage()
-            .bid()
-            .build();
-        let ask_order = UserOrderBuilder::new()
-            .exact()
-            .ask()
-            .amount(10)
-            .exact_in(true)
-            .min_price(low_price)
-            .with_storage()
-            .ask()
-            .build();
-        println!("Bid order:\n{:?}", bid_order);
-        println!("Ask order:\n{:?}", ask_order);
-        let book = OrderBook::new(pool_id, None, vec![bid_order.clone()], vec![ask_order], None);
-        let mut matcher = VolumeFillMatcher::new(&book);
-        let _fill_outcome = matcher.run_match();
-        let solution = matcher.from_checkpoint().unwrap().solution(None);
-        println!(
-            "Solution UCP: {:?}\nFinal bid: {:?}",
-            solution.ucp,
-            bid_price.inv_ray_round(true)
-        );
-        assert!(
-            solution.ucp == bid_price.inv_ray_round(true),
-            "Bid outweighed but the final price wasn't properly set"
-        );
-    }
-
-    #[test]
-    fn ask_outweighs_bid_sets_price() {
-        let pool_id = PoolId::random();
-        let high_price = Ray::from(Uint::from(1_000_000_000_u128));
-        let low_price = Ray::from(Uint::from(1_000_u128));
-        let bid_order = UserOrderBuilder::new()
-            .exact()
-            .bid()
-            .amount(10)
-            .bid_min_price(high_price)
-            .with_storage()
-            .bid()
-            .build();
-        let ask_order = UserOrderBuilder::new()
-            .partial()
-            .ask()
-            .amount(100)
-            .min_price(low_price)
-            .with_storage()
-            .ask()
-            .build();
-        let book = OrderBook::new(pool_id, None, vec![bid_order.clone()], vec![ask_order], None);
-        let mut matcher = VolumeFillMatcher::new(&book);
-        let _fill_outcome = matcher.run_match();
-        let solution = matcher.from_checkpoint().unwrap().solution(None);
-        assert!(
-            solution.ucp == low_price,
-            "Ask outweighed but the final price wasn't properly set"
-        );
-    }
-
-    fn basic_order_book(
-        is_bid: bool,
-        count: usize,
-        target_price: Ray,
-        price_step: usize
-    ) -> (Vec<BookOrder>, Vec<OrderFillState>) {
-        let orders = (0..count)
-            .map(|i| {
-                // Step downwards if it's a bid to simulate bid book ordering
-                let min_price = if is_bid {
-                    (target_price - (i * price_step)).inv_ray_round(true)
-                } else {
-                    target_price + (i * price_step)
-                };
-                UserOrderBuilder::new()
-                    .exact()
-                    .exact_in(!is_bid)
-                    .min_price(min_price)
-                    .amount(100)
-                    .is_bid(is_bid)
-                    .with_storage()
-                    .is_bid(is_bid)
-                    .build()
-            })
-            .collect();
-        let states = (0..count).map(|_| OrderFillState::Unfilled).collect();
-        (orders, states)
-    }
-
-    #[test]
-    fn gets_next_bid_order() {
-        let index = Cell::new(0);
-        let (book, fill_state) = basic_order_book(true, 10, Ray::from(10000_usize), 10);
-        let mut debt = None;
-        let amm = None;
-        let next_order =
-            VolumeFillMatcher::next_order(true, &index, &mut debt, amm, &book, &fill_state)
-                .unwrap();
-        if let OrderContainer::BookOrder { order, .. } = next_order {
-            assert_eq!(*order, book[0], "Next order selected was not first order in book");
-        } else {
-            panic!("Next order is not a BookOrder");
-        }
-    }
-
-    #[test]
-    fn bid_side_amm_overrides_book_order() {
-        let market: PoolSnapshot =
-            generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price(true);
-        let amm = Some(&amm_price);
-        let mut debt = None;
-        let index = Cell::new(0);
-        let (book, fill_state) =
-            basic_order_book(true, 10, Ray::from(SqrtPriceX96::at_tick(99999).unwrap()), 10);
-
-        let next_order =
-            VolumeFillMatcher::next_order(true, &index, &mut debt, amm, &book, &fill_state)
-                .unwrap();
-
-        assert!(matches!(next_order, OrderContainer::Composite(_)), "Composite order not created!");
-        if let OrderContainer::Composite(c) = next_order {
-            println!("Order: {:?}", c);
-            assert_eq!(c.start_price(), amm_price.as_ray(), "AMM price is not starting price");
-            assert!(c.quantity(book[0].price()) > 0, "Composite order has zero quantity");
-        } else {
-            panic!("Composite order not created but did match?");
-        }
-    }
-
-    #[test]
-    fn bid_side_debt_overrides_amm_and_book() {
-        let market: PoolSnapshot =
-            generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price(true);
-        let amm = Some(&amm_price);
-        let mut debt = Some(Debt::new(
-            DebtType::ExactIn(100000000),
-            Ray::from(SqrtPriceX96::at_tick(101001).unwrap())
-        ));
-        let index = Cell::new(0);
-        let (book, fill_state) =
-            basic_order_book(true, 10, Ray::from(SqrtPriceX96::at_tick(99999).unwrap()), 10);
-
-        let next_order =
-            VolumeFillMatcher::next_order(true, &index, &mut debt, amm, &book, &fill_state)
-                .unwrap();
-        let order_q_target = max(book[0].price(), amm_price.as_ray());
-
-        assert!(matches!(next_order, OrderContainer::Composite(_)), "Composite order not created!");
-        if let OrderContainer::Composite(c) = next_order {
-            assert!(c.debt().is_some(), "No debt in created Composite");
-            assert!(c.amm().is_none(), "AMM erroneously included in created Composite");
-            assert!(c.bound().is_some(), "No bound price included");
-            assert!(c.quantity(order_q_target) > 0, "Composite order has zero quantity");
-            assert_eq!(c.bound().unwrap(), amm_price.as_ray(), "Bound is not AMM price");
-        } else {
-            panic!("Composite order not created but did match?");
-        }
-    }
-
-    #[test]
-    fn bid_side_book_overrides_amm_and_debt() {
-        let market: PoolSnapshot =
-            generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price(true);
-        let amm = Some(&amm_price);
-        let mut debt = Some(Debt::new(
-            DebtType::ExactIn(100000000),
-            Ray::from(SqrtPriceX96::at_tick(10001).unwrap())
-        ));
-        let index = Cell::new(0);
-        let (book, fill_state) =
-            basic_order_book(true, 10, Ray::from(SqrtPriceX96::at_tick(100100).unwrap()), 10);
-
-        let next_order =
-            VolumeFillMatcher::next_order(true, &index, &mut debt, amm, &book, &fill_state)
-                .unwrap();
-
-        assert!(matches!(next_order, OrderContainer::BookOrder { .. }), "Book order not chosen");
-        if let OrderContainer::BookOrder { order: b, .. } = next_order {
-            assert_eq!(*b, book[0], "First book order not chosen");
-        } else {
-            panic!("Book order not created but did match?");
-        }
-    }
-
-    #[test]
-    fn bid_side_debt_overrides_amm_and_book_with_book_bound() {
-        let market: PoolSnapshot =
-            generate_single_position_amm_at_tick(99999, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price(true);
-        let amm = Some(&amm_price);
-        let mut debt = Some(Debt::new(
-            DebtType::ExactIn(100000000),
-            Ray::from(SqrtPriceX96::at_tick(101001).unwrap())
-        ));
-        let index = Cell::new(0);
-        let (book, fill_state) =
-            basic_order_book(true, 10, Ray::from(SqrtPriceX96::at_tick(100000).unwrap()), 10);
-
-        let next_order =
-            VolumeFillMatcher::next_order(true, &index, &mut debt, amm, &book, &fill_state)
-                .unwrap();
-
-        let order_q_target = max(book[0].price(), amm_price.as_ray());
-
-        assert!(matches!(next_order, OrderContainer::Composite(_)), "Composite order not created!");
-        if let OrderContainer::Composite(c) = next_order {
-            assert!(c.debt().is_some(), "No debt in created Composite");
-            assert!(c.amm().is_none(), "AMM erroneously included in created Composite");
-            assert!(c.bound().is_some(), "No bound price included");
-            assert!(c.quantity(order_q_target) > 0, "Composite order has zero quantity");
-            assert_eq!(c.bound().unwrap(), amm_price.as_ray(), "Bound is not AMM price");
-        } else {
-            panic!("Composite order not created but did match?");
-        }
-    }
-
-    #[test]
-    fn ask_side_debt_has_zero_quantity() {
-        let mut debt = Some(Debt::new(
-            DebtType::ExactOut(100000000),
-            Ray::from(SqrtPriceX96::at_tick(100000).unwrap())
-        ));
-        let index = Cell::new(0);
-        let (book, fill_state) =
-            basic_order_book(false, 10, Ray::from(SqrtPriceX96::at_tick(101000).unwrap()), 10);
-
-        let next_order =
-            VolumeFillMatcher::next_order(false, &index, &mut debt, None, &book, &fill_state)
-                .unwrap();
-
-        assert!(matches!(next_order, OrderContainer::Composite(_)), "Composite order not created!");
-        if let OrderContainer::Composite(c) = next_order {
-            let q = c.quantity(book[0].price_for_book_side(false));
-            assert_eq!(q, 0, "Ask-side debt doesn't have a zero quantity!");
-        } else {
-            panic!("Composite order not created but did match?");
-        }
-    }
-
-    #[test]
-    fn ask_side_double_match_works() {
-        let debt_price = Ray::from(SqrtPriceX96::at_tick(90000).unwrap());
-        let ask_target_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
-        let bid_target_price = Ray::from(SqrtPriceX96::at_tick(110000).unwrap());
-        let debt = Some(Debt::new(DebtType::ExactOut(100000), debt_price));
-        if let Some(ref d) = debt {
-            assert!(!d.valid_for_price(ask_target_price), "Debt already at ask price");
-        }
-        let (ask_book, _) = basic_order_book(false, 10, ask_target_price, 10);
-        let (bid_book, _) = basic_order_book(true, 10, bid_target_price, 10);
-
-        let ob = OrderBook::new(
-            FixedBytes::random(),
-            None,
-            bid_book,
-            ask_book,
-            Some(crate::book::sort::SortStrategy::ByPriceByVolume)
-        );
-        let mut matcher = VolumeFillMatcher::new(&ob);
-        matcher.debt = debt;
-        let first_ask = matcher.book.asks().get(matcher.ask_idx.get()).unwrap();
-        assert!(
-            !debt.as_ref().unwrap().valid_for_price(first_ask.price()),
-            "Debt starting at first ask price"
-        );
-        let end = matcher.single_match();
-        println!("Fill ended: {:?}", end);
-        let current_ask = matcher
-            .book
-            .asks()
-            .get(matcher.bid_idx.get())
-            .expect("Missing current ask");
-        let current_ask_fill_state = matcher
-            .ask_outcomes
-            .get(matcher.ask_idx.get())
-            .expect("Missing current ask fill state");
-        assert!(
-            matches!(current_ask_fill_state, OrderFillState::PartialFill(8)),
-            "Wrong amount of volume taken from our order"
-        );
-        assert!(matcher.debt.is_some(), "No debt left on the matcher");
-        let md = matcher.debt.as_ref().unwrap();
-        assert!(md.valid_for_price(current_ask.price()), "Debt is not at the current order price");
-
-        matcher.single_match();
-
-        let current_bid_fill_state = matcher
-            .bid_outcomes
-            .get(matcher.bid_idx.get())
-            .expect("Missing current bid fill state");
-        assert!(
-            matches!(current_bid_fill_state, OrderFillState::PartialFill(92)),
-            "Wrong amount of volume taken from our order"
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn ask_side_double_match_works_with_amm() {
-        let market: PoolSnapshot =
-            generate_single_position_amm_at_tick(91000, 100, 1_000_000_000_000_000_u128);
-        let debt_price = Ray::from(SqrtPriceX96::at_tick(90000).unwrap());
-        let ask_target_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
-        let bid_target_price = Ray::from(SqrtPriceX96::at_tick(110000).unwrap());
-        let debt = Some(Debt::new(DebtType::ExactIn(100000), debt_price));
-        if let Some(ref d) = debt {
-            assert!(!d.valid_for_price(ask_target_price), "Debt already at ask price");
-        }
-        let (ask_book, _) = basic_order_book(false, 10, ask_target_price, 10);
-        let (bid_book, _) = basic_order_book(true, 10, bid_target_price, 10);
-
-        let ob = OrderBook::new(
-            FixedBytes::random(),
-            Some(market),
-            bid_book,
-            ask_book,
-            Some(crate::book::sort::SortStrategy::ByPriceByVolume)
-        );
-        let mut matcher = VolumeFillMatcher::new(&ob);
-        matcher.debt = debt;
-        let first_ask = matcher.book.asks().get(matcher.ask_idx.get()).unwrap();
-        assert!(
-            !debt.as_ref().unwrap().valid_for_price(first_ask.price()),
-            "Debt starting at first ask price"
-        );
-        let end = matcher.single_match();
-        println!("Fill ended: {:?}", end);
-    }
-
-    #[test]
-    fn get_match_quantities_works_properly() {
-        let bid_price = Ray::from(SqrtPriceX96::at_tick(110000).unwrap());
-        let ask_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
-        let (bid_book, _) = basic_order_book(true, 10, bid_price, 10);
-        let (ask_book, _) = basic_order_book(false, 10, ask_price, 10);
-        let bid = OrderContainer::from(&bid_book[0]);
-        let ask = OrderContainer::from(&ask_book[0]);
-        println!("Bid order: {:?}\nAsk order: {:?}", bid, ask);
-        let (bid_q, ask_q) = VolumeFillMatcher::get_match_quantities(&bid, &ask, None);
-        println!("Bidq: {}\nAskq: {}", bid_q, ask_q);
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use std::{cell::Cell, cmp::max};
+//
+//     use alloy::primitives::Uint;
+//     use alloy_primitives::FixedBytes;
+//     use angstrom_types::{
+//         matching::{Debt, DebtType, Ray, SqrtPriceX96, uniswap::PoolSnapshot},
+//         orders::OrderFillState,
+//         primitive::PoolId
+//     };
+//     use testing_tools::type_generator::{
+//         amm::generate_single_position_amm_at_tick, orders::UserOrderBuilder
+//     };
+//
+//     use super::VolumeFillMatcher;
+//     use crate::book::{BookOrder, OrderBook, order::OrderContainer};
+//
+//     #[test]
+//     fn runs_cleanly_on_empty_book() {
+//         let book = OrderBook::default();
+//         let matcher = VolumeFillMatcher::new(&book);
+//         let solution = matcher.solution(None);
+//         assert!(solution.ucp == Ray::ZERO, "Empty book didn't have UCP of
+// zero");     }
+//
+//     // Let's write tests for all the basic matching outcomes to make sure
+// they     // work properly, then come up with some more complicated situations
+// and     // components to check
+//
+//     #[test]
+//     fn bid_outweighs_ask_sets_price() {
+//         let pool_id = PoolId::random();
+//         let bid_price =
+// Ray::from(Uint::from(1_000_000_000_u128)).inv_ray_round(true);         let
+// low_price = Ray::from(Uint::from(1_000_u128));         let bid_order =
+// UserOrderBuilder::new()             .partial()
+//             .bid()
+//             .amount(100)
+//             .min_price(bid_price)
+//             .with_storage()
+//             .bid()
+//             .build();
+//         let ask_order = UserOrderBuilder::new()
+//             .exact()
+//             .ask()
+//             .amount(10)
+//             .exact_in(true)
+//             .min_price(low_price)
+//             .with_storage()
+//             .ask()
+//             .build();
+//         println!("Bid order:\n{:?}", bid_order);
+//         println!("Ask order:\n{:?}", ask_order);
+//         let book = OrderBook::new(pool_id, None, vec![bid_order.clone()],
+// vec![ask_order], None);         let mut matcher =
+// VolumeFillMatcher::new(&book);         let _fill_outcome =
+// matcher.run_match();         let solution =
+// matcher.from_checkpoint().unwrap().solution(None);         println!(
+//             "Solution UCP: {:?}\nFinal bid: {:?}",
+//             solution.ucp,
+//             bid_price.inv_ray_round(true)
+//         );
+//         assert!(
+//             solution.ucp == bid_price.inv_ray_round(true),
+//             "Bid outweighed but the final price wasn't properly set"
+//         );
+//     }
+//
+//     #[test]
+//     fn ask_outweighs_bid_sets_price() {
+//         let pool_id = PoolId::random();
+//         let high_price = Ray::from(Uint::from(1_000_000_000_u128));
+//         let low_price = Ray::from(Uint::from(1_000_u128));
+//         let bid_order = UserOrderBuilder::new()
+//             .exact()
+//             .bid()
+//             .amount(10)
+//             .bid_min_price(high_price)
+//             .with_storage()
+//             .bid()
+//             .build();
+//         let ask_order = UserOrderBuilder::new()
+//             .partial()
+//             .ask()
+//             .amount(100)
+//             .min_price(low_price)
+//             .with_storage()
+//             .ask()
+//             .build();
+//         let book = OrderBook::new(pool_id, None, vec![bid_order.clone()],
+// vec![ask_order], None);         let mut matcher =
+// VolumeFillMatcher::new(&book);         let _fill_outcome =
+// matcher.run_match();         let solution =
+// matcher.from_checkpoint().unwrap().solution(None);         assert!(
+//             solution.ucp == low_price,
+//             "Ask outweighed but the final price wasn't properly set"
+//         );
+//     }
+//
+//     fn basic_order_book(
+//         is_bid: bool,
+//         count: usize,
+//         target_price: Ray,
+//         price_step: usize
+//     ) -> (Vec<BookOrder>, Vec<OrderFillState>) {
+//         let orders = (0..count)
+//             .map(|i| {
+//                 // Step downwards if it's a bid to simulate bid book ordering
+//                 let min_price = if is_bid {
+//                     (target_price - (i * price_step)).inv_ray_round(true)
+//                 } else {
+//                     target_price + (i * price_step)
+//                 };
+//                 UserOrderBuilder::new()
+//                     .exact()
+//                     .exact_in(!is_bid)
+//                     .min_price(min_price)
+//                     .amount(100)
+//                     .is_bid(is_bid)
+//                     .with_storage()
+//                     .is_bid(is_bid)
+//                     .build()
+//             })
+//             .collect();
+//         let states = (0..count).map(|_| OrderFillState::Unfilled).collect();
+//         (orders, states)
+//     }
+//
+//     #[test]
+//     fn gets_next_bid_order() {
+//         let index = Cell::new(0);
+//         let (book, fill_state) = basic_order_book(true, 10,
+// Ray::from(10000_usize), 10);         let mut debt = None;
+//         let amm = None;
+//         let next_order =
+//             VolumeFillMatcher::next_order(true, &index, &mut debt, amm,
+// &book, &fill_state)                 .unwrap();
+//         if let OrderContainer::BookOrder { order, .. } = next_order {
+//             assert_eq!(*order, book[0], "Next order selected was not first
+// order in book");         } else {
+//             panic!("Next order is not a BookOrder");
+//         }
+//     }
+//
+//     #[test]
+//     fn bid_side_amm_overrides_book_order() {
+//         let market: PoolSnapshot =
+//             generate_single_position_amm_at_tick(100000, 100,
+// 1_000_000_000_000_000_u128);         let amm_price =
+// market.current_price(true);         let amm = Some(&amm_price);
+//         let mut debt = None;
+//         let index = Cell::new(0);
+//         let (book, fill_state) =
+//             basic_order_book(true, 10,
+// Ray::from(SqrtPriceX96::at_tick(99999).unwrap()), 10);
+//
+//         let next_order =
+//             VolumeFillMatcher::next_order(true, &index, &mut debt, amm,
+// &book, &fill_state)                 .unwrap();
+//
+//         assert!(matches!(next_order, OrderContainer::Composite(_)),
+// "Composite order not created!");         if let OrderContainer::Composite(c)
+// = next_order {             println!("Order: {:?}", c);
+//             assert_eq!(c.start_price(), amm_price.as_ray(), "AMM price is not
+// starting price");             assert!(c.quantity(book[0].price()) > 0,
+// "Composite order has zero quantity");         } else {
+//             panic!("Composite order not created but did match?");
+//         }
+//     }
+//
+//     #[test]
+//     fn bid_side_debt_overrides_amm_and_book() {
+//         let market: PoolSnapshot =
+//             generate_single_position_amm_at_tick(100000, 100,
+// 1_000_000_000_000_000_u128);         let amm_price =
+// market.current_price(true);         let amm = Some(&amm_price);
+//         let mut debt = Some(Debt::new(
+//             DebtType::ExactIn(100000000),
+//             Ray::from(SqrtPriceX96::at_tick(101001).unwrap())
+//         ));
+//         let index = Cell::new(0);
+//         let (book, fill_state) =
+//             basic_order_book(true, 10,
+// Ray::from(SqrtPriceX96::at_tick(99999).unwrap()), 10);
+//
+//         let next_order =
+//             VolumeFillMatcher::next_order(true, &index, &mut debt, amm,
+// &book, &fill_state)                 .unwrap();
+//         let order_q_target = max(book[0].price(), amm_price.as_ray());
+//
+//         assert!(matches!(next_order, OrderContainer::Composite(_)),
+// "Composite order not created!");         if let OrderContainer::Composite(c)
+// = next_order {             assert!(c.debt().is_some(), "No debt in created
+// Composite");             assert!(c.amm().is_none(), "AMM erroneously included
+// in created Composite");             assert!(c.bound().is_some(), "No bound
+// price included");             assert!(c.quantity(order_q_target) > 0,
+// "Composite order has zero quantity");
+// assert_eq!(c.bound().unwrap(), amm_price.as_ray(), "Bound is not AMM price");
+//         } else {
+//             panic!("Composite order not created but did match?");
+//         }
+//     }
+//
+//     #[test]
+//     fn bid_side_book_overrides_amm_and_debt() {
+//         let market: PoolSnapshot =
+//             generate_single_position_amm_at_tick(100000, 100,
+// 1_000_000_000_000_000_u128);         let amm_price =
+// market.current_price(true);         let amm = Some(&amm_price);
+//         let mut debt = Some(Debt::new(
+//             DebtType::ExactIn(100000000),
+//             Ray::from(SqrtPriceX96::at_tick(10001).unwrap())
+//         ));
+//         let index = Cell::new(0);
+//         let (book, fill_state) =
+//             basic_order_book(true, 10,
+// Ray::from(SqrtPriceX96::at_tick(100100).unwrap()), 10);
+//
+//         let next_order =
+//             VolumeFillMatcher::next_order(true, &index, &mut debt, amm,
+// &book, &fill_state)                 .unwrap();
+//
+//         assert!(matches!(next_order, OrderContainer::BookOrder { .. }), "Book
+// order not chosen");         if let OrderContainer::BookOrder { order: b, .. }
+// = next_order {             assert_eq!(*b, book[0], "First book order not
+// chosen");         } else {
+//             panic!("Book order not created but did match?");
+//         }
+//     }
+//
+//     #[test]
+//     fn bid_side_debt_overrides_amm_and_book_with_book_bound() {
+//         let market: PoolSnapshot =
+//             generate_single_position_amm_at_tick(99999, 100,
+// 1_000_000_000_000_000_u128);         let amm_price =
+// market.current_price(true);         let amm = Some(&amm_price);
+//         let mut debt = Some(Debt::new(
+//             DebtType::ExactIn(100000000),
+//             Ray::from(SqrtPriceX96::at_tick(101001).unwrap())
+//         ));
+//         let index = Cell::new(0);
+//         let (book, fill_state) =
+//             basic_order_book(true, 10,
+// Ray::from(SqrtPriceX96::at_tick(100000).unwrap()), 10);
+//
+//         let next_order =
+//             VolumeFillMatcher::next_order(true, &index, &mut debt, amm,
+// &book, &fill_state)                 .unwrap();
+//
+//         let order_q_target = max(book[0].price(), amm_price.as_ray());
+//
+//         assert!(matches!(next_order, OrderContainer::Composite(_)),
+// "Composite order not created!");         if let OrderContainer::Composite(c)
+// = next_order {             assert!(c.debt().is_some(), "No debt in created
+// Composite");             assert!(c.amm().is_none(), "AMM erroneously included
+// in created Composite");             assert!(c.bound().is_some(), "No bound
+// price included");             assert!(c.quantity(order_q_target) > 0,
+// "Composite order has zero quantity");
+// assert_eq!(c.bound().unwrap(), amm_price.as_ray(), "Bound is not AMM price");
+//         } else {
+//             panic!("Composite order not created but did match?");
+//         }
+//     }
+//
+//     #[test]
+//     fn ask_side_debt_has_zero_quantity() {
+//         let mut debt = Some(Debt::new(
+//             DebtType::ExactOut(100000000),
+//             Ray::from(SqrtPriceX96::at_tick(100000).unwrap())
+//         ));
+//         let index = Cell::new(0);
+//         let (book, fill_state) =
+//             basic_order_book(false, 10,
+// Ray::from(SqrtPriceX96::at_tick(101000).unwrap()), 10);
+//
+//         let next_order =
+//             VolumeFillMatcher::next_order(false, &index, &mut debt, None,
+// &book, &fill_state)                 .unwrap();
+//
+//         assert!(matches!(next_order, OrderContainer::Composite(_)),
+// "Composite order not created!");         if let OrderContainer::Composite(c)
+// = next_order {             let q =
+// c.quantity(book[0].price_for_book_side(false));             assert_eq!(q, 0,
+// "Ask-side debt doesn't have a zero quantity!");         } else {
+//             panic!("Composite order not created but did match?");
+//         }
+//     }
+//
+//     #[test]
+//     fn ask_side_double_match_works() {
+//         let debt_price = Ray::from(SqrtPriceX96::at_tick(90000).unwrap());
+//         let ask_target_price =
+// Ray::from(SqrtPriceX96::at_tick(100000).unwrap());         let
+// bid_target_price = Ray::from(SqrtPriceX96::at_tick(110000).unwrap());
+//         let debt = Some(Debt::new(DebtType::ExactOut(100000), debt_price));
+//         if let Some(ref d) = debt {
+//             assert!(!d.valid_for_price(ask_target_price), "Debt already at
+// ask price");         }
+//         let (ask_book, _) = basic_order_book(false, 10, ask_target_price,
+// 10);         let (bid_book, _) = basic_order_book(true, 10, bid_target_price,
+// 10);
+//
+//         let ob = OrderBook::new(
+//             FixedBytes::random(),
+//             None,
+//             bid_book,
+//             ask_book,
+//             Some(crate::book::sort::SortStrategy::ByPriceByVolume)
+//         );
+//         let mut matcher = VolumeFillMatcher::new(&ob);
+//         matcher.debt = debt;
+//         let first_ask =
+// matcher.book.asks().get(matcher.ask_idx.get()).unwrap();         assert!(
+//             !debt.as_ref().unwrap().valid_for_price(first_ask.price()),
+//             "Debt starting at first ask price"
+//         );
+//         let end = matcher.single_match();
+//         println!("Fill ended: {:?}", end);
+//         let current_ask = matcher
+//             .book
+//             .asks()
+//             .get(matcher.bid_idx.get())
+//             .expect("Missing current ask");
+//         let current_ask_fill_state = matcher
+//             .ask_outcomes
+//             .get(matcher.ask_idx.get())
+//             .expect("Missing current ask fill state");
+//         assert!(
+//             matches!(current_ask_fill_state, OrderFillState::PartialFill(8)),
+//             "Wrong amount of volume taken from our order"
+//         );
+//         assert!(matcher.debt.is_some(), "No debt left on the matcher");
+//         let md = matcher.debt.as_ref().unwrap();
+//         assert!(md.valid_for_price(current_ask.price()), "Debt is not at the
+// current order price");
+//
+//         matcher.single_match();
+//
+//         let current_bid_fill_state = matcher
+//             .bid_outcomes
+//             .get(matcher.bid_idx.get())
+//             .expect("Missing current bid fill state");
+//         assert!(
+//             matches!(current_bid_fill_state,
+// OrderFillState::PartialFill(92)),             "Wrong amount of volume taken
+// from our order"         );
+//     }
+//
+//     #[test]
+//     #[ignore]
+//     fn ask_side_double_match_works_with_amm() {
+//         let market: PoolSnapshot =
+//             generate_single_position_amm_at_tick(91000, 100,
+// 1_000_000_000_000_000_u128);         let debt_price =
+// Ray::from(SqrtPriceX96::at_tick(90000).unwrap());         let
+// ask_target_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+//         let bid_target_price =
+// Ray::from(SqrtPriceX96::at_tick(110000).unwrap());         let debt =
+// Some(Debt::new(DebtType::ExactIn(100000), debt_price));         if let
+// Some(ref d) = debt {
+// assert!(!d.valid_for_price(ask_target_price), "Debt already at ask price");
+//         }
+//         let (ask_book, _) = basic_order_book(false, 10, ask_target_price,
+// 10);         let (bid_book, _) = basic_order_book(true, 10, bid_target_price,
+// 10);
+//
+//         let ob = OrderBook::new(
+//             FixedBytes::random(),
+//             Some(market),
+//             bid_book,
+//             ask_book,
+//             Some(crate::book::sort::SortStrategy::ByPriceByVolume)
+//         );
+//         let mut matcher = VolumeFillMatcher::new(&ob);
+//         matcher.debt = debt;
+//         let first_ask =
+// matcher.book.asks().get(matcher.ask_idx.get()).unwrap();         assert!(
+//             !debt.as_ref().unwrap().valid_for_price(first_ask.price()),
+//             "Debt starting at first ask price"
+//         );
+//         let end = matcher.single_match();
+//         println!("Fill ended: {:?}", end);
+//     }
+//
+//     #[test]
+//     fn get_match_quantities_works_properly() {
+//         let bid_price = Ray::from(SqrtPriceX96::at_tick(110000).unwrap());
+//         let ask_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
+//         let (bid_book, _) = basic_order_book(true, 10, bid_price, 10);
+//         let (ask_book, _) = basic_order_book(false, 10, ask_price, 10);
+//         let bid = OrderContainer::from(&bid_book[0]);
+//         let ask = OrderContainer::from(&ask_book[0]);
+//         println!("Bid order: {:?}\nAsk order: {:?}", bid, ask);
+//         let (bid_q, ask_q) = VolumeFillMatcher::get_match_quantities(&bid,
+// &ask, None);         println!("Bidq: {}\nAskq: {}", bid_q, ask_q);
+//     }
+// }

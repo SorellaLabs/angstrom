@@ -72,6 +72,8 @@ impl ProposalBuilder {
                     .with_positions(vec![
                         LiqRange::new_init(99000, 101000, 1_000_000_000_000_000_u128, 0, true)
                             .unwrap(),
+                        LiqRange::new_init(99000, 101000, 1_000_000_000_000_000_u128, 0, false)
+                            .unwrap(),
                     ])
                     .build();
                 Pool::new(key, amm, Address::random())

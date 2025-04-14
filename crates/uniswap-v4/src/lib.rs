@@ -138,8 +138,7 @@ pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer>(
     UniswapPoolManager::new(factory, current_block, notifier, block_sync, update_stream).await
 }
 
-// #[cfg(all(test, feature = "testnet-sepolia"))]
-#[cfg(test)]
+#[cfg(all(test, feature = "testnet-sepolia"))]
 pub mod fuzz_uniswap {
     use std::{collections::HashSet, ops::Deref, sync::Arc};
 

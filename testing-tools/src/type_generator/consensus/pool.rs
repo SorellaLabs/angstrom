@@ -83,6 +83,7 @@ impl PoolBuilder {
         let price = SqrtPriceX96::at_tick(100000).unwrap();
         let ranges = vec![
             LiqRange::new_init(99000, 101000, 1_000_000_000_000_000_000_u128, 0, true).unwrap(),
+            LiqRange::new_init(99000, 101000, 1_000_000_000_000_000_000_u128, 0, false).unwrap(),
         ];
         PoolSnapshot::new(10, ranges, price, 0).unwrap()
     }

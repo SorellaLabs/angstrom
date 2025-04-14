@@ -101,7 +101,7 @@ pub fn run() -> eyre::Result<()> {
             })
             .launch()
             .await?;
-        network = network.with_reth(node.network.clone());
+        let network = network.with_reth(node.network.clone());
 
         initialize_strom_components(
             args,

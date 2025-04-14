@@ -385,7 +385,8 @@ mod test {
                 upper_tick:     100100,
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             }],
             SqrtPriceX96::at_tick(100001).unwrap(),
             0
@@ -408,7 +409,8 @@ mod test {
                     upper_tick:     100100,
                     is_tick_edge:   false,
                     is_initialized: true,
-                    fee:            0
+                    fee:            0,
+                    direction:      true
                 },
                 LiqRange {
                     liquidity:      1_000_000_000_000_000_u128,
@@ -416,7 +418,8 @@ mod test {
                     upper_tick:     100200,
                     is_tick_edge:   false,
                     is_initialized: true,
-                    fee:            0
+                    fee:            0,
+                    direction:      true
                 },
             ],
             SqrtPriceX96::at_tick(100100).unwrap(),

@@ -39,7 +39,8 @@ pub struct TickInfo {
     pub liquidity_gross: u128,
     pub liquidity_net:   i128,
     pub initialized:     bool,
-    pub is_edge:         bool
+    pub is_edge:         bool,
+    pub zfo:             bool
 }
 
 // at around 190 is when "max code size exceeded" comes up

@@ -294,7 +294,8 @@ mod tests {
                 liquidity:      1000,
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             },
             LiqRange {
                 lower_tick:     100,
@@ -302,7 +303,8 @@ mod tests {
                 liquidity:      2000,
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             },
             LiqRange {
                 lower_tick:     200,
@@ -310,7 +312,8 @@ mod tests {
                 liquidity:      1500,
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             },
         ];
 

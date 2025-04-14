@@ -19,7 +19,11 @@ pub struct LiqRange {
     pub(super) liquidity:      u128,
     pub(super) is_tick_edge:   bool,
     pub(super) is_initialized: bool,
-    pub(super) fee:            u32
+    pub(super) fee:            u32,
+    /// The direction in which this range is valid for.
+    /// this is because ranges change based on which way you are
+    /// swapping through the pool.
+    pub(super) direction:      bool
 }
 
 impl LiqRange {
@@ -27,7 +31,8 @@ impl LiqRange {
         lower_tick: Tick,
         upper_tick: Tick,
         liquidity: u128,
-        fee: u32
+        fee: u32,
+        direction: bool
     ) -> eyre::Result<Self> {
         // Validate our inputs
         if upper_tick <= lower_tick {
@@ -49,7 +54,8 @@ impl LiqRange {
             liquidity,
             is_tick_edge: false,
             is_initialized: true,
-            fee
+            fee,
+            direction
         })
     }
 
@@ -59,7 +65,8 @@ impl LiqRange {
         liquidity: u128,
         is_tick_edge: bool,
         is_initialized: bool,
-        fee: u32
+        fee: u32,
+        direction: bool
     ) -> eyre::Result<Self> {
         // Validate our inputs
         if upper_tick <= lower_tick {
@@ -75,7 +82,7 @@ impl LiqRange {
         if lower_tick < MIN_TICK {
             return Err(eyre!("Proposed lower tick '{}' out of valid tick range", lower_tick));
         }
-        Ok(Self { lower_tick, upper_tick, liquidity, is_tick_edge, is_initialized, fee })
+        Ok(Self { lower_tick, upper_tick, liquidity, is_tick_edge, is_initialized, fee, direction })
     }
 
     pub fn lower_tick(&self) -> i32 {

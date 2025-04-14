@@ -92,18 +92,6 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
     ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let node_pubkey = reth_network.local_node_record().id.to_pubkey().unwrap();
-
-        // Load cached peers
-        // tracing::info!("Currently connected to {} peers",
-        // reth_network.num_connected_peers()); let cached_peers =
-        // Self::load_known_peers(&node_pubkey); tracing::info!("Connecting to
-        // {} cached peers...", cached_peers.len()); for peer in
-        // cached_peers.peers {     tracing::info!("Adding cached peer {}",
-        // peer.enr());     //reth_network.connect_peer(peer.peer_id,
-        // peer.addr);     reth_network.add_peer(peer.peer_id, peer.addr);
-        // }
-
         let peers = Arc::new(AtomicUsize::default());
         let cpeers = peers.clone();
         let handle =

@@ -209,7 +209,7 @@ fn fill_from_amm() {
 #[test]
 fn amm_provides_last_mile_liquidity() {
     let amm = generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-    let amm_price = amm.current_price().as_ray();
+    let amm_price = amm.current_price(true).as_ray();
     let book = make_books(
         vec![TestOrder { q: 100, p: amm_price + 100000000000_usize }],
         vec![TestOrder { q: 50, p: amm_price - 100_usize }],

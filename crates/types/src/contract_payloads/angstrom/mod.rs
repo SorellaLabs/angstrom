@@ -574,7 +574,6 @@ impl AngstromBundle {
         } else {
             book_swap_vec
         };
-        tracing::info!("pool: {net_pool_vec:#?}");
 
         // Account for our net_pool_vec
         let (asset_in_index, asset_out_index) =

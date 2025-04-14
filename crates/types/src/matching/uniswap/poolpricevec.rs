@@ -324,6 +324,7 @@ impl<'a> PoolPriceVec<'a> {
             start.direction,
             "have the wrong ticks loaded for this direction"
         );
+        tracing::info!(is_ask = !direction.is_bid());
 
         while left_to_swap > 0 {
             // Update our current liquidiy range

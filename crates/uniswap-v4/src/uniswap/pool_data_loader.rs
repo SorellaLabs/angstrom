@@ -55,6 +55,7 @@ sol! {
     #[derive(Debug)]
     struct TicksWithBlock {
         TickData[] ticks;
+        uint256 validTo;
         uint256 blockNumber;
     }
 }
@@ -262,7 +263,14 @@ impl PoolDataLoader for DataLoader {
 
         let result = TicksWithBlock::abi_decode(&data, true)?;
 
-        Ok((result.ticks, result.blockNumber))
+        Ok((
+            result
+                .ticks
+                .into_iter()
+                .take(result.validTo.to::<usize>())
+                .collect::<Vec<_>>(),
+            result.blockNumber
+        ))
     }
 
     fn address(&self) -> AngstromPoolId {

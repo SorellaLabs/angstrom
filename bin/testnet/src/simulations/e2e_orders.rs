@@ -88,7 +88,7 @@ fn end_to_end_agent<'a>(
                             }
                         }
                         Some(resolved_order) = pending_orders.next() => {
-                            tracing::info!("orders resolved");
+                            tracing::info!("orders resolved {:#?}", resolved_order);
                         }
 
                     }

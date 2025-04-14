@@ -119,6 +119,7 @@ where
 
             let outcome =
                 PayloadTopOfBlockOrder::calc_vec_and_reward(tob, &market_snapshot).map(|(_, r)| r);
+            tracing::info!(?outcome);
 
             if outcome.is_err() {
                 let zfo = !tob.is_bid;

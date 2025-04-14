@@ -3,7 +3,7 @@ use std::{io::Write, iter::Chain, slice::Iter, time::UNIX_EPOCH};
 
 use alloy_primitives::U256;
 use angstrom_types::{
-    matching::uniswap::PoolSnapshot,
+    matching::{SqrtPriceX96, uniswap::PoolSnapshot},
     primitive::PoolId,
     sol_bindings::{
         Ray,
@@ -11,6 +11,7 @@ use angstrom_types::{
     }
 };
 use serde::{Deserialize, Serialize};
+use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 
 use self::sort::SortStrategy;
 
@@ -75,7 +76,7 @@ impl OrderBook {
             .map(|bid| bid.bid_price() / U256::from(2))
             .chain(self.asks().iter().map(|ask| ask.price() / U256::from(2)))
             .min()
-            .unwrap_or_default()
+            .unwrap_or_else(|| SqrtPriceX96::from(MIN_SQRT_RATIO).into())
     }
 
     pub fn highest_clearing_price(&self) -> Ray {
@@ -84,7 +85,7 @@ impl OrderBook {
             .map(|bid| bid.bid_price() * U256::from(2))
             .chain(self.asks().iter().map(|ask| ask.price() * U256::from(2)))
             .max()
-            .unwrap_or(Ray::from(U256::MAX))
+            .unwrap_or_else(|| SqrtPriceX96::from(MAX_SQRT_RATIO).into())
     }
 
     /// writes the book to the cwd + timestamp in seconds

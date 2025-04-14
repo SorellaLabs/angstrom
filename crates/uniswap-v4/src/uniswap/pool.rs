@@ -451,6 +451,7 @@ where
         self.apply_ticks(true, asks, None, None);
 
         let (_, _, bids) = bids?;
+
         self.apply_ticks(false, bids, None, None);
 
         Ok(())
@@ -486,16 +487,26 @@ where
                 .await?
                 .0;
 
-            let Some(next_tick) = batch_ticks
-                .iter()
-                .max_by(|a, b| if direction { b.tick.cmp(&a.tick) } else { a.tick.cmp(&b.tick) })
-                .map(|k| k.tick.as_i32())
-            else {
+            let Some(next_tick) = (if direction {
+                batch_ticks
+                    .iter()
+                    .min_by_key(|a| a.tick)
+                    .map(|k| k.tick.as_i32())
+            } else {
+                batch_ticks
+                    .iter()
+                    .max_by_key(|a| a.tick)
+                    .map(|k| k.tick.as_i32())
+            }) else {
                 break;
             };
 
+            let len = batch_ticks.len();
             current_tick = next_tick;
             fetched_ticks.extend(batch_ticks);
+            if len != TICKS_PER_BATCH {
+                break;
+            }
         }
 
         Ok((start_tick, current_tick, fetched_ticks))

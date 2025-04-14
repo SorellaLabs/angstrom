@@ -16,6 +16,7 @@ contract GetUniswapV4TickData {
 
     struct TicksWithBlock {
         TickData[] ticks;
+        uint256 validTo;
         uint256 blockNumber;
     }
 
@@ -52,9 +53,7 @@ contract GetUniswapV4TickData {
 
             //Make sure not to overshoot the max/min tick
             //If we do, break the loop, and set the last initialized tick to the max/min tick=
-            if (
-                nextTick <= TickMath.MIN_TICK || nextTick >= TickMath.MAX_TICK
-            ) {
+            if (nextTick < TickMath.MIN_TICK || nextTick >= TickMath.MAX_TICK) {
                 break;
             } else {
                 tickData[counter].initialized = initialized;
@@ -73,6 +72,7 @@ contract GetUniswapV4TickData {
 
         TicksWithBlock memory ticksWithBlock = TicksWithBlock({
             ticks: tickData,
+            validTo: counter,
             blockNumber: block.number
         });
 

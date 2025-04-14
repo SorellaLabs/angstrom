@@ -16,6 +16,7 @@ use angstrom_types::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::trace;
+use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 
 use crate::OrderBook;
 
@@ -84,7 +85,14 @@ impl<'a> DeltaMatcher<'a> {
     }
 
     fn fetch_concentrated_liquidity(&self, price: Ray) -> (I256, I256) {
-        let end_sqrt = SqrtPriceX96::from(price);
+        let end_sqrt = if price.within_sqrt_price_bounds() {
+            SqrtPriceX96::from(price)
+        } else {
+            let this_price: SqrtPriceX96 = MIN_SQRT_RATIO.into();
+            let ray: Ray = this_price.into();
+
+            if price <= ray { this_price } else { MAX_SQRT_RATIO.into() }
+        };
         let Some(start_price) = self
             .amm_start_price
             .clone()

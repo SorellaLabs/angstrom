@@ -188,11 +188,11 @@ impl<'a> LiqRangeRef<'a> {
     /// to properly mirror the uniswap swap logic
     pub fn next(&self, direction: Direction) -> Option<Self> {
         match direction {
-            // bid
+            // bid, price goes up
             Direction::BuyingT0 => self
                 .pool_snap
                 .get_range_for_tick(self.range.upper_tick, false),
-            // ask
+            // ask price goes down
             Direction::SellingT0 => self
                 .pool_snap
                 .get_range_for_tick(self.range.lower_tick - 1, true)

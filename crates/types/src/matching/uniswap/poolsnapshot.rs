@@ -62,8 +62,11 @@ impl PoolSnapshot {
         // Find the tick range that our current tick lies within
         let Some(cur_tick_idx_ask) = ranges
             .iter()
-            .filter(|f| f.direction)
-            .position(|r| r.lower_tick <= current_tick && current_tick < r.upper_tick)
+            .enumerate()
+            .filter(|(_, f)| f.direction)
+            .find_map(|(idx, r)| {
+                (r.lower_tick <= current_tick && current_tick < r.upper_tick).then_some(idx)
+            })
         else {
             return Err(eyre!(
                 "Unable to find initialized tick window for tick '{}'\n {:?}",
@@ -74,8 +77,11 @@ impl PoolSnapshot {
 
         let Some(cur_tick_idx_bid) = ranges
             .iter()
-            .filter(|f| !f.direction)
-            .position(|r| r.lower_tick <= current_tick && current_tick < r.upper_tick)
+            .enumerate()
+            .filter(|(_, f)| !f.direction)
+            .find_map(|(idx, r)| {
+                (r.lower_tick <= current_tick && current_tick < r.upper_tick).then_some(idx)
+            })
         else {
             return Err(eyre!(
                 "Unable to find initialized tick window for tick '{}'\n {:?}",
@@ -112,8 +118,8 @@ impl PoolSnapshot {
     pub fn get_range_for_tick(&self, tick: Tick, direction: bool) -> Option<LiqRangeRef> {
         self.ranges
             .iter()
-            .filter(|range| range.direction == direction)
             .enumerate()
+            .filter(|(_, range)| range.direction == direction)
             .find(|(_, r)| r.lower_tick <= tick && tick < r.upper_tick)
             .map(|(range_idx, range)| LiqRangeRef { pool_snap: self, range, range_idx })
     }
@@ -133,8 +139,8 @@ impl PoolSnapshot {
         let mut output = self
             .ranges
             .iter()
-            .filter(|range| range.direction == is_ask)
             .enumerate()
+            .filter(|(_, range)| range.direction == is_ask)
             .filter_map(|(range_idx, range)| {
                 if range.upper_tick > *low && range.lower_tick <= *high {
                     Some(LiqRangeRef { pool_snap: self, range, range_idx })

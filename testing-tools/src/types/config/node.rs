@@ -9,7 +9,7 @@ use angstrom_types::{CHAIN_ID, primitive::AngstromSigner};
 use consensus::AngstromValidator;
 use rand_chacha::{
     ChaCha20Rng,
-    rand_core::{SeedableRng, TryRngCore}
+    rand_core::{RngCore, SeedableRng}
 };
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 
@@ -48,7 +48,7 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             seed[0..8].copy_from_slice(&node_id.to_le_bytes());
             let mut rng = ChaCha20Rng::from_seed(seed);
             let mut sk_bytes = [0u8; 32];
-            rng.try_fill_bytes(&mut sk_bytes).unwrap();
+            rng.fill_bytes(&mut sk_bytes);
             SecretKey::from_slice(&sk_bytes).unwrap()
         };
 

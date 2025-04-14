@@ -1,13 +1,13 @@
 use std::{
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
 use alloy::{
     network::TransactionBuilder,
     primitives::{Address, I256, U256},
     providers::Provider,
-    sol_types::SolCall,
+    sol_types::SolCall
 };
 use alloy_primitives::TxKind;
 use alloy_rpc_types::TransactionRequest;
@@ -26,25 +26,25 @@ use crate::env::ProviderType;
 /// based off of this.
 pub struct PoolIntentBundler<T>
 where
-    T: OrderApiClient + Send + Sync + 'static,
+    T: OrderApiClient + Send + Sync + 'static
 {
-    pool: EnhancedUniswapPool,
-    block_number: u64,
-    keys: Vec<AngstromSigner>,
-    provider: Arc<ProviderType>,
-    angstrom_client: Arc<T>,
+    pool:            EnhancedUniswapPool,
+    block_number:    u64,
+    keys:            Vec<AngstromSigner>,
+    provider:        Arc<ProviderType>,
+    angstrom_client: Arc<T>
 }
 
 impl<T> PoolIntentBundler<T>
 where
-    T: OrderApiClient + Send + Sync + 'static,
+    T: OrderApiClient + Send + Sync + 'static
 {
     pub fn new(
         pool: EnhancedUniswapPool,
         block_number: u64,
         keys: Vec<AngstromSigner>,
         provider: Arc<ProviderType>,
-        angstrom_client: Arc<T>,
+        angstrom_client: Arc<T>
     ) -> Self {
         Self { pool, block_number, keys, provider, angstrom_client }
     }
@@ -101,12 +101,12 @@ where
         // limit to crossing 30 ticks a swap
         let target_price = if zfo {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick - (5 * self.pool.tick_spacing),
+                self.pool.tick - (5 * self.pool.tick_spacing)
             )
             .unwrap()
         } else {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick + (5 * self.pool.tick_spacing),
+                self.pool.tick + (5 * self.pool.tick_spacing)
             )
             .unwrap()
         };
@@ -181,20 +181,12 @@ where
 
         let target_price = if zfo {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-<<<<<<< HEAD
-                self.pool.tick - (30 * self.pool.tick_spacing),
-=======
                 self.pool.tick - (10 * self.pool.tick_spacing)
->>>>>>> 75f6874f (solid progress made)
             )
             .unwrap()
         } else {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-<<<<<<< HEAD
-                self.pool.tick + (30 * self.pool.tick_spacing),
-=======
                 self.pool.tick + (10 * self.pool.tick_spacing)
->>>>>>> 75f6874f (solid progress made)
             )
             .unwrap()
         };
@@ -263,41 +255,14 @@ where
         &self,
         key: &AngstromSigner,
         pool_price: &Ray,
-        exact_in: bool,
+        exact_in: bool
     ) -> (I256, bool) {
-<<<<<<< HEAD
-        let bytes = self
-            .provider
-            .call(
-                TransactionRequest::default()
-                    .with_from(key.address())
-                    .with_kind(TxKind::Call(self.pool.token0))
-                    .with_input(crate::balanceOfCall::new((key.address(),)).abi_encode()),
-            )
-            .await
-            .unwrap();
-
-        let token0_bal = balanceOfCall::abi_decode_returns(&bytes, true).unwrap();
-        let bytes = self
-            .provider
-            .call(
-                TransactionRequest::default()
-                    .with_from(key.address())
-                    .with_kind(TxKind::Call(self.pool.token1))
-                    .with_input(crate::balanceOfCall::new((key.address(),)).abi_encode()),
-            )
-            .await
-            .unwrap();
-
-        let token1_bal = balanceOfCall::abi_decode_returns(&bytes, true).unwrap();
-=======
         let token0_bal = self
             .make_call(key.address(), self.pool.token0, crate::balanceOfCall::new((key.address(),)))
             .await;
         let token1_bal = self
             .make_call(key.address(), self.pool.token1, crate::balanceOfCall::new((key.address(),)))
             .await;
->>>>>>> 75f6874f (solid progress made)
 
         if token0_bal.balance.is_zero() || token1_bal.balance.is_zero() {
             panic!(

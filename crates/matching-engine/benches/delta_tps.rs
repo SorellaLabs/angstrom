@@ -42,7 +42,8 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 300_000_000,
                 is_edge:         false,
-                initialized:     true
+                initialized:     true,
+                zfo:             true
             }
         ),
         (
@@ -51,7 +52,8 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 400_000_000,
                 is_edge:         false,
-                initialized:     true
+                initialized:     true,
+                zfo:             true
             }
         ),
         (
@@ -60,7 +62,8 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 500_000_000,
                 is_edge:         false,
-                initialized:     true
+                initialized:     true,
+                zfo:             true
             }
         ),
         (
@@ -69,7 +72,8 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 600_000_000,
                 is_edge:         false,
-                initialized:     true
+                initialized:     true,
+                zfo:             true
             }
         ),
         (
@@ -78,7 +82,8 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 700_000_000,
                 is_edge:         false,
-                initialized:     true
+                initialized:     true,
+                zfo:             true
             }
         ),
         (
@@ -87,7 +92,8 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 800_000_000,
                 is_edge:         false,
-                initialized:     true
+                initialized:     true,
+                zfo:             true
             }
         ),
         (
@@ -96,7 +102,8 @@ async fn setup_synced_pool_for_order_generation() -> SyncedUniswapPool {
                 liquidity_net:   100_000_000,
                 liquidity_gross: 900_000_000,
                 is_edge:         false,
-                initialized:     true
+                initialized:     true,
+                zfo:             true
             }
         ),
     ]

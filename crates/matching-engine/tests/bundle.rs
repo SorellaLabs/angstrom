@@ -75,7 +75,7 @@ fn delta_matcher_test() {
         let (book, tob): (OrderBook, DeltaMatcherToB) = serde_json::from_slice(&bytes).unwrap();
         println!("TOB: {tob:#?}");
         let amm = book.amm().unwrap();
-        let post_tob = (amm.current_price() + Quantity::Token1(2595367055652127901)).unwrap();
+        let post_tob = (amm.current_price(false) + Quantity::Token1(2595367055652127901)).unwrap();
         let post_tob_price = post_tob.end_bound.as_ray();
         println!("Post-TOB: {post_tob_price:?}");
         let post_match = (post_tob.end_bound - Quantity::Token1(4265126092132152183)).unwrap();
@@ -88,8 +88,8 @@ fn delta_matcher_test() {
 
         let mut matcher = DeltaMatcher::new(&book, tob, false);
         let solution = matcher.solution(None);
-        let end_price = amm.at_price(solution.ucp.into()).unwrap();
-        let mid_map = PoolPriceVec::from_price_range(amm.current_price(), end_price).unwrap();
+        let end_price = amm.at_price(solution.ucp.into(), true).unwrap();
+        let mid_map = PoolPriceVec::from_price_range(amm.current_price(true), end_price).unwrap();
         println!("Mid-map: {} {} {:?}", mid_map.d_t0, mid_map.d_t1, mid_map.end_bound.as_ray());
         // println!("{:#?}", solution);
     })

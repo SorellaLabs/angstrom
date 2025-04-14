@@ -20,20 +20,23 @@ use crate::{
 pub struct PoolSnapshot {
     /// Known tick ranges and liquidity positions gleaned from the market
     /// snapshot
-    pub ranges:                Vec<LiqRange>,
+    pub ranges:                  Vec<LiqRange>,
     /// The current SqrtPriceX96 for this pairing as of this snapshot
     /// (𝛥Token1/𝛥Token0)
-    pub(crate) sqrt_price_x96: SqrtPriceX96,
+    pub(crate) sqrt_price_x96:   SqrtPriceX96,
     /// The current tick our price lives in - price might not be precisely on a
     /// tick bound, this is the LOWER of the possible ticks
-    pub(crate) current_tick:   Tick,
+    pub(crate) current_tick:     Tick,
     /// Index into the 'ranges' vector for the PoolRange that includes the tick
-    /// our current price lives at/in
-    pub(crate) cur_tick_idx:   usize,
+    /// our current price lives at/in for bids
+    pub(crate) cur_tick_idx_bid: usize,
+    /// Index into the 'ranges' vector for the PoolRange that includes the tick
+    /// our current price lives at/in for asks
+    pub(crate) cur_tick_idx_ask: usize,
     /// Tick spacing of our pool
-    pub(crate) tick_spacing:   i32,
+    pub(crate) tick_spacing:     i32,
     /// the fee on the underlying pool
-    pub(crate) fee:            u32
+    pub(crate) fee:              u32
 }
 
 impl PoolSnapshot {
@@ -51,26 +54,15 @@ impl PoolSnapshot {
             return Err(eyre!("Invalid tick spacing: {tick_spacing}"));
         }
 
-        // If we had only a single range, then `windows` wouldn't have iterated at all
-        // so let's check that quick
-        if ranges.len() == 1 {
-            for t in [ranges[0].lower_tick, ranges[0].upper_tick] {
-                if t % tick_spacing != 0 {
-                    return Err(eyre!(
-                        "Provided tick '{t}' not aligned with tick spacing {tick_spacing}"
-                    ));
-                }
-            }
-        }
-
         // Get our current tick from our current price
         let current_tick = get_tick_at_sqrt_ratio(sqrt_price_x96.into()).wrap_err_with(|| {
             eyre!("Unable to get a tick from our current price '{:?}'", sqrt_price_x96)
         })?;
 
         // Find the tick range that our current tick lies within
-        let Some(cur_tick_idx) = ranges
+        let Some(cur_tick_idx_ask) = ranges
             .iter()
+            .filter(|f| f.direction)
             .position(|r| r.lower_tick <= current_tick && current_tick < r.upper_tick)
         else {
             return Err(eyre!(
@@ -80,7 +72,27 @@ impl PoolSnapshot {
             ));
         };
 
-        Ok(Self { ranges, sqrt_price_x96, current_tick, cur_tick_idx, tick_spacing, fee })
+        let Some(cur_tick_idx_bid) = ranges
+            .iter()
+            .filter(|f| !f.direction)
+            .position(|r| r.lower_tick <= current_tick && current_tick < r.upper_tick)
+        else {
+            return Err(eyre!(
+                "Unable to find initialized tick window for tick '{}'\n {:?}",
+                current_tick,
+                ranges
+            ));
+        };
+
+        Ok(Self {
+            ranges,
+            sqrt_price_x96,
+            current_tick,
+            cur_tick_idx_ask,
+            cur_tick_idx_bid,
+            tick_spacing,
+            fee
+        })
     }
 
     pub fn set_fee(&mut self, fee: u32) {
@@ -91,18 +103,23 @@ impl PoolSnapshot {
         self.fee
     }
 
+    pub fn as_sqrtpricex96(&self) -> SqrtPriceX96 {
+        self.sqrt_price_x96
+    }
+
     /// Find the PoolRange in this market snapshot that the provided tick lies
     /// within, if any
-    pub fn get_range_for_tick(&self, tick: Tick) -> Option<LiqRangeRef> {
+    pub fn get_range_for_tick(&self, tick: Tick, direction: bool) -> Option<LiqRangeRef> {
         self.ranges
             .iter()
+            .filter(|range| range.direction == direction)
             .enumerate()
             .find(|(_, r)| r.lower_tick <= tick && tick < r.upper_tick)
             .map(|(range_idx, range)| LiqRangeRef { pool_snap: self, range, range_idx })
     }
 
     /// Returns a list of references to all liquidity ranges including and
-    /// between the given Ticks.  These ranges will be continuous in order, and
+    /// between the given Ticks. These ranges will be continuous in order, and
     /// in the order specified from the range for start_tick to the range for
     /// end_tick
     pub fn ranges_for_ticks(
@@ -110,10 +127,13 @@ impl PoolSnapshot {
         start_tick: Tick,
         end_tick: Tick
     ) -> eyre::Result<Vec<LiqRangeRef>> {
+        let is_ask = start_tick >= end_tick;
+
         let (low, high) = low_to_high(&start_tick, &end_tick);
         let mut output = self
             .ranges
             .iter()
+            .filter(|range| range.direction == is_ask)
             .enumerate()
             .filter_map(|(range_idx, range)| {
                 if range.upper_tick > *low && range.lower_tick <= *high {
@@ -174,40 +194,44 @@ impl PoolSnapshot {
         self.ranges.iter()
     }
 
-    pub fn current_price(&self) -> PoolPrice {
+    pub fn current_price(&self, direction: bool) -> PoolPrice {
+        let index = if direction { self.cur_tick_idx_ask } else { self.cur_tick_idx_bid };
         let range = self
             .ranges
-            .get(self.cur_tick_idx)
-            .map(|range| LiqRangeRef { pool_snap: self, range, range_idx: self.cur_tick_idx })
+            .get(index)
+            .map(|range| LiqRangeRef { pool_snap: self, range, range_idx: index })
             .unwrap();
+
         PoolPrice {
             liq_range: range,
-            tick:      self.current_tick,
-            price:     self.sqrt_price_x96,
-            fee:       self.fee
+            tick: self.current_tick,
+            price: self.sqrt_price_x96,
+            fee: self.fee,
+            direction
         }
     }
 
-    pub fn at_price(&self, price: SqrtPriceX96) -> eyre::Result<PoolPrice> {
+    pub fn at_price(&self, price: SqrtPriceX96, direction: bool) -> eyre::Result<PoolPrice> {
         let tick = price.to_tick()?;
         let range = self
-            .get_range_for_tick(tick)
+            .get_range_for_tick(tick, direction)
             .ok_or_eyre("Unable to find tick range for price")?;
-        Ok(PoolPrice { liq_range: range, tick, price, fee: self.fee })
+        Ok(PoolPrice { liq_range: range, tick, price, fee: self.fee, direction })
     }
 
     #[cfg(test)]
-    pub fn at_tick(&self, tick: i32) -> eyre::Result<PoolPrice> {
+    pub fn at_tick(&self, tick: i32, direction: bool) -> eyre::Result<PoolPrice> {
         let price = SqrtPriceX96::at_tick(tick)?;
         let range = self
-            .get_range_for_tick(tick)
+            .get_range_for_tick(tick, direction)
             .ok_or_eyre("Unable to find tick range for price")?;
-        Ok(PoolPrice { liq_range: range, tick, price, fee: self.fee })
+        Ok(PoolPrice { liq_range: range, tick, price, fee: self.fee, direction })
     }
 
     #[cfg(test)]
     pub fn liquidity_at_tick(&self, tick: Tick) -> Option<u128> {
-        self.get_range_for_tick(tick).map(|range| range.liquidity())
+        self.get_range_for_tick(tick, true)
+            .map(|range| range.liquidity())
     }
 
     pub fn is_bid(&self, price: Ray) -> bool {
@@ -407,7 +431,8 @@ mod tests {
                 liquidity:      10000, // 10x more liquidity
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             },
             LiqRange {
                 lower_tick:     100,
@@ -415,7 +440,8 @@ mod tests {
                 liquidity:      20000,
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             },
         ];
 
@@ -426,7 +452,8 @@ mod tests {
                 liquidity:      1000,
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             },
             LiqRange {
                 lower_tick:     100,
@@ -434,7 +461,8 @@ mod tests {
                 liquidity:      2000,
                 is_tick_edge:   false,
                 is_initialized: true,
-                fee:            0
+                fee:            0,
+                direction:      true
             },
         ];
 

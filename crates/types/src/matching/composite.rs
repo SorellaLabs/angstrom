@@ -222,14 +222,14 @@ mod tests {
         let amm_price = SqrtPriceX96::at_tick(mid).unwrap();
         let lower_tick = mid - width;
         let upper_tick = mid + width;
-        let ranges = vec![LiqRange::new_init(lower_tick, upper_tick, liquidity, 0).unwrap()];
+        let ranges = vec![LiqRange::new_init(lower_tick, upper_tick, liquidity, 0, true).unwrap()];
         PoolSnapshot::new(width, ranges, amm_price, 0).unwrap()
     }
 
     #[test]
     fn can_be_constructed() {
         let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm = market.current_price();
+        let amm = market.current_price(true);
         let debt = Debt::new(DebtType::exact_in(100), Ray::default());
         // With just debt
         CompositeOrder::new(Some(debt), None, None);
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn computes_quantities() {
         let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm = market.current_price();
+        let amm = market.current_price(true);
         let co = CompositeOrder::new(None, Some(amm), None);
         let target_price = Ray::from(SqrtPriceX96::at_tick(99990).unwrap());
         assert!(co.quantity(target_price) != 0, "Quantity of order was zero")
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn restricts_quantities_to_bounds() {
         let market = simple_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm = market.current_price();
+        let amm = market.current_price(true);
         let bound_price = Some(Ray::from(SqrtPriceX96::at_tick(100005).unwrap()));
         let co = CompositeOrder::new(None, Some(amm.clone()), bound_price);
         let target_price = Ray::from(SqrtPriceX96::at_tick(100010).unwrap());

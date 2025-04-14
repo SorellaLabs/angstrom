@@ -53,7 +53,7 @@ impl<'a> VolumeFillMatcher<'a> {
         info!(?bid_cnt, ?ask_cnt, "Book size");
         let bid_outcomes = vec![OrderFillState::Unfilled; book.bids().len()];
         let ask_outcomes = vec![OrderFillState::Unfilled; book.asks().len()];
-        let amm_price = book.amm().map(|a| a.current_price());
+        let amm_price = book.amm().map(|a| a.current_price(true));
         let mut new_element = Self {
             book,
             bid_idx: Cell::new(0),
@@ -927,7 +927,7 @@ mod tests {
     fn bid_side_amm_overrides_book_order() {
         let market: PoolSnapshot =
             generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price();
+        let amm_price = market.current_price(true);
         let amm = Some(&amm_price);
         let mut debt = None;
         let index = Cell::new(0);
@@ -952,7 +952,7 @@ mod tests {
     fn bid_side_debt_overrides_amm_and_book() {
         let market: PoolSnapshot =
             generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price();
+        let amm_price = market.current_price(true);
         let amm = Some(&amm_price);
         let mut debt = Some(Debt::new(
             DebtType::ExactIn(100000000),
@@ -983,7 +983,7 @@ mod tests {
     fn bid_side_book_overrides_amm_and_debt() {
         let market: PoolSnapshot =
             generate_single_position_amm_at_tick(100000, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price();
+        let amm_price = market.current_price(true);
         let amm = Some(&amm_price);
         let mut debt = Some(Debt::new(
             DebtType::ExactIn(100000000),
@@ -1009,7 +1009,7 @@ mod tests {
     fn bid_side_debt_overrides_amm_and_book_with_book_bound() {
         let market: PoolSnapshot =
             generate_single_position_amm_at_tick(99999, 100, 1_000_000_000_000_000_u128);
-        let amm_price = market.current_price();
+        let amm_price = market.current_price(true);
         let amm = Some(&amm_price);
         let mut debt = Some(Debt::new(
             DebtType::ExactIn(100000000),

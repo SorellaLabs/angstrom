@@ -80,7 +80,8 @@ impl Direction {
     /// bid-type interaction from the contract's perspective (An interaction
     /// that is purchasing T0 from the contract)
     pub fn is_bid(&self) -> bool {
-        matches!(self, Self::SellingT0)
+        // if we are selling t0 we are buying t1 which is a ask
+        matches!(self, Self::BuyingT0)
     }
 
     /// Determine the direction of sale from a start and end price

@@ -28,6 +28,9 @@ impl RewardsUpdate {
     ) -> eyre::Result<Self> {
         // If our bound is a higher tick value, we're doing this the `from_above` way,
         // otherwise we're coming from below the current tick
+
+        // current = end
+        // from above == ask
         let from_above = bound_tick > current_tick;
         let (low, high) =
             if from_above { (&current_tick, &bound_tick) } else { (&bound_tick, &current_tick) };
@@ -45,7 +48,7 @@ impl RewardsUpdate {
             .collect::<Vec<_>>();
 
         let (start_tick, start_liquidity) = snapshot
-            .get_range_for_tick(bound_tick)
+            .get_range_for_tick(bound_tick, from_above)
             .map(|r| (if from_above { r.lower_tick() } else { r.upper_tick() }, r.liquidity()))
             .unwrap_or_default();
         tracing::warn!(

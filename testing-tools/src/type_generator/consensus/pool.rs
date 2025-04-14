@@ -37,7 +37,7 @@ impl Pool {
     }
 
     pub fn price(&self) -> PoolPrice {
-        self.snapshot.current_price()
+        self.snapshot.current_price(true)
     }
 
     pub fn id(&self) -> PoolId {
@@ -81,8 +81,9 @@ impl PoolBuilder {
 
     fn random_snapshot() -> PoolSnapshot {
         let price = SqrtPriceX96::at_tick(100000).unwrap();
-        let ranges =
-            vec![LiqRange::new_init(99000, 101000, 1_000_000_000_000_000_000_u128, 0).unwrap()];
+        let ranges = vec![
+            LiqRange::new_init(99000, 101000, 1_000_000_000_000_000_000_u128, 0, true).unwrap(),
+        ];
         PoolSnapshot::new(10, ranges, price, 0).unwrap()
     }
 

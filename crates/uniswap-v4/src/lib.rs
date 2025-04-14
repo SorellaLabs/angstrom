@@ -441,7 +441,7 @@ pub mod fuzz_uniswap {
         let t1 = t1.abs().into_raw().to::<u128>();
 
         // local calculations
-        let local_swap_output = (snap.current_price() - amount_i).ok()?;
+        let local_swap_output = (snap.current_price(zfo) - amount_i).ok()?;
         let t0_delta_local = local_swap_output.d_t0;
         let t1_delta_local = local_swap_output.d_t1;
         let sqrt_price_local = *local_swap_output.end_bound.as_sqrtpricex96();
@@ -507,7 +507,7 @@ pub mod fuzz_uniswap {
         let t1 = t1.abs().into_raw().to::<u128>();
 
         // local calculations
-        let local_swap_output = (snap.current_price() + amount_i).ok()?;
+        let local_swap_output = (snap.current_price(zfo) + amount_i).ok()?;
         let t0_delta_local = local_swap_output.d_t0;
         let t1_delta_local = local_swap_output.d_t1;
 

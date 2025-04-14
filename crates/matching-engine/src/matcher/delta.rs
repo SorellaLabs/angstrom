@@ -69,7 +69,7 @@ impl<'a> DeltaMatcher<'a> {
             // If we have a fixed shift, apply that to the AMM start price (Not yet operational)
             DeltaMatcherToB::FixedShift(q, is_bid) => book.amm().and_then(|f| {
                 PoolPriceVec::from_swap(
-                    f.current_price().no_fees(),
+                    f.current_price(!is_bid).no_fees(),
                     Direction::from_is_bid(!is_bid),
                     q
                 )
@@ -77,30 +77,43 @@ impl<'a> DeltaMatcher<'a> {
                 .map(|v| v.end_bound)
             }),
             // If we have no order or shift, we just use the AMM start price as-is
-            DeltaMatcherToB::None => book.amm().map(|f| f.current_price())
+            DeltaMatcherToB::None => None
         };
 
         Self { book, amm_start_price, fee, solve_for_t0 }
     }
 
     fn fetch_concentrated_liquidity(&self, price: Ray) -> (I256, I256) {
-        let Some(start_price) = self.amm_start_price.clone().map(|s| s.no_fees()) else {
-            return Default::default();
-        };
-        let Ok(end_price) = start_price
-            .snapshot()
-            .at_price(SqrtPriceX96::from(price))
-            .map(|e| e.no_fees())
+        let end_sqrt = SqrtPriceX96::from(price);
+        let Some(start_price) = self
+            .amm_start_price
+            .clone()
+            .map(|s| s.no_fees())
+            .or_else(|| {
+                // if we have book, then we start at current
+                let book = self.book.amm()?;
+                let start = book.as_sqrtpricex96();
+                let is_bid = start >= end_sqrt;
+                Some(book.current_price(is_bid).no_fees())
+            })
         else {
             return Default::default();
         };
 
         let start_sqrt = start_price.as_sqrtpricex96();
-        let end_sqrt = SqrtPriceX96::from(price);
 
         // If the AMM price is decreasing, it is because the AMM is accepting T0 from
         // the contract.  An order that purchases T0 from the contract is a bid
         let is_bid = start_sqrt >= end_sqrt;
+
+        let Ok(end_price) = start_price
+            .snapshot()
+            .at_price(end_sqrt, is_bid)
+            .map(|e| e.no_fees())
+        else {
+            // no tob
+            return Default::default();
+        };
 
         let Ok(res) = PoolPriceVec::from_price_range(start_price, end_price) else {
             return Default::default();
@@ -510,10 +523,24 @@ impl<'a> DeltaMatcher<'a> {
 
     /// Return the NetAmmOrder that moves the AMM to our UCP
     fn fetch_amm_movement_at_ucp(&self, ucp: Ray) -> Option<NetAmmOrder> {
-        let start_price = self.amm_start_price.clone()?;
+        let end_price_sqrt = SqrtPriceX96::from(ucp);
+        let start_price = self
+            .amm_start_price
+            .clone()
+            .map(|s| s.no_fees())
+            .or_else(|| {
+                // if we have book, then we start at current
+                let book = self.book.amm()?;
+                let start = book.as_sqrtpricex96();
+                let is_bid = start >= end_price_sqrt;
+                Some(book.current_price(is_bid).no_fees())
+            })?;
+
+        let is_ask = start_price.as_sqrtpricex96() >= end_price_sqrt;
+
         let end_price = start_price
             .snapshot()
-            .at_price(SqrtPriceX96::from(ucp))
+            .at_price(end_price_sqrt, is_ask)
             .ok()?;
 
         let Ok(res) = PoolPriceVec::from_price_range(start_price, end_price) else {

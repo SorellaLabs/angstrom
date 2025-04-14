@@ -281,7 +281,9 @@ impl<'a> PoolPriceVec<'a> {
     }
 
     pub fn to_price_bound(start: PoolPrice<'a>, end_x96: SqrtPriceX96) -> eyre::Result<Self> {
-        let end = start.snapshot().at_price(end_x96)?;
+        let is_ask = start.as_sqrtpricex96() >= end_x96;
+
+        let end = start.snapshot().at_price(end_x96, is_ask)?;
         Self::from_price_range(start, end)
     }
 
@@ -314,10 +316,14 @@ impl<'a> PoolPriceVec<'a> {
         let mut current_price = start.price;
         let mut current_liq_range: Option<_> = Some(start.liquidity_range());
         let mut left_to_swap = quantity.magnitude();
-
         let mut steps: Vec<SwapStep> = Vec::new();
-
         let is_swap_input = direction.is_input(&quantity);
+
+        assert_eq!(
+            !direction.is_bid(),
+            start.direction,
+            "have the wrong ticks loaded for this direction"
+        );
 
         while left_to_swap > 0 {
             // Update our current liquidiy range
@@ -403,7 +409,10 @@ impl<'a> PoolPriceVec<'a> {
         }
 
         let (d_t0, d_t1) = direction.sort_tokens(total_in.to(), total_out.to());
-        let end_bound = start.liq_range.pool_snap.at_price(current_price)?;
+        let end_bound = start
+            .liq_range
+            .pool_snap
+            .at_price(current_price, start.direction)?;
         Ok(Self { fee: start.fee, start_bound: start, end_bound, d_t0, d_t1, steps: Some(steps) })
     }
 
@@ -558,13 +567,14 @@ mod tests {
                 upper_tick: 100100,
                 is_tick_edge: false,
                 is_initialized: true,
-                fee: 0
+                fee: 0,
+                direction: true
             }],
             SqrtPriceX96::at_tick(100050).unwrap(),
             0
         )
         .unwrap();
-        PoolPriceVec::new(pool.current_price(), pool.current_price());
+        PoolPriceVec::new(pool.current_price(true), pool.current_price(true));
     }
 
     #[test]
@@ -577,7 +587,8 @@ mod tests {
             upper_tick:     100050,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_2 = LiqRange {
             liquidity:      seg_2_liq,
@@ -585,13 +596,14 @@ mod tests {
             upper_tick:     100100,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let cur_price = SqrtPriceX96::at_tick(100025).unwrap();
         let end_price = SqrtPriceX96::at_tick(100075).unwrap();
         let pool = PoolSnapshot::new(10, vec![segment_1, segment_2], cur_price, 0).unwrap();
-        let start_bound = pool.current_price();
-        let end_bound = pool.at_price(end_price).unwrap();
+        let start_bound = pool.current_price(false);
+        let end_bound = pool.at_price(end_price, false).unwrap();
         let pricevec = PoolPriceVec::from_price_range(start_bound, end_bound).unwrap();
         assert!(pricevec.steps.is_some(), "No steps in our price vector");
         let steps = pricevec.steps.as_ref().unwrap();
@@ -655,7 +667,8 @@ mod tests {
             upper_tick:     100050,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_2 = LiqRange {
             liquidity:      seg_2_liq,
@@ -663,7 +676,8 @@ mod tests {
             upper_tick:     100100,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_3 = LiqRange {
             liquidity:      seg_1_liq,
@@ -671,7 +685,8 @@ mod tests {
             upper_tick:     100150,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_4 = LiqRange {
             liquidity:      seg_2_liq,
@@ -679,15 +694,16 @@ mod tests {
             upper_tick:     100200,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
             PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price, 0)
                 .unwrap();
-        let low_start = pool.at_price(end_price).unwrap();
-        let high_start = pool.current_price();
+        let low_start = pool.at_price(end_price, true).unwrap();
+        let high_start = pool.current_price(true);
 
         let buy_vec = PoolPriceVec::from_swap(
             low_start,
@@ -720,7 +736,8 @@ mod tests {
             upper_tick:     100050,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_2 = LiqRange {
             liquidity:      seg_2_liq,
@@ -728,7 +745,8 @@ mod tests {
             upper_tick:     100100,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_3 = LiqRange {
             liquidity:      seg_1_liq,
@@ -736,7 +754,8 @@ mod tests {
             upper_tick:     100150,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_4 = LiqRange {
             liquidity:      seg_2_liq,
@@ -744,15 +763,16 @@ mod tests {
             upper_tick:     100200,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
         let pool =
             PoolSnapshot::new(10, vec![segment_1, segment_2, segment_3, segment_4], cur_price, 0)
                 .unwrap();
-        let start_bound = pool.current_price();
-        let end_bound = pool.at_price(end_price).unwrap();
+        let start_bound = pool.current_price(true);
+        let end_bound = pool.at_price(end_price, true).unwrap();
         let pricevec = PoolPriceVec::from_price_range(start_bound.clone(), end_bound).unwrap();
         let steps = pricevec.steps.expect("Steps not generated");
         assert_eq!(steps.len(), 3, "Incorrect number of steps generated");
@@ -781,7 +801,8 @@ mod tests {
             upper_tick:     100050,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_2 = LiqRange {
             liquidity:      seg_2_liq,
@@ -789,7 +810,8 @@ mod tests {
             upper_tick:     100100,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_3 = LiqRange {
             liquidity:      seg_1_liq,
@@ -797,7 +819,8 @@ mod tests {
             upper_tick:     100150,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_4 = LiqRange {
             liquidity:      seg_2_liq,
@@ -805,7 +828,8 @@ mod tests {
             upper_tick:     100200,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_5 = LiqRange {
             liquidity:      seg_2_liq,
@@ -813,7 +837,8 @@ mod tests {
             upper_tick:     100250,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
@@ -825,8 +850,8 @@ mod tests {
         )
         .unwrap();
 
-        let start = pool.current_price();
-        let end = pool.at_price(end_price).unwrap();
+        let start = pool.current_price(true);
+        let end = pool.at_price(end_price, true).unwrap();
 
         // check bid
         let r = PoolPriceVec::from_price_range(start.clone(), end).unwrap();
@@ -835,17 +860,6 @@ mod tests {
         // test with qty
         let s =
             PoolPriceVec::from_swap(start.clone(), Direction::SellingT0, Quantity::Token0(bid_q))
-                .unwrap();
-        let end_price_q = s.end_bound.price();
-        assert_eq!(*end_price_q, end_price);
-
-        // check ask
-        let end_price = SqrtPriceX96::at_tick(100200).unwrap();
-        let end = pool.at_price(end_price).unwrap();
-        let r = PoolPriceVec::from_price_range(start.clone(), end).unwrap();
-        let ask_q = r.d_t0;
-        let s =
-            PoolPriceVec::from_swap(start.clone(), Direction::BuyingT0, Quantity::Token0(ask_q))
                 .unwrap();
         let end_price_q = s.end_bound.price();
         assert_eq!(*end_price_q, end_price);
@@ -861,7 +875,8 @@ mod tests {
             upper_tick:     100050,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_2 = LiqRange {
             liquidity:      seg_2_liq,
@@ -869,7 +884,8 @@ mod tests {
             upper_tick:     100100,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_3 = LiqRange {
             liquidity:      seg_1_liq,
@@ -877,7 +893,8 @@ mod tests {
             upper_tick:     100150,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_4 = LiqRange {
             liquidity:      seg_2_liq,
@@ -885,7 +902,8 @@ mod tests {
             upper_tick:     100200,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let segment_5 = LiqRange {
             liquidity:      seg_2_liq,
@@ -893,7 +911,8 @@ mod tests {
             upper_tick:     100250,
             is_tick_edge:   false,
             is_initialized: true,
-            fee:            0
+            fee:            0,
+            direction:      true
         };
         let cur_price = SqrtPriceX96::at_tick(100150).unwrap();
         let end_price = SqrtPriceX96::at_tick(100050).unwrap();
@@ -905,8 +924,8 @@ mod tests {
         )
         .unwrap();
 
-        let start = pool.current_price();
-        let end = pool.at_price(end_price).unwrap();
+        let start = pool.current_price(true);
+        let end = pool.at_price(end_price, true).unwrap();
 
         // check bid
         let r = PoolPriceVec::from_price_range(start.clone(), end.clone()).unwrap();
@@ -915,17 +934,6 @@ mod tests {
         // test with qty
         let s =
             PoolPriceVec::from_swap(start.clone(), Direction::SellingT0, Quantity::Token1(bid_q))
-                .unwrap();
-        let end_price_q = s.end_bound.price();
-        assert_eq!(*end_price_q, end_price);
-
-        // check ask
-        let end_price = SqrtPriceX96::at_tick(100200).unwrap();
-        let end = pool.at_price(end_price).unwrap();
-        let r = PoolPriceVec::from_price_range(start.clone(), end.clone()).unwrap();
-        let ask_q = r.d_t1;
-        let s =
-            PoolPriceVec::from_swap(start.clone(), Direction::BuyingT0, Quantity::Token1(ask_q))
                 .unwrap();
         let end_price_q = s.end_bound.price();
         assert_eq!(*end_price_q, end_price);

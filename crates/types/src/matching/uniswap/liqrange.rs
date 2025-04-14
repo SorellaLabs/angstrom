@@ -22,7 +22,8 @@ pub struct LiqRange {
     pub(super) fee:            u32,
     /// The direction in which this range is valid for.
     /// this is because ranges change based on which way you are
-    /// swapping through the pool.
+    /// swapping through the pool. direction is zero for 1 or
+    /// true == ask
     pub(super) direction:      bool
 }
 
@@ -160,7 +161,8 @@ impl<'a> LiqRangeRef<'a> {
             tick,
             liq_range: *self,
             price: SqrtPriceX96::at_tick(tick).unwrap(),
-            fee: self.fee
+            fee: self.fee,
+            direction: !direction.is_bid()
         }
     }
 
@@ -171,7 +173,8 @@ impl<'a> LiqRangeRef<'a> {
             tick,
             liq_range: *self,
             price: SqrtPriceX96::at_tick(tick).unwrap(),
-            fee: self.fee
+            fee: self.fee,
+            direction: !direction.is_bid()
         }
     }
 
@@ -185,8 +188,14 @@ impl<'a> LiqRangeRef<'a> {
     /// to properly mirror the uniswap swap logic
     pub fn next(&self, direction: Direction) -> Option<Self> {
         match direction {
-            Direction::BuyingT0 => self.pool_snap.get_range_for_tick(self.range.upper_tick),
-            Direction::SellingT0 => self.pool_snap.get_range_for_tick(self.range.lower_tick - 1)
+            // bid
+            Direction::BuyingT0 => self
+                .pool_snap
+                .get_range_for_tick(self.range.upper_tick, false),
+            // ask
+            Direction::SellingT0 => self
+                .pool_snap
+                .get_range_for_tick(self.range.lower_tick - 1, true)
         }
     }
 }

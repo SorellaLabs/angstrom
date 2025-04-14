@@ -31,7 +31,7 @@ use crate::{
     contract_bindings::angstrom::Angstrom::PoolKey,
     contract_payloads::rewards::RewardsUpdate,
     matching::{
-        Ray, get_quantities_at_price,
+        Ray, SqrtPriceX96, get_quantities_at_price,
         uniswap::{Direction, PoolPriceVec, PoolSnapshot, Quantity}
     },
     orders::{OrderFillState, OrderId, OrderOutcome, PoolSolution},
@@ -510,14 +510,28 @@ impl AngstromBundle {
         let post_tob_price = tob_swap_info
             .as_ref()
             .map(|(v, _)| v.end_bound.clone())
-            .unwrap_or_else(|| snapshot.current_price());
+            .unwrap_or_else(|| {
+                // if we have no tob, its a swap from current to book.
+                if solution.ucp.is_zero() {
+                    // doesn't matter because we don't have tob or swap
+                    snapshot.current_price(true)
+                } else {
+                    let ucp: SqrtPriceX96 = solution.ucp.into();
+                    // if the price is moving down, we have a ask
+                    let is_ask = snapshot.sqrt_price_x96 >= ucp;
+                    snapshot.current_price(is_ask)
+                }
+            });
 
         // NOTE: if we have no books, its a zero swap from exact price to exact price.
         // optimally we have these separate branches but this is just a patch fix
         let book_end_price = if solution.ucp.is_zero() {
             post_tob_price.clone()
         } else {
-            snapshot.at_price(solution.ucp.into())?
+            let ucp: SqrtPriceX96 = solution.ucp.into();
+            // if the price is moving down, we have a ask
+            let is_ask = snapshot.sqrt_price_x96 >= ucp;
+            snapshot.at_price(solution.ucp.into(), is_ask)?
         };
 
         // We then use `post_tob_price` as the start price for our book swap, just as
@@ -552,8 +566,13 @@ impl AngstromBundle {
             let quantity = Quantity::Token0(net_t0.unsigned_abs().to::<u128>());
 
             // Create a poolpricevec based on this data
-            PoolPriceVec::from_swap(snapshot.current_price(), net_direction, quantity)
-                .expect("Unable to create net swap vec")
+            PoolPriceVec::from_swap(
+                // is_bid m
+                snapshot.current_price(!net_direction.is_bid()),
+                net_direction,
+                quantity
+            )
+            .expect("Unable to create net swap vec")
         } else {
             book_swap_vec
         };

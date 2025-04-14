@@ -149,7 +149,7 @@ impl TopOfBlockOrder {
             // Therefore, our input quantity is simple - the entire input amount from
             // the order.
             let pricevec =
-                (snapshot.current_price().no_fees() + Quantity::Token1(tob.quantity_in))?;
+                (snapshot.current_price(false).no_fees() + Quantity::Token1(tob.quantity_in))?;
 
             let leftover = pricevec
                 .d_t0
@@ -166,7 +166,7 @@ impl TopOfBlockOrder {
             // First we find the amount of T0 in it would take to at least hit our quantity
             // out
             let cost =
-                (snapshot.current_price().no_fees() - Quantity::Token1(tob.quantity_out))?.d_t0;
+                (snapshot.current_price(true).no_fees() - Quantity::Token1(tob.quantity_out))?.d_t0;
 
             let leftover = tob
                 .quantity_in
@@ -175,7 +175,7 @@ impl TopOfBlockOrder {
 
             // But then we have to operate in the right direction to calculate how much T1
             // we ACTUALLY get out
-            let pricevec = (snapshot.current_price().no_fees() + Quantity::Token0(cost))?;
+            let pricevec = (snapshot.current_price(true).no_fees() + Quantity::Token0(cost))?;
             Ok((pricevec, leftover))
         }
     }
@@ -190,9 +190,14 @@ mod test {
     use uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick;
 
     fn _generate_amm_market(target_tick: i32) -> PoolSnapshot {
-        let range =
-            LiqRange::new_init(target_tick - 1000, target_tick + 1000, 100_000_000_000_000, 0)
-                .unwrap();
+        let range = LiqRange::new_init(
+            target_tick - 1000,
+            target_tick + 1000,
+            100_000_000_000_000,
+            0,
+            true
+        )
+        .unwrap();
         let ranges = vec![range];
         let sqrt_price_x96 = SqrtPriceX96::from(get_sqrt_ratio_at_tick(target_tick).unwrap());
         PoolSnapshot::new(10, ranges, sqrt_price_x96, 0).unwrap()

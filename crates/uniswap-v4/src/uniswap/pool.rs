@@ -117,25 +117,45 @@ where
             return Err(PoolError::PoolNotInitialized);
         }
 
-        // Get the information for our current position
+        let ask_liq = self.fetch_liq_ranges_by_side(true);
+        let bid_liq = self.fetch_liq_ranges_by_side(false);
+
+        // Put them all together - the PoolSnapshot constructor will sort this
+        let liq_ranges = [ask_liq.as_slice(), bid_liq.as_slice()].concat();
+
+        Ok((
+            self.token0,
+            self.token1,
+            PoolSnapshot::new(
+                self.tick_spacing,
+                liq_ranges,
+                self.sqrt_price.into(),
+                self.book_fee
+            )?
+        ))
+    }
+
+    fn fetch_liq_ranges_by_side(&self, direction: bool) -> Vec<LiqRange> {
         let current_liquidity = self.liquidity;
         let current_tick = self.tick;
 
         // we need to pad out ticks here. Any ticks that are in the tick map are either
-        // initalized or not and on a tick boundry. In order to match uniswap
+        // initialized or not and on a tick boundary. In order to match uniswap
         // with this, what we need to do is fill in empty ticks that aren't
-        // initalized and not on a tick bound and mark this.
+        // initialized and not on a tick bound and mark this.
 
         let (less_than, more_than): (Vec<_>, Vec<_>) = self
             .ticks
             .iter()
+            // if the tick is initialized, then it is valid for both directions. otherwise
+            // we will have different edges
+            .filter(|f| f.1.zfo == direction || f.1.initialized)
             .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
             .partition(|t| *t.0 <= current_tick);
 
         let lower = *less_than.last().expect("No lower bound to current range");
+
         let current_range = LiqRange::new_uninit(
-            // Because they're already sorted low to high - we want the highest low and the lowest
-            // high
             *lower.0,
             *more_than
                 .first()
@@ -144,7 +164,8 @@ where
             current_liquidity,
             lower.1.is_edge,
             lower.1.initialized,
-            self.book_fee
+            self.book_fee,
+            direction
         )
         .unwrap();
 
@@ -183,7 +204,8 @@ where
                     tracked_liq.unsigned_abs(),
                     low_tick_data.is_edge,
                     low_tick_data.initialized,
-                    self.book_fee
+                    self.book_fee,
+                    direction
                 )
                 .unwrap()
             })
@@ -225,26 +247,14 @@ where
                     tracked_liq.unsigned_abs(),
                     high_tick_data.is_edge,
                     high_tick_data.initialized,
-                    self.book_fee
+                    self.book_fee,
+                    direction
                 )
                 .unwrap()
             })
             .collect::<Vec<_>>();
 
-        // Put them all together - the PoolSnapshot constructor will sort this
-        let liq_ranges =
-            [[current_range].as_slice(), upper_ranges.as_slice(), lower_ranges.as_slice()].concat();
-
-        Ok((
-            self.token0,
-            self.token1,
-            PoolSnapshot::new(
-                self.tick_spacing,
-                liq_ranges,
-                self.sqrt_price.into(),
-                self.book_fee
-            )?
-        ))
+        [[current_range].as_slice(), upper_ranges.as_slice(), lower_ranges.as_slice()].concat()
     }
 
     pub async fn initialize(
@@ -303,11 +313,11 @@ where
 
     pub fn apply_ticks(
         &mut self,
+        direction: bool,
         mut fetched_ticks: Vec<TickData>,
         lower_tick: Option<I24>,
         higher_tick: Option<I24>
     ) {
-        tracing::info!(?lower_tick, ?higher_tick);
         fetched_ticks.sort_by_key(|k| k.tick);
 
         let process_tick_lower = |l: I24, tick: &TickData| {
@@ -386,17 +396,17 @@ where
             .unique()
             .map(|tick| (!tick.initialized, tick))
             .for_each(|(is_edge, tick)| {
-                tracing::info!(?tick);
                 self.ticks.insert(
                     tick.tick.as_i32(),
                     TickInfo {
                         initialized: tick.initialized,
                         liquidity_gross: tick.liquidityGross,
                         liquidity_net: tick.liquidityNet,
-                        is_edge
+                        is_edge,
+                        zfo: direction
                     }
                 );
-                self.flip_tick(tick.tick.as_i32(), self.tick_spacing);
+                self.flip_tick_if_not_init(tick.tick.as_i32(), self.tick_spacing);
             });
     }
 
@@ -416,27 +426,11 @@ where
             )
             .await?
             .0;
-        let end_tick = tick_data.end_tick(self.tick_spacing);
 
         // if we are zero for one, means that we need a new end tick.
-        if tick_data.zfo {
-            self.apply_ticks(ticks, Some(self.align_lower(I24::unchecked_from(end_tick))), None);
-        } else {
-            self.apply_ticks(ticks, None, Some(self.align_upper(I24::unchecked_from(end_tick))));
-        }
+        self.apply_ticks(tick_data.zfo, ticks, None, None);
 
         Ok(())
-    }
-
-    // finds the tick lower to the current and moves to it
-    fn align_lower(&self, tick: I24) -> I24 {
-        let diff = tick.as_i32() % self.tick_spacing;
-        tick - I24::unchecked_from(diff)
-    }
-
-    fn align_upper(&self, tick: I24) -> I24 {
-        let diff = self.tick_spacing - (tick.as_i32() % self.tick_spacing);
-        tick + I24::unchecked_from(diff)
     }
 
     async fn sync_ticks<P: Provider>(
@@ -449,57 +443,62 @@ where
 
         tracing::info!(?self.token0, ?self.token1,?self.tick, ?self.tick_spacing, ?self.liquidity,?self.liquidity_net);
 
+        let (asks, bids) = futures::join!(
+            self.load_ticks_in_direction(provider.clone(), block_number, true),
+            self.load_ticks_in_direction(provider.clone(), block_number, false),
+        );
+        let (_, _, asks) = asks?;
+        self.apply_ticks(true, asks, None, None);
+
+        let (_, _, bids) = bids?;
+        self.apply_ticks(false, bids, None, None);
+
+        Ok(())
+    }
+
+    async fn load_ticks_in_direction<P: Provider>(
+        &self,
+        provider: Arc<P>,
+        block_number: Option<u64>,
+        direction: bool
+    ) -> Result<(i32, i32, Vec<TickData>), PoolError> {
         let extra = (self.tick.rem(self.tick_spacing) == 0i32) as u8;
+        // true = zfo
+        let adjustment = if direction {
+            self.tick_spacing * self.initial_ticks_per_side as i32 - extra as i32
+        } else {
+            -(self.tick_spacing * self.initial_ticks_per_side as i32 - extra as i32)
+        };
+        let start_tick = self.tick + adjustment;
 
-        let total_ticks_to_fetch = self.initial_ticks_per_side * 2;
-        // current tick when loaded (init tick) - (half total tics * spacing);
-
-        let start_tick = self.tick
-            - (total_ticks_to_fetch.div_ceil(2) as i32 * self.tick_spacing)
-            - (extra as i32);
-
-        let end_tick = start_tick + (self.tick_spacing as u16 * total_ticks_to_fetch) as i32;
-        tracing::info!(?start_tick, ?end_tick);
-
-        // Fetch ticks in batches of TICKS_PER_BATCH
         let mut fetched_ticks = Vec::new();
         let mut current_tick = start_tick;
-        let remaining_ticks = total_ticks_to_fetch;
 
-        for batch_idx in 0..(remaining_ticks.div_ceil(TICKS_PER_BATCH as u16)) {
-            let batch_size = std::cmp::min(
-                TICKS_PER_BATCH as u16,
-                remaining_ticks - (batch_idx * TICKS_PER_BATCH as u16)
-            );
-
-            if batch_size == 0 {
-                break;
-            }
-
-            tracing::info!(?current_tick, ?batch_size, batch_idx, "Fetching tick batch");
-
+        for _ in 0..(self.initial_ticks_per_side.div_ceil(TICKS_PER_BATCH as u16)) {
             let batch_ticks = self
                 .get_tick_data_batch_request(
                     i32_to_i24(current_tick)?,
-                    true,
-                    batch_size,
+                    direction,
+                    TICKS_PER_BATCH as u16,
                     block_number,
                     provider.clone()
                 )
                 .await?
                 .0;
 
-            current_tick += (self.tick_spacing as u16 * batch_size) as i32;
+            let Some(next_tick) = batch_ticks
+                .iter()
+                .max_by(|a, b| if direction { b.tick.cmp(&a.tick) } else { a.tick.cmp(&b.tick) })
+                .map(|k| k.tick.as_i32())
+            else {
+                break;
+            };
+
+            current_tick = next_tick;
             fetched_ticks.extend(batch_ticks);
         }
 
-        self.apply_ticks(
-            fetched_ticks,
-            Some(self.align_lower(I24::unchecked_from(start_tick))),
-            Some(self.align_upper(I24::unchecked_from(end_tick)))
-        );
-
-        Ok(())
+        Ok((start_tick, current_tick, fetched_ticks))
     }
 
     pub fn calculate_price_unshifted(&self, sqrt_price_limit_x96: U256) -> f64 {
@@ -784,6 +783,21 @@ where
         };
 
         flipped
+    }
+
+    pub fn flip_tick_if_not_init(&mut self, tick: i32, tick_spacing: i32) {
+        let (word_pos, bit_pos) = uniswap_v3_math::tick_bitmap::position(tick / tick_spacing);
+        let mask = U256::from(1) << bit_pos;
+
+        if let Some(word) = self.tick_bitmap.get_mut(&word_pos) {
+            // if the word xor mask flips the bit, then and that of mask will == mask if bit
+            // flipped.
+            if ((*word ^ mask) & mask) == mask {
+                *word ^= mask;
+            }
+        } else {
+            self.tick_bitmap.insert(word_pos, mask);
+        }
     }
 
     pub fn flip_tick(&mut self, tick: i32, tick_spacing: i32) {

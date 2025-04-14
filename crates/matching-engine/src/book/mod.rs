@@ -126,7 +126,7 @@ mod test {
         let asks = vec![];
         let amm = PoolSnapshot::new(
             10,
-            vec![LiqRange::new_init(90000, 110000, 10, 0).unwrap()],
+            vec![LiqRange::new_init(90000, 110000, 10, 0, true).unwrap()],
             SqrtPriceX96::at_tick(100000).unwrap(),
             0
         )

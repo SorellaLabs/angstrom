@@ -40,7 +40,8 @@ pub struct PoolPrice<'a> {
     /// The ratio between Token0 and Token1
     pub(crate) price:     SqrtPriceX96,
     /// the fee to swap on the pool
-    pub(crate) fee:       u32
+    pub(crate) fee:       u32,
+    pub(crate) direction: bool
 }
 
 impl Eq for PoolPrice<'_> {}
@@ -68,7 +69,8 @@ impl<'a> PoolPrice<'a> {
         liq_range: LiqRangeRef<'a>,
         price: SqrtPriceX96,
         tick: i32,
-        fee: u32
+        fee: u32,
+        direction: bool
     ) -> Self {
         if tick < liq_range.lower_tick || tick > liq_range.upper_tick {
             panic!("Created PoolPrice with out of range tick!");
@@ -76,7 +78,7 @@ impl<'a> PoolPrice<'a> {
         if get_tick_at_sqrt_ratio(price.into()).unwrap() != tick {
             panic!("Created PoolPrice with price that doesn't match the given tick!");
         }
-        Self { liq_range, price, tick, fee }
+        Self { liq_range, price, tick, fee, direction }
     }
 
     pub fn tick(&self) -> Tick {
@@ -184,7 +186,7 @@ impl<'a> PoolPrice<'a> {
             eyre!("Somehow have no active liquidity range despite iterationg - should never happen")
         })?;
         debug!(final_price = ?price, "Final price");
-        let new_price = PoolPrice::checked_new(liq_range, price, tick, self.fee);
+        let new_price = PoolPrice::checked_new(liq_range, price, tick, self.fee, self.direction);
         Ok(new_price)
     }
 
@@ -199,7 +201,7 @@ impl<'a> PoolPrice<'a> {
     pub fn to_liq_range_upper(&self) -> eyre::Result<PoolPriceVec<'a>> {
         let end = if let Some(range) = self
             .snapshot()
-            .get_range_for_tick(self.liq_range.upper_tick)
+            .get_range_for_tick(self.liq_range.upper_tick, self.direction)
         {
             range.start_price(Direction::BuyingT0)
         } else {
@@ -208,11 +210,11 @@ impl<'a> PoolPrice<'a> {
         PoolPriceVec::from_price_range(self.clone(), end)
     }
 
-    /// Create a PoolPriceVec from the current price to the lower bound of the
-    /// liquidity range that the current price is in
-    pub fn to_liq_range_lower(&self) -> eyre::Result<PoolPriceVec<'a>> {
-        self.vec_to(SqrtPriceX96::at_tick(self.liq_range.lower_tick)?)
-    }
+    // /// Create a PoolPriceVec from the current price to the lower bound of the
+    // /// liquidity range that the current price is in
+    // pub fn to_liq_range_lower(&self) -> eyre::Result<PoolPriceVec<'a>> {
+    //     self.vec_to(SqrtPriceX96::at_tick(self.liq_range.lower_tick)?)
+    // }
 
     /// Determine the quantity of t0 needed to bring this price to the price of
     /// the given Debt
@@ -316,7 +318,8 @@ impl<'a> PoolPrice<'a> {
             liq_range: LiqRangeRef { range: pool, range_idx: new_range_idx, ..self.liq_range },
             price:     closest_price,
             tick:      get_tick_at_sqrt_ratio(closest_price.into()).ok()?,
-            fee:       self.fee
+            fee:       self.fee,
+            direction: false
         };
         Some(PoolPriceVec::new(self.clone(), end_bound))
     }
@@ -369,34 +372,9 @@ mod test {
     use alloy_primitives::U160;
 
     use crate::matching::{
-        Debt, Ray, SqrtPriceX96,
+        SqrtPriceX96,
         uniswap::{Direction, LiqRange, PoolSnapshot}
     };
-
-    #[test]
-    fn intersects_with_debt() {
-        let debt_price = Ray::from(SqrtPriceX96::at_tick(100000).unwrap());
-        let debt = Debt::new(crate::matching::DebtType::ExactOut(1_000_000_000_u128), debt_price);
-        let amm = PoolSnapshot::new(
-            10,
-            vec![LiqRange {
-                liquidity:      1_000_000_000_u128,
-                lower_tick:     99900,
-                upper_tick:     100100,
-                is_tick_edge:   false,
-                is_initialized: true,
-                fee:            0,
-                direction:      true
-            }],
-            SqrtPriceX96::at_tick(100001).unwrap(),
-            0
-        )
-        .unwrap();
-        let result = amm.current_price().intersect_with_debt(debt).unwrap();
-        println!("Result: {}", result);
-        let valid = debt.valid_for_price(amm.current_price().as_ray());
-        println!("Valid: {}", valid);
-    }
 
     #[test]
     fn can_buy_and_sell_t0() {
@@ -426,9 +404,9 @@ mod test {
             0
         )
         .unwrap();
-        let cur_price = amm.current_price();
+        let cur_price = amm.current_price(true);
         let new_price = amm
-            .current_price()
+            .current_price(true)
             .d_t0(1000000, Direction::BuyingT0)
             .unwrap();
         assert!(new_price.price > cur_price.price, "Price didn't move up when buying T0");

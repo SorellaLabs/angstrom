@@ -35,13 +35,13 @@ fn build_bundle() {
             _
         ) = serde_json::from_slice(&bytes).unwrap();
 
-        let vec_one = (snapshot.current_price() + Quantity::Token0(663457929968124)).unwrap();
+        let vec_one = (snapshot.current_price(true) + Quantity::Token0(663457929968124)).unwrap();
         let vec_two = (vec_one.end_bound.clone() + Quantity::Token1(17509420022687840846)).unwrap();
         // Vec by pulling T0 instead of adding T1
         // let vec_direct = (snapshot.current_price() -
         // Quantity::Token0(147398421527330)).unwrap();
         let vec_direct =
-            (snapshot.current_price() + Quantity::Token1(3192774615752599438)).unwrap();
+            (snapshot.current_price(false) + Quantity::Token1(3192774615752599438)).unwrap();
 
         println!(
             "Vec_one:  t0 - {} t1 - {} final_price - {:?}",
@@ -97,8 +97,12 @@ fn build_bundle() {
             (Direction::BuyingT0, Quantity::Token1(bundle.pool_updates[0].swap_in_quantity))
         };
         tracing::trace!(?direction, ?quantity, "Got values from bundle");
-        let inspect_vec =
-            PoolPriceVec::from_swap(snapshot.current_price(), direction, quantity).unwrap();
+        let inspect_vec = PoolPriceVec::from_swap(
+            snapshot.current_price(!direction.is_bid()),
+            direction,
+            quantity
+        )
+        .unwrap();
         println!(
             "Final price: {:#?} {}",
             inspect_vec.end_bound.price(),

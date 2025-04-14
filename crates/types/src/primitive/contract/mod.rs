@@ -45,6 +45,14 @@ pub const TESTNET_POOL_MANAGER_ADDRESS: Address =
     alloy::primitives::address!("E03A1074c86CFeDd5C142C4F04F1a1536e203543");
 
 #[cfg(all(not(feature = "testnet"), feature = "testnet-sepolia"))]
+pub const TESTNET_POSITION_MANAGER_ADDRESS: Address =
+    alloy::primitives::address!("429ba70129df741B2Ca2a85BC3A2a3328e5c09b4");
+
+#[cfg(all(not(feature = "testnet"), feature = "testnet-sepolia"))]
+pub const TESTNET_CONTROLLER_V1_ADDRESS: Address =
+    alloy::primitives::address!("4De4326613020a00F5545074bC578C87761295c7");
+
+#[cfg(all(not(feature = "testnet"), feature = "testnet-sepolia"))]
 pub const ANGSTROM_DOMAIN: Eip712Domain = eip712_domain!(
     name: "Angstrom",
     version: "v1",

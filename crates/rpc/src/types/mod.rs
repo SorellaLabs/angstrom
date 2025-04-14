@@ -6,7 +6,7 @@ pub use quoting::*;
 use serde::{Deserialize, Serialize};
 pub use subscriptions::*;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct PendingOrder {
     /// the order id
     pub order_id: FixedBytes<32>,

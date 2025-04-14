@@ -10,7 +10,7 @@ exclude.workspace = true
 
 [dependencies]
 consensus.workspace = true
-angstrom-types. workspace = true 
+angstrom-types.workspace = true
 angstrom-utils.workspace = true
 uniswap-v4.workspace = true
 angstrom-network.workspace = true
@@ -72,7 +72,7 @@ reth-db.workspace = true
 enr = { workspace = true, features = ["serde", "k256"] }
 rand.workspace = true
 rand_distr.workspace = true
-rand_chacha = "0"
+rand_chacha = "0.3"
 secp256k1.workspace = true
 
 # misc

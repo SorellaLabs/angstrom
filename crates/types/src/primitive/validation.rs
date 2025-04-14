@@ -52,15 +52,15 @@ pub enum UserAccountVerificationError {
     NonEmptyHook,
     #[error("could not fetch, error - {0}")]
     CouldNotFetch(String),
-    #[error("insufficient approval amounts. token {0} needs {1} more")]
-    InsufficientApproval(Address, u128),
-    #[error("insufficient balance amounts. token {0} needs {1} more")]
-    InsufficientBalance(Address, u128),
+    #[error("{0} insufficient approval amounts. token {1} needs {2} more")]
+    InsufficientApproval(B256, Address, u128),
+    #[error("{0} insufficient balance amounts. token {1} needs {2} more")]
+    InsufficientBalance(B256, Address, u128),
     #[error(
-        "insufficient balance and approval amounts. token {0} needs {1} more balance and {2} more \
-         approvals"
+        "{0} insufficient balance and approval amounts. token {1} needs {2} more balance and {3} \
+         more approvals"
     )]
-    InsufficientBoth(Address, u128, u128),
+    InsufficientBoth(B256, Address, u128, u128),
     #[error("{0}")]
     Unknown(String)
 }

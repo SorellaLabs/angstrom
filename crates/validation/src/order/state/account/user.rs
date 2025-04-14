@@ -36,12 +36,14 @@ impl LiveState {
         pool_info: &UserOrderPoolInfo
     ) -> Result<PendingUserAction, UserAccountVerificationError> {
         assert_eq!(order.token_in(), self.token, "incorrect lives state for order");
+        let hash = order.order_hash();
 
         let amount_in = self.fetch_amount_in(order);
 
         let (angstrom_delta, token_delta) = if order.use_internal() {
             if self.angstrom_balance < amount_in {
                 return Err(UserAccountVerificationError::InsufficientBalance(
+                    hash,
                     self.token,
                     (amount_in - self.angstrom_balance).to()
                 ));
@@ -51,6 +53,7 @@ impl LiveState {
             match (self.approval < amount_in, self.balance < amount_in) {
                 (true, true) => {
                     return Err(UserAccountVerificationError::InsufficientBoth(
+                        hash,
                         self.token,
                         (amount_in - self.balance).to(),
                         (amount_in - self.approval).to()
@@ -58,12 +61,14 @@ impl LiveState {
                 }
                 (true, false) => {
                     return Err(UserAccountVerificationError::InsufficientApproval(
+                        hash,
                         self.token,
                         (amount_in - self.approval).to()
                     ));
                 }
                 (false, true) => {
                     return Err(UserAccountVerificationError::InsufficientBalance(
+                        hash,
                         self.token,
                         (amount_in - self.balance).to()
                     ));

@@ -43,6 +43,7 @@ impl DonationResult {
         // Validate that we're still covering a contiguous range
         let mut all_ranges = tick_donations.keys().collect::<Vec<_>>();
         all_ranges.sort_by_key(|(l, _)| *l);
+        tracing::info!(?all_ranges, ?tick_donations);
         let contiguous = all_ranges.windows(2).all(|k| k[0].1 == k[1].0);
         if !contiguous {
             return Err(eyre!("Does not still cover a contiguous range"));

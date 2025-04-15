@@ -71,8 +71,8 @@ where
 
     async fn generate_orders_for_block(&self) -> eyre::Result<Vec<AllOrders>> {
         tokio::time::sleep(Duration::from_millis(15)).await;
-        let mut all_orders = self.generate_book_intents().await?;
-        // let mut all_orders = vec![];
+        // let mut all_orders = self.generate_book_intents().await?;
+        let mut all_orders = vec![];
         all_orders.push(self.generate_tob_intent().await?);
 
         Ok(all_orders)
@@ -101,12 +101,12 @@ where
         // limit to crossing 30 ticks a swap
         let target_price = if zfo {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick - (5 * self.pool.tick_spacing)
+                self.pool.tick - (30 * self.pool.tick_spacing)
             )
             .unwrap()
         } else {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick + (5 * self.pool.tick_spacing)
+                self.pool.tick + (30 * self.pool.tick_spacing)
             )
             .unwrap()
         };
@@ -282,16 +282,16 @@ where
         let amount = if exact_in {
             // exact in will swap 1/6 of the balance
             I256::unchecked_from(if zfo {
-                token0_bal.balance / U256::from(50)
+                token0_bal.balance / U256::from(10)
             } else {
-                token1_bal.balance / U256::from(50)
+                token1_bal.balance / U256::from(10)
             })
         } else {
             // exact out
             I256::unchecked_from(if zfo {
-                t1_with_current_price / U256::from(50)
+                t1_with_current_price / U256::from(10)
             } else {
-                token1_bal.balance / U256::from(50)
+                token1_bal.balance / U256::from(10)
             })
             .wrapping_neg()
         };

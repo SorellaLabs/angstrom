@@ -91,13 +91,13 @@ impl BundleLander {
                             tracing::info!("new block");
                             // if we had and angstrom bundle, stop
                             let block_num = block.header.number;
-                            if block
-                                .into_transactions_vec()
-                                .into_iter()
-                                .any(|tx| tx.to() == Some(TESTNET_ANGSTROM_ADDRESS))
-                            {
-                                break;
-                            }
+                            // if block
+                            //     .into_transactions_vec()
+                            //     .into_iter()
+                            //     .any(|tx| tx.to() == Some(TESTNET_ANGSTROM_ADDRESS))
+                            // {
+                            //     break;
+                            // }
                             futures::stream::iter(&mut processors)
                                 .for_each(|processor| async move {
                                     processor

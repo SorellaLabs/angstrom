@@ -86,6 +86,7 @@ where
                 self.utils.metrics.clone()
             ),
             ValidationRequest::Bundle { sender, bundle } => {
+                println!("{:#?}", bundle);
                 tracing::debug!("simulating bundle");
                 let bn = self
                     .order_validator

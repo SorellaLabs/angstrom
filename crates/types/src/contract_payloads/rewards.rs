@@ -34,30 +34,36 @@ impl RewardsUpdate {
         let from_above = bound_tick > current_tick;
         let (low, high) =
             if from_above { (&current_tick, &bound_tick) } else { (&bound_tick, &current_tick) };
+
         let quantities = donation_data
             .tick_donations
             .iter()
+            // current tick
+            .chain(vec![(&bound_tick, &donation_data.current_tick)])
             // Filter for only ranges within our provided bounds
-            .filter(|((l, h), _)| *h > *low && *l <= *high)
+            .filter(|(t, _)| *t > low && *t <= high)
             // Sort to put them in order by low bound tick - high-to-low if from_above, low-to-high
             // otherwise
-            .sorted_by(|((a, _), _), ((b, _), _)| if from_above { b.cmp(a) } else { a.cmp(b) })
+            .sorted_by(|(a, _), (b, _)| if from_above { b.cmp(a) } else { a.cmp(b) })
             // Map to the quantity
-            .filter(|f| f.1.0)
-            .map(|(_, q)| q.1)
+            .map(|(_, q)| *q)
             .collect::<Vec<_>>();
 
         let (start_tick, start_liquidity) = snapshot
             .get_range_for_tick(bound_tick, from_above)
             .map(|r| (if from_above { r.lower_tick() } else { r.upper_tick() }, r.liquidity()))
             .unwrap_or_default();
+        tracing::warn!(
+            current_tick,
+            bound_tick,
+            start_tick,
+            start_liquidity,
+            "Assembling rewards update"
+        );
 
         match quantities.len() {
             0 | 1 => Ok(Self::CurrentOnly {
-                amount:             quantities
-                    .first()
-                    .copied()
-                    .unwrap_or(donation_data.current_tick),
+                amount:             quantities.first().copied().unwrap_or(0),
                 expected_liquidity: start_liquidity
             }),
             _ => Ok(Self::MultiTick {

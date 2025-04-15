@@ -137,6 +137,37 @@ impl TopOfBlockOrder {
         })
     }
 
+    pub fn calc_vec<'a>(
+        tob: &OrderWithStorageData<RpcTopOfBlockOrder>,
+        snapshot: &'a PoolSnapshot
+    ) -> eyre::Result<PoolPriceVec<'a>> {
+        // First let's simulate the actual ToB swap and use that to determine what our
+        // leftover T0 is for rewards
+        if tob.is_bid {
+            // If ToB is a bid, it's buying T0.  To reward, it will offer in more T1
+            // than needed, but the entire input will be swapped through the AMM.
+            // Therefore, our input quantity is simple - the entire input amount from
+            // the order.
+            let pricevec =
+                // for 
+                (snapshot.current_price(false).no_fees() + Quantity::Token1(tob.quantity_in))?;
+            Ok(pricevec)
+        } else {
+            // If ToB is an Ask, it's inputting T0.  We will take the reward T0 first
+            // before swapping the remaining T0 with the AMM, so we need to determine
+            // how much T0 will actually get to the AMM.  To do this, we determine how
+            // much T0 is required to produce the quantity of T1 the order expects to
+            // receive as output.  This quantity is our input which moves the AMM.
+
+            // First we find the amount of T0 in it would take to at least hit our quantity
+            // out
+            let cost =
+                (snapshot.current_price(true).no_fees() - Quantity::Token1(tob.quantity_out))?.d_t0;
+            let pricevec = (snapshot.current_price(true).no_fees() + Quantity::Token0(cost))?;
+            Ok(pricevec)
+        }
+    }
+
     pub fn calc_vec_and_reward<'a>(
         tob: &OrderWithStorageData<RpcTopOfBlockOrder>,
         snapshot: &'a PoolSnapshot
@@ -149,6 +180,7 @@ impl TopOfBlockOrder {
             // Therefore, our input quantity is simple - the entire input amount from
             // the order.
             let pricevec =
+                // for 
                 (snapshot.current_price(false).no_fees() + Quantity::Token1(tob.quantity_in))?;
 
             let leftover = pricevec

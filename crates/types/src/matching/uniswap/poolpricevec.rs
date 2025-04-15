@@ -513,7 +513,7 @@ impl<'a> PoolPriceVec<'a> {
         // We can start remaining_donation over
         remaining_donation = total_donation;
         let mut total_donated = 0_u128;
-        let tick_donations: HashMap<(Tick, Tick), (bool, u128)> = steps
+        let tick_donations: HashMap<Tick, u128> = steps
             .iter()
             .filter(|step| step.is_initialized)
             .map(|step| {
@@ -534,9 +534,8 @@ impl<'a> PoolPriceVec<'a> {
                 };
                 remaining_donation -= reward;
                 total_donated += reward;
-                // We associate a reward with a specific liquidity range and we will extract the
-                // lower or upper tick depending on the direction of our rewards
-                ((step.liq_range.lower_tick(), step.liq_range.upper_tick()), (true, reward))
+                // initalized is always marked by lower tick
+                (step.liq_range.lower_tick(), reward)
             })
             .collect();
 

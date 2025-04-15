@@ -548,6 +548,7 @@ impl AngstromBundle {
         // If we have a TOB swap, let's get the rewards and combine them - otherwise we
         // continue to use just the rewards we got from the AMM swap
         let total_rewards = if let Some((tob_vec, tob_donation)) = tob_swap_info.as_ref() {
+            tracing::info!(?tob_vec);
             let tob_rewards = tob_vec.t0_donation(*tob_donation);
             book_swap_rewards.combine(&tob_rewards)?
         } else {

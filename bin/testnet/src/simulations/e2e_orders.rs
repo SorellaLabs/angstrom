@@ -76,11 +76,12 @@ fn end_to_end_agent<'a>(
 
                             for orders in new_orders {
                                 let GeneratedPoolOrders { pool_id, tob, book } = orders;
-                                let all_orders = book
-                                    .into_iter()
-                                    .map(Into::into)
-                                    .chain(vec![tob.into()])
-                                    .collect::<Vec<AllOrders>>();
+                                // let all_orders = book
+                                //     .into_iter()
+                                //     .map(Into::into)
+                                //     .chain(vec![tob.into()])
+                                //     .collect::<Vec<AllOrders>>();
+                                let all_orders = vec![tob.into()];
 
                                  pending_orders.push(client.send_orders(all_orders));
                             }

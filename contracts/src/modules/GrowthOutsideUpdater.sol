@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
-// import {console} from "forge-std/console.sol";
+import {console} from "forge-std/console.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {PoolRewards, REWARD_GROWTH_SIZE} from "../types/PoolRewards.sol";
 import {CalldataReader} from "../types/CalldataReader.sol";
@@ -38,8 +38,10 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         int24 currentTick
     ) internal returns (CalldataReader, uint256) {
         if (currentOnly) {
+            console.log("Rewarding current tick");
             uint128 amount;
             (reader, amount) = reader.readU128();
+            console.log("Read reward quantity - ", amount);
             uint128 expectedLiquidity;
             (reader, expectedLiquidity) = reader.readU128();
             // we sometimes have to do empty updates for swap encoding
@@ -50,7 +52,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
 
             uint128 pooLiquidity = UNI_V4.getPoolLiquidity(id);
             if (expectedLiquidity != pooLiquidity) {
-                // console.log("expectedLiquidity != pooLiquidity");
+                console.log("expectedLiquidity != pooLiquidity");
                 revert JustInTimeLiquidityChange();
             }
             unchecked {
@@ -59,6 +61,8 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
 
             return (reader, amount);
         }
+
+        console.log("Starting multi-tick reward");
 
         uint256 cumulativeGrowth;
         uint128 endLiquidity;
@@ -69,6 +73,9 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         // start liq
         (reader, liquidity) = reader.readU128();
         (CalldataReader newReader, CalldataReader amountsEnd) = reader.readU24End();
+
+        console.log("Multi-tick start tick - ", startTick);
+        console.log("Multi-tick start liq - ", liquidity);
 
         // Stack too deep shenanigan.
         PoolRewards storage poolRewards = poolRewards_;
@@ -81,6 +88,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
 
         uint128 donateToCurrent;
         (newReader, donateToCurrent) = newReader.readU128();
+        console.log("Multi-tick current tick donation - ", donateToCurrent);
         unchecked {
             cumulativeGrowth += X128MathLib.flatDivX128(donateToCurrent, endLiquidity);
         }
@@ -97,7 +105,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
             uint160 expectedRewardChecksum;
             (newReader, expectedRewardChecksum) = newReader.readU160();
             if (expectedRewardChecksum != pool.rewardChecksum >> 96) {
-                // console.log("expectedRewardChecksum != pool.rewardChecksum >> 96");
+                console.log("expectedRewardChecksum != pool.rewardChecksum >> 96");
                 revert JustInTimeLiquidityChange();
             }
         }
@@ -121,10 +129,14 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         uint256 cumulativeGrowth = 0;
         uint256 rewardChecksum = 0;
 
+        console.log("Starting _rewardBelow");
+
         do {
+            console.log("Processing tick - ", rewardTick);
             if (initialized) {
                 uint128 amount;
                 (reader, amount) = reader.readU128();
+                console.log("Adding donation quantity - ", amount);
 
                 total += amount;
                 unchecked {
@@ -135,7 +147,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
                 (, int128 netLiquidity) = UNI_V4.getTickLiquidity(pool.id, rewardTick);
                 liquidity = MixedSignLib.add(liquidity, netLiquidity);
 
-                // console.log("below", uint256(int256(rewardTick)), uint256(liquidity));
+                console.log("below", uint256(int256(rewardTick)), uint256(liquidity));
                 assembly ("memory-safe") {
                     mstore(0x13, rewardTick)
                     mstore(0x10, liquidity)
@@ -163,10 +175,13 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
         uint256 cumulativeGrowth = 0;
         uint256 rewardChecksum = 0;
 
+        console.log("Starting _rewardAbove");
         do {
+            console.log("Processing tick - ", rewardTick);
             if (initialized) {
                 uint128 amount;
                 (reader, amount) = reader.readU128();
+                console.log("Adding donation quantity - ", amount);
 
                 total += amount;
                 unchecked {
@@ -177,7 +192,7 @@ abstract contract GrowthOutsideUpdater is UniConsumer {
                 (, int128 netLiquidity) = UNI_V4.getTickLiquidity(pool.id, rewardTick);
                 liquidity = MixedSignLib.sub(liquidity, netLiquidity);
 
-                // console.log("above", uint256(int256(rewardTick)), uint256(liquidity));
+                console.log("above", uint256(int256(rewardTick)), uint256(liquidity));
                 assembly ("memory-safe") {
                     mstore(0x13, rewardTick)
                     mstore(0x10, liquidity)

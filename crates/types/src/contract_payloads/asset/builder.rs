@@ -104,15 +104,15 @@ impl AssetBuilder {
     pub fn get_asset_array(&self) -> Vec<Asset> {
         if event_enabled!(target: "dump::assetbuilder", Level::TRACE) {
             trace!(target: "dump::assetbuilder", map = ?self.swaps.map, "Swap level");
+            trace!(target: "dump::assetbuilder", map = ?self.rewards.map, "Reward level");
             trace!(target: "dump::assetbuilder", map = ?self.top_of_block.map, "ToB level");
             trace!(target: "dump::assetbuilder", map = ?self.user_orders.map, "User level");
-            trace!(target: "dump::assetbuilder", map = ?self.rewards.map, "Reward level");
         }
         let combined_assets = self
             .swaps
+            .and_then(&self.rewards)
             .and_then(&self.top_of_block)
             .and_then(&self.user_orders)
-            .and_then(&self.rewards)
             .collect_extra();
         self.assets
             .get_asset_array()

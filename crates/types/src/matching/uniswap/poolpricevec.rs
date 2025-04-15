@@ -431,7 +431,7 @@ impl<'a> PoolPriceVec<'a> {
                 current_tick:   total_donation,
                 tick_donations: HashMap::new(),
                 final_price:    self.end_bound.price,
-                total_donated:  0
+                total_donated:  total_donation
             };
         };
 

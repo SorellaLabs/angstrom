@@ -32,6 +32,7 @@ impl DonationResult {
     /// to ensure that our output is a set of donations to a contiguous range.
     pub fn combine(&self, rhs: &Self) -> eyre::Result<Self> {
         // Merge our two HashMaps
+        tracing::info!(?self, ?rhs);
         let mut tick_donations = HashMap::new();
         for (k, v) in self.tick_donations.iter().chain(rhs.tick_donations.iter()) {
             tick_donations

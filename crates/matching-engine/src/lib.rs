@@ -31,12 +31,7 @@ pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
 }
 
 pub fn build_book(id: PoolId, amm: Option<PoolSnapshot>, orders: HashSet<BookOrder>) -> OrderBook {
-    let (mut bids, mut asks): (Vec<BookOrder>, Vec<BookOrder>) =
-        orders.into_iter().partition(|o| o.is_bid);
+    let (bids, asks): (Vec<BookOrder>, Vec<BookOrder>) = orders.into_iter().partition(|o| o.is_bid);
 
-    // assert bids decreasing and asks increasing
-    bids.sort_by_key(|b| std::cmp::Reverse(b.limit_price()));
-    asks.sort_by_key(|a| a.limit_price());
-
-    OrderBook::new(id, amm, bids, asks, Some(book::sort::SortStrategy::ByPriceByVolume))
+    OrderBook::new(id, amm, bids, asks, Some(book::sort::SortStrategy::PricePartialVolume))
 }

@@ -43,6 +43,18 @@ impl Sum for Ray {
     }
 }
 
+impl PartialEq<U256> for Ray {
+    fn eq(&self, other: &U256) -> bool {
+        self.0.eq(other)
+    }
+}
+
+impl PartialOrd<U256> for Ray {
+    fn partial_cmp(&self, other: &U256) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+
 impl From<Ray> for Natural {
     fn from(value: Ray) -> Self {
         Natural::from_limbs_asc(value.0.as_limbs())

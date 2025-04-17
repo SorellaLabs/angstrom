@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{GenerateFlippedOrder, RawPoolOrder, RespendAvoidanceMethod};
 use crate::{
-    matching::{Debt, Ray},
+    matching::Ray,
     orders::{OrderId, OrderLocation, OrderPriorityData},
     primitive::{ANGSTROM_DOMAIN, PoolId, UserAccountVerificationError},
     sol_bindings::rpc_orders::{
@@ -60,32 +60,6 @@ impl StandingVariants {
         match self {
             Self::Exact(o) => o.amount,
             Self::Partial(o) => o.min_amount_in
-        }
-    }
-
-    /// The quantity available for this order to match in terms of T0
-    pub fn quantity(&self, _debt: Option<&Debt>) -> u128 {
-        let is_bid = self.is_bid();
-        let exact_in = self.exact_in();
-        let raw_q = match self {
-            Self::Exact(o) => o.amount,
-            Self::Partial(o) => o.max_amount_in
-        };
-        match (is_bid, exact_in) {
-            // Exact In bid
-            (true, true) => {
-                // In this case the price in this order is stored as T0/T1 so we use
-                // mul_quantity to get the number of T0 for this amount of T1
-                let order_price = Ray::from(self.limit_price());
-                order_price.mul_quantity(U256::from(raw_q)).saturating_to()
-            }
-            // Exact Out ask
-            (false, false) => {
-                let order_price = Ray::from(self.limit_price());
-                order_price.inverse_quantity(raw_q, true)
-            }
-            // Exact Out bid (normal bid) and Exact In ask (normal ask)
-            (true, false) | (false, true) => raw_q
         }
     }
 

@@ -8,12 +8,11 @@ use alloy::{
     transports::Transport
 };
 use angstrom_types::{
-    matching::uniswap::{LiqRange, TickInfo},
+    matching::uniswap::TickInfo,
     primitive::PoolId,
     uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity}
 };
 use itertools::Itertools;
-use malachite::num::conversion::traits::SaturatingInto;
 use thiserror::Error;
 use uniswap_v3_math::{
     error::UniswapV3MathError,
@@ -125,128 +124,6 @@ where
             )
         ))
     }
-
-    // fn fetch_liq_ranges_by_side(&self, direction: bool) -> Vec<LiqRange> {
-    //     let current_liquidity = self.liquidity;
-    //     let current_tick = self.tick;
-    //
-    //     // we need to pad out ticks here. Any ticks that are in the tick map are
-    // either     // initialized or not and on a tick boundary. In order to
-    // match uniswap     // with this, what we need to do is fill in empty ticks
-    // that aren't     // initialized and not on a tick bound and mark this.
-    //
-    //     let (less_than, more_than): (Vec<_>, Vec<_>) = self
-    //         .ticks
-    //         .iter()
-    //         // if the tick is initialized, then it is valid for both directions.
-    // otherwise         // we will have different edges
-    //         .filter(|f| f.1.zfo == direction || f.1.initialized)
-    //         .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
-    //         .partition(|t| *t.0 <= current_tick);
-    //
-    //     let lower = *less_than.last().expect("No lower bound to current range");
-    //
-    //     let current_range = LiqRange::new_uninit(
-    //         *lower.0,
-    //         *more_than
-    //             .first()
-    //             .expect("No upper bound to current range")
-    //             .0,
-    //         current_liquidity,
-    //         lower.1.is_edge,
-    //         lower.1.initialized,
-    //         self.book_fee,
-    //         direction,
-    //     )
-    //     .unwrap();
-    //
-    //     let mut tracked_liq: i128 = current_liquidity.saturating_into();
-    //     let upper_ranges = more_than
-    //         .iter()
-    //         // Sort low to high
-    //         .sorted_unstable_by(|(tick_a, _), (tick_b, _)| tick_a.cmp(tick_b))
-    //         .tuple_windows()
-    //         .map(|((low_tick, low_tick_data), (high_tick, _))| {
-    //             // We're walking upwards so we add the low tick's net
-    //             tracked_liq += low_tick_data.liquidity_net;
-    //             // ensure everything is spaced properly
-    //             assert!(
-    //                 low_tick.rem(self.tick_spacing) == 0,
-    //                 "Lower tick not aligned {} spacing {}",
-    //                 low_tick,
-    //                 self.tick_spacing
-    //             );
-    //             assert!(
-    //                 high_tick.rem(self.tick_spacing) == 0,
-    //                 "Upper tick not aligned {} spacing {}",
-    //                 high_tick,
-    //                 self.tick_spacing
-    //             );
-    //             assert!(
-    //                 tracked_liq >= 0,
-    //                 "Liquidity dropped below zero {} - {}",
-    //                 low_tick,
-    //                 high_tick
-    //             );
-    //
-    //             LiqRange::new_uninit(
-    //                 **low_tick,
-    //                 **high_tick,
-    //                 tracked_liq.unsigned_abs(),
-    //                 low_tick_data.is_edge,
-    //                 low_tick_data.initialized,
-    //                 self.book_fee,
-    //                 direction,
-    //             )
-    //             .unwrap()
-    //         })
-    //         .collect::<Vec<_>>();
-    //
-    //     // Reset our tracked liquidity
-    //     tracked_liq = current_liquidity.saturating_into();
-    //     // Iterate downwards now
-    //     let lower_ranges = less_than
-    //         .iter()
-    //         // We want to walk our ranges high to low, so we reverse
-    //         .rev()
-    //         .tuple_windows()
-    //         .map(|((high_tick, high_tick_data), (low_tick, _))| {
-    //             // We're walking downwards now so we subtract the upper tick's
-    // net             tracked_liq -= high_tick_data.liquidity_net;
-    //             // ensure everything is spaced properly
-    //             assert!(
-    //                 low_tick.rem(self.tick_spacing) == 0,
-    //                 "Lower tick not aligned {} spacing {}",
-    //                 low_tick,
-    //                 self.tick_spacing
-    //             );
-    //             assert!(
-    //                 high_tick.rem(self.tick_spacing) == 0,
-    //                 "Upper tick not aligned {} spacing {}",
-    //                 high_tick,
-    //                 self.tick_spacing
-    //             );
-    //             assert!(
-    //                 tracked_liq >= 0,
-    //                 "Liquidity dropped below zero {} - {}",
-    //                 low_tick,
-    //                 high_tick
-    //             );
-    //             LiqRange::new_uninit(
-    //                 **low_tick,
-    //                 **high_tick,
-    //                 tracked_liq.unsigned_abs(),
-    //                 high_tick_data.is_edge,
-    //                 high_tick_data.initialized,
-    //                 self.book_fee,
-    //                 direction,
-    //             )
-    //             .unwrap()
-    //         })
-    //         .collect::<Vec<_>>();
-    //
-    //     [[current_range].as_slice(), upper_ranges.as_slice(),
-    // lower_ranges.as_slice()].concat() }
 
     pub async fn initialize(
         &mut self,

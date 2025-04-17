@@ -15,7 +15,6 @@ use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
     consensus::{PreProposal, PreProposalAggregation, Proposal},
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
-    matching::uniswap::PoolSnapshot,
     mev_boost::MevBoostProvider,
     orders::PoolSolution,
     primitive::AngstromSigner,

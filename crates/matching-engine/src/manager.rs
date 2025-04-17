@@ -8,7 +8,7 @@ use alloy_primitives::Address;
 use angstrom_types::{
     consensus::PreProposal,
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
-    matching::{match_estimate_response::BundleEstimate, uniswap::PoolSnapshot},
+    matching::match_estimate_response::BundleEstimate,
     orders::PoolSolution,
     primitive::PoolId,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},

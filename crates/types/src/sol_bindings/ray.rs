@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 
 use crate::matching::{
-    MatchingPrice, SqrtPriceX96, const_1e6, const_1e27, const_1e54, const_2_192, uniswap::PoolPrice
+    MatchingPrice, SqrtPriceX96, const_1e6, const_1e27, const_1e54, const_2_192
 };
 
 fn max_tick_ray() -> &'static Ray {
@@ -195,12 +195,6 @@ impl From<&MatchingPrice> for Ray {
 impl From<MatchingPrice> for Ray {
     fn from(value: MatchingPrice) -> Self {
         Self(*value)
-    }
-}
-
-impl From<PoolPrice<'_>> for Ray {
-    fn from(value: PoolPrice) -> Self {
-        Self::from(value.price)
     }
 }
 

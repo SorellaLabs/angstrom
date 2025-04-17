@@ -1,7 +1,4 @@
-use angstrom_types::matching::{
-    SqrtPriceX96,
-    uniswap::{LiqRange, PoolSnapshot}
-};
+use angstrom_types::matching::SqrtPriceX96;
 use eyre::{Context, Error, eyre};
 use rand_distr::{Distribution, SkewNormal};
 use uniswap_v3_math::tick_math::{get_sqrt_ratio_at_tick, get_tick_at_sqrt_ratio};
@@ -13,8 +10,7 @@ pub struct AMMSnapshotBuilder {
     upper_tick: i32,
     default_position_width: Option<i32>,
     default_position_liquidity: Option<u128>,
-    liquidity_distribution: Option<LiquidityDistributionParameters>,
-    positions: Option<Vec<LiqRange>>
+    liquidity_distribution: Option<LiquidityDistributionParameters>
 }
 
 impl AMMSnapshotBuilder {
@@ -23,22 +19,6 @@ impl AMMSnapshotBuilder {
         let lower_tick = price_tick;
         let upper_tick = price_tick + 1;
         Self { price, lower_tick, upper_tick, ..Self::default() }
-    }
-
-    pub fn with_positions(self, positions: Vec<LiqRange>) -> Self {
-        let (lower_tick, upper_tick) =
-            positions
-                .iter()
-                .fold((i32::MAX, i32::MIN), |mut state, pos| {
-                    if state.0 > pos.lower_tick() {
-                        state.0 = pos.lower_tick();
-                    }
-                    if state.1 < pos.upper_tick() {
-                        state.1 = pos.upper_tick();
-                    }
-                    state
-                });
-        Self { lower_tick, upper_tick, positions: Some(positions), ..self }
     }
 
     pub fn with_positions_from_distribution(

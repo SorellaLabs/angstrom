@@ -3,7 +3,7 @@ use std::{io::Write, iter::Chain, slice::Iter, time::UNIX_EPOCH};
 
 use alloy_primitives::U256;
 use angstrom_types::{
-    matching::{SqrtPriceX96, uniswap::PoolSnapshot},
+    matching::SqrtPriceX96,
     primitive::PoolId,
     sol_bindings::{
         Ray,
@@ -18,7 +18,6 @@ use self::sort::SortStrategy;
 
 pub type BookOrder = OrderWithStorageData<GroupedVanillaOrder>;
 
-pub mod order;
 pub mod sort;
 
 #[derive(Serialize, Deserialize, Debug, Default)]

@@ -18,10 +18,9 @@ use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     contract_payloads::angstrom::TopOfBlockOrder as PayloadTopOfBlockOrder,
-    matching::uniswap::PoolSnapshot,
     primitive::PoolId,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
-    uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity}
+    uni_structure::BaselinePoolState
 };
 use arraydeque::ArrayDeque;
 use dashmap::DashMap;

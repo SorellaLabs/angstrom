@@ -20,7 +20,8 @@ use angstrom_types::{
     contract_payloads::angstrom::TopOfBlockOrder as PayloadTopOfBlockOrder,
     matching::uniswap::PoolSnapshot,
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
+    uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity}
 };
 use arraydeque::ArrayDeque;
 use dashmap::DashMap;
@@ -217,7 +218,7 @@ where
         }
     }
 
-    pub fn fetch_pool_snapshots(&self) -> HashMap<PoolId, PoolSnapshot> {
+    pub fn fetch_pool_snapshots(&self) -> HashMap<PoolId, BaselinePoolState> {
         self.pools
             .iter()
             .filter_map(|refr| {

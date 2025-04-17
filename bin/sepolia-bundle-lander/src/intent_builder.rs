@@ -70,7 +70,7 @@ where
     }
 
     async fn generate_orders_for_block(&self) -> eyre::Result<Vec<AllOrders>> {
-        tokio::time::sleep(Duration::from_millis(15)).await;
+        tokio::time::sleep(Duration::from_millis(1001)).await;
         let mut all_orders = self.generate_book_intents().await?;
         // let mut all_orders = vec![];
         all_orders.push(self.generate_tob_intent().await?);
@@ -101,12 +101,12 @@ where
         // limit to crossing 30 ticks a swap
         let target_price = if zfo {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick - (5 * self.pool.tick_spacing)
+                self.pool.tick - (100 * self.pool.tick_spacing)
             )
             .unwrap()
         } else {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick + (5 * self.pool.tick_spacing)
+                self.pool.tick + (100 * self.pool.tick_spacing)
             )
             .unwrap()
         };
@@ -181,12 +181,12 @@ where
 
         let target_price = if zfo {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick - (10 * self.pool.tick_spacing)
+                self.pool.tick - (30 * self.pool.tick_spacing)
             )
             .unwrap()
         } else {
             uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick(
-                self.pool.tick + (10 * self.pool.tick_spacing)
+                self.pool.tick + (30 * self.pool.tick_spacing)
             )
             .unwrap()
         };
@@ -196,8 +196,8 @@ where
 
         let mut clearing_price = Ray::from(SqrtPriceX96::from(sqrt_price_x_96));
         // how much we want to reduce our price from as we don't need the exact.
-        // we shave 5% off
-        let pct = Ray::generate_ray_decimal(95, 2);
+        // we shave 70% off
+        let pct = Ray::generate_ray_decimal(30, 2);
         clearing_price.mul_ray_assign(pct);
 
         let amount = if zfo == exact_in {
@@ -282,16 +282,16 @@ where
         let amount = if exact_in {
             // exact in will swap 1/6 of the balance
             I256::unchecked_from(if zfo {
-                token0_bal.balance / U256::from(50)
+                token0_bal.balance / U256::from(30)
             } else {
-                token1_bal.balance / U256::from(50)
+                token1_bal.balance / U256::from(30)
             })
         } else {
             // exact out
             I256::unchecked_from(if zfo {
-                t1_with_current_price / U256::from(50)
+                t1_with_current_price / U256::from(30)
             } else {
-                token1_bal.balance / U256::from(50)
+                token1_bal.balance / U256::from(30)
             })
             .wrapping_neg()
         };

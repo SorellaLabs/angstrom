@@ -4,17 +4,19 @@ use alloy::primitives::{Address, B256, U256};
 use eyre::eyre;
 use pade::PadeDecode;
 use pade_macro::{PadeDecode, PadeEncode};
+use revm_primitives::I256;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     contract_payloads::{Asset, Pair, Signature},
-    matching::uniswap::{PoolPriceVec, PoolSnapshot, Quantity},
+    matching::uniswap::Direction,
     primitive::ANGSTROM_DOMAIN,
     sol_bindings::{
         RawPoolOrder,
         grouped_orders::OrderWithStorageData,
         rpc_orders::{OmitOrderMeta, TopOfBlockOrder as RpcTopOfBlockOrder}
-    }
+    },
+    uni_structure::{BaselinePoolState, pool_swap::PoolSwapResult}
 };
 
 // This currently exists in types::sol_bindings as well, but that one is
@@ -139,8 +141,8 @@ impl TopOfBlockOrder {
 
     pub fn calc_vec_and_reward<'a>(
         tob: &OrderWithStorageData<RpcTopOfBlockOrder>,
-        snapshot: &'a PoolSnapshot
-    ) -> eyre::Result<(PoolPriceVec<'a>, u128)> {
+        snapshot: &'a BaselinePoolState
+    ) -> eyre::Result<(PoolSwapResult<'a>, u128)> {
         // First let's simulate the actual ToB swap and use that to determine what our
         // leftover T0 is for rewards
         if tob.is_bid {
@@ -148,14 +150,17 @@ impl TopOfBlockOrder {
             // than needed, but the entire input will be swapped through the AMM.
             // Therefore, our input quantity is simple - the entire input amount from
             // the order.
-            let pricevec =
-                (snapshot.current_price(false).no_fees() + Quantity::Token1(tob.quantity_in))?;
-
-            let leftover = pricevec
-                .d_t0
+            let res = snapshot.swap_current_to(
+                I256::unchecked_from(tob.quantity_in),
+                Direction::BuyingT0,
+                None
+            )?;
+            let leftover = res
+                .total_d_t0
                 .checked_sub(tob.quantity_out)
                 .ok_or_else(|| eyre!("Not enough output to cover the transaction"))?;
-            Ok((pricevec, leftover))
+
+            Ok((res, leftover))
         } else {
             // If ToB is an Ask, it's inputting T0.  We will take the reward T0 first
             // before swapping the remaining T0 with the AMM, so we need to determine
@@ -165,18 +170,23 @@ impl TopOfBlockOrder {
 
             // First we find the amount of T0 in it would take to at least hit our quantity
             // out
-            let cost =
-                (snapshot.current_price(true).no_fees() - Quantity::Token1(tob.quantity_out))?.d_t0;
+
+            let cost = snapshot
+                .swap_current_to(
+                    -I256::unchecked_from(tob.quantity_out),
+                    Direction::SellingT0,
+                    None
+                )?
+                .total_d_t0;
 
             let leftover = tob
                 .quantity_in
                 .checked_sub(cost)
                 .ok_or_else(|| eyre!("Not enough input to cover the transaction"))?;
 
-            // But then we have to operate in the right direction to calculate how much T1
-            // we ACTUALLY get out
-            let pricevec = (snapshot.current_price(true).no_fees() + Quantity::Token0(cost))?;
-            Ok((pricevec, leftover))
+            let price_vec =
+                snapshot.swap_current_to(I256::unchecked_from(cost), Direction::SellingT0, None)?;
+            Ok((price_vec, leftover))
         }
     }
 }

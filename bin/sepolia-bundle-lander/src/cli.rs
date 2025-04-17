@@ -96,7 +96,8 @@ impl BundleLander {
                                 .into_iter()
                                 .any(|tx| tx.to() == Some(TESTNET_ANGSTROM_ADDRESS))
                             {
-                                break;
+                                tracing::info!("landed");
+                                // break;
                             }
                             futures::stream::iter(&mut processors)
                                 .for_each(|processor| async move {

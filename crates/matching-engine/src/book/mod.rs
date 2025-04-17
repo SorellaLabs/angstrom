@@ -8,7 +8,8 @@ use angstrom_types::{
     sol_bindings::{
         Ray,
         grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
-    }
+    },
+    uni_structure::BaselinePoolState
 };
 use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
@@ -23,7 +24,7 @@ pub mod sort;
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct OrderBook {
     pub id: PoolId,
-    amm:    Option<PoolSnapshot>,
+    amm:    Option<BaselinePoolState>,
     bids:   Vec<BookOrder>,
     asks:   Vec<BookOrder>
 }
@@ -31,7 +32,7 @@ pub struct OrderBook {
 impl OrderBook {
     pub fn new(
         id: PoolId,
-        amm: Option<PoolSnapshot>,
+        amm: Option<BaselinePoolState>,
         mut bids: Vec<BookOrder>,
         mut asks: Vec<BookOrder>,
         sort: Option<SortStrategy>
@@ -66,7 +67,7 @@ impl OrderBook {
         self.bids.iter().chain(self.asks.iter())
     }
 
-    pub fn amm(&self) -> Option<&PoolSnapshot> {
+    pub fn amm(&self) -> Option<&BaselinePoolState> {
         self.amm.as_ref()
     }
 
@@ -86,29 +87,5 @@ impl OrderBook {
             .chain(self.asks().iter().map(|ask| ask.price() * U256::from(2)))
             .max()
             .unwrap_or_else(|| SqrtPriceX96::from(MAX_SQRT_RATIO).into())
-    }
-
-    /// writes the book to the cwd + timestamp in seconds
-    pub fn save(&self, bisection_ucp: Ray, debt_ucp: Ray) -> eyre::Result<()> {
-        let jsond = serde_json::json!({
-            "bisection_ucp": bisection_ucp,
-            "debt_ucp": debt_ucp,
-            "book": &self
-        });
-
-        let strd = serde_json::to_string_pretty(&jsond)?;
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_millis();
-
-        let bi = *bisection_ucp;
-        let debt = *debt_ucp;
-        let mut file = std::fs::File::create_new(format!(
-            "book-with-ucp-timestamp-{timestamp}-bi-ucp-{bi:?}-debt-ucp-{debt:?}.json"
-        ))?;
-
-        write!(&mut file, "{strd}")?;
-
-        Ok(())
     }
 }

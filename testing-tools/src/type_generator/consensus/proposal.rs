@@ -11,10 +11,7 @@ use angstrom_types::{
     primitive::{AngstromSigner, PoolId},
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
-use matching_engine::{
-    MatchingManager,
-    strategy::{MatchingStrategy, SimpleCheckpointStrategy}
-};
+use matching_engine::{MatchingManager, strategy::BinarySearchStrategy};
 use reth_tasks::TokioTaskExecutor;
 
 use super::{pool::Pool, pre_proposal_agg::PreProposalAggregationBuilder};
@@ -111,7 +108,7 @@ impl ProposalBuilder {
 
         let books = MatchingManager::<TokioTaskExecutor, MockValidator>::build_books(
             &preproposals[0].pre_proposals,
-            &HashMap::default()
+            HashMap::default()
         );
         let searcher_orders: HashMap<PoolId, OrderWithStorageData<TopOfBlockOrder>> = preproposals
             .iter()
@@ -125,9 +122,7 @@ impl ProposalBuilder {
             .into_iter()
             .map(|b| {
                 let searcher = searcher_orders.get(&b.id()).cloned();
-                SimpleCheckpointStrategy::run(&b)
-                    .map(|s| s.solution(searcher))
-                    .unwrap()
+                BinarySearchStrategy::run(&b, searcher)
             })
             .collect::<Vec<_>>();
         Proposal::generate_proposal(ethereum_height, &sk, preproposals, solutions)

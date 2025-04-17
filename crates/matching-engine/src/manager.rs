@@ -11,7 +11,8 @@ use angstrom_types::{
     matching::{match_estimate_response::BundleEstimate, uniswap::PoolSnapshot},
     orders::PoolSolution,
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
+    uni_structure::BaselinePoolState
 };
 use futures::{Future, stream::FuturesUnordered};
 use futures_util::FutureExt;
@@ -30,20 +31,20 @@ use crate::{
     MatchingEngineHandle,
     book::{BookOrder, OrderBook},
     build_book,
-    strategy::{BinarySearchStrategy, MatchingStrategy, SimpleCheckpointStrategy}
+    strategy::BinarySearchStrategy
 };
 
 pub enum MatcherCommand {
     BuildProposal(
         Vec<BookOrder>,
         Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>,
+        HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
         oneshot::Sender<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>
     ),
     EstimateGasPerPool {
         limit:    Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pools:    HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>,
+        pools:    HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
         tx:       oneshot::Sender<eyre::Result<BundleEstimate>>
     }
 }
@@ -69,7 +70,7 @@ impl MatchingEngineHandle for MatcherHandle {
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+        pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> futures_util::future::BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> {
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
@@ -117,7 +118,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
 
     pub fn build_non_proposal_books(
         limit: Vec<BookOrder>,
-        pool_snapshots: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+        pool_snapshots: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> Vec<OrderBook> {
         let book_sources = Self::orders_sorted_by_pool_id(limit);
 
@@ -132,7 +133,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
 
     pub fn build_books(
         preproposals: &[PreProposal],
-        pool_snapshots: &HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+        pool_snapshots: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> Vec<OrderBook> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
@@ -151,7 +152,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+        pool_snapshots: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> eyre::Result<(Vec<PoolSolution>, BundleGasDetails)> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
@@ -211,7 +212,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pool_snapshots: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+        pool_snapshots: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> eyre::Result<BundleEstimate> {
         let books = Self::build_non_proposal_books(limit.clone(), &pool_snapshots);
 
@@ -230,9 +231,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
             // dedicated threadpool and some suggest the `rayon` crate.  This is probably
             // not a problem while I'm testing, but leaving this note here as it may be
             // important for future efficiency gains
-            solution_set.spawn_blocking(move || {
-                SimpleCheckpointStrategy::run(&b).map(|s| s.solution(searcher))
-            });
+            solution_set.spawn_blocking(move || Some(BinarySearchStrategy::run(&b, searcher)));
         });
 
         let mut solutions = Vec::new();

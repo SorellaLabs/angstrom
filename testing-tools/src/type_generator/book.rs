@@ -28,11 +28,11 @@ impl BookBuilder {
 
     pub fn build(self) -> OrderBook {
         let id = self._poolid.unwrap_or_default();
-        let amm = self._amm;
+        // let amm = self._amm;
         let bids = self._bids.unwrap_or_default();
         let asks = self._asks.unwrap_or_default();
         let sort = self._sort;
-        OrderBook::new(id, amm, bids, asks, sort)
+        OrderBook::new(id, None, bids, asks, sort)
     }
 
     pub fn poolid(mut self, poolid: PoolId) -> Self {

@@ -259,6 +259,27 @@ impl AnvilInitializer {
             .await?;
 
         self.pending_state.add_pending_tx(add_liq);
+
+        let lowest_tick = I24::unchecked_from(tick - (pool_key.tickSpacing.as_i32() * 2));
+        let highest_tick = I24::unchecked_from(tick + (pool_key.tickSpacing.as_i32() * 2));
+        tracing::info!(?lowest_tick, ?highest_tick, "initalizing single range at");
+
+        let add_liq = self
+            .pool_gate
+            .addLiquidity(
+                pool_key.currency0,
+                pool_key.currency1,
+                lowest_tick,
+                highest_tick,
+                U256::from(liquidity),
+                FixedBytes::<32>::default()
+            )
+            .from(self.provider.controller())
+            .nonce(nonce + 4)
+            .deploy_pending()
+            .await?;
+
+        self.pending_state.add_pending_tx(add_liq);
         self.rpc_provider().anvil_mine(Some(1), None).await?;
 
         Ok(())

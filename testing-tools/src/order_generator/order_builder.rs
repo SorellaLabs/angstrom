@@ -118,6 +118,10 @@ impl OrderBuilder {
 
         let amount = (amount as f64 * modifier) as u128;
 
+        // allow for more flexibility
+        let pct = Ray::generate_ray_decimal(75, 2);
+        unshifted_price.mul_ray_assign(pct);
+
         // if the random direction changes the swap. inv the price
         if !zfo {
             unshifted_price.inv_ray_assign_round(true);

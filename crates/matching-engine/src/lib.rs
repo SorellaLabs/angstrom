@@ -3,12 +3,12 @@ use std::collections::{HashMap, HashSet};
 use alloy_primitives::Address;
 use angstrom_types::{
     contract_payloads::angstrom::BundleGasDetails,
-    matching::uniswap::PoolSnapshot,
     orders::PoolSolution,
     primitive::PoolId,
     sol_bindings::{
         RawPoolOrder, grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder
-    }
+    },
+    uni_structure::BaselinePoolState
 };
 use book::{BookOrder, OrderBook};
 use futures_util::future::BoxFuture;
@@ -26,11 +26,15 @@ pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pools: HashMap<PoolId, (Address, Address, PoolSnapshot, u16)>
+        pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>;
 }
 
-pub fn build_book(id: PoolId, amm: Option<PoolSnapshot>, orders: HashSet<BookOrder>) -> OrderBook {
+pub fn build_book(
+    id: PoolId,
+    amm: Option<BaselinePoolState>,
+    orders: HashSet<BookOrder>
+) -> OrderBook {
     let (mut bids, mut asks): (Vec<BookOrder>, Vec<BookOrder>) =
         orders.into_iter().partition(|o| o.is_bid);
 

@@ -15,6 +15,13 @@ use serde::{Deserialize, Serialize};
 
 pub type Tick = i32;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TickInfo {
+    pub liquidity_gross: u128,
+    pub liquidity_net:   i128,
+    pub initialized:     bool
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Quantity {
     Token0(u128),
@@ -82,6 +89,10 @@ impl Direction {
     pub fn is_bid(&self) -> bool {
         // if we are selling t0 we are buying t1 which is a ask
         matches!(self, Self::BuyingT0)
+    }
+
+    pub fn is_ask(&self) -> bool {
+        matches!(self, Self::SellingT0)
     }
 
     /// Determine the direction of sale from a start and end price

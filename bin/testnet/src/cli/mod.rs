@@ -97,29 +97,29 @@ pub fn init_tracing(verbosity: u8) {
         .with_ansi(true)
         .with_target(true);
 
-    // if let Some(f) = envfilter {
-    //     let _ = tracing_subscriber::registry()
-    //         .with(format)
-    //         .with(f)
-    //         .try_init();
-    // } else {
-    let filter = filter::Targets::new()
-        .with_target("testnet", level)
-        .with_target("devnet", level)
-        .with_target("angstrom_rpc", level)
-        .with_target("angstrom", level)
-        .with_target("testing_tools", level)
-        .with_target("angstrom_eth", level)
-        .with_target("matching_engine", level)
-        .with_target("uniswap_v4", level)
-        .with_target("consensus", level)
-        .with_target("validation", level)
-        .with_target("order_pool", level);
-    let _ = tracing_subscriber::registry()
-        .with(format)
-        .with(filter)
-        .try_init();
-    // }
+    if let Some(f) = envfilter {
+        let _ = tracing_subscriber::registry()
+            .with(format)
+            .with(f)
+            .try_init();
+    } else {
+        let filter = filter::Targets::new()
+            .with_target("testnet", level)
+            .with_target("devnet", level)
+            .with_target("angstrom_rpc", level)
+            .with_target("angstrom", level)
+            .with_target("testing_tools", level)
+            .with_target("angstrom_eth", level)
+            .with_target("matching_engine", level)
+            .with_target("uniswap_v4", level)
+            .with_target("consensus", level)
+            .with_target("validation", level)
+            .with_target("order_pool", level);
+        let _ = tracing_subscriber::registry()
+            .with(format)
+            .with(filter)
+            .try_init();
+    }
 }
 
 fn layer_builder(filter_str: String) -> Box<dyn Layer<Registry> + Send + Sync> {

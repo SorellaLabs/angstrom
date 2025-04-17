@@ -47,8 +47,8 @@ fn end_to_end_agent<'a>(
         let mut generator = OrderGenerator::new(
             agent_config.uniswap_pools.clone(),
             agent_config.current_block,
-            5..10,
-            0.7..0.9
+            10..15,
+            0.5..0.9
         );
 
         let mut stream =
@@ -81,6 +81,7 @@ fn end_to_end_agent<'a>(
                                     .map(Into::into)
                                     .chain(vec![tob.into()])
                                     .collect::<Vec<AllOrders>>();
+                                // let all_orders = vec![tob.into()];
 
                                  pending_orders.push(client.send_orders(all_orders));
                             }

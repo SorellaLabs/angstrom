@@ -1,10 +1,10 @@
 pub mod delta;
-mod volume;
+// mod volume;
 use angstrom_types::{
     matching::SqrtPriceX96,
     orders::{OrderPrice, OrderVolume}
 };
-pub use volume::VolumeFillMatcher;
+// pub use volume::VolumeFillMatcher;
 
 /// Preliminary implementation of a struct that captures all the information
 /// we'd want to get out of a finished match for us to use for heurestics and

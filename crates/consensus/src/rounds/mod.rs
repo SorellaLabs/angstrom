@@ -19,7 +19,8 @@ use angstrom_types::{
     mev_boost::MevBoostProvider,
     orders::PoolSolution,
     primitive::AngstromSigner,
-    sol_bindings::grouped_orders::OrderWithStorageData
+    sol_bindings::grouped_orders::OrderWithStorageData,
+    uni_structure::BaselinePoolState
 };
 use bid_aggregation::BidAggregationState;
 use futures::{FutureExt, Stream, future::BoxFuture};
@@ -207,7 +208,7 @@ where
 
     fn fetch_pool_snapshot(
         &self
-    ) -> HashMap<FixedBytes<32>, (Address, Address, PoolSnapshot, u16)> {
+    ) -> HashMap<FixedBytes<32>, (Address, Address, BaselinePoolState, u16)> {
         self.uniswap_pools
             .iter()
             .map(|item| {

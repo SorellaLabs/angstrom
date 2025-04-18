@@ -46,11 +46,11 @@ contract Angstrom is
         _checkAngstromHookFlags();
     }
 
+    /// @dev Angstrom entry point, use empty payload to short-circuit empty bundles and just unlock.
     function execute(bytes calldata encoded) external {
         _nodeBundleLock();
-        if (encoded.length > 0) {
-            UNI_V4.unlock(encoded);
-        }
+        if (encoded.length == 0) return;
+        UNI_V4.unlock(encoded);
     }
 
     function unlockCallback(bytes calldata data) external override returns (bytes memory) {

@@ -84,4 +84,14 @@ contract MockRewardsManager is UniConsumer, Settlement, PoolUpdates {
         (uint256 grossLiquidity,) = UNI_V4.getTickLiquidity(id, tick);
         require(grossLiquidity > 0, string.concat(name, " [", tick.toStr(), "] not initialized"));
     }
+
+    function _domainNameAndVersion()
+        internal
+        pure
+        override
+        returns (string memory name, string memory version)
+    {
+        name = "MockRewardsManager";
+        version = "1";
+    }
 }

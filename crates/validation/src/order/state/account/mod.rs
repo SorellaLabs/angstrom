@@ -55,6 +55,7 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
                     .is_valid_nonce(user, nonce)
                     .map_err(|e| UserAccountVerificationError::CouldNotFetch(e.to_string()))?
                 {
+                    tracing::error!(order_hash=?order.order_hash(), ?nonce, "invalid nonce");
                     return Err(UserAccountVerificationError::DuplicateNonce(order_hash));
                 }
             }
@@ -81,6 +82,12 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
             // unless the hash is lower. This is simply due to the fact that
             // we need uniformity across all nodes validation in order to properly
             // do slashing as everything needs to be replicable across the board.
+            let conflicting_order_hashes = conflicting_orders
+                .iter()
+                .filter(|o| o.order_hash <= order_hash)
+                .map(|o| o.order_hash)
+                .collect::<Vec<_>>();
+            tracing::error!(?order_hash, ?conflicting_order_hashes, "conflicting order hash");
             return Err(UserAccountVerificationError::DuplicateNonce(order_hash));
         }
         tracing::trace!(?conflicting_orders);

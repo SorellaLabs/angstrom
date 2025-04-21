@@ -18,6 +18,7 @@ contract RouterActor is IUnlockCallback {
 
     enum Action {
         Swap,
+        SwapWithData,
         Liquidity
     }
 
@@ -38,6 +39,26 @@ contract RouterActor is IUnlockCallback {
                 bytes1(uint8(Action.Swap)),
                 abi.encode(
                     key, IPoolManager.SwapParams(zeroForOne, amountSpecified, sqrtPriceLimitX96)
+                )
+            )
+        );
+        return abi.decode(ret, (BalanceDelta));
+    }
+
+    function swap(
+        PoolKey calldata key,
+        bool zeroForOne,
+        int256 amountSpecified,
+        uint160 sqrtPriceLimitX96,
+        bytes calldata hookData
+    ) external returns (BalanceDelta) {
+        bytes memory ret = uniV4.unlock(
+            bytes.concat(
+                bytes1(uint8(Action.SwapWithData)),
+                abi.encode(
+                    key,
+                    IPoolManager.SwapParams(zeroForOne, amountSpecified, sqrtPriceLimitX96),
+                    hookData
                 )
             )
         );
@@ -71,7 +92,11 @@ contract RouterActor is IUnlockCallback {
         if (action == Action.Swap) {
             (PoolKey memory key, IPoolManager.SwapParams memory params) =
                 abi.decode(payload[1:], (PoolKey, IPoolManager.SwapParams));
-            return _swap(key, params);
+            return _swap(key, params, "");
+        } else if (action == Action.SwapWithData) {
+            (PoolKey memory key, IPoolManager.SwapParams memory params, bytes memory hookData) =
+                abi.decode(payload[1:], (PoolKey, IPoolManager.SwapParams, bytes));
+            return _swap(key, params, hookData);
         } else if (action == Action.Liquidity) {
             (PoolKey memory key, IPoolManager.ModifyLiquidityParams memory params) =
                 abi.decode(payload[1:], (PoolKey, IPoolManager.ModifyLiquidityParams));
@@ -89,11 +114,11 @@ contract RouterActor is IUnlockCallback {
         asset.safeTransfer(to, amount);
     }
 
-    function _swap(PoolKey memory key, IPoolManager.SwapParams memory params)
+    function _swap(PoolKey memory key, IPoolManager.SwapParams memory params, bytes memory hookData)
         internal
         returns (bytes memory)
     {
-        BalanceDelta delta = uniV4.swap(key, params, "");
+        BalanceDelta delta = uniV4.swap(key, params, hookData);
         _settle(key, delta);
         return abi.encode(delta);
     }

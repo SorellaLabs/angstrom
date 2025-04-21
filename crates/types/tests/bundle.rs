@@ -18,7 +18,7 @@ use {
             },
             rewards::PoolUpdate
         },
-        matching::{Ray, SqrtPriceX96, uniswap::LiqRange},
+        matching::{Ray, SqrtPriceX96},
         primitive::AngstromSigner
     },
     pade::PadeEncode,
@@ -388,6 +388,8 @@ async fn use_raw_bundle() {
 #[cfg(feature = "anvil")]
 async fn similar_to_prev() {
     // Create our anvil environment and grab the nodes and provider
+
+    use angstrom_types::matching::uniswap::LiqRange;
     let anvil = LocalAnvil::new("http://localhost:8545".to_owned())
         .await
         .unwrap();
@@ -428,7 +430,7 @@ async fn similar_to_prev() {
     let liquidity = 1_000_000_000_000_000_u128;
     let price = SqrtPriceX96::at_tick(100000).unwrap();
     let amm = AMMSnapshotBuilder::new(price)
-        .with_positions(vec![LiqRange::new(99000, 101000, liquidity).unwrap()])
+        .with_positions(vec![LiqRange::new_init(99000, 101000, liquidity, 0, true).unwrap()])
         .build();
     // Configure our pool that we just made
     angstrom

@@ -205,6 +205,9 @@ where
                     self.pool_store
                         .remove_pair(removed_pool.asset0, removed_pool.asset1);
 
+                    self.angstrom_tokens.remove(&removed_pool.asset0);
+                    self.angstrom_tokens.remove(&removed_pool.asset1);
+
                     let pool_key = PoolKey {
                         currency1:   removed_pool.asset1,
                         currency0:   removed_pool.asset0,
@@ -622,8 +625,8 @@ pub mod test {
         eth.apply_periphery_logs(&*mock_chain);
 
         // Verify final state after add and remove
-        assert!(eth.angstrom_tokens.contains(&asset0));
-        assert!(eth.angstrom_tokens.contains(&asset1));
+        assert!(!eth.angstrom_tokens.contains(&asset0));
+        assert!(!eth.angstrom_tokens.contains(&asset1));
         assert_eq!(eth.pool_store.length(), 0); // Should be 0 after removal
     }
 
@@ -903,8 +906,8 @@ pub mod test {
         eth.apply_periphery_logs(&*mock_chain);
 
         // Verify final state
-        assert!(eth.angstrom_tokens.contains(&asset0));
-        assert!(eth.angstrom_tokens.contains(&asset1));
+        assert!(!eth.angstrom_tokens.contains(&asset0));
+        assert!(!eth.angstrom_tokens.contains(&asset1));
         assert_eq!(eth.pool_store.length(), 0); // Should be removed
     }
 

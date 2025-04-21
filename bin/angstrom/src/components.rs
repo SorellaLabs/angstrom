@@ -229,6 +229,11 @@ where
     .await;
     tracing::info!("found pools");
 
+    let angstrom_tokens = pools
+        .iter()
+        .flat_map(|pool| [pool.currency0, pool.currency1])
+        .collect::<HashSet<_>>();
+
     // re-fetch given the fetch pools takes awhile. given this, we do techincally
     // have a gap in which a pool is deployed durning startup. This isn't
     // critical but we will want to fix this down the road.
@@ -257,7 +262,7 @@ where
         executor.clone(),
         handles.eth_tx,
         handles.eth_rx,
-        HashSet::new(),
+        angstrom_tokens,
         pool_config_store.clone(),
         global_block_sync.clone(),
         node_set.clone(),

@@ -58,6 +58,7 @@ testing-tools = { path = "./testing-tools/", default-features = false }
 angstrom = { path = "./bin/angstrom/" }
 matching-engine = { path = "./crates/matching-engine/" }
 contract-bindings = { path = "./crates/contract-bindings/" }
+telemetry = { path = "./crates/telemetry/" }
 eyre = "0"
 dashmap = "6"
 malachite = "0.4"

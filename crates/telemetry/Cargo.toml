@@ -9,3 +9,5 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
+angstrom-types.workspace = true
+tokio.workspace = true

@@ -10,4 +10,9 @@ exclude.workspace = true
 
 [dependencies]
 angstrom-types.workspace = true
+base64.workspace = true
+base64-serde.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
+tracing.workspace = true

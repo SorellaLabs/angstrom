@@ -7,6 +7,7 @@ use angstrom_types::{
     },
     uni_structure::BaselinePoolState
 };
+use serde::{Deserialize, Serialize};
 
 /// A PoolSnapshot represents the current node's view of a single pair.  It
 /// contains the current AMM state of that pair, the ToB order valid for this
@@ -15,7 +16,7 @@ use angstrom_types::{
 /// pool as computed by this node.  Note that all data in this structure is
 /// specific to what THIS node has seen and computed, any consensus information
 /// that has come in from other nodes is snapshotted separately.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PoolSnapshot {
     /// ID of this pool
     id:          PoolId,

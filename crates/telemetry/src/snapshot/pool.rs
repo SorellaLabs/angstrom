@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 /// pool as computed by this node.  Note that all data in this structure is
 /// specific to what THIS node has seen and computed, any consensus information
 /// that has come in from other nodes is snapshotted separately.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PoolSnapshot {
     /// ID of this pool
     id:          PoolId,

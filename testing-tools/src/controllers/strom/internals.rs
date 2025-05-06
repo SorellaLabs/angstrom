@@ -29,6 +29,7 @@ use matching_engine::{MatchingManager, manager::MatcherHandle};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
+use telemetry::client::TelemetryClient;
 use tracing::{Instrument, span};
 use uniswap_v4::configure_uniswap_manager;
 use validation::{
@@ -166,6 +167,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
+        let telemetry: Option<TelemetryClient> = None;
+
         let uniswap_pool_manager = configure_uniswap_manager(
             state_provider.rpc_provider().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
@@ -173,7 +176,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             block_number,
             block_sync.clone(),
             inital_angstrom_state.pool_manager_addr,
-            network_stream
+            network_stream,
+            telemetry
         )
         .await;
         tracing::debug!("uniswap configured");

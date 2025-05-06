@@ -53,6 +53,7 @@ use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAd
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
+use telemetry::client::TelemetryClient;
 use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
@@ -297,6 +298,8 @@ where
     let network_stream = Box::pin(eth_handle.subscribe_network())
         as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
+    let telemetry: Option<TelemetryClient> = None;
+
     let uniswap_pool_manager = configure_uniswap_manager(
         querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
@@ -304,7 +307,8 @@ where
         block_id,
         global_block_sync.clone(),
         node_config.pool_manager_address,
-        network_stream
+        network_stream,
+        telemetry
     )
     .await;
 

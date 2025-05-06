@@ -107,6 +107,8 @@ where
                     self.order_validator
                         .on_new_block(block_number, orders, addresses);
                 });
+                self.bundle_validator.new_block();
+
                 sender
                     .send(OrderValidationResults::TransitionedToBlock)
                     .unwrap();

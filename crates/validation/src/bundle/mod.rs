@@ -44,6 +44,11 @@ where
         Self { db: CacheDB::new(db), angstrom_address, node_address }
     }
 
+    pub fn new_block(&mut self) {
+        self.db.cache.logs.clear();
+        self.db.cache.accounts.clear();
+    }
+
     #[cfg(all(feature = "testnet", not(feature = "testnet-sepolia")))]
     fn apply_slot_overrides_for_token(
         db: &mut CacheDB<Arc<DB>>,

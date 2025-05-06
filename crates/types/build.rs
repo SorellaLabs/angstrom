@@ -34,7 +34,7 @@ fn main() {
     let mut src_dir = base_dir.clone();
     src_dir.push(SRC_DIRECTORY);
     if let Some(src_dir_str) = src_dir.to_str() {
-        println!("cargo:rerun-if-changed={}", src_dir_str);
+        println!("cargo::rerun-if-changed={}", src_dir_str);
     }
 
     let mut out_dir = base_dir.clone();

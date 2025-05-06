@@ -89,6 +89,10 @@ impl LimitOrderPool {
         self.limit_orders.get_all_orders()
     }
 
+    pub fn get_all_orders_with_parked(&self) -> Vec<OrderWithStorageData<AllOrders>> {
+        self.limit_orders.get_all_orders_with_parked()
+    }
+
     pub fn get_all_orders_from_pool(&self, pool: FixedBytes<32>) -> Vec<AllOrders> {
         self.limit_orders
             .pending_orders

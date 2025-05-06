@@ -343,6 +343,17 @@ impl OrderStorage {
         OrderSet { limit, searcher }
     }
 
+    pub fn get_all_orders_with_parked(&self) -> OrderSet<AllOrders, TopOfBlockOrder> {
+        let limit = self
+            .limit_orders
+            .lock()
+            .expect("poisoned")
+            .get_all_orders_with_parked();
+        let searcher = self.top_tob_orders();
+
+        OrderSet { limit, searcher }
+    }
+
     pub fn new_pool(&self, pool: NewInitializedPool) {
         self.limit_orders.lock().expect("poisoned").new_pool(pool);
         self.searcher_orders

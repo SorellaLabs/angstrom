@@ -11,6 +11,10 @@ impl ParkedPool {
         Self(HashMap::new())
     }
 
+    pub fn get_all_orders(&self) -> Vec<OrderWithStorageData<AllOrders>> {
+        self.0.values().cloned().collect()
+    }
+
     pub fn get_order(&self, order_id: FixedBytes<32>) -> Option<OrderWithStorageData<AllOrders>> {
         self.0.get(&order_id).cloned()
     }

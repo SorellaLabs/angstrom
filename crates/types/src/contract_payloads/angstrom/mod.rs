@@ -31,7 +31,7 @@ use crate::{
     contract_bindings::angstrom::Angstrom::PoolKey,
     contract_payloads::rewards::RewardsUpdate,
     matching::{Ray, SqrtPriceX96, get_quantities_at_price, uniswap::Direction},
-    orders::{OrderFillState, OrderId, OrderOutcome, PoolSolution},
+    orders::{OrderFillState, OrderId, OrderOutcome, OrderSet, PoolSolution},
     primitive::{PoolId, UniswapPoolRegistry},
     sol_bindings::{
         RawPoolOrder,
@@ -780,6 +780,7 @@ impl AngstromBundle {
 
     pub fn from_proposal(
         proposal: &Proposal,
+        orders: OrderSet<OrderWithStorageData<AllOrders>, OrderWithStorageData<RpcTopOfBlockOrder>>,
         _gas_details: BundleGasDetails,
         pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> eyre::Result<Self> {

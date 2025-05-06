@@ -126,6 +126,14 @@ impl LimitPool {
             .collect()
     }
 
+    pub fn get_all_orders_with_parked(&self) -> Vec<OrderWithStorageData<AllOrders>> {
+        self.pending_orders
+            .values()
+            .flat_map(|p| p.get_all_orders())
+            .chain(self.parked_orders.values().flat_map(|p| p.get_all_orders()))
+            .collect()
+    }
+
     pub fn park_order(&mut self, order_id: &OrderId) {
         let Some(mut order) = self.remove_order(order_id.pool_id, order_id.hash) else { return };
         order.is_currently_valid =

@@ -135,8 +135,6 @@ impl TokenPriceGenerator {
 
         for pool_update in updates {
             tracing::info!(?pool_update);
-            // make sure we aren't replaying
-            assert!(pool_update.block_num == self.cur_block + 1);
 
             let pool_key = if let Some(p) = self
                 .pair_to_pool

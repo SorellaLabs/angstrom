@@ -134,6 +134,7 @@ impl TokenPriceGenerator {
         let mut updated_pool_keys = Vec::new();
 
         for pool_update in updates {
+            tracing::info!(?pool_update);
             // make sure we aren't replaying
             assert!(pool_update.block_num == self.cur_block + 1);
 

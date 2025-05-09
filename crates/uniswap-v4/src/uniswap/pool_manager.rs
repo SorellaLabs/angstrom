@@ -19,7 +19,8 @@ use angstrom_types::{
     block_sync::BlockSyncConsumer,
     contract_payloads::angstrom::TopOfBlockOrder as PayloadTopOfBlockOrder,
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
+    uni_structure::BaselinePoolState
 };
 use arraydeque::ArrayDeque;
 use dashmap::DashMap;
@@ -240,6 +241,25 @@ where
         self.pools.clone()
     }
 
+    fn fetch_pool_snapshots(&self) -> HashMap<PoolId, BaselinePoolState> {
+        self.pools
+            .iter()
+            .filter_map(|refr| {
+                let key = refr.key();
+                let pool = refr.value();
+                // gotta
+                Some((
+                    *key,
+                    pool.read()
+                        .expect("lock busted")
+                        .fetch_pool_snapshot()
+                        .ok()?
+                        .2
+                ))
+            })
+            .collect()
+    }
+
     fn handle_new_block_info(&mut self, block_info: PoolMangerBlocks) {
         // If there is a reorg, unwind state changes from last_synced block to the
         // chain head block number
@@ -267,34 +287,7 @@ where
 
         // Send off the updated pool snapshot to our telemetry sidecar
         if let Some(t) = self.telemetry.as_ref() {
-            let pool_snapshots = self
-                .pools
-                .iter()
-                .filter_map(|refr| {
-                    let key = refr.key();
-                    let pool = refr.value();
-                    let pub_id = self
-                        .factory
-                        .conversion_map()
-                        .iter()
-                        .find_map(|(r, m)| {
-                            if m == key {
-                                return Some(r)
-                            }
-                            None
-                        })
-                        .copied()
-                        .expect("failed to convert to pub id");
-                    Some((
-                        pub_id,
-                        pool.read()
-                            .expect("lock busted")
-                            .fetch_pool_snapshot()
-                            .ok()?
-                            .2
-                    ))
-                })
-                .collect();
+            let pool_snapshots = self.fetch_pool_snapshots();
             t.pools(self.latest_synced_block, pool_snapshots);
         }
 

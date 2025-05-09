@@ -1539,6 +1539,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "telemetry",
  "tempfile",
  "testing-tools",
  "thiserror 1.0.69",

@@ -53,10 +53,12 @@ use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAd
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
-use telemetry::client::TelemetryClient;
+use telemetry::init_telemetry;
 use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
+ use tokio::sync::mpsc::{
+     Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel
 };
 use uniswap_v4::{configure_uniswap_manager, fetch_angstrom_pools};
 use validation::{
@@ -298,7 +300,7 @@ where
     let network_stream = Box::pin(eth_handle.subscribe_network())
         as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-    let telemetry: Option<TelemetryClient> = None;
+    let telemetry = init_telemetry();
 
     let uniswap_pool_manager = configure_uniswap_manager(
         querying_provider.clone(),
@@ -308,7 +310,7 @@ where
         global_block_sync.clone(),
         node_config.pool_manager_address,
         network_stream,
-        telemetry
+        Some(telemetry.clone())
     )
     .await;
 
@@ -367,7 +369,8 @@ where
         network_handle.clone(),
         eth_handle.subscribe_network(),
         handles.pool_rx,
-        global_block_sync.clone()
+        global_block_sync.clone(),
+        Some(telemetry)
     )
     .with_config(pool_config)
     .build_with_channels(

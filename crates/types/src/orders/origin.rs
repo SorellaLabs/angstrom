@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// Where the transaction originates from.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderOrigin {
     /// Order is coming from a local source.
     Local,

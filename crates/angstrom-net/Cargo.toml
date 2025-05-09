@@ -55,6 +55,7 @@ angstrom-types.workspace = true
 angstrom-utils.workspace = true
 order-pool.workspace = true
 validation.workspace = true
+telemetry.workspace = true
 
 # async/futures
 futures.workspace = true

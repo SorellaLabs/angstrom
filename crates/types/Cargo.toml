@@ -17,6 +17,7 @@ reth-storage-api.workspace = true
 bytes.workspace = true
 pade.workspace = true
 pade-macro.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 thiserror.workspace = true

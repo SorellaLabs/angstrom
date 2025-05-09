@@ -21,6 +21,7 @@ use order_pool::{
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_tasks::TaskSpawner;
+use telemetry::client::TelemetryHandle;
 use tokio::sync::{
     broadcast,
     mpsc::{UnboundedReceiver, UnboundedSender, error::SendError, unbounded_channel}
@@ -125,10 +126,11 @@ impl OrderPoolHandle for PoolHandle {
     }
 }
 
-pub struct PoolManagerBuilder<V, GlobalSync>
+pub struct PoolManagerBuilder<V, GlobalSync, Telemetry>
 where
     V: OrderValidatorHandle,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    Telemetry: TelemetryHandle
 {
     validator:            V,
     global_sync:          GlobalSync,
@@ -137,13 +139,15 @@ where
     strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     eth_network_events:   UnboundedReceiverStream<EthEvent>,
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
-    config:               PoolConfig
+    config:               PoolConfig,
+    telemetry:            Option<Telemetry>
 }
 
-impl<V, GlobalSync> PoolManagerBuilder<V, GlobalSync>
+impl<V, GlobalSync, Telemetry> PoolManagerBuilder<V, GlobalSync, Telemetry>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    Telemetry: TelemetryHandle + Unpin
 {
     pub fn new(
         validator: V,
@@ -151,7 +155,8 @@ where
         network_handle: StromNetworkHandle,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        global_sync: GlobalSync
+        global_sync: GlobalSync,
+        telemetry: Option<Telemetry>
     ) -> Self {
         Self {
             order_events,
@@ -161,7 +166,8 @@ where
             network_handle,
             validator,
             order_storage,
-            config: Default::default()
+            config: Default::default(),
+            telemetry
         }
     }
 
@@ -207,7 +213,8 @@ where
                 order_indexer:        inner,
                 network:              self.network_handle,
                 command_rx:           rx,
-                global_sync:          self.global_sync
+                global_sync:          self.global_sync,
+                telemetry:            self.telemetry
             })
         );
 
@@ -240,7 +247,8 @@ where
                 order_indexer:        inner,
                 network:              self.network_handle,
                 command_rx:           rx,
-                global_sync:          self.global_sync
+                global_sync:          self.global_sync,
+                telemetry:            self.telemetry
             })
         );
 
@@ -248,10 +256,11 @@ where
     }
 }
 
-pub struct PoolManager<V, GlobalSync>
+pub struct PoolManager<V, GlobalSync, Telemetry>
 where
     V: OrderValidatorHandle,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    Telemetry: TelemetryHandle
 {
     /// access to validation and sorted storage of orders.
     order_indexer:        OrderIndexer<V>,
@@ -270,20 +279,32 @@ where
     /// Incoming events from the ProtocolManager.
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     /// All the connected peers.
-    peer_to_info:         HashMap<PeerId, StromPeer>
+    peer_to_info:         HashMap<PeerId, StromPeer>,
+    /// Telemetry handle, if available
+    telemetry:            Option<Telemetry>
 }
 
-impl<V, GlobalSync> PoolManager<V, GlobalSync>
+impl<V, GlobalSync, Telemetry> PoolManager<V, GlobalSync, Telemetry>
 where
     V: OrderValidatorHandle<Order = AllOrders>,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    Telemetry: TelemetryHandle
 {
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
-            OrderCommand::NewOrder(_, order, validation_response) => self
-                .order_indexer
-                .new_rpc_order(OrderOrigin::External, order, validation_response),
+            OrderCommand::NewOrder(origin, order, validation_response) => {
+                if let Some(t) = self.telemetry.as_ref() {
+                    let blocknum = self.global_sync.current_block_number();
+                    t.new_order(blocknum, origin, order.clone());
+                }
+                self.order_indexer
+                    .new_rpc_order(OrderOrigin::External, order, validation_response)
+            }
             OrderCommand::CancelOrder(req, receiver) => {
+                if let Some(t) = self.telemetry.as_ref() {
+                    let blocknum = self.global_sync.current_block_number();
+                    t.cancel_order(blocknum, req.clone());
+                }
                 let res = self.order_indexer.cancel_order(&req);
                 if res {
                     self.broadcast_cancel_to_peers(req);
@@ -449,10 +470,11 @@ where
     }
 }
 
-impl<V, GlobalSync> Future for PoolManager<V, GlobalSync>
+impl<V, GlobalSync, Telemetry> Future for PoolManager<V, GlobalSync, Telemetry>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    Telemetry: TelemetryHandle + Unpin
 {
     type Output = ();
 

@@ -15,10 +15,10 @@ use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
     consensus::{PreProposal, PreProposalAggregation, Proposal},
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
-    mev_boost::MevBoostProvider,
     orders::PoolSolution,
     primitive::AngstromSigner,
     sol_bindings::grouped_orders::OrderWithStorageData,
+    submission::SubmissionHandler,
     uni_structure::BaselinePoolState
 };
 use bid_aggregation::BidAggregationState;
@@ -42,7 +42,7 @@ type PollTransition<P, Matching> = Poll<Option<Box<dyn ConsensusState<P, Matchin
 
 pub trait ConsensusState<P, Matching>: Send
 where
-    P: Provider,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(
@@ -65,7 +65,10 @@ where
 }
 
 /// Holds and progresses the consensus state machine
-pub struct RoundStateMachine<P, Matching> {
+pub struct RoundStateMachine<P, Matching>
+where
+    P: Provider + Unpin + 'static
+{
     current_state:           Box<dyn ConsensusState<P, Matching>>,
     /// for consensus, on a new block we wait a duration of time before signing
     /// our pre-proposal. this is the time
@@ -75,7 +78,7 @@ pub struct RoundStateMachine<P, Matching> {
 
 impl<P, Matching> RoundStateMachine<P, Matching>
 where
-    P: Provider + 'static,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     pub fn new(shared_state: SharedRoundState<P, Matching>) -> Self {
@@ -118,7 +121,7 @@ where
 
 impl<P, Matching> Stream for RoundStateMachine<P, Matching>
 where
-    P: Provider + 'static,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     type Item = ConsensusMessage;
@@ -142,31 +145,29 @@ where
     }
 }
 
-pub struct SharedRoundState<P, Matching> {
-    block_height:     BlockNumber,
-    angstrom_address: Address,
-    matching_engine:  Matching,
-    signer:           AngstromSigner,
-    round_leader:     Address,
-    validators:       Vec<AngstromValidator>,
-    order_storage:    Arc<OrderStorage>,
-    _metrics:         ConsensusMetricsWrapper,
-    pool_registry:    UniswapAngstromRegistry,
-    uniswap_pools:    SyncedUniswapPools,
-    provider:         Arc<MevBoostProvider<P>>,
-    messages:         VecDeque<ConsensusMessage>
+pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching> {
+    block_height:    BlockNumber,
+    matching_engine: Matching,
+    signer:          AngstromSigner,
+    round_leader:    Address,
+    validators:      Vec<AngstromValidator>,
+    order_storage:   Arc<OrderStorage>,
+    _metrics:        ConsensusMetricsWrapper,
+    pool_registry:   UniswapAngstromRegistry,
+    uniswap_pools:   SyncedUniswapPools,
+    provider:        Arc<SubmissionHandler<P>>,
+    messages:        VecDeque<ConsensusMessage>
 }
 
 // contains shared impls
 impl<P, Matching> SharedRoundState<P, Matching>
 where
-    P: Provider + 'static,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         block_height: BlockNumber,
-        angstrom_address: Address,
         order_storage: Arc<OrderStorage>,
         signer: AngstromSigner,
         round_leader: Address,
@@ -174,12 +175,11 @@ where
         metrics: ConsensusMetricsWrapper,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: MevBoostProvider<P>,
+        provider: SubmissionHandler<P>,
         matching_engine: Matching
     ) -> Self {
         Self {
             block_height,
-            angstrom_address,
             round_leader,
             validators,
             order_storage,
@@ -377,8 +377,8 @@ pub mod tests {
     use angstrom_network::manager::StromConsensusEvent;
     use angstrom_types::{
         contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-        mev_boost::MevBoostProvider,
-        primitive::{AngstromSigner, UniswapPoolRegistry}
+        primitive::{AngstromSigner, UniswapPoolRegistry},
+        submission::SubmissionHandler
     };
     use dashmap::DashMap;
     use futures::{Stream, pin_mut};
@@ -446,11 +446,11 @@ pub mod tests {
             .unwrap()
             .into();
 
-        let provider = MevBoostProvider::new_from_raw(querying_provider, vec![]);
+        let provider =
+            SubmissionHandler { node_provider: querying_provider, submitters: vec![] };
 
         let shared_state = SharedRoundState::new(
             1, // block height
-            Address::ZERO,
             order_storage,
             signer,
             leader_id,

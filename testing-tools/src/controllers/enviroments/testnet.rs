@@ -125,7 +125,6 @@ where
 
         let nodes = futures::stream::iter(configs.into_iter())
             .map(|node_config| {
-                let block_st = self.block_provider.subscribe_to_new_blocks();
                 let c = c.clone();
                 let initial_validators = initial_validators.clone();
                 let initial_angstrom_state = initial_angstrom_state.clone().unwrap();
@@ -172,7 +171,6 @@ where
                         provider,
                         initial_validators,
                         initial_angstrom_state,
-                        block_st,
                         agents.clone(),
                         block_sync.clone(),
                         ex.clone()

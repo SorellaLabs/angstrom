@@ -1,5 +1,4 @@
 //! CLI definition and entrypoint to executable
-
 use std::{
     collections::{HashMap, HashSet},
     pin::Pin,
@@ -27,10 +26,10 @@ use angstrom_network::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    mev_boost::MevBoostProvider,
     primitive::{AngstromSigner, UniswapPoolRegistry},
     reth_db_provider::RethDbLayer,
-    reth_db_wrapper::RethDbWrapper
+    reth_db_wrapper::RethDbWrapper,
+    submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
@@ -194,10 +193,12 @@ where
         .unwrap()
         .into();
 
-    let mev_boost_provider = MevBoostProvider::new_from_urls(
+    let submission_handler = SubmissionHandler::new(
         querying_provider.clone(),
+        &config.normal_nodes,
+        &config.angstrom_submission_nodes,
         &config.mev_boost_endpoints,
-        &config.normal_nodes
+        node_config.angstrom_address
     );
 
     tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
@@ -374,10 +375,9 @@ where
         order_storage.clone(),
         node_config.angstrom_deploy_block,
         block_height,
-        node_config.angstrom_address,
         uni_ang_registry,
         uniswap_pools.clone(),
-        mev_boost_provider,
+        submission_handler,
         matching_handle,
         global_block_sync.clone()
     );

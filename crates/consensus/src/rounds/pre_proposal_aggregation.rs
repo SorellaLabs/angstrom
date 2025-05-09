@@ -38,7 +38,7 @@ impl PreProposalAggregationState {
         waker: Waker
     ) -> Self
     where
-        P: Provider + 'static,
+        P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
         // generate my pre_proposal aggregation
@@ -64,7 +64,7 @@ impl PreProposalAggregationState {
 
 impl<P, Matching> ConsensusState<P, Matching> for PreProposalAggregationState
 where
-    P: Provider + 'static,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(

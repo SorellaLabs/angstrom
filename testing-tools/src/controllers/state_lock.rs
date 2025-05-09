@@ -27,7 +27,11 @@ use crate::{
     validation::TestOrderValidator
 };
 
-pub(crate) struct TestnetStateFutureLock<C: Unpin, T, P: Peers + Unpin + 'static> {
+pub(crate) struct TestnetStateFutureLock<
+    C: Unpin,
+    T: Provider + Unpin + 'static,
+    P: Peers + Unpin + 'static
+> {
     eth_peer:              StateLockInner<Peer<C>>,
     strom_network_manager: StateLockInner<StromNetworkManager<C, P>>,
     strom_consensus:       StateLockInner<ConsensusManager<T, MatcherHandle, GlobalBlockSync>>,
@@ -42,7 +46,7 @@ where
         + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + 'static,
-    T: Provider + 'static,
+    T: Provider + Unpin + 'static,
     P: Peers + Unpin + 'static
 {
     pub(crate) fn new(
@@ -167,7 +171,8 @@ where
     }
 }
 
-impl<C, T, P: Peers + Unpin + 'static> Future for TestnetStateFutureLock<C, T, P>
+impl<C, T: Provider + Unpin + 'static, P: Peers + Unpin + 'static> Future
+    for TestnetStateFutureLock<C, T, P>
 where
     C: BlockReader
         + HeaderProvider

@@ -3,7 +3,6 @@ use std::sync::Arc;
 use alloy_rpc_types::{Block, TransactionReceipt};
 use itertools::Itertools;
 use parking_lot::RwLock;
-use reth_node_types::{Block as _, BlockBody};
 use reth_primitives::{RecoveredBlock, TransactionSigned};
 use reth_provider::{Chain, ExecutionOutcome};
 

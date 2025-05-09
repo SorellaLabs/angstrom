@@ -94,6 +94,11 @@ sol! {
         uint64 valid_for_block;
         OrderMeta meta;
     }
+
+    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    struct AttestAngstromBlockEmpty {
+        uint64 block_number;
+    }
 }
 
 pub trait OmitOrderMeta: SolStruct {
@@ -211,6 +216,8 @@ impl OmitOrderMeta for TopOfBlockOrder {}
 
 #[cfg(test)]
 pub mod test {
+    use alloy_primitives::fixed_bytes;
+
     use super::*;
 
     const TEST_DOMAIN: Eip712Domain = alloy::sol_types::eip712_domain! {
@@ -261,5 +268,16 @@ pub mod test {
         let expected = default_omit.eip712_signing_hash(&TEST_DOMAIN);
 
         assert_eq!(expected, result)
+    }
+
+    #[test]
+    fn ensure_block_type_hash_matches() {
+        let expected_type_hash =
+            fixed_bytes!("0x3f25e551746414ff93f076a7dd83828ff53735b39366c74015637e004fcb0223");
+
+        let test_attestation = AttestAngstromBlockEmpty { block_number: 6123 };
+        let type_hash = test_attestation.eip712_type_hash();
+
+        assert_eq!(expected_type_hash, type_hash)
     }
 }

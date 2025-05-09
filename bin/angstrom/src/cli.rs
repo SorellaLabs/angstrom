@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use alloy_primitives::Address;
 use angstrom_metrics::initialize_prometheus_metrics;
+use angstrom_types::primitive::{ANGSTROM_RPC, DEFAULT_RPC, MEV_RPC};
 use eyre::Context;
 use serde::Deserialize;
 use url::Url;
@@ -9,28 +10,34 @@ use url::Url;
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
     #[clap(long)]
-    pub secret_key_location: PathBuf,
+    pub secret_key_location:       PathBuf,
     #[clap(long)]
-    pub node_config:         PathBuf,
+    pub node_config:               PathBuf,
     /// enables the metrics
     #[clap(long, default_value = "false", global = true)]
-    pub metrics_enabled:     bool,
+    pub metrics_enabled:           bool,
     /// spawns the prometheus metrics exporter at the specified port
     /// Default: 6969
     #[clap(long, default_value = "6969", global = true)]
-    pub metrics_port:        u16,
-    #[clap(short, long, default_value = "https://rpc.flashbots.net")]
-    pub mev_boost_endpoints: Vec<Url>,
+    pub metrics_port:              u16,
+    #[clap(short, long, default_values = MEV_RPC)]
+    pub mev_boost_endpoints:       Vec<Url>,
     /// needed to properly setup the node as we need some chain state before
     /// starting the internal reth node
     #[clap(short, long, default_value = "https://eth.drpc.org")]
-    pub boot_node:           String,
+    pub boot_node:                 String,
     #[clap(
         short,
         long,
-        default_values_t = ["https://ethereum-sepolia.rpc.subquery.network/public".to_string(),"https://endpoints.omniatech.io/v1/eth/sepolia/public".to_string(),"https://sepolia.gateway.tenderly.co,https://1rpc.io/sepolia".to_string()]
+        default_values = DEFAULT_RPC
     )]
-    pub normal_nodes:        Vec<String>
+    pub normal_nodes:              Vec<Url>,
+    #[clap(
+        short,
+        long,
+        default_values = ANGSTROM_RPC
+    )]
+    pub angstrom_submission_nodes: Vec<Url>
 }
 
 #[derive(Debug, Clone, Deserialize)]

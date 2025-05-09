@@ -4,20 +4,15 @@ use std::{
     time::{Duration, Instant}
 };
 
-use alloy::{
-    network::TransactionBuilder, providers::Provider, rpc::types::TransactionRequest,
-    sol_types::SolCall
-};
+use alloy::providers::Provider;
 use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
     consensus::{PreProposalAggregation, Proposal},
-    contract_bindings::angstrom::Angstrom,
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::PoolSolution
 };
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use matching_engine::MatchingEngineHandle;
-use pade::PadeEncode;
 
 use super::{ConsensusState, SharedRoundState};
 use crate::rounds::{ConsensusMessage, preproposal_wait_trigger::LastRoundInfo};
@@ -49,7 +44,7 @@ impl ProposalState {
         waker: Waker
     ) -> Self
     where
-        P: Provider + 'static,
+        P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
         // queue building future
@@ -75,67 +70,61 @@ impl ProposalState {
         handles: &mut SharedRoundState<P, Matching>
     ) -> bool
     where
-        P: Provider + 'static,
+        P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
         self.last_round_info = Some(LastRoundInfo {
             time_to_complete: Instant::now().duration_since(self.trigger_time)
         });
 
-        tracing::debug!("starting to build proposal");
-        let Ok((pool_solution, gas_info)) = result.inspect_err(|e| {
-            tracing::error!(err=%e,
-                "Failed to properly build proposal, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
-            );
-        }) else {
-            return false;
-        };
-
-        let proposal = Proposal::generate_proposal(
-            handles.block_height,
-            &handles.signer,
-            self.pre_proposal_aggs.clone(),
-            pool_solution
-        );
-
-        self.proposal = Some(proposal.clone());
-        let snapshot = handles.fetch_pool_snapshot();
-
-        let Ok(bundle) =
-            AngstromBundle::from_proposal(&proposal, gas_info, &snapshot).inspect_err(|e| {
-                tracing::error!(err=%e,
-                    "failed to encode angstrom bundle, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
-                );
-            })
-        else {
-            return false;
-        };
-
-        let encoded = Angstrom::executeCall::new((bundle.pade_encode().into(),)).abi_encode();
-
-        let mut tx = TransactionRequest::default()
-            .with_from(handles.signer.address())
-            .with_kind(alloy::primitives::TxKind::Call(handles.angstrom_address))
-            .with_input(encoded);
-
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();
         let target_block = handles.block_height + 1;
 
-        let submission_future = async move {
-            tracing::info!("building bundle");
-            provider
-                .populate_gas_nonce_chain_id(signer.address(), &mut tx)
-                .await;
+        tracing::debug!("starting to build proposal");
 
-            let (hash, success) = provider.sign_and_send(signer, tx, target_block).await;
-            if !success {
-                tracing::info!("submission failed");
+        let Ok(possible_bundle) = result.inspect_err(|e| {
+            tracing::error!(err=%e,
+                "Failed to properly build proposal, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
+            )})
+            .map(|(pool_solution, gas_info)| {
+
+                let proposal = Proposal::generate_proposal(
+                    handles.block_height,
+                    &handles.signer,
+                    self.pre_proposal_aggs.clone(),
+                    pool_solution,
+                );
+
+                self.proposal = Some(proposal.clone());
+                let snapshot = handles.fetch_pool_snapshot();
+
+                     AngstromBundle::from_proposal(&proposal, gas_info, &snapshot).inspect_err(|e| {
+                        tracing::error!(err=%e,
+                            "failed to encode angstrom bundle, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
+                        );
+                    }).ok()
+
+
+            }) else {
                 return false;
-            }
-            tracing::info!("submitted bundle");
+            };
 
-            // wait for next block. then see if transaction landed
+        let submission_future = Box::pin(async move {
+            let Ok(tx_hash) = provider
+                .submit_tx(signer, possible_bundle, target_block)
+                .await
+            else {
+                tracing::error!("submission failed");
+                return false;
+            };
+
+            let Some(tx_hash) = tx_hash else {
+                tracing::info!("submitted unlock attestation");
+                return true;
+            };
+
+            tracing::info!("submitted bundle");
             provider
                 .watch_blocks()
                 .await
@@ -145,16 +134,17 @@ impl ProposalState {
                 .next()
                 .await;
 
-            provider
-                .get_transaction_by_hash(hash)
+            let included = provider
+                .get_transaction_by_hash(tx_hash)
                 .await
                 .unwrap()
-                .is_some()
-        }
-        .boxed();
+                .is_some();
+            tracing::info!(?included, "block tx result");
+            included
+        });
 
         self.waker.wake_by_ref();
-        self.submission_future = Some(tokio::spawn(submission_future).boxed());
+        self.submission_future = Some(Box::pin(tokio::spawn(submission_future)));
 
         true
     }
@@ -162,7 +152,7 @@ impl ProposalState {
 
 impl<P, Matching> ConsensusState<P, Matching> for ProposalState
 where
-    P: Provider + 'static,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(

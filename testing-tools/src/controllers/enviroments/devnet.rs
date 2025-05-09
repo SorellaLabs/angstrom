@@ -111,7 +111,6 @@ where
                 provider,
                 initial_validators.clone(),
                 initial_angstrom_state.clone().unwrap(),
-                self.block_provider.subscribe_to_new_blocks(),
                 vec![a],
                 block_sync.clone(),
                 ex.clone()

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use alloy::primitives::Address;
-use alloy_rpc_types::{BlockId, Transaction};
+use alloy_rpc_types::BlockId;
 use angstrom::components::StromHandles;
 use angstrom_eth::{
     handle::Eth,
@@ -12,10 +12,10 @@ use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    mev_boost::{MevBoostProvider, SubmitTx},
     pair_with_price::PairsWithPrice,
     primitive::UniswapPoolRegistry,
     sol_bindings::testnet::TestnetHub,
+    submission::SubmissionHandler,
     testnet::InitialTestnetState
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
@@ -25,7 +25,6 @@ use matching_engine::{MatchingManager, manager::MatcherHandle};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
-use tokio_stream::wrappers::BroadcastStream;
 use tracing::{Instrument, span};
 use uniswap_v4::configure_uniswap_manager;
 use validation::{
@@ -63,7 +62,6 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         strom_handles: StromHandles,
         strom_network_handle: StromNetworkHandle,
         initial_validators: Vec<AngstromValidator>,
-        block_rx: BroadcastStream<(u64, Vec<Transaction>)>,
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
         block_sync: GlobalBlockSync,
@@ -263,12 +261,15 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         tracing::debug!("created testnet hub and uniswap registry");
 
-        let anvil = AnvilSubmissionProvider { provider: state_provider.rpc_provider() };
+        let anvil = AnvilSubmissionProvider {
+            provider:         state_provider.rpc_provider(),
+            angstrom_address: inital_angstrom_state.angstrom_addr
+        };
 
-        let mev_boost_provider = MevBoostProvider::new_from_raw(
-            Arc::new(state_provider.rpc_provider()),
-            vec![Arc::new(Box::new(anvil) as Box<dyn SubmitTx>)]
-        );
+        let mev_boost_provider = SubmissionHandler {
+            node_provider: Arc::new(state_provider.rpc_provider()),
+            submitters:    vec![Box::new(anvil)]
+        };
 
         tracing::debug!("created mev boost provider");
 
@@ -283,7 +284,6 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             order_storage.clone(),
             block_number,
             block_number,
-            inital_angstrom_state.angstrom_addr,
             pool_registry,
             uniswap_pools.clone(),
             mev_boost_provider,

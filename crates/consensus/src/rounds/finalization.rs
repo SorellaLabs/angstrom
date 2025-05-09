@@ -31,7 +31,7 @@ impl FinalizationState {
         waker: Waker
     ) -> Self
     where
-        P: Provider + 'static,
+        P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
         let preproposal = proposal
@@ -77,7 +77,7 @@ impl FinalizationState {
 
 impl<P, Matching> ConsensusState<P, Matching> for FinalizationState
 where
-    P: Provider + 'static,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(

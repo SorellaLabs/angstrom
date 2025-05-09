@@ -29,7 +29,7 @@ use reth_network::{
 };
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use reth_tasks::TaskExecutor;
-use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::instrument;
 
 use super::internals::AngstromNodeInternals;
@@ -65,14 +65,13 @@ where
     P: WithWalletProvider,
     G: GlobalTestingConfig
 {
-    #[instrument(name = "node", level = "trace", skip(node_config, c, state_provider, initial_validators, inital_angstrom_state, block_provider, agents, block_sync, ex), fields(id = node_config.node_id))]
+    #[instrument(name = "node", level = "trace", skip(node_config, c, state_provider, initial_validators, inital_angstrom_state,  agents, block_sync, ex), fields(id = node_config.node_id))]
     pub async fn new<F>(
         c: C,
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
         initial_validators: Vec<AngstromValidator>,
         inital_angstrom_state: InitialTestnetState,
-        block_provider: BroadcastStream<(u64, Vec<alloy_rpc_types::Transaction>)>,
         agents: Vec<F>,
         block_sync: GlobalBlockSync,
         ex: TaskExecutor
@@ -103,7 +102,6 @@ where
             strom_handles,
             strom_network.strom_handle.network_handle().clone(),
             initial_validators,
-            block_provider,
             inital_angstrom_state.clone(),
             agents,
             block_sync,

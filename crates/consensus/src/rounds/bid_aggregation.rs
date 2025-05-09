@@ -52,7 +52,7 @@ impl BidAggregationState {
 
 impl<P, Matching> ConsensusState<P, Matching> for BidAggregationState
 where
-    P: Provider + 'static,
+    P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle
 {
     fn on_consensus_message(

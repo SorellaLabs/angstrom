@@ -1,52 +1,45 @@
 use std::pin::Pin;
 
 use alloy::{
-    eips::eip2718::Encodable2718, network::TransactionBuilder, primitives::TxHash,
+    eips::eip2718::Encodable2718,
+    primitives::{Address, TxHash},
     providers::Provider
 };
-use alloy_rpc_types::TransactionRequest;
-use angstrom_types::{mev_boost::SubmitTx, primitive::AngstromSigner};
-use futures::{Future, FutureExt};
+use angstrom_types::{
+    contract_payloads::angstrom::AngstromBundle,
+    primitive::AngstromSigner,
+    submission::{ChainSubmitter, TxFeatureInfo}
+};
+use futures::Future;
 
 use crate::contracts::anvil::WalletProviderRpc;
 
 pub struct AnvilSubmissionProvider {
-    pub provider: WalletProviderRpc
+    pub provider:         WalletProviderRpc,
+    pub angstrom_address: Address
 }
+impl ChainSubmitter for AnvilSubmissionProvider {
+    fn angstrom_address(&self) -> alloy_primitives::Address {
+        self.angstrom_address
+    }
 
-impl SubmitTx for AnvilSubmissionProvider {
-    fn submit_transaction<'a>(
+    fn submit<'a>(
         &'a self,
         signer: &'a AngstromSigner,
-        tx: TransactionRequest
-    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
-        async move {
-            // decoded encoded payload, then apply all mock approvals + balances for the
-            // given token
+        bundle: Option<&'a AngstromBundle>,
+        tx_features: &'a TxFeatureInfo
+    ) -> Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
+        Box::pin(async move {
+            let Some(bundle) = bundle else { return Ok(None) };
 
             #[cfg(all(feature = "testnet", not(feature = "testnet-sepolia")))]
             {
                 use alloy::providers::ext::AnvilApi;
-                use alloy_sol_types::SolCall;
-                use angstrom_types::{
-                    contract_bindings::angstrom::Angstrom,
-                    contract_payloads::angstrom::AngstromBundle
-                };
                 use futures::StreamExt;
-                use pade::PadeDecode;
 
-                let data_vec = tx.input.input.clone().unwrap().to_vec();
-                let slice = data_vec.as_slice();
-                // problem is we have abi enocded as bytes so we need to unabi incode
-                let bytes = Angstrom::executeCall::abi_decode(slice).unwrap().encoded;
-
-                let vecd = bytes.to_vec();
-                let mut slice = vecd.as_slice();
-
-                let bundle = AngstromBundle::pade_decode(&mut slice, None).unwrap();
                 let block = self.provider.get_block_number().await.unwrap() + 1;
                 let order_overrides = bundle.fetch_needed_overrides(block);
-                let angstrom_address = *tx.to.as_ref().unwrap().to().unwrap();
+                let angstrom_address = self.angstrom_address();
 
                 let _ = futures::stream::iter(
                     order_overrides.into_slots_with_overrides(angstrom_address)
@@ -61,29 +54,15 @@ impl SubmitTx for AnvilSubmissionProvider {
                 .await;
             }
 
-            let tx = tx.build(&signer).await.unwrap();
-
+            let tx = self.build_and_sign_tx(signer, bundle, tx_features).await;
             let hash = *tx.tx_hash();
             let encoded = tx.encoded_2718();
 
-            let submitted = self.provider.send_raw_transaction(&encoded).await;
-            let submitted = submitted
-                .inspect_err(|e| {
-                    tracing::info!(?e, "failed to submit transaction");
-                })
-                .is_ok();
-
-            (hash, submitted)
-        }
-        .boxed()
-    }
-
-    fn submit_transaction_private<'a>(
-        &'a self,
-        signer: &'a AngstromSigner,
-        tx: TransactionRequest,
-        _: u64
-    ) -> Pin<Box<dyn Future<Output = (TxHash, bool)> + Send + 'a>> {
-        self.submit_transaction(signer, tx)
+            self.provider
+                .send_raw_transaction(&encoded)
+                .await
+                .map(|_| Some(hash))
+                .map_err(Into::into)
+        })
     }
 }

@@ -1,7 +1,7 @@
-use crate::snapshot::Snapshot;
+use crate::blocklog::BlockLog;
 
 pub mod log;
 
 pub trait TelemetryOutput {
-    fn snapshot(&self, snap: &Snapshot);
+    fn output(&self, blocklog: &BlockLog);
 }

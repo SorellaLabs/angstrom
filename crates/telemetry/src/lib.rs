@@ -13,13 +13,11 @@ use blocklog::BlockLog;
 use client::TelemetryClient;
 use outputs::{TelemetryOutput, log::LogOutput};
 use serde::{Deserialize, Serialize};
-use snapshot::Snapshot;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 pub mod blocklog;
 pub mod client;
 pub mod outputs;
-pub mod snapshot;
 
 // 5 block lookbehind, simple const for now
 const MAX_BLOCKS: usize = 5;
@@ -36,11 +34,7 @@ pub enum TelemetryMessage {
     /// Message indicating an incoming Consensus message
     Consensus { blocknum: u64 },
     /// Message indicating an error has happened, marking a block for output
-    Error { blocknum: u64, message: String },
-
-    /// For legacy reasons - allowing us to migrate to these new messages, To be
-    /// removed
-    Snapshot { snapshot: Snapshot }
+    Error { blocknum: u64, message: String }
 }
 
 pub struct Telemetry {
@@ -55,11 +49,6 @@ impl Telemetry {
         let outputs: Vec<Box<dyn TelemetryOutput>> = vec![Box::new(LogOutput {})];
         let block_cache = HashMap::new();
         Self { rx, block_cache, outputs }
-    }
-
-    /// On a snapshot being received, we want each output to save it
-    fn on_new_snapshot(&self, snap: Snapshot) {
-        self.outputs.iter().for_each(|out| out.snapshot(&snap));
     }
 
     fn get_block(&mut self, blocknum: u64) -> &mut BlockLog {
@@ -98,7 +87,6 @@ impl Future for Telemetry {
             match self.rx.poll_recv(cx) {
                 // As long as we're getting snapshots, process them
                 Poll::Ready(Some(req)) => match req {
-                    TelemetryMessage::Snapshot { snapshot } => self.on_new_snapshot(snapshot),
                     TelemetryMessage::NewBlock { blocknum, pool_snapshots } => {
                         println!("New block [{blocknum}]");
                         self.on_new_block(blocknum, pool_snapshots);

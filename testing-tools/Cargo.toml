@@ -25,6 +25,8 @@ order-pool.workspace = true
 validation.workspace = true
 matching-engine.workspace = true
 
+reth.workspace = true
+reth-node-builder.workspace = true
 reth-network-api.workspace = true
 reth-codecs.workspace = true
 reth-tasks.workspace = true

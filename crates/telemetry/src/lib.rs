@@ -16,6 +16,7 @@ use tracing::warn;
 pub mod blocklog;
 pub mod client;
 pub mod outputs;
+pub mod replay;
 
 // 5 block lookbehind, simple const for now
 const MAX_BLOCKS: usize = 5;

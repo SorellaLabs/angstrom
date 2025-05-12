@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    task::Poll
-};
+use std::{collections::HashMap, task::Poll};
 
 use angstrom_types::{
     orders::{CancelOrderRequest, OrderOrigin},
@@ -14,6 +11,7 @@ use client::TelemetryClient;
 use outputs::{TelemetryOutput, log::LogOutput};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedReceiver;
+use tracing::warn;
 
 pub mod blocklog;
 pub mod client;
@@ -73,6 +71,17 @@ impl Telemetry {
 
     fn add_event_to_block(&mut self, blocknum: u64, event: TelemetryMessage) {
         self.get_block(blocknum).add_event(event);
+    }
+
+    fn on_error(&mut self, blocknum: u64, error: String) {
+        if let Some(block) = self.block_cache.get_mut(&blocknum) {
+            block.error(error);
+            for out in self.outputs.iter() {
+                out.output(block)
+            }
+        } else {
+            warn!(blocknum, "Telemetry error for unrecorded block");
+        }
     }
 }
 

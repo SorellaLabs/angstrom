@@ -11791,6 +11791,7 @@ dependencies = [
  "angstrom-types",
  "base64 0.21.7",
  "base64-serde",
+ "flate2",
  "serde",
  "serde_json",
  "tokio",

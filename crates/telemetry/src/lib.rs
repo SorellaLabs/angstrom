@@ -1,4 +1,7 @@
-use std::{collections::HashMap, task::Poll};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    task::Poll
+};
 
 use angstrom_types::{
     orders::{CancelOrderRequest, OrderOrigin},
@@ -17,6 +20,9 @@ pub mod blocklog;
 pub mod client;
 pub mod outputs;
 pub mod snapshot;
+
+// 5 block lookbehind, simple const for now
+const MAX_BLOCKS: usize = 5;
 
 #[derive(Serialize, Deserialize)]
 pub enum TelemetryMessage {
@@ -57,9 +63,19 @@ impl Telemetry {
     }
 
     fn get_block(&mut self, blocknum: u64) -> &mut BlockLog {
-        self.block_cache
-            .entry(blocknum)
-            .or_insert_with(|| BlockLog::new(blocknum))
+        if self.block_cache.contains_key(&blocknum) {
+            self.block_cache.get_mut(&blocknum).unwrap()
+        } else {
+            // We're adding a new item, so trim down to size
+            while self.block_cache.len() >= MAX_BLOCKS {
+                let oldest_key = self.block_cache.keys().copied().min().unwrap();
+                self.block_cache.remove(&oldest_key);
+            }
+            // Add our new entry
+            self.block_cache
+                .entry(blocknum)
+                .or_insert_with(|| BlockLog::new(blocknum))
+        }
     }
 
     fn on_new_block(&mut self, blocknum: u64, pool_snapshots: HashMap<PoolId, BaselinePoolState>) {

@@ -38,4 +38,3 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username ${DOCKER_USERNAME} --password-stdin
       - name: Build and push ${{ matrix.build.name }}
         run: ${{ matrix.build.command }}
-

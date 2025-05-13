@@ -5,6 +5,8 @@ ARG TARGETARCH=x86_64
 ARG FEATURES=""
 ARG BUILD_PROFILE=release
 
+LABEL org.opencontainers.image.source=https://github.com/SorellaLabs/angstrom
+
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 

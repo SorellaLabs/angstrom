@@ -83,6 +83,7 @@ secp256k1.workspace = true
 # misc
 serial_test.workspace = true
 tempfile.workspace = true
+dashmap.workspace = true
 
 parking_lot.workspace = true
 clap = { workspace = true, features = ["derive"] }

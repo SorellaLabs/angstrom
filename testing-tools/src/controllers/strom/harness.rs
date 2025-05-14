@@ -1,45 +1,39 @@
-use std::{
-    collections::{HashMap, HashSet},
-    pin::Pin,
-    sync::Arc,
-    time::Duration
-};
+use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
 
 use alloy::{
     self,
-    eips::{BlockId, BlockNumberOrTag},
-    network::Ethereum,
+    eips::BlockId,
+    network::{Ethereum, Network},
     primitives::Address,
     providers::{Provider, ProviderBuilder}
 };
-use alloy_chains::Chain;
+use alloy_primitives::U256;
 use angstrom::{
     cli::{AngstromConfig, NodeConfig},
-    components::{StromHandles, initialize_strom_handles}
+    components::StromHandles
 };
-use angstrom_eth::{
-    handle::{Eth, EthCommand},
-    manager::{EthDataCleanser, EthEvent}
-};
-use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    VerificationSidecar,
-    manager::StromConsensusEvent,
-    pool_manager::{OrderCommand, PoolHandle}
-};
+use angstrom_eth::manager::EthEvent;
+use angstrom_network::{NetworkBuilder as StromNetworkBuilder, PoolManagerBuilder};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        CONFIG_STORE_SLOT, POOL_CONFIG_STORE_ENTRY_SIZE,
+        angstrom::{
+            AngPoolConfigEntry, AngstromPoolConfigStore, AngstromPoolPartialKey,
+            UniswapAngstromRegistry
+        }
+    },
     mev_boost::MevBoostProvider,
     primitive::{AngstromSigner, UniswapPoolRegistry},
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
+use dashmap::DashMap;
+use eyre::eyre;
 use futures::Stream;
-use matching_engine::{MatchingManager, manager::MatcherCommand};
-use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
-use parking_lot::RwLock;
+use matching_engine::MatchingManager;
+use order_pool::{PoolConfig, order_storage::OrderStorage};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -49,34 +43,114 @@ use reth::{
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
-use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
-use reth_network::{NetworkHandle, Peers};
+use reth_network::Peers;
 use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns};
 use reth_provider::{
-    BlockReader, CanonStateNotifications, DatabaseProviderFactory, ReceiptProvider,
-    TryIntoHistoricalStateProvider
+    BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider,
+    test_utils::TestCanonStateSubscriptions
 };
 use telemetry::init_telemetry;
-use tokio::sync::mpsc::{
-    Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel
-};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use uniswap_v4::{configure_uniswap_manager, fetch_angstrom_pools};
-use validation::{
-    common::TokenPriceGenerator,
-    init_validation,
-    validator::{ValidationClient, ValidationRequest}
-};
+use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
+
+async fn handle_init_block_spam(
+    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification>
+) {
+    // wait for the first notification
+    let _ = canon.recv().await.expect("first block");
+    tracing::info!("got first block");
+
+    loop {
+        tokio::select! {
+            // if we can go 10.5s without a update, we know that all of the pending cannon
+            // state notifications have been processed and we are at the tip.
+            _ = tokio::time::sleep(Duration::from_millis(1050)) => {
+                break;
+            }
+            Ok(_) = canon.recv() => {
+
+            }
+        }
+    }
+    tracing::info!("finished handling block-spam");
+}
+
+pub async fn load_poolconfig_from_chain<N, P>(
+    angstrom_contract: Address,
+    block_id: BlockId,
+    provider: &P
+) -> eyre::Result<DashMap<AngstromPoolPartialKey, AngPoolConfigEntry>>
+where
+    N: Network,
+    P: Provider<N>
+{
+    // offset of 6 bytes
+    let value = provider
+        .get_storage_at(angstrom_contract, U256::from(CONFIG_STORE_SLOT))
+        .block_id(block_id)
+        .await
+        .map_err(|e| eyre!("Error getting storage: {}", e))?;
+
+    let value_bytes: [u8; 32] = value.to_be_bytes();
+    tracing::debug!("storage slot of poolkey storage {:?}", value_bytes);
+    let config_store_address = Address::from(<[u8; 20]>::try_from(&value_bytes[4..24]).unwrap());
+    tracing::info!(?config_store_address);
+
+    let code = provider
+        .get_code_at(config_store_address)
+        .block_id(block_id)
+        .await
+        .map_err(|e| eyre!("Error getting code: {}", e))?;
+
+    tracing::info!(len=?code.len(), "bytecode: {:x}", code);
+
+    if code.is_empty() {
+        return Ok(DashMap::new());
+    }
+
+    if code.first() != Some(&0) {
+        return Err(eyre!("Invalid encoded entries: must start with a safety byte of 0"));
+    }
+    tracing::info!(bytecode_len=?code.len());
+    let adjusted_entries = &code[1..];
+    if adjusted_entries.len() % POOL_CONFIG_STORE_ENTRY_SIZE != 0 {
+        tracing::info!(bytecode_len=?adjusted_entries.len(), ?POOL_CONFIG_STORE_ENTRY_SIZE);
+        return Err(eyre!("Invalid encoded entries: incorrect length after removing safety byte"));
+    }
+    let entries = adjusted_entries
+        .chunks(POOL_CONFIG_STORE_ENTRY_SIZE)
+        .enumerate()
+        .map(|(index, chunk)| {
+            let pool_partial_key =
+                AngstromPoolPartialKey::new(<[u8; 27]>::try_from(&chunk[0..27]).unwrap());
+            let tick_spacing = u16::from_be_bytes([chunk[27], chunk[28]]);
+            let fee_in_e6 = u32::from_be_bytes([0, chunk[29], chunk[30], chunk[31]]);
+            (
+                pool_partial_key,
+                AngPoolConfigEntry {
+                    pool_partial_key,
+                    tick_spacing,
+                    fee_in_e6,
+                    store_index: index
+                }
+            )
+        })
+        .collect();
+    Ok(entries)
+}
 
 pub async fn initialize_strom_components_at_block<Node, AddOns, P: Peers + Unpin + 'static>(
     config: AngstromConfig,
     signer: AngstromSigner,
-    mut handles: StromHandles,
+    handles: StromHandles,
     network_builder: StromNetworkBuilder<P>,
     node: &FullNode<Node, AddOns>,
     executor: TaskExecutor,
     exit: NodeExitFuture,
     node_set: HashSet<Address>,
-    node_config: NodeConfig
+    node_config: NodeConfig,
+    block_id: u64
 ) -> eyre::Result<()>
 where
     Node: FullNodeComponents
@@ -91,5 +165,192 @@ where
         TryIntoHistoricalStateProvider + ReceiptProvider,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider: BlockNumReader
 {
-    Ok(())
+    // Get our URL
+    let url = node.rpc_server_handle().ipc_endpoint().unwrap();
+    // Create our provider
+    tracing::info!(?url, ?config.mev_boost_endpoints, "backup to database is");
+    let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
+        .with_recommended_fillers()
+        .layer(RethDbLayer::new(node.provider().clone()))
+        // backup
+        .connect(&url)
+        .await
+        .unwrap()
+        .into();
+    let mev_boost_provider = MevBoostProvider::new_from_urls(
+        querying_provider.clone(),
+        &config.mev_boost_endpoints,
+        &config.normal_nodes
+    );
+
+    // Constants that we want to work with
+    let angstrom_contract = node_config.angstrom_address;
+    let deploy_block = node_config.angstrom_deploy_block;
+    let node_address = signer.address();
+    let mock_canon = TestCanonStateSubscriptions::default();
+
+    // EXTERNAL DATA - we can specify block by using a specific ID
+    let pool_config_data = load_poolconfig_from_chain(
+        angstrom_contract,
+        BlockId::number(block_id),
+        &querying_provider
+    )
+    .await
+    .unwrap();
+
+    let pool_config = Arc::new(AngstromPoolConfigStore::from_entries(pool_config_data));
+
+    // EXTERNAL DATA - we can specify block by using end_block
+    let pools = fetch_angstrom_pools(
+        deploy_block as usize,
+        block_id as usize,
+        angstrom_contract,
+        &node.provider
+    )
+    .await;
+
+    // re-fetch given the fetch pools takes awhile. given this, we do techincally
+    // have a gap in which a pool is deployed durning startup. This isn't
+    // critical but we will want to fix this down the road.
+    // let block_id = querying_provider.get_block_number().await.unwrap();
+
+    // Data stream - can be mocked if we're looking at a single block
+    let (_eth_event_tx, eth_event_rx) = tokio::sync::mpsc::unbounded_channel::<EthEvent>();
+    let eth_event_rx_stream = UnboundedReceiverStream::new(eth_event_rx);
+    let (_eth_event_tx_pmb, eth_event_rx_pmb) = tokio::sync::mpsc::unbounded_channel::<EthEvent>();
+    let eth_event_rx_stream_pmb = UnboundedReceiverStream::new(eth_event_rx_pmb);
+    // let eth_data_sub = node.provider.subscribe_to_canonical_state();
+
+    let global_block_sync = GlobalBlockSync::new(block_id);
+
+    // INTERNAL DATA
+    let uniswap_registry: UniswapPoolRegistry = pools.into();
+    let uni_ang_registry =
+        UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config.clone());
+
+    // Build our PoolManager using the PoolConfig and OrderStorage we've already
+    // created
+    let network_stream =
+        Box::pin(eth_event_rx_stream) as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
+
+    let telemetry = init_telemetry();
+
+    // Takes updates that are generally provided by EthDataCleanser
+    let uniswap_pool_manager = configure_uniswap_manager(
+        querying_provider.clone(),
+        mock_canon.subscribe_to_canonical_state(),
+        uniswap_registry,
+        block_id,
+        global_block_sync.clone(),
+        node_config.pool_manager_address,
+        network_stream,
+        Some(telemetry.clone())
+    )
+    .await;
+
+    tracing::info!("uniswap manager start");
+
+    let uniswap_pools = uniswap_pool_manager.pools();
+    let pool_ids = uniswap_pool_manager.pool_addresses().collect::<Vec<_>>();
+
+    executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
+    // EXTERNAL DATA - reads the price history from the chain to establish the price
+    // background. Can be snapshotted or re-read from the chain
+    let price_generator = TokenPriceGenerator::new(
+        querying_provider.clone(),
+        block_id,
+        uniswap_pools.clone(),
+        node_config.gas_token_address,
+        None
+    )
+    .await
+    .expect("failed to start token price generator");
+
+    // Needs to regularly talk to the chain, this one is complicated.  However,
+    // given a single block and no actual updates to the canonical state we should
+    // be able to freeze this in time at a specific block
+    init_validation(
+        RethDbWrapper::new(node.provider.clone()),
+        block_id,
+        angstrom_contract,
+        node_address,
+        // Because this is incapsulated under the orderpool syncer. this is the only case
+        // we can use the raw stream.
+        mock_canon.canonical_state_stream(),
+        uniswap_pools.clone(),
+        price_generator,
+        pool_config.clone(),
+        handles.validator_rx
+    );
+
+    let validation_handle = ValidationClient(handles.validator_tx.clone());
+    tracing::info!("validation manager start");
+
+    let network_handle = network_builder
+        .with_pool_manager(handles.pool_tx)
+        .with_consensus_manager(handles.consensus_tx_op)
+        .build_handle(executor.clone(), node.provider.clone());
+
+    // fetch pool ids
+
+    let pool_config = PoolConfig::with_pool_ids(pool_ids);
+    let order_storage = Arc::new(OrderStorage::new(&pool_config));
+
+    let _pool_handle = PoolManagerBuilder::new(
+        validation_handle.clone(),
+        Some(order_storage.clone()),
+        network_handle.clone(),
+        eth_event_rx_stream_pmb,
+        handles.pool_rx,
+        global_block_sync.clone(),
+        Some(telemetry)
+    )
+    .with_config(pool_config)
+    .build_with_channels(
+        executor.clone(),
+        handles.orderpool_tx,
+        handles.orderpool_rx,
+        handles.pool_manager_tx,
+        block_id
+    );
+    let validators = node_set
+        .into_iter()
+        // use same weight for all validators
+        .map(|addr| AngstromValidator::new(addr, 100))
+        .collect::<Vec<_>>();
+    tracing::info!("pool manager start");
+
+    // spinup matching engine
+    let matching_handle = MatchingManager::spawn(executor.clone(), validation_handle.clone());
+
+    let manager = ConsensusManager::new(
+        ManagerNetworkDeps::new(
+            network_handle.clone(),
+            mock_canon.subscribe_to_canonical_state(),
+            handles.consensus_rx_op
+        ),
+        signer,
+        validators,
+        order_storage.clone(),
+        deploy_block,
+        block_id,
+        angstrom_contract,
+        uni_ang_registry,
+        uniswap_pools.clone(),
+        mev_boost_provider,
+        matching_handle,
+        global_block_sync.clone()
+    );
+
+    executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
+        manager.run_till_shutdown(grace)
+    });
+
+    global_block_sync.finalize_modules();
+    tracing::info!("started angstrom");
+
+    // Now we can feed our orders into the system
+
+    // Now we await the end of it all
+    exit.await
 }

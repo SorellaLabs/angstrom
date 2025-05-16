@@ -8,11 +8,14 @@ use alloy::{
     providers::Provider
 };
 use angstrom_types::{
-    matching::SqrtPriceX96, pair_with_price::PairsWithPrice, primitive::PoolId, sol_bindings::Ray
+    matching::SqrtPriceX96, orders::UpdatedGas, pair_with_price::PairsWithPrice, primitive::PoolId,
+    sol_bindings::Ray
 };
 use futures::StreamExt;
 use tracing::warn;
 use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools};
+
+use crate::order::sim::{BOOK_GAS, BOOK_GAS_INTERNAL, TOB_GAS, TOB_GAS_INTERNAL};
 
 const BLOCKS_TO_AVG_PRICE: u64 = 15;
 pub const WETH_ADDRESS: Address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
@@ -115,6 +118,33 @@ impl TokenPriceGenerator {
             uniswap_pools: uni,
             base_wei: new_gas_wei
         })
+    }
+
+    pub fn generate_gas_updates(&self) -> Vec<UpdatedGas> {
+        self.pair_to_pool
+            .iter()
+            .filter_map(|(&(mut token0, mut token1), pool_id)| {
+                if token1 < token0 {
+                    std::mem::swap(&mut token0, &mut token1)
+                };
+
+                let price = self.get_eth_conversion_price(token0, token1)?;
+
+                let book_internal = price.inverse_quantity(BOOK_GAS_INTERNAL as u128, false);
+                let book_external = price.inverse_quantity(BOOK_GAS as u128, false);
+                let tob_internal = price.inverse_quantity(TOB_GAS_INTERNAL as u128, false);
+                let tob_external = price.inverse_quantity(TOB_GAS as u128, false);
+
+                Some(UpdatedGas {
+                    pool_id:           *pool_id,
+                    gas_internal_book: book_internal,
+                    gas_internal_tob:  tob_internal,
+                    gas_external_tob:  tob_external,
+                    gas_external_book: book_external,
+                    block_number:      self.cur_block
+                })
+            })
+            .collect()
     }
 
     pub fn generate_lookup_map(&self) -> HashMap<(Address, Address), Ray> {

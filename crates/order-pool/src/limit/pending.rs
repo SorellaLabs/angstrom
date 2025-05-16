@@ -10,13 +10,13 @@ use angstrom_types::{
 
 pub struct PendingPool<Order: Clone> {
     /// all order hashes
-    orders: HashMap<FixedBytes<32>, OrderWithStorageData<Order>>,
+    pub(super) orders: HashMap<FixedBytes<32>, OrderWithStorageData<Order>>,
     /// bids are sorted descending by price, TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    bids:   BTreeMap<Reverse<OrderPriorityData>, FixedBytes<32>>,
+    bids:              BTreeMap<Reverse<OrderPriorityData>, FixedBytes<32>>,
     /// asks are sorted ascending by price,  TODO: This should be binned into
     /// ticks based off of the underlying pools params
-    asks:   BTreeMap<OrderPriorityData, FixedBytes<32>>
+    asks:              BTreeMap<OrderPriorityData, FixedBytes<32>>
 }
 
 impl<Order: Clone> PendingPool<Order> {
@@ -39,8 +39,8 @@ impl<Order: Clone> PendingPool<Order> {
         self.orders.insert(order.order_id.hash, order);
     }
 
-    pub fn remove_order(&mut self, id: FixedBytes<32>) -> Option<OrderWithStorageData<Order>> {
-        let order = self.orders.remove(&id)?;
+    pub fn remove_order(&mut self, id: &FixedBytes<32>) -> Option<OrderWithStorageData<Order>> {
+        let order = self.orders.remove(id)?;
 
         if order.is_bid {
             self.bids.remove(&Reverse(order.priority_data))?;

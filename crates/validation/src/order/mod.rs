@@ -2,7 +2,7 @@ use std::{fmt::Debug, future::Future, pin::Pin};
 
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
-    orders::OrderOrigin,
+    orders::{OrderOrigin, UpdatedGas},
     primitive::OrderValidationError,
     sol_bindings::{
         ext::RawPoolOrder,
@@ -59,7 +59,7 @@ pub enum OrderValidationResults {
     Valid(OrderWithStorageData<AllOrders>),
     // the raw hash to be removed
     Invalid { hash: B256, error: OrderValidationError },
-    TransitionedToBlock
+    TransitionedToBlock(Vec<UpdatedGas>)
 }
 
 impl OrderValidationResults {

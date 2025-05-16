@@ -209,7 +209,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             &self.order_storage,
             &mut self.validator,
             |id, storage, validator| {
-                if let Some(order) = storage.get_order_from_id(id) {
+                if let Some(order) = storage.remove_order_from_id(id) {
                     validator.validate_order(OrderOrigin::Local, order.order);
                 }
             }
@@ -318,7 +318,12 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 let peers = self.order_tracker.invalid_verification(hash);
                 Ok(PoolInnerEvent::BadOrderMessages(peers))
             }
-            OrderValidationResults::TransitionedToBlock => Ok(PoolInnerEvent::None)
+            OrderValidationResults::TransitionedToBlock(new_gas_updates) => {
+                let parked = self
+                    .order_storage
+                    .apply_new_gas_and_return_blocked_orders(new_gas_updates);
+                Ok(PoolInnerEvent::None)
+            }
         }
     }
 

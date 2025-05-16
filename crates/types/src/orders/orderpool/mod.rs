@@ -4,6 +4,9 @@ use alloy::primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod updated_gas;
+pub use updated_gas::*;
+
 use crate::{
     primitive::{PoolId, UserAccountVerificationError},
     sol_bindings::{RawPoolOrder, ext::RespendAvoidanceMethod}

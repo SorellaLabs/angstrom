@@ -108,8 +108,10 @@ where
                     self.order_validator
                         .on_new_block(block_number, orders, addresses);
                 });
+
+                let gas_updates = self.utils.token_pricing_ref().generate_gas_updates();
                 sender
-                    .send(OrderValidationResults::TransitionedToBlock)
+                    .send(OrderValidationResults::TransitionedToBlock(gas_updates))
                     .unwrap();
             }
             ValidationRequest::Nonce { sender, user_address } => {

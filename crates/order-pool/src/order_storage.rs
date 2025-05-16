@@ -9,7 +9,7 @@ use std::{
 use alloy::primitives::{B256, BlockNumber, FixedBytes};
 use angstrom_metrics::OrderStorageMetricsWrapper;
 use angstrom_types::{
-    orders::{OrderId, OrderLocation, OrderSet, OrderStatus},
+    orders::{OrderId, OrderLocation, OrderSet, OrderStatus, UpdatedGas},
     primitive::{NewInitializedPool, PoolId},
     sol_bindings::{
         grouped_orders::{AllOrders, OrderWithStorageData},
@@ -68,6 +68,18 @@ impl OrderStorage {
         self.limit_orders.lock().unwrap().remove_pool(&key);
     }
 
+    pub fn apply_new_gas_and_return_blocked_orders(
+        &self,
+        gas_updates: Vec<UpdatedGas>
+    ) -> Vec<AllOrders> {
+        let limit_lock = self.limit_orders.lock().unwrap();
+        let searcher_lock = self.searcher_orders.lock().unwrap();
+
+        for gas_update in gas_updates {
+            let limit_pool = limit_lock.update_gas(&gas_update);
+        }
+    }
+
     pub fn fetch_status_of_order(&self, order: B256) -> Option<OrderStatus> {
         if self
             .filled_orders
@@ -120,6 +132,26 @@ impl OrderStorage {
                 .lock()
                 .expect("lock poisoned")
                 .get_all_orders_from_pool(pool_id)
+        }
+    }
+
+    pub fn remove_order_from_id(
+        &self,
+        order_id: &OrderId
+    ) -> Option<OrderWithStorageData<AllOrders>> {
+        match order_id.location {
+            OrderLocation::Limit => self
+                .limit_orders
+                .lock()
+                .expect("lock poisoned")
+                .remove_order(order_id)
+                .and_then(|order| order.try_map_inner(Ok).ok()),
+            OrderLocation::Searcher => self
+                .searcher_orders
+                .lock()
+                .expect("lock poisoned")
+                .remove_order(order_id)
+                .and_then(|order| order.try_map_inner(|inner| Ok(AllOrders::TOB(inner))).ok())
         }
     }
 

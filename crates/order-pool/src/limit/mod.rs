@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use alloy::primitives::{B256, FixedBytes};
 use angstrom_types::{
-    orders::{OrderId, OrderStatus},
+    orders::{OrderId, OrderStatus, UpdatedGas},
     primitive::{NewInitializedPool, PoolId},
     sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
@@ -31,6 +31,10 @@ impl LimitOrderPool {
             limit_orders:      LimitPool::new(ids),
             size:              SizeTracker { max: max_size, current: 0 }
         }
+    }
+
+    pub fn update_gas(&mut self, gas: &UpdatedGas) -> Vec<AllOrders> {
+        self.limit_orders.update_gas(&gas.pool_id, gas)
     }
 
     pub fn get_order(&self, id: &OrderId) -> Option<OrderWithStorageData<AllOrders>> {

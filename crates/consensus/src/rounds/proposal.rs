@@ -5,9 +5,8 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{PreProposalAggregation, Proposal},
+    consensus::{PreProposalAggregation, Proposal, StromConsensusEvent},
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::PoolSolution,
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty

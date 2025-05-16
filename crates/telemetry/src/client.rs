@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use angstrom_types::{
+    consensus::StromConsensusEvent,
+    contract_bindings::angstrom::Angstrom::PoolKey,
     orders::{CancelOrderRequest, OrderOrigin},
     primitive::PoolId,
     sol_bindings::grouped_orders::AllOrders,
@@ -11,9 +13,15 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::TelemetryMessage;
 
 pub trait TelemetryHandle: Send + Sync + Clone + Debug + Unpin + 'static {
-    fn pools(&self, blocknum: u64, pool_snapshots: HashMap<PoolId, BaselinePoolState>);
+    fn pools(
+        &self,
+        blocknum: u64,
+        pool_keys: Vec<PoolKey>,
+        pool_snapshots: HashMap<PoolId, BaselinePoolState>
+    );
     fn new_order(&self, blocknum: u64, origin: OrderOrigin, order: AllOrders);
     fn cancel_order(&self, blocknum: u64, cancel: CancelOrderRequest);
+    fn consensus_event(&self, event: StromConsensusEvent);
 }
 
 #[derive(Clone, Debug)]
@@ -28,10 +36,15 @@ impl TelemetryClient {
 }
 
 impl TelemetryHandle for TelemetryClient {
-    fn pools(&self, blocknum: u64, pool_snapshots: HashMap<PoolId, BaselinePoolState>) {
+    fn pools(
+        &self,
+        blocknum: u64,
+        pool_keys: Vec<PoolKey>,
+        pool_snapshots: HashMap<PoolId, BaselinePoolState>
+    ) {
         let _ = self
             .tx
-            .send(TelemetryMessage::NewBlock { blocknum, pool_snapshots });
+            .send(TelemetryMessage::NewBlock { blocknum, pool_keys, pool_snapshots });
     }
 
     fn new_order(&self, blocknum: u64, origin: OrderOrigin, order: AllOrders) {
@@ -44,5 +57,12 @@ impl TelemetryHandle for TelemetryClient {
         let _ = self
             .tx
             .send(TelemetryMessage::CancelOrder { blocknum, cancel });
+    }
+
+    fn consensus_event(&self, event: StromConsensusEvent) {
+        let blocknum = event.block_height();
+        let _ = self
+            .tx
+            .send(TelemetryMessage::Consensus { blocknum, event });
     }
 }

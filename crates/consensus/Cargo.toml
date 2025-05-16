@@ -40,6 +40,7 @@ rand.workspace = true
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
 angstrom-network.workspace = true
+telemetry.workspace = true
 order-pool.workspace = true
 matching-engine.workspace = true
 validation.workspace = true

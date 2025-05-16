@@ -3,16 +3,21 @@ use std::{
     io::{Read, Write}
 };
 
-use angstrom_types::{primitive::PoolId, uni_structure::BaselinePoolState};
+use angstrom_types::{
+    contract_bindings::angstrom::Angstrom::PoolKey, primitive::PoolId,
+    uni_structure::BaselinePoolState
+};
 use base64::Engine;
 use flate2::Compression;
 use serde::{Deserialize, Serialize};
 
-use crate::TelemetryMessage;
+use crate::{NodeConstants, TelemetryMessage};
 
 #[derive(Serialize, Deserialize)]
 pub struct BlockLog {
     blocknum:       u64,
+    constants:      Option<NodeConstants>,
+    pool_keys:      Option<Vec<PoolKey>>,
     pool_snapshots: Option<HashMap<PoolId, BaselinePoolState>>,
     events:         Vec<TelemetryMessage>,
     error:          Option<String>
@@ -20,15 +25,42 @@ pub struct BlockLog {
 
 impl BlockLog {
     pub fn new(blocknum: u64) -> Self {
-        Self { blocknum, pool_snapshots: None, events: Vec::new(), error: None }
+        Self {
+            blocknum,
+            constants: None,
+            pool_keys: None,
+            pool_snapshots: None,
+            events: Vec::new(),
+            error: None
+        }
     }
 
     pub fn blocknum(&self) -> u64 {
         self.blocknum
     }
 
+    pub fn events(&self) -> &[TelemetryMessage] {
+        &self.events
+    }
+
+    pub fn constants(&self) -> Option<&NodeConstants> {
+        self.constants.as_ref()
+    }
+
+    pub fn pool_keys(&self) -> Option<&Vec<PoolKey>> {
+        self.pool_keys.as_ref()
+    }
+
     pub fn set_pool_snapshots(&mut self, pool_snapshots: HashMap<PoolId, BaselinePoolState>) {
         self.pool_snapshots = Some(pool_snapshots);
+    }
+
+    pub fn set_pool_keys(&mut self, pool_keys: Vec<PoolKey>) {
+        self.pool_keys = Some(pool_keys);
+    }
+
+    pub fn set_node_constants(&mut self, node_consts: NodeConstants) {
+        self.constants = Some(node_consts);
     }
 
     pub fn add_event(&mut self, event: TelemetryMessage) {

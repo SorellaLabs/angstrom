@@ -1,9 +1,9 @@
 use std::{future::Future, pin::Pin};
 
 use alloy_primitives::{Address, keccak256};
-use angstrom_network::{StromMessage, manager::StromConsensusEvent};
+use angstrom_network::StromMessage;
 use angstrom_types::{
-    consensus::{PreProposal, Proposal},
+    consensus::{PreProposal, Proposal, StromConsensusEvent},
     primitive::PeerId,
     sol_bindings::grouped_orders::AllOrders
 };

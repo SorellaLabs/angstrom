@@ -11,9 +11,8 @@ use alloy::{
     providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
-use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{PreProposal, PreProposalAggregation, Proposal},
+    consensus::{PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent},
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
     orders::PoolSolution,
     primitive::AngstromSigner,
@@ -379,8 +378,8 @@ pub mod tests {
         providers::{ProviderBuilder, RootProvider, fillers::*, network::Ethereum, *}
     };
     use angstrom_metrics::ConsensusMetricsWrapper;
-    use angstrom_network::manager::StromConsensusEvent;
     use angstrom_types::{
+        consensus::StromConsensusEvent,
         contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
         primitive::{AngstromSigner, UniswapPoolRegistry},
         submission::SubmissionHandler

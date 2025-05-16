@@ -5,8 +5,9 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::manager::StromConsensusEvent;
-use angstrom_types::consensus::{PreProposal, PreProposalAggregation, Proposal};
+use angstrom_types::consensus::{
+    PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
+};
 use futures::FutureExt;
 use matching_engine::MatchingEngineHandle;
 

@@ -3014,6 +3014,7 @@ dependencies = [
  "secp256k1 0.30.0",
  "serde",
  "serde_json",
+ "telemetry",
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
@@ -11788,6 +11789,7 @@ dependencies = [
 name = "telemetry"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
  "angstrom-types",
  "base64 0.21.7",
  "base64-serde",
@@ -11855,6 +11857,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_distr",
  "rayon",
+ "reth",
  "reth-chainspec",
  "reth-codecs",
  "reth-db",
@@ -11864,6 +11867,7 @@ dependencies = [
  "reth-network",
  "reth-network-api",
  "reth-network-peers",
+ "reth-node-builder",
  "reth-node-ethereum",
  "reth-node-types",
  "reth-primitives",

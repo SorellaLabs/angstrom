@@ -288,7 +288,8 @@ where
         // Send off the updated pool snapshot to our telemetry sidecar
         if let Some(t) = self.telemetry.as_ref() {
             let pool_snapshots = self.fetch_pool_snapshots();
-            t.pools(self.latest_synced_block, pool_snapshots);
+            let pool_keys = self.factory.current_pool_keys();
+            t.pools(self.latest_synced_block, pool_keys, pool_snapshots);
         }
 
         if is_reorg {

@@ -1,7 +1,3 @@
-use std::str::FromStr;
-
-use alloy::primitives::U256;
-use angstrom_types::matching::Ray;
 use base64::Engine;
 use matching_engine::{
     book::OrderBook,

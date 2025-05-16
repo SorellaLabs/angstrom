@@ -7,8 +7,12 @@ use alloy::{
     signers::{SignerSync, local::PrivateKeySigner}
 };
 use alloy_primitives::Address;
-use k256::{ecdsa::VerifyingKey, elliptic_curve::sec1::ToEncodedPoint};
+use k256::{
+    ecdsa::{SigningKey, VerifyingKey},
+    elliptic_curve::sec1::ToEncodedPoint
+};
 use reth_network_peers::PeerId;
+use revm_primitives::FixedBytes;
 
 /// Wrapper around key and signing to allow for a uniform type across codebase
 #[derive(Debug, Clone)]
@@ -23,6 +27,15 @@ impl AngstromSigner {
         let peer_id = Self::public_key_to_peer_id(pub_key);
 
         Self { signer, id: peer_id }
+    }
+
+    /// Make a dummy signer that targets a specified address, this is used only
+    /// for snapshot replay at the moment
+    pub fn for_address(address: Address) -> Self {
+        let bytes: FixedBytes<64> = FixedBytes::random();
+        let credential = SigningKey::from_slice(bytes.as_slice()).unwrap();
+        let key = PrivateKeySigner::new_with_credential(credential, address, None);
+        Self::new(key)
     }
 
     pub fn random() -> Self {

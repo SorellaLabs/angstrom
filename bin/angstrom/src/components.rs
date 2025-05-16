@@ -21,11 +21,11 @@ use angstrom_eth::{
 use angstrom_network::{
     NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
     VerificationSidecar,
-    manager::StromConsensusEvent,
     pool_manager::{OrderCommand, PoolHandle}
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
+    consensus::StromConsensusEvent,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{AngstromSigner, PoolId, UniswapPoolRegistry},
@@ -53,7 +53,7 @@ use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAd
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
-use telemetry::init_telemetry;
+use telemetry::{NodeConstants, init_telemetry};
 use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
@@ -300,7 +300,13 @@ where
     let network_stream = Box::pin(eth_handle.subscribe_network())
         as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-    let telemetry = init_telemetry();
+    let telemetry = init_telemetry(NodeConstants::new(
+        signer.address(),
+        node_config.angstrom_address,
+        node_config.pool_manager_address,
+        node_config.angstrom_deploy_block,
+        node_config.gas_token_address
+    ));
 
     let uniswap_pool_manager = configure_uniswap_manager(
         querying_provider.clone(),
@@ -370,7 +376,7 @@ where
         eth_handle.subscribe_network(),
         handles.pool_rx,
         global_block_sync.clone(),
-        Some(telemetry)
+        Some(telemetry.clone())
     )
     .with_config(pool_config)
     .build_with_channels(
@@ -421,7 +427,8 @@ where
         submission_handler,
         matching_handle,
         global_block_sync.clone(),
-        handles.consensus_rx_rpc
+        handles.consensus_rx_rpc,
+        Some(telemetry.clone())
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

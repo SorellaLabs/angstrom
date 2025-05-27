@@ -22,7 +22,7 @@ use angstrom_types::{
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
 use dashmap::DashMap;
 use eyre::eyre;
-use futures::{Stream, StreamExt, channel::mpsc::UnboundedReceiver};
+use futures::{Stream, StreamExt};
 use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
@@ -201,7 +201,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let update_stream = Box::pin(
         mock_canon
             .canonical_state_stream()
-            .then(async |x| (0_u128, vec![]))
+            .then(async |_| (0_u128, vec![]))
     );
     init_validation(
         provider.state_provider(),

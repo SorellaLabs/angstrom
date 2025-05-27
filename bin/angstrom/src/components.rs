@@ -57,8 +57,6 @@ use telemetry::{NodeConstants, init_telemetry};
 use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
- use tokio::sync::mpsc::{
-     Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel
 };
 use uniswap_v4::{configure_uniswap_manager, fetch_angstrom_pools};
 use validation::{

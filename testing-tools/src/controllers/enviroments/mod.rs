@@ -1,4 +1,5 @@
 mod devnet;
+pub mod replay;
 mod state_machine;
 mod testnet;
 use std::{
@@ -7,10 +8,11 @@ use std::{
 };
 
 use alloy::{node_bindings::AnvilInstance, providers::Provider};
-use angstrom_network::{
-    NetworkOrderEvent, StromMessage, StromNetworkManager, manager::StromConsensusEvent
+use angstrom_network::{NetworkOrderEvent, StromMessage, StromNetworkManager};
+use angstrom_types::{
+    block_sync::GlobalBlockSync, consensus::StromConsensusEvent,
+    sol_bindings::grouped_orders::AllOrders
 };
-use angstrom_types::{block_sync::GlobalBlockSync, sol_bindings::grouped_orders::AllOrders};
 use futures::TryFutureExt;
 use rand::Rng;
 use reth_chainspec::Hardforks;

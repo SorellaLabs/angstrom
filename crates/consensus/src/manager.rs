@@ -12,9 +12,10 @@ use alloy::{
     providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
-use angstrom_network::{StromMessage, StromNetworkHandle, manager::StromConsensusEvent};
+use angstrom_network::{StromMessage, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
+    consensus::{ConsensusRoundName, StromConsensusEvent},
     contract_payloads::angstrom::UniswapAngstromRegistry,
     primitive::{AngstromSigner, ChainExt},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
@@ -26,6 +27,7 @@ use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
 use reth_tasks::shutdown::GracefulShutdown;
+use telemetry::client::TelemetryHandle;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::BroadcastStream;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
@@ -38,7 +40,7 @@ use crate::{
 
 const MODULE_NAME: &str = "Consensus";
 
-pub struct ConsensusManager<P, Matching, BlockSync>
+pub struct ConsensusManager<P, Matching, BlockSync, Telemetry>
 where
     P: Provider + Unpin + 'static
 {
@@ -51,16 +53,19 @@ where
     block_sync:             BlockSync,
     rpc_rx:                 mpsc::UnboundedReceiver<ConsensusRequest>,
     subscribers:            Vec<mpsc::Sender<ConsensusDataWithBlock<Bytes>>>,
+    telemetry:              Option<Telemetry>,
+    state_updates:          Option<mpsc::UnboundedSender<ConsensusRoundName>>,
 
     /// Track broadcasted messages to avoid rebroadcasting
     broadcasted_messages: HashSet<StromConsensusEvent>
 }
 
-impl<P, Matching, BlockSync> ConsensusManager<P, Matching, BlockSync>
+impl<P, Matching, BlockSync, Telemetry> ConsensusManager<P, Matching, BlockSync, Telemetry>
 where
     P: Provider + Unpin + 'static,
     BlockSync: BlockSyncConsumer,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -75,7 +80,9 @@ where
         provider: SubmissionHandler<P>,
         matching_engine: Matching,
         block_sync: BlockSync,
-        rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>
+        rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>,
+        telemetry: Option<Telemetry>,
+        state_updates: Option<mpsc::UnboundedSender<ConsensusRoundName>>
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
@@ -101,6 +108,8 @@ where
                 matching_engine
             )),
             rpc_rx,
+            telemetry,
+            state_updates,
             block_sync,
             network,
             canonical_block_stream: wrapped_broadcast_stream,
@@ -181,11 +190,25 @@ where
             }
         }
 
+        if let Some(t) = self.telemetry.as_ref() {
+            t.consensus_event(event.clone());
+        }
+
         self.consensus_round_state.handle_message(event);
     }
 
     fn on_round_event(&mut self, event: ConsensusMessage) {
         match event {
+            ConsensusMessage::StateChange(state) => {
+                // If we have telemetry, record the state change
+                if let Some(t) = self.telemetry.as_ref() {
+                    t.consensus_state(self.current_height, state);
+                }
+                // If we have a state update listener, report the new state
+                if let Some(su) = self.state_updates.as_ref() {
+                    let _res = su.send(state);
+                }
+            }
             ConsensusMessage::PropagateProposal(p) => {
                 self.network.broadcast_message(StromMessage::Propose(p))
             }
@@ -234,11 +257,13 @@ where
     async fn cleanup(mut self) {}
 }
 
-impl<P, Matching, BlockSync> Future for ConsensusManager<P, Matching, BlockSync>
+impl<P, Matching, BlockSync, Telemetry> Future
+    for ConsensusManager<P, Matching, BlockSync, Telemetry>
 where
     P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle,
-    BlockSync: BlockSyncConsumer
+    BlockSync: BlockSyncConsumer,
+    Telemetry: TelemetryHandle
 {
     type Output = ();
 

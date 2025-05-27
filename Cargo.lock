@@ -1406,6 +1406,7 @@ dependencies = [
  "revm-interpreter 20.0.0",
  "secp256k1 0.30.0",
  "serde",
+ "telemetry",
  "tikv-jemallocator",
  "tokio",
  "tokio-util",
@@ -1538,6 +1539,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "telemetry",
  "tempfile",
  "testing-tools",
  "thiserror 1.0.69",
@@ -3012,6 +3014,7 @@ dependencies = [
  "secp256k1 0.30.0",
  "serde",
  "serde_json",
+ "telemetry",
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
@@ -7730,6 +7733,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "replay"
+version = "0.1.0"
+dependencies = [
+ "alloy-provider 1.0.6",
+ "angstrom-types",
+ "eyre",
+ "futures",
+ "reth",
+ "reth-provider",
+ "telemetry",
+ "testing-tools",
+]
+
+[[package]]
 name = "reqwest"
 version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11783,6 +11800,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "telemetry"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "angstrom-types",
+ "base64 0.21.7",
+ "base64-serde",
+ "flate2",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11825,6 +11857,7 @@ dependencies = [
  "clap",
  "consensus",
  "create3",
+ "dashmap 6.1.0",
  "enr",
  "eyre",
  "futures",
@@ -11838,6 +11871,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_distr",
  "rayon",
+ "reth",
  "reth-chainspec",
  "reth-codecs",
  "reth-db",
@@ -11847,6 +11881,7 @@ dependencies = [
  "reth-network",
  "reth-network-api",
  "reth-network-peers",
+ "reth-node-builder",
  "reth-node-ethereum",
  "reth-node-types",
  "reth-primitives",
@@ -11858,6 +11893,7 @@ dependencies = [
  "revm 24.0.0",
  "secp256k1 0.30.0",
  "serial_test",
+ "telemetry",
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -12642,6 +12678,7 @@ dependencies = [
  "revm-primitives",
  "revm-state",
  "serde",
+ "telemetry",
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",

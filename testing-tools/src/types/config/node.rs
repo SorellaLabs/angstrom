@@ -131,10 +131,11 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
     }
 
     pub async fn spawn_anvil_rpc(&self) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
-        if matches!(self.global_config.config_type(), TestingConfigKind::Testnet) {
-            self.spawn_testnet_anvil_rpc().await
-        } else {
-            self.spawn_devnet_anvil_rpc().await
+        match self.global_config.config_type() {
+            TestingConfigKind::Testnet | TestingConfigKind::Replay => {
+                self.spawn_testnet_anvil_rpc().await
+            }
+            TestingConfigKind::Devnet => self.spawn_devnet_anvil_rpc().await
         }
     }
 

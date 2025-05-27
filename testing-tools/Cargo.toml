@@ -14,6 +14,7 @@ angstrom-amm-quoter.workspace = true
 consensus.workspace = true
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
+telemetry.workspace = true
 uniswap-v4.workspace = true
 angstrom-network.workspace = true
 angstrom-eth.workspace = true
@@ -24,6 +25,8 @@ order-pool.workspace = true
 validation.workspace = true
 matching-engine.workspace = true
 
+reth.workspace = true
+reth-node-builder.workspace = true
 reth-network-api.workspace = true
 reth-codecs.workspace = true
 reth-tasks.workspace = true
@@ -80,6 +83,7 @@ secp256k1.workspace = true
 # misc
 serial_test.workspace = true
 tempfile.workspace = true
+dashmap.workspace = true
 
 parking_lot.workspace = true
 clap = { workspace = true, features = ["derive"] }

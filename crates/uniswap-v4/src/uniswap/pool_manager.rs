@@ -19,12 +19,14 @@ use angstrom_types::{
     block_sync::BlockSyncConsumer,
     contract_payloads::angstrom::TopOfBlockOrder as PayloadTopOfBlockOrder,
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
+    uni_structure::BaselinePoolState
 };
 use arraydeque::ArrayDeque;
 use dashmap::DashMap;
 use futures::Stream;
 use futures_util::{StreamExt, stream::BoxStream};
+use telemetry::client::TelemetryHandle;
 use thiserror::Error;
 use tokio::sync::Notify;
 
@@ -169,8 +171,9 @@ where
     }
 }
 
-pub struct UniswapPoolManager<P, PP, BlockSync>
+pub struct UniswapPoolManager<P, PP, BlockSync, Telemetry>
 where
+    Telemetry: TelemetryHandle,
     DataLoader: PoolDataLoader,
     PP: Provider + 'static
 {
@@ -183,14 +186,16 @@ where
     block_sync:          BlockSync,
     block_stream:        BoxStream<'static, Option<PoolMangerBlocks>>,
     update_stream:       Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>,
-    rx:                  tokio::sync::mpsc::Receiver<(TickRangeToLoad, Arc<Notify>)>
+    rx:                  tokio::sync::mpsc::Receiver<(TickRangeToLoad, Arc<Notify>)>,
+    telemetry:           Option<Telemetry>
 }
 
-impl<P, PP, BlockSync> UniswapPoolManager<P, PP, BlockSync>
+impl<P, PP, BlockSync, Telemetry> UniswapPoolManager<P, PP, BlockSync, Telemetry>
 where
     PP: Provider + 'static,
     DataLoader: PoolDataLoader + Default + Clone + Send + Sync + Unpin + 'static,
     BlockSync: BlockSyncConsumer,
+    Telemetry: TelemetryHandle,
     P: PoolManagerProvider + Send + Sync + 'static
 {
     pub async fn new(
@@ -198,7 +203,8 @@ where
         latest_synced_block: BlockNumber,
         provider: Arc<P>,
         block_sync: BlockSync,
-        update_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>
+        update_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>,
+        telemetry: Option<Telemetry>
     ) -> Self {
         block_sync.register(MODULE_NAME);
 
@@ -222,7 +228,8 @@ where
             provider,
             block_sync,
             update_stream,
-            rx
+            rx,
+            telemetry
         }
     }
 
@@ -232,6 +239,25 @@ where
 
     pub fn pools(&self) -> SyncedUniswapPools {
         self.pools.clone()
+    }
+
+    fn fetch_pool_snapshots(&self) -> HashMap<PoolId, BaselinePoolState> {
+        self.pools
+            .iter()
+            .filter_map(|refr| {
+                let key = refr.key();
+                let pool = refr.value();
+                // gotta
+                Some((
+                    *key,
+                    pool.read()
+                        .expect("lock busted")
+                        .fetch_pool_snapshot()
+                        .ok()?
+                        .2
+                ))
+            })
+            .collect()
     }
 
     fn handle_new_block_info(&mut self, block_info: PoolMangerBlocks) {
@@ -258,6 +284,13 @@ where
         );
 
         self.latest_synced_block = chain_head_block_number;
+
+        // Send off the updated pool snapshot to our telemetry sidecar
+        if let Some(t) = self.telemetry.as_ref() {
+            let pool_snapshots = self.fetch_pool_snapshots();
+            let pool_keys = self.factory.current_pool_keys();
+            t.pools(self.latest_synced_block, pool_keys, pool_snapshots);
+        }
 
         if is_reorg {
             self.block_sync.sign_off_reorg(
@@ -299,12 +332,13 @@ where
     }
 }
 
-impl<P, PP, BlockSync> Future for UniswapPoolManager<P, PP, BlockSync>
+impl<P, PP, BlockSync, Telemetry> Future for UniswapPoolManager<P, PP, BlockSync, Telemetry>
 where
     DataLoader: PoolDataLoader + Default + Clone + Send + Sync + Unpin + 'static,
     BlockSync: BlockSyncConsumer,
     P: PoolManagerProvider + Send + Sync + 'static,
-    PP: Provider + 'static
+    PP: Provider + 'static,
+    Telemetry: TelemetryHandle + Unpin
 {
     type Output = ();
 

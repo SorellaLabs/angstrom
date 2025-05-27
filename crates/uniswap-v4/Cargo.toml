@@ -13,6 +13,7 @@ exclude.workspace = true
 serde.workspace = true
 dashmap.workspace = true
 angstrom-types.workspace = true
+telemetry.workspace = true
 angstrom-eth.workspace = true
 angstrom-utils.workspace = true
 alloy.workspace = true

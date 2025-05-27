@@ -28,7 +28,7 @@ pub struct AnvilStateProvider<P> {
 }
 
 impl<P: WithWalletProvider> AnvilStateProvider<P> {
-    pub(crate) fn new(provider: P) -> Self {
+    pub fn new(provider: P) -> Self {
         Self {
             provider,
             canon_state: AnvilConsensusCanonStateNotification::new(),

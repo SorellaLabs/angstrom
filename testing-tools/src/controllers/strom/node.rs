@@ -29,6 +29,7 @@ use reth_network::{
 };
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use reth_tasks::TaskExecutor;
+use telemetry::client::TelemetryClient;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::instrument;
 
@@ -294,14 +295,23 @@ where
     /// -------------------------------------
     pub fn strom_consensus<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync>) -> R
+        F: FnOnce(
+            &ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync, TelemetryClient>
+        ) -> R
     {
         self.state_lock.strom_consensus(f)
     }
 
     pub fn strom_consensus_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&mut ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync>) -> R
+        F: FnOnce(
+            &mut ConsensusManager<
+                WalletProviderRpc,
+                MatcherHandle,
+                GlobalBlockSync,
+                TelemetryClient
+            >
+        ) -> R
     {
         self.state_lock.strom_consensus_mut(f)
     }

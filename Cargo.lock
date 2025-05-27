@@ -7733,6 +7733,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "replay"
+version = "0.1.0"
+dependencies = [
+ "alloy-provider 1.0.6",
+ "angstrom-types",
+ "eyre",
+ "futures",
+ "reth",
+ "reth-provider",
+ "telemetry",
+ "testing-tools",
+]
+
+[[package]]
 name = "reqwest"
 version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"

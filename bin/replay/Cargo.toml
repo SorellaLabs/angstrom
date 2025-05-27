@@ -1,0 +1,19 @@
+[package]
+name = "replay"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+futures.workspace = true
+alloy-provider.workspace = true
+angstrom-types.workspace = true
+eyre.workspace = true
+testing-tools.workspace = true
+telemetry.workspace = true
+reth.workspace = true
+reth-provider = { workspace = true, features = ["test-utils"] }

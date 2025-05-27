@@ -13,7 +13,7 @@ pub async fn replay_stuff<Provider: WithWalletProvider>(
     provider: AnvilProvider<Provider>,
     executor: TaskExecutor,
     replay_log: BlockLog
-) {
+) -> eyre::Result<()> {
     // The target block is the one in our replay
     let block_id = replay_log.blocknum();
 
@@ -59,4 +59,5 @@ pub async fn replay_stuff<Provider: WithWalletProvider>(
             }
         }
     }
+    Ok(())
 }

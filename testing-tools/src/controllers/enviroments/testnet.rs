@@ -1,6 +1,7 @@
 use std::{cell::Cell, collections::HashSet, pin::Pin, rc::Rc};
 
 use alloy::{
+    node_bindings::AnvilInstance,
     primitives::Address,
     providers::{WalletProvider as _, ext::AnvilApi}
 };
@@ -17,7 +18,8 @@ use crate::{
     providers::{AnvilInitializer, AnvilProvider, TestnetBlockProvider, WalletProvider},
     types::{
         GlobalTestingConfig, WithWalletProvider,
-        config::{TestingNodeConfig, TestnetConfig}
+        config::{TestingNodeConfig, TestnetConfig},
+        initial_state::PartialConfigPoolKey
     }
 };
 
@@ -92,8 +94,6 @@ where
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
         F: Clone
     {
-        let mut initial_angstrom_state = None;
-
         let configs = (0..self.config.node_count())
             .map(|_| {
                 let node_id = self.incr_peer_id();
@@ -112,15 +112,12 @@ where
 
         // initialize leader provider
         let front = configs.first().unwrap().clone();
-        let leader_provider = Rc::new(Cell::new(
-            self.initalize_leader_provider(
-                front,
-                &mut initial_angstrom_state,
-                node_addresses,
-                ex.clone()
-            )
-            .await?
-        ));
+        let pool_keys = front.pool_keys();
+        let initializer_provider = Self::spawn_provider(front, node_addresses).await?;
+        let (i, p, s) = Self::anvil_deployment(initializer_provider, pool_keys, ex.clone()).await?;
+        let initial_angstrom_state = Some(s);
+        self._anvil_instance = Some(i);
+        let leader_provider = Rc::new(Cell::new(p));
         // take the provider and then set all people in the testnet as nodes.
 
         let nodes = futures::stream::iter(configs.into_iter())
@@ -144,7 +141,7 @@ where
                         config.node_id = 69;
 
                         leader_provider.replace(
-                            AnvilProvider::new(
+                            AnvilProvider::from_future(
                                 WalletProvider::new(config)
                                     .then(async |v| v.map(|i| (i.0, i.1, None))),
                                 true
@@ -153,7 +150,7 @@ where
                         )
                     } else {
                         tracing::info!(?node_id, "follower node init");
-                        AnvilProvider::new(
+                        AnvilProvider::from_future(
                             WalletProvider::new(node_config.clone())
                                 .then(async |v| v.map(|i| (i.0, i.1, None))),
                             true
@@ -198,38 +195,29 @@ where
         Ok(())
     }
 
-    async fn initalize_leader_provider(
-        &mut self,
+    async fn spawn_provider(
         node_config: TestingNodeConfig<TestnetConfig>,
-        initial_angstrom_state: &mut Option<InitialTestnetState>,
-        node_addresses: Vec<Address>,
-        ex: TaskExecutor
-    ) -> eyre::Result<AnvilProvider<WalletProvider>> {
-        let (p, initial_state) = self
-            .leader_initialization(node_config.clone(), node_addresses, ex)
-            .await?;
-        *initial_angstrom_state = Some(initial_state);
-        Ok(p)
-    }
-
-    async fn leader_initialization(
-        &mut self,
-        config: TestingNodeConfig<TestnetConfig>,
-        node_addresses: Vec<Address>,
-        ex: TaskExecutor
-    ) -> eyre::Result<(AnvilProvider<WalletProvider>, InitialTestnetState)> {
-        let mut provider = AnvilProvider::new(
-            AnvilInitializer::new(config.clone(), node_addresses)
+        node_addresses: Vec<Address>
+    ) -> eyre::Result<AnvilProvider<AnvilInitializer>> {
+        AnvilProvider::from_future(
+            AnvilInitializer::new(node_config.clone(), node_addresses)
                 .then(async |v| v.map(|i| (i.0, i.1, Some(i.2)))),
             true
         )
-        .await?;
-        self._anvil_instance = Some(provider._instance.take().unwrap());
+        .await
+    }
+
+    pub async fn anvil_deployment(
+        mut provider: AnvilProvider<AnvilInitializer>,
+        pool_keys: Vec<PartialConfigPoolKey>,
+        ex: TaskExecutor
+    ) -> eyre::Result<(AnvilInstance, AnvilProvider<WalletProvider>, InitialTestnetState)> {
+        let instance = provider._instance.take().unwrap();
 
         tracing::debug!(leader_address = ?provider.rpc_provider().default_signer_address());
 
         let initializer = provider.provider_mut().provider_mut();
-        initializer.deploy_pool_fulls(config.pool_keys()).await?;
+        initializer.deploy_pool_fulls(pool_keys).await?;
 
         let initial_state = initializer.initialize_state_no_bytes(ex).await?;
         initializer
@@ -237,6 +225,6 @@ where
             .anvil_mine(Some(10), None)
             .await?;
 
-        Ok((provider.into_state_provider(), initial_state))
+        Ok((instance, provider.into_state_provider(), initial_state))
     }
 }

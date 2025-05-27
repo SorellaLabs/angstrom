@@ -1,5 +1,5 @@
 mod devnet;
-mod replay;
+pub mod replay;
 mod state_machine;
 mod testnet;
 use std::{

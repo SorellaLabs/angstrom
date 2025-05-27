@@ -15,7 +15,7 @@ use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{StromMessage, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    consensus::StromConsensusEvent,
+    consensus::{ConsensusRoundName, StromConsensusEvent},
     contract_payloads::angstrom::UniswapAngstromRegistry,
     primitive::{AngstromSigner, ChainExt},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
@@ -54,6 +54,7 @@ where
     rpc_rx:                 mpsc::UnboundedReceiver<ConsensusRequest>,
     subscribers:            Vec<mpsc::Sender<ConsensusDataWithBlock<Bytes>>>,
     telemetry:              Option<Telemetry>,
+    state_updates:          Option<mpsc::UnboundedSender<ConsensusRoundName>>,
 
     /// Track broadcasted messages to avoid rebroadcasting
     broadcasted_messages: HashSet<StromConsensusEvent>
@@ -80,7 +81,8 @@ where
         matching_engine: Matching,
         block_sync: BlockSync,
         rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>,
-        telemetry: Option<Telemetry>
+        telemetry: Option<Telemetry>,
+        state_updates: Option<mpsc::UnboundedSender<ConsensusRoundName>>
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
@@ -107,6 +109,7 @@ where
             )),
             rpc_rx,
             telemetry,
+            state_updates,
             block_sync,
             network,
             canonical_block_stream: wrapped_broadcast_stream,
@@ -196,6 +199,16 @@ where
 
     fn on_round_event(&mut self, event: ConsensusMessage) {
         match event {
+            ConsensusMessage::StateChange(state) => {
+                // If we have telemetry, record the state change
+                if let Some(t) = self.telemetry.as_ref() {
+                    t.consensus_state(self.current_height, state);
+                }
+                // If we have a state update listener, report the new state
+                if let Some(su) = self.state_updates.as_ref() {
+                    let _res = su.send(state);
+                }
+            }
             ConsensusMessage::PropagateProposal(p) => {
                 self.network.broadcast_message(StromMessage::Propose(p))
             }

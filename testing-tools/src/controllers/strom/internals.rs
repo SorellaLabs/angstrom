@@ -314,7 +314,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             matching_handle,
             block_sync.clone(),
             strom_handles.consensus_rx_rpc,
-            Some(telemetry.clone())
+            Some(telemetry.clone()),
+            None
         );
 
         // spin up amm quoter

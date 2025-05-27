@@ -7,6 +7,7 @@ use angstrom_eth::manager::EthEvent;
 use angstrom_network::{PoolManagerBuilder, pool_manager::PoolHandle};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
+    consensus::ConsensusRoundName,
     contract_bindings::angstrom::Angstrom::PoolKey,
     contract_payloads::{
         CONFIG_STORE_SLOT, POOL_CONFIG_STORE_ENTRY_SIZE,
@@ -21,7 +22,7 @@ use angstrom_types::{
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
 use dashmap::DashMap;
 use eyre::eyre;
-use futures::Stream;
+use futures::{Stream, StreamExt, channel::mpsc::UnboundedReceiver};
 use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
@@ -105,7 +106,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     executor: TaskExecutor,
     pools: Vec<PoolKey>,
     block_id: u64
-) -> eyre::Result<PoolHandle> {
+) -> eyre::Result<(PoolHandle, tokio::sync::mpsc::UnboundedReceiver<ConsensusRoundName>)> {
     // Get our URL
 
     // Constants that we want to work with
@@ -197,6 +198,11 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     // Needs to regularly talk to the chain, this one is complicated.  However,
     // given a single block and no actual updates to the canonical state we should
     // be able to freeze this in time at a specific block
+    let update_stream = Box::pin(
+        mock_canon
+            .canonical_state_stream()
+            .then(async |x| (0_u128, vec![]))
+    );
     init_validation(
         provider.state_provider(),
         block_id,
@@ -204,7 +210,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         telemetry_constants.node_address(),
         // Because this is incapsulated under the orderpool syncer. this is the only case
         // we can use the raw stream.
-        mock_canon.canonical_state_stream(),
+        update_stream,
         uniswap_pools.clone(),
         price_generator,
         pool_config.clone(),
@@ -251,6 +257,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     // spinup matching engine
     let matching_handle = MatchingManager::spawn(executor.clone(), validation_handle.clone());
 
+    let (state_tx, state_rx) = tokio::sync::mpsc::unbounded_channel();
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
@@ -268,7 +275,8 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         matching_handle,
         global_block_sync.clone(),
         handles.consensus_rx_rpc,
-        telemetry
+        telemetry,
+        Some(state_tx)
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
@@ -278,5 +286,5 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     global_block_sync.finalize_modules();
     tracing::info!("started angstrom");
 
-    Ok(pool_handle)
+    Ok((pool_handle, state_rx))
 }

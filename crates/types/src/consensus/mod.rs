@@ -10,6 +10,15 @@ pub use pre_propose_agg::*;
 pub use proposal::*;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConsensusRoundName {
+    BidAggregation,
+    Finalization,
+    PreProposalAggregation,
+    PreProposal,
+    Proposal
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StromConsensusEvent {
     PreProposal(Address, PreProposal),

@@ -6,7 +6,7 @@ use std::{
 
 use alloy::providers::Provider;
 use angstrom_types::consensus::{
-    PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
+    ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
 };
 use matching_engine::MatchingEngineHandle;
 
@@ -127,5 +127,9 @@ where
         }
 
         Poll::Pending
+    }
+
+    fn name(&self) -> ConsensusRoundName {
+        ConsensusRoundName::PreProposalAggregation
     }
 }

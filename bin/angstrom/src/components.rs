@@ -426,7 +426,8 @@ where
         matching_handle,
         global_block_sync.clone(),
         handles.consensus_rx_rpc,
-        Some(telemetry.clone())
+        Some(telemetry.clone()),
+        None
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

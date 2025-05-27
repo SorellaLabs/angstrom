@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use angstrom_types::{
-    consensus::StromConsensusEvent,
+    consensus::{ConsensusRoundName, StromConsensusEvent},
     contract_bindings::angstrom::Angstrom::PoolKey,
     orders::{CancelOrderRequest, OrderOrigin},
     primitive::PoolId,
@@ -22,6 +22,7 @@ pub trait TelemetryHandle: Send + Sync + Clone + Debug + Unpin + 'static {
     fn new_order(&self, blocknum: u64, origin: OrderOrigin, order: AllOrders);
     fn cancel_order(&self, blocknum: u64, cancel: CancelOrderRequest);
     fn consensus_event(&self, event: StromConsensusEvent);
+    fn consensus_state(&self, blocknum: u64, state: ConsensusRoundName);
 }
 
 #[derive(Clone, Debug)]
@@ -64,5 +65,11 @@ impl TelemetryHandle for TelemetryClient {
         let _ = self
             .tx
             .send(TelemetryMessage::Consensus { blocknum, event });
+    }
+
+    fn consensus_state(&self, blocknum: u64, state: ConsensusRoundName) {
+        let _ = self
+            .tx
+            .send(TelemetryMessage::ConsensusStateChange { blocknum, state });
     }
 }

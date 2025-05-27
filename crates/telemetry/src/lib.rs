@@ -2,7 +2,7 @@ use std::{collections::HashMap, task::Poll};
 
 use alloy_primitives::Address;
 use angstrom_types::{
-    consensus::StromConsensusEvent,
+    consensus::{ConsensusRoundName, StromConsensusEvent},
     contract_bindings::angstrom::Angstrom::PoolKey,
     orders::{CancelOrderRequest, OrderOrigin},
     primitive::PoolId,
@@ -81,13 +81,30 @@ pub enum TelemetryMessage {
         pool_snapshots: HashMap<PoolId, BaselinePoolState>
     },
     /// Message indicating an incoming order to be validated
-    NewOrder { blocknum: u64, origin: OrderOrigin, order: AllOrders },
+    NewOrder {
+        blocknum: u64,
+        origin:   OrderOrigin,
+        order:    AllOrders
+    },
     /// Request to cancel an order
-    CancelOrder { blocknum: u64, cancel: CancelOrderRequest },
+    CancelOrder {
+        blocknum: u64,
+        cancel:   CancelOrderRequest
+    },
     /// Message indicating an incoming Consensus message
-    Consensus { blocknum: u64, event: StromConsensusEvent },
+    Consensus {
+        blocknum: u64,
+        event:    StromConsensusEvent
+    },
+    ConsensusStateChange {
+        blocknum: u64,
+        state:    ConsensusRoundName
+    },
     /// Message indicating an error has happened, marking a block for output
-    Error { blocknum: u64, message: String }
+    Error {
+        blocknum: u64,
+        message:  String
+    }
 }
 
 pub struct Telemetry {

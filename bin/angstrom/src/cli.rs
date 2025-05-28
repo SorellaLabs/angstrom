@@ -50,7 +50,7 @@ pub struct AngstromConfig {
 impl AngstromConfig {
     #[cfg(not(feature = "aws-signer"))]
     pub fn get_secret_key(&self) -> eyre::Result<AngstromSigner> {
-        let sk_path = self.secret_key_location.as_str();
+        let sk_path = &self.secret_key_location;
         let exists = sk_path.try_exists();
 
         match exists {

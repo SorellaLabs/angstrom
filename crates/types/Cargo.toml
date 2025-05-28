@@ -66,15 +66,12 @@ rand.workspace = true
 tokio.workspace = true
 testing-tools.workspace = true
 angstrom-types.workspace = true
+aws-config.workspace = true
+aws-sdk-kms.workspace = true
 
 [features]
-default = ["aws-signer"]
+default = []
 testnet = []
 testnet-sepolia = []
 anvil = []
-aws-signer = [
-    "dep:aws-config",
-    "dep:aws-sdk-kms",
-    "dep:tokio",
-    "alloy/signer-aws",
-]
+aws-signer = ["dep:aws-config", "dep:aws-sdk-kms", "dep:tokio"]

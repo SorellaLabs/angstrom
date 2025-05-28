@@ -25,9 +25,9 @@ pub struct AngstromSigner<S = AngstromSigningKey> {
 }
 
 impl AngstromSigner {
-    pub fn new(signer: AngstromSigningKey) -> Self {
+    pub fn new<S: GetVerifyingKey>(signer: S) -> AngstromSigner<S> {
         let peer_id = Self::public_key_to_peer_id(&signer.verifying_key());
-        Self { signer, id: peer_id }
+        AngstromSigner { signer, id: peer_id }
     }
 
     pub fn random() -> AngstromSigner<alloy::signers::local::PrivateKeySigner> {
@@ -148,10 +148,6 @@ mod aws {
     impl AngstromAwsSigner {
         pub fn new(signer: AwsSigner, handle: Handle) -> Self {
             Self { signer, handle }
-        }
-
-        pub fn address(&self) -> Address {
-            self.signer.address()
         }
     }
 

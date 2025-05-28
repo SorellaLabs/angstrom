@@ -8,6 +8,7 @@ futures.workspace = true
 base64.workspace = true
 bitmaps.workspace = true
 reth.workspace = true
+tokio = { workspace = true, optional = true }
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
 reth-provider.workspace = true
 reth-trie.workspace = true
@@ -32,7 +33,7 @@ k256.workspace = true
 malachite.workspace = true
 hex-literal.workspace = true
 anyhow.workspace = true
-alloy = { workspace = true, features  = ["rpc-types-mev"] }
+alloy = { workspace = true, features = ["rpc-types-mev"] }
 alloy-primitives = { workspace = true, features = ["rand"] }
 alloy-rlp.workspace = true
 derive_more = "0"
@@ -52,6 +53,10 @@ revm-primitives.workspace = true
 tower = "0.5.2"
 reqwest = { version = "0.12.5", features = ["json"] }
 
+# aws signer
+aws-sdk-kms = { workspace = true, optional = true }
+aws-config = { workspace = true, optional = true }
+
 [build-dependencies]
 convert_case.workspace = true
 itertools.workspace = true
@@ -63,7 +68,13 @@ testing-tools.workspace = true
 angstrom-types.workspace = true
 
 [features]
-default = []
+default = ["aws-signer"]
 testnet = []
 testnet-sepolia = []
 anvil = []
+aws-signer = [
+    "dep:aws-config",
+    "dep:aws-sdk-kms",
+    "dep:tokio",
+    "alloy/signer-aws",
+]

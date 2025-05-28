@@ -44,14 +44,14 @@ incremental = false
 
 [workspace.dependencies]
 consensus = { path = "./crates/consensus/" }
-angstrom-types = { path = "./crates/types/" }
+angstrom-types = { path = "./crates/types/", default-features = false }
 uniswap-v4 = { path = "./crates/uniswap-v4/" }
 angstrom-utils = { path = "./crates/utils/" }
 validation = { path = "./crates/validation/" }
 order-pool = { path = "./crates/order-pool/" }
 angstrom-eth = { path = "./crates/eth/" }
 angstrom-rpc = { path = "./crates/rpc/" }
-angstrom-amm-quoter= { path = "./crates/amm-quoter/" }
+angstrom-amm-quoter = { path = "./crates/amm-quoter/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 angstrom-metrics = { path = "./crates/metrics/" }
 testing-tools = { path = "./testing-tools/", default-features = false }
@@ -243,6 +243,9 @@ secp256k1 = { version = "0.30", default-features = false, features = [
 
 enr = { version = "0", default-features = false, features = ["k256"] }
 
+# aws signer
+aws-sdk-kms = "1"
+aws-config = "1"
 
 aquamarine = "0"
 

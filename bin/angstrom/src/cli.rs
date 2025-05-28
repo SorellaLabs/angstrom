@@ -2,15 +2,22 @@ use std::path::PathBuf;
 
 use alloy_primitives::Address;
 use angstrom_metrics::initialize_prometheus_metrics;
-use angstrom_types::primitive::{ANGSTROM_RPC, DEFAULT_RPC, MEV_RPC};
+use angstrom_types::primitive::{ANGSTROM_RPC, AngstromSigner, DEFAULT_RPC, MEV_RPC};
 use eyre::Context;
 use serde::Deserialize;
 use url::Url;
 
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
+    #[cfg(not(feature = "aws-signer"))]
     #[clap(long)]
     pub secret_key_location:       PathBuf,
+    #[cfg(feature = "aws-signer")]
+    #[clap(long)]
+    pub aws_region:                String,
+    #[cfg(feature = "aws-signer")]
+    #[clap(long)]
+    pub aws_kms_node_pk_id:        String,
     #[clap(long)]
     pub node_config:               PathBuf,
     /// enables the metrics
@@ -38,6 +45,49 @@ pub struct AngstromConfig {
         default_values = ANGSTROM_RPC
     )]
     pub angstrom_submission_nodes: Vec<Url>
+}
+
+impl AngstromConfig {
+    #[cfg(not(feature = "aws-signer"))]
+    pub fn get_secret_key(&self) -> eyre::Result<AngstromSigner> {
+        let sk_path = self.secret_key_location.as_str();
+        let exists = sk_path.try_exists();
+
+        match exists {
+            Ok(true) => {
+                let contents = std::fs::read_to_string(sk_path)?;
+                Ok(AngstromSigner::new(
+                    contents
+                        .trim()
+                        .parse::<alloy::signers::local::PrivateKeySigner>()?
+                ))
+            }
+            _ => Err(eyre::eyre!("no secret_key was found at {:?}", sk_path))
+        }
+    }
+
+    #[cfg(feature = "aws-signer")]
+    pub async fn get_secret_key(
+        &self,
+        handle: tokio::runtime::Handle
+    ) -> eyre::Result<AngstromSigner> {
+        use alloy::signers::aws::AwsSigner;
+        use angstrom_types::primitive::AngstromAwsSigner;
+        use aws_config::{BehaviorVersion, Region};
+
+        let mut cfg_builder = aws_config::load_defaults(BehaviorVersion::latest())
+            .await
+            .into_builder();
+        cfg_builder.set_region(Some(Region::new(self.aws_region.clone())));
+        let cfg = cfg_builder.build();
+
+        let client = aws_sdk_kms::Client::new(&cfg);
+
+        let signer =
+            AwsSigner::new(client, self.aws_kms_node_pk_id.clone().into(), Some(1)).await?;
+
+        Ok(AngstromSigner::new(AngstromAwsSigner::new(signer, handle)))
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

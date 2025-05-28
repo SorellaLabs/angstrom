@@ -2,12 +2,9 @@
 //!
 //! ## Feature Flags
 
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 
-use alloy::{
-    providers::{ProviderBuilder, network::Ethereum},
-    signers::local::PrivateKeySigner
-};
+use alloy::providers::{ProviderBuilder, network::Ethereum};
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
 use angstrom_network::AngstromNetworkBuilder;
@@ -15,10 +12,7 @@ use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}
 };
-use angstrom_types::{
-    contract_bindings::controller_v_1::ControllerV1,
-    primitive::{ANGSTROM_DOMAIN, AngstromSigner}
-};
+use angstrom_types::{contract_bindings::controller_v_1::ControllerV1, primitive::ANGSTROM_DOMAIN};
 use clap::Parser;
 use cli::AngstromConfig;
 use consensus::ConsensusHandler;
@@ -52,7 +46,10 @@ pub fn run() -> eyre::Result<()> {
 
         tracing::info!(domain=?ANGSTROM_DOMAIN);
 
-        let secret_key = get_secret_key(&args.secret_key_location)?;
+        #[cfg(not(feature = "aws-signer"))]
+        let secret_key = args.get_secret_key()?;
+        #[cfg(feature = "aws-signer")]
+        let secret_key = args.get_secret_key(executor.handle().clone()).await?;
 
         let mut channels = initialize_strom_handles();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());
@@ -129,16 +126,4 @@ pub fn run() -> eyre::Result<()> {
         )
         .await
     })
-}
-
-fn get_secret_key(sk_path: &PathBuf) -> eyre::Result<AngstromSigner> {
-    let exists = sk_path.try_exists();
-
-    match exists {
-        Ok(true) => {
-            let contents = std::fs::read_to_string(sk_path)?;
-            Ok(AngstromSigner::new(contents.trim().parse::<PrivateKeySigner>()?))
-        }
-        _ => Err(eyre::eyre!("no secret_key was found at {:?}", sk_path))
-    }
 }

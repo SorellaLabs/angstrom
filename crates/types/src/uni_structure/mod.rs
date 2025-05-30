@@ -26,6 +26,10 @@ impl BaselinePoolState {
         Self { liquidity, fee, block }
     }
 
+    pub fn block_number(&self) -> u64 {
+        self.block
+    }
+
     pub fn fee(&self) -> u32 {
         self.fee
     }

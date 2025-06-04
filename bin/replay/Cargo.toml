@@ -1,0 +1,26 @@
+[package]
+name = "replay"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+futures.workspace = true
+alloy-provider.workspace = true
+alloy-primitives.workspace = true
+angstrom-types.workspace = true
+eyre.workspace = true
+testing-tools.workspace = true
+telemetry.workspace = true
+reth.workspace = true
+reth-provider = { workspace = true, features = ["test-utils"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { workspace = true, features = ["derive"] }
+toml.workspace = true
+serde.workspace = true
+tokio.workspace = true

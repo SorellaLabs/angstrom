@@ -5,15 +5,15 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{PreProposalAggregation, Proposal},
+    consensus::{ConsensusRoundName, PreProposalAggregation, Proposal, StromConsensusEvent},
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::PoolSolution,
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty
 };
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use matching_engine::MatchingEngineHandle;
+use telemetry::client::TelemetryHandle;
 
 use super::{ConsensusState, SharedRoundState};
 use crate::rounds::{ConsensusMessage, preproposal_wait_trigger::LastRoundInfo};
@@ -38,15 +38,16 @@ pub struct ProposalState {
 }
 
 impl ProposalState {
-    pub fn new<P, Matching>(
+    pub fn new<P, Matching, Telemetry>(
         pre_proposal_aggregation: HashSet<PreProposalAggregation>,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         trigger_time: Instant,
         waker: Waker
     ) -> Self
     where
         P: Provider + Unpin + 'static,
-        Matching: MatchingEngineHandle
+        Matching: MatchingEngineHandle,
+        Telemetry: TelemetryHandle
     {
         // queue building future
         waker.wake_by_ref();
@@ -65,15 +66,16 @@ impl ProposalState {
         }
     }
 
-    fn try_build_proposal<P, Matching>(
+    fn try_build_proposal<P, Matching, Telemetry>(
         &mut self,
         cx: &mut Context<'_>,
         result: eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>,
-        handles: &mut SharedRoundState<P, Matching>
+        handles: &mut SharedRoundState<P, Matching, Telemetry>
     ) -> bool
     where
         P: Provider + Unpin + 'static,
-        Matching: MatchingEngineHandle
+        Matching: MatchingEngineHandle,
+        Telemetry: TelemetryHandle
     {
         self.last_round_info = Some(LastRoundInfo {
             time_to_complete: Instant::now().duration_since(self.trigger_time)
@@ -122,6 +124,11 @@ impl ProposalState {
             cx.waker().wake_by_ref();
         }
 
+        // We're right now ALWAYS going to log our block
+        if let Some(t) = handles.telemetry.as_ref() {
+            t.error(handles.block_height, "Default error".to_owned());
+        }
+
         let submission_future = Box::pin(async move {
             let Ok(tx_hash) = provider
                 .submit_tx(signer, possible_bundle, target_block)
@@ -162,14 +169,15 @@ impl ProposalState {
     }
 }
 
-impl<P, Matching> ConsensusState<P, Matching> for ProposalState
+impl<P, Matching, Telemetry> ConsensusState<P, Matching, Telemetry> for ProposalState
 where
     P: Provider + Unpin + 'static,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
     fn on_consensus_message(
         &mut self,
-        _: &mut SharedRoundState<P, Matching>,
+        _: &mut SharedRoundState<P, Matching, Telemetry>,
         _: StromConsensusEvent
     ) {
         // No messages at this point can effect the consensus round and thus are
@@ -178,9 +186,9 @@ where
 
     fn poll_transition(
         &mut self,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         cx: &mut Context<'_>
-    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>> {
+    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching, Telemetry>>>> {
         if let Some(mut b_fut) = self.matching_engine_future.take() {
             match b_fut.poll_unpin(cx) {
                 Poll::Ready(state) => {
@@ -214,5 +222,9 @@ where
 
     fn last_round_info(&mut self) -> Option<LastRoundInfo> {
         self.last_round_info.take()
+    }
+
+    fn name(&self) -> ConsensusRoundName {
+        ConsensusRoundName::Proposal
     }
 }

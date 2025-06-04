@@ -303,8 +303,15 @@ impl AnvilInitializer {
             .nonce(nonce)
             .deploy_pending()
             .await?;
+        // .await
+        // .inspect(|x| println!("Completed controller_configure_pool with hash {x}"));
         tracing::debug!("success: controller_configure_pool");
-        self.pending_state.add_pending_tx(controller_configure_pool);
+        let _ = self
+            .provider
+            .execute_then_mine(controller_configure_pool)
+            .await
+            .unwrap();
+        // self.pending_state.add_pending_tx(controller_configure_pool);
 
         tracing::debug!("initializing pool");
         let initialize_angstrom_pool = self
@@ -314,8 +321,15 @@ impl AnvilInitializer {
             .nonce(nonce + 1)
             .deploy_pending()
             .await?;
+        // .await
+        // .inspect(|x| println!("Completed initialize_angstrom_pool with hash {x}"));
         tracing::debug!("success: angstrom.initializePool");
-        self.pending_state.add_pending_tx(initialize_angstrom_pool);
+        // self.pending_state.add_pending_tx(initialize_angstrom_pool);
+        let _ = self
+            .provider
+            .execute_then_mine(initialize_angstrom_pool)
+            .await
+            .unwrap();
 
         tracing::debug!("tick spacing");
         let pool_gate = self
@@ -325,8 +339,11 @@ impl AnvilInitializer {
             .nonce(nonce + 2)
             .deploy_pending()
             .await?;
+        // .await
+        // .inspect(|x| println!("Completed pool_gate with hash {x}"));
         tracing::debug!("success: pool_gate");
-        self.pending_state.add_pending_tx(pool_gate);
+        // self.pending_state.add_pending_tx(pool_gate);
+        let _ = self.provider.execute_then_mine(pool_gate).await.unwrap();
 
         let tick = price.to_tick()?;
         let lowest_tick = I24::unchecked_from(tick - (pool_key.tickSpacing.as_i32() * 1000));
@@ -348,7 +365,9 @@ impl AnvilInitializer {
             .deploy_pending()
             .await?;
 
-        self.pending_state.add_pending_tx(add_liq);
+        let _ = self.provider.execute_then_mine(add_liq).await.unwrap();
+
+        // self.pending_state.add_pending_tx(add_liq);
 
         let lowest_tick = I24::unchecked_from(tick - (pool_key.tickSpacing.as_i32() * 2));
         let highest_tick = I24::unchecked_from(tick + (pool_key.tickSpacing.as_i32() * 2));
@@ -369,7 +388,8 @@ impl AnvilInitializer {
             .deploy_pending()
             .await?;
 
-        self.pending_state.add_pending_tx(add_liq);
+        let _ = self.provider.execute_then_mine(add_liq).await.unwrap();
+        // self.pending_state.add_pending_tx(add_liq);
 
         let low_aligned_tick =
             MIN_TICK + (pool_key.tickSpacing.as_i32() - (MIN_TICK % pool_key.tickSpacing.as_i32()));
@@ -391,7 +411,8 @@ impl AnvilInitializer {
             .deploy_pending()
             .await?;
 
-        self.pending_state.add_pending_tx(add_liq);
+        let _ = self.provider.execute_then_mine(add_liq).await.unwrap();
+        // self.pending_state.add_pending_tx(add_liq);
 
         self.rpc_provider().anvil_mine(Some(1), None).await?;
 

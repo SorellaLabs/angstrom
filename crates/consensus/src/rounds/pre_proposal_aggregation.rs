@@ -5,9 +5,11 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::manager::StromConsensusEvent;
-use angstrom_types::consensus::{PreProposal, PreProposalAggregation, Proposal};
+use angstrom_types::consensus::{
+    ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
+};
 use matching_engine::MatchingEngineHandle;
+use telemetry::client::TelemetryHandle;
 
 use super::{ConsensusState, SharedRoundState};
 use crate::rounds::{finalization::FinalizationState, proposal::ProposalState};
@@ -30,16 +32,17 @@ pub struct PreProposalAggregationState {
 }
 
 impl PreProposalAggregationState {
-    pub fn new<P, Matching>(
+    pub fn new<P, Matching, Telemetry>(
         pre_proposals: HashSet<PreProposal>,
         mut pre_proposals_aggregation: HashSet<PreProposalAggregation>,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         trigger_time: Instant,
         waker: Waker
     ) -> Self
     where
         P: Provider + Unpin + 'static,
-        Matching: MatchingEngineHandle
+        Matching: MatchingEngineHandle,
+        Telemetry: TelemetryHandle
     {
         // generate my pre_proposal aggregation
         let my_preproposal_aggregation = PreProposalAggregation::new(
@@ -62,14 +65,15 @@ impl PreProposalAggregationState {
     }
 }
 
-impl<P, Matching> ConsensusState<P, Matching> for PreProposalAggregationState
+impl<P, Matching, Telemetry> ConsensusState<P, Matching, Telemetry> for PreProposalAggregationState
 where
     P: Provider + Unpin + 'static,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
     fn on_consensus_message(
         &mut self,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         message: StromConsensusEvent
     ) {
         match message {
@@ -94,9 +98,9 @@ where
 
     fn poll_transition(
         &mut self,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         cx: &mut Context<'_>
-    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>> {
+    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching, Telemetry>>>> {
         // if we aren't the leader. we wait for the proposal to then verify in the
         // finalization state.
         if let Some(proposal) = self.proposal.take() {
@@ -126,5 +130,9 @@ where
         }
 
         Poll::Pending
+    }
+
+    fn name(&self) -> ConsensusRoundName {
+        ConsensusRoundName::PreProposalAggregation
     }
 }

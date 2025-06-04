@@ -86,6 +86,7 @@ impl TokenPriceGenerator {
                             .load_pool_data(Some(block_number), provider.clone())
                             .await
                             .expect("failed to load historical price for token price conversion");
+                        tracing::debug!(?pool_data, "Loaded data");
 
                         // price as ray
                         let price = pool_data.get_raw_price();
@@ -107,6 +108,7 @@ impl TokenPriceGenerator {
             })
             .await;
 
+        println!("{:#?}", pools);
         Ok(Self {
             prev_prices: pools,
             base_gas_token,
@@ -291,9 +293,11 @@ impl TokenPriceGenerator {
     /// returns price in GAS / t0
     pub fn get_eth_conversion_price(&self, token_0: Address, token_1: Address) -> Option<Ray> {
         let wei = if self.base_wei == 0 { 1e18 as u128 } else { self.base_wei };
-
-        self.get_conversion_rate(token_0, token_1)
-            .map(|val| val.mul_wad(wei, 18))
+        let rate = self
+            .get_conversion_rate(token_0, token_1)
+            .map(|val| val.mul_wad(wei, 18));
+        tracing::trace!(?token_0, ?token_1, ?rate, "Getting conversion rate");
+        rate
     }
 
     fn get_conversion_rate(&self, token_0: Address, token_1: Address) -> Option<Ray> {

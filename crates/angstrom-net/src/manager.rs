@@ -7,12 +7,9 @@ use std::{
     time::Duration
 };
 
-use alloy::primitives::{Address, BlockNumber, Bytes, FixedBytes};
+use alloy::primitives::{Address, FixedBytes};
 use angstrom_eth::manager::EthEvent;
-use angstrom_types::{
-    consensus::{PreProposal, PreProposalAggregation, Proposal},
-    primitive::PeerId
-};
+use angstrom_types::{consensus::StromConsensusEvent, primitive::PeerId};
 use futures::{FutureExt, StreamExt};
 use itertools::Itertools;
 use once_cell::unsync::Lazy;
@@ -408,43 +405,6 @@ pub enum StromNetworkEvent {
     PeerAdded(PeerId),
     /// Event emitted when a new peer is removed
     PeerRemoved(PeerId)
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum StromConsensusEvent {
-    PreProposal(Address, PreProposal),
-    PreProposalAgg(Address, PreProposalAggregation),
-    Proposal(Address, Proposal),
-    BundleUnlockAttestation(Address, u64, Bytes)
-}
-
-impl StromConsensusEvent {
-    pub fn message_type(&self) -> &'static str {
-        match self {
-            StromConsensusEvent::PreProposal(..) => "PreProposal",
-            StromConsensusEvent::PreProposalAgg(..) => "PreProposalAggregation",
-            StromConsensusEvent::Proposal(..) => "Proposal",
-            StromConsensusEvent::BundleUnlockAttestation(..) => "BundleUnlockAttestation"
-        }
-    }
-
-    pub fn sender(&self) -> Address {
-        match self {
-            StromConsensusEvent::PreProposal(peer_id, _)
-            | StromConsensusEvent::Proposal(peer_id, _)
-            | StromConsensusEvent::PreProposalAgg(peer_id, _)
-            | StromConsensusEvent::BundleUnlockAttestation(peer_id, ..) => *peer_id
-        }
-    }
-
-    pub fn block_height(&self) -> BlockNumber {
-        match self {
-            StromConsensusEvent::PreProposal(_, PreProposal { block_height, .. }) => *block_height,
-            StromConsensusEvent::PreProposalAgg(_, p) => p.block_height,
-            StromConsensusEvent::Proposal(_, Proposal { block_height, .. }) => *block_height,
-            StromConsensusEvent::BundleUnlockAttestation(_, block, _) => *block
-        }
-    }
 }
 
 impl From<StromConsensusEvent> for StromMessage {

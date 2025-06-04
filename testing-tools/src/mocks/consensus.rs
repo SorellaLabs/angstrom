@@ -1,8 +1,7 @@
 use std::time::Duration;
 
 use alloy::primitives::Address;
-use angstrom_network::manager::StromConsensusEvent;
-use angstrom_types::consensus::{PreProposal, Proposal};
+use angstrom_types::consensus::{PreProposal, Proposal, StromConsensusEvent};
 use tokio::{
     sync::{
         Mutex,

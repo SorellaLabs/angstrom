@@ -28,7 +28,15 @@ impl<P> AnvilProvider<P>
 where
     P: WithWalletProvider
 {
-    pub async fn new<F>(fut: F, testnet: bool) -> eyre::Result<Self>
+    pub fn new(
+        provider: AnvilStateProvider<P>,
+        anvil: Option<AnvilInstance>,
+        deployed_addresses: Option<DeployedAddresses>
+    ) -> Self {
+        Self { provider, _instance: anvil, deployed_addresses }
+    }
+
+    pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
     where
         F: Future<Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>>
     {
@@ -39,6 +47,7 @@ where
             deployed_addresses
         };
         if testnet {
+            tracing::debug!("Starting up block monitoring thread");
             let handle = tokio::runtime::Handle::current().clone();
             let sp = this.provider.as_wallet_state_provider();
             std::thread::spawn(move || handle.block_on(sp.listen_to_new_blocks()));

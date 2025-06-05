@@ -18,9 +18,10 @@ import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
 import {UnlockSwapFeeCollector} from "./UnlockSwapFeeCollector.sol";
 
 /// @dev Maximum fee that the `bundleFee` for any given pool should be settable to.
-uint256 constant MAX_UNLOCK_FEE_BPS = 0.4e6;
+uint256 constant MAX_UNLOCK_FEE_E6 = 0.4e6;
 
 /// @author philogy <https://github.com/philogy>
+/// @author Will Smith <https://github.com/Will-Smith11>
 abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
     using LPFeeLibrary for uint24;
     using SafeTransferLib for address;
@@ -46,15 +47,16 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
 
     mapping(address => bool) internal _isNode;
 
-    /// @dev Stores `(unlockedFee << 1) | isSet` in each word. `isSet = 1` means that `unlockedFee`
-    /// has a value, `isSet = 0` means that the pool is not currently configured.
-    mapping(StoreKey => uint256) private _unlockedFeePackedSet;
+    struct UnlockedFees {
+        uint24 unlockedFee;
+        uint24 protocolUnlockedFee;
+    }
+
+    /// @dev Stores the unlocked fees.
+    mapping(StoreKey => UnlockedFees) internal _unlockedFees;
 
     uint64 internal _lastBlockUpdated;
     PoolConfigStore internal _configStore;
-
-    mapping(address asset0 => mapping(address asset1 => uint32)) internal
-        _pairUnlockSwapProtocolFeeE6;
 
     constructor(address controller) {
         _controller = controller;
@@ -64,17 +66,6 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
     function setController(address newController) public override {
         _onlyController();
         _controller = newController;
-    }
-
-    function set_protocol_unlock_swap_fee_e6(
-        address asset0,
-        address asset1,
-        uint32 protocol_unlock_swap_fee_e6
-    ) external override {
-        _onlyController();
-        if (asset0 >= asset1) revert AssetsUnordered();
-        if (protocol_unlock_swap_fee_e6 >= 1e6) revert UnlockFeeAboveMax();
-        _pairUnlockSwapProtocolFeeE6[asset0][asset1] = protocol_unlock_swap_fee_e6;
     }
 
     function collect_unlock_swap_fees(address to, bytes calldata packed_assets) external override {
@@ -89,7 +80,8 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
         address asset1,
         uint16 tickSpacing,
         uint24 bundleFee,
-        uint24 unlockedFee
+        uint24 unlockedFee,
+        uint24 protocolUnlockedFee
     ) external override {
         _onlyController();
 
@@ -118,8 +110,11 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
 
         _configStore = PoolConfigStoreLib.store_from_buffer(buffer);
 
+        _unlockedFees[key] =
+            UnlockedFees({unlockedFee: unlockedFee, protocolUnlockedFee: protocolUnlockedFee});
+
+        protocolUnlockedFee.validate();
         unlockedFee.validate();
-        _setUnlockedFee(key, unlockedFee);
     }
 
     function initializePool(
@@ -150,7 +145,7 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
         buffer.remove_entry(key, store_index);
         _configStore = PoolConfigStoreLib.store_from_buffer(buffer);
 
-        _unsetUnlockedFee(key);
+        delete _unlockedFees[key];
     }
 
     function batchUpdatePools(PoolConfigStore expected_store, ConfigEntryUpdate[] calldata updates)
@@ -168,7 +163,14 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
             ConfigEntryUpdate calldata update = updates[i];
             buffer.entries[update.index] =
                 buffer.get(update.key, update.index).setBundleFee(update.bundleFee);
-            _setUnlockedFee(update.key, update.unlockedFee);
+
+            update.unlockedFee.validate();
+            update.protocolUnlockedFee.validate();
+
+            _unlockedFees[update.key] = UnlockedFees({
+                unlockedFee: update.unlockedFee,
+                protocolUnlockedFee: update.protocolUnlockedFee
+            });
         }
 
         _configStore = PoolConfigStoreLib.store_from_buffer(buffer);
@@ -210,22 +212,6 @@ abstract contract TopLevelAuth is EIP712, UniConsumer, IAngstromAuth {
 
     function _isUnlocked() internal view returns (bool) {
         return _lastBlockUpdated == block.number;
-    }
-
-    function _unsetUnlockedFee(StoreKey key) internal {
-        _unlockedFeePackedSet[key] = 0;
-    }
-
-    function _setUnlockedFee(StoreKey key, uint24 unlockedFee) internal {
-        if (unlockedFee > MAX_UNLOCK_FEE_BPS) revert UnlockFeeAboveMax();
-        _unlockedFeePackedSet[key] = (uint256(unlockedFee) << 1) | 1;
-    }
-
-    function _unlockedFee(address asset0, address asset1) internal view returns (uint24) {
-        StoreKey key = StoreKeyLib.keyFromAssetsUnchecked(asset0, asset1);
-        uint256 packed = _unlockedFeePackedSet[key];
-        if (packed & 1 == 0) revert UnlockedFeeNotSet(key);
-        return uint24(packed >> 1);
     }
 
     function _onlyController() internal view {

@@ -58,7 +58,9 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
         id = PoolIdLibrary.toId(poolKey());
 
         vm.prank(gov);
-        angstrom.configurePool(address(asset0), address(asset1), uint16(uint24(TICK_SPACING)), 0, 0);
+        angstrom.configurePool(
+            address(asset0), address(asset1), uint16(uint24(TICK_SPACING)), 0, 0, 0
+        );
 
         gate.setHook(address(angstrom));
         angstrom.initializePool(
@@ -119,13 +121,13 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
         uint128 totalLiq = liq1 + liq2;
         assertApproxEqRel(
             positionRewards(lp1, -180, 180, liq1),
-            amount1 + uint256(amount2) * liq1 / totalLiq,
+            amount1 + (uint256(amount2) * liq1) / totalLiq,
             1.0e18 / 1e12,
             "lp1"
         );
         assertApproxEqRel(
             positionRewards(lp2, -60, 60, liq2),
-            uint256(amount2) * liq2 / totalLiq,
+            (uint256(amount2) * liq2) / totalLiq,
             1.0e18 / 1e12,
             "lp2"
         );
@@ -135,13 +137,13 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
         handler.addLiquidity(lp3, -60, 60, liq3);
         assertApproxEqRel(
             positionRewards(lp1, -180, 180, liq1),
-            amount1 + uint256(amount2) * liq1 / totalLiq,
+            amount1 + (uint256(amount2) * liq1) / totalLiq,
             1.0e18 / 1e12,
             "lp1"
         );
         assertApproxEqRel(
             positionRewards(lp2, -60, 60, liq2),
-            uint256(amount2) * liq2 / totalLiq,
+            (uint256(amount2) * liq2) / totalLiq,
             1.0e18 / 1e12,
             "lp2"
         );
@@ -152,13 +154,13 @@ contract PoolUpdatesTest is HookDeployer, BaseTest {
         handler.rewardTicks(re(TickReward({tick: -180, amount: amount3})));
         assertApproxEqRel(
             positionRewards(lp1, -180, 180, liq1),
-            amount1 + amount3 + uint256(amount2) * liq1 / totalLiq,
+            amount1 + amount3 + (uint256(amount2) * liq1) / totalLiq,
             1.0e18 / 1e12,
             "lp1"
         );
         assertApproxEqRel(
             positionRewards(lp2, -60, 60, liq2),
-            uint256(amount2) * liq2 / totalLiq,
+            (uint256(amount2) * liq2) / totalLiq,
             1.0e18 / 1e12,
             "lp2"
         );

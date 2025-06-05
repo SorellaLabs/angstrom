@@ -368,7 +368,7 @@ contract SettlementTest is BaseTest {
 
     function enablePool(address asset0, address asset1) internal {
         vm.prank(controller);
-        angstrom.configurePool(asset0, asset1, 60, 0, 0);
+        angstrom.configurePool(asset0, asset1, 60, 0, 0, 0);
     }
 
     function addFee(Bundle memory bundle, address assetAddr, uint128 amount) internal {

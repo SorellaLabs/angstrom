@@ -5,7 +5,7 @@ import {BaseTest} from "test/_helpers/BaseTest.sol";
 import {PoolManager} from "v4-core/src/PoolManager.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {Angstrom} from "src/Angstrom.sol";
-import {TopLevelAuth, MAX_UNLOCK_FEE_BPS} from "src/modules/TopLevelAuth.sol";
+import {TopLevelAuth, MAX_UNLOCK_FEE_E6} from "src/modules/TopLevelAuth.sol";
 import {Bundle} from "test/_reference/Bundle.sol";
 import {Asset, AssetLib} from "test/_reference/Asset.sol";
 import {Pair, PairLib} from "test/_reference/Pair.sol";
@@ -69,7 +69,7 @@ contract AngstromTest is BaseTest {
         uint256 fee = 0.002e6;
 
         vm.prank(controller);
-        angstrom.configurePool(asset0, asset1, 1, uint24(fee), 0);
+        angstrom.configurePool(asset0, asset1, 1, uint24(fee), 0, 0);
 
         console.log("asset0: %s", asset0);
         console.log("asset1: %s", asset1);
@@ -189,13 +189,13 @@ contract AngstromTest is BaseTest {
 
         bytes memory unlockData = bytes.concat(bytes20(node.addr), r, s, bytes1(v));
 
-        unlockedFee = uint24(bound(unlockedFee, 0, MAX_UNLOCK_FEE_BPS));
+        unlockedFee = uint24(bound(unlockedFee, 0, MAX_UNLOCK_FEE_E6));
         swapAmount1 = bound(swapAmount1, 1e8, 10e18);
         swapAmount2 = bound(swapAmount2, 1e8, 10e18);
 
         uint248 liq = 100_000e21;
 
-        PoolKey memory pk = _createPool(60, unlockedFee, liq);
+        PoolKey memory pk = _createPool(60, unlockedFee, liq, 0);
 
         vm.prank(node.addr);
         angstrom.execute("");
@@ -214,22 +214,19 @@ contract AngstromTest is BaseTest {
         uint24 unlockedFee,
         uint256 swapAmount1,
         uint256 swapAmount2,
-        uint32 protocol_unlock_swap_fee_e6
+        uint24 protocol_unlock_swap_fee_e6
     ) public {
         uint64 bn = bound_block(bnInput);
         vm.roll(bn);
 
-        unlockedFee = uint24(bound(unlockedFee, 0, MAX_UNLOCK_FEE_BPS));
-        protocol_unlock_swap_fee_e6 = uint32(bound(protocol_unlock_swap_fee_e6, 0, 0.02e6));
+        unlockedFee = uint24(bound(unlockedFee, 0, MAX_UNLOCK_FEE_E6));
+        protocol_unlock_swap_fee_e6 = uint24(bound(protocol_unlock_swap_fee_e6, 0, 0.02e6));
         swapAmount1 = bound(swapAmount1, 1e8, 10e18);
         swapAmount2 = bound(swapAmount2, 1e8, 10e18);
 
         uint248 liq = 100_000e21;
 
-        PoolKey memory pk = _createPool(60, unlockedFee, liq);
-
-        vm.prank(controller);
-        angstrom.set_protocol_unlock_swap_fee_e6(asset0, asset1, protocol_unlock_swap_fee_e6);
+        PoolKey memory pk = _createPool(60, unlockedFee, liq, protocol_unlock_swap_fee_e6);
 
         vm.prank(node.addr);
         angstrom.execute("");
@@ -250,19 +247,21 @@ contract AngstromTest is BaseTest {
         console.log("here");
 
         uint256 effective_fee_share =
-            fee_collected * 1e18 / (uint128(withFeeOut1) + uint128(withFeeOut2) + fee_collected);
+            (fee_collected * 1e18) / (uint128(withFeeOut1) + uint128(withFeeOut2) + fee_collected);
 
         console.log("here? (%s)", protocol_unlock_swap_fee_e6);
 
         assertApproxEqRel(effective_fee_share, uint256(protocol_unlock_swap_fee_e6) * 1e12, 0.01e18);
     }
 
-    function _createPool(uint16 tickSpacing, uint24 unlockedFee, uint248 startLiquidity)
-        internal
-        returns (PoolKey memory pk)
-    {
+    function _createPool(
+        uint16 tickSpacing,
+        uint24 unlockedFee,
+        uint248 startLiquidity,
+        uint24 protocolUnlockedFee
+    ) internal returns (PoolKey memory pk) {
         vm.prank(controller);
-        angstrom.configurePool(asset0, asset1, tickSpacing, 0, unlockedFee);
+        angstrom.configurePool(asset0, asset1, tickSpacing, 0, unlockedFee, protocolUnlockedFee);
         angstrom.initializePool(asset0, asset1, 0, TickMath.getSqrtPriceAtTick(0));
         int24 spacing = int24(uint24(tickSpacing));
         pk = poolKey(angstrom, asset0, asset1, spacing);

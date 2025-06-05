@@ -568,7 +568,8 @@ pub mod test {
             asset1,
             bundleFee: fee,
             unlockedFee: fee,
-            tickSpacing: tick_spacing
+            tickSpacing: tick_spacing,
+            protocolUnlockedFee: fee
         };
         let configured_log =
             Log { address: periphery_addr, data: pool_configured.encode_log_data() };
@@ -847,14 +848,16 @@ pub mod test {
             asset1,
             bundleFee: fee,
             unlockedFee: fee,
-            tickSpacing: tick_spacing
+            tickSpacing: tick_spacing,
+            protocolUnlockedFee: U24::ZERO
         };
         let configure2 = PoolConfigured {
             asset0,
             asset1,
             bundleFee: fee,
             unlockedFee: fee,
-            tickSpacing: tick_spacing * 2 // Different spacing
+            tickSpacing: tick_spacing * 2,
+            protocolUnlockedFee: U24::ZERO
         };
         let remove = PoolRemoved {
             asset0,
@@ -926,7 +929,8 @@ pub mod test {
             asset1,
             bundleFee: fee,
             unlockedFee: fee,
-            tickSpacing: tick_spacing
+            tickSpacing: tick_spacing,
+            protocolUnlockedFee: U24::ZERO
         };
         let remove = PoolRemoved {
             asset0,

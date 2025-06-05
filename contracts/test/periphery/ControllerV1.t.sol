@@ -28,14 +28,14 @@ contract ControllerV1Test is BaseTest {
     function setUp() public {
         uni = new PoolManager(pm_owner);
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, temp_controller));
-        controller = new ControllerV1(angstrom, controller_owner);
+        controller = new ControllerV1(angstrom, controller_owner, controller_owner);
         vm.prank(temp_controller);
         angstrom.setController(address(controller));
     }
 
     function test_fuzzing_initializesOwner(address startingOwner) public {
         vm.assume(startingOwner != address(0));
-        ControllerV1 c = new ControllerV1(angstrom, startingOwner);
+        ControllerV1 c = new ControllerV1(angstrom, startingOwner, startingOwner);
         assertEq(c.owner(), startingOwner);
     }
 
@@ -116,9 +116,9 @@ contract ControllerV1Test is BaseTest {
         LibSort.sort(assets);
 
         vm.expectEmit(true, true, true, true);
-        emit ControllerV1.PoolConfigured(assets[0], assets[2], 100, 0, 0);
+        emit ControllerV1.PoolConfigured(assets[0], assets[2], 100, 0, 0, 0);
         vm.prank(controller_owner);
-        controller.configurePool(assets[0], assets[2], 100, 0, 0);
+        controller.configurePool(assets[0], assets[2], 100, 0, 0, 0);
 
         PoolConfigStore store = PoolConfigStore.wrap(rawGetConfigStore(address(angstrom)));
         assertEq(store.totalEntries(), 1);

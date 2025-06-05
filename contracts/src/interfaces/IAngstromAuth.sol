@@ -9,27 +9,31 @@ struct ConfigEntryUpdate {
     StoreKey key;
     uint24 bundleFee;
     uint24 unlockedFee;
+    uint24 protocolUnlockedFee;
 }
 
 interface IAngstromAuth {
     function setController(address newController) external;
-    function set_protocol_unlock_swap_fee_e6(
-        address asset0,
-        address asset1,
-        uint32 protcolUnlockFeeE6
-    ) external;
+
     function collect_unlock_swap_fees(address to, bytes calldata packed_assets) external;
+
     function configurePool(
         address assetA,
         address assetB,
         uint16 tickSpacing,
         uint24 bundleFee,
-        uint24 unlockedFee
+        uint24 unlockedFee,
+        uint24 protocolUnlockedFee
     ) external;
+
     function removePool(StoreKey key, PoolConfigStore expectedStore, uint256 storeIndex) external;
+
     function batchUpdatePools(PoolConfigStore expected_store, ConfigEntryUpdate[] calldata updates)
         external;
+
     function pullFee(address asset, uint256 amount) external;
+
     function toggleNodes(address[] calldata nodes) external;
+
     function extsload(uint256 slot) external view returns (uint256);
 }

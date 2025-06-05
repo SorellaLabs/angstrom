@@ -67,8 +67,8 @@ contract PoolRewardsTest is BaseTest {
         angstrom.toggleNodes(nodes);
 
         vm.startPrank(controller);
-        angstrom.configurePool(asset0, asset1, 60, 0, 0);
-        angstrom.configurePool(asset0, address(clearer), 1, 0, 0);
+        angstrom.configurePool(asset0, asset1, 60, 0, 0, 0);
+        angstrom.configurePool(asset0, address(clearer), 1, 0, 0, 0);
         vm.stopPrank();
         // Note hardcoded slot for `Angstrom.sol`, might be different for test derivations.
         configStore = rawGetConfigStore(address(angstrom));

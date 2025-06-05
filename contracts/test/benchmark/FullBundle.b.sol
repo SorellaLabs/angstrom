@@ -40,7 +40,7 @@ contract FullBundleBenchmark is BaseTest {
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, controller));
         (asset0, asset1) = deployTokensSorted();
         vm.startPrank(controller);
-        angstrom.configurePool(asset0, asset1, 60, 0, 0);
+        angstrom.configurePool(asset0, asset1, 60, 0, 0, 0);
         angstrom.toggleNodes(addressArray(abi.encode(node)));
         vm.stopPrank();
 

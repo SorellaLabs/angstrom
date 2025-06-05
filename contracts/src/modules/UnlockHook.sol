@@ -5,6 +5,7 @@ import {IBeforeSwapHook, IAfterSwapHook, SimplePoolKey} from "../interfaces/IHoo
 import {UniConsumer} from "./UniConsumer.sol";
 import {TopLevelAuth} from "./TopLevelAuth.sol";
 import {PoolConfigStoreLib} from "../libraries/PoolConfigStore.sol";
+import {StoreKey, StoreKeyLib} from "../types/StoreKey.sol";
 
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {BeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
@@ -12,6 +13,7 @@ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 
 /// @author philogy <https://github.com/philogy>
+/// @author Will Smith <https://github.com/Will-Smith11>
 abstract contract UnlockHook is UniConsumer, TopLevelAuth, IBeforeSwapHook, IAfterSwapHook {
     error UnlockDataTooShort();
     error CannotSwapWhileLocked();
@@ -26,7 +28,9 @@ abstract contract UnlockHook is UniConsumer, TopLevelAuth, IBeforeSwapHook, IAft
 
         if (!_isUnlocked()) {
             if (optionalUnlockData.length < 20) {
-                if (optionalUnlockData.length == 0) revert CannotSwapWhileLocked();
+                if (optionalUnlockData.length == 0) {
+                    revert CannotSwapWhileLocked();
+                }
                 revert UnlockDataTooShort();
             } else {
                 address node = address(bytes20(optionalUnlockData[:20]));
@@ -35,7 +39,10 @@ abstract contract UnlockHook is UniConsumer, TopLevelAuth, IBeforeSwapHook, IAft
             }
         }
 
-        swapFee = _unlockedFee(key.asset0, key.asset1) | LPFeeLibrary.OVERRIDE_FEE_FLAG;
+        StoreKey storeKey = StoreKeyLib.keyFromAssetsUnchecked(key.asset0, key.asset1);
+
+        swapFee = _unlockedFees[storeKey].unlockedFee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
+
         return (IBeforeSwapHook.beforeSwap.selector, BeforeSwapDelta.wrap(0), swapFee);
     }
 
@@ -48,12 +55,13 @@ abstract contract UnlockHook is UniConsumer, TopLevelAuth, IBeforeSwapHook, IAft
     ) external returns (bytes4, int128) {
         _onlyUniV4();
 
-        int32 fee_rate_e6 = int32(_pairUnlockSwapProtocolFeeE6[key.asset0][key.asset1]);
+        StoreKey storeKey = StoreKeyLib.keyFromAssetsUnchecked(key.asset0, key.asset1);
+        int24 fee_rate_e6 = int24(_unlockedFees[storeKey].protocolUnlockedFee);
         bool exactIn = params.amountSpecified < 0;
 
         int128 target_amount =
             exactIn != params.zeroForOne ? swap_delta.amount0() : swap_delta.amount1();
-        int128 fee = (target_amount < 0 ? -target_amount : target_amount) * fee_rate_e6 / 1e6;
+        int128 fee = ((target_amount < 0 ? -target_amount : target_amount) * fee_rate_e6) / 1e6;
 
         UNI_V4.mint(
             address(FEE_COLLECTOR),

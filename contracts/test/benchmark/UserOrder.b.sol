@@ -35,7 +35,7 @@ contract UserOrderBenchmarkTest is BaseTest {
         angstrom = OpenAngstrom(deployAngstrom(type(OpenAngstrom).creationCode, uni, controller));
         (asset0, asset1) = deployTokensSorted();
         vm.startPrank(controller);
-        angstrom.configurePool(asset0, asset1, 1, 0, 0);
+        angstrom.configurePool(asset0, asset1, 1, 0, 0, 0);
         angstrom.toggleNodes(addressArray(abi.encode(node)));
         vm.stopPrank();
     }

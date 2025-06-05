@@ -154,7 +154,9 @@ contract AngstromHandler is BaseTest {
                 asset1Index = (asset0Index + 1) % e.assets.length;
             }
         }
-        if (asset0Index > asset1Index) (asset0Index, asset1Index) = (asset1Index, asset0Index);
+        if (asset0Index > asset1Index) {
+            (asset0Index, asset1Index) = (asset1Index, asset0Index);
+        }
         tickSpacing =
             int24(bound(tickSpacing, TickMath.MIN_TICK_SPACING, TickMath.MAX_TICK_SPACING));
 
@@ -169,7 +171,7 @@ contract AngstromHandler is BaseTest {
 
         vm.prank(e.controller);
         e.angstrom.configurePool(
-            asset0, asset1, uint16(uint24(tickSpacing)), bundleFee, unlockedFee
+            asset0, asset1, uint16(uint24(tickSpacing)), bundleFee, unlockedFee, 0
         );
 
         _enabledAssets.add(asset0);
@@ -199,7 +201,9 @@ contract AngstromHandler is BaseTest {
             upperTick =
                 int24(bound(upperTick, minTick, maxTick)).normalizeUnchecked(pool.tickSpacing);
             vm.assume(lowerTick != upperTick);
-            if (upperTick < lowerTick) (lowerTick, upperTick) = (upperTick, lowerTick);
+            if (upperTick < lowerTick) {
+                (lowerTick, upperTick) = (upperTick, lowerTick);
+            }
         }
 
         {
@@ -568,8 +572,8 @@ contract AngstromHandler is BaseTest {
     }
 
     function _getBounds(int24 tickSpacing) internal pure returns (int24 minTick, int24 maxTick) {
-        minTick = TickMath.MIN_TICK / tickSpacing * tickSpacing;
-        maxTick = TickMath.MAX_TICK / tickSpacing * tickSpacing;
+        minTick = (TickMath.MIN_TICK / tickSpacing) * tickSpacing;
+        maxTick = (TickMath.MAX_TICK / tickSpacing) * tickSpacing;
     }
 
     function _getRewardableTicks(PoolId id, int24 tickSpacing)

@@ -26,8 +26,8 @@ contract BaseTestTest is BaseTest {
             "Default get config store mismatch real != open"
         );
         vm.startPrank(controller);
-        real.configurePool(address(1), address(2), 1, 0, 0);
-        open.configurePool(address(1), address(2), 1, 0, 0);
+        real.configurePool(address(1), address(2), 1, 0, 0, 0);
+        open.configurePool(address(1), address(2), 1, 0, 0, 0);
         vm.stopPrank();
 
         assertEq(

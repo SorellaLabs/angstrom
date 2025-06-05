@@ -72,6 +72,7 @@ where
             .execute_then_mine(ControllerV1::deploy(
                 inner.provider(),
                 angstrom_addr,
+                inner.controller(),
                 inner.controller()
             ))
             .await?

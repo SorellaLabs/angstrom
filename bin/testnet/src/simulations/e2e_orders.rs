@@ -352,7 +352,7 @@ pub mod test {
             tracing::info!("slept, adding pool now \n\n\n\n\n\n\n\n\n\n");
 
             let _ = controller_instance
-                .configurePool(pk.currency0, pk.currency1, 120, pk.fee, U24::ZERO)
+                .configurePool(pk.currency0, pk.currency1, 120, pk.fee, U24::ZERO, U24::ZERO)
                 .nonce(cnt + 1)
                 .send()
                 .await

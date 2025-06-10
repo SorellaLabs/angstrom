@@ -6,8 +6,9 @@ use alloy_chains::Chain;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{
     NetworkOrderEvent, StatusState, StromNetworkManager, StromProtocolHandler, StromSessionManager,
-    Swarm, VerificationSidecar, manager::StromConsensusEvent, state::StromState
+    Swarm, VerificationSidecar, state::StromState
 };
+use angstrom_types::consensus::StromConsensusEvent;
 pub use eth_peer::*;
 use parking_lot::RwLock;
 use reth_chainspec::Hardforks;

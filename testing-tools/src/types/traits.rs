@@ -14,6 +14,10 @@ pub trait GlobalTestingConfig: Debug + Clone + Send + Sync {
 
     fn fork_config(&self) -> Option<(u64, String)>;
 
+    /// Determines whether we should be performing testnet setup when we fork
+    /// our chain
+    fn use_testnet(&self) -> bool;
+
     fn config_type(&self) -> TestingConfigKind;
 
     fn anvil_rpc_endpoint(&self, node_id: u64) -> String;

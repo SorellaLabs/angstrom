@@ -1,6 +1,12 @@
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    cmp::max,
+    collections::{HashMap, VecDeque},
+    pin::Pin,
+    sync::Arc,
+    time::Duration
+};
 
-use alloy::primitives::Address;
+use alloy::{primitives::Address, providers::Provider};
 use alloy_rpc_types::BlockId;
 use angstrom::components::StromHandles;
 use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
@@ -15,9 +21,10 @@ use angstrom_rpc::{
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
+    consensus::ConsensusRoundName,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
-    primitive::UniswapPoolRegistry,
+    primitive::{PoolId, UniswapPoolRegistry},
     sol_bindings::testnet::TestnetHub,
     submission::SubmissionHandler,
     testnet::InitialTestnetState
@@ -29,6 +36,8 @@ use matching_engine::{MatchingManager, manager::MatcherHandle};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
+use telemetry::{NodeConstants, client::TelemetryClient, init_telemetry};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{Instrument, span};
 use uniswap_v4::configure_uniswap_manager;
 use validation::{
@@ -69,10 +78,12 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
         block_sync: GlobalBlockSync,
-        executor: TaskExecutor
+        executor: TaskExecutor,
+        state_updates: Option<UnboundedSender<ConsensusRoundName>>,
+        token_price_snapshot: Option<(HashMap<PoolId, VecDeque<PairsWithPrice>>, u128)>
     ) -> eyre::Result<(
         Self,
-        ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync>,
+        ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync, TelemetryClient>,
         TestOrderValidator<AnvilStateProvider<WalletProvider>>
     )>
     where
@@ -82,6 +93,12 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
         F: Clone
     {
+        let start_block = state_provider
+            .rpc_provider()
+            .get_block_number()
+            .await
+            .unwrap();
+        println!("Strom internals start block: {start_block}");
         let pool = strom_handles.get_pool_handle();
         let tx_strom_handles = (&strom_handles).into();
 
@@ -156,7 +173,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         tracing::debug!("spawned data cleaner");
 
-        let block_number = b.tip().number;
+        // See if we have an updated block number - only ever advance
+        let block_number = max(block_number, b.tip().number);
 
         block_sync.clear();
         block_sync.set_block(block_number);
@@ -166,6 +184,15 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
+        let node_constants = NodeConstants::new(
+            node_config.address(),
+            inital_angstrom_state.angstrom_addr,
+            inital_angstrom_state.pool_manager_addr,
+            block_number,
+            WETH_ADDRESS
+        );
+        let telemetry = init_telemetry(node_constants);
+
         let uniswap_pool_manager = configure_uniswap_manager(
             state_provider.rpc_provider().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
@@ -173,7 +200,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             block_number,
             block_sync.clone(),
             inital_angstrom_state.pool_manager_addr,
-            network_stream
+            network_stream,
+            Some(telemetry.clone())
         )
         .await;
         tracing::debug!("uniswap configured");
@@ -188,15 +216,26 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             )))
         );
 
-        let token_conversion = TokenPriceGenerator::new(
-            Arc::new(state_provider.rpc_provider()),
-            block_number,
-            uniswap_pools.clone(),
-            WETH_ADDRESS,
-            Some(1)
-        )
-        .await
-        .expect("failed to start price generator");
+        let token_conversion = if let Some((prev_prices, base_wei)) = token_price_snapshot {
+            println!("Using snapshot");
+            TokenPriceGenerator::from_snapshot(
+                uniswap_pools.clone(),
+                prev_prices,
+                WETH_ADDRESS,
+                base_wei
+            )
+        } else {
+            TokenPriceGenerator::new(
+                Arc::new(state_provider.rpc_provider()),
+                block_number,
+                uniswap_pools.clone(),
+                WETH_ADDRESS,
+                Some(1)
+            )
+            .await
+            .expect("failed to start price generator")
+        };
+        println!("{:#?}", token_conversion);
 
         let token_price_update_stream = state_provider.state_provider().canonical_state_stream();
         let token_price_update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
@@ -220,7 +259,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             token_conversion,
             token_price_update_stream,
             pool_storage.clone(),
-            node_config.node_id
+            node_config.node_id,
+            Some(telemetry.clone())
         )
         .await?;
 
@@ -236,7 +276,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             strom_network_handle.clone(),
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
-            block_sync.clone()
+            block_sync.clone(),
+            Some(telemetry.clone())
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -301,7 +342,9 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             mev_boost_provider,
             matching_handle,
             block_sync.clone(),
-            strom_handles.consensus_rx_rpc
+            strom_handles.consensus_rx_rpc,
+            Some(telemetry.clone()),
+            state_updates
         );
 
         // spin up amm quoter

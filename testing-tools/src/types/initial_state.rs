@@ -5,7 +5,10 @@ use alloy_primitives::{
 };
 use angstrom_types::{
     contract_bindings::{angstrom::Angstrom::PoolKey, mintable_mock_erc_20::MintableMockERC20},
-    matching::SqrtPriceX96
+    matching::SqrtPriceX96,
+    primitive::{
+        ANGSTROM_ADDRESS, CONTROLLER_V1_ADDRESS, POOL_MANAGER_ADDRESS, POSITION_MANAGER_ADDRESS
+    }
 };
 
 use crate::{
@@ -202,4 +205,22 @@ pub struct DeployedAddresses {
     pub position_fetcher_address: Address,
     pub pool_manager_address:     Address,
     pub position_manager_address: Address
+}
+
+impl DeployedAddresses {
+    pub fn from_globals(pool_gate_address: Address, position_fetcher_address: Address) -> Self {
+        let angstrom_address = ANGSTROM_ADDRESS.get().cloned().unwrap();
+        let controller_v1_address = CONTROLLER_V1_ADDRESS.get().cloned().unwrap();
+        let position_manager_address = POSITION_MANAGER_ADDRESS.get().cloned().unwrap();
+        let pool_manager_address = POOL_MANAGER_ADDRESS.get().cloned().unwrap();
+
+        Self {
+            angstrom_address,
+            pool_gate_address,
+            controller_v1_address,
+            position_fetcher_address,
+            pool_manager_address,
+            position_manager_address
+        }
+    }
 }

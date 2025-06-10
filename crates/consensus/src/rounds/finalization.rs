@@ -5,10 +5,10 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::manager::StromConsensusEvent;
-use angstrom_types::consensus::Proposal;
+use angstrom_types::consensus::{ConsensusRoundName, Proposal, StromConsensusEvent};
 use futures::{Future, FutureExt};
 use matching_engine::MatchingEngineHandle;
+use telemetry::client::TelemetryHandle;
 
 use super::{ConsensusState, SharedRoundState};
 
@@ -25,14 +25,15 @@ pub struct FinalizationState {
 }
 
 impl FinalizationState {
-    pub fn new<P, Matching>(
+    pub fn new<P, Matching, Telemetry>(
         proposal: Proposal,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         waker: Waker
     ) -> Self
     where
         P: Provider + Unpin + 'static,
-        Matching: MatchingEngineHandle
+        Matching: MatchingEngineHandle,
+        Telemetry: TelemetryHandle
     {
         let preproposal = proposal
             .preproposals()
@@ -75,14 +76,15 @@ impl FinalizationState {
     }
 }
 
-impl<P, Matching> ConsensusState<P, Matching> for FinalizationState
+impl<P, Matching, Telemetry> ConsensusState<P, Matching, Telemetry> for FinalizationState
 where
     P: Provider + Unpin + 'static,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
     fn on_consensus_message(
         &mut self,
-        _: &mut SharedRoundState<P, Matching>,
+        _: &mut SharedRoundState<P, Matching, Telemetry>,
         _: StromConsensusEvent
     ) {
         // no messages consensus related matter at this point. is just waiting
@@ -91,9 +93,9 @@ where
 
     fn poll_transition(
         &mut self,
-        _: &mut SharedRoundState<P, Matching>,
+        _: &mut SharedRoundState<P, Matching, Telemetry>,
         cx: &mut Context<'_>
-    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching>>>> {
+    ) -> Poll<Option<Box<dyn ConsensusState<P, Matching, Telemetry>>>> {
         if self.completed {
             return Poll::Ready(None);
         }
@@ -105,5 +107,9 @@ where
         }
 
         Poll::Pending
+    }
+
+    fn name(&self) -> ConsensusRoundName {
+        ConsensusRoundName::Finalization
     }
 }

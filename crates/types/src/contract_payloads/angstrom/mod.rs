@@ -1014,6 +1014,12 @@ impl AngstromBundle {
 #[derive(Debug, Hash, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub struct AngstromPoolPartialKey([u8; 27]);
 
+impl AngstromPoolPartialKey {
+    pub fn new(key: [u8; 27]) -> Self {
+        Self(key)
+    }
+}
+
 impl Deref for AngstromPoolPartialKey {
     type Target = [u8; 27];
 
@@ -1036,6 +1042,10 @@ pub struct AngstromPoolConfigStore {
 }
 
 impl AngstromPoolConfigStore {
+    pub fn from_entries(entries: DashMap<AngstromPoolPartialKey, AngPoolConfigEntry>) -> Self {
+        Self { entries }
+    }
+
     pub async fn load_from_chain<N, P>(
         angstrom_contract: Address,
         block_id: BlockId,

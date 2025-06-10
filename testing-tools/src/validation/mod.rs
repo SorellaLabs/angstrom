@@ -10,6 +10,7 @@ use alloy_primitives::{Address, U256};
 use angstrom_types::pair_with_price::PairsWithPrice;
 use futures::{FutureExt, Stream};
 use reth_provider::BlockNumReader;
+use telemetry::client::TelemetryClient;
 use tokio::sync::mpsc::UnboundedReceiver;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validation::{
@@ -43,7 +44,7 @@ where
     pub db:         Arc<DB>,
     pub node_id:    u64,
     pub client:     ValidationClient,
-    pub underlying: Validator<DB, AngstromPoolsTracker, AutoMaxFetchUtils>
+    pub underlying: Validator<DB, AngstromPoolsTracker, AutoMaxFetchUtils, TelemetryClient>
 }
 
 impl<DB> TestOrderValidator<DB>
@@ -61,7 +62,8 @@ where
         token_conversion: TokenPriceGenerator,
         token_updates: Pin<Box<dyn Stream<Item = (u128, Vec<PairsWithPrice>)> + Send + 'static>>,
         pool_storage: AngstromPoolsTracker,
-        node_id: u64
+        node_id: u64,
+        telemetry: Option<TelemetryClient>
     ) -> eyre::Result<Self> {
         let current_block = Arc::new(AtomicU64::new(BlockNumReader::best_block_number(&db)?));
         let db = Arc::new(db);
@@ -78,7 +80,13 @@ where
         let bundle_validator = BundleValidator::new(db.clone(), angstrom_address, node_address);
         let shared_utils = SharedTools::new(token_conversion, token_updates, thread_pool);
 
-        let val = Validator::new(validator_rx, order_validator, bundle_validator, shared_utils);
+        let val = Validator::new(
+            validator_rx,
+            order_validator,
+            bundle_validator,
+            shared_utils,
+            telemetry
+        );
 
         Ok(Self { db, client: validation_client, underlying: val, node_id })
     }

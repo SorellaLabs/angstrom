@@ -11,9 +11,10 @@ use alloy::{
     providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
-use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{PreProposal, PreProposalAggregation, Proposal},
+    consensus::{
+        ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
+    },
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
     orders::PoolSolution,
     primitive::AngstromSigner,
@@ -26,6 +27,7 @@ use itertools::Itertools;
 use matching_engine::MatchingEngineHandle;
 use order_pool::order_storage::OrderStorage;
 use preproposal_wait_trigger::{LastRoundInfo, PreProposalWaitTrigger};
+use telemetry::client::{TelemetryClient, TelemetryHandle};
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::AngstromValidator;
@@ -37,18 +39,19 @@ mod pre_proposal_aggregation;
 mod preproposal_wait_trigger;
 mod proposal;
 
+type PollTransition<P, Matching, Telemetry> =
+    Poll<Option<Box<dyn ConsensusState<P, Matching, Telemetry>>>>;
 pub use preproposal_wait_trigger::{MAX_WAIT_DURATION, MIN_WAIT_DURATION};
 
-type PollTransition<P, Matching> = Poll<Option<Box<dyn ConsensusState<P, Matching>>>>;
-
-pub trait ConsensusState<P, Matching>: Send
+pub trait ConsensusState<P, Matching, Telemetry = TelemetryClient>: Send
 where
     P: Provider + Unpin + 'static,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
     fn on_consensus_message(
         &mut self,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         message: StromConsensusEvent
     );
 
@@ -56,33 +59,36 @@ where
     /// round is over
     fn poll_transition(
         &mut self,
-        handles: &mut SharedRoundState<P, Matching>,
+        handles: &mut SharedRoundState<P, Matching, Telemetry>,
         cx: &mut Context<'_>
-    ) -> PollTransition<P, Matching>;
+    ) -> PollTransition<P, Matching, Telemetry>;
 
     fn last_round_info(&mut self) -> Option<LastRoundInfo> {
         None
     }
+
+    fn name(&self) -> ConsensusRoundName;
 }
 
 /// Holds and progresses the consensus state machine
-pub struct RoundStateMachine<P, Matching>
+pub struct RoundStateMachine<P, Matching, Telemetry: TelemetryHandle = TelemetryClient>
 where
     P: Provider + Unpin + 'static
 {
-    current_state:           Box<dyn ConsensusState<P, Matching>>,
+    current_state:           Box<dyn ConsensusState<P, Matching, Telemetry>>,
     /// for consensus, on a new block we wait a duration of time before signing
     /// our pre-proposal. this is the time
     consensus_wait_duration: PreProposalWaitTrigger,
-    shared_state:            SharedRoundState<P, Matching>
+    shared_state:            SharedRoundState<P, Matching, Telemetry>
 }
 
-impl<P, Matching> RoundStateMachine<P, Matching>
+impl<P, Matching, Telemetry> RoundStateMachine<P, Matching, Telemetry>
 where
     P: Provider + Unpin + 'static,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
-    pub fn new(shared_state: SharedRoundState<P, Matching>) -> Self {
+    pub fn new(shared_state: SharedRoundState<P, Matching, Telemetry>) -> Self {
         let mut consensus_wait_duration =
             PreProposalWaitTrigger::new(shared_state.order_storage.clone());
 
@@ -124,10 +130,11 @@ where
     }
 }
 
-impl<P, Matching> Stream for RoundStateMachine<P, Matching>
+impl<P, Matching, Telemetry> Stream for RoundStateMachine<P, Matching, Telemetry>
 where
     P: Provider + Unpin + 'static,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
     type Item = ConsensusMessage;
 
@@ -140,6 +147,8 @@ where
         {
             tracing::info!("transitioning to new round state");
             this.current_state = transitioned_state;
+            let name = this.current_state.name();
+            return Poll::Ready(Some(ConsensusMessage::StateChange(name)))
         }
 
         if let Some(message) = this.shared_state.messages.pop_front() {
@@ -150,7 +159,11 @@ where
     }
 }
 
-pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching> {
+pub struct SharedRoundState<
+    P: Provider + Unpin + 'static,
+    Matching,
+    Telemetry: TelemetryHandle = TelemetryClient
+> {
     block_height:    BlockNumber,
     matching_engine: Matching,
     signer:          AngstromSigner,
@@ -161,14 +174,16 @@ pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching> {
     pool_registry:   UniswapAngstromRegistry,
     uniswap_pools:   SyncedUniswapPools,
     provider:        Arc<SubmissionHandler<P>>,
-    messages:        VecDeque<ConsensusMessage>
+    messages:        VecDeque<ConsensusMessage>,
+    telemetry:       Option<Telemetry>
 }
 
 // contains shared impls
-impl<P, Matching> SharedRoundState<P, Matching>
+impl<P, Matching, Telemetry> SharedRoundState<P, Matching, Telemetry>
 where
     P: Provider + Unpin + 'static,
-    Matching: MatchingEngineHandle
+    Matching: MatchingEngineHandle,
+    Telemetry: TelemetryHandle
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -181,7 +196,8 @@ where
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
         provider: SubmissionHandler<P>,
-        matching_engine: Matching
+        matching_engine: Matching,
+        telemetry: Option<Telemetry>
     ) -> Self {
         Self {
             block_height,
@@ -194,7 +210,8 @@ where
             _metrics: metrics,
             matching_engine,
             messages: VecDeque::new(),
-            provider: Arc::new(provider)
+            provider: Arc::new(provider),
+            telemetry
         }
     }
 
@@ -347,9 +364,15 @@ where
 /// contracts don't currently contain them.
 #[derive(Debug, Clone)]
 pub enum ConsensusMessage {
+    /// Notification that the consensus state has changed
+    StateChange(ConsensusRoundName),
+    /// Command to propagate a PreProposal over the network
     PropagatePreProposal(PreProposal),
+    /// Command to propagate a PreProposal Aggregation over the network
     PropagatePreProposalAgg(PreProposalAggregation),
+    /// Command to propagate a Proposal over the network
     PropagateProposal(Proposal),
+    /// Command to propagate an Empty Block Attestatino over the network
     PropagateEmptyBlockAttestation(Bytes)
 }
 
@@ -379,8 +402,8 @@ pub mod tests {
         providers::{ProviderBuilder, RootProvider, fillers::*, network::Ethereum, *}
     };
     use angstrom_metrics::ConsensusMetricsWrapper;
-    use angstrom_network::manager::StromConsensusEvent;
     use angstrom_types::{
+        consensus::StromConsensusEvent,
         contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
         primitive::{AngstromSigner, UniswapPoolRegistry},
         submission::SubmissionHandler
@@ -464,7 +487,8 @@ pub mod tests {
             pool_registry,
             uniswap_pools,
             provider,
-            MockMatchingEngine {}
+            MockMatchingEngine {},
+            None
         );
         RoundStateMachine::new(shared_state)
     }

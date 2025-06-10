@@ -4,6 +4,7 @@ use alloy::{consensus::Transaction, primitives::Address, providers::Provider, so
 use futures::{Stream, StreamExt};
 use pade::PadeDecode;
 use reth_provider::CanonStateNotificationStream;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     contract_bindings::angstrom::Angstrom::executeCall,
@@ -11,7 +12,7 @@ use crate::{
 };
 
 /// represents the price settled on angstrom between two tokens
-#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct PairsWithPrice {
     pub token0:         Address,
     pub token1:         Address,

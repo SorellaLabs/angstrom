@@ -16,6 +16,7 @@ use angstrom_types::{
 use bundle::BundleValidator;
 use common::SharedTools;
 use futures::Stream;
+use telemetry::client::TelemetryHandle;
 use tokio::sync::mpsc::UnboundedReceiver;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validator::Validator;
@@ -37,7 +38,8 @@ const MAX_VALIDATION_PER_ADDR: usize = 1;
 
 #[allow(clippy::too_many_arguments)]
 pub fn init_validation<
-    DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync
+    DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync,
+    Telemetry: TelemetryHandle
 >(
     db: DB,
     current_block: u64,
@@ -47,7 +49,8 @@ pub fn init_validation<
     uniswap_pools: SyncedUniswapPools,
     price_generator: TokenPriceGenerator,
     pool_store: Arc<AngstromPoolConfigStore>,
-    validator_rx: UnboundedReceiver<ValidationRequest>
+    validator_rx: UnboundedReceiver<ValidationRequest>,
+    telemetry: Option<Telemetry>
 ) where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
@@ -76,7 +79,8 @@ pub fn init_validation<
         let shared_utils = SharedTools::new(price_generator, update_stream, thread_pool);
 
         rt.block_on(async {
-            Validator::new(validator_rx, order_validator, bundle_validator, shared_utils).await
+            Validator::new(validator_rx, order_validator, bundle_validator, shared_utils, telemetry)
+                .await
         })
     });
 }

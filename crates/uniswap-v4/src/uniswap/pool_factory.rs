@@ -53,6 +53,10 @@ where
         .await
     }
 
+    pub fn current_pool_keys(&self) -> Vec<PoolKey> {
+        self.registry.pools.values().cloned().collect()
+    }
+
     pub fn conversion_map(&self) -> &HashMap<PoolId, PoolId> {
         &self.registry.conversion_map
     }

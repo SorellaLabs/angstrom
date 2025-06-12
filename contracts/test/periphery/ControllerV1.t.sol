@@ -28,16 +28,14 @@ contract ControllerV1Test is BaseTest {
     function setUp() public {
         uni = new PoolManager(pm_owner);
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, temp_controller));
-        address[] memory nodes;
-        controller = new ControllerV1(angstrom, controller_owner, controller_owner, nodes);
+        controller = new ControllerV1(angstrom, controller_owner, controller_owner);
         vm.prank(temp_controller);
         angstrom.setController(address(controller));
     }
 
     function test_fuzzing_initializesOwner(address startingOwner) public {
         vm.assume(startingOwner != address(0));
-        address[] memory nodes;
-        ControllerV1 c = new ControllerV1(angstrom, startingOwner, startingOwner, nodes);
+        ControllerV1 c = new ControllerV1(angstrom, startingOwner, startingOwner);
         assertEq(c.owner(), startingOwner);
     }
 

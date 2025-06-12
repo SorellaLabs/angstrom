@@ -48,8 +48,6 @@ contract ControllerV1 is Ownable {
         address indexed asset0, address indexed asset1, int24 tickSpacing, uint24 feeInE6
     );
 
-    event PoolProtocolUnlockSwapFeeSet(address indexed asset0, address indexed asset1, uint32 fee);
-
     event NodeAdded(address indexed node);
     event NodeRemoved(address indexed node);
 
@@ -77,22 +75,23 @@ contract ControllerV1 is Ownable {
     mapping(StoreKey key => uint256 maybeIndex) internal _poolIndices;
 
     address public immutable fastOwner;
+    bool internal hasSetInit;
 
-    constructor(
-        IAngstromAuth angstrom,
-        address initialOwner,
-        address _fastOwner,
-        address[] memory initNodes
-    ) {
+    constructor(IAngstromAuth angstrom, address initialOwner, address _fastOwner) {
         _initializeOwner(initialOwner);
         ANGSTROM = angstrom;
         fastOwner = _fastOwner;
+    }
+
+    function initStartNodes(address[] memory initNodes) public {
+        if (hasSetInit) return;
+        hasSetInit = true;
 
         for (uint256 i = 0; i < initNodes.length; i++) {
             address node = initNodes[i];
             if (!_nodes.add(node)) revert AlreadyNode();
-            emit NodeAdded(node);
             _toggle(node);
+            emit NodeAdded(node);
         }
     }
 

@@ -183,6 +183,7 @@ where
             .receipts_by_block_hash(chain.tip_hash())
             .unwrap_or_default()
             .into_iter()
+            .filter(|r| r.success)
             .flat_map(|receipt| &receipt.logs)
             .filter(|log| log.address == periphery_address)
             .for_each(|log| {
@@ -257,7 +258,7 @@ where
         &'a self,
         chain: &'a impl ChainExt
     ) -> impl Iterator<Item = B256> + 'a {
-        let tip_txs = chain.tip_transactions().cloned();
+        let tip_txs = chain.successful_tip_transactions().cloned();
 
         tip_txs
             .filter(|tx| tx.to() == Some(self.angstrom_address))

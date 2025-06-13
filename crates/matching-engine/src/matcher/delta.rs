@@ -104,6 +104,24 @@ impl<'a> DeltaMatcher<'a> {
         self.amm_start_location.as_ref().unwrap()
     }
 
+    fn process_swap(&self, is_bid: bool, res: PoolSwapResult<'_>) -> (I256, I256) {
+        if is_bid {
+            // if the amm is swapping from zero to one, it means that we need more liquidity
+            // it in token 1 and less in token zero
+            (
+                I256::try_from(res.total_d_t0).unwrap() * I256::MINUS_ONE,
+                I256::try_from(res.total_d_t1).unwrap()
+            )
+        } else {
+            // if we are one for zero, means we are adding liquidity in t0 and removing in
+            // t1
+            (
+                I256::try_from(res.total_d_t0).unwrap(),
+                I256::try_from(res.total_d_t1).unwrap() * I256::MINUS_ONE
+            )
+        }
+    }
+
     fn fetch_concentrated_liquidity(&self, price: Ray) -> (I256, I256) {
         let end_sqrt = if price.within_sqrt_price_bounds() {
             SqrtPriceX96::from(price)
@@ -127,30 +145,7 @@ impl<'a> DeltaMatcher<'a> {
             return Default::default();
         };
 
-        trace!(
-            ?start_sqrt,
-            ?end_sqrt,
-            ?price,
-            res.total_d_t0,
-            res.total_d_t1,
-            is_bid,
-            "AMM swap calc"
-        );
-        if is_bid {
-            // if the amm is swapping from zero to one, it means that we need more liquidity
-            // it in token 1 and less in token zero
-            (
-                I256::try_from(res.total_d_t0).unwrap() * I256::MINUS_ONE,
-                I256::try_from(res.total_d_t1).unwrap()
-            )
-        } else {
-            // if we are one for zero, means we are adding liquidity in t0 and removing in
-            // t1
-            (
-                I256::try_from(res.total_d_t0).unwrap(),
-                I256::try_from(res.total_d_t1).unwrap() * I256::MINUS_ONE
-            )
-        }
+        self.process_swap(is_bid, res)
     }
 
     /// Combined method that finds total order liquidity available at a price.
@@ -636,6 +631,83 @@ impl<'a> DeltaMatcher<'a> {
             reward_t0: price_and_partial_solution.reward_t0,
             fee: self.fee as u32
         }
+    }
+
+    fn fetch_lower_upper_liq_bounds(&self, solve_for_t0: bool, price: Ray) -> Option<(I256)> {
+        let end_mid_sqrt = if price.within_sqrt_price_bounds() {
+            SqrtPriceX96::from(price)
+        } else {
+            return None;
+        };
+
+        let end_upper_sqrt = end_mid_sqrt + SqrtPriceX96::from(U256_1);
+        let end_lower_sqrt = end_mid_sqrt - SqrtPriceX96::from(U256_1);
+
+        let Some(pool) = self.amm_start_location.as_ref() else { return Default::default() };
+        let start_sqrt = pool.end_price;
+
+        // If the AMM price is decreasing, it is because the AMM is accepting T0 from
+        // the contract.  An order that purchases T0 from the contract is a bid
+        let is_bid = start_sqrt >= end_sqrt;
+
+        // swap to start
+        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_sqrt) else {
+            return Default::default();
+        };
+
+        self.process_swap(is_bid, res);
+    }
+
+    fn try_solve_dust_solution(
+        &self,
+        stats: &CheckUcpStats,
+        res: &SupplyDemandResult,
+        p_mid: Ray,
+        dust: Option<&(U256, UcpSolution)>,
+        killed: &HashSet<OrderId>
+    ) -> Option<(U256, UcpSolution)> {
+        // while this works. Dusting should actually be bounding by the limitation of
+        // the amm's SqrtPriceX96 precision.
+
+        // check lower
+        let (total_liq, price_for_one) = if self.solve_for_t0 {
+            (stats.amm_t0 + stats.order_t0, p_mid.price_of(Quantity::Token1(1), false))
+        } else {
+            (stats.amm_t1 + stats.order_t1, p_mid.price_of(Quantity::Token0(1), false))
+        };
+
+        trace!(?total_liq, price_for_one, "Calculating for dust");
+
+        if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
+            // Check to see if our excess is within one price unit
+            if e < U256::from(price_for_one) {
+                trace!("Valid dust solution found");
+                // We have a dust solution, let's store it
+                let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
+                if e < dust_q {
+                    let (partial_fills, reward_t0) = if let SupplyDemandResult::PartialFillEq {
+                        bid_fill_q,
+                        ask_fill_q,
+                        reward_t0
+                    } = res
+                    {
+                        (Some((*bid_fill_q, *ask_fill_q)), *reward_t0)
+                    } else {
+                        (None, 0_u128)
+                    };
+                    let solution = UcpSolution {
+                        ucp: p_mid,
+                        killed: killed.clone(),
+                        partial_fills,
+                        reward_t0
+                    };
+
+                    return Some((e, solution));
+                }
+            }
+        }
+
+        None
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

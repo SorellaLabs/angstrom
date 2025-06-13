@@ -280,6 +280,8 @@ impl<'a> DeltaMatcher<'a> {
         if total_elim >= min_target { (total_elim, order_ids) } else { (0_u128, None) }
     }
 
+    fn calculate_pro_rata_remaining_ucp(&self, price: &Ray) -> Option<u128> {}
+
     fn check_ucp(
         &self,
         price: Ray,
@@ -335,7 +337,7 @@ impl<'a> DeltaMatcher<'a> {
         // We should see if we can fix our excess liquidity to be within the realm of
         // our add?
 
-        // Option<(bid_partial_fill, ask_partial_fill)
+        // Option<(bid_partial_fill, ask_partial_fill)>
         let (bid_fill_q, ask_fill_q, reward_t0) = if excess_liquidity.is_negative() {
             // If our available fill is not enough to resolve our excess liquidity, we can
             // end here
@@ -678,6 +680,7 @@ impl<'a> DeltaMatcher<'a> {
                 (stats.amm_t1 + stats.order_t1, p_mid.price_of(Quantity::Token0(1), false))
             };
             trace!(?total_liq, price_for_one, "Calculating for dust");
+
             if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
                 // Check to see if our excess is within one price unit
                 if e < U256::from(price_for_one) {
@@ -726,7 +729,18 @@ impl<'a> DeltaMatcher<'a> {
                 (SupplyDemandResult::MoreSupply(_), _, false)
                 | (SupplyDemandResult::MoreDemand(_), _, true) => p_min = p_mid,
                 (SupplyDemandResult::NaturallyEqual, ..) => {
-                    debug!(ucp = ?p_mid, partial = false, reward_t0 = 0_u128, ?stats.amm_t0, ?stats.amm_t1, ?stats.order_t0, ?stats.order_t1, ?stats.order_bid_slack, ?stats.order_ask_slack, "Pool solution found");
+                    debug!(
+                        ucp = ?p_mid,
+                        partial = false,
+                        reward_t0 = 0_u128,
+                        ?stats.amm_t0,
+                        ?stats.amm_t1,
+                        ?stats.order_t0,
+                        ?stats.order_t1,
+                        ?stats.order_bid_slack,
+                        ?stats.order_ask_slack,
+                        "Pool solution found"
+                    );
                     return Some(UcpSolution {
                         ucp: p_mid,
                         killed,
@@ -735,7 +749,18 @@ impl<'a> DeltaMatcher<'a> {
                     });
                 }
                 (SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 }, ..) => {
-                    debug!(ucp = ?p_mid, partial = true, reward_t0, ?stats.amm_t0, ?stats.amm_t1, ?stats.order_t0, ?stats.order_t1, ?stats.order_bid_slack, ?stats.order_ask_slack, "Pool solution found");
+                    debug!(
+                        ucp = ?p_mid,
+                        partial = true,
+                        reward_t0,
+                        ?stats.amm_t0,
+                        ?stats.amm_t1,
+                        ?stats.order_t0,
+                        ?stats.order_t1,
+                        ?stats.order_bid_slack,
+                        ?stats.order_ask_slack,
+                        "Pool solution found"
+                    );
                     return Some(UcpSolution {
                         ucp: p_mid,
                         killed,

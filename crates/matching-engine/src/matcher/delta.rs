@@ -104,6 +104,24 @@ impl<'a> DeltaMatcher<'a> {
         self.amm_start_location.as_ref().unwrap()
     }
 
+    fn process_swap(&self, is_bid: bool, res: PoolSwapResult<'_>) -> (I256, I256) {
+        if is_bid {
+            // if the amm is swapping from zero to one, it means that we need more liquidity
+            // it in token 1 and less in token zero
+            (
+                I256::try_from(res.total_d_t0).unwrap() * I256::MINUS_ONE,
+                I256::try_from(res.total_d_t1).unwrap()
+            )
+        } else {
+            // if we are one for zero, means we are adding liquidity in t0 and removing in
+            // t1
+            (
+                I256::try_from(res.total_d_t0).unwrap(),
+                I256::try_from(res.total_d_t1).unwrap() * I256::MINUS_ONE
+            )
+        }
+    }
+
     fn fetch_concentrated_liquidity(&self, price: Ray) -> (I256, I256) {
         let end_sqrt = if price.within_sqrt_price_bounds() {
             SqrtPriceX96::from(price)
@@ -127,30 +145,7 @@ impl<'a> DeltaMatcher<'a> {
             return Default::default();
         };
 
-        trace!(
-            ?start_sqrt,
-            ?end_sqrt,
-            ?price,
-            res.total_d_t0,
-            res.total_d_t1,
-            is_bid,
-            "AMM swap calc"
-        );
-        if is_bid {
-            // if the amm is swapping from zero to one, it means that we need more liquidity
-            // it in token 1 and less in token zero
-            (
-                I256::try_from(res.total_d_t0).unwrap() * I256::MINUS_ONE,
-                I256::try_from(res.total_d_t1).unwrap()
-            )
-        } else {
-            // if we are one for zero, means we are adding liquidity in t0 and removing in
-            // t1
-            (
-                I256::try_from(res.total_d_t0).unwrap(),
-                I256::try_from(res.total_d_t1).unwrap() * I256::MINUS_ONE
-            )
-        }
+        self.process_swap(is_bid, res)
     }
 
     /// Combined method that finds total order liquidity available at a price.
@@ -280,6 +275,10 @@ impl<'a> DeltaMatcher<'a> {
         if total_elim >= min_target { (total_elim, order_ids) } else { (0_u128, None) }
     }
 
+    fn calculate_pro_rata_remaining_ucp(&self, price: &Ray) -> Option<u128> {
+        None
+    }
+
     fn check_ucp(
         &self,
         price: Ray,
@@ -335,7 +334,7 @@ impl<'a> DeltaMatcher<'a> {
         // We should see if we can fix our excess liquidity to be within the realm of
         // our add?
 
-        // Option<(bid_partial_fill, ask_partial_fill)
+        // Option<(bid_partial_fill, ask_partial_fill)>
         let (bid_fill_q, ask_fill_q, reward_t0) = if excess_liquidity.is_negative() {
             // If our available fill is not enough to resolve our excess liquidity, we can
             // end here
@@ -636,6 +635,109 @@ impl<'a> DeltaMatcher<'a> {
         }
     }
 
+    /// For all cases, because of the precision RAY offers, we will overshoot
+    /// the amm a lot, this means that there is a solution with the amm were
+    /// we don't solve because amm doesn't have the same precision as ray.
+    /// There are also other cases were Ray itself doesn't have the
+    /// precision. In these cases, this amount will always be less than 1 unit
+    /// delta of SqrtPriceX96. because of this, we assume that any dusting
+    /// within the bounds of 1 SqrtPriceX96 unit to be valid solution.
+    fn fetch_lower_upper_liq_bounds(&self, price: Ray, stats: &CheckUcpStats) -> Option<U256> {
+        let end_mid_sqrt = if price.within_sqrt_price_bounds() {
+            SqrtPriceX96::from(price)
+        } else {
+            return None;
+        };
+
+        let end_upper_sqrt = end_mid_sqrt + SqrtPriceX96::from(U256_1);
+        let end_lower_sqrt = end_mid_sqrt - SqrtPriceX96::from(U256_1);
+
+        let Some(pool) = self.amm_start_location.as_ref() else { return Default::default() };
+        let start_sqrt = pool.end_price;
+
+        // Handle upper.
+        let is_bid = start_sqrt >= end_upper_sqrt;
+        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_upper_sqrt) else {
+            return Default::default();
+        };
+        let (t0_upper, t1_upper) = self.process_swap(is_bid, res);
+
+        // Handle lower.
+        let is_bid = start_sqrt >= end_lower_sqrt;
+        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_lower_sqrt) else {
+            return Default::default();
+        };
+        let (t0_lower, t1_lower) = self.process_swap(is_bid, res);
+
+        // we take the biggest 1 SqrtPriceX96 unit move and return this
+        (if self.solve_for_t0 {
+            let (t0_upper, t0, t0_lower) = (t0_upper.abs(), stats.amm_t0.abs(), t0_lower.abs());
+            // we take the max of upper lower
+            if t0_upper > t0 {
+                Some((t0_upper - t0).max(t0 - t0_lower))
+            } else {
+                Some((t0 - t0_upper).max(t0_lower - t0))
+            }
+        } else {
+            let (t1_upper, t1, t1_lower) = (t1_upper.abs(), stats.amm_t1.abs(), t1_lower.abs());
+            if t1_upper > t1 {
+                Some((t1_upper - t1).max(t1 - t1_lower))
+            } else {
+                Some((t1 - t1_upper).max(t1_lower - t1))
+            }
+        })
+        .map(|int| int.into_raw())
+    }
+
+    fn try_solve_dust_solution(
+        &self,
+        stats: &CheckUcpStats,
+        res: &SupplyDemandResult,
+        p_mid: Ray,
+        dust: Option<&(U256, UcpSolution)>,
+        killed: &HashSet<OrderId>
+    ) -> Option<(U256, UcpSolution)> {
+        // while this works. Dusting should actually be bounding by the limitation of
+        // the amm's SqrtPriceX96 precision.
+
+        let (total_liq, price_for_one) = if self.solve_for_t0 {
+            (stats.amm_t0 + stats.order_t0, self.fetch_lower_upper_liq_bounds(p_mid, stats)?)
+        } else {
+            (stats.amm_t1 + stats.order_t1, self.fetch_lower_upper_liq_bounds(p_mid, stats)?)
+        };
+
+        if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
+            // Check to see if our excess is within one price unit
+            if e <= price_for_one {
+                trace!("Valid dust solution found");
+                // We have a dust solution, let's store it
+                let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
+                if e < dust_q {
+                    let (partial_fills, reward_t0) = if let SupplyDemandResult::PartialFillEq {
+                        bid_fill_q,
+                        ask_fill_q,
+                        reward_t0
+                    } = res
+                    {
+                        (Some((*bid_fill_q, *ask_fill_q)), *reward_t0)
+                    } else {
+                        (None, 0_u128)
+                    };
+                    let solution = UcpSolution {
+                        ucp: p_mid,
+                        killed: killed.clone(),
+                        partial_fills,
+                        reward_t0
+                    };
+
+                    return Some((e, solution));
+                }
+            }
+        }
+
+        None
+    }
+
     #[tracing::instrument(level = "debug", skip(self))]
     fn solve_clearing_price(&self) -> Option<UcpSolution> {
         // p_max is (highest bid || (MAX_PRICE - 1)) + 1
@@ -672,39 +774,10 @@ impl<'a> DeltaMatcher<'a> {
 
             // Check to see if we've found a valid dust solution that is better than our
             // current dust solution if it exists
-            let (total_liq, price_for_one) = if self.solve_for_t0 {
-                (stats.amm_t0 + stats.order_t0, p_mid.price_of(Quantity::Token1(1), false))
-            } else {
-                (stats.amm_t1 + stats.order_t1, p_mid.price_of(Quantity::Token0(1), false))
-            };
-            trace!(?total_liq, price_for_one, "Calculating for dust");
-            if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
-                // Check to see if our excess is within one price unit
-                if e < U256::from(price_for_one) {
-                    trace!("Valid dust solution found");
-                    // We have a dust solution, let's store it
-                    let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
-                    if e < dust_q {
-                        let (partial_fills, reward_t0) =
-                            if let SupplyDemandResult::PartialFillEq {
-                                bid_fill_q,
-                                ask_fill_q,
-                                reward_t0
-                            } = res
-                            {
-                                (Some((bid_fill_q, ask_fill_q)), reward_t0)
-                            } else {
-                                (None, 0_u128)
-                            };
-                        let solution = UcpSolution {
-                            ucp: p_mid,
-                            killed: killed.clone(),
-                            partial_fills,
-                            reward_t0
-                        };
-                        dust = Some((e, solution))
-                    }
-                }
+            if let Some(new_dust) =
+                self.try_solve_dust_solution(&stats, &res, p_mid, dust.as_ref(), &killed)
+            {
+                dust = Some(new_dust);
             }
 
             match (res, can_kill, self.solve_for_t0) {
@@ -726,7 +799,18 @@ impl<'a> DeltaMatcher<'a> {
                 (SupplyDemandResult::MoreSupply(_), _, false)
                 | (SupplyDemandResult::MoreDemand(_), _, true) => p_min = p_mid,
                 (SupplyDemandResult::NaturallyEqual, ..) => {
-                    debug!(ucp = ?p_mid, partial = false, reward_t0 = 0_u128, ?stats.amm_t0, ?stats.amm_t1, ?stats.order_t0, ?stats.order_t1, ?stats.order_bid_slack, ?stats.order_ask_slack, "Pool solution found");
+                    debug!(
+                        ucp = ?p_mid,
+                        partial = false,
+                        reward_t0 = 0_u128,
+                        ?stats.amm_t0,
+                        ?stats.amm_t1,
+                        ?stats.order_t0,
+                        ?stats.order_t1,
+                        ?stats.order_bid_slack,
+                        ?stats.order_ask_slack,
+                        "Pool solution found"
+                    );
                     return Some(UcpSolution {
                         ucp: p_mid,
                         killed,
@@ -735,7 +819,18 @@ impl<'a> DeltaMatcher<'a> {
                     });
                 }
                 (SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 }, ..) => {
-                    debug!(ucp = ?p_mid, partial = true, reward_t0, ?stats.amm_t0, ?stats.amm_t1, ?stats.order_t0, ?stats.order_t1, ?stats.order_bid_slack, ?stats.order_ask_slack, "Pool solution found");
+                    debug!(
+                        ucp = ?p_mid,
+                        partial = true,
+                        reward_t0,
+                        ?stats.amm_t0,
+                        ?stats.amm_t1,
+                        ?stats.order_t0,
+                        ?stats.order_t1,
+                        ?stats.order_bid_slack,
+                        ?stats.order_ask_slack,
+                        "Pool solution found"
+                    );
                     return Some(UcpSolution {
                         ucp: p_mid,
                         killed,

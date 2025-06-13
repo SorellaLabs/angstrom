@@ -633,7 +633,14 @@ impl<'a> DeltaMatcher<'a> {
         }
     }
 
-    fn fetch_lower_upper_liq_bounds(&self, solve_for_t0: bool, price: Ray) -> Option<(I256)> {
+    /// For all cases, because of the precision RAY offers, we will overshoot
+    /// the amm a lot, this means that there is a solution with the amm were
+    /// we don't solve because amm doesn't have the same precision as ray.
+    /// There are also other cases were Ray itself doesn't have the
+    /// precision. In these cases, this amount will always be less than 1 unit
+    /// delta of SqrtPriceX96. because of this, we assume that any dusting
+    /// within the bounds of 1 SqrtPriceX96 unit to be valid solution.
+    fn fetch_lower_upper_liq_bounds(&self, price: Ray, stats: &CheckUcpStats) -> Option<U256> {
         let end_mid_sqrt = if price.within_sqrt_price_bounds() {
             SqrtPriceX96::from(price)
         } else {
@@ -646,16 +653,38 @@ impl<'a> DeltaMatcher<'a> {
         let Some(pool) = self.amm_start_location.as_ref() else { return Default::default() };
         let start_sqrt = pool.end_price;
 
-        // If the AMM price is decreasing, it is because the AMM is accepting T0 from
-        // the contract.  An order that purchases T0 from the contract is a bid
-        let is_bid = start_sqrt >= end_sqrt;
-
-        // swap to start
-        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_sqrt) else {
+        // Handle upper.
+        let is_bid = start_sqrt >= end_upper_sqrt;
+        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_upper_sqrt) else {
             return Default::default();
         };
+        let (t0_upper, t1_upper) = self.process_swap(is_bid, res);
 
-        self.process_swap(is_bid, res);
+        // Handle lower.
+        let is_bid = start_sqrt >= end_lower_sqrt;
+        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_lower_sqrt) else {
+            return Default::default();
+        };
+        let (t0_lower, t1_lower) = self.process_swap(is_bid, res);
+
+        // we take the biggest 1 SqrtPriceX96 unit move and return this
+        (if self.solve_for_t0 {
+            let (t0_upper, t0, t0_lower) = (t0_upper.abs(), stats.amm_t0.abs(), t0_lower.abs());
+            // we take the max of upper lower
+            if t0_upper > t0 {
+                Some((t0_upper - t0).max(t0 - t0_lower))
+            } else {
+                Some((t0 - t0_upper).max(t0_lower - t0))
+            }
+        } else {
+            let (t1_upper, t1, t1_lower) = (t1_upper.abs(), stats.amm_t1.abs(), t1_lower.abs());
+            if t1_upper > t1 {
+                Some((t1_upper - t1).max(t1 - t1_lower))
+            } else {
+                Some((t1 - t1_upper).max(t1_lower - t1))
+            }
+        })
+        .map(|int| int.into_raw())
     }
 
     fn try_solve_dust_solution(
@@ -669,18 +698,15 @@ impl<'a> DeltaMatcher<'a> {
         // while this works. Dusting should actually be bounding by the limitation of
         // the amm's SqrtPriceX96 precision.
 
-        // check lower
         let (total_liq, price_for_one) = if self.solve_for_t0 {
-            (stats.amm_t0 + stats.order_t0, p_mid.price_of(Quantity::Token1(1), false))
+            (stats.amm_t0 + stats.order_t0, self.fetch_lower_upper_liq_bounds(p_mid, stats)?)
         } else {
-            (stats.amm_t1 + stats.order_t1, p_mid.price_of(Quantity::Token0(1), false))
+            (stats.amm_t1 + stats.order_t1, self.fetch_lower_upper_liq_bounds(p_mid, stats)?)
         };
-
-        trace!(?total_liq, price_for_one, "Calculating for dust");
 
         if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
             // Check to see if our excess is within one price unit
-            if e < U256::from(price_for_one) {
+            if e <= price_for_one {
                 trace!("Valid dust solution found");
                 // We have a dust solution, let's store it
                 let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
@@ -746,40 +772,10 @@ impl<'a> DeltaMatcher<'a> {
 
             // Check to see if we've found a valid dust solution that is better than our
             // current dust solution if it exists
-            let (total_liq, price_for_one) = if self.solve_for_t0 {
-                (stats.amm_t0 + stats.order_t0, p_mid.price_of(Quantity::Token1(1), false))
-            } else {
-                (stats.amm_t1 + stats.order_t1, p_mid.price_of(Quantity::Token0(1), false))
-            };
-            trace!(?total_liq, price_for_one, "Calculating for dust");
-
-            if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
-                // Check to see if our excess is within one price unit
-                if e < U256::from(price_for_one) {
-                    trace!("Valid dust solution found");
-                    // We have a dust solution, let's store it
-                    let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
-                    if e < dust_q {
-                        let (partial_fills, reward_t0) =
-                            if let SupplyDemandResult::PartialFillEq {
-                                bid_fill_q,
-                                ask_fill_q,
-                                reward_t0
-                            } = res
-                            {
-                                (Some((bid_fill_q, ask_fill_q)), reward_t0)
-                            } else {
-                                (None, 0_u128)
-                            };
-                        let solution = UcpSolution {
-                            ucp: p_mid,
-                            killed: killed.clone(),
-                            partial_fills,
-                            reward_t0
-                        };
-                        dust = Some((e, solution))
-                    }
-                }
+            if let Some(new_dust) =
+                self.try_solve_dust_solution(&stats, &res, p_mid, dust.as_ref(), &killed)
+            {
+                dust = Some(new_dust);
             }
 
             match (res, can_kill, self.solve_for_t0) {

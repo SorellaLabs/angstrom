@@ -275,7 +275,9 @@ impl<'a> DeltaMatcher<'a> {
         if total_elim >= min_target { (total_elim, order_ids) } else { (0_u128, None) }
     }
 
-    fn calculate_pro_rata_remaining_ucp(&self, price: &Ray) -> Option<u128> {}
+    fn calculate_pro_rata_remaining_ucp(&self, price: &Ray) -> Option<u128> {
+        None
+    }
 
     fn check_ucp(
         &self,

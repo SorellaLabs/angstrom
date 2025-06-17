@@ -244,161 +244,6 @@ impl<'a> DeltaMatcher<'a> {
         if total_elim >= min_target { (total_elim, order_ids) } else { (0_u128, None) }
     }
 
-    fn excess_liquidity_negative(
-        &self,
-        price: Ray,
-        available_add: u128,
-        abs_excess: u128,
-        available_drain: u128,
-        killable_orders: &[(OrderId, u128, bool)],
-        bid_is_input: bool,
-        t0_sum: I256
-    ) -> SupplyDemandResult {
-        // If our available fill is not enough to resolve our excess liquidity, we can
-        // end here
-        let Some(remaining_add) = available_add.checked_sub(abs_excess) else {
-            // See if we can find an order we can kill to fix the problem
-            let min_target = abs_excess - available_add;
-            let (_, ko) = Self::check_killable_orders(&killable_orders, bid_is_input, min_target);
-            return SupplyDemandResult::MoreDemand(ko);
-        };
-
-        // Otherwise let's see if we can fill any extra after this
-        let additional_fillable = min(remaining_add, available_drain);
-        let (bid_fill_q, ask_fill_q, reward_t0) = if self.solve_for_t0 {
-            // If I'm solving for T0, asks are providing me the extra T0 I need and bids are
-            // matched with my additional_fillable.
-
-            // For T0 solve we do not expect to have excess T0 to donate so `reward_t0` is
-            // just zero.
-
-            (price.quantity(additional_fillable, false), abs_excess + additional_fillable, 0)
-        } else {
-            // For T1 swap, we want to figure out how much excess T0 we have, which will
-            // become our `reward_t0`.  We can assume that we will be swapping all of our
-            // excess T1 (`abs_excess`) for T0 and that will be the amount of extra T0 we
-            // have to give as a reward. `additional_fillable` is based on orders that have
-            // been matched against each other, so its effect on our net balances should be
-            // zero and it is allocated to partial orders on both sides of the book.
-
-            // `abs_excess` is in T1 and on this path it is an underflow (negative
-            // quantity), we will be getting our additional T1 from bid orders.  We should
-            // also have an excess of T0 at this point that we're selling to those bid
-            // orders, so we need to calculate how much of our T0 excess will be leaving
-            // before we allocate the rest to rewards.  We would like to overestimate this
-            // sum if possible to make sure we never have rounding errors.
-
-            // We know that each bid order will round its output down, so if we convert
-            // `abs_excess` to T0 at our UCP, we can also round down.  We can presume that
-            // there will be at least 1 bid order accepting the T0 (also rounding down),
-            // and if there is more than one order we will get multiple round-downs which
-            // will mean that the actual output can only be lower than this estimate and we
-            // can only successfully overestimate.
-
-            // This is our overestimation of how much T0 we are sending out to bids
-            let excess_t0_cost = price.inv_ray().inverse_quantity(abs_excess, false);
-            // If we already have a surplus of T0 in the balance, find out how much we will
-            // have left after we settle the bids providing our excess T1.  That's our
-            // reward quantity. (If `t0_sum` is already negative we are in a bad place
-            // overall and surely have nothing to donate to rewards)
-            let reward_t0 = if t0_sum.is_positive() {
-                t0_sum
-                    .unsigned_abs()
-                    .to::<u128>()
-                    .saturating_sub(excess_t0_cost)
-            } else {
-                0_u128
-            };
-
-            (
-                // Bids are providing the extra T1 I need, and we add the amount of T1 our
-                // partials matched as `additional_fillable`
-                abs_excess + additional_fillable,
-                // Asks are only needed to provide the reciprocal match for
-                // `additional_fillable` (flipped because they are exact_in in T0)
-                price.inverse_quantity(additional_fillable, false),
-                // And our rewards
-                reward_t0
-            )
-        };
-
-        SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 }
-    }
-
-    // fn excess_liquidity_positive(
-    //     &self,
-    //     price: Ray,
-    //     available_add: u128,
-    //     abs_excess: u128,
-    //     available_drain: u128,
-    //     killable_orders: &[(OrderId, u128, bool)],
-    //     bid_is_input: bool,
-    //     t0_sum: I256,
-    // ) -> SupplyDemandResult {
-    //     let Some(remaining_drain) = available_drain.checked_sub(abs_excess) else
-    // {         // Check if we can do any order killing to fix this and return
-    // our status         let min_target = abs_excess - available_add;
-    //         let (_, ko) = Self::check_killable_orders(&killable_orders,
-    // bid_is_input, min_target);         return
-    // SupplyDemandResult::MoreSupply(ko);     };
-    //
-    //     let additional_drainable = min(remaining_drain, available_add);
-    //     let (bid_fill_q, ask_fill_q, reward_t0) = if self.solve_for_t0 {
-    //         // If I'm solving for T0, bids are draining my excess T0 and asks are
-    // matched         // with my additional_fillable
-    //
-    //         // For T0 solve we do not expect to have excess T0 to donate so
-    // `reward_t0` is         // just zero.
-    //         (price.quantity(abs_excess + additional_drainable, false),
-    // additional_drainable, 0_u128)     } else {
-    //         // This is very similar to above but we're going to logic it through
-    // in the         // opposite direction.
-    //
-    //         // `abs_excess` is in T1 and on this path it is an overflow (positive
-    //         // quantity), we will be draining our excess T1 using ask orders.  We
-    // should         // also have an underflow of T0 at this point that we're
-    // buying from those ask         // orders, so we need to calculate how much
-    // we will overflow our T0 defecit to         // know how much we can
-    // allocate to rewards.  We would like to underestimate         // this sum
-    // if possible to make sure we never have rounding errors.
-    //
-    //         // We know that each ask order will round its input up, so if we
-    // convert         // `abs_excess` to T0 at our UCP, we can also round up.
-    // We can presume that         // there will be at least 1 ask order
-    // providing the T0 (also rounding up),         // and if there is more than
-    // one order we will get multiple round-ups which         // will mean that
-    // the actual input can only be higher than this estimate and we         //
-    // can only successfully underestimate.
-    //
-    //         // This is our underestimation of how much T0 we are getting in from
-    // asks         let excess_t0_gain = price.inverse_quantity(abs_excess,
-    // true);         // We should already have a defecit of T0 in the balance
-    // and this sale should         // bring it positive.  If `t0_sum` is
-    // already positive...that's weird, but we         // can still do this
-    // math.  So we see where we stand after our gain and donate         //
-    // whatever positive value we have.         let final_t0 = t0_sum +
-    // I256::unchecked_from(excess_t0_gain);         let reward_t0 =
-    //             if final_t0.is_positive() { final_t0.unsigned_abs().to::<u128>()
-    // } else { 0_u128 };
-    //
-    //         // Bids will round up so if we round-down for bids we will only have
-    // extra in         // For asks we already know how much new T0 we're
-    // getting in with no change         (
-    //             // Bids are only needed to provide the reciprocal match for
-    //             // `additional_fillable` (not flipped because they are exact_in
-    // in T1)             additional_drainable,
-    //             // Asks are draining the extra T1 I have, and we add the amount
-    // of T1 our             // partials matched as `additional_fillable`.  We
-    // need to flip this because             // asks are exact_in in T0.
-    //             price.inverse_quantity(abs_excess + additional_drainable, false),
-    //             // And our rewards
-    //             reward_t0,
-    //         )
-    //     };
-    //
-    //     SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 }
-    // }
-
     /// NOTE: only implied for solve for t1
     fn solve_last_mile(
         &self,
@@ -879,9 +724,9 @@ impl<'a> DeltaMatcher<'a> {
 
         let two = U256::from(2);
         let four = U256::from(4);
-        let mut killed = HashSet::new();
+        let mut perma_killed = HashSet::new();
         let mut dust: Option<(U256, UcpSolution)> = None;
-        let mut dust: Option<(U256, UcpSolution)> = None;
+        let mut valid_solution: Option<UcpSolution> = None;
 
         // Loop on a checked sub, if our prices ever overlap we'll terminate the loop
         while let Some(diff) = p_max.checked_sub(*p_min) {
@@ -900,16 +745,18 @@ impl<'a> DeltaMatcher<'a> {
             let (stats, res) = {
                 let check_ucp_span =
                     tracing::trace_span!("check_ucp", price = ?p_mid, can_perma_kill);
-                check_ucp_span.in_scope(|| self.check_ucp(p_mid, &killed))
+                check_ucp_span.in_scope(|| self.check_ucp(p_mid, &perma_killed))
             };
 
             // If we're on our last iterations, check to see if we can come up with a
             // "within_one" solution
 
             // Check to see if we've found a valid dust solution that is better than our
-            // current dust solution if it exists
+            // current dust solution if it exists.
+            //
+            // NOTE: dust solution wi
             if let Some(new_dust) =
-                self.try_solve_dust_solution(&stats, &res, p_mid, dust.as_ref(), &killed)
+                self.try_solve_dust_solution(&stats, &res, p_mid, dust.as_ref(), &perma_killed)
             {
                 dust = Some(new_dust);
             }
@@ -943,7 +790,7 @@ impl<'a> DeltaMatcher<'a> {
                         ?stats.order_t1,
                         "Pool solution found"
                     );
-                    return Some(UcpSolution {
+                    valid_solution = Some(UcpSolution {
                         ucp: p_mid,
                         killed,
                         partial_fills: None,

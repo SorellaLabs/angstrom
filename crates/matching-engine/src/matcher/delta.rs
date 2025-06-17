@@ -558,93 +558,79 @@ impl<'a> DeltaMatcher<'a> {
     /// helper functions for grabbing all orders that we filled at ucp
     fn fetch_orders_at_ucp(&self, fetch: &UcpSolution) -> Vec<OrderOutcome> {
         let (bid_partial, ask_partial) = fetch.partial_fills.unwrap_or_default();
-        let (bid_count, ask_count) = self.book.partial_order_count_at_ucp(fetch.ucp);
+
+        //Precompute total deltas for pro-rata calculation
+        let mut total_bid_delta: u128 = 0;
+        let mut total_ask_delta: u128 = 0;
+
+        for o in self.book.all_orders_iter() {
+            if fetch.killed.contains(&o.order_id) {
+                continue;
+            }
+            match (o.price_t1_over_t0().cmp(&fetch.ucp), o.is_bid) {
+                (Ordering::Equal, true) if o.is_partial() => {
+                    let delta = o.amount().saturating_sub(o.min_amount());
+                    total_bid_delta += delta;
+                }
+                (Ordering::Equal, false) if o.is_partial() => {
+                    let delta = o.amount().saturating_sub(o.min_amount());
+                    total_ask_delta += delta;
+                }
+                _ => {}
+            }
+        }
 
         self.book
             .all_orders_iter()
             .map(|o| {
                 let outcome = if fetch.killed.contains(&o.order_id) {
-                    // Killed orders are killed
                     OrderFillState::Killed
                 } else {
                     match (o.price_t1_over_t0().cmp(&fetch.ucp), o.is_bid) {
-                        // A bid with a higher price than UCP or an ask with a lower price than UCP
-                        // is filled
+                        // Fully filled orders
                         (Ordering::Greater, true) | (Ordering::Less, false) => {
-                            trace!("Order completely filled due to price position");
                             OrderFillState::CompleteFill
                         }
-                        // A bid with a lower price than UCP or an ask with a higher price than UCP
-                        // is unfilled
+                        // Fully unfilled orders
                         (Ordering::Greater, false) | (Ordering::Less, true) => {
-                            trace!("Order unfilled due to price position");
                             OrderFillState::Unfilled
                         }
-                        // At the precise price, we've already sorted our partial orders to be
-                        // before our exact orders.  We attempt to fill
-                        // orders as completely as possible in the
-                        // order in which we encounter them.
-                        //
-                        // This does make the presumption that our book sort strategy has properly
-                        // ordered things.  This is probably fine for now but in the long run if we
-                        // have multiple different strategies we probably
-                        // want to isolate them a bit more so
-                        // we can properly enact diverse order sorting and filling strategies across
-                        // the board
+                        // Partial fill candidates at UCP
                         (Ordering::Equal, true) => {
-                            // bid side
-                            // if bid_pro_rata > 0 {
-                            // } else {
-                            // };
-
-                            OrderFillState::Unfilled
+                            if !o.is_partial() {
+                                OrderFillState::CompleteFill
+                            } else {
+                                let delta = o.amount().saturating_sub(o.min_amount());
+                                if delta == 0 || total_bid_delta == 0 {
+                                    OrderFillState::PartialFill(o.min_amount())
+                                } else {
+                                    let portion =
+                                        (delta as u128 * bid_partial as u128) / total_bid_delta;
+                                    OrderFillState::PartialFill(o.min_amount() + portion)
+                                }
+                            }
                         }
-                        (Ordering::Equal, false) => OrderFillState::Unfilled
+                        (Ordering::Equal, false) => {
+                            if !o.is_partial() {
+                                OrderFillState::CompleteFill
+                            } else {
+                                let delta = o.amount().saturating_sub(o.min_amount());
+                                if delta == 0 || total_ask_delta == 0 {
+                                    OrderFillState::PartialFill(o.min_amount())
+                                } else {
+                                    let portion =
+                                        (delta as u128 * ask_partial as u128) / total_ask_delta;
+                                    OrderFillState::PartialFill(o.min_amount() + portion)
+                                }
+                            }
+                        }
                     }
                 };
+
                 OrderOutcome { id: o.order_id, outcome }
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
-
-    // // let partial_q =
-    // //     if o.is_bid { &mut bid_partial } else { &mut ask_partial };
-    // if *pro_rata_rate > 0 {
-    //     // If we have partial to fill, check to see if we have enough to
-    //     // completely fill this order
-    //     let max_partial = if o.is_partial() {
-    //         o.amount() - o.min_amount()
-    //     } else {
-    //         o.min_amount()
-    //     };
-    //     let res = if *partial_q > max_partial {
-    //         trace!(
-    //             o.is_bid,
-    //             partial_q,
-    //             max_partial,
-    //             "Partial order completely filled at UCP"
-    //         );
-    //         OrderFillState::CompleteFill
-    //     } else {
-    //         trace!(
-    //             o.is_bid,
-    //             partial_q, "Partial order partially filled at UCP"
-    //         );
-    //         OrderFillState::PartialFill(o.min_amount() + *partial_q)
-    //     };
-    //     *partial_q = partial_q.saturating_sub(max_partial);
-    //     res
-    // } else if o.is_partial() {
-    //     // A partial order that we have no remaining
-    //     // slack to fill with was still filled for its
-    //     // minimum amount as per our algorithm
-    //     OrderFillState::PartialFill(o.min_amount())
-    // } else {
-    //     // An exact order that we cannot fill (due to 0 remaining slack) is
-    //     // Unfilled
-    //     OrderFillState::Unfilled
-    // }
-    // }
 
     /// Return the NetAmmOrder that moves the AMM to our UCP
     fn fetch_amm_movement_at_ucp(&self, ucp: Ray) -> Option<NetAmmOrder> {

@@ -182,7 +182,7 @@ pub trait StorageWithData: RawPoolOrder {
                 // this is always amount as order are collected as
                 // bid and ask, thus when compairing, these will all be
                 // on the same side
-                volume:    self.amount(),
+                volume:    self.min_qty_t0(),
                 // set later
                 gas:       U256::ZERO,
                 gas_units: 0

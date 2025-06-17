@@ -23,24 +23,9 @@ impl SortStrategy {
             Self::Unsorted => (),
             // First sort by price, then put partial orders before exact orders then sort by volume,
             // gas, gas_units
-            Self::PricePartialVolume => bids.sort_by(|a, b| {
-                a.priority_data
-                    .price
-                    .cmp(&b.priority_data.price)
-                    .then_with(|| a.is_partial().cmp(&b.is_partial()))
-                    .then_with(|| a.priority_data.volume.cmp(&b.priority_data.volume))
-                    .then_with(|| a.priority_data.gas.cmp(&b.priority_data.gas))
-                    .then_with(|| a.priority_data.gas_units.cmp(&b.priority_data.gas_units))
-            }),
+            Self::PricePartialVolume => bids.sort_unstable(),
             // First sort by price, then volume, gas, gas_units
-            Self::ByPriceByVolume => bids.sort_by(|a, b| {
-                let (ap, bp) = (&a.priority_data, &b.priority_data);
-                ap.price
-                    .cmp(&bp.price)
-                    .then_with(|| ap.volume.cmp(&bp.volume))
-                    .then_with(|| ap.gas.cmp(&bp.gas))
-                    .then_with(|| ap.gas_units.cmp(&bp.gas_units))
-            })
+            Self::ByPriceByVolume => bids.sort_unstable()
         }
     }
 
@@ -49,24 +34,9 @@ impl SortStrategy {
             Self::Unsorted => (),
             // First sort by price, then put partial orders before exact orders then sort by volume,
             // gas, gas_units
-            Self::PricePartialVolume => asks.sort_by(|a, b| {
-                a.priority_data
-                    .price
-                    .cmp(&b.priority_data.price)
-                    .then_with(|| a.is_partial().cmp(&b.is_partial()))
-                    .then_with(|| a.priority_data.volume.cmp(&b.priority_data.volume))
-                    .then_with(|| a.priority_data.gas.cmp(&b.priority_data.gas))
-                    .then_with(|| a.priority_data.gas_units.cmp(&b.priority_data.gas_units))
-            }),
+            Self::PricePartialVolume => asks.sort_unstable(),
             // First sort by price, then volume, gas, gas_units
-            Self::ByPriceByVolume => asks.sort_by(|a, b| {
-                let (ap, bp) = (&a.priority_data, &b.priority_data);
-                ap.price
-                    .cmp(&bp.price)
-                    .then_with(|| ap.volume.cmp(&bp.volume))
-                    .then_with(|| ap.gas.cmp(&bp.gas))
-                    .then_with(|| ap.gas_units.cmp(&bp.gas_units))
-            })
+            Self::ByPriceByVolume => asks.sort_unstable()
         }
     }
 }

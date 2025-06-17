@@ -1,5 +1,5 @@
 use std::{
-    cmp::{Ordering, Reverse, min},
+    cmp::{Ordering, Reverse},
     collections::HashSet
 };
 
@@ -193,7 +193,7 @@ impl<'a> DeltaMatcher<'a> {
                     let (min_in, min_out) = Self::get_amount_in_out(o, min_q, self.fee, price);
 
                     if o.is_bid {
-                        min_t1_ucp += min_in
+                        min_t1_ucp += I256::unchecked_from(min_in)
                     } else {
                         min_t1_ucp += I256::unchecked_from(min_out).saturating_neg()
                     }
@@ -227,35 +227,6 @@ impl<'a> DeltaMatcher<'a> {
         OrderLiquidity { net_t0, net_t1, last_mile_solve, min_at_ucp_t1: min_t1_ucp }
     }
 
-    fn check_killable_orders(
-        killable_orders: &[(OrderId, u128, bool)],
-        is_bid: bool,
-        min_target: u128
-    ) -> (u128, Option<Vec<OrderId>>) {
-        let (total_elim, order_ids) = killable_orders
-            .iter()
-            .filter(|x| x.2 == is_bid)
-            .sorted_by_key(|x| Reverse(x.1))
-            .fold_while::<(u128, Option<Vec<OrderId>>), _>(
-                (0_u128, None),
-                |(total_elim, mut elim_ids), (order_id, order_q, _)| {
-                    let elim_vec = elim_ids.get_or_insert_default();
-                    elim_vec.push(*order_id);
-                    let new_elim = total_elim + *order_q;
-                    let new_acc = (new_elim, elim_ids);
-                    if new_elim > min_target {
-                        itertools::FoldWhile::Done(new_acc)
-                    } else {
-                        itertools::FoldWhile::Continue(new_acc)
-                    }
-                }
-            )
-            .into_inner();
-        // We only suggest killing orders if we can actually succeed at fixing this
-        // price
-        if total_elim >= min_target { (total_elim, order_ids) } else { (0_u128, None) }
-    }
-
     /// NOTE: only implied for solve for t1
     fn solve_last_mile(
         &self,
@@ -264,11 +235,11 @@ impl<'a> DeltaMatcher<'a> {
         amm: (I256, I256)
     ) -> Option<SupplyDemandResult> {
         let (amm_t0, amm_t1) = amm;
-        let OrderLiquidity { net_t0, net_t1, mut last_mile_solve, .. } = liq;
-        let t1_sum = amm_t1 + *net_t1;
-        let t0_sum = amm_t0 + *net_t0;
+        let OrderLiquidity { net_t0, net_t1, last_mile_solve, .. } = liq;
+        let mut t1_sum = amm_t1 + net_t1;
+        let mut t0_sum = amm_t0 + net_t0;
 
-        let current_solve = None;
+        let mut current_solve = None;
 
         // we might be naturally equal but if we can solve more volume with partials,
         // than this solution is objectively better
@@ -276,41 +247,47 @@ impl<'a> DeltaMatcher<'a> {
             // any remainder t0 should be donated.
             let t0_reward = t0_sum
                 .is_positive()
-                .then(|| t0_sum.to::<u128>())
+                .then(|| t0_sum.into_raw().to::<u128>())
                 .unwrap_or_default();
 
-            current_solve = Some(SupplyDemandResult::NaturallyEqual(last_mile_solve, t0_reward));
+            current_solve =
+                Some(SupplyDemandResult::NaturallyEqual(last_mile_solve.clone(), t0_reward));
         }
 
-        let t1_bid_slack = 0u128;
-        let t1_ask_slack = 0u128;
+        let mut t1_bid_slack = 0u128;
+        let mut t1_ask_slack = 0u128;
+        let mut remaining_killed = last_mile_solve.clone();
 
         for order in itertools::kmerge_by(
             vec![
                 self.book
                     .bids()
                     .into_iter()
-                    .filter(|f| last_mile_solve.contains(&f.order_id)),
+                    .filter(|f| last_mile_solve.contains(&f.order_id))
+                    .collect_vec(),
                 self.book
                     .asks()
                     .into_iter()
-                    .filter(|f| last_mile_solve.contains(&f.order_id)),
+                    .filter(|f| last_mile_solve.contains(&f.order_id))
+                    .collect::<Vec<_>>(),
             ],
-            |a, b| a.priority_data.volume.lt(&b.priority_data.volume)
+            |a: &&OrderWithStorageData<AllOrders>, b: &&OrderWithStorageData<AllOrders>| {
+                a.priority_data.volume.lt(&b.priority_data.volume)
+            }
         ) {
             // we are processing and thus needs to be removed.
-            last_mile_solve.remove(&order.order_id);
+            remaining_killed.remove(&order.order_id);
 
             if order.is_bid {
                 let (min_in, min_out) =
                     Self::get_amount_in_out(order, order.min_amount(), self.fee, price);
                 let (max_in, _) = Self::get_amount_in_out(order, order.amount(), self.fee, price);
                 let delta_v = (min_in != max_in)
-                    .then_some(|| max_in - min_in)
+                    .then_some(max_in - min_in)
                     .unwrap_or_default();
 
                 t1_bid_slack += delta_v;
-                t1_sum += min_in;
+                t1_sum += I256::unchecked_from(min_in);
                 t0_sum += I256::unchecked_from(min_out).saturating_neg();
             } else {
                 let (min_in, min_out) =
@@ -318,12 +295,12 @@ impl<'a> DeltaMatcher<'a> {
                 let (_, max_out) = Self::get_amount_in_out(order, order.amount(), self.fee, price);
 
                 let delta_v = (min_out != max_out)
-                    .then_some(|| max_out - min_out)
+                    .then_some(max_out - min_out)
                     .unwrap_or_default();
 
                 t1_ask_slack += delta_v;
                 t1_sum += I256::unchecked_from(min_out).saturating_neg();
-                t0_sum += min_in;
+                t0_sum += I256::unchecked_from(min_in);
             }
 
             // The first thing we try to do is see if we can solve with all the orders and
@@ -333,11 +310,11 @@ impl<'a> DeltaMatcher<'a> {
             if t1_sum.is_zero() {
                 let t0_reward = t0_sum
                     .is_positive()
-                    .then(|| t0_sum.to::<u128>())
+                    .then(|| t0_sum.into_raw().to::<u128>())
                     .unwrap_or_default();
 
                 current_solve =
-                    Some(SupplyDemandResult::NaturallyEqual(last_mile_solve, t0_reward));
+                    Some(SupplyDemandResult::NaturallyEqual(remaining_killed.clone(), t0_reward));
             } else if t1_sum.is_positive() {
                 // if we are positive, we want to see if we can add some amount of ask-slack to
                 // make this zero
@@ -345,7 +322,7 @@ impl<'a> DeltaMatcher<'a> {
 
                 // we can solve here
                 if delta.is_negative() || delta.is_zero() {
-                    let rem = delta.abs().to::<u128>();
+                    let rem = delta.abs().into_raw().to::<u128>();
 
                     // we solve with only a full fill on 1 side
                     let (ask_q, bid_q) = if rem.is_zero() {
@@ -354,15 +331,15 @@ impl<'a> DeltaMatcher<'a> {
                         if rem > t1_bid_slack {
                             // If our remainder is more than our total bid-slack,
                             // we can full fill this with our remainder t1_bid_slack
-                            (t1_sum.to::<u128>() + t1_bid_slack, t1_bid_slack)
+                            (t1_sum.into_raw().to::<u128>() + t1_bid_slack, t1_bid_slack)
                         } else {
                             // If we have less remainder than our bid_slack,
                             // we can fill for full remainder amount
-                            (t1_sum.to::<u128>() + rem, rem)
+                            (t1_sum.into_raw().to::<u128>() + rem, rem)
                         }
                     };
 
-                    let abs_excess = t1_sum.abs().to::<u128>();
+                    let abs_excess = t1_sum.abs().into_raw().to::<u128>();
                     let excess_t0_gain = price.inverse_quantity(abs_excess, true);
                     let final_t0 = t0_sum + I256::unchecked_from(excess_t0_gain);
 
@@ -376,7 +353,7 @@ impl<'a> DeltaMatcher<'a> {
                         bid_fill_q: bid_q,
                         ask_fill_q: ask_q,
                         reward_t0,
-                        killed: last_mile_solve.clone()
+                        killed: remaining_killed.clone()
                     });
 
                     continue;
@@ -386,7 +363,7 @@ impl<'a> DeltaMatcher<'a> {
                 let delta = t1_sum + I256::unchecked_from(t1_bid_slack);
 
                 if delta.is_positive() || delta.is_zero() {
-                    let rem = delta.to::<u128>();
+                    let rem = delta.into_raw().to::<u128>();
 
                     // we solve with only a full fill on 1 side
                     let (ask_q, bid_q) = if rem.is_zero() {
@@ -395,14 +372,14 @@ impl<'a> DeltaMatcher<'a> {
                         if rem > t1_ask_slack {
                             // if we have more remainder than we can subtract, we subtract full
                             // slack
-                            (t1_ask_slack, t1_sum.abs().to::<u128>() + t1_ask_slack)
+                            (t1_ask_slack, t1_sum.abs().into_raw().to::<u128>() + t1_ask_slack)
                         } else {
                             // If we have more ask slack, we put in full remainder
-                            (rem, t1_sum.abs().to::<u128>() + rem)
+                            (rem, t1_sum.abs().into_raw().to::<u128>() + rem)
                         }
                     };
 
-                    let abs_excess = t1_sum.abs().to::<u128>();
+                    let abs_excess = t1_sum.abs().into_raw().to::<u128>();
                     let excess_t0_cost = price.inv_ray().inverse_quantity(abs_excess, false);
                     let reward_t0 = if t0_sum.is_positive() {
                         t0_sum
@@ -417,7 +394,7 @@ impl<'a> DeltaMatcher<'a> {
                         bid_fill_q: bid_q,
                         ask_fill_q: ask_q,
                         reward_t0,
-                        killed: last_mile_solve.clone()
+                        killed: remaining_killed.clone()
                     });
 
                     continue;
@@ -458,10 +435,10 @@ impl<'a> DeltaMatcher<'a> {
             // the positive, we would of had a fill via last mile solve.
             if t1_sum_with_end_min.is_positive() {
                 // remove bids.
-                 self.calculate_kills(price, true, all_current_killable, t1_sum_with_end_min.to())
+                 self.calculate_kills(price, true, all_current_killable, t1_sum_with_end_min.into_raw().to())
             } else {
                 // remove asks
-                 self.calculate_kills(price, false, all_current_killable, t1_sum_with_end_min.abs().to())
+                 self.calculate_kills(price, false, all_current_killable, t1_sum_with_end_min.abs().into_raw().to())
             }).flatten();
 
         if t1_sum.is_positive() {
@@ -834,7 +811,6 @@ impl<'a> DeltaMatcher<'a> {
             // Check to see if we've found a valid dust solution that is better than our
             // current dust solution if it exists.
             //
-            // NOTE: dust solution wi
             if let Some(new_dust) =
                 self.try_solve_dust_solution(&stats, &res, p_mid, dust.as_ref(), &perma_killed)
             {
@@ -844,6 +820,15 @@ impl<'a> DeltaMatcher<'a> {
             match (res, can_perma_kill, self.solve_for_t0) {
                 (SupplyDemandResult::MoreSupply(Some(ko)), true, _)
                 | (SupplyDemandResult::MoreDemand(Some(ko)), true, _) => {
+                    // Means we are within 4 iterations of ending and most likely will need to
+                    // cancel orders. in this case, if we have already passed by a dust solution
+                    // or a solution on the way down. Canceling most likely will lead us to that
+                    // solution as these singluar heavy orders in which we are cancelling are
+                    // failing us.
+                    if valid_solution.is_some() || dust.is_some() {
+                        return valid_solution.or(dust.map(|d| d.1));
+                    }
+
                     tracing::info!(order_ids = ? ko, "Killing orders");
                     // Add our killed order to the set of orders we're skipping
                     perma_killed.extend(ko);
@@ -860,7 +845,7 @@ impl<'a> DeltaMatcher<'a> {
                 (SupplyDemandResult::MoreSupply(_), _, false)
                 | (SupplyDemandResult::MoreDemand(_), _, true) => p_min = p_mid,
                 (SupplyDemandResult::NaturallyEqual(mut killed, reward), ..) => {
-                    killed.extend(perma_killed);
+                    killed.extend(perma_killed.clone());
                     debug!(
                         ucp = ?p_mid,
                         partial = false,
@@ -897,9 +882,10 @@ impl<'a> DeltaMatcher<'a> {
                         ?stats.order_t1,
                         "Pool solution found"
                     );
-                    killed.extend(perma_killed);
+                    killed.extend(perma_killed.clone());
 
-                    return Some(UcpSolution {
+                    // We keep searching as we want to ensure we fill the most orders.
+                    valid_solution = Some(UcpSolution {
                         ucp: p_mid,
                         killed,
                         partial_fills: Some((bid_fill_q, ask_fill_q)),
@@ -908,13 +894,8 @@ impl<'a> DeltaMatcher<'a> {
                 }
             }
         }
-        if dust.is_some() {
-            debug!("Solved with dust solution");
-        } else {
-            debug!("Unable to solve");
-        }
 
-        dust.map(|d| d.1)
+        valid_solution.or(dust.map(|d| d.1))
     }
 }
 

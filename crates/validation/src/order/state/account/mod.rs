@@ -180,9 +180,11 @@ pub trait StorageWithData: RawPoolOrder {
             priority_data: angstrom_types::orders::OrderPriorityData {
                 price:     self.limit_price(),
                 // this is always amount as order are collected as
-                // bid and ask, thus when compairing, these will all be
+                // bid and ask, thus when comparing, these will all be
                 // on the same side
-                volume:    self.min_qty_t0(),
+                volume:    self
+                    .min_qty_t0()
+                    .expect("should have had validation checks before this is called"),
                 // set later
                 gas:       U256::ZERO,
                 gas_units: 0

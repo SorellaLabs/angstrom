@@ -10,7 +10,8 @@ use alloy::{
     network::Network,
     primitives::{Address, B256, FixedBytes, U256, keccak256},
     providers::Provider,
-    sol_types::SolValue
+    sol_types::SolValue,
+    transports::{RpcError, TransportError}
 };
 use alloy_primitives::I256;
 use base64::{Engine, prelude::BASE64_STANDARD};
@@ -1040,7 +1041,7 @@ impl AngstromPoolConfigStore {
         angstrom_contract: Address,
         block_id: BlockId,
         provider: &P
-    ) -> Result<AngstromPoolConfigStore, String>
+    ) -> Result<AngstromPoolConfigStore, RpcError<TransportError>>
     where
         N: Network,
         P: Provider<N>
@@ -1050,7 +1051,9 @@ impl AngstromPoolConfigStore {
             .get_storage_at(angstrom_contract, U256::from(CONFIG_STORE_SLOT))
             .block_id(block_id)
             .await
-            .map_err(|e| format!("Error getting storage: {}", e))?;
+            .inspect_err(|e| {
+                tracing::error!("Error getting storage: {}", e);
+            })?;
 
         let value_bytes: [u8; 32] = value.to_be_bytes();
         tracing::debug!("storage slot of poolkey storage {:?}", value_bytes);
@@ -1062,12 +1065,16 @@ impl AngstromPoolConfigStore {
             .get_code_at(config_store_address)
             .block_id(block_id)
             .await
-            .map_err(|e| format!("Error getting code: {}", e))?;
+            .inspect_err(|e| tracing::error!("Error getting code: {}", e))?;
 
         tracing::info!(len=?code.len(), "bytecode: {:x}", code);
 
-        AngstromPoolConfigStore::try_from(code.as_ref())
-            .map_err(|e| format!("Failed to deserialize code into AngstromPoolConfigStore: {}", e))
+        AngstromPoolConfigStore::try_from(code.as_ref()).map_err(|e| {
+            RpcError::LocalUsageError(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to deserialize code into AngstromPoolConfigStore: {e}")
+            )))
+        })
     }
 
     pub fn length(&self) -> usize {

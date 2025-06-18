@@ -1,7 +1,4 @@
-use std::{
-    cmp::{Ordering, Reverse},
-    collections::HashSet
-};
+use std::{cmp::Ordering, collections::HashSet};
 
 use alloy_primitives::{I256, Sign, U256};
 use angstrom_types::{
@@ -65,18 +62,16 @@ impl From<Option<OrderWithStorageData<TopOfBlockOrder>>> for DeltaMatcherToB {
 pub struct DeltaMatcher<'a> {
     book:               &'a OrderBook,
     fee:                u128,
-    /// If true, we solve for T0.  If false we solve for T1.
-    solve_for_t0:       bool,
     /// changes if there is a tob or not
     amm_start_location: Option<PoolSwapResult<'a>>
 }
 
 impl<'a> DeltaMatcher<'a> {
-    pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB, solve_for_t0: bool) -> Self {
+    pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB) -> Self {
         // Dump if matcher dumps are enabled
         if tracing::event_enabled!(target: "dump::delta_matcher", Level::TRACE) {
             // Dump the solution
-            let json = serde_json::to_string(&(book, tob.clone(), solve_for_t0)).unwrap();
+            let json = serde_json::to_string(&(book, tob.clone())).unwrap();
             let b64_output = base64::prelude::BASE64_STANDARD.encode(json.as_bytes());
             trace!(target: "dump::delta_matcher", data = b64_output, "Raw DeltaMatcher data");
         }
@@ -95,7 +90,7 @@ impl<'a> DeltaMatcher<'a> {
             DeltaMatcherToB::None => book.amm().map(|book| book.noop())
         };
 
-        Self { book, amm_start_location, fee, solve_for_t0 }
+        Self { book, amm_start_location, fee }
     }
 
     /// panics if there is no amm swap
@@ -181,7 +176,7 @@ impl<'a> DeltaMatcher<'a> {
                     .iter()
                     .filter(|o| price >= o.pre_fee_price(self.fee))
             )
-            .filter(|o| perma_killed.contains(&o.order_id))
+            .filter(|o| !perma_killed.contains(&o.order_id))
             .for_each(|o| {
                 // If we're precisely at our target price, we determine what our minimum and
                 // maximum output is for this order.  Otherwise our minimum is "all of it"
@@ -703,23 +698,13 @@ impl<'a> DeltaMatcher<'a> {
         let (t0_lower, t1_lower) = self.process_swap(is_bid, res);
 
         // we take the biggest 1 SqrtPriceX96 unit move and return this
-        (if self.solve_for_t0 {
-            let (t0_upper, t0, t0_lower) = (t0_upper.abs(), stats.amm_t0.abs(), t0_lower.abs());
-            // we take the max of upper lower
-            if t0_upper > t0 {
-                Some((t0_upper - t0).max(t0 - t0_lower))
-            } else {
-                Some((t0 - t0_upper).max(t0_lower - t0))
-            }
+
+        let (t1_upper, t1, t1_lower) = (t1_upper.abs(), stats.amm_t1.abs(), t1_lower.abs());
+        if t1_upper > t1 {
+            Some((t1_upper - t1).max(t1 - t1_lower)).map(|i| i.into_raw())
         } else {
-            let (t1_upper, t1, t1_lower) = (t1_upper.abs(), stats.amm_t1.abs(), t1_lower.abs());
-            if t1_upper > t1 {
-                Some((t1_upper - t1).max(t1 - t1_lower))
-            } else {
-                Some((t1 - t1_upper).max(t1_lower - t1))
-            }
-        })
-        .map(|int| int.into_raw())
+            Some((t1 - t1_upper).max(t1_lower - t1)).map(|i| i.into_raw())
+        }
     }
 
     fn try_solve_dust_solution(
@@ -733,11 +718,8 @@ impl<'a> DeltaMatcher<'a> {
         // while this works. Dusting should actually be bounding by the limitation of
         // the amm's SqrtPriceX96 precision.
 
-        let (total_liq, price_for_one) = if self.solve_for_t0 {
-            (stats.amm_t0 + stats.order_t0, self.fetch_lower_upper_liq_bounds(p_mid, stats)?)
-        } else {
-            (stats.amm_t1 + stats.order_t1, self.fetch_lower_upper_liq_bounds(p_mid, stats)?)
-        };
+        let (total_liq, price_for_one) =
+            (stats.amm_t1 + stats.order_t1, self.fetch_lower_upper_liq_bounds(p_mid, stats)?);
 
         if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
             // Check to see if our excess is within one price unit
@@ -783,7 +765,6 @@ impl<'a> DeltaMatcher<'a> {
         let four = U256::from(4);
         let mut perma_killed = HashSet::new();
         let mut dust: Option<(U256, UcpSolution)> = None;
-        let mut valid_solution: Option<UcpSolution> = None;
 
         // Loop on a checked sub, if our prices ever overlap we'll terminate the loop
         while let Some(diff) = p_max.checked_sub(*p_min) {
@@ -817,18 +798,9 @@ impl<'a> DeltaMatcher<'a> {
                 dust = Some(new_dust);
             }
 
-            match (res, can_perma_kill, self.solve_for_t0) {
-                (SupplyDemandResult::MoreSupply(Some(ko)), true, _)
-                | (SupplyDemandResult::MoreDemand(Some(ko)), true, _) => {
-                    // Means we are within 4 iterations of ending and most likely will need to
-                    // cancel orders. in this case, if we have already passed by a dust solution
-                    // or a solution on the way down. Canceling most likely will lead us to that
-                    // solution as these singluar heavy orders in which we are cancelling are
-                    // failing us.
-                    if valid_solution.is_some() || dust.is_some() {
-                        return valid_solution.or(dust.map(|d| d.1));
-                    }
-
+            match (res, can_perma_kill) {
+                (SupplyDemandResult::MoreSupply(Some(ko)), true)
+                | (SupplyDemandResult::MoreDemand(Some(ko)), true) => {
                     tracing::info!(order_ids = ? ko, "Killing orders");
                     // Add our killed order to the set of orders we're skipping
                     perma_killed.extend(ko);
@@ -838,25 +810,23 @@ impl<'a> DeltaMatcher<'a> {
                 }
                 // If there's too much supply of T0 or too much demand of T1, we want to look at a
                 // lower price
-                (SupplyDemandResult::MoreSupply(_), _, true)
-                | (SupplyDemandResult::MoreDemand(_), _, false) => p_max = p_mid,
+                (SupplyDemandResult::MoreDemand(_), _) => p_max = p_mid,
                 // If there's too much supply of T1 or too much demand for T0, we want to look at a
                 // higher price
-                (SupplyDemandResult::MoreSupply(_), _, false)
-                | (SupplyDemandResult::MoreDemand(_), _, true) => p_min = p_mid,
+                (SupplyDemandResult::MoreSupply(_), _) => p_min = p_mid,
                 (SupplyDemandResult::NaturallyEqual(mut killed, reward), ..) => {
                     killed.extend(perma_killed.clone());
                     debug!(
                         ucp = ?p_mid,
                         partial = false,
-                        reward_t0 = 0_u128,
+                        reward_t0 = reward,
                         ?stats.amm_t0,
                         ?stats.amm_t1,
                         ?stats.order_t0,
                         ?stats.order_t1,
                         "Pool solution found"
                     );
-                    valid_solution = Some(UcpSolution {
+                    return Some(UcpSolution {
                         ucp: p_mid,
                         killed,
                         partial_fills: None,
@@ -885,7 +855,7 @@ impl<'a> DeltaMatcher<'a> {
                     killed.extend(perma_killed.clone());
 
                     // We keep searching as we want to ensure we fill the most orders.
-                    valid_solution = Some(UcpSolution {
+                    return Some(UcpSolution {
                         ucp: p_mid,
                         killed,
                         partial_fills: Some((bid_fill_q, ask_fill_q)),
@@ -895,7 +865,7 @@ impl<'a> DeltaMatcher<'a> {
             }
         }
 
-        valid_solution.or(dust.map(|d| d.1))
+        dust.map(|d| d.1)
     }
 }
 

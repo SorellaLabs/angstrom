@@ -94,13 +94,13 @@ fn delta_matcher_test() {
             Some(matching_engine::book::sort::SortStrategy::ByPriceByVolume)
         );
         println!("{:#?}", book);
-        let mut matcher = DeltaMatcher::new(&book, DeltaMatcherToB::None, true);
+        let mut matcher = DeltaMatcher::new(&book, DeltaMatcherToB::None);
         let solution = matcher.solution(None);
         println!("{:?}", solution);
-        // Because it's a partial fill, our price should end at our ask price
         assert_eq!(solution.ucp, book.asks()[0].price(), "Price is not at partial fill Ask price");
+        // Because it's a partial fill, our price should end at our ask price
         // And our total T0 state should sum to zero
-        let mut total_t0 = I256::ZERO;
+        let mut total_t1 = I256::ZERO;
         for (order, outcome) in orders.iter().zip(solution.limit.iter()) {
             if outcome.id != order.order_id {
                 panic!("Mismatched iteration, fix this test");
@@ -108,7 +108,7 @@ fn delta_matcher_test() {
             match outcome.outcome {
                 OrderFillState::Unfilled | OrderFillState::Killed => continue,
                 OrderFillState::CompleteFill => {
-                    let (_, t0_net, _) = get_quantities_at_price(
+                    let (t1_net, ..) = get_quantities_at_price(
                         order.is_bid,
                         order.exact_in(),
                         order.amount(),
@@ -116,25 +116,24 @@ fn delta_matcher_test() {
                         0,
                         solution.ucp
                     );
-                    let signed_t0 = if order.is_bid {
-                        I256::unchecked_from(t0_net).saturating_neg()
+                    let signed_t1 = if order.is_bid {
+                        I256::unchecked_from(t1_net)
                     } else {
-                        I256::unchecked_from(t0_net)
+                        I256::unchecked_from(t1_net).saturating_neg()
                     };
-                    total_t0 += signed_t0;
+                    total_t1 += signed_t1;
                 }
                 OrderFillState::PartialFill(q) => {
-                    let signed_t0_filled = if order.is_bid {
+                    let signed_t1_filled = if order.is_bid {
                         I256::unchecked_from(solution.ucp.inverse_quantity(q, false))
-                            .saturating_neg()
                     } else {
-                        I256::unchecked_from(q)
+                        I256::unchecked_from(q).saturating_neg()
                     };
-                    total_t0 += signed_t0_filled
+                    total_t1 += signed_t1_filled
                 }
             }
         }
-        assert_eq!(total_t0, I256::ZERO, "T0 exchanged did not sum to zero");
+        assert_eq!(total_t1, I256::ZERO, "T1 exchanged did not sum to zero");
     });
 }
 
@@ -159,7 +158,7 @@ fn delta_matcher_kill_order_test() {
             Some(matching_engine::book::sort::SortStrategy::ByPriceByVolume)
         );
         println!("{:#?}", book);
-        let mut matcher = DeltaMatcher::new(&book, DeltaMatcherToB::None, true);
+        let mut matcher = DeltaMatcher::new(&book, DeltaMatcherToB::None);
         let solution = matcher.solution(None);
         println!("{:?}", solution);
         // Because it's a partial fill, our price should end at our ask price
@@ -174,7 +173,7 @@ fn delta_matcher_kill_order_test() {
             match outcome.outcome {
                 OrderFillState::Unfilled | OrderFillState::Killed => continue,
                 OrderFillState::CompleteFill => {
-                    let (_, t0_net, _) = get_quantities_at_price(
+                    let (t1_net, ..) = get_quantities_at_price(
                         order.is_bid,
                         order.exact_in(),
                         order.amount(),
@@ -182,24 +181,23 @@ fn delta_matcher_kill_order_test() {
                         0,
                         solution.ucp
                     );
-                    let signed_t0 = if order.is_bid {
-                        I256::unchecked_from(t0_net).saturating_neg()
+                    let signed_t1 = if order.is_bid {
+                        I256::unchecked_from(t1_net)
                     } else {
-                        I256::unchecked_from(t0_net)
+                        I256::unchecked_from(t1_net).saturating_neg()
                     };
-                    total_t0 += signed_t0;
+                    total_t0 += signed_t1;
                 }
                 OrderFillState::PartialFill(q) => {
-                    let signed_t0_filled = if order.is_bid {
+                    let signed_t1_filled = if order.is_bid {
                         I256::unchecked_from(solution.ucp.inverse_quantity(q, false))
-                            .saturating_neg()
                     } else {
-                        I256::unchecked_from(q)
+                        I256::unchecked_from(q).saturating_neg()
                     };
-                    total_t0 += signed_t0_filled
+                    total_t0 += signed_t1_filled
                 }
             }
         }
-        assert_eq!(total_t0, I256::ZERO, "T0 exchanged did not sum to zero");
+        assert_eq!(total_t0, I256::ZERO, "T1 exchanged did not sum to zero");
     });
 }

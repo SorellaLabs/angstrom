@@ -14,7 +14,7 @@ impl BinarySearchStrategy {
         book: &OrderBook,
         searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
     ) -> PoolSolution {
-        let mut matcher = DeltaMatcher::new(book, searcher.clone().into(), false);
+        let mut matcher = DeltaMatcher::new(book, searcher.clone().into());
         matcher.solution(searcher)
     }
 
@@ -23,7 +23,7 @@ impl BinarySearchStrategy {
         searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
     ) -> (U160, i32) {
         let snapshot = book.amm().unwrap();
-        let mut matcher = DeltaMatcher::new(book, searcher.clone().into(), false);
+        let mut matcher = DeltaMatcher::new(book, searcher.clone().into());
         let solution = matcher.solution(searcher);
 
         // we have no book currently attached

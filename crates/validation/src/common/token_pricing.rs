@@ -58,6 +58,7 @@ impl TokenPriceGenerator {
             pair_to_pool.insert((pool.token0, pool.token1), *key);
         }
         let new_gas_wei = provider.get_gas_price().await.unwrap_or(1e18 as u128);
+        tracing::info!(?new_gas_wei);
 
         let blocks_to_avg_price = blocks_to_avg_price_override.unwrap_or(BLOCKS_TO_AVG_PRICE);
         // for each pool, we want to load the last 5 blocks and get the sqrt_price_96
@@ -156,7 +157,6 @@ impl TokenPriceGenerator {
         self.base_wei = new_gas_wei;
 
         for mut pool_update in updates {
-            println!("{:#?} {:#?}", pool_update, self.pair_to_pool);
             let pool_key = if let Some(p) = self
                 .pair_to_pool
                 .get(&(pool_update.token0, pool_update.token1))

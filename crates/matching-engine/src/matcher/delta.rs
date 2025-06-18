@@ -688,14 +688,14 @@ impl<'a> DeltaMatcher<'a> {
         let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_upper_sqrt) else {
             return Default::default();
         };
-        let (t0_upper, t1_upper) = self.process_swap(is_bid, res);
+        let (_, t1_upper) = self.process_swap(is_bid, res);
 
         // Handle lower.
         let is_bid = start_sqrt >= end_lower_sqrt;
         let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_lower_sqrt) else {
             return Default::default();
         };
-        let (t0_lower, t1_lower) = self.process_swap(is_bid, res);
+        let (_, t1_lower) = self.process_swap(is_bid, res);
 
         // we take the biggest 1 SqrtPriceX96 unit move and return this
 
@@ -865,7 +865,10 @@ impl<'a> DeltaMatcher<'a> {
             }
         }
 
-        dust.map(|d| d.1)
+        dust.map(|d| {
+            tracing::info!(dust=?d.1,"dust solve");
+            d.1
+        })
     }
 }
 

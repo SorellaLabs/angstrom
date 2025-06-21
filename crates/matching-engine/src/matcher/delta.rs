@@ -1,7 +1,4 @@
-use std::{
-    cmp::{Ordering, Reverse, min},
-    collections::HashSet
-};
+use std::{cmp::Ordering, collections::HashSet};
 
 use alloy_primitives::{I256, Sign, U256};
 use angstrom_types::{
@@ -20,6 +17,7 @@ use angstrom_types::{
 };
 use base64::Engine;
 use itertools::Itertools;
+use rand_distr::num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use tracing::{Level, debug, trace};
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
@@ -30,10 +28,8 @@ use crate::OrderBook;
 struct OrderLiquidity {
     net_t0:          I256,
     net_t1:          I256,
-    bid_slack:       (u128, u128),
-    ask_slack:       (u128, u128),
-    /// Vec of (OrderID, total quantity, is_bid)
-    killable_orders: Vec<(OrderId, u128, bool)>
+    min_at_ucp_t1:   I256,
+    last_mile_solve: HashSet<OrderId>
 }
 
 /// Enum describing what kind of ToB order we want to use to set the initial AMM
@@ -66,18 +62,16 @@ impl From<Option<OrderWithStorageData<TopOfBlockOrder>>> for DeltaMatcherToB {
 pub struct DeltaMatcher<'a> {
     book:               &'a OrderBook,
     fee:                u128,
-    /// If true, we solve for T0.  If false we solve for T1.
-    solve_for_t0:       bool,
     /// changes if there is a tob or not
     amm_start_location: Option<PoolSwapResult<'a>>
 }
 
 impl<'a> DeltaMatcher<'a> {
-    pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB, solve_for_t0: bool) -> Self {
+    pub fn new(book: &'a OrderBook, tob: DeltaMatcherToB) -> Self {
         // Dump if matcher dumps are enabled
         if tracing::event_enabled!(target: "dump::delta_matcher", Level::TRACE) {
             // Dump the solution
-            let json = serde_json::to_string(&(book, tob.clone(), solve_for_t0)).unwrap();
+            let json = serde_json::to_string(&(book, tob.clone())).unwrap();
             let b64_output = base64::prelude::BASE64_STANDARD.encode(json.as_bytes());
             trace!(target: "dump::delta_matcher", data = b64_output, "Raw DeltaMatcher data");
         }
@@ -96,12 +90,30 @@ impl<'a> DeltaMatcher<'a> {
             DeltaMatcherToB::None => book.amm().map(|book| book.noop())
         };
 
-        Self { book, amm_start_location, fee, solve_for_t0 }
+        Self { book, amm_start_location, fee }
     }
 
     /// panics if there is no amm swap
     pub fn try_get_amm_location(&self) -> &PoolSwapResult<'_> {
         self.amm_start_location.as_ref().unwrap()
+    }
+
+    fn process_swap(&self, is_bid: bool, res: PoolSwapResult<'_>) -> (I256, I256) {
+        if is_bid {
+            // if the amm is swapping from zero to one, it means that we need more liquidity
+            // it in token 1 and less in token zero
+            (
+                I256::try_from(res.total_d_t0).unwrap() * I256::MINUS_ONE,
+                I256::try_from(res.total_d_t1).unwrap()
+            )
+        } else {
+            // if we are one for zero, means we are adding liquidity in t0 and removing in
+            // t1
+            (
+                I256::try_from(res.total_d_t0).unwrap(),
+                I256::try_from(res.total_d_t1).unwrap() * I256::MINUS_ONE
+            )
+        }
     }
 
     fn fetch_concentrated_liquidity(&self, price: Ray) -> (I256, I256) {
@@ -127,30 +139,7 @@ impl<'a> DeltaMatcher<'a> {
             return Default::default();
         };
 
-        trace!(
-            ?start_sqrt,
-            ?end_sqrt,
-            ?price,
-            res.total_d_t0,
-            res.total_d_t1,
-            is_bid,
-            "AMM swap calc"
-        );
-        if is_bid {
-            // if the amm is swapping from zero to one, it means that we need more liquidity
-            // it in token 1 and less in token zero
-            (
-                I256::try_from(res.total_d_t0).unwrap() * I256::MINUS_ONE,
-                I256::try_from(res.total_d_t1).unwrap()
-            )
-        } else {
-            // if we are one for zero, means we are adding liquidity in t0 and removing in
-            // t1
-            (
-                I256::try_from(res.total_d_t0).unwrap(),
-                I256::try_from(res.total_d_t1).unwrap() * I256::MINUS_ONE
-            )
-        }
+        self.process_swap(is_bid, res)
     }
 
     /// Combined method that finds total order liquidity available at a price.
@@ -169,13 +158,12 @@ impl<'a> DeltaMatcher<'a> {
     /// the data we gather here and the values we choose for minimum required
     /// fill and maximum possible fill/slack are designed to support this
     /// matching technique
-    fn order_liquidity(&self, price: Ray, killed: &HashSet<OrderId>) -> OrderLiquidity {
+    fn order_liquidity(&self, price: Ray, perma_killed: &HashSet<OrderId>) -> OrderLiquidity {
         let mut net_t0 = I256::ZERO;
         let mut net_t1 = I256::ZERO;
+        let mut min_t1_ucp = I256::ZERO;
 
-        let mut bid_slack = (0_u128, 0_u128);
-        let mut ask_slack = (0_u128, 0_u128);
-        let mut killable_orders = vec![];
+        let mut last_mile_solve = HashSet::new();
 
         // Iterate over all the orders valid at this price
         self.book
@@ -188,30 +176,31 @@ impl<'a> DeltaMatcher<'a> {
                     .iter()
                     .filter(|o| price >= o.pre_fee_price(self.fee))
             )
-            .filter(|o| !killed.contains(&o.order_id))
+            .filter(|o| !perma_killed.contains(&o.order_id))
             .for_each(|o| {
                 // If we're precisely at our target price, we determine what our minimum and
                 // maximum output is for this order.  Otherwise our minimum is "all of it"
                 let at_price = price == o.price_t1_over_t0();
-                let (min_q, max_q) = if at_price {
-                    if o.is_partial() {
-                        // Partial orders at the price have a range
-                        (o.min_amount(), Some(o.amount()))
+                let min_q = o.amount();
+
+                if at_price {
+                    last_mile_solve.insert(o.order_id);
+                    let (min_in, min_out) = Self::get_amount_in_out(o, min_q, self.fee, price);
+
+                    if o.is_bid {
+                        min_t1_ucp += I256::unchecked_from(min_in)
                     } else {
-                        // Exact orders at the price need to be registered as killable
-                        let order_q = o.amount();
-                        killable_orders.push((o.order_id, order_q, o.is_bid));
-                        (order_q, None)
+                        min_t1_ucp += I256::unchecked_from(min_out).saturating_neg()
                     }
-                } else {
-                    // All other orders are completely filled
-                    (o.amount(), None)
+
+                    return;
                 };
 
                 // Calculate and account for our minimum fill, preserving quantity numbers in
                 // case we need to use them for slack later
 
                 let (min_in, min_out) = Self::get_amount_in_out(o, min_q, self.fee, price);
+
                 // Add the mandatory portion of this order to our overall delta
                 let s_in = I256::try_from(min_in).unwrap();
                 let s_out = I256::try_from(min_out).unwrap();
@@ -227,251 +216,293 @@ impl<'a> DeltaMatcher<'a> {
 
                 // If we have a maximum available amount, put that into our slack to be matched
                 // later
-                let (t0_s, t1_s) = if let Some(fill_amount) = max_q {
-                    let (max_in, max_out) =
-                        Self::get_amount_in_out(o, fill_amount, self.fee, price);
-                    if o.is_bid {
-                        let t0_s = max_out - min_out;
-                        let t1_s = max_in - min_in;
-                        bid_slack.0 += t0_s;
-                        bid_slack.1 += t1_s;
-                        (t0_s, t1_s)
-                    } else {
-                        let t0_s = max_in - min_in;
-                        let t1_s = max_out - min_out;
-                        ask_slack.0 += t0_s;
-                        ask_slack.1 += t1_s;
-                        (t0_s, t1_s)
-                    }
-                } else {
-                    (0, 0)
-                };
-                trace!(at_price, is_bid = o.is_bid, ?t0_d, ?t1_d, t0_s, t1_s, "Processed order");
+                trace!(at_price, is_bid = o.is_bid, ?t0_d, ?t1_d, "Processed order");
             });
-        OrderLiquidity { net_t0, net_t1, bid_slack, ask_slack, killable_orders }
+
+        OrderLiquidity { net_t0, net_t1, last_mile_solve, min_at_ucp_t1: min_t1_ucp }
     }
 
-    fn check_killable_orders(
-        killable_orders: &[(OrderId, u128, bool)],
-        is_bid: bool,
-        min_target: u128
-    ) -> (u128, Option<Vec<OrderId>>) {
-        let (total_elim, order_ids) = killable_orders
-            .iter()
-            .filter(|x| x.2 == is_bid)
-            .sorted_by_key(|x| Reverse(x.1))
-            .fold_while::<(u128, Option<Vec<OrderId>>), _>(
-                (0_u128, None),
-                |(total_elim, mut elim_ids), (order_id, order_q, _)| {
-                    let elim_vec = elim_ids.get_or_insert_default();
-                    elim_vec.push(*order_id);
-                    let new_elim = total_elim + *order_q;
-                    let new_acc = (new_elim, elim_ids);
-                    if new_elim > min_target {
-                        itertools::FoldWhile::Done(new_acc)
+    /// NOTE: only implied for solve for t1
+    fn solve_last_mile(
+        &self,
+        price: Ray,
+        liq: OrderLiquidity,
+        amm: (I256, I256)
+    ) -> Option<SupplyDemandResult> {
+        let (amm_t0, amm_t1) = amm;
+        let OrderLiquidity { net_t0, net_t1, last_mile_solve, .. } = liq;
+        let mut t1_sum = amm_t1 + net_t1;
+        let mut t0_sum = amm_t0 + net_t0;
+
+        let mut current_solve = None;
+
+        // we might be naturally equal but if we can solve more volume with partials,
+        // than this solution is objectively better
+        if t1_sum.is_zero() {
+            // any remainder t0 should be donated.
+            let t0_reward = t0_sum
+                .is_positive()
+                .then(|| t0_sum.into_raw().to::<u128>())
+                .unwrap_or_default();
+
+            current_solve =
+                Some(SupplyDemandResult::NaturallyEqual(last_mile_solve.clone(), t0_reward));
+        }
+
+        let mut t1_bid_slack = 0u128;
+        let mut t1_ask_slack = 0u128;
+        let mut remaining_killed = last_mile_solve.clone();
+
+        for order in itertools::kmerge_by(
+            vec![
+                self.book
+                    .bids()
+                    .into_iter()
+                    .filter(|f| last_mile_solve.contains(&f.order_id))
+                    .collect_vec(),
+                self.book
+                    .asks()
+                    .into_iter()
+                    .filter(|f| last_mile_solve.contains(&f.order_id))
+                    .collect::<Vec<_>>(),
+            ],
+            |a: &&OrderWithStorageData<AllOrders>, b: &&OrderWithStorageData<AllOrders>| {
+                a.priority_data.volume.lt(&b.priority_data.volume)
+            }
+        ) {
+            // we are processing and thus needs to be removed.
+            remaining_killed.remove(&order.order_id);
+
+            if order.is_bid {
+                let (min_in, min_out) =
+                    Self::get_amount_in_out(order, order.min_amount(), self.fee, price);
+                let (max_in, _) = Self::get_amount_in_out(order, order.amount(), self.fee, price);
+                let delta_v = (min_in != max_in)
+                    .then_some(max_in - min_in)
+                    .unwrap_or_default();
+
+                t1_bid_slack += delta_v;
+                t1_sum += I256::unchecked_from(min_in);
+                t0_sum += I256::unchecked_from(min_out).saturating_neg();
+            } else {
+                let (min_in, min_out) =
+                    Self::get_amount_in_out(order, order.min_amount(), self.fee, price);
+                let (_, max_out) = Self::get_amount_in_out(order, order.amount(), self.fee, price);
+
+                let delta_v = (min_out != max_out)
+                    .then_some(max_out - min_out)
+                    .unwrap_or_default();
+
+                t1_ask_slack += delta_v;
+                t1_sum += I256::unchecked_from(min_out).saturating_neg();
+                t0_sum += I256::unchecked_from(min_in);
+            }
+
+            // The first thing we try to do is see if we can solve with all the orders and
+            // compose with partial.
+
+            // The logic gets messy here
+            if t1_sum.is_zero() {
+                let t0_reward = t0_sum
+                    .is_positive()
+                    .then(|| t0_sum.into_raw().to::<u128>())
+                    .unwrap_or_default();
+
+                current_solve =
+                    Some(SupplyDemandResult::NaturallyEqual(remaining_killed.clone(), t0_reward));
+            } else if t1_sum.is_positive() {
+                // if we are positive, we want to see if we can add some amount of ask-slack to
+                // make this zero
+                let delta = t1_sum - I256::unchecked_from(t1_ask_slack);
+
+                // we can solve here
+                if delta.is_negative() || delta.is_zero() {
+                    let rem = delta.abs().into_raw().to::<u128>();
+
+                    // we solve with only a full fill on 1 side
+                    let (ask_q, bid_q) = if rem.is_zero() {
+                        (t1_ask_slack, 0)
                     } else {
-                        itertools::FoldWhile::Continue(new_acc)
-                    }
+                        if rem > t1_bid_slack {
+                            // If our remainder is more than our total bid-slack,
+                            // we can full fill this with our remainder t1_bid_slack
+                            (t1_sum.into_raw().to::<u128>() + t1_bid_slack, t1_bid_slack)
+                        } else {
+                            // If we have less remainder than our bid_slack,
+                            // we can fill for full remainder amount
+                            (t1_sum.into_raw().to::<u128>() + rem, rem)
+                        }
+                    };
+
+                    let abs_excess = t1_sum.abs().into_raw().to::<u128>();
+                    let excess_t0_gain = price.inverse_quantity(abs_excess, true);
+                    let final_t0 = t0_sum + I256::unchecked_from(excess_t0_gain);
+
+                    let reward_t0 = if final_t0.is_positive() {
+                        final_t0.unsigned_abs().to::<u128>()
+                    } else {
+                        0_u128
+                    };
+
+                    current_solve = Some(SupplyDemandResult::PartialFillEq {
+                        bid_fill_q: bid_q,
+                        ask_fill_q: ask_q,
+                        reward_t0,
+                        killed: remaining_killed.clone()
+                    });
+
+                    continue;
                 }
-            )
-            .into_inner();
-        // We only suggest killing orders if we can actually succeed at fixing this
-        // price
-        if total_elim >= min_target { (total_elim, order_ids) } else { (0_u128, None) }
+            } else {
+                // Case were we are negative.
+                let delta = t1_sum + I256::unchecked_from(t1_bid_slack);
+
+                if delta.is_positive() || delta.is_zero() {
+                    let rem = delta.into_raw().to::<u128>();
+
+                    // we solve with only a full fill on 1 side
+                    let (ask_q, bid_q) = if rem.is_zero() {
+                        (0, t1_bid_slack)
+                    } else {
+                        if rem > t1_ask_slack {
+                            // if we have more remainder than we can subtract, we subtract full
+                            // slack
+                            (t1_ask_slack, t1_sum.abs().into_raw().to::<u128>() + t1_ask_slack)
+                        } else {
+                            // If we have more ask slack, we put in full remainder
+                            (rem, t1_sum.abs().into_raw().to::<u128>() + rem)
+                        }
+                    };
+
+                    let abs_excess = t1_sum.abs().into_raw().to::<u128>();
+                    let excess_t0_cost = price.inv_ray().inverse_quantity(abs_excess, false);
+                    let reward_t0 = if t0_sum.is_positive() {
+                        t0_sum
+                            .unsigned_abs()
+                            .to::<u128>()
+                            .saturating_sub(excess_t0_cost)
+                    } else {
+                        0_u128
+                    };
+
+                    current_solve = Some(SupplyDemandResult::PartialFillEq {
+                        bid_fill_q: bid_q,
+                        ask_fill_q: ask_q,
+                        reward_t0,
+                        killed: remaining_killed.clone()
+                    });
+
+                    continue;
+                }
+            }
+        }
+
+        current_solve
     }
 
     fn check_ucp(
         &self,
         price: Ray,
-        killed: &HashSet<OrderId>
+        perma_killed: &HashSet<OrderId>,
+        try_kill: bool
     ) -> (CheckUcpStats, SupplyDemandResult) {
-        let (amm_t0, amm_t1) = self.fetch_concentrated_liquidity(price);
+        let amm = self.fetch_concentrated_liquidity(price);
 
-        let OrderLiquidity { net_t0, net_t1, bid_slack, ask_slack, killable_orders } =
-            self.order_liquidity(price, killed);
-
-        let t0_sum = amm_t0 + net_t0;
-        let t1_sum = amm_t1 + net_t1;
-
-        tracing::trace!(
-            ?amm_t0,
-            ?amm_t1,
-            ?net_t0,
-            ?net_t1,
-            ?t0_sum,
-            ?t1_sum,
-            ?bid_slack,
-            ?ask_slack,
-            "Liquidity sums"
-        );
+        let liq = self.order_liquidity(price, perma_killed);
+        let t1_sum = amm.1 + liq.net_t1;
+        let t1_sum_with_end_min = t1_sum + liq.min_at_ucp_t1;
+        let all_current_killable = liq.last_mile_solve.clone();
 
         let stats = CheckUcpStats {
-            amm_t0,
-            amm_t1,
-            order_t0: net_t0,
-            order_t1: net_t1,
-            order_bid_slack: bid_slack,
-            order_ask_slack: ask_slack
+            amm_t0:   amm.0,
+            amm_t1:   amm.1,
+            order_t0: liq.net_t0,
+            order_t1: liq.net_t1
         };
 
-        if t0_sum.is_zero() && t1_sum.is_zero() {
-            return (stats, SupplyDemandResult::NaturallyEqual);
+        // If we have a solve on the last mile.
+        if let Some(res) = self.solve_last_mile(price, liq, amm) {
+            return (stats, res);
         }
 
-        // Depending on how we're solving, we want to look at a specific excess
-        // liquidity
-        let excess_liquidity = if self.solve_for_t0 { &t0_sum } else { &t1_sum };
+        let kills = try_kill.then(||
+            // we can look at just the min here as we know that if there was a intersection with
+            // the positive, we would of had a fill via last mile solve.
+            if t1_sum_with_end_min.is_positive() {
+                // remove bids.
+                 self.calculate_kills(price, true, all_current_killable, t1_sum_with_end_min.into_raw().to())
+            } else {
+                // remove asks
+                 self.calculate_kills(price, false, all_current_killable, t1_sum_with_end_min.abs().into_raw().to())
+            }).flatten();
 
-        // See if we have any partial amount available that actually drains liquidity
-        let (available_drain, available_add, bid_is_input) = if self.solve_for_t0 {
-            (bid_slack.0, ask_slack.0, false)
+        if t1_sum.is_positive() {
+            (stats, SupplyDemandResult::MoreSupply(kills))
         } else {
-            (ask_slack.1, bid_slack.1, true)
+            (stats, SupplyDemandResult::MoreDemand(kills))
+        }
+    }
+
+    /// given the current ucp, what orders
+    fn calculate_kills(
+        &self,
+        price: Ray,
+        bids: bool,
+        orders: HashSet<OrderId>,
+        target_amount: u128
+    ) -> Option<Vec<OrderId>> {
+        let (total_killed, ids) = if bids {
+            self.book
+                .bids()
+                .into_iter()
+                .filter(|o| orders.contains(&o.order_id))
+                .sorted_by(|a, b| b.priority_data.volume.cmp(&a.priority_data.volume))
+                .fold_while::<(u128, Option<Vec<OrderId>>), _>(
+                    (0_u128, None),
+                    |(total_elim, mut elim_ids), order| {
+                        let elim_vec = elim_ids.get_or_insert_default();
+                        let (t1_bid, _) =
+                            Self::get_amount_in_out(order, order.amount(), self.fee, price);
+
+                        elim_vec.push(order.order_id);
+                        let new_elim = total_elim + t1_bid;
+                        let new_acc = (new_elim, elim_ids);
+                        if new_elim > target_amount {
+                            itertools::FoldWhile::Done(new_acc)
+                        } else {
+                            itertools::FoldWhile::Continue(new_acc)
+                        }
+                    }
+                )
+                .into_inner()
+        } else {
+            self.book
+                .asks()
+                .into_iter()
+                .filter(|o| orders.contains(&o.order_id))
+                .sorted_by(|a, b| b.priority_data.volume.cmp(&a.priority_data.volume))
+                .fold_while::<(u128, Option<Vec<OrderId>>), _>(
+                    (0_u128, None),
+                    |(total_elim, mut elim_ids), order| {
+                        let elim_vec = elim_ids.get_or_insert_default();
+                        // if were a ask
+                        let (_, t1_ask) =
+                            Self::get_amount_in_out(order, order.amount(), self.fee, price);
+
+                        elim_vec.push(order.order_id);
+                        let new_elim = total_elim + t1_ask;
+                        let new_acc = (new_elim, elim_ids);
+                        if new_elim > target_amount {
+                            itertools::FoldWhile::Done(new_acc)
+                        } else {
+                            itertools::FoldWhile::Continue(new_acc)
+                        }
+                    }
+                )
+                .into_inner()
         };
 
-        // We need our absolute excess in all cases here
-        let abs_excess = excess_liquidity.unsigned_abs().saturating_to::<u128>();
-
-        // We should see if we can fix our excess liquidity to be within the realm of
-        // our add?
-
-        // Option<(bid_partial_fill, ask_partial_fill)
-        let (bid_fill_q, ask_fill_q, reward_t0) = if excess_liquidity.is_negative() {
-            // If our available fill is not enough to resolve our excess liquidity, we can
-            // end here
-            let Some(remaining_add) = available_add.checked_sub(abs_excess) else {
-                // See if we can find an order we can kill to fix the problem
-                let min_target = abs_excess - available_add;
-                let (_, ko) =
-                    Self::check_killable_orders(&killable_orders, bid_is_input, min_target);
-                return (stats, SupplyDemandResult::MoreDemand(ko));
-            };
-            // Otherwise let's see if we can fill any extra after this
-            let additional_fillable = min(remaining_add, available_drain);
-            if self.solve_for_t0 {
-                // If I'm solving for T0, asks are providing me the extra T0 I need and bids are
-                // matched with my additional_fillable.
-
-                // For T0 solve we do not expect to have excess T0 to donate so `reward_t0` is
-                // just zero.
-
-                (price.quantity(additional_fillable, false), abs_excess + additional_fillable, 0)
-            } else {
-                // For T1 swap, we want to figure out how much excess T0 we have, which will
-                // become our `reward_t0`.  We can assume that we will be swapping all of our
-                // excess T1 (`abs_excess`) for T0 and that will be the amount of extra T0 we
-                // have to give as a reward. `additional_fillable` is based on orders that have
-                // been matched against each other, so its effect on our net balances should be
-                // zero and it is allocated to partial orders on both sides of the book.
-
-                // `abs_excess` is in T1 and on this path it is an underflow (negative
-                // quantity), we will be getting our additional T1 from bid orders.  We should
-                // also have an excess of T0 at this point that we're selling to those bid
-                // orders, so we need to calculate how much of our T0 excess will be leaving
-                // before we allocate the rest to rewards.  We would like to overestimate this
-                // sum if possible to make sure we never have rounding errors.
-
-                // We know that each bid order will round its output down, so if we convert
-                // `abs_excess` to T0 at our UCP, we can also round down.  We can presume that
-                // there will be at least 1 bid order accepting the T0 (also rounding down),
-                // and if there is more than one order we will get multiple round-downs which
-                // will mean that the actual output can only be lower than this estimate and we
-                // can only successfully overestimate.
-
-                // This is our overestimation of how much T0 we are sending out to bids
-                let excess_t0_cost = price.inv_ray().inverse_quantity(abs_excess, false);
-                // If we already have a surplus of T0 in the balance, find out how much we will
-                // have left after we settle the bids providing our excess T1.  That's our
-                // reward quantity. (If `t0_sum` is already negative we are in a bad place
-                // overall and surely have nothing to donate to rewards)
-                let reward_t0 = if t0_sum.is_positive() {
-                    t0_sum
-                        .unsigned_abs()
-                        .to::<u128>()
-                        .saturating_sub(excess_t0_cost)
-                } else {
-                    0_u128
-                };
-
-                (
-                    // Bids are providing the extra T1 I need, and we add the amount of T1 our
-                    // partials matched as `additional_fillable`
-                    abs_excess + additional_fillable,
-                    // Asks are only needed to provide the reciprocal match for
-                    // `additional_fillable` (flipped because they are exact_in in T0)
-                    price.inverse_quantity(additional_fillable, false),
-                    // And our rewards
-                    reward_t0
-                )
-            }
-        } else {
-            let Some(remaining_drain) = available_drain.checked_sub(abs_excess) else {
-                // Check if we can do any order killing to fix this and return our status
-                let min_target = abs_excess - available_add;
-                let (_, ko) =
-                    Self::check_killable_orders(&killable_orders, bid_is_input, min_target);
-                return (stats, SupplyDemandResult::MoreSupply(ko));
-            };
-            let additional_drainable = min(remaining_drain, available_add);
-            if self.solve_for_t0 {
-                // If I'm solving for T0, bids are draining my excess T0 and asks are matched
-                // with my additional_fillable
-
-                // For T0 solve we do not expect to have excess T0 to donate so `reward_t0` is
-                // just zero.
-                (
-                    price.quantity(abs_excess + additional_drainable, false),
-                    additional_drainable,
-                    0_u128
-                )
-            } else {
-                // This is very similar to above but we're going to logic it through in the
-                // opposite direction.
-
-                // `abs_excess` is in T1 and on this path it is an overflow (positive
-                // quantity), we will be draining our excess T1 using ask orders.  We should
-                // also have an underflow of T0 at this point that we're buying from those ask
-                // orders, so we need to calculate how much we will overflow our T0 defecit to
-                // know how much we can allocate to rewards.  We would like to underestimate
-                // this sum if possible to make sure we never have rounding errors.
-
-                // We know that each ask order will round its input up, so if we convert
-                // `abs_excess` to T0 at our UCP, we can also round up.  We can presume that
-                // there will be at least 1 ask order providing the T0 (also rounding up),
-                // and if there is more than one order we will get multiple round-ups which
-                // will mean that the actual input can only be higher than this estimate and we
-                // can only successfully underestimate.
-
-                // This is our underestimation of how much T0 we are getting in from asks
-                let excess_t0_gain = price.inverse_quantity(abs_excess, true);
-                // We should already have a defecit of T0 in the balance and this sale should
-                // bring it positive.  If `t0_sum` is already positive...that's weird, but we
-                // can still do this math.  So we see where we stand after our gain and donate
-                // whatever positive value we have.
-                let final_t0 = t0_sum + I256::unchecked_from(excess_t0_gain);
-                let reward_t0 = if final_t0.is_positive() {
-                    final_t0.unsigned_abs().to::<u128>()
-                } else {
-                    0_u128
-                };
-
-                // Bids will round up so if we round-down for bids we will only have extra in
-                // For asks we already know how much new T0 we're getting in with no change
-                (
-                    // Bids are only needed to provide the reciprocal match for
-                    // `additional_fillable` (not flipped because they are exact_in in T1)
-                    additional_drainable,
-                    // Asks are draining the extra T1 I have, and we add the amount of T1 our
-                    // partials matched as `additional_fillable`.  We need to flip this because
-                    // asks are exact_in in T0.
-                    price.inverse_quantity(abs_excess + additional_drainable, false),
-                    // And our rewards
-                    reward_t0
-                )
-            }
-        };
-
-        (stats, SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 })
+        (total_killed >= target_amount).then_some(ids).flatten()
     }
 
     /// calculates given the supply, demand, optional supply and optional demand
@@ -498,83 +529,79 @@ impl<'a> DeltaMatcher<'a> {
 
     /// helper functions for grabbing all orders that we filled at ucp
     fn fetch_orders_at_ucp(&self, fetch: &UcpSolution) -> Vec<OrderOutcome> {
-        let (mut bid_partial, mut ask_partial) = fetch.partial_fills.unwrap_or_default();
+        let (bid_partial, ask_partial) = fetch.partial_fills.unwrap_or_default();
+
+        //Precompute total deltas for pro-rata calculation
+        let mut total_bid_delta: u128 = 0;
+        let mut total_ask_delta: u128 = 0;
+
+        for o in self.book.all_orders_iter() {
+            if fetch.killed.contains(&o.order_id) {
+                continue;
+            }
+            match (o.price_t1_over_t0().cmp(&fetch.ucp), o.is_bid) {
+                (Ordering::Equal, true) if o.is_partial() => {
+                    let delta = o.amount().saturating_sub(o.min_amount());
+                    total_bid_delta += delta;
+                }
+                (Ordering::Equal, false) if o.is_partial() => {
+                    let delta = o.amount().saturating_sub(o.min_amount());
+                    total_ask_delta += delta;
+                }
+                _ => {}
+            }
+        }
 
         self.book
             .all_orders_iter()
             .map(|o| {
                 let outcome = if fetch.killed.contains(&o.order_id) {
-                    // Killed orders are killed
                     OrderFillState::Killed
                 } else {
                     match (o.price_t1_over_t0().cmp(&fetch.ucp), o.is_bid) {
-                        // A bid with a higher price than UCP or an ask with a lower price than UCP
-                        // is filled
+                        // Fully filled orders
                         (Ordering::Greater, true) | (Ordering::Less, false) => {
-                            trace!("Order completely filled due to price position");
                             OrderFillState::CompleteFill
                         }
-                        // A bid with a lower price than UCP or an ask with a higher price than UCP
-                        // is unfilled
+                        // Fully unfilled orders
                         (Ordering::Greater, false) | (Ordering::Less, true) => {
-                            trace!("Order unfilled due to price position");
                             OrderFillState::Unfilled
                         }
-                        // At the precise price, we've already sorted our partial orders to be
-                        // before our exact orders.  We attempt to fill
-                        // orders as completely as possible in the
-                        // order in which we encounter them.
-                        //
-                        // This does make the presumption that our book sort strategy has properly
-                        // ordered things.  This is probably fine for now but in the long run if we
-                        // have multiple different strategies we probably
-                        // want to isolate them a bit more so
-                        // we can properly enact diverse order sorting and filling strategies across
-                        // the board
-                        (Ordering::Equal, _) => {
-                            let partial_q =
-                                if o.is_bid { &mut bid_partial } else { &mut ask_partial };
-                            if *partial_q > 0 {
-                                // If we have partial to fill, check to see if we have enough to
-                                // completely fill this order
-                                let max_partial = if o.is_partial() {
-                                    o.amount() - o.min_amount()
-                                } else {
-                                    o.min_amount()
-                                };
-                                let res = if *partial_q > max_partial {
-                                    trace!(
-                                        o.is_bid,
-                                        partial_q,
-                                        max_partial,
-                                        "Partial order completely filled at UCP"
-                                    );
-                                    OrderFillState::CompleteFill
-                                } else {
-                                    trace!(
-                                        o.is_bid,
-                                        partial_q, "Partial order partially filled at UCP"
-                                    );
-                                    OrderFillState::PartialFill(o.min_amount() + *partial_q)
-                                };
-                                *partial_q = partial_q.saturating_sub(max_partial);
-                                res
-                            } else if o.is_partial() {
-                                // A partial order that we have no remaining
-                                // slack to fill with was still filled for its
-                                // minimum amount as per our algorithm
-                                OrderFillState::PartialFill(o.min_amount())
+                        // Partial fill candidates at UCP
+                        (Ordering::Equal, true) => {
+                            if !o.is_partial() {
+                                OrderFillState::CompleteFill
                             } else {
-                                // An exact order that we cannot fill (due to 0 remaining slack) is
-                                // Unfilled
-                                OrderFillState::Unfilled
+                                let delta = o.amount().saturating_sub(o.min_amount());
+                                if delta == 0 || total_bid_delta == 0 {
+                                    OrderFillState::PartialFill(o.min_amount())
+                                } else {
+                                    let portion =
+                                        (delta as u128 * bid_partial as u128) / total_bid_delta;
+                                    OrderFillState::PartialFill(o.min_amount() + portion)
+                                }
+                            }
+                        }
+                        (Ordering::Equal, false) => {
+                            if !o.is_partial() {
+                                OrderFillState::CompleteFill
+                            } else {
+                                let delta = o.amount().saturating_sub(o.min_amount());
+                                if delta == 0 || total_ask_delta == 0 {
+                                    OrderFillState::PartialFill(o.min_amount())
+                                } else {
+                                    let portion =
+                                        (delta as u128 * ask_partial as u128) / total_ask_delta;
+                                    OrderFillState::PartialFill(o.min_amount() + portion)
+                                }
                             }
                         }
                     }
                 };
+
                 OrderOutcome { id: o.order_id, outcome }
             })
-            .collect::<Vec<_>>()
+            .collect()
     }
 
     /// Return the NetAmmOrder that moves the AMM to our UCP
@@ -636,6 +663,97 @@ impl<'a> DeltaMatcher<'a> {
         }
     }
 
+    /// For all cases, because of the precision RAY offers, we will overshoot
+    /// the amm a lot, this means that there is a solution with the amm were
+    /// we don't solve because amm doesn't have the same precision as ray.
+    /// There are also other cases were Ray itself doesn't have the
+    /// precision. In these cases, this amount will always be less than 1 unit
+    /// delta of SqrtPriceX96. because of this, we assume that any dusting
+    /// within the bounds of 1 SqrtPriceX96 unit to be valid solution.
+    fn fetch_lower_upper_liq_bounds(&self, price: Ray, stats: &CheckUcpStats) -> Option<U256> {
+        let end_mid_sqrt = if price.within_sqrt_price_bounds() {
+            SqrtPriceX96::from(price)
+        } else {
+            return None;
+        };
+
+        let end_upper_sqrt = end_mid_sqrt + SqrtPriceX96::from(U256_1);
+        let end_lower_sqrt = end_mid_sqrt - SqrtPriceX96::from(U256_1);
+
+        let Some(pool) = self.amm_start_location.as_ref() else { return Default::default() };
+        let start_sqrt = pool.end_price;
+
+        // Handle upper.
+        let is_bid = start_sqrt >= end_upper_sqrt;
+        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_upper_sqrt) else {
+            return Default::default();
+        };
+        let (_, t1_upper) = self.process_swap(is_bid, res);
+
+        // Handle lower.
+        let is_bid = start_sqrt >= end_lower_sqrt;
+        let Ok(res) = pool.swap_to_price(Direction::from_is_bid(is_bid), end_lower_sqrt) else {
+            return Default::default();
+        };
+        let (_, t1_lower) = self.process_swap(is_bid, res);
+
+        // we take the biggest 1 SqrtPriceX96 unit move and return this
+
+        let (t1_upper, t1, t1_lower) = (t1_upper.abs(), stats.amm_t1.abs(), t1_lower.abs());
+        if t1_upper > t1 {
+            Some((t1_upper - t1).max(t1 - t1_lower)).map(|i| i.into_raw())
+        } else {
+            Some((t1 - t1_upper).max(t1_lower - t1)).map(|i| i.into_raw())
+        }
+    }
+
+    fn try_solve_dust_solution(
+        &self,
+        stats: &CheckUcpStats,
+        res: &SupplyDemandResult,
+        p_mid: Ray,
+        dust: Option<&(U256, UcpSolution)>,
+        killed: &HashSet<OrderId>
+    ) -> Option<(U256, UcpSolution)> {
+        // while this works. Dusting should actually be bounding by the limitation of
+        // the amm's SqrtPriceX96 precision.
+
+        let (total_liq, price_for_one) =
+            (stats.amm_t1 + stats.order_t1, self.fetch_lower_upper_liq_bounds(p_mid, stats)?);
+
+        if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
+            // Check to see if our excess is within one price unit
+            if e <= price_for_one {
+                trace!("Valid dust solution found");
+                // We have a dust solution, let's store it
+                let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
+                if e < dust_q {
+                    let (partial_fills, reward_t0) = if let SupplyDemandResult::PartialFillEq {
+                        bid_fill_q,
+                        ask_fill_q,
+                        reward_t0,
+                        killed: _
+                    } = res
+                    {
+                        (Some((*bid_fill_q, *ask_fill_q)), *reward_t0)
+                    } else {
+                        (None, 0_u128)
+                    };
+                    let solution = UcpSolution {
+                        ucp: p_mid,
+                        killed: killed.clone(),
+                        partial_fills,
+                        reward_t0
+                    };
+
+                    return Some((e, solution));
+                }
+            }
+        }
+
+        None
+    }
+
     #[tracing::instrument(level = "debug", skip(self))]
     fn solve_clearing_price(&self) -> Option<UcpSolution> {
         // p_max is (highest bid || (MAX_PRICE - 1)) + 1
@@ -645,7 +763,7 @@ impl<'a> DeltaMatcher<'a> {
 
         let two = U256::from(2);
         let four = U256::from(4);
-        let mut killed = HashSet::new();
+        let mut perma_killed = HashSet::new();
         let mut dust: Option<(U256, UcpSolution)> = None;
 
         // Loop on a checked sub, if our prices ever overlap we'll terminate the loop
@@ -657,85 +775,86 @@ impl<'a> DeltaMatcher<'a> {
             // We're willing to kill orders if and only if we're at the end of our
             // iteration.  I believe that a distance of four will capture the last 2 cycles
             // of iteration
-            let can_kill = diff <= four;
+            let can_perma_kill = diff <= four;
             // Find the midpoint that we'll be testing
             let p_mid = (p_max + p_min) / two;
 
             // the delta of t0
             let (stats, res) = {
-                let check_ucp_span = tracing::trace_span!("check_ucp", price = ?p_mid, can_kill);
-                check_ucp_span.in_scope(|| self.check_ucp(p_mid, &killed))
+                let check_ucp_span =
+                    tracing::trace_span!("check_ucp", price = ?p_mid, can_perma_kill);
+                check_ucp_span.in_scope(|| self.check_ucp(p_mid, &perma_killed, can_perma_kill))
             };
 
             // If we're on our last iterations, check to see if we can come up with a
             // "within_one" solution
 
             // Check to see if we've found a valid dust solution that is better than our
-            // current dust solution if it exists
-            let (total_liq, price_for_one) = if self.solve_for_t0 {
-                (stats.amm_t0 + stats.order_t0, p_mid.price_of(Quantity::Token1(1), false))
-            } else {
-                (stats.amm_t1 + stats.order_t1, p_mid.price_of(Quantity::Token0(1), false))
-            };
-            trace!(?total_liq, price_for_one, "Calculating for dust");
-            if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
-                // Check to see if our excess is within one price unit
-                if e < U256::from(price_for_one) {
-                    trace!("Valid dust solution found");
-                    // We have a dust solution, let's store it
-                    let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
-                    if e < dust_q {
-                        let (partial_fills, reward_t0) =
-                            if let SupplyDemandResult::PartialFillEq {
-                                bid_fill_q,
-                                ask_fill_q,
-                                reward_t0
-                            } = res
-                            {
-                                (Some((bid_fill_q, ask_fill_q)), reward_t0)
-                            } else {
-                                (None, 0_u128)
-                            };
-                        let solution = UcpSolution {
-                            ucp: p_mid,
-                            killed: killed.clone(),
-                            partial_fills,
-                            reward_t0
-                        };
-                        dust = Some((e, solution))
-                    }
-                }
+            // current dust solution if it exists.
+            //
+            if let Some(new_dust) =
+                self.try_solve_dust_solution(&stats, &res, p_mid, dust.as_ref(), &perma_killed)
+            {
+                dust = Some(new_dust);
             }
 
-            match (res, can_kill, self.solve_for_t0) {
-                (SupplyDemandResult::MoreSupply(Some(ko)), true, _)
-                | (SupplyDemandResult::MoreDemand(Some(ko)), true, _) => {
+            match (res, can_perma_kill) {
+                (SupplyDemandResult::MoreSupply(Some(ko)), true)
+                | (SupplyDemandResult::MoreDemand(Some(ko)), true) => {
                     tracing::info!(order_ids = ? ko, "Killing orders");
                     // Add our killed order to the set of orders we're skipping
-                    killed.extend(ko);
+                    perma_killed.extend(ko);
                     // Reset our price bounds so we start our match over
                     p_max = Ray::from(self.book.highest_clearing_price().saturating_add(U256_1));
                     p_min = Ray::from(self.book.lowest_clearing_price().saturating_sub(U256_1));
                 }
                 // If there's too much supply of T0 or too much demand of T1, we want to look at a
                 // lower price
-                (SupplyDemandResult::MoreSupply(_), _, true)
-                | (SupplyDemandResult::MoreDemand(_), _, false) => p_max = p_mid,
+                (SupplyDemandResult::MoreDemand(_), _) => p_max = p_mid,
                 // If there's too much supply of T1 or too much demand for T0, we want to look at a
                 // higher price
-                (SupplyDemandResult::MoreSupply(_), _, false)
-                | (SupplyDemandResult::MoreDemand(_), _, true) => p_min = p_mid,
-                (SupplyDemandResult::NaturallyEqual, ..) => {
-                    debug!(ucp = ?p_mid, partial = false, reward_t0 = 0_u128, ?stats.amm_t0, ?stats.amm_t1, ?stats.order_t0, ?stats.order_t1, ?stats.order_bid_slack, ?stats.order_ask_slack, "Pool solution found");
+                (SupplyDemandResult::MoreSupply(_), _) => p_min = p_mid,
+                (SupplyDemandResult::NaturallyEqual(mut killed, reward), ..) => {
+                    killed.extend(perma_killed.clone());
+                    debug!(
+                        ucp = ?p_mid,
+                        partial = false,
+                        reward_t0 = reward,
+                        ?stats.amm_t0,
+                        ?stats.amm_t1,
+                        ?stats.order_t0,
+                        ?stats.order_t1,
+                        "Pool solution found"
+                    );
                     return Some(UcpSolution {
                         ucp: p_mid,
                         killed,
                         partial_fills: None,
-                        reward_t0: 0_u128
+                        reward_t0: reward
                     });
                 }
-                (SupplyDemandResult::PartialFillEq { bid_fill_q, ask_fill_q, reward_t0 }, ..) => {
-                    debug!(ucp = ?p_mid, partial = true, reward_t0, ?stats.amm_t0, ?stats.amm_t1, ?stats.order_t0, ?stats.order_t1, ?stats.order_bid_slack, ?stats.order_ask_slack, "Pool solution found");
+                (
+                    SupplyDemandResult::PartialFillEq {
+                        bid_fill_q,
+                        ask_fill_q,
+                        reward_t0,
+                        mut killed
+                    },
+                    ..
+                ) => {
+                    debug!(
+                        ucp = ?p_mid,
+                        partial = true,
+                        reward_t0,
+                        ?stats.amm_t0,
+                        ?stats.amm_t1,
+                        ?stats.order_t0,
+                        ?stats.order_t1,
+                        "Pool solution found"
+                    );
+                    killed.extend(perma_killed.clone());
+
+                    // We keep searching as we want to ensure we fill the most orders.
                     return Some(UcpSolution {
                         ucp: p_mid,
                         killed,
@@ -745,12 +864,11 @@ impl<'a> DeltaMatcher<'a> {
                 }
             }
         }
-        if dust.is_some() {
-            debug!("Solved with dust solution");
-        } else {
-            debug!("Unable to solve");
-        }
-        dust.map(|d| d.1)
+
+        dust.map(|d| {
+            tracing::info!(dust=?d.1,"dust solve");
+            d.1
+        })
     }
 }
 
@@ -760,19 +878,18 @@ struct UcpSolution {
     ucp:           Ray,
     /// Orders that were killed in this solution
     killed:        HashSet<OrderId>,
-    /// Partial fill quantities in format `Option<(bid_partial, ask_partial)>`
+    /// Partial fill quantities in format `Option<(bid_partial, ask_partial)>
+    /// lambda bid, lambda ask `
     partial_fills: Option<(u128, u128)>,
     /// Extra T0 that should be added to rewards
     reward_t0:     u128
 }
 
 struct CheckUcpStats {
-    amm_t0:          I256,
-    amm_t1:          I256,
-    order_t0:        I256,
-    order_t1:        I256,
-    order_bid_slack: (u128, u128),
-    order_ask_slack: (u128, u128)
+    amm_t0:   I256,
+    amm_t1:   I256,
+    order_t0: I256,
+    order_t1: I256
 }
 
 #[derive(Debug)]
@@ -784,9 +901,15 @@ pub enum SupplyDemandResult {
     /// as orders that can be killed to establish balance at this price
     MoreDemand(Option<Vec<OrderId>>),
     /// Supply and Demand of our target token type are perfectly balanced!
-    NaturallyEqual,
+    NaturallyEqual(HashSet<OrderId>, u128),
     /// We were able to balance supply and demand by using partial fills and
     /// allocating a reward.  Note that the reward will always be in T0, so when
     /// balancing for T0 we should not see a reward allocated
-    PartialFillEq { bid_fill_q: u128, ask_fill_q: u128, reward_t0: u128 }
+    /// the quantities here refer to the amount of partial fill needed
+    PartialFillEq {
+        bid_fill_q: u128,
+        ask_fill_q: u128,
+        reward_t0:  u128,
+        killed:     HashSet<OrderId>
+    }
 }

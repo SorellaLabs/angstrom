@@ -64,6 +64,20 @@ impl OrderBook {
         self.bids.iter().chain(self.asks.iter())
     }
 
+    /// Returns bid count at ucp and ask count at ucp
+    pub fn partial_order_count_at_ucp(&self, price: Ray) -> (usize, usize) {
+        (
+            self.bids()
+                .iter()
+                .filter(|bid| bid.price_t1_over_t0() == price && bid.is_partial())
+                .count(),
+            self.asks()
+                .iter()
+                .filter(|ask| ask.price_t1_over_t0() == price && ask.is_partial())
+                .count()
+        )
+    }
+
     pub fn amm(&self) -> Option<&BaselinePoolState> {
         self.amm.as_ref()
     }

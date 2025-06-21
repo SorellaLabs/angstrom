@@ -218,6 +218,29 @@ pub struct OrderWithStorageData<Order> {
     pub tob_reward:         U256
 }
 
+impl<O: PartialEq> PartialOrd for OrderWithStorageData<O> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(
+            self.priority_data
+                .price
+                .cmp(&other.priority_data.price)
+                .then_with(|| self.priority_data.volume.cmp(&other.priority_data.volume))
+                .then_with(|| self.priority_data.gas.cmp(&other.priority_data.gas))
+                .then_with(|| {
+                    self.priority_data
+                        .gas_units
+                        .cmp(&other.priority_data.gas_units)
+                })
+        )
+    }
+}
+
+impl<O: Eq> Ord for OrderWithStorageData<O> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 impl<O: RawPoolOrder> OrderWithStorageData<O> {
     pub fn is_currently_valid(&self) -> bool {
         self.is_currently_valid.is_none()

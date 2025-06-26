@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Add, Deref, Sub};
 
 use alloy::primitives::{U160, U256, Uint, aliases::U320};
 use malachite::{
@@ -54,6 +54,26 @@ impl SqrtPriceX96 {
     /// contains PriceX192
     pub fn as_price_x192(&self) -> U320 {
         self.0.widening_mul(self.0)
+    }
+}
+
+impl Add<SqrtPriceX96> for SqrtPriceX96 {
+    type Output = SqrtPriceX96;
+
+    fn add(mut self, rhs: SqrtPriceX96) -> Self::Output {
+        self.0 += rhs.0;
+
+        self
+    }
+}
+
+impl Sub<SqrtPriceX96> for SqrtPriceX96 {
+    type Output = SqrtPriceX96;
+
+    fn sub(mut self, rhs: SqrtPriceX96) -> Self::Output {
+        self.0 -= rhs.0;
+
+        self
     }
 }
 

@@ -114,6 +114,7 @@ sol! {
 impl TopOfBlockOrder {
     /// returns the amount in t0 that this order is bidding in the auction.
     pub fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128> {
+        // Cefi Sell
         if self.is_bid() {
             let res = snapshot.swap_current_with_amount(
                 I256::unchecked_from(self.quantity_in),
@@ -123,6 +124,8 @@ impl TopOfBlockOrder {
                 .checked_sub(self.quantity_out)
                 .ok_or_else(|| eyre!("Not enough output to cover the transaction"))
         } else {
+            // qty am_in -> price
+            // Cefi Buy
             let cost = snapshot
                 .swap_current_with_amount(
                     -I256::unchecked_from(self.quantity_out),
@@ -153,7 +156,7 @@ impl AttestAngstromBlockEmpty {
 
     pub fn is_valid_attestation(target_block: u64, bytes: &Bytes) -> bool {
         // size needs to be 65 + 20
-        if bytes.len() != 85 && !bytes.is_empty() {
+        if bytes.len() != 85 {
             tracing::warn!(bytes=%bytes.len(),"attestation bytes doesn't match expected 85");
             return false;
         }

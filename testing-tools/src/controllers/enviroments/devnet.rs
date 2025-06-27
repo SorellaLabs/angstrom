@@ -78,7 +78,7 @@ where
             let block_sync = GlobalBlockSync::new(0);
             tracing::info!(node_id, "connecting to state provider");
             let provider = if self.config.is_leader(node_id) {
-                let mut initializer = AnvilProvider::new(
+                let mut initializer = AnvilProvider::from_future(
                     AnvilInitializer::new(node_config.clone(), node_addresses.clone())
                         .then(async |v| v.map(|i| (i.0, i.1, Some(i.2)))),
                     false
@@ -93,7 +93,7 @@ where
             } else {
                 tracing::info!(?node_id, "default init");
                 let state_bytes = initial_angstrom_state.clone().unwrap().state.unwrap();
-                let provider = AnvilProvider::new(
+                let provider = AnvilProvider::from_future(
                     WalletProvider::new(node_config.clone())
                         .then(async |v| v.map(|i| (i.0, i.1, None))),
                     false
@@ -113,7 +113,9 @@ where
                 initial_angstrom_state.clone().unwrap(),
                 vec![a],
                 block_sync.clone(),
-                ex.clone()
+                ex.clone(),
+                None,
+                None
             )
             .await?;
             tracing::info!(node_id, "made angstrom node");

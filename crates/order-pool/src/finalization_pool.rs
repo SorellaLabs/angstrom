@@ -4,10 +4,17 @@ use alloy::primitives::FixedBytes;
 use angstrom_metrics::FinalizationOrderPoolMetricsWrapper;
 use angstrom_types::sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData};
 use angstrom_utils::map::OwnedMap;
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinalizationPool {
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     id_to_orders: HashMap<FixedBytes<32>, OrderWithStorageData<AllOrders>>,
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     block_to_ids: HashMap<u64, Vec<FixedBytes<32>>>,
+    #[serde(skip)]
     metrics:      FinalizationOrderPoolMetricsWrapper
 }
 

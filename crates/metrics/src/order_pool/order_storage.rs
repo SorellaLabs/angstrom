@@ -2,7 +2,7 @@ use prometheus::IntGauge;
 
 use crate::METRICS_ENABLED;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct OrderStorageMetrics {
     // number of vanilla limit orders
     vanilla_limit_orders:        IntGauge,
@@ -122,7 +122,7 @@ impl OrderStorageMetrics {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OrderStorageMetricsWrapper(Option<OrderStorageMetrics>);
 
 impl Default for OrderStorageMetricsWrapper {
@@ -132,6 +132,10 @@ impl Default for OrderStorageMetricsWrapper {
 }
 
 impl OrderStorageMetricsWrapper {
+    pub fn empty() -> Self {
+        Self(None)
+    }
+
     pub fn new() -> Self {
         Self(
             METRICS_ENABLED

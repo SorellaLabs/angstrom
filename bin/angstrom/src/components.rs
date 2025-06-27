@@ -21,11 +21,11 @@ use angstrom_eth::{
 use angstrom_network::{
     NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
     VerificationSidecar,
-    manager::StromConsensusEvent,
     pool_manager::{OrderCommand, PoolHandle}
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
+    consensus::StromConsensusEvent,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
@@ -57,11 +57,12 @@ use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAd
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
+use telemetry::init_telemetry;
 use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
 };
-use uniswap_v4::{configure_uniswap_manager, fetch_angstrom_pools};
+use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use validation::{
     common::TokenPriceGenerator,
     init_validation,
@@ -308,7 +309,12 @@ where
     let network_stream = Box::pin(eth_handle.subscribe_network())
         as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-    let uniswap_pool_manager = configure_uniswap_manager(
+    let signer_addr = signer.address();
+    executor.spawn_critical_with_graceful_shutdown_signal("telemetry init", |grace_shutdown| {
+        init_telemetry(signer_addr, grace_shutdown)
+    });
+
+    let uniswap_pool_manager = configure_uniswap_manager::<_, DEFAULT_TICKS>(
         querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,
@@ -382,7 +388,8 @@ where
         handles.orderpool_tx,
         handles.orderpool_rx,
         handles.pool_manager_tx,
-        block_id
+        block_id,
+        |_| {}
     );
     let validators = node_set
         .into_iter()
@@ -425,7 +432,8 @@ where
         submission_handler,
         matching_handle,
         global_block_sync.clone(),
-        handles.consensus_rx_rpc
+        handles.consensus_rx_rpc,
+        None
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

@@ -16,15 +16,19 @@ pub mod user;
 /// wether or not this order is valid.
 pub struct UserAccountProcessor<S> {
     /// keeps track of all user accounts
-    user_accounts:          UserAccounts,
+    pub(crate) user_accounts: UserAccounts,
     /// utils for fetching the required data to verify
     /// a order.
-    pub(crate) fetch_utils: S
+    pub(crate) fetch_utils:   S
 }
 
 impl<S: StateFetchUtils> UserAccountProcessor<S> {
     pub fn new(fetch_utils: S) -> Self {
         let user_accounts = UserAccounts::new();
+        Self { fetch_utils, user_accounts }
+    }
+
+    pub fn new_with_accounts(fetch_utils: S, user_accounts: UserAccounts) -> Self {
         Self { fetch_utils, user_accounts }
     }
 

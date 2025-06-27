@@ -61,6 +61,10 @@ impl GlobalTestingConfig for DevnetConfig {
         TestingConfigKind::Devnet
     }
 
+    fn use_testnet(&self) -> bool {
+        false
+    }
+
     fn anvil_rpc_endpoint(&self, node_id: u64) -> String {
         format!("/tmp/anvil_{node_id}.ipc")
     }

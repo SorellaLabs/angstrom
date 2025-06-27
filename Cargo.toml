@@ -111,7 +111,7 @@ consensus = { path = "./crates/consensus/" }
 contract-bindings = { path = "./crates/contract-bindings/" }
 convert_case = "0"
 criterion = "0"
-dashmap = "6"
+dashmap = { version = "6", features = ["serde"] }
 divan = "0"
 enr = { version = "0", default-features = false, features = ["k256"] }
 eyre = "0"
@@ -192,8 +192,11 @@ ring = "=0.17.12"
 secp256k1 = { version = "0.30", default-features = false, features = ["global-context", "rand", "recovery"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = "1"
+serde_with = "3.13.0"
 serial_test = "3"
 strum = "0"
+telemetry = { path = "./crates/telemetry/" }
+telemetry-recorder = { path = "./crates/telemetry-recorder/" }
 tempfile = "3"
 testing-tools = { path = "./testing-tools/", default-features = false }
 thiserror = "1"

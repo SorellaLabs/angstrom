@@ -11,14 +11,20 @@ use angstrom_types::{
     }
 };
 use angstrom_utils::map::OwnedMap;
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
 use super::{parked::ParkedPool, pending::PendingPool};
 use crate::limit::LimitPoolError;
 
-#[derive(Default)]
+#[serde_as]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LimitPool {
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) pending_orders: HashMap<PoolId, PendingPool<AllOrders>>,
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) parked_orders:  HashMap<PoolId, ParkedPool>,
+    #[serde(skip)]
     metrics:                   VanillaLimitOrderPoolMetricsWrapper
 }
 

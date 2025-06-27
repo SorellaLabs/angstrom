@@ -22,18 +22,22 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct AnvilStateProvider<P> {
-    provider:       P,
-    canon_state:    AnvilConsensusCanonStateNotification,
-    canon_state_tx: broadcast::Sender<CanonStateNotification>
+    provider:           P,
+    canon_state:        AnvilConsensusCanonStateNotification,
+    pub canon_state_tx: broadcast::Sender<CanonStateNotification>
 }
 
 impl<P: WithWalletProvider> AnvilStateProvider<P> {
-    pub(crate) fn new(provider: P) -> Self {
+    pub fn new(provider: P) -> Self {
         Self {
             provider,
             canon_state: AnvilConsensusCanonStateNotification::new(),
             canon_state_tx: broadcast::channel(1000).0
         }
+    }
+
+    pub fn current_chain_block(&self) -> u64 {
+        self.canon_state.current_block()
     }
 
     pub(crate) fn update_canon_chain(
@@ -57,11 +61,11 @@ impl<P: WithWalletProvider> AnvilStateProvider<P> {
         &self.provider
     }
 
-    pub(crate) fn provider_mut(&mut self) -> &mut P {
+    pub fn provider_mut(&mut self) -> &mut P {
         &mut self.provider
     }
 
-    pub(crate) fn as_wallet_state_provider(&self) -> AnvilStateProvider<WalletProvider> {
+    pub fn as_wallet_state_provider(&self) -> AnvilStateProvider<WalletProvider> {
         AnvilStateProvider {
             provider:       self.provider.wallet_provider(),
             canon_state:    self.canon_state.clone(),

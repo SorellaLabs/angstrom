@@ -5,7 +5,10 @@ use std::{collections::HashSet, sync::Arc};
 use alloy::primitives::Address;
 use alloy_chains::Chain;
 use angstrom_eth::manager::EthEvent;
-use angstrom_types::primitive::{AngstromMetaSigner, AngstromSigner, PeerId};
+use angstrom_types::{
+    consensus::StromConsensusEvent,
+    primitive::{AngstromMetaSigner, AngstromSigner, PeerId}
+};
 use parking_lot::RwLock;
 use reth_metrics::common::mpsc::{MeteredPollSender, UnboundedMeteredSender};
 use reth_network::Peers;
@@ -15,8 +18,8 @@ use tokio_util::sync::PollSender;
 
 use crate::{
     NetworkOrderEvent, Status, StromNetworkHandle, StromNetworkManager, StromProtocolHandler,
-    StromSessionManager, StromSessionMessage, Swarm, VerificationSidecar,
-    manager::StromConsensusEvent, state::StromState, types::status::StatusState
+    StromSessionManager, StromSessionMessage, Swarm, VerificationSidecar, state::StromState,
+    types::status::StatusState
 };
 
 pub struct NetworkBuilder<P: Peers + Unpin, S: AngstromMetaSigner> {

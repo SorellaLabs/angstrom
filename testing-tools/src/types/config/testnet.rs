@@ -51,6 +51,10 @@ impl GlobalTestingConfig for TestnetConfig {
         format!("/tmp/testnet_anvil_{}.ipc", self.seed)
     }
 
+    fn use_testnet(&self) -> bool {
+        true
+    }
+
     fn is_leader(&self, node_id: u64) -> bool {
         node_id == 0
     }

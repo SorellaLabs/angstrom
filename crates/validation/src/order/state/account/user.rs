@@ -12,6 +12,7 @@ use angstrom_types::{
 };
 use angstrom_utils::FnResultOption;
 use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::order::state::db_state_utils::StateFetchUtils;
 
@@ -19,7 +20,7 @@ pub type UserAddress = Address;
 pub type TokenAddress = Address;
 pub type Amount = U256;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BaselineState {
     token_approval:   HashMap<TokenAddress, Amount>,
     token_balance:    HashMap<TokenAddress, Amount>,
@@ -125,7 +126,7 @@ impl LiveState {
 /// deltas to be applied to the base user action
 /// We need to update this ordering such that we prioritize
 /// TOB -> Partial Orders -> Book Orders.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PendingUserAction {
     pub order_priority: OrderValidationPriority,
     // TODO: easier to properly encode this stuff
@@ -150,6 +151,7 @@ impl Deref for PendingUserAction {
 }
 
 /// NB: tob actions have priority over non-tob
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAccounts {
     /// all of a user addresses pending book orders.
     pending_book_actions: Arc<DashMap<UserAddress, Vec<PendingUserAction>>>,
@@ -173,6 +175,18 @@ impl UserAccounts {
             pending_tob_actions:  Arc::new(DashMap::default()),
             pending_book_actions: Arc::new(DashMap::default()),
             last_known_state:     Arc::new(DashMap::default())
+        }
+    }
+
+    pub fn deep_clone(&self) -> Self {
+        let pending_book = Arc::new((*self.pending_book_actions).clone());
+        let pending_tob = Arc::new((*self.pending_tob_actions).clone());
+        let last_known = Arc::new((*self.last_known_state).clone());
+
+        Self {
+            last_known_state:     last_known,
+            pending_tob_actions:  pending_tob,
+            pending_book_actions: pending_book
         }
     }
 

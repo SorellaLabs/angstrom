@@ -8,13 +8,21 @@ use angstrom_types::{
     orders::OrderPriorityData,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingPool {
     /// all order hashes
+
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     orders: HashMap<FixedBytes<32>, OrderWithStorageData<TopOfBlockOrder>>,
     /// bids are sorted descending by price,
+    #[serde_as(as = "Vec<(_, _)>")]
     bids:   BTreeMap<Reverse<OrderPriorityData>, FixedBytes<32>>,
     /// asks are sorted ascending by price,  
+    #[serde_as(as = "Vec<(_, _)>")]
     asks:   BTreeMap<OrderPriorityData, FixedBytes<32>>
 }
 

@@ -5,9 +5,8 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{PreProposalAggregation, Proposal},
+    consensus::{ConsensusRoundName, PreProposalAggregation, Proposal, StromConsensusEvent},
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::PoolSolution,
     primitive::AngstromMetaSigner,
@@ -211,5 +210,9 @@ where
 
     fn last_round_info(&mut self) -> Option<LastRoundInfo> {
         self.last_round_info.take()
+    }
+
+    fn name(&self) -> ConsensusRoundName {
+        ConsensusRoundName::Proposal
     }
 }

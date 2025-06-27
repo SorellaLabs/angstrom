@@ -41,6 +41,48 @@ pub struct TokenPriceGenerator {
 }
 
 impl TokenPriceGenerator {
+    pub fn from_snapshot(
+        uniswap_pools: SyncedUniswapPools,
+        prev_prices: HashMap<PoolId, VecDeque<PairsWithPrice>>,
+        base_gas_token: Address,
+        base_wei: u128
+    ) -> Self {
+        let pair_to_pool = uniswap_pools
+            .iter()
+            .map(|p| {
+                let key = p.key();
+                let pool = p.value().read().unwrap();
+                ((pool.token0, pool.token1), *key)
+            })
+            .collect::<HashMap<(Address, Address), PoolId>>();
+
+        let mut avg = 0;
+        let remapped_prices = prev_prices
+            .into_iter()
+            .map(|(k, v)| {
+                avg = v.len();
+                let new_k = v
+                    .front()
+                    .and_then(|i| pair_to_pool.get(&(i.token0, i.token1)).copied())
+                    .unwrap_or(k);
+                (new_k, v)
+            })
+            .collect();
+
+        Self {
+            uniswap_pools,
+            prev_prices: remapped_prices,
+            pair_to_pool,
+            base_gas_token,
+            blocks_to_avg_price: avg as u64,
+            base_wei
+        }
+    }
+
+    pub fn to_snapshot(&self) -> (HashMap<PoolId, VecDeque<PairsWithPrice>>, u128) {
+        (self.prev_prices.clone(), self.base_wei)
+    }
+
     /// is a bit of a pain as we need todo a look-back in-order to grab last 5
     /// blocks.
     pub async fn new<P: Provider>(
@@ -86,6 +128,7 @@ impl TokenPriceGenerator {
                             .load_pool_data(Some(block_number), provider.clone())
                             .await
                             .expect("failed to load historical price for token price conversion");
+                        tracing::debug!(?pool_data, "Loaded data");
 
                         // price as ray
                         let price = pool_data.get_raw_price();
@@ -291,9 +334,11 @@ impl TokenPriceGenerator {
     /// returns price in GAS / t0
     pub fn get_eth_conversion_price(&self, token_0: Address, token_1: Address) -> Option<Ray> {
         let wei = if self.base_wei == 0 { 1e18 as u128 } else { self.base_wei };
-
-        self.get_conversion_rate(token_0, token_1)
-            .map(|val| val.mul_wad(wei, 18))
+        let rate = self
+            .get_conversion_rate(token_0, token_1)
+            .map(|val| val.mul_wad(wei, 18));
+        tracing::trace!(?token_0, ?token_1, ?rate, "Getting conversion rate");
+        rate
     }
 
     fn get_conversion_rate(&self, token_0: Address, token_1: Address) -> Option<Ray> {
@@ -423,7 +468,7 @@ impl std::fmt::Debug for TokenPriceGenerator {
             .field("pair_to_pool", &self.pair_to_pool)
             .field("base_gas_token", &self.base_gas_token)
             .field("blocks_to_avg_price", &self.blocks_to_avg_price)
-            .field("base_gas_token", &self.base_gas_token)
+            .field("base_wei", &self.base_wei)
             .finish()
     }
 }

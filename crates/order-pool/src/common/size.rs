@@ -1,4 +1,6 @@
-#[derive(Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SizeTracker {
     pub max:     Option<usize>,
     pub current: usize

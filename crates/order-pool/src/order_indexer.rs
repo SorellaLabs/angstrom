@@ -24,9 +24,11 @@ use crate::{
     order_storage::OrderStorage,
     order_subscribers::OrderSubscriptionTracker,
     order_tracker::OrderTracker,
+    telemetry::OrderPoolSnapshot,
     validator::{OrderValidator, OrderValidatorRes}
 };
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct InnerCancelOrderRequest {
     /// The address of the entity requesting the cancellation.
     pub from:     Address,
@@ -35,17 +37,17 @@ pub(crate) struct InnerCancelOrderRequest {
 
 pub struct OrderIndexer<V: OrderValidatorHandle> {
     /// order storage
-    order_storage: Arc<OrderStorage>,
+    pub(crate) order_storage: Arc<OrderStorage>,
     /// current block_number
-    block_number:  u64,
+    pub(crate) block_number:  u64,
     /// used to track the relevant order ids.
-    order_tracker: OrderTracker,
+    pub(crate) order_tracker: OrderTracker,
     /// Order hash to order id, used for order inclusion lookups
     /// Order Validator
-    validator:     OrderValidator<V>,
+    pub(crate) validator:     OrderValidator<V>,
     /// List of subscribers for order validation result
     /// order
-    subscribers:   OrderSubscriptionTracker
+    pub(crate) subscribers:   OrderSubscriptionTracker
 }
 
 impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
@@ -62,6 +64,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             validator: OrderValidator::new(validator),
             subscribers: OrderSubscriptionTracker::new(orders_subscriber_tx)
         }
+    }
+
+    pub fn set_tracker(&mut self, tracker: OrderTracker) {
+        self.order_tracker = tracker;
     }
 
     pub fn pending_orders_for_address(
@@ -310,11 +316,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                     .invalidates
                     .iter()
                     .flat_map(|order| {
-                        let id = self
-                            .order_tracker
-                            .order_hash_to_order_id
-                            .get(order)
-                            .unwrap();
+                        let id = self.order_tracker.order_hash_to_order_id.get(order)?;
                         self.order_storage.remove_order_from_id(id)
                     })
                     .collect::<Vec<_>>();
@@ -397,6 +399,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         address_changes: Vec<Address>
     ) {
         self.block_number = block_number;
+        telemetry_recorder::telemetry_event!(OrderPoolSnapshot::from((block_number, &*self)));
         // clear the invalid orders as they could of become valid.
         self.order_tracker.clear_invalid();
         // deal with changed orders

@@ -13,7 +13,7 @@ alloy.workspace = true
 angstrom-metrics.workspace = true
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
-dashmap = "6.0.1"
+dashmap = { version = "6.0.1", features = ["serde"] }
 eyre = "0.6.8"
 futures = "0.3.26"
 futures-util.workspace = true
@@ -25,6 +25,8 @@ reth-provider.workspace = true
 reth-revm.workspace = true
 revm.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+telemetry-recorder.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uniswap-v4.workspace = true

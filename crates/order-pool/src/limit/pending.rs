@@ -7,19 +7,26 @@ use alloy::primitives::FixedBytes;
 use angstrom_types::{
     orders::OrderPriorityData, sol_bindings::grouped_orders::OrderWithStorageData
 };
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
-pub struct PendingPool<Order: Clone> {
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PendingPool<Order: Clone + Serialize + for<'a> Deserialize<'a>> {
     /// all order hashes
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(crate) orders: HashMap<FixedBytes<32>, OrderWithStorageData<Order>>,
     /// bids are sorted descending by price, TODO: This should be binned into
     /// ticks based off of the underlying pools params
+    #[serde_as(as = "Vec<(_, _)>")]
     bids:              BTreeMap<Reverse<OrderPriorityData>, FixedBytes<32>>,
     /// asks are sorted ascending by price,  TODO: This should be binned into
     /// ticks based off of the underlying pools params
+    #[serde_as(as = "Vec<(_, _)>")]
     asks:              BTreeMap<OrderPriorityData, FixedBytes<32>>
 }
 
-impl<Order: Clone> PendingPool<Order> {
+impl<Order: Clone + Serialize + for<'a> Deserialize<'a>> PendingPool<Order> {
     #[allow(unused)]
     pub fn new() -> Self {
         Self { orders: HashMap::new(), bids: BTreeMap::new(), asks: BTreeMap::new() }

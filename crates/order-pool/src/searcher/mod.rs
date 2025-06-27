@@ -9,6 +9,8 @@ use angstrom_types::{
 };
 use angstrom_utils::map::OwnedMap;
 use pending::PendingPool;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 use crate::{AllOrders, common::SizeTracker};
 
@@ -17,12 +19,15 @@ mod pending;
 #[allow(dead_code)]
 pub const SEARCHER_POOL_MAX_SIZE: usize = 15;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde_as]
 pub struct SearcherPool {
     /// Holds all non composable searcher order pools
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     searcher_orders: HashMap<PoolId, PendingPool>,
     /// The size of the current transactions.
     size:            SizeTracker,
+    #[serde(skip)]
     metrics:         SearcherOrderPoolMetricsWrapper
 }
 

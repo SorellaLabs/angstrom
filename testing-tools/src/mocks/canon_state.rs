@@ -21,6 +21,11 @@ impl AnvilConsensusCanonStateNotification {
         Self { chain: Arc::new(RwLock::new(Chain::default())) }
     }
 
+    pub fn current_block(&self) -> u64 {
+        let chain = self.chain.read();
+        chain.tip().number
+    }
+
     pub fn new_block(&self, block: &Block, receipts: Vec<TransactionReceipt>) -> Arc<Chain> {
         let mut chain = self.chain.write();
 

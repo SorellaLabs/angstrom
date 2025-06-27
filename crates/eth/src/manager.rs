@@ -28,7 +28,10 @@ use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
-use crate::handle::{EthCommand, EthHandle};
+use crate::{
+    handle::{EthCommand, EthHandle},
+    telemetry::EthUpdaterSnapshot
+};
 
 alloy::sol!(
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
@@ -38,23 +41,23 @@ alloy::sol!(
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
 pub struct EthDataCleanser<Sync> {
-    angstrom_address:  Address,
-    periphery_address: Address,
+    pub(crate) angstrom_address:  Address,
+    pub(crate) periphery_address: Address,
     /// our command receiver
-    commander:         ReceiverStream<EthCommand>,
+    commander:                    ReceiverStream<EthCommand>,
     /// people listening to events
-    event_listeners:   Vec<UnboundedSender<EthEvent>>,
+    event_listeners:              Vec<UnboundedSender<EthEvent>>,
     /// for rebroadcasting
-    cannon_sender:     tokio::sync::broadcast::Sender<CanonStateNotification>,
+    cannon_sender:                tokio::sync::broadcast::Sender<CanonStateNotification>,
     /// Notifications for Canonical Block updates
-    canonical_updates: BroadcastStream<CanonStateNotification>,
-    angstrom_tokens:   HashMap<Address, usize>,
+    canonical_updates:            BroadcastStream<CanonStateNotification>,
+    pub(crate) angstrom_tokens:   HashMap<Address, usize>,
     /// handles syncing of blocks.
-    block_sync:        Sync,
+    block_sync:                   Sync,
     /// updated by periphery contract.
-    pool_store:        Arc<AngstromPoolConfigStore>,
+    pub(crate) pool_store:        Arc<AngstromPoolConfigStore>,
     /// the set of currently active nodes.
-    node_set:          HashSet<Address>
+    pub(crate) node_set:          HashSet<Address>
 }
 
 impl<Sync> EthDataCleanser<Sync>
@@ -125,6 +128,11 @@ where
 
     fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) {
         tracing::info!("got new block update!!!!!");
+        telemetry_recorder::telemetry_event!(EthUpdaterSnapshot::from((
+            &*self,
+            canonical_updates.clone()
+        )));
+
         match canonical_updates.clone() {
             CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new),
             CanonStateNotification::Commit { new } => self.handle_commit(new)
@@ -258,7 +266,7 @@ where
         &'a self,
         chain: &'a impl ChainExt
     ) -> impl Iterator<Item = B256> + 'a {
-        let tip_txs = chain.successful_tip_transactions().cloned();
+        let tip_txs = chain.tip_transactions().cloned();
 
         tip_txs
             .filter(|tx| tx.to() == Some(self.angstrom_address))

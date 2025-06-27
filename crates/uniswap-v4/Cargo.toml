@@ -25,6 +25,7 @@ rand.workspace = true
 rayon = "1"
 reth-provider.workspace = true
 serde.workspace = true
+telemetry-recorder.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

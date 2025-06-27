@@ -24,7 +24,10 @@ reqwest = { version = "0.12.5", features = ["json"] }
 reth.workspace = true
 reth-chainspec.workspace = true
 reth-ethereum-primitives.workspace = true
-reth-network-peers = { workspace = true, features = ["secp256k1"] }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", version = "1.4.3", tag = "v1.4.3", features = [
+  "serde",
+] }
+reth-network-peers.workspace = true
 reth-primitives.workspace = true
 reth-primitives-traits.workspace = true
 reth-provider.workspace = true
@@ -34,9 +37,12 @@ revm.workspace = true
 revm-bytecode.workspace = true
 revm-database.workspace = true
 revm-primitives.workspace = true
+secp256k1.workspace = true
 serde = { workspace = true, default-features = false, features = ["derive"] }
 serde_json.workspace = true
+serde_with.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 tower = "0.5.2"
 tracing.workspace = true
 tracing-subscriber.workspace = true

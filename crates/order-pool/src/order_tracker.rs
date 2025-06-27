@@ -11,6 +11,7 @@ use angstrom_types::{
         RawPoolOrder, ext::grouped_orders::AllOrders, grouped_orders::OrderWithStorageData
     }
 };
+use serde_with::{DisplayFromStr, serde_as};
 use validation::order::OrderValidatorHandle;
 
 use crate::{
@@ -24,17 +25,22 @@ const MAX_NEW_ORDER_DELAY_PROPAGATION: u64 = 7000;
 
 /// Used as a storage of order hashes to order ids of validated and pending
 /// validation orders.
-#[derive(Default)]
+#[serde_as]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OrderTracker {
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) address_to_orders:      HashMap<Address, HashSet<OrderId>>,
     /// current block_number
     /// Order hash to order id, used for order inclusion lookups
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) order_hash_to_order_id: HashMap<B256, OrderId>,
     /// Used to get trigger reputation side-effects on network order submission
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) order_hash_to_peer_id:  HashMap<B256, Vec<PeerId>>,
     /// Used to avoid unnecessary computation on order spam
     pub(super) seen_invalid_orders:    HashSet<B256>,
     /// Used to protect against late order propagation
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) cancelled_orders:       HashMap<B256, InnerCancelOrderRequest>,
     pub(super) is_validating:          HashSet<B256>
 }

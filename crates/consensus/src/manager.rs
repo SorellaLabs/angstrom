@@ -12,9 +12,10 @@ use alloy::{
     providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
-use angstrom_network::{StromMessage, StromNetworkHandle, manager::StromConsensusEvent};
+use angstrom_network::{StromMessage, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
+    consensus::{ConsensusRoundName, StromConsensusEvent},
     contract_payloads::angstrom::UniswapAngstromRegistry,
     primitive::{AngstromMetaSigner, AngstromSigner, ChainExt},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
@@ -26,6 +27,7 @@ use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
 use reth_tasks::shutdown::GracefulShutdown;
+use telemetry_recorder::telemetry_event;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::BroadcastStream;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
@@ -51,6 +53,7 @@ where
     block_sync:             BlockSync,
     rpc_rx:                 mpsc::UnboundedReceiver<ConsensusRequest>,
     subscribers:            Vec<mpsc::Sender<ConsensusDataWithBlock<Bytes>>>,
+    state_updates:          Option<mpsc::UnboundedSender<ConsensusRoundName>>,
 
     /// Track broadcasted messages to avoid rebroadcasting
     broadcasted_messages: HashSet<StromConsensusEvent>
@@ -76,7 +79,8 @@ where
         provider: SubmissionHandler<P>,
         matching_engine: Matching,
         block_sync: BlockSync,
-        rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>
+        rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>,
+        state_updates: Option<mpsc::UnboundedSender<ConsensusRoundName>>
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
@@ -89,7 +93,7 @@ where
             strom_consensus_event,
             current_height,
             leader_selection,
-            consensus_round_state: RoundStateMachine::new(SharedRoundState::new(
+            consensus_round_state: RoundStateMachine::new(SharedRoundState::<_, _, S>::new(
                 current_height,
                 order_storage,
                 signer,
@@ -102,6 +106,7 @@ where
                 matching_engine
             )),
             rpc_rx,
+            state_updates,
             block_sync,
             network,
             canonical_block_stream: wrapped_broadcast_stream,
@@ -123,6 +128,11 @@ where
 
         self.consensus_round_state
             .reset_round(self.current_height, round_leader);
+
+        // We just reset to BidAggregation so let's make sure to send our listener.
+        if let Some(su) = self.state_updates.as_ref() {
+            let _ = su.send(ConsensusRoundName::BidAggregation);
+        }
         self.broadcasted_messages.clear();
 
         match notification {
@@ -182,11 +192,23 @@ where
             }
         }
 
+        let block = event.block_height();
+        telemetry_event!(block, event.clone());
+
         self.consensus_round_state.handle_message(event);
     }
 
     fn on_round_event(&mut self, event: ConsensusMessage) {
         match event {
+            ConsensusMessage::StateChange(state) => {
+                // If we have telemetry, record the state change.
+                telemetry_event!(self.current_height, state);
+
+                // If we have a state update listener, report the new state.
+                if let Some(su) = self.state_updates.as_ref() {
+                    let _ = su.send(state);
+                }
+            }
             ConsensusMessage::PropagateProposal(p) => {
                 self.network.broadcast_message(StromMessage::Propose(p))
             }

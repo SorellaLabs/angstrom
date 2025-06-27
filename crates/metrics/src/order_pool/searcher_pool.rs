@@ -3,7 +3,7 @@ use prometheus::{IntGauge, IntGaugeVec};
 
 use crate::METRICS_ENABLED;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct SearcherOrderPoolMetrics {
     // number of searcher orders
     total_orders: IntGauge,
@@ -58,7 +58,7 @@ impl SearcherOrderPoolMetrics {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SearcherOrderPoolMetricsWrapper(Option<SearcherOrderPoolMetrics>);
 
 impl Default for SearcherOrderPoolMetricsWrapper {

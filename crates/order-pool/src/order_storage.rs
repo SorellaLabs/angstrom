@@ -3,7 +3,7 @@ use std::{
     default::Default,
     fmt::Debug,
     sync::{Arc, Mutex},
-    time::Instant
+    time::SystemTime
 };
 
 use alloy::primitives::{B256, BlockNumber, FixedBytes};
@@ -16,6 +16,8 @@ use angstrom_types::{
         rpc_orders::TopOfBlockOrder
     }
 };
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
 
 use crate::{
     PoolConfig,
@@ -25,22 +27,18 @@ use crate::{
 };
 
 /// The Storage of all verified orders.
-#[derive(Clone)]
+#[serde_as]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OrderStorage {
     pub limit_orders:                Arc<Mutex<LimitOrderPool>>,
     pub searcher_orders:             Arc<Mutex<SearcherPool>>,
     pub pending_finalization_orders: Arc<Mutex<FinalizationPool>>,
     /// we store filled order hashes until they are expired time wise to ensure
     /// we don't waste processing power in the validator.
-    pub filled_orders:               Arc<Mutex<HashMap<B256, Instant>>>,
+    #[serde_as(as = "Arc<Mutex<HashMap<DisplayFromStr, _>>>")]
+    pub filled_orders:               Arc<Mutex<HashMap<B256, SystemTime>>>,
+    #[serde(skip)]
     pub metrics:                     OrderStorageMetricsWrapper
-}
-
-impl Debug for OrderStorage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Simplified implementation for the moment
-        write!(f, "OrderStorage")
-    }
 }
 
 impl OrderStorage {
@@ -53,13 +51,31 @@ impl OrderStorage {
             &config.ids,
             Some(config.s_pending_limit.max_size)
         )));
+
         let pending_finalization_orders = Arc::new(Mutex::new(FinalizationPool::new()));
+
         Self {
             filled_orders: Arc::new(Mutex::new(HashMap::default())),
             limit_orders,
             searcher_orders,
             pending_finalization_orders,
-            metrics: OrderStorageMetricsWrapper::default()
+            metrics: OrderStorageMetricsWrapper::new()
+        }
+    }
+
+    pub fn deep_clone(&self) -> Self {
+        let limit_orders = Arc::new(Mutex::new(self.limit_orders.lock().unwrap().clone()));
+        let searcher_orders = Arc::new(Mutex::new(self.searcher_orders.lock().unwrap().clone()));
+        let pending_finalization_orders =
+            Arc::new(Mutex::new(self.pending_finalization_orders.lock().unwrap().clone()));
+        let filled_orders = Arc::new(Mutex::new(self.filled_orders.lock().unwrap().clone()));
+
+        Self {
+            limit_orders,
+            pending_finalization_orders,
+            searcher_orders,
+            filled_orders,
+            metrics: OrderStorageMetricsWrapper::empty()
         }
     }
 

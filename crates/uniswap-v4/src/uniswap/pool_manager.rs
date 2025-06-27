@@ -19,12 +19,14 @@ use angstrom_types::{
     block_sync::BlockSyncConsumer,
     contract_payloads::angstrom::TopOfBlockOrder as PayloadTopOfBlockOrder,
     primitive::PoolId,
-    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
+    uni_structure::BaselinePoolState
 };
 use arraydeque::ArrayDeque;
 use dashmap::DashMap;
 use futures::Stream;
 use futures_util::{StreamExt, stream::BoxStream};
+use telemetry_recorder::telemetry_event;
 use thiserror::Error;
 use tokio::sync::Notify;
 
@@ -169,13 +171,13 @@ where
     }
 }
 
-pub struct UniswapPoolManager<P, PP, BlockSync>
+pub struct UniswapPoolManager<P, PP, BlockSync, const TICKS: u16>
 where
     DataLoader: PoolDataLoader,
     PP: Provider + 'static
 {
     /// the poolId with the fee to the dynamic fee poolId
-    factory:             V4PoolFactory<PP>,
+    factory:             V4PoolFactory<PP, TICKS>,
     pools:               SyncedUniswapPools,
     latest_synced_block: u64,
     _state_change_cache: Arc<RwLock<StateChangeCache>>,
@@ -186,7 +188,7 @@ where
     rx:                  tokio::sync::mpsc::Receiver<(TickRangeToLoad, Arc<Notify>)>
 }
 
-impl<P, PP, BlockSync> UniswapPoolManager<P, PP, BlockSync>
+impl<P, PP, BlockSync, const TICKS: u16> UniswapPoolManager<P, PP, BlockSync, TICKS>
 where
     PP: Provider + 'static,
     DataLoader: PoolDataLoader + Default + Clone + Send + Sync + Unpin + 'static,
@@ -194,7 +196,7 @@ where
     P: PoolManagerProvider + Send + Sync + 'static
 {
     pub async fn new(
-        factory: V4PoolFactory<PP>,
+        factory: V4PoolFactory<PP, TICKS>,
         latest_synced_block: BlockNumber,
         provider: Arc<P>,
         block_sync: BlockSync,
@@ -234,6 +236,25 @@ where
         self.pools.clone()
     }
 
+    fn fetch_pool_snapshots(&self) -> HashMap<PoolId, BaselinePoolState> {
+        self.pools
+            .iter()
+            .filter_map(|refr| {
+                let key = refr.key();
+                let pool = refr.value();
+                // gotta
+                Some((
+                    *key,
+                    pool.read()
+                        .expect("lock busted")
+                        .fetch_pool_snapshot()
+                        .ok()?
+                        .2
+                ))
+            })
+            .collect()
+    }
+
     fn handle_new_block_info(&mut self, block_info: PoolMangerBlocks) {
         // If there is a reorg, unwind state changes from last_synced block to the
         // chain head block number
@@ -258,6 +279,12 @@ where
         );
 
         self.latest_synced_block = chain_head_block_number;
+
+        telemetry_event!(
+            self.latest_synced_block,
+            self.factory.current_pool_keys(),
+            self.fetch_pool_snapshots()
+        );
 
         if is_reorg {
             self.block_sync.sign_off_reorg(
@@ -299,7 +326,7 @@ where
     }
 }
 
-impl<P, PP, BlockSync> Future for UniswapPoolManager<P, PP, BlockSync>
+impl<P, PP, BlockSync, const TICKS: u16> Future for UniswapPoolManager<P, PP, BlockSync, TICKS>
 where
     DataLoader: PoolDataLoader + Default + Clone + Send + Sync + Unpin + 'static,
     BlockSync: BlockSyncConsumer,

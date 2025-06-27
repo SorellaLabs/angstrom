@@ -1,5 +1,7 @@
 use std::{collections::HashSet, pin::Pin, sync::Arc};
 
+pub const DEFAULT_TICKS: u16 = 400;
+
 use alloy::{
     consensus::TxReceipt, primitives::aliases::I24, providers::Provider, sol_types::SolEvent
 };
@@ -117,7 +119,7 @@ where
         .collect::<Vec<_>>()
 }
 
-pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer>(
+pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer, const TICKS: u16>(
     provider: Arc<impl Provider + 'static>,
     state_notification: CanonStateNotifications,
     uniswap_pool_registry: UniswapPoolRegistry,
@@ -128,9 +130,14 @@ pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer>(
 ) -> UniswapPoolManager<
     CanonicalStateAdapter<impl Provider + 'static>,
     impl Provider + 'static,
-    BlockSync
+    BlockSync,
+    TICKS
 > {
-    let factory = V4PoolFactory::new(provider.clone(), uniswap_pool_registry, pool_manager_address);
+    let factory = V4PoolFactory::<_, TICKS>::new(
+        provider.clone(),
+        uniswap_pool_registry,
+        pool_manager_address
+    );
 
     let notifier =
         Arc::new(CanonicalStateAdapter::new(state_notification, provider.clone(), current_block));

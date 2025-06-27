@@ -37,6 +37,7 @@ reth-node-builder.workspace = true
 reth-node-ethereum.workspace = true
 reth-provider.workspace = true
 serde.workspace = true
+telemetry.workspace = true
 tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true

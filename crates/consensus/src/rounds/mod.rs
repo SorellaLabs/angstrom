@@ -11,9 +11,10 @@ use alloy::{
     providers::Provider
 };
 use angstrom_metrics::ConsensusMetricsWrapper;
-use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{PreProposal, PreProposalAggregation, Proposal},
+    consensus::{
+        ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
+    },
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
     orders::PoolSolution,
     primitive::{AngstromMetaSigner, AngstromSigner},
@@ -64,6 +65,8 @@ where
     fn last_round_info(&mut self) -> Option<LastRoundInfo> {
         None
     }
+
+    fn name(&self) -> ConsensusRoundName;
 }
 
 /// Holds and progresses the consensus state machine
@@ -143,6 +146,8 @@ where
         {
             tracing::info!("transitioning to new round state");
             this.current_state = transitioned_state;
+            let name = this.current_state.name();
+            return Poll::Ready(Some(ConsensusMessage::StateChange(name)));
         }
 
         if let Some(message) = this.shared_state.messages.pop_front() {
@@ -377,9 +382,15 @@ where
 /// contracts don't currently contain them.
 #[derive(Debug, Clone)]
 pub enum ConsensusMessage {
+    /// Notification that the consensus state has changed
+    StateChange(ConsensusRoundName),
+    /// Command to propagate a PreProposal over the network
     PropagatePreProposal(PreProposal),
+    /// Command to propagate a PreProposal Aggregation over the network
     PropagatePreProposalAgg(PreProposalAggregation),
+    /// Command to propagate a Proposal over the network
     PropagateProposal(Proposal),
+    /// Command to propagate an Empty Block Attestatino over the network
     PropagateEmptyBlockAttestation(Bytes)
 }
 
@@ -410,8 +421,8 @@ pub mod tests {
         signers::local::PrivateKeySigner
     };
     use angstrom_metrics::ConsensusMetricsWrapper;
-    use angstrom_network::manager::StromConsensusEvent;
     use angstrom_types::{
+        consensus::StromConsensusEvent,
         contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
         primitive::{AngstromSigner, UniswapPoolRegistry},
         submission::SubmissionHandler

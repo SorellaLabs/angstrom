@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     net::SocketAddr,
     pin::Pin,
     sync::Arc,
@@ -10,11 +10,14 @@ use alloy::signers::local::PrivateKeySigner;
 use alloy_primitives::Address;
 use angstrom::components::initialize_strom_handles;
 use angstrom_network::{
-    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager
+    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager,
+    pool_manager::PoolHandle
 };
 use angstrom_types::{
     block_sync::GlobalBlockSync,
-    primitive::PeerId,
+    consensus::ConsensusRoundName,
+    pair_with_price::PairsWithPrice,
+    primitive::{PeerId, PoolId},
     sol_bindings::{grouped_orders::AllOrders, testnet::random::RandomValues},
     testnet::InitialTestnetState
 };
@@ -30,6 +33,7 @@ use reth_network::{
 };
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use reth_tasks::TaskExecutor;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::instrument;
 
@@ -40,7 +44,9 @@ use crate::{
     controllers::TestnetStateFutureLock,
     network::{EthPeerPool, TestnetNodeNetwork},
     providers::{AnvilProvider, AnvilStateProvider, WalletProvider},
-    types::{GlobalTestingConfig, WithWalletProvider, config::TestingNodeConfig},
+    types::{
+        GlobalTestingConfig, SendingStromHandles, WithWalletProvider, config::TestingNodeConfig
+    },
     validation::TestOrderValidator
 };
 
@@ -66,7 +72,7 @@ where
     P: WithWalletProvider,
     G: GlobalTestingConfig
 {
-    #[instrument(name = "node", level = "trace", skip(node_config, c, state_provider, initial_validators, inital_angstrom_state,  agents, block_sync, ex), fields(id = node_config.node_id))]
+    #[instrument(name = "node", level = "trace", skip(node_config, c, state_provider, initial_validators, inital_angstrom_state,  agents, block_sync, ex, state_updates), fields(id = node_config.node_id))]
     pub async fn new<F>(
         c: C,
         node_config: TestingNodeConfig<G>,
@@ -75,7 +81,9 @@ where
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
         block_sync: GlobalBlockSync,
-        ex: TaskExecutor
+        ex: TaskExecutor,
+        state_updates: Option<UnboundedSender<ConsensusRoundName>>,
+        token_price_snapshot: Option<(HashMap<PoolId, VecDeque<PairsWithPrice>>, u128)>
     ) -> eyre::Result<Self>
     where
         F: for<'a> Fn(
@@ -85,7 +93,6 @@ where
         F: Clone
     {
         tracing::info!("spawning node");
-
         let strom_handles = initialize_strom_handles();
         let (strom_network, eth_peer, strom_network_manager) = TestnetNodeNetwork::new(
             c,
@@ -106,7 +113,9 @@ where
             inital_angstrom_state.clone(),
             agents,
             block_sync,
-            ex.clone()
+            ex.clone(),
+            state_updates,
+            token_price_snapshot
         )
         .await?;
 
@@ -204,6 +213,14 @@ where
 
     pub fn subscribe_strom_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
         self.network.strom_handle.subscribe_network_events()
+    }
+
+    pub fn pool_handle(&self) -> PoolHandle {
+        self.strom.pool_handle.clone()
+    }
+
+    pub fn strom_tx_handles(&self) -> SendingStromHandles {
+        self.strom.tx_strom_handles.clone()
     }
 
     /// Network

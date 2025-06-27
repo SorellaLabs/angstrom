@@ -5,9 +5,10 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_network::manager::StromConsensusEvent;
 use angstrom_types::{
-    consensus::{PreProposal, PreProposalAggregation, Proposal},
+    consensus::{
+        ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
+    },
     primitive::AngstromMetaSigner
 };
 use futures::FutureExt;
@@ -122,5 +123,9 @@ where
         }
 
         Poll::Pending
+    }
+
+    fn name(&self) -> ConsensusRoundName {
+        ConsensusRoundName::BidAggregation
     }
 }

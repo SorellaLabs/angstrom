@@ -3,7 +3,7 @@ use prometheus::{IntGauge, IntGaugeVec};
 
 use crate::METRICS_ENABLED;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct VanillaLimitOrderPoolMetrics {
     // number of vanilla limit orders
     total_orders:         IntGauge,
@@ -123,7 +123,7 @@ impl VanillaLimitOrderPoolMetrics {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct VanillaLimitOrderPoolMetricsWrapper(Option<VanillaLimitOrderPoolMetrics>);
 
 impl Default for VanillaLimitOrderPoolMetricsWrapper {
@@ -168,7 +168,7 @@ impl VanillaLimitOrderPoolMetricsWrapper {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct ComposableLimitOrderPoolMetrics {
     // number of composable limit orders
     total_orders: IntGauge,
@@ -223,7 +223,7 @@ impl ComposableLimitOrderPoolMetrics {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ComposableLimitOrderPoolMetricsWrapper(Option<ComposableLimitOrderPoolMetrics>);
 
 impl Default for ComposableLimitOrderPoolMetricsWrapper {

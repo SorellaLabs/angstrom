@@ -2,7 +2,7 @@ use prometheus::IntGauge;
 
 use crate::METRICS_ENABLED;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct FinalizationOrderPoolMetrics {
     // number of blocks tracked
     blocks_tracked: IntGauge,
@@ -46,7 +46,7 @@ impl FinalizationOrderPoolMetrics {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FinalizationOrderPoolMetricsWrapper(Option<FinalizationOrderPoolMetrics>);
 
 impl Default for FinalizationOrderPoolMetricsWrapper {

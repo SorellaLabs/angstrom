@@ -17,6 +17,10 @@ angstrom-types.workspace = true
 angstrom-utils.workspace = true
 eyre.workspace = true
 futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with = "3.13.0"
+telemetry-recorder.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-stream.workspace = true

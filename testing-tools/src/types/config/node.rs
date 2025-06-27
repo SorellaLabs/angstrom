@@ -38,11 +38,15 @@ pub struct TestingNodeConfig<C> {
 
 impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
     pub fn new(node_id: u64, global_config: C, voting_power: u64) -> Self {
-        let secret_key = if matches!(global_config.config_type(), TestingConfigKind::Testnet)
-            && global_config.is_leader(node_id)
+        let secret_key = if matches!(
+            global_config.config_type(),
+            TestingConfigKind::Testnet | TestingConfigKind::Replay
+        ) && global_config.is_leader(node_id)
         {
+            tracing::trace!(node_id, voting_power, "Using fixed leader node key");
             SecretKey::from_slice(&TESTNET_LEADER_SECRET_KEY).unwrap()
         } else {
+            tracing::trace!(node_id, voting_power, "Using deterministic follower node key");
             // use node_id as deterministic random seed
             let mut seed = [0u8; 32];
             seed[0..8].copy_from_slice(&node_id.to_le_bytes());
@@ -90,6 +94,28 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
         self.global_config.initial_state_config().pool_keys
     }
 
+    fn configure_replay_leader_anvil(&self) -> Anvil {
+        let mut anvil_builder = Anvil::new()
+            .chain_id(*CHAIN_ID.get().unwrap())
+            .arg("--host")
+            .arg("0.0.0.0")
+            .port(self.global_config.leader_eth_rpc_port())
+            .fork(self.global_config.eth_ws_url())
+            .arg("--ipc")
+            .arg(self.global_config.anvil_rpc_endpoint(self.node_id))
+            .arg("--code-size-limit")
+            .arg("393216")
+            .arg("--disable-block-gas-limit");
+
+        if let Some((fork_block_number, fork_url)) = self.global_config.fork_config() {
+            anvil_builder = anvil_builder
+                .fork(fork_url)
+                .fork_block_number(fork_block_number)
+        }
+
+        anvil_builder
+    }
+
     fn configure_testnet_leader_anvil(&self) -> Anvil {
         if !self.global_config.is_leader(self.node_id) {
             panic!("only the leader can call this!")
@@ -131,10 +157,11 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
     }
 
     pub async fn spawn_anvil_rpc(&self) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
-        if matches!(self.global_config.config_type(), TestingConfigKind::Testnet) {
-            self.spawn_testnet_anvil_rpc().await
-        } else {
-            self.spawn_devnet_anvil_rpc().await
+        match self.global_config.config_type() {
+            TestingConfigKind::Testnet | TestingConfigKind::Replay => {
+                self.spawn_testnet_anvil_rpc().await
+            }
+            TestingConfigKind::Devnet => self.spawn_devnet_anvil_rpc().await
         }
     }
 
@@ -144,7 +171,11 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
         let anvil = self
             .global_config
             .is_leader(self.node_id)
-            .then(|| self.configure_testnet_leader_anvil().try_spawn())
+            .then(|| match self.global_config.config_type() {
+                TestingConfigKind::Testnet => self.configure_testnet_leader_anvil().try_spawn(),
+                TestingConfigKind::Replay => self.configure_replay_leader_anvil().try_spawn(),
+                TestingConfigKind::Devnet => unreachable!("This should never happen")
+            })
             .transpose()?;
 
         let sk = self.signing_key();
@@ -161,15 +192,19 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
 
         tracing::info!("connected to anvil");
 
-        let mut addresses_with_eth = self
-            .global_config
-            .initial_state_config()
-            .addresses_with_tokens;
-        addresses_with_eth.push(sk.address());
-        futures::future::try_join_all(addresses_with_eth.into_iter().map(|addr| {
-            rpc.anvil_set_balance(addr, U256::from(HACKED_TOKEN_BALANCE) * U256::from(10))
-        }))
-        .await?;
+        if self.global_config.use_testnet() {
+            // Only setup our addresses with eth if we're a Testnet config or a Replay
+            // config that's not forked from main
+            let mut addresses_with_eth = self
+                .global_config
+                .initial_state_config()
+                .addresses_with_tokens;
+            addresses_with_eth.push(sk.address());
+            futures::future::try_join_all(addresses_with_eth.into_iter().map(|addr| {
+                rpc.anvil_set_balance(addr, U256::from(HACKED_TOKEN_BALANCE) * U256::from(10))
+            }))
+            .await?;
+        }
 
         Ok((WalletProvider::new_with_provider(rpc, sk), anvil))
     }

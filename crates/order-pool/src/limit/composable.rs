@@ -7,12 +7,16 @@ use angstrom_types::{
     sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 use angstrom_utils::map::OwnedMap;
+use serde_with::{DisplayFromStr, serde_as};
 
 use super::{LimitPoolError, pending::PendingPool};
 
-#[derive(Default)]
+#[serde_as]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ComposableLimitPool {
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) map: HashMap<PoolId, PendingPool<AllOrders>>,
+    #[serde(skip)]
     metrics:        ComposableLimitOrderPoolMetricsWrapper
 }
 

@@ -1,6 +1,7 @@
 pub mod bundle;
 pub mod common;
 pub mod order;
+pub mod telemetry;
 pub mod validator;
 
 use std::{
@@ -51,6 +52,37 @@ pub fn init_validation<
 ) where
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
+    init_validation_replay(
+        db,
+        current_block,
+        angstrom_address,
+        node_address,
+        update_stream,
+        uniswap_pools,
+        price_generator,
+        pool_store,
+        validator_rx,
+        |_| {}
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn init_validation_replay<
+    DB: Unpin + Clone + 'static + reth_provider::BlockNumReader + revm::DatabaseRef + Send + Sync
+>(
+    db: DB,
+    current_block: u64,
+    angstrom_address: Address,
+    node_address: Address,
+    update_stream: Pin<Box<dyn Stream<Item = (u128, Vec<PairsWithPrice>)> + Send + 'static>>,
+    uniswap_pools: SyncedUniswapPools,
+    price_generator: TokenPriceGenerator,
+    pool_store: Arc<AngstromPoolConfigStore>,
+    validator_rx: UnboundedReceiver<ValidationRequest>,
+    hook: impl FnOnce(&mut Validator<DB, AngstromPoolsTracker, FetchUtils<DB>>) + Send + 'static
+) where
+    <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
+{
     let current_block = Arc::new(AtomicU64::new(current_block));
     let revm_lru = Arc::new(db);
     let fetch = FetchUtils::new(angstrom_address, revm_lru.clone());
@@ -76,7 +108,10 @@ pub fn init_validation<
         let shared_utils = SharedTools::new(price_generator, update_stream, thread_pool);
 
         rt.block_on(async {
-            Validator::new(validator_rx, order_validator, bundle_validator, shared_utils).await
+            let mut validator =
+                Validator::new(validator_rx, order_validator, bundle_validator, shared_utils);
+            hook(&mut validator);
+            validator.await
         })
     });
 }

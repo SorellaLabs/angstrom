@@ -6,6 +6,7 @@ mod order_indexer;
 pub mod order_storage;
 mod order_subscribers;
 pub mod order_tracker;
+pub mod telemetry;
 
 mod searcher;
 mod validator;

@@ -23,6 +23,7 @@ reth-metrics.workspace = true
 reth-provider.workspace = true
 reth-tasks.workspace = true
 serde.workspace = true
+telemetry-recorder.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true

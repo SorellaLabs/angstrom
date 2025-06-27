@@ -26,5 +26,6 @@ pub mod providers;
 pub mod contracts;
 
 pub mod controllers;
+pub mod replay;
 pub mod types;
 pub mod utils;

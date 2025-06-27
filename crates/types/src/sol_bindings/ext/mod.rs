@@ -134,7 +134,7 @@ impl RespendAvoidanceMethod {
     }
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
 pub struct OrderValidationPriority {
     pub order_hash:     FixedBytes<32>,
     pub is_tob:         bool,

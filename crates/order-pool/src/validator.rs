@@ -57,6 +57,19 @@ where
         Self::RegularProcessing { validator, remaining_futures: FuturesUnordered::new() }
     }
 
+    pub fn get_waiting_orders(&self) -> VecDeque<(OrderOrigin, AllOrders)> {
+        match self {
+            Self::RegularProcessing { .. } => VecDeque::default(),
+            Self::InformState { waiting_for_new_block, .. } => waiting_for_new_block.clone(),
+            Self::ClearingForNewBlock { waiting_for_new_block, .. } => {
+                waiting_for_new_block.clone()
+            }
+            Self::WaitingForStorageCleanup { waiting_for_new_block, .. } => {
+                waiting_for_new_block.clone()
+            }
+        }
+    }
+
     pub fn cancel_order(&self, user: Address, order_hash: B256) {
         match self {
             OrderValidator::InformState { validator, .. }

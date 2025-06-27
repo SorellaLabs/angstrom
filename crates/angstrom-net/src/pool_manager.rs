@@ -21,10 +21,8 @@ use order_pool::{
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_tasks::TaskSpawner;
-use tokio::sync::{
-    broadcast,
-    mpsc::{UnboundedReceiver, UnboundedSender, error::SendError, unbounded_channel}
-};
+use telemetry_recorder::telemetry_event;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::SendError};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
@@ -180,7 +178,8 @@ where
         tx: UnboundedSender<OrderCommand>,
         rx: UnboundedReceiver<OrderCommand>,
         pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
-        block_number: u64
+        block_number: u64,
+        replay: impl FnOnce(&mut OrderIndexer<V>) + Send + 'static
     ) -> PoolHandle {
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -188,46 +187,14 @@ where
             .unwrap_or_else(|| Arc::new(OrderStorage::new(&self.config)));
         let handle =
             PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
-        let inner = OrderIndexer::new(
+        let mut inner = OrderIndexer::new(
             self.validator.clone(),
             order_storage.clone(),
             block_number,
             pool_manager_tx.clone()
         );
+        replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
-
-        task_spawner.spawn_critical(
-            "transaction manager",
-            Box::pin(PoolManager {
-                eth_network_events:   self.eth_network_events,
-                strom_network_events: self.strom_network_events,
-                order_events:         self.order_events,
-                peer_to_info:         HashMap::default(),
-                order_indexer:        inner,
-                network:              self.network_handle,
-                command_rx:           rx,
-                global_sync:          self.global_sync
-            })
-        );
-
-        handle
-    }
-
-    pub fn build<TP: TaskSpawner>(self, task_spawner: TP) -> PoolHandle {
-        let (tx, rx) = unbounded_channel();
-        let rx = UnboundedReceiverStream::new(rx);
-        let order_storage = self
-            .order_storage
-            .unwrap_or_else(|| Arc::new(OrderStorage::new(&self.config)));
-        let (pool_manager_tx, _) = broadcast::channel(100);
-        let handle =
-            PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
-        let inner = OrderIndexer::new(
-            self.validator.clone(),
-            order_storage.clone(),
-            0,
-            pool_manager_tx.clone()
-        );
 
         task_spawner.spawn_critical(
             "transaction manager",
@@ -279,10 +246,17 @@ where
 {
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
-            OrderCommand::NewOrder(_, order, validation_response) => self
-                .order_indexer
-                .new_rpc_order(OrderOrigin::External, order, validation_response),
+            OrderCommand::NewOrder(origin, order, validation_response) => {
+                let blocknum = self.global_sync.current_block_number();
+                telemetry_event!(blocknum, origin, order.clone());
+
+                self.order_indexer
+                    .new_rpc_order(OrderOrigin::External, order, validation_response)
+            }
             OrderCommand::CancelOrder(req, receiver) => {
+                let blocknum = self.global_sync.current_block_number();
+                telemetry_event!(blocknum, req.clone());
+
                 let res = self.order_indexer.cancel_order(&req);
                 if res {
                     self.broadcast_cancel_to_peers(req);
@@ -344,11 +318,14 @@ where
     fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
         match event {
             NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
+                let block_num = self.global_sync.current_block_number();
+
                 orders.into_iter().for_each(|order| {
                     self.peer_to_info
                         .get_mut(&peer_id)
                         .map(|peer| peer.orders.insert(order.order_hash()));
 
+                    telemetry_event!(block_num, OrderOrigin::External, order.clone());
                     self.order_indexer.new_network_order(
                         peer_id,
                         OrderOrigin::External,
@@ -357,6 +334,9 @@ where
                 });
             }
             NetworkOrderEvent::CancelOrder { request, .. } => {
+                let block_num = self.global_sync.current_block_number();
+                telemetry_event!(block_num, request.clone());
+
                 let res = self.order_indexer.cancel_order(&request);
                 if res {
                     self.broadcast_cancel_to_peers(request);

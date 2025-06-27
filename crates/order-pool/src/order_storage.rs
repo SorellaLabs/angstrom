@@ -281,6 +281,16 @@ impl OrderStorage {
         orders: Vec<OrderWithStorageData<AllOrders>>
     ) {
         let num_orders = orders.len();
+
+        // Add to filled orders cache
+        {
+            let mut filled_orders = self.filled_orders.lock().expect("poisoned");
+            for order in &orders {
+                filled_orders.insert(order.order_hash(), std::time::Instant::now());
+            }
+        }
+
+        // Add to pending finalization
         self.pending_finalization_orders
             .lock()
             .expect("poisoned")

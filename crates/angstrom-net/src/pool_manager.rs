@@ -380,8 +380,12 @@ where
                         )
                     }
                 );
-                let all_orders = self.order_indexer.get_all_orders().into_all_orders();
-                self.broadcast_orders_to_peers(all_orders);
+                let all_orders = self
+                    .order_indexer
+                    .get_all_orders_with_parked()
+                    .into_all_orders();
+
+                self.broadcast_order_to_peer(all_orders, peer_id);
             }
             StromNetworkEvent::SessionClosed { peer_id, .. } => {
                 // remove the peer
@@ -430,6 +434,11 @@ where
                 info.cancellations.insert(order_hash);
             }
         }
+    }
+
+    fn broadcast_order_to_peer(&mut self, valid_orders: Vec<AllOrders>, peer: PeerId) {
+        self.network
+            .send_message(peer, StromMessage::PropagatePooledOrders(valid_orders));
     }
 
     fn broadcast_orders_to_peers(&mut self, valid_orders: Vec<AllOrders>) {

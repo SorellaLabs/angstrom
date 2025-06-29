@@ -371,6 +371,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         }
     }
 
+    pub fn get_all_orders_with_parked(&self) -> OrderSet<AllOrders, TopOfBlockOrder> {
+        self.order_storage.get_all_orders_with_parked()
+    }
+
     pub fn get_all_orders(&self) -> OrderSet<AllOrders, TopOfBlockOrder> {
         self.order_storage.get_all_orders()
     }

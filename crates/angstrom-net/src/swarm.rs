@@ -43,15 +43,6 @@ impl<DB: Unpin> Swarm<DB> {
         &self.sessions
     }
 
-    // pub(crate) fn remove_peer(&mut self, peer_id: PeerId, kind: PeerKind) {
-    //     match kind {
-    //         PeerKind::Basic => self.state.peers_mut().remove_peer(peer_id),
-    //         PeerKind::MevGuard =>
-    // self.state.peers_mut().remove_peer_from_trusted_set(peer_id),
-    //         _ => todo!()
-    //     }
-    // }
-
     fn on_session_event(&mut self, event: SessionEvent) -> Option<SwarmEvent> {
         match event {
             SessionEvent::BadMessage { peer_id } => {

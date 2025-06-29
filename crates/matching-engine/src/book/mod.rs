@@ -68,6 +68,16 @@ impl OrderBook {
         self.amm.as_ref()
     }
 
+    pub fn is_empty_book(&self) -> bool {
+        self.bids().is_empty() && self.asks().is_empty()
+    }
+
+    pub fn set_amm_if_missing(&mut self, apply: impl FnOnce() -> BaselinePoolState) {
+        if self.amm().is_none() {
+            self.amm = Some(apply());
+        }
+    }
+
     pub fn lowest_clearing_price(&self) -> Ray {
         // because bids need to be ucp <= bid price
         // they don't have a lowest price but rather

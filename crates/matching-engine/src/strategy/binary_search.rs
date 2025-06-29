@@ -23,6 +23,11 @@ impl BinarySearchStrategy {
         searcher: Option<OrderWithStorageData<TopOfBlockOrder>>
     ) -> (U160, i32) {
         let snapshot = book.amm().unwrap();
+
+        if book.is_empty_book() {
+            return (*snapshot.current_price(), snapshot.current_tick());
+        }
+
         let mut matcher = DeltaMatcher::new(book, searcher.clone().into(), false);
         let solution = matcher.solution(searcher);
 

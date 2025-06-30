@@ -20,7 +20,6 @@ use crate::{
 /// This is used to remove validated orders. During validation
 /// the same check wil be ran but with more accuracy
 const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
-const MAX_NEW_ORDER_DELAY_PROPAGATION: u64 = 7000;
 
 /// Used as a storage of order hashes to order ids of validated and pending
 /// validation orders.
@@ -77,7 +76,9 @@ impl OrderTracker {
     }
 
     pub fn is_duplicate(&self, hash: &B256) -> bool {
-        self.order_hash_to_order_id.contains_key(hash) || self.seen_invalid_orders.contains(hash)
+        self.order_hash_to_order_id.contains_key(hash)
+            || self.seen_invalid_orders.contains(hash)
+            || self.is_validating.contains(hash)
     }
 
     pub fn handle_pool_removed(&mut self, txes: &[OrderWithStorageData<AllOrders>]) {
@@ -119,14 +120,27 @@ impl OrderTracker {
         self.cancelled_orders
             .retain(|_, req| req.deadline > expiry_deadline);
 
+        let current_time = U256::from(time.as_secs());
+
         let hashes = self
             .order_hash_to_order_id
             .iter()
-            .filter(|(_, v)| {
-                v.deadline.map(|i| i <= expiry_deadline).unwrap_or_default()
-                    || v.flash_block
-                        .map(|b| b != block_number + 1)
-                        .unwrap_or_default()
+            .filter(|(_, order_id)| {
+                // Check deadline expiry
+                if let Some(deadline) = order_id.deadline {
+                    if deadline <= current_time {
+                        return true;
+                    }
+                }
+
+                // Check flash block expiry - flash orders expire if not for current block
+                if let Some(flash_block) = order_id.flash_block {
+                    if flash_block != block_number {
+                        return true;
+                    }
+                }
+
+                false
             })
             .map(|(k, _)| *k)
             .collect::<Vec<_>>();
@@ -134,33 +148,60 @@ impl OrderTracker {
         hashes
             .iter()
             // remove hash from id
-            .map(|hash| self.order_hash_to_order_id.remove(hash).unwrap())
+            .filter_map(|hash| self.order_hash_to_order_id.remove(hash))
             // remove from all underlying pools
-            .filter_map(|id| {
-                self.address_to_orders
-                    .values_mut()
-                    // remove from address to orders
-                    .for_each(|v| v.retain(|o| o != &id));
-                match id.location {
-                    OrderLocation::Searcher => storage.remove_searcher_order(&id),
-                    OrderLocation::Limit => storage.remove_limit_order(&id)
+            .filter_map(|order_id| {
+                // Remove from address mapping
+                if let Some(order_set) = self.address_to_orders.get_mut(&order_id.address) {
+                    order_set.remove(&order_id);
+                    if order_set.is_empty() {
+                        self.address_to_orders.remove(&order_id.address);
+                    }
+                }
+
+                // Remove from peer tracking
+                self.order_hash_to_peer_id.remove(&order_id.hash);
+
+                // Remove from storage
+                match order_id.location {
+                    OrderLocation::Searcher => storage.remove_searcher_order(&order_id),
+                    OrderLocation::Limit => storage.remove_limit_order(&order_id)
                 }
             })
             .collect::<Vec<_>>()
     }
 
-    pub fn filled_orders<'a>(
-        &'a mut self,
-        orders: &'a [B256],
-        storage: &'a OrderStorage
-    ) -> impl Iterator<Item = OrderWithStorageData<AllOrders>> + 'a {
-        orders
-            .iter()
-            .filter_map(|hash| self.order_hash_to_order_id.remove(hash))
-            .filter_map(move |order_id| match order_id.location {
-                OrderLocation::Limit => storage.remove_limit_order(&order_id),
-                OrderLocation::Searcher => storage.remove_searcher_order(&order_id)
-            })
+    pub fn filled_orders(
+        &mut self,
+        orders: &[B256],
+        storage: &OrderStorage
+    ) -> Vec<OrderWithStorageData<AllOrders>> {
+        let mut filled_orders = Vec::new();
+
+        for hash in orders {
+            if let Some(order_id) = self.order_hash_to_order_id.remove(hash) {
+                // Remove from address mapping
+                if let Some(order_set) = self.address_to_orders.get_mut(&order_id.address) {
+                    order_set.remove(&order_id);
+                    if order_set.is_empty() {
+                        self.address_to_orders.remove(&order_id.address);
+                    }
+                }
+
+                // Remove from peer tracking
+                self.order_hash_to_peer_id.remove(&order_id.hash);
+
+                // Remove from storage
+                if let Some(order) = match order_id.location {
+                    OrderLocation::Limit => storage.remove_limit_order(&order_id),
+                    OrderLocation::Searcher => storage.remove_searcher_order(&order_id)
+                } {
+                    filled_orders.push(order);
+                }
+            }
+        }
+
+        filled_orders
     }
 
     pub fn park_orders(&mut self, txes: &[B256], storage: &OrderStorage) {
@@ -177,15 +218,6 @@ impl OrderTracker {
         // nonce overlap is checked during validation so its ok we
         // don't check for duplicates
         self.address_to_orders.entry(user).or_default().insert(id);
-    }
-
-    fn cancel_with_next_block_deadline(&mut self, from: Address, order_hash: &B256) {
-        let deadline = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + MAX_NEW_ORDER_DELAY_PROPAGATION * ETH_BLOCK_TIME.as_secs();
-        self.insert_cancel_with_deadline(from, order_hash, Some(U256::from(deadline)));
     }
 
     fn insert_cancel_with_deadline(
@@ -217,23 +249,37 @@ impl OrderTracker {
         hash: B256,
         storage: &OrderStorage
     ) -> Option<(bool, PoolId)> {
-        self.order_hash_to_order_id
-            .remove(&hash)
-            .and_then(|v| storage.cancel_order(&v))
-            .map(|order| {
-                self.order_hash_to_order_id.remove(&order.order_hash());
-                self.order_hash_to_peer_id.remove(&order.order_hash());
-                self.insert_cancel_with_deadline(order.from(), &hash, order.deadline());
+        // First check if order exists and belongs to the requester
+        if let Some(order_id) = self.order_hash_to_order_id.get(&hash) {
+            // Verify the cancellation request is from the order owner
+            if order_id.address != from {
+                return None; // Not authorized to cancel
+            }
 
-                (order.is_tob(), order.pool_id)
-            })
-            .or_else(|| {
-                // in the case we haven't index the order yet, we are going to add it
-                // in the cancel to register
-                self.cancel_with_next_block_deadline(from, &hash);
+            // Remove and cancel the order
+            if let Some(order_id) = self.order_hash_to_order_id.remove(&hash) {
+                // Remove from address mapping
+                if let Some(order_set) = self.address_to_orders.get_mut(&order_id.address) {
+                    order_set.remove(&order_id);
+                    if order_set.is_empty() {
+                        self.address_to_orders.remove(&order_id.address);
+                    }
+                }
 
-                None
-            })
+                if let Some(order) = storage.cancel_order(&order_id) {
+                    self.order_hash_to_peer_id.remove(&hash);
+
+                    // Add cancellation record
+                    self.insert_cancel_with_deadline(from, &hash, order.deadline());
+
+                    return Some((order.is_tob(), order.pool_id));
+                }
+            }
+        }
+        // Note: For orders that don't exist, we don't add preemptive cancellation
+        // as this can interfere with legitimate order submissions
+
+        None
     }
 
     pub fn pending_orders_for_address<F>(

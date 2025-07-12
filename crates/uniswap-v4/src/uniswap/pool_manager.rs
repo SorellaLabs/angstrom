@@ -125,6 +125,16 @@ where
                 pool.fetch_pool_snapshot().map(|v| v.2).unwrap()
             };
 
+            if tob.valid_block - 1 != market_snapshot.block_number() {
+                tracing::error!(
+                    pool_block_number = market_snapshot.block_number(),
+                    target_block = tob.valid_block,
+                    "pool snapshot isn't properly loaded for block"
+                );
+
+                return Err(eyre::eyre!("pool not properly loaded"));
+            }
+
             let outcome =
                 PayloadTopOfBlockOrder::calc_vec_and_reward(tob, &market_snapshot).map(|(_, r)| r);
             tracing::info!(?outcome);

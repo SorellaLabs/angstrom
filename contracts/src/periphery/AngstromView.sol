@@ -17,7 +17,7 @@ library AngstromView {
     uint256 constant LAST_BLOCK_BIT_OFFSET = 0;
     uint256 constant STORE_BIT_OFFSET = 64;
 
-    uint256 constant BALANCES_SLOT = 6;
+    uint256 constant BALANCES_SLOT = 5;
 
     function controller(IAngstromAuth self) internal view returns (address) {
         return address(uint160(self.extsload(CONTROLLER_SLOT)));
@@ -35,12 +35,12 @@ library AngstromView {
     function unlockedFee(IAngstromAuth self, StoreKey key)
         internal
         view
-        returns (bool isSet, uint24 fee)
+        returns (uint24 fee, uint24 protocolFee)
     {
         uint256 slot = uint256(keccak256(abi.encode(key, UNLOCKED_FEE_PACKED_SET_SLOT)));
         uint256 unlockedPackedIsSet = self.extsload(slot);
-        isSet = unlockedPackedIsSet & 1 == 1;
-        fee = uint24(unlockedPackedIsSet >> 1);
+        fee = uint24(unlockedPackedIsSet);
+        protocolFee = uint24(unlockedPackedIsSet >> 24);
     }
 
     function balanceOf(IAngstromAuth self, address asset, address owner)

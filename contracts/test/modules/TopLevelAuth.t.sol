@@ -103,54 +103,49 @@ contract TopLevelAuthTest is BaseTest {
 
     function test_batchUpdatePools() public {
         vm.startPrank(controller);
-        angstrom.configurePool(assets[0], assets[4], 19, 0.01e6, 0.0444e6, 0);
-        angstrom.configurePool(assets[2], assets[20], 120, 0.000134e6, 0.01e6, 0);
-        angstrom.configurePool(assets[1], assets[8], 41, 0.1003e6, 0.003e6, 0);
-        angstrom.configurePool(assets[12], assets[31], 60, 0.00012e6, 0.03e6, 0);
+        angstrom.configurePool(assets[0], assets[4], 19, 0.01e6, 0.0444e6, 0.01e6);
+        angstrom.configurePool(assets[2], assets[20], 120, 0.000134e6, 0.01e6, 0.2222e6);
+        angstrom.configurePool(assets[1], assets[8], 41, 0.1003e6, 0.003e6, 0.03e6);
+        angstrom.configurePool(assets[12], assets[31], 60, 0.00012e6, 0.03e6, 0.4444e6);
         vm.stopPrank();
 
         PoolConfigStore store = angstrom.configStore();
 
         ConfigEntryUpdate[] memory updates = new ConfigEntryUpdate[](2);
-        updates[0] = ConfigEntryUpdate(1, skey(assets[2], assets[20]), 0, 0.05e6, 0);
-        updates[1] = ConfigEntryUpdate(3, skey(assets[12], assets[31]), 0.001e6, 0.03e6, 0);
+        updates[0] = ConfigEntryUpdate(1, skey(assets[2], assets[20]), 0, 0.05e6, 0.02e6);
+        updates[1] = ConfigEntryUpdate(3, skey(assets[12], assets[31]), 0.001e6, 0.03e6, 0.04e6);
 
         vm.prank(controller);
         angstrom.batchUpdatePools(store, updates);
 
-        (
-            StoreKey key,
-            uint16 tickSpacing,
-            uint24 bundleFee,
-            bool unlockedFeeSet,
-            uint24 unlockedFee
-        ) = getEntry(0);
+        (StoreKey key, uint16 tickSpacing, uint24 bundleFee, uint24 unlockedFee, uint24 protocolFee)
+        = getEntry(0);
         assertEq(key, skey(assets[0], assets[4]));
         assertEq(tickSpacing, 19);
         assertEq(bundleFee, 0.01e6);
-        assertTrue(unlockedFeeSet);
         assertEq(unlockedFee, 0.0444e6);
+        assertEq(protocolFee, 0.01e6);
 
-        (key, tickSpacing, bundleFee, unlockedFeeSet, unlockedFee) = getEntry(1);
+        (key, tickSpacing, bundleFee, unlockedFee, protocolFee) = getEntry(1);
         assertEq(key, skey(assets[2], assets[20]));
         assertEq(tickSpacing, 120);
         assertEq(bundleFee, 0);
-        assertTrue(unlockedFeeSet);
         assertEq(unlockedFee, 0.05e6);
+        assertEq(protocolFee, 0.02e6);
 
-        (key, tickSpacing, bundleFee, unlockedFeeSet, unlockedFee) = getEntry(2);
+        (key, tickSpacing, bundleFee, unlockedFee, protocolFee) = getEntry(2);
         assertEq(key, skey(assets[1], assets[8]));
         assertEq(tickSpacing, 41);
         assertEq(bundleFee, 0.1003e6);
-        assertTrue(unlockedFeeSet);
         assertEq(unlockedFee, 0.003e6);
+        assertEq(protocolFee, 0.03e6);
 
-        (key, tickSpacing, bundleFee, unlockedFeeSet, unlockedFee) = getEntry(3);
+        (key, tickSpacing, bundleFee, unlockedFee, protocolFee) = getEntry(3);
         assertEq(key, skey(assets[12], assets[31]));
         assertEq(tickSpacing, 60);
         assertEq(bundleFee, 0.001e6);
-        assertTrue(unlockedFeeSet);
         assertEq(unlockedFee, 0.03e6);
+        assertEq(protocolFee, 0.04e6);
     }
 
     function test_fuzzing_removeExistingWhenGreaterThanOne(uint256 indexToRemove) public {
@@ -347,8 +342,8 @@ contract TopLevelAuthTest is BaseTest {
             StoreKey key,
             uint16 tickSpacing,
             uint24 bundleFee,
-            bool unlockedFeeSet,
-            uint24 unlockedFee
+            uint24 unlockedFee,
+            uint24 protocolFee
         )
     {
         PoolConfigStore store = angstrom.configStore();
@@ -358,6 +353,6 @@ contract TopLevelAuthTest is BaseTest {
         key = entry.key();
         tickSpacing = entry.tickSpacing();
         bundleFee = entry.bundleFee();
-        (unlockedFeeSet, unlockedFee) = AngstromView.unlockedFee(angstrom, key);
+        (unlockedFee, protocolFee) = AngstromView.unlockedFee(angstrom, key);
     }
 }

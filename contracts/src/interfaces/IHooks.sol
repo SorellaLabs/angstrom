@@ -8,15 +8,6 @@ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {BeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 
-// Same ABI as `PoolKey` just no custom types to make it easier to handle.
-struct SimplePoolKey {
-    address asset0;
-    address asset1;
-    uint24 fee;
-    int24 tickSpacing;
-    address hooks;
-}
-
 interface IBeforeInitializeHook {
     /// @notice The hook called before the state of a pool is initialized
     /// @param sender The initial msg.sender for the initialize call
@@ -117,7 +108,7 @@ interface IBeforeSwapHook {
     /// @return uint24 Optionally override the lp fee, only used if three conditions are met: 1. the Pool has a dynamic fee, 2. the value's 2nd highest bit is set (23rd bit, 0x400000), and 3. the value is less than or equal to the maximum fee (1 million)
     function beforeSwap(
         address sender,
-        SimplePoolKey calldata key,
+        PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         bytes calldata hookData
     ) external returns (bytes4, BeforeSwapDelta, uint24);
@@ -134,7 +125,7 @@ interface IAfterSwapHook {
     /// @return int128 The hook's delta in unspecified currency. Positive: the hook is owed/took currency, negative: the hook owes/sent currency
     function afterSwap(
         address sender,
-        SimplePoolKey calldata key,
+        PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata hookData

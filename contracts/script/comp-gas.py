@@ -1,36 +1,50 @@
-tob_cost = 16700 + 1000
+import json
+import os
+
+CURRENT_PATH = os.path.dirname(__file__)
+
+with open(os.path.join(CURRENT_PATH, '../snapshots/Full Bundle Benchmark.json')) as f:
+    raw_nums = json.load(f)
+
+raw_nums = {
+    k: int(v)
+    for k, v in raw_nums.items()
+}
+
+
+tob_cost = 32100 + 1000
 
 # Measurements from `../test/benchmark/FullBundle.b.sol` (with --isolate --flamechart `.execute`)
 
 # efi = Exact Flash order, Internal balances
-efi_amm_total_1 = 152_977
-efi_amm_total_2 = 172_371
-efi_amm_total_3 = 191_615
+efi_amm_total_1 = raw_nums['test_exactFlashInternal_amm_1']
+efi_amm_total_2 = raw_nums['test_exactFlashInternal_amm_2']
+efi_amm_total_3 = raw_nums['test_exactFlashInternal_amm_3']
 efi_amm_var = efi_amm_total_2 - efi_amm_total_1
 efi_amm_var2 = efi_amm_total_3 - efi_amm_total_2
 print(f'efi_amm_var: {efi_amm_var} ({efi_amm_var2 / efi_amm_var - 1:.2%})')
 efi_amm_fixed = efi_amm_total_1 - efi_amm_var
 
-efi_solo_total_1 = 82_943
-efi_solo_total_2 = 102_327
-efi_solo_total_3 = 121_711
+efi_solo_total_1 = raw_nums['test_exactFlashInternal_solo_1']
+efi_solo_total_2 = raw_nums['test_exactFlashInternal_solo_2']
+efi_solo_total_3 = raw_nums['test_exactFlashInternal_solo_3']
 efi_solo_var = efi_solo_total_2 - efi_solo_total_1
 efi_solo_var2 = efi_solo_total_3 - efi_solo_total_2
 print(f'efi_solo_var: {efi_solo_var} ({efi_solo_var2 / efi_solo_var - 1:.2%})')
 efi_solo_fixed = efi_solo_total_1 - efi_solo_var
 
 # esln = Exact Standing order, Liquid token balances, Non-zero starting nonce
-esln_amm_total_1 = 165_912
-esln_amm_total_2 = 198_247
-esln_amm_total_3 = 230_688
+esln_amm_total_1 = raw_nums['test_exactStandingLiquidNonZeroNonce_amm_1']
+esln_amm_total_2 = raw_nums['test_exactStandingLiquidNonZeroNonce_amm_2']
+esln_amm_total_3 = raw_nums['test_exactStandingLiquidNonZeroNonce_amm_3']
 esln_amm_var = esln_amm_total_2 - esln_amm_total_1
 esln_amm_var2 = esln_amm_total_3 - esln_amm_total_2
 print(f'esln_amm_var: {esln_amm_var} ({esln_amm_var2 / esln_amm_var - 1:.2%})')
 esln_amm_fixed = esln_amm_total_1 - esln_amm_var
 
-esln_solo_total_1 = 110_608
-esln_solo_total_2 = 142_937
-esln_solo_total_3 = 175_232
+esln_solo_total_1 = raw_nums['test_exactStandingLiquidNonZeroNonce_solo_1']
+esln_solo_total_2 = raw_nums['test_exactStandingLiquidNonZeroNonce_solo_2']
+esln_solo_total_3 = raw_nums['test_exactStandingLiquidNonZeroNonce_solo_3']
 esln_solo_var = esln_solo_total_2 - esln_solo_total_1
 esln_solo_var2 = esln_solo_total_3 - esln_solo_total_2
 print(

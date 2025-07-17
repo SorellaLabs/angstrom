@@ -217,7 +217,7 @@ impl TopOfBlockOrder {
 
             let cost = snapshot
                 .swap_current_with_amount(
-                    -I256::unchecked_from(tob.quantity_out - tob.max_gas_asset0),
+                    I256::unchecked_from(tob.quantity_out - tob.max_gas_asset0).wrapping_neg(),
                     true
                 )?
                 .total_d_t0;
@@ -242,7 +242,7 @@ impl TopOfBlockOrder {
         } else {
             let cost = snapshot
                 .swap_current_with_amount(
-                    -I256::unchecked_from(self.quantity_out - self.max_gas_asset_0),
+                    I256::unchecked_from(self.quantity_out - self.max_gas_asset_0).wrapping_neg(),
                     true
                 )?
                 .total_d_t0;

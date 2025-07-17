@@ -119,9 +119,15 @@ impl TopOfBlockOrder {
                 .checked_sub(self.quantity_out)
                 .ok_or_else(|| eyre!("Not enough output to cover the transaction"))
         } else {
+            // Given that this is a external function, meant for use with validators,
+            // Will return errors for gas case.
+            if self.quantity_out < self.max_gas_asset0 {
+                return Err(eyre::eyre!("quantity_out < max_gas_asset0"));
+            }
+
             let cost = snapshot
                 .swap_current_with_amount(
-                    -I256::unchecked_from(self.quantity_out - self.max_gas_asset0),
+                    I256::unchecked_from(self.quantity_out - self.max_gas_asset0).wrapping_neg(),
                     true
                 )?
                 .total_d_t0;

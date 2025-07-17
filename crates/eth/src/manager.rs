@@ -268,8 +268,8 @@ where
     ) -> impl Iterator<Item = B256> + 'a {
         chain
             .successful_tip_transactions()
+            .filter(|&tx| tx.to() == Some(self.angstrom_address))
             .cloned()
-            .filter(|tx| tx.to() == Some(self.angstrom_address))
             .filter_map(|transaction| {
                 let input: &[u8] = transaction.input();
                 let call = executeCall::abi_decode(input).ok()?;

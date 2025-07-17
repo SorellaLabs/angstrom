@@ -216,7 +216,10 @@ impl TopOfBlockOrder {
             // out
 
             let cost = snapshot
-                .swap_current_with_amount(-I256::unchecked_from(tob.quantity_out), true)?
+                .swap_current_with_amount(
+                    -I256::unchecked_from(tob.quantity_out - tob.max_gas_asset0),
+                    true
+                )?
                 .total_d_t0;
 
             let leftover = tob
@@ -238,7 +241,10 @@ impl TopOfBlockOrder {
                 .ok_or_else(|| eyre!("Not enough output to cover the transaction"))
         } else {
             let cost = snapshot
-                .swap_current_with_amount(-I256::unchecked_from(self.quantity_out), true)?
+                .swap_current_with_amount(
+                    -I256::unchecked_from(self.quantity_out - self.max_gas_asset_0),
+                    true
+                )?
                 .total_d_t0;
 
             self.quantity_in

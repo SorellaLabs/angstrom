@@ -31,7 +31,7 @@ impl ChainExt for Chain {
     }
 
     fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>> {
-        Chain::receipts_by_block_hash(&self, block_hash)
+        Chain::receipts_by_block_hash(self, block_hash)
     }
 
     fn successful_tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {

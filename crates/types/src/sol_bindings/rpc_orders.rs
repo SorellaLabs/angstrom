@@ -112,7 +112,6 @@ sol! {
 impl TopOfBlockOrder {
     /// returns the amount in t0 that this order is bidding in the auction.
     pub fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128> {
-        // Cefi Sell
         if self.is_bid() {
             let res =
                 snapshot.swap_current_with_amount(I256::unchecked_from(self.quantity_in), false)?;
@@ -120,10 +119,11 @@ impl TopOfBlockOrder {
                 .checked_sub(self.quantity_out)
                 .ok_or_else(|| eyre!("Not enough output to cover the transaction"))
         } else {
-            // qty am_in -> price
-            // Cefi Buy
             let cost = snapshot
-                .swap_current_with_amount(-I256::unchecked_from(self.quantity_out), true)?
+                .swap_current_with_amount(
+                    -I256::unchecked_from(self.quantity_out - self.max_gas_asset0),
+                    true
+                )?
                 .total_d_t0;
 
             self.quantity_in

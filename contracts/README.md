@@ -32,19 +32,19 @@ function pythonRunCmd() internal pure returns (string[] memory args) {
 
 ### Total Cost
 
-Amortized cost of `N` orders not including the ToB order cost.
+Amortized cost of `N` orders not including the ToB order cost (~34.1k for liquid balance ToB). When
+with AMM the donate is a `CurrentOnly` donate with a non-zero amount.
 
 - EFI = Exact Flash Order \w Internal Balances
 - ESLn = Exact Standing Order \w Liquid Tokens (Nonce non-zero)
 
 |Order Count|EFI (\w AMM)|EFI (No AMM)|ESLn (\w AMM)|ESLn (No AMM)|
 |-----------|------------|------------|-------------|-------------|
-| 1| 135.3k | 65.2k | 148.2k | 92.9k |
-| 2| 77.3k | 42.3k | 90.3k | 62.6k |
-| 3| 58.0k | 34.7k | 71.0k | 52.5k |
-| 4| 48.4k | 30.8k | 61.3k | 47.5k |
-| 5| 42.6k | 28.6k | 55.5k | 44.4k |
-|10| 31.0k | 24.0k | 43.9k | 38.4k |
-|20| 25.2k | 21.7k | 38.1k | 35.4k |
-|50| 21.7k | 20.3k | 34.7k | 33.5k |
-
+| 1| 156.0k | 77.5k | 166.2k | 87.8k |
+| 2| 87.7k | 48.5k | 99.2k | 60.1k |
+| 3| 65.0k | 38.8k | 76.9k | 50.8k |
+| 4| 53.6k | 34.0k | 65.8k | 46.2k |
+| 5| 46.7k | 31.1k | 59.1k | 43.4k |
+|10| 33.1k | 25.2k | 45.7k | 37.9k |
+|20| 26.3k | 22.3k | 39.0k | 35.1k |
+|50| 22.2k | 20.6k | 35.0k | 33.4k |

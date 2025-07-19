@@ -1,0 +1,14 @@
+{
+  "test_exactFlashInternal_amm_1": "189133",
+  "test_exactFlashInternal_amm_2": "208559",
+  "test_exactFlashInternal_amm_3": "227855",
+  "test_exactFlashInternal_solo_1": "110644",
+  "test_exactFlashInternal_solo_2": "130071",
+  "test_exactFlashInternal_solo_3": "149509",
+  "test_exactStandingLiquidNonZeroNonce_amm_1": "199251",
+  "test_exactStandingLiquidNonZeroNonce_amm_2": "231599",
+  "test_exactStandingLiquidNonZeroNonce_amm_3": "264105",
+  "test_exactStandingLiquidNonZeroNonce_solo_1": "120913",
+  "test_exactStandingLiquidNonZeroNonce_solo_2": "153249",
+  "test_exactStandingLiquidNonZeroNonce_solo_3": "185616"
+}

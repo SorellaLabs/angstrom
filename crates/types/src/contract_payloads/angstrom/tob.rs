@@ -202,7 +202,16 @@ impl TopOfBlockOrder {
             let leftover = res
                 .total_d_t0
                 .checked_sub(tob.quantity_out)
-                .ok_or_else(|| eyre!("Not enough output to cover the transaction"))?;
+                .ok_or_else(|| {
+                    eyre!(
+                        "Not enough output to cover the transaction, q_in: {} q_out: {} swap_in: \
+                         {} swap_out: {}",
+                        tob.quantity_in,
+                        tob.quantity_out,
+                        res.total_d_t1,
+                        res.total_d_t0
+                    )
+                })?;
 
             Ok((res, leftover))
         } else {
@@ -215,14 +224,20 @@ impl TopOfBlockOrder {
             // First we find the amount of T0 in it would take to at least hit our quantity
             // out
 
-            let cost = snapshot
-                .swap_current_with_amount(-I256::unchecked_from(tob.quantity_out), true)?
-                .total_d_t0;
+            let res =
+                snapshot.swap_current_with_amount(-I256::unchecked_from(tob.quantity_out), true)?;
 
-            let leftover = tob
-                .quantity_in
-                .checked_sub(cost)
-                .ok_or_else(|| eyre!("Not enough input to cover the transaction"))?;
+            let cost = res.total_d_t0;
+            let leftover = tob.quantity_in.checked_sub(res.total_d_t0).ok_or_else(|| {
+                eyre!(
+                    "Not enough input to cover the transaction, q_in: {} q_out: {} swap_in: {} \
+                     swap_out: {}",
+                    tob.quantity_in,
+                    tob.quantity_out,
+                    res.total_d_t0,
+                    res.total_d_t1
+                )
+            })?;
 
             let price_vec = snapshot.swap_current_with_amount(I256::unchecked_from(cost), true)?;
             Ok((price_vec, leftover))
@@ -235,15 +250,30 @@ impl TopOfBlockOrder {
                 snapshot.swap_current_with_amount(I256::unchecked_from(self.quantity_in), false)?;
             res.total_d_t0
                 .checked_sub(self.quantity_out)
-                .ok_or_else(|| eyre!("Not enough output to cover the transaction"))
+                .ok_or_else(|| {
+                    eyre!(
+                        "Not enough output to cover the transaction, q_in: {} q_out: {} swap_in: \
+                         {} swap_out: {}",
+                        self.quantity_in,
+                        self.quantity_out,
+                        res.total_d_t1,
+                        res.total_d_t0
+                    )
+                })
         } else {
-            let cost = snapshot
-                .swap_current_with_amount(-I256::unchecked_from(self.quantity_out), true)?
-                .total_d_t0;
+            let res = snapshot
+                .swap_current_with_amount(-I256::unchecked_from(self.quantity_out), true)?;
 
-            self.quantity_in
-                .checked_sub(cost)
-                .ok_or_else(|| eyre!("Not enough input to cover the transaction"))
+            self.quantity_in.checked_sub(res.total_d_t0).ok_or_else(|| {
+                eyre!(
+                    "Not enough input to cover the transaction, q_in: {} q_out: {} swap_in: {} \
+                     swap_out: {}",
+                    self.quantity_in,
+                    self.quantity_out,
+                    res.total_d_t0,
+                    res.total_d_t1
+                )
+            })
         }
     }
 }

@@ -8,10 +8,9 @@ use std::{
 };
 
 use alloy::primitives::U160;
-#[cfg(not(feature = "rollup"))]
-use angstrom_types::consensus::{ConsensusRoundEvent, ConsensusRoundOrderHashes};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
+    consensus::{ConsensusRoundEvent, ConsensusRoundOrderHashes},
     orders::OrderSet,
     primitive::PoolId,
     sol_bindings::{grouped_orders::AllOrders, rpc_orders::TopOfBlockOrder},
@@ -71,30 +70,35 @@ impl AngstromBookQuoter for QuoterHandle {
     }
 }
 
-pub struct QuoterManager<BlockSync: BlockSyncConsumer> {
-    cur_block: u64,
-    seq_id: u16,
-    block_sync: BlockSync,
-    orders: Arc<OrderStorage>,
-    amms: SyncedUniswapPools,
-    threadpool: ThreadPool,
-    recv: mpsc::Receiver<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-    book_snapshots: HashMap<PoolId, (PoolId, BaselinePoolState)>,
-    pending_tasks: FuturesUnordered<BoxFuture<'static, eyre::Result<Slot0Update>>>,
-    pool_to_subscribers: HashMap<PoolId, Vec<mpsc::Sender<Slot0Update>>>,
-    #[cfg(not(feature = "rollup"))]
+pub struct ConsensusMode {
     consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>,
     /// The unique order hashes of the current PreProposalAggregate consensus
     /// round. Used to build the book for the slot0 stream, so that all
     /// orders are valid, and the subscription can't be manipulated by orders
     /// submitted after this round and between the next block
-    #[cfg(not(feature = "rollup"))]
-    active_pre_proposal_aggr_order_hashes: Option<ConsensusRoundOrderHashes>,
-
-    execution_interval: Interval
+    active_pre_proposal_aggr_order_hashes: Option<ConsensusRoundOrderHashes>
 }
 
-impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
+pub struct RollupMode;
+
+pub struct QuoterManager<BlockSync: BlockSyncConsumer, M = ConsensusMode> {
+    cur_block:           u64,
+    seq_id:              u16,
+    block_sync:          BlockSync,
+    orders:              Arc<OrderStorage>,
+    amms:                SyncedUniswapPools,
+    threadpool:          ThreadPool,
+    recv:                mpsc::Receiver<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
+    book_snapshots:      HashMap<PoolId, (PoolId, BaselinePoolState)>,
+    pending_tasks:       FuturesUnordered<BoxFuture<'static, eyre::Result<Slot0Update>>>,
+    pool_to_subscribers: HashMap<PoolId, Vec<mpsc::Sender<Slot0Update>>>,
+
+    execution_interval: Interval,
+
+    mode: M
+}
+
+impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync, ConsensusMode> {
     /// ensure that we haven't registered on the BlockSync.
     /// We just want to ensure that we don't access during a update period
     pub fn new(
@@ -104,9 +108,7 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
         amms: SyncedUniswapPools,
         threadpool: ThreadPool,
         update_interval: Duration,
-        #[cfg(not(feature = "rollup"))] consensus_stream: Pin<
-            Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>
-        >
+        consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>
     ) -> Self {
         let cur_block = block_sync.current_block_number();
         let book_snapshots = amms
@@ -126,6 +128,8 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
             "cannot update quicker than every 10ms"
         );
 
+        let mode = ConsensusMode { consensus_stream, active_pre_proposal_aggr_order_hashes: None };
+
         Self {
             seq_id: 0,
             block_sync,
@@ -138,10 +142,7 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
             pending_tasks: FuturesUnordered::new(),
             pool_to_subscribers: HashMap::default(),
             execution_interval: interval(update_interval),
-            #[cfg(not(feature = "rollup"))]
-            consensus_stream,
-            #[cfg(not(feature = "rollup"))]
-            active_pre_proposal_aggr_order_hashes: None
+            mode
         }
     }
 
@@ -169,16 +170,12 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
     }
 
     fn all_orders_with_consensus(&self) -> OrderSet<AllOrders, TopOfBlockOrder> {
-        #[cfg(not(feature = "rollup"))]
-        if let Some(hashes) = self.active_pre_proposal_aggr_order_hashes.as_ref() {
+        if let Some(hashes) = self.mode.active_pre_proposal_aggr_order_hashes.as_ref() {
             self.orders
                 .get_all_orders_with_hashes(&hashes.limit, &hashes.searcher)
         } else {
             self.orders.get_all_orders()
         }
-
-        #[cfg(feature = "rollup")]
-        self.orders.get_all_orders()
     }
 
     fn spawn_book_solvers(&mut self, seq_id: u16) {
@@ -254,10 +251,9 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
             .collect();
     }
 
-    #[cfg(not(feature = "rollup"))]
     fn update_consensus_state(&mut self, round: ConsensusRoundOrderHashes) {
         if matches!(round.round, ConsensusRoundEvent::PropagatePreProposalAgg) {
-            self.active_pre_proposal_aggr_order_hashes = Some(round)
+            self.mode.active_pre_proposal_aggr_order_hashes = Some(round)
         }
     }
 
@@ -278,7 +274,7 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
     }
 }
 
-impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync> {
+impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync, ConsensusMode> {
     type Output = ();
 
     fn poll(
@@ -289,8 +285,9 @@ impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync> {
             self.handle_new_subscription(pools, subscriber);
         }
 
-        #[cfg(not(feature = "rollup"))]
-        while let Poll::Ready(Some(consensus_update)) = self.consensus_stream.poll_next_unpin(cx) {
+        while let Poll::Ready(Some(consensus_update)) =
+            self.mode.consensus_stream.poll_next_unpin(cx)
+        {
             self.update_consensus_state(consensus_update);
         }
 
@@ -310,10 +307,7 @@ impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync> {
                 self.update_book_state();
                 self.cur_block = self.block_sync.current_block_number();
 
-                #[cfg(not(feature = "rollup"))]
-                {
-                    self.active_pre_proposal_aggr_order_hashes = None;
-                }
+                self.mode.active_pre_proposal_aggr_order_hashes = None;
 
                 self.seq_id = 0;
             }

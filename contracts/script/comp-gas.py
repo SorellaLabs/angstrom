@@ -12,7 +12,7 @@ raw_nums = {
 }
 
 
-tob_cost = 32100 + 1000
+tob_cost = 39236 + 1000
 
 # Measurements from `../test/benchmark/FullBundle.b.sol` (with --isolate --flamechart `.execute`)
 

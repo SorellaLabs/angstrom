@@ -13,20 +13,17 @@ use alloy::{
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
-use alloy_chains::Chain;
 use angstrom_amm_quoter::{QuoterManager, Slot0Update};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    VerificationSidecar,
+    NetworkOrderEvent, PoolManagerBuilder,
     pool_manager::{OrderCommand, PoolHandle}
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
-    consensus::StromConsensusEvent,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
@@ -114,7 +111,7 @@ impl<N: NodePrimitives> StromHandles<N> {
     }
 }
 
-pub fn initialize_strom_handles() -> StromHandles {
+pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
     let (eth_tx, eth_rx) = channel(100);
     let (matching_tx, matching_rx) = channel(100);
     let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
@@ -146,7 +143,7 @@ pub fn initialize_strom_handles() -> StromHandles {
 pub async fn initialize_strom_components<Node, AddOns, S>(
     config: AngstromConfig,
     signer: AngstromSigner<S>,
-    mut handles: StromHandles,
+    mut handles: StromHandles<OpPrimitives>,
     node: &FullNode<Node, AddOns>,
     executor: TaskExecutor,
     exit: NodeExitFuture,

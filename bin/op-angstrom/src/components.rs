@@ -35,11 +35,10 @@ use angstrom_types::{
     reth_db_wrapper::RethDbWrapper,
     submission::SubmissionHandler
 };
-use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
+use consensus::AngstromValidator;
 use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
-use parking_lot::RwLock;
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -296,7 +295,7 @@ where
         init_telemetry(signer_addr, grace_shutdown)
     });
 
-    let uniswap_pool_manager = configure_uniswap_manager::<_, DEFAULT_TICKS>(
+    let uniswap_pool_manager = configure_uniswap_manager::<_, OpPrimitives, DEFAULT_TICKS>(
         querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,

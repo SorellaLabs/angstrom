@@ -13405,6 +13405,8 @@ dependencies = [
  "pade-macro",
  "rand 0.9.1",
  "rayon",
+ "reth-node-builder",
+ "reth-primitives",
  "reth-provider",
  "revm",
  "revm-bytecode",

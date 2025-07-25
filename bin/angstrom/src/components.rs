@@ -335,7 +335,7 @@ where
         init_telemetry(signer_addr, grace_shutdown)
     });
 
-    let uniswap_pool_manager = configure_uniswap_manager::<_, DEFAULT_TICKS>(
+    let uniswap_pool_manager = configure_uniswap_manager::<_, EthPrimitives, DEFAULT_TICKS>(
         querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,

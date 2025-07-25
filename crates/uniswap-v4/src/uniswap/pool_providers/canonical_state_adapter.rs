@@ -11,25 +11,29 @@ use alloy::{
     rpc::types::{Filter, FilterBlockOption}
 };
 use futures_util::StreamExt;
+use reth_node_builder::NodePrimitives;
+use reth_primitives::EthPrimitives;
 use reth_provider::CanonStateNotification;
 use tokio::sync::broadcast;
 
 use super::PoolMangerBlocks;
 use crate::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 
-pub struct CanonicalStateAdapter<P>
+pub struct CanonicalStateAdapter<P, N = EthPrimitives>
 where
-    P: Provider + 'static
+    P: Provider + 'static,
+    N: NodePrimitives
 {
-    canon_state_notifications: broadcast::Receiver<CanonStateNotification>,
+    canon_state_notifications: broadcast::Receiver<CanonStateNotification<N>>,
     last_logs:                 Arc<RwLock<Vec<Log>>>,
     last_block_number:         Arc<AtomicU64>,
     node_provider:             Arc<P>
 }
 
-impl<P> Clone for CanonicalStateAdapter<P>
+impl<P, N> Clone for CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static
+    P: Provider + 'static,
+    N: NodePrimitives
 {
     fn clone(&self) -> Self {
         Self {
@@ -41,12 +45,13 @@ where
     }
 }
 
-impl<P> CanonicalStateAdapter<P>
+impl<P, N> CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static
+    P: Provider + 'static,
+    N: NodePrimitives
 {
     pub fn new(
-        canon_state_notifications: broadcast::Receiver<CanonStateNotification>,
+        canon_state_notifications: broadcast::Receiver<CanonStateNotification<N>>,
         node_provider: Arc<P>,
         block_number: u64
     ) -> Self {
@@ -59,9 +64,10 @@ where
     }
 }
 
-impl<P> PoolManagerProvider for CanonicalStateAdapter<P>
+impl<P, N> PoolManagerProvider for CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static
+    P: Provider + 'static,
+    N: NodePrimitives
 {
     fn provider(&self) -> Arc<impl Provider> {
         self.node_provider.clone()
@@ -81,11 +87,12 @@ where
 
                                 let logs: Vec<Log> = new
                                     .execution_outcome()
-                                    .logs(block.number)
+                                    .logs(block.number())
                                     .map_or_else(Vec::new, |logs| logs.cloned().collect());
                                 *last_log_write = logs;
-                                this.last_block_number.store(block.number, Ordering::SeqCst);
-                                tracing::info!(?block.number,"updated number");
+                                this.last_block_number
+                                    .store(block.number(), Ordering::SeqCst);
+                                tracing::info!(number = ?block.number(), "updated number");
                                 Some(Some(PoolMangerBlocks::NewBlock(block.number())))
                             }
                             CanonStateNotification::Reorg { old, new } => {
@@ -122,9 +129,10 @@ where
                                 }
 
                                 *last_log_write = logs;
-                                this.last_block_number.store(block.number, Ordering::SeqCst);
-                                tracing::info!(?block.number,"updated number");
-                                Some(Some(PoolMangerBlocks::Reorg(block.number, range)))
+                                this.last_block_number
+                                    .store(block.number(), Ordering::SeqCst);
+                                tracing::info!(number = ?block.number(), "updated number");
+                                Some(Some(PoolMangerBlocks::Reorg(block.number(), range)))
                             }
                         };
                         Some((block, notifications))
@@ -152,9 +160,10 @@ where
     }
 }
 
-impl<P> CanonicalStateAdapter<P>
+impl<P, N> CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static
+    P: Provider + 'static,
+    N: NodePrimitives
 {
     fn validate_filter(&self, filter: &Filter) -> Result<(), PoolManagerError> {
         let last_block = self.last_block_number.load(Ordering::SeqCst);

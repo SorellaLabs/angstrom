@@ -31,7 +31,7 @@ use tokio::{
 use tokio_stream::wrappers::ReceiverStream;
 use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools};
 
-use crate::consensus::ConsensusMode;
+pub use crate::{consensus::ConsensusMode, rollup::RollupMode};
 
 mod consensus;
 mod rollup;

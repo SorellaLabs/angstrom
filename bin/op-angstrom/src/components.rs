@@ -13,7 +13,7 @@ use alloy::{
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
-use angstrom_amm_quoter::{QuoterManager, Slot0Update};
+use angstrom_amm_quoter::{QuoterManager, RollupMode, Slot0Update};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::{EthDataCleanser, EthEvent}
@@ -379,7 +379,7 @@ where
     let matching_handle = MatchingManager::spawn(executor.clone(), validation_handle.clone());
 
     // spin up amm quoter
-    let amm = QuoterManager::new(
+    let amm = QuoterManager::<_, RollupMode>::new(
         global_block_sync.clone(),
         order_storage.clone(),
         handles.quoter_rx,

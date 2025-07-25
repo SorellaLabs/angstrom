@@ -44,11 +44,14 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: cargo-check
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: cargo check --workspace --all-features
         run: cargo check --workspace --all-features
@@ -67,11 +70,14 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: cargo-clippy
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: cargo clippy --workspace --all-features
         run: cargo clippy --workspace --all-features
@@ -90,11 +96,14 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: cargo-fix
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: cargo fix --workspace --all-features
         run: |
@@ -123,11 +132,14 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: cargo-test-unit
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - uses: taiki-e/install-action@nextest
 
@@ -148,11 +160,14 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: cargo-test-integration
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - uses: taiki-e/install-action@nextest
 
@@ -175,6 +190,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -195,6 +211,9 @@ jobs:
         with:
           key: forge
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          workspaces: "./contracts -> target"
 
       - name: Run Forge fmt
         run: forge fmt --check

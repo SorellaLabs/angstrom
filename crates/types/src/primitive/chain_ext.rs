@@ -1,53 +1,55 @@
 use std::ops::RangeInclusive;
 
 use alloy::{
-    consensus::BlockHeader,
+    consensus::{BlockHeader, TxReceipt},
     primitives::{BlockHash, BlockNumber}
 };
-use reth_ethereum_primitives::{Block, Receipt, TransactionSigned};
-use reth_primitives_traits::RecoveredBlock;
+use reth_primitives::{EthPrimitives, NodePrimitives};
+use reth_primitives_traits::{BlockBody, RecoveredBlock};
 use reth_provider::Chain;
 
 pub const MAX_REORG_DEPTH: u64 = 150;
 
 #[auto_impl::auto_impl(&, Arc)]
-pub trait ChainExt {
+pub trait ChainExt<N: NodePrimitives = EthPrimitives> {
     fn tip_number(&self) -> BlockNumber;
     fn tip_hash(&self) -> BlockHash;
-    fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>>;
-    fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_;
-    fn successful_tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_;
-    fn reorged_range(&self, new: impl ChainExt) -> Option<RangeInclusive<u64>>;
-    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<Block>> + '_;
+    fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&N::Receipt>>;
+    fn tip_transactions(&self) -> impl Iterator<Item = &N::SignedTx> + '_;
+    fn successful_tip_transactions(&self) -> impl Iterator<Item = &N::SignedTx> + '_;
+    fn reorged_range(&self, new: impl ChainExt<N>) -> Option<RangeInclusive<u64>>;
+    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<N::Block>> + '_;
 }
 
-impl ChainExt for Chain {
+impl<N: NodePrimitives> ChainExt<N> for Chain<N> {
     fn tip_number(&self) -> BlockNumber {
-        self.tip().number
+        self.tip().number()
     }
 
     fn tip_hash(&self) -> BlockHash {
         self.tip().hash()
     }
 
-    fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>> {
+    fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&N::Receipt>> {
         Chain::receipts_by_block_hash(self, block_hash)
     }
 
-    fn successful_tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
-        let execution = self.execution_outcome_at_block(self.tip().number).unwrap();
+    fn successful_tip_transactions(&self) -> impl Iterator<Item = &N::SignedTx> + '_ {
+        let execution = self
+            .execution_outcome_at_block(self.tip().number())
+            .unwrap();
         let receipts = execution.receipts.last().unwrap().clone();
 
         self.tip_transactions()
             .zip(receipts)
-            .filter_map(|(tx, receipt)| receipt.success.then_some(tx))
+            .filter_map(|(tx, receipt)| receipt.status().then_some(tx))
     }
 
-    fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
-        self.tip().body().transactions()
+    fn tip_transactions(&self) -> impl Iterator<Item = &N::SignedTx> + '_ {
+        self.tip().body().transactions().iter()
     }
 
-    fn reorged_range(&self, new: impl ChainExt) -> Option<RangeInclusive<u64>> {
+    fn reorged_range(&self, new: impl ChainExt<N>) -> Option<RangeInclusive<u64>> {
         let tip = new.tip_number();
         // search 150 blocks back;
         let start = tip - MAX_REORG_DEPTH;
@@ -74,7 +76,7 @@ impl ChainExt for Chain {
         }
     }
 
-    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<Block>> + '_ {
+    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<N::Block>> + '_ {
         self.blocks_iter()
     }
 }

@@ -8,9 +8,10 @@ use std::{
 };
 
 use alloy::primitives::U160;
+#[cfg(not(feature = "rollup"))]
+use angstrom_types::consensus::{ConsensusRoundEvent, ConsensusRoundOrderHashes};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    consensus::{ConsensusRoundEvent, ConsensusRoundOrderHashes},
     orders::OrderSet,
     primitive::PoolId,
     sol_bindings::{grouped_orders::AllOrders, rpc_orders::TopOfBlockOrder},
@@ -81,11 +82,13 @@ pub struct QuoterManager<BlockSync: BlockSyncConsumer> {
     book_snapshots: HashMap<PoolId, (PoolId, BaselinePoolState)>,
     pending_tasks: FuturesUnordered<BoxFuture<'static, eyre::Result<Slot0Update>>>,
     pool_to_subscribers: HashMap<PoolId, Vec<mpsc::Sender<Slot0Update>>>,
+    #[cfg(not(feature = "rollup"))]
     consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>,
     /// The unique order hashes of the current PreProposalAggregate consensus
     /// round. Used to build the book for the slot0 stream, so that all
     /// orders are valid, and the subscription can't be manipulated by orders
     /// submitted after this round and between the next block
+    #[cfg(not(feature = "rollup"))]
     active_pre_proposal_aggr_order_hashes: Option<ConsensusRoundOrderHashes>,
 
     execution_interval: Interval
@@ -101,7 +104,9 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
         amms: SyncedUniswapPools,
         threadpool: ThreadPool,
         update_interval: Duration,
-        consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>
+        #[cfg(not(feature = "rollup"))] consensus_stream: Pin<
+            Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>
+        >
     ) -> Self {
         let cur_block = block_sync.current_block_number();
         let book_snapshots = amms
@@ -133,7 +138,9 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
             pending_tasks: FuturesUnordered::new(),
             pool_to_subscribers: HashMap::default(),
             execution_interval: interval(update_interval),
+            #[cfg(not(feature = "rollup"))]
             consensus_stream,
+            #[cfg(not(feature = "rollup"))]
             active_pre_proposal_aggr_order_hashes: None
         }
     }
@@ -162,12 +169,16 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
     }
 
     fn all_orders_with_consensus(&self) -> OrderSet<AllOrders, TopOfBlockOrder> {
+        #[cfg(not(feature = "rollup"))]
         if let Some(hashes) = self.active_pre_proposal_aggr_order_hashes.as_ref() {
             self.orders
                 .get_all_orders_with_hashes(&hashes.limit, &hashes.searcher)
         } else {
             self.orders.get_all_orders()
         }
+
+        #[cfg(feature = "rollup")]
+        self.orders.get_all_orders()
     }
 
     fn spawn_book_solvers(&mut self, seq_id: u16) {
@@ -243,6 +254,7 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
             .collect();
     }
 
+    #[cfg(not(feature = "rollup"))]
     fn update_consensus_state(&mut self, round: ConsensusRoundOrderHashes) {
         if matches!(round.round, ConsensusRoundEvent::PropagatePreProposalAgg) {
             self.active_pre_proposal_aggr_order_hashes = Some(round)
@@ -277,6 +289,7 @@ impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync> {
             self.handle_new_subscription(pools, subscriber);
         }
 
+        #[cfg(not(feature = "rollup"))]
         while let Poll::Ready(Some(consensus_update)) = self.consensus_stream.poll_next_unpin(cx) {
             self.update_consensus_state(consensus_update);
         }
@@ -296,7 +309,12 @@ impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync> {
             if self.cur_block != self.block_sync.current_block_number() {
                 self.update_book_state();
                 self.cur_block = self.block_sync.current_block_number();
-                self.active_pre_proposal_aggr_order_hashes = None;
+
+                #[cfg(not(feature = "rollup"))]
+                {
+                    self.active_pre_proposal_aggr_order_hashes = None;
+                }
+
                 self.seq_id = 0;
             }
 

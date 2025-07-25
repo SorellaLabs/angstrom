@@ -3,6 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use alloy::{consensus::Transaction, primitives::Address, providers::Provider, sol_types::SolCall};
 use futures::{Stream, StreamExt};
 use pade::PadeDecode;
+use reth_primitives::NodePrimitives;
 use reth_provider::CanonStateNotificationStream;
 use serde::{Deserialize, Serialize};
 
@@ -35,9 +36,9 @@ impl PairsWithPrice {
             .collect::<Vec<_>>()
     }
 
-    pub fn into_price_update_stream<P: Provider + 'static>(
+    pub fn into_price_update_stream<P: Provider + 'static, N: NodePrimitives>(
         angstrom_address: Address,
-        stream: CanonStateNotificationStream,
+        stream: CanonStateNotificationStream<N>,
         provider: Arc<P>
     ) -> impl Stream<Item = (u64, u128, Vec<Self>)> + Send {
         stream.then(move |notification| {

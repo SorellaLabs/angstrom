@@ -15,6 +15,8 @@ This document outlines the architectural decisions made for the rollup mode of a
     - `RollupMode` contains rollup related logic and state.
     - We then use concrete implementations of each type state to express the logic for each mode.
 
+## Reasoning
+
 - We chose this approach over working with feature flags because it doesn't work as expected in workspaces (where each feature is additive, i.e. you can't import a workspace member from one binary with a specific feature flag, and then use that member in another binary with a different feature flag). 
 - We chose this approach over runtime decisions (i.e., consensus handles / streams are optional and have to be configured at runtime) because that adds unnecessary overhead. We know what we need at compile time, hence we can use the type state pattern to express the logic for each mode.
 

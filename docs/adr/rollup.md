@@ -3,7 +3,7 @@
 This document outlines the architectural decisions made for the rollup mode of angstrom: `op-angstrom`.
 
 ## High-Level
-- A new binary for rollup mode: [`op-angstrom`](../bin/op-angstrom)
+- A new binary for rollup mode: [`op-angstrom`](../../bin/op-angstrom)
 - Crates using default Eth L1 primitives are made generic over [`NodePrimitives`](https://reth.rs/docs/reth_primitives_traits/node/trait.NodePrimitives.html)
     - This trait is a template for the most important chain-related primitives used in Angstrom: `Block`, `BlockHeader`, `BlockBody`, `SignedTx`, `Receipt`
     - The default implementation is always [`EthPrimitives`](https://reth.rs/docs/reth/primitives/struct.EthPrimitives.html)

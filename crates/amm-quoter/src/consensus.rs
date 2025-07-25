@@ -1,3 +1,4 @@
+//! This module implements consensus-based quoter mode.
 use std::{
     collections::{HashMap, HashSet},
     pin::Pin,
@@ -17,9 +18,9 @@ use futures::{Stream, StreamExt, stream::FuturesUnordered};
 use order_pool::order_storage::OrderStorage;
 use rayon::ThreadPool;
 use tokio::{sync::mpsc, time::interval};
-use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools};
+use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
-use crate::{QuoterManager, Slot0Update};
+use crate::{QuoterManager, Slot0Update, book_snapshots_from_amms};
 
 /// Mode for consensus-based order book building.
 pub struct ConsensusMode {
@@ -44,17 +45,7 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync, ConsensusMode> {
         consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>
     ) -> Self {
         let cur_block = block_sync.current_block_number();
-        let book_snapshots = amms
-            .iter()
-            .map(|entry| {
-                let pool_lock = entry.value().read().unwrap();
-
-                let pk = pool_lock.public_address();
-                let uni_key = pool_lock.data_loader().private_address();
-                let snapshot_data = pool_lock.fetch_pool_snapshot().unwrap().2;
-                (pk, (uni_key, snapshot_data))
-            })
-            .collect();
+        let book_snapshots = book_snapshots_from_amms(&amms);
 
         assert!(
             update_interval > Duration::from_millis(10),

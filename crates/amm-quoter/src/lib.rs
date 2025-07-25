@@ -72,8 +72,6 @@ impl AngstromBookQuoter for QuoterHandle {
     }
 }
 
-pub struct RollupMode;
-
 pub struct QuoterManager<BlockSync: BlockSyncConsumer, M = ConsensusMode> {
     cur_block:           u64,
     seq_id:              u16,
@@ -225,4 +223,17 @@ pub fn orders_sorted_by_pool_id(limit: Vec<BookOrder>) -> HashMap<PoolId, HashSe
         acc.entry(order.pool_id).or_default().insert(order);
         acc
     })
+}
+
+pub fn book_snapshots_from_amms(
+    amms: &SyncedUniswapPools
+) -> HashMap<PoolId, (PoolId, BaselinePoolState)> {
+    amms.iter()
+        .map(|entry| {
+            let pool_lock = entry.value().read().unwrap();
+            let uni_key = pool_lock.data_loader().private_address();
+            let snapshot_data = pool_lock.fetch_pool_snapshot().unwrap().2;
+            (*entry.key(), (uni_key, snapshot_data))
+        })
+        .collect()
 }

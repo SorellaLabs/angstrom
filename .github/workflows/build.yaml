@@ -109,8 +109,8 @@ jobs:
               echo "No changes detected after running 'cargo fix --workspace --all-features' ✅"
           fi
 
-  cargo-test:
-    name: cargo test
+  cargo-test-unit:
+    name: cargo test (unit)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -126,13 +126,38 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: cargo-test
+          key: cargo-test-unit
           cache-on-failure: true
 
       - uses: taiki-e/install-action@nextest
 
-      - name: Run tests
-        run: cargo nextest run --retries 3 --no-tests=warn
+      - name: Run unit tests
+        run: cargo nextest run --workspace --exclude testnet --retries 3 --no-tests=warn
+
+  cargo-test-integration:
+    name: cargo test (integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check-Out
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cargo-test-integration
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Run integration tests
+        run: cargo nextest run --package testnet --retries 1 --no-tests=warn
 
   contracts:
     name: forge fmt && forge test

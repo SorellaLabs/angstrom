@@ -26,6 +26,7 @@ use reth_node_builder::{Node, NodeBuilder, NodeHandle, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
 use reth_optimism_node::{OpAddOns, OpNode};
+use reth_optimism_primitives::OpPrimitives;
 use validation::validator::ValidationClient;
 
 use crate::components::{StromHandles, initialize_strom_components, initialize_strom_handles};
@@ -134,7 +135,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     quoter_handle: QuoterHandle,
     secret_key: AngstromSigner<S>,
     args: AngstromConfig,
-    channels: StromHandles,
+    channels: StromHandles<OpPrimitives>,
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>
 ) -> eyre::Result<()> {
     let executor_clone = executor.clone();

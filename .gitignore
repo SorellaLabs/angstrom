@@ -24,3 +24,6 @@ rustc-ice-*.txt
 cache/
 out/
 verify-contract.sh
+
+# Claude
+.claude/

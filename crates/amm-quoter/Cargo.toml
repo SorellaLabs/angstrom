@@ -20,6 +20,3 @@ serde.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 uniswap-v4.workspace = true
-
-[features]
-rollup = []

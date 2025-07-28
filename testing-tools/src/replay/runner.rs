@@ -15,7 +15,7 @@ use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
 };
-use angstrom_network::{PoolManagerBuilder, pool_manager::PoolHandle};
+use pool_manager::{PoolHandle, PoolManagerBuilder};
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}

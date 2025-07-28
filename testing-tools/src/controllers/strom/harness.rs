@@ -8,7 +8,8 @@ use alloy::{self, eips::BlockId, network::Network, primitives::Address, provider
 use alloy_primitives::U256;
 use angstrom::components::StromHandles;
 use angstrom_eth::manager::EthEvent;
-use angstrom_network::{PoolManagerBuilder, StromNetworkHandle, pool_manager::PoolHandle};
+use angstrom_network::StromNetworkHandle;
+use pool_manager::{PoolHandle, PoolManagerBuilder};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::ConsensusRoundName,

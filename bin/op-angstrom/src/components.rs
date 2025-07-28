@@ -18,10 +18,8 @@ use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::{EthDataCleanser, EthEvent}
 };
-use angstrom_network::{
-    NetworkOrderEvent, PoolManagerBuilder,
-    pool_manager::{OrderCommand, PoolHandle}
-};
+use angstrom_network::NetworkOrderEvent;
+use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},

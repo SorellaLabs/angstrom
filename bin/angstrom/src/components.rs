@@ -20,10 +20,10 @@ use angstrom_eth::{
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    VerificationSidecar,
-    pool_manager::{OrderCommand, PoolHandle}
+    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, StatusState,
+    VerificationSidecar
 };
+use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::StromConsensusEvent,

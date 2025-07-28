@@ -9,7 +9,7 @@ use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
-use angstrom_network::pool_manager::PoolHandle;
+use pool_manager::PoolHandle;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::{
     contract_bindings::controller_v_1::ControllerV1,

@@ -26,7 +26,53 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::SendError};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-use crate::{LruCache, NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
+use crate::cache::LruCache;
+
+// These types need to be defined as trait bounds or generic parameters
+// to avoid circular dependencies with angstrom-network
+pub trait NetworkMessage: Send + Sync + Clone {}
+pub trait NetworkEvent: Send + Sync {}
+pub trait NetworkHandle: Send + Sync {
+    type Message: NetworkMessage;
+    type Event: NetworkEvent;
+    
+    fn send_message(&mut self, peer_id: PeerId, message: Self::Message);
+    fn peer_reputation_change(&mut self, peer_id: PeerId, change: ReputationChangeKind);
+    fn subscribe_network_events(&self) -> UnboundedReceiverStream<Self::Event>;
+}
+
+#[derive(Debug, Clone)]
+pub enum ReputationChangeKind {
+    InvalidOrder,
+}
+
+// Temporary placeholder types - these should be provided by the caller
+#[derive(Debug)]
+pub enum NetworkOrderEvent {
+    IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> },
+    CancelOrder { peer_id: PeerId, request: CancelOrderRequest },
+}
+
+#[derive(Debug)]
+pub enum StromNetworkEvent {
+    SessionEstablished { peer_id: PeerId },
+    SessionClosed { peer_id: PeerId },
+    PeerRemoved(PeerId),
+    PeerAdded(PeerId),
+}
+
+impl NetworkEvent for StromNetworkEvent {}
+
+#[derive(Clone)]
+pub enum StromMessage {
+    PropagatePooledOrders(Vec<AllOrders>),
+    OrderCancellation(CancelOrderRequest),
+}
+
+impl NetworkMessage for StromMessage {}
+
+// Forward declare the actual StromNetworkHandle type
+// This will be imported from angstrom-network where it's actually defined
 
 const MODULE_NAME: &str = "Order Pool";
 
@@ -122,7 +168,7 @@ impl OrderPoolHandle for PoolHandle {
     }
 }
 
-pub struct PoolManagerBuilder<V, GlobalSync>
+pub struct PoolManagerBuilder<V, GlobalSync, NetworkHandle>
 where
     V: OrderValidatorHandle,
     GlobalSync: BlockSyncConsumer
@@ -130,7 +176,7 @@ where
     validator:            V,
     global_sync:          GlobalSync,
     order_storage:        Option<Arc<OrderStorage>>,
-    network_handle:       StromNetworkHandle,
+    network_handle:       NetworkHandle,
     strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     eth_network_events:   UnboundedReceiverStream<EthEvent>,
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
@@ -387,7 +433,7 @@ where
                     o.into_iter().for_each(|peer| {
                         self.network.peer_reputation_change(
                             peer,
-                            crate::ReputationChangeKind::InvalidOrder
+                            ReputationChangeKind::InvalidOrder
                         );
                     });
                     None

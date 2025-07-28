@@ -28,6 +28,7 @@ hsm-signer.workspace = true
 matching-engine.workspace = true
 order-pool.workspace = true
 parking_lot.workspace = true
+pool-manager.workspace = true
 rayon = "1"
 reth.workspace = true
 reth-db.workspace = true

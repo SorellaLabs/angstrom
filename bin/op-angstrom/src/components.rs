@@ -74,42 +74,6 @@ use crate::AngstromConfig;
 pub type DefaultPoolHandle = PoolHandle;
 type DefaultOrderCommand = OrderCommand;
 
-// due to how the init process works with reth. we need to init like this
-pub struct StromHandles<N: NodePrimitives = EthPrimitives> {
-    pub eth_tx: Sender<EthCommand<N>>,
-    pub eth_rx: Receiver<EthCommand<N>>,
-
-    pub pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
-    pub pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
-
-    pub orderpool_tx: UnboundedSender<DefaultOrderCommand>,
-    pub orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
-
-    pub quoter_tx: mpsc::Sender<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-    pub quoter_rx: mpsc::Receiver<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-
-    pub validator_tx: UnboundedSender<ValidationRequest>,
-    pub validator_rx: UnboundedReceiver<ValidationRequest>,
-
-    pub eth_handle_tx: Option<UnboundedSender<EthEvent>>,
-    pub eth_handle_rx: Option<UnboundedReceiver<EthEvent>>,
-
-    pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
-
-    // only 1 set cur
-    pub matching_tx: Sender<MatcherCommand>,
-    pub matching_rx: Receiver<MatcherCommand>
-}
-
-impl<N: NodePrimitives> StromHandles<N> {
-    pub fn get_pool_handle(&self) -> DefaultPoolHandle {
-        PoolHandle {
-            manager_tx:      self.orderpool_tx.clone(),
-            pool_manager_tx: self.pool_manager_tx.clone()
-        }
-    }
-}
-
 pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
     let (eth_tx, eth_rx) = channel(100);
     let (matching_tx, matching_rx) = channel(100);

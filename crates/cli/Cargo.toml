@@ -40,3 +40,9 @@ tracing.workspace = true
 uniswap-v4.workspace = true
 url.workspace = true
 validation.workspace = true
+
+# OP-stack support
+reth-optimism-chainspec.workspace = true
+reth-optimism-cli.workspace = true
+reth-optimism-node.workspace = true
+reth-optimism-primitives.workspace = true

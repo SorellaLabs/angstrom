@@ -53,7 +53,10 @@ use reth::{
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_network::{NetworkHandle, Peers};
-use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns};
+use reth_node_builder::{
+    FullNode, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
+};
+use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
@@ -92,91 +95,10 @@ pub fn init_network_builder<S: AngstromMetaSigner>(
     Ok(StromNetworkBuilder::new(verification, eth_handle, validator_set))
 }
 
-pub type DefaultPoolHandle = PoolHandle;
-type DefaultOrderCommand = OrderCommand;
-
-// due to how the init process works with reth. we need to init like this
-pub struct StromHandles {
-    pub eth_tx: Sender<EthCommand>,
-    pub eth_rx: Receiver<EthCommand>,
-
-    pub pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
-    pub pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
-
-    pub orderpool_tx: UnboundedSender<DefaultOrderCommand>,
-    pub orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
-
-    pub quoter_tx: mpsc::Sender<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-    pub quoter_rx: mpsc::Receiver<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-
-    pub validator_tx: UnboundedSender<ValidationRequest>,
-    pub validator_rx: UnboundedReceiver<ValidationRequest>,
-
-    pub eth_handle_tx: Option<UnboundedSender<EthEvent>>,
-    pub eth_handle_rx: Option<UnboundedReceiver<EthEvent>>,
-
-    pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
-
-    pub consensus_tx_op: UnboundedMeteredSender<StromConsensusEvent>,
-    pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>,
-
-    pub consensus_tx_rpc: UnboundedSender<consensus::ConsensusRequest>,
-    pub consensus_rx_rpc: UnboundedReceiver<consensus::ConsensusRequest>,
-
-    // only 1 set cur
-    pub matching_tx: Sender<MatcherCommand>,
-    pub matching_rx: Receiver<MatcherCommand>
-}
-
-impl StromHandles {
-    pub fn get_pool_handle(&self) -> DefaultPoolHandle {
-        PoolHandle {
-            manager_tx:      self.orderpool_tx.clone(),
-            pool_manager_tx: self.pool_manager_tx.clone()
-        }
-    }
-}
-
-pub fn initialize_strom_handles() -> StromHandles {
-    let (eth_tx, eth_rx) = channel(100);
-    let (matching_tx, matching_rx) = channel(100);
-    let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
-    let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
-    let (orderpool_tx, orderpool_rx) = unbounded_channel();
-    let (validator_tx, validator_rx) = unbounded_channel();
-    let (eth_handle_tx, eth_handle_rx) = unbounded_channel();
-    let (quoter_tx, quoter_rx) = channel(1000);
-    let (consensus_tx_rpc, consensus_rx_rpc) = unbounded_channel();
-    let (consensus_tx_op, consensus_rx_op) =
-        reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
-
-    StromHandles {
-        eth_tx,
-        quoter_tx,
-        quoter_rx,
-        eth_rx,
-        pool_tx,
-        pool_rx,
-        orderpool_tx,
-        orderpool_rx,
-        validator_tx,
-        validator_rx,
-        pool_manager_tx,
-        consensus_tx_op,
-        consensus_rx_op,
-        matching_tx,
-        matching_rx,
-        consensus_tx_rpc,
-        consensus_rx_rpc,
-        eth_handle_tx: Some(eth_handle_tx),
-        eth_handle_rx: Some(eth_handle_rx)
-    }
-}
-
 pub async fn initialize_strom_components<Node, AddOns, P: Peers + Unpin + 'static, S>(
     config: AngstromConfig,
     signer: AngstromSigner<S>,
-    mut handles: StromHandles,
+    mut handles: StromHandles<M>,
     network_builder: StromNetworkBuilder<P, S>,
     node: &FullNode<Node, AddOns>,
     executor: TaskExecutor,

@@ -29,6 +29,7 @@ use validation::order::{OrderValidationResults, OrderValidatorHandle};
 use crate::cache::LruCache;
 
 use angstrom_types::network::{NetworkOrderEvent, StromNetworkEvent, NetworkHandle, ReputationChangeKind, PoolStromMessage};
+use angstrom_network::StromNetworkHandle;
 
 pub(crate) const MODULE_NAME: &str = "Order Pool";
 
@@ -44,22 +45,24 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
     /// 
     /// Different modes may have different requirements for which orders should be
     /// included in proposals (e.g., consensus mode might filter based on consensus state).
-    fn get_proposable_orders<V, GS>(pool: &mut PoolManager<V, GS, Self>) -> Vec<AllOrders>
+    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, Self, NH>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
+        NH: NetworkHandle,
         Self: Sized;
 
     /// Hook for any mode-specific polling logic within the main future's poll loop.
     /// 
     /// This allows modes to add their own polling behavior (e.g., consensus streams,
     /// mode-specific timers, etc.) without duplicating the entire Future implementation.
-    fn poll_mode_specific<V, GS>(
-        _pool: &mut PoolManager<V, GS, Self>,
+    fn poll_mode_specific<V, GS, NH>(
+        _pool: &mut PoolManager<V, GS, Self, NH>,
         _cx: &mut Context<'_>
     ) where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
+        NH: NetworkHandle,
         Self: Sized
     {
         // Default to no-op - modes can override if they need specific polling behavior
@@ -155,7 +158,7 @@ impl OrderPoolHandle for PoolHandle {
     }
 }
 
-pub struct PoolManagerBuilder<V, GlobalSync, M = crate::consensus::ConsensusMode>
+pub struct PoolManagerBuilder<V, GlobalSync, M = crate::consensus::ConsensusMode, NH: NetworkHandle = StromNetworkHandle>
 where
     V: OrderValidatorHandle,
     GlobalSync: BlockSyncConsumer
@@ -163,7 +166,7 @@ where
     validator:            V,
     global_sync:          GlobalSync,
     order_storage:        Option<Arc<OrderStorage>>,
-    network_handle:       Box<dyn NetworkHandle + Send + Sync + 'static>,
+    network_handle:       NH,
     strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     eth_network_events:   UnboundedReceiverStream<EthEvent>,
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
@@ -172,12 +175,13 @@ where
 }
 
 
-impl<V, GlobalSync, M> PoolManagerBuilder<V, GlobalSync, M>
+impl<V, GlobalSync, M, NH> PoolManagerBuilder<V, GlobalSync, M, NH>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    NH: NetworkHandle + Send + Sync + 'static + Unpin,
 {
-    pub fn new<NH: NetworkHandle + Send + Sync + 'static>(
+    pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         network_handle: NH,
@@ -191,7 +195,7 @@ where
             global_sync,
             eth_network_events,
             strom_network_events: network_handle.subscribe_network_events(),
-            network_handle: Box::new(network_handle),
+            network_handle,
             validator,
             order_storage,
             config: Default::default(),
@@ -220,6 +224,7 @@ where
     ) -> PoolHandle
     where
         M: PoolManagerMode,
+        NH: NetworkHandle + Send + Sync + 'static + Unpin,
     {
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -255,7 +260,7 @@ where
     }
 }
 
-pub struct PoolManager<V, GlobalSync, M = crate::consensus::ConsensusMode>
+pub struct PoolManager<V, GlobalSync, M = crate::consensus::ConsensusMode, NH: NetworkHandle = StromNetworkHandle>
 where
     V: OrderValidatorHandle,
     GlobalSync: BlockSyncConsumer
@@ -264,7 +269,7 @@ where
     pub(crate) order_indexer:        OrderIndexer<V>,
     pub(crate) global_sync:          GlobalSync,
     /// Network access.
-    pub(crate) network:              Box<dyn NetworkHandle + Send + Sync + 'static>,
+    pub(crate) network:              NH,
     /// Subscriptions to all the strom-network related events.
     ///
     /// From which we get all new incoming order related messages.
@@ -282,11 +287,12 @@ where
     pub(crate) mode:                 M
 }
 
-impl<V, GlobalSync, M> PoolManager<V, GlobalSync, M>
+impl<V, GlobalSync, M, NH> PoolManager<V, GlobalSync, M, NH>
 where
     V: OrderValidatorHandle<Order = AllOrders>,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode,
+    NH: NetworkHandle,
 {
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
@@ -478,11 +484,12 @@ where
     }
 }
 
-impl<V, GlobalSync, M> Future for PoolManager<V, GlobalSync, M>
+impl<V, GlobalSync, M, NH> Future for PoolManager<V, GlobalSync, M, NH>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode,
+    NH: NetworkHandle + Unpin,
 {
     type Output = ();
 
@@ -555,25 +562,26 @@ pub(crate) struct StromPeer {
 
 // Type aliases for convenience
 /// Pool manager configured for consensus mode - includes consensus-specific behavior
-pub type ConsensusPoolManager<V, GlobalSync> = PoolManager<V, GlobalSync, crate::consensus::ConsensusMode>;
+pub type ConsensusPoolManager<V, GlobalSync, NH> = PoolManager<V, GlobalSync, crate::consensus::ConsensusMode, NH>;
 
 /// Pool manager configured for rollup mode - simpler behavior without consensus logic
-pub type RollupPoolManager<V, GlobalSync> = PoolManager<V, GlobalSync, crate::rollup::RollupMode>;
+pub type RollupPoolManager<V, GlobalSync, NH> = PoolManager<V, GlobalSync, crate::rollup::RollupMode, NH>;
 
 /// Pool manager builder configured for consensus mode
-pub type ConsensusPoolManagerBuilder<V, GlobalSync> = PoolManagerBuilder<V, GlobalSync, crate::consensus::ConsensusMode>;
+pub type ConsensusPoolManagerBuilder<V, GlobalSync, NH> = PoolManagerBuilder<V, GlobalSync, crate::consensus::ConsensusMode, NH>;
 
 /// Pool manager builder configured for rollup mode
-pub type RollupPoolManagerBuilder<V, GlobalSync> = PoolManagerBuilder<V, GlobalSync, crate::rollup::RollupMode>;
+pub type RollupPoolManagerBuilder<V, GlobalSync, NH> = PoolManagerBuilder<V, GlobalSync, crate::rollup::RollupMode, NH>;
 
 // Mode-specific constructor implementations
-impl<V, GlobalSync> ConsensusPoolManagerBuilder<V, GlobalSync>
+impl<V, GlobalSync, NH> ConsensusPoolManagerBuilder<V, GlobalSync, NH>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    NH: NetworkHandle + Send + Sync + 'static + Unpin,
 {
     /// Create a new consensus pool manager builder
-    pub fn new_consensus<NH: NetworkHandle + Send + Sync + 'static>(
+    pub fn new_consensus(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         network_handle: NH,
@@ -593,13 +601,14 @@ where
     }
 }
 
-impl<V, GlobalSync> RollupPoolManagerBuilder<V, GlobalSync>
+impl<V, GlobalSync, NH> RollupPoolManagerBuilder<V, GlobalSync, NH>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    NH: NetworkHandle + Send + Sync + 'static + Unpin,
 {
     /// Create a new rollup pool manager builder
-    pub fn new_rollup<NH: NetworkHandle + Send + Sync + 'static>(
+    pub fn new_rollup(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         network_handle: NH,

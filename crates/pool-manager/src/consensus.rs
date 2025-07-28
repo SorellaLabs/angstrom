@@ -1,6 +1,6 @@
 use std::task::Context;
 
-use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders, network::NetworkHandle};
 use validation::order::OrderValidatorHandle;
 
 use crate::order::{PoolManager, PoolManagerMode};
@@ -27,10 +27,11 @@ impl Default for ConsensusMode {
 }
 
 impl PoolManagerMode for ConsensusMode {
-    fn get_proposable_orders<V, GS>(pool: &mut PoolManager<V, GS, Self>) -> Vec<AllOrders>
+    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, Self, NH>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
+        NH: NetworkHandle,
         Self: Sized
     {
         // In consensus mode, we might need to filter orders based on consensus state
@@ -40,10 +41,11 @@ impl PoolManagerMode for ConsensusMode {
             .into_all_orders()
     }
 
-    fn poll_mode_specific<V, GS>(_pool: &mut PoolManager<V, GS, Self>, _cx: &mut Context<'_>)
+    fn poll_mode_specific<V, GS, NH>(_pool: &mut PoolManager<V, GS, Self, NH>, _cx: &mut Context<'_>)
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
+        NH: NetworkHandle,
         Self: Sized
     {
         // In the future, this could poll consensus streams, handle pre-proposal
@@ -52,10 +54,11 @@ impl PoolManagerMode for ConsensusMode {
     }
 }
 
-impl<V, GlobalSync> PoolManager<V, GlobalSync, ConsensusMode>
+impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, ConsensusMode, NH>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    NH: NetworkHandle,
 {
     /// Consensus-specific order processing logic
     ///

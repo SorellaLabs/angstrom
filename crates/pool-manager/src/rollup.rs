@@ -1,4 +1,4 @@
-use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders, network::NetworkHandle};
 use validation::order::OrderValidatorHandle;
 
 use crate::order::{PoolManager, PoolManagerMode};
@@ -22,10 +22,11 @@ impl Default for RollupMode {
 }
 
 impl PoolManagerMode for RollupMode {
-    fn get_proposable_orders<V, GS>(pool: &mut PoolManager<V, GS, Self>) -> Vec<AllOrders>
+    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, Self, NH>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
+        NH: NetworkHandle,
         Self: Sized
     {
         // In rollup mode, we process all orders without consensus filtering
@@ -39,10 +40,11 @@ impl PoolManagerMode for RollupMode {
     // as it doesn't need any mode-specific polling behavior
 }
 
-impl<V, GlobalSync> PoolManager<V, GlobalSync, RollupMode>
+impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, RollupMode, NH>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    NH: NetworkHandle,
 {
     /// Rollup-specific order processing logic
     ///

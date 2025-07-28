@@ -20,6 +20,9 @@ use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{QuoterManager, Slot0Update, book_snapshots_from_amms};
 
+/// A type alias for the rollup quoter manager.
+pub type RollupQuoterManager<BlockSync> = QuoterManager<BlockSync, RollupMode>;
+
 /// Mode for rollup-based order book building.
 pub struct RollupMode;
 

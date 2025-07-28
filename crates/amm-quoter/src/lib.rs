@@ -34,7 +34,10 @@ use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::Synced
 mod consensus;
 mod rollup;
 
-pub use crate::{consensus::ConsensusMode, rollup::RollupMode};
+pub use crate::{
+    consensus::{ConsensusMode, ConsensusQuoterManager},
+    rollup::{RollupMode, RollupQuoterManager}
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Slot0Update {

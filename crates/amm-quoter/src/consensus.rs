@@ -22,6 +22,9 @@ use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{QuoterManager, Slot0Update, book_snapshots_from_amms};
 
+/// A type alias for the consensus quoter manager.
+pub type ConsensusQuoterManager<BlockSync> = QuoterManager<BlockSync, ConsensusMode>;
+
 /// Mode for consensus-based order book building.
 pub struct ConsensusMode {
     consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>,

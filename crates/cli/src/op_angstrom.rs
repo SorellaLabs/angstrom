@@ -1,0 +1,1 @@
+//! Optimism Angstrom binary executable.

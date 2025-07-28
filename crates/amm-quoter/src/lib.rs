@@ -31,10 +31,10 @@ use tokio::{
 use tokio_stream::wrappers::ReceiverStream;
 use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools};
 
-pub use crate::{consensus::ConsensusMode, rollup::RollupMode};
-
 mod consensus;
 mod rollup;
+
+pub use crate::{consensus::ConsensusMode, rollup::RollupMode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Slot0Update {

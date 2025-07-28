@@ -14,7 +14,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
-use angstrom_amm_quoter::{QuoterManager, Slot0Update};
+use angstrom_amm_quoter::{ConsensusQuoterManager, Slot0Update};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::{EthDataCleanser, EthEvent}
@@ -423,7 +423,7 @@ where
     let matching_handle = MatchingManager::spawn(executor.clone(), validation_handle.clone());
 
     // spin up amm quoter
-    let amm = QuoterManager::new(
+    let amm = ConsensusQuoterManager::new(
         global_block_sync.clone(),
         order_storage.clone(),
         handles.quoter_rx,

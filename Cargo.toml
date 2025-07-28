@@ -88,6 +88,7 @@ alloy-transport-ws = { version = "1.0.23", default-features = false }
 alloy-trie = { version = "0.9.0", default-features = false }
 angstrom = { path = "./bin/angstrom/" }
 angstrom-amm-quoter = { path = "./crates/amm-quoter/" }
+angstrom-cli = { path = "./crates/cli/" }
 angstrom-eth = { path = "./crates/eth/" }
 angstrom-metrics = { path = "./crates/metrics/" }
 angstrom-network = { path = "./crates/angstrom-net/" }

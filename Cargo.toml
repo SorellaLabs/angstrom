@@ -136,6 +136,7 @@ once_cell = "1"
 order-pool = { path = "./crates/order-pool/" }
 pade = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
 pade-macro = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
+pool-manager = { path = "./crates/pool-manager/" }
 parking_lot = "0"
 pin-project = "1"
 pprof = "0"

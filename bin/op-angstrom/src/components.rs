@@ -23,10 +23,11 @@ use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    network::{NetworkHandle, PoolStromMessage, ReputationChangeKind, StromNetworkEvent},
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId,
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PeerId, PoolId,
         UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
@@ -59,6 +60,7 @@ use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
 use validation::{
@@ -134,6 +136,26 @@ pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
         matching_rx,
         eth_handle_tx: Some(eth_handle_tx),
         eth_handle_rx: Some(eth_handle_rx)
+    }
+}
+
+// Stub network handle for op-angstrom that doesn't use networking
+#[derive(Clone)]
+struct StubNetworkHandle;
+
+impl NetworkHandle for StubNetworkHandle {
+    fn send_message(&mut self, _peer_id: PeerId, _message: PoolStromMessage) {
+        // Op-angstrom doesn't use networking, so this is a no-op
+    }
+    
+    fn peer_reputation_change(&mut self, _peer_id: PeerId, _change: ReputationChangeKind) {
+        // Op-angstrom doesn't use networking, so this is a no-op
+    }
+    
+    fn subscribe_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
+        // Return an empty stream since op-angstrom doesn't have network events
+        let (_, rx) = unbounded_channel();
+        UnboundedReceiverStream::new(rx)
     }
 }
 
@@ -343,12 +365,15 @@ where
     let validation_handle = ValidationClient(handles.validator_tx.clone());
     tracing::info!("validation manager start");
 
+    // Create stub network handle for op-angstrom (no networking)
+    let network_handle = StubNetworkHandle;
+
     // fetch pool ids
 
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    // TODO: PoolManagerBuilder should have optional network handle
+    // PoolManagerBuilder with stub network handle for op-angstrom
     let _pool_handle = PoolManagerBuilder::new(
         validation_handle.clone(),
         Some(order_storage.clone()),

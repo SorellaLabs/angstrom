@@ -6,7 +6,8 @@ pub use types::*;
 pub mod state;
 
 pub mod manager;
-pub use manager::{StromNetworkEvent, StromNetworkManager};
+pub use manager::StromNetworkManager;
+pub use angstrom_types::network::{NetworkOrderEvent, StromNetworkEvent};
 
 
 pub mod peers;

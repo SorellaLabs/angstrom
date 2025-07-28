@@ -1,7 +1,8 @@
 use std::sync::{Arc, atomic::AtomicUsize};
 
 use angstrom_types::{
-    orders::CancelOrderRequest, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
+    network::{ReputationChangeKind, StromNetworkEvent},
+    primitive::PeerId
 };
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;
@@ -11,7 +12,7 @@ use tokio::sync::{
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::{ReputationChangeKind, StromMessage, StromNetworkEvent};
+use crate::StromMessage;
 
 //TODO:
 // 1) Implement the order pool manager
@@ -88,13 +89,6 @@ struct StromNetworkInner {
     to_manager_tx: UnboundedMeteredSender<StromNetworkHandleMsg>
 }
 
-/// All events related to orders emitted by the network.
-#[derive(Debug, Clone, PartialEq)]
-pub enum NetworkOrderEvent {
-    IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> },
-    CancelOrder { peer_id: PeerId, request: CancelOrderRequest }
-}
-
 #[derive(Debug)]
 pub enum StromNetworkHandleMsg {
     SubscribeEvents(UnboundedSender<StromNetworkEvent>),
@@ -118,4 +112,35 @@ pub enum StromNetworkHandleMsg {
     ReputationChange(PeerId, ReputationChangeKind),
     /// Gracefully shutdown network
     Shutdown(oneshot::Sender<()>)
+}
+
+// Implementation of NetworkHandle trait from angstrom-types
+impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
+    fn send_message(
+        &mut self,
+        peer_id: PeerId,
+        message: angstrom_types::network::PoolStromMessage
+    ) {
+        // Convert pool message to full StromMessage
+        let strom_msg = match message {
+            angstrom_types::network::PoolStromMessage::PropagatePooledOrders(orders) => {
+                StromMessage::PropagatePooledOrders(orders)
+            }
+            angstrom_types::network::PoolStromMessage::OrderCancellation(req) => {
+                StromMessage::OrderCancellation(req)
+            }
+        };
+        // Call the inherent method on self, not the trait method
+        StromNetworkHandle::send_message(self, peer_id, strom_msg);
+    }
+
+    fn peer_reputation_change(&mut self, peer_id: PeerId, change: ReputationChangeKind) {
+        // Call the inherent method on self, not the trait method
+        StromNetworkHandle::peer_reputation_change(self, peer_id, change);
+    }
+
+    fn subscribe_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
+        // Call the inherent method on self, not the trait method
+        StromNetworkHandle::subscribe_network_events(self)
+    }
 }

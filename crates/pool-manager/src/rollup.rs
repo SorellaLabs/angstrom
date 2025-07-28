@@ -22,7 +22,7 @@ impl Default for RollupMode {
 }
 
 impl PoolManagerMode for RollupMode {
-    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, Self, NH>) -> Vec<AllOrders>
+    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
@@ -40,7 +40,7 @@ impl PoolManagerMode for RollupMode {
     // as it doesn't need any mode-specific polling behavior
 }
 
-impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, RollupMode, NH>
+impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, NH, RollupMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,

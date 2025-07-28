@@ -10,7 +10,6 @@ use tokio::sync::{
     mpsc::{UnboundedSender, unbounded_channel},
     oneshot
 };
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::StromMessage;
 
@@ -51,11 +50,11 @@ impl StromNetworkHandle {
         self.send_to_network_manager(StromNetworkHandleMsg::ReputationChange(peer, change));
     }
 
-    pub fn subscribe_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
+    pub fn subscribe_network_events(&self) -> tokio::sync::mpsc::UnboundedReceiver<StromNetworkEvent> {
         let (tx, rx) = unbounded_channel();
         self.send_to_network_manager(StromNetworkHandleMsg::SubscribeEvents(tx));
 
-        UnboundedReceiverStream::from(rx)
+        rx
     }
 
     /// Send message to gracefully shutdown node.
@@ -119,14 +118,14 @@ impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
     fn send_message(
         &mut self,
         peer_id: PeerId,
-        message: angstrom_types::network::PoolStromMessage
+        message: angstrom_types::network::PoolNetworkMessage
     ) {
         // Convert pool message to full StromMessage
         let strom_msg = match message {
-            angstrom_types::network::PoolStromMessage::PropagatePooledOrders(orders) => {
+            angstrom_types::network::PoolNetworkMessage::PropagatePooledOrders(orders) => {
                 StromMessage::PropagatePooledOrders(orders)
             }
-            angstrom_types::network::PoolStromMessage::OrderCancellation(req) => {
+            angstrom_types::network::PoolNetworkMessage::OrderCancellation(req) => {
                 StromMessage::OrderCancellation(req)
             }
         };
@@ -139,7 +138,7 @@ impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
         StromNetworkHandle::peer_reputation_change(self, peer_id, change);
     }
 
-    fn subscribe_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
+    fn subscribe_network_events(&self) -> tokio::sync::mpsc::UnboundedReceiver<StromNetworkEvent> {
         // Call the inherent method on self, not the trait method
         StromNetworkHandle::subscribe_network_events(self)
     }

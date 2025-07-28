@@ -27,7 +27,7 @@ impl Default for ConsensusMode {
 }
 
 impl PoolManagerMode for ConsensusMode {
-    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, Self, NH>) -> Vec<AllOrders>
+    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
@@ -41,7 +41,7 @@ impl PoolManagerMode for ConsensusMode {
             .into_all_orders()
     }
 
-    fn poll_mode_specific<V, GS, NH>(_pool: &mut PoolManager<V, GS, Self, NH>, _cx: &mut Context<'_>)
+    fn poll_mode_specific<V, GS, NH>(_pool: &mut PoolManager<V, GS, NH, Self>, _cx: &mut Context<'_>)
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
@@ -54,7 +54,7 @@ impl PoolManagerMode for ConsensusMode {
     }
 }
 
-impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, ConsensusMode, NH>
+impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, NH, ConsensusMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,

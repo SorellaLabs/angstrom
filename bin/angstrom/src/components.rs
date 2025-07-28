@@ -395,7 +395,7 @@ where
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    let _pool_handle = PoolManagerBuilder::new(
+    let _pool_handle = PoolManagerBuilder::new_consensus(
         validation_handle.clone(),
         Some(order_storage.clone()),
         network_handle.clone(),

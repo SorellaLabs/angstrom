@@ -64,14 +64,14 @@ impl ReputationChangeKind {
 
 /// Pool-specific message types for network communication
 #[derive(Clone)]
-pub enum PoolStromMessage {
+pub enum PoolNetworkMessage {
     PropagatePooledOrders(Vec<crate::sol_bindings::grouped_orders::AllOrders>),
     OrderCancellation(crate::orders::CancelOrderRequest),
 }
 
 /// Trait for network handles used by pool manager
 pub trait NetworkHandle: Send + Sync {
-    fn send_message(&mut self, peer_id: PeerId, message: PoolStromMessage);
+    fn send_message(&mut self, peer_id: PeerId, message: PoolNetworkMessage);
     fn peer_reputation_change(&mut self, peer_id: PeerId, change: ReputationChangeKind);
-    fn subscribe_network_events(&self) -> tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent>;
+    fn subscribe_network_events(&self) -> tokio::sync::mpsc::UnboundedReceiver<StromNetworkEvent>;
 }

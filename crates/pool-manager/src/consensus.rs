@@ -1,6 +1,8 @@
 use std::task::Context;
 
-use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders, network::NetworkHandle};
+use angstrom_types::{
+    block_sync::BlockSyncConsumer, network::NetworkHandle, sol_bindings::grouped_orders::AllOrders
+};
 use validation::order::OrderValidatorHandle;
 
 use crate::order::{PoolManager, PoolManagerMode};
@@ -41,8 +43,10 @@ impl PoolManagerMode for ConsensusMode {
             .into_all_orders()
     }
 
-    fn poll_mode_specific<V, GS, NH>(_pool: &mut PoolManager<V, GS, NH, Self>, _cx: &mut Context<'_>)
-    where
+    fn poll_mode_specific<V, GS, NH>(
+        _pool: &mut PoolManager<V, GS, NH, Self>,
+        _cx: &mut Context<'_>
+    ) where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
         NH: NetworkHandle,
@@ -58,7 +62,7 @@ impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, NH, ConsensusMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle,
+    NH: NetworkHandle
 {
     /// Consensus-specific order processing logic
     ///

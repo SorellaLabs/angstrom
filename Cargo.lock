@@ -1284,7 +1284,6 @@ dependencies = [
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
- "tokio-stream",
  "tower",
  "tracing",
  "tracing-subscriber 0.3.19",

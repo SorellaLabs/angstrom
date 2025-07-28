@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use std::{
     collections::HashMap,
     num::NonZeroUsize,
@@ -10,6 +11,10 @@ use alloy::primitives::{Address, B256, FixedBytes};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
+    network::{
+        NetworkHandle, NetworkOrderEvent, PoolNetworkMessage, ReputationChangeKind,
+        StromNetworkEvent
+    },
     orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
     primitive::{NewInitializedPool, OrderValidationError, PeerId, PoolId},
     sol_bindings::grouped_orders::AllOrders
@@ -28,23 +33,22 @@ use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
 use crate::cache::LruCache;
 
-use angstrom_types::network::{NetworkOrderEvent, StromNetworkEvent, NetworkHandle, ReputationChangeKind, PoolNetworkMessage};
-use core::marker::PhantomData;
-
 pub(crate) const MODULE_NAME: &str = "Order Pool";
 
 /// Cache limit of transactions to keep track of for a single peer.
 pub(crate) const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
 
 /// Trait defining mode-specific behavior for PoolManager
-/// 
-/// This trait allows different operational modes (Consensus, Rollup) to customize
-/// specific aspects of pool management behavior while sharing the bulk of the implementation.
+///
+/// This trait allows different operational modes (Consensus, Rollup) to
+/// customize specific aspects of pool management behavior while sharing the
+/// bulk of the implementation.
 pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
     /// Mode-specific logic for processing/filtering orders for a proposal.
-    /// 
-    /// Different modes may have different requirements for which orders should be
-    /// included in proposals (e.g., consensus mode might filter based on consensus state).
+    ///
+    /// Different modes may have different requirements for which orders should
+    /// be included in proposals (e.g., consensus mode might filter based on
+    /// consensus state).
     fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
@@ -52,10 +56,12 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
         NH: NetworkHandle,
         Self: Sized;
 
-    /// Hook for any mode-specific polling logic within the main future's poll loop.
-    /// 
-    /// This allows modes to add their own polling behavior (e.g., consensus streams,
-    /// mode-specific timers, etc.) without duplicating the entire Future implementation.
+    /// Hook for any mode-specific polling logic within the main future's poll
+    /// loop.
+    ///
+    /// This allows modes to add their own polling behavior (e.g., consensus
+    /// streams, mode-specific timers, etc.) without duplicating the entire
+    /// Future implementation.
     fn poll_mode_specific<V, GS, NH>(
         _pool: &mut PoolManager<V, GS, NH, Self>,
         _cx: &mut Context<'_>
@@ -65,7 +71,8 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
         NH: NetworkHandle,
         Self: Sized
     {
-        // Default to no-op - modes can override if they need specific polling behavior
+        // Default to no-op - modes can override if they need specific polling
+        // behavior
     }
 }
 
@@ -161,7 +168,8 @@ impl OrderPoolHandle for PoolHandle {
 pub struct PoolManagerBuilder<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
 where
     V: OrderValidatorHandle,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    M: PoolManagerMode
 {
     validator:            V,
     global_sync:          GlobalSync,
@@ -171,35 +179,36 @@ where
     eth_network_events:   UnboundedReceiverStream<EthEvent>,
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     config:               PoolConfig,
-    _mode:                PhantomData<M>
+    _mode:                PhantomData<fn() -> M>
 }
-
 
 impl<V, GlobalSync, NH, M> PoolManagerBuilder<V, GlobalSync, NH, M>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle + Send + Sync + 'static + Unpin,
+    NH: NetworkHandle + Send + Sync + 'static,
+    M: PoolManagerMode
 {
-    pub fn new(
+    fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         network_handle: NH,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        global_sync: GlobalSync,
-        _mode: M
+        global_sync: GlobalSync
     ) -> Self {
         Self {
             order_events,
             global_sync,
             eth_network_events,
-            strom_network_events: UnboundedReceiverStream::new(network_handle.subscribe_network_events()),
+            strom_network_events: UnboundedReceiverStream::new(
+                network_handle.subscribe_network_events()
+            ),
             network_handle,
             validator,
             order_storage,
             config: Default::default(),
-            _mode: PhantomData::<M>
+            _mode: PhantomData
         }
     }
 
@@ -224,7 +233,7 @@ where
     ) -> PoolHandle
     where
         M: PoolManagerMode,
-        NH: NetworkHandle + Send + Sync + 'static + Unpin,
+        NH: NetworkHandle + Send + Sync + 'static + Unpin
     {
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -243,7 +252,7 @@ where
 
         task_spawner.spawn_critical(
             "transaction manager",
-            Box::pin(PoolManager {
+            Box::pin(PoolManager::<V, GlobalSync, NH, M> {
                 eth_network_events:   self.eth_network_events,
                 strom_network_events: self.strom_network_events,
                 order_events:         self.order_events,
@@ -252,7 +261,7 @@ where
                 network:              self.network_handle,
                 command_rx:           rx,
                 global_sync:          self.global_sync,
-                _mode:                PhantomData::<M>
+                _mode:                PhantomData
             })
         );
 
@@ -263,7 +272,8 @@ where
 pub struct PoolManager<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
 where
     V: OrderValidatorHandle,
-    GlobalSync: BlockSyncConsumer
+    GlobalSync: BlockSyncConsumer,
+    M: PoolManagerMode
 {
     /// access to validation and sorted storage of orders.
     pub(crate) order_indexer:        OrderIndexer<V>,
@@ -275,7 +285,7 @@ where
     /// From which we get all new incoming order related messages.
     pub(crate) strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     /// Ethereum updates stream that tells the pool manager about orders that
-    /// have been filled  
+    /// have been filled
     pub(crate) eth_network_events:   UnboundedReceiverStream<EthEvent>,
     /// receiver half of the commands to the pool manager
     pub(crate) command_rx:           UnboundedReceiverStream<OrderCommand>,
@@ -283,8 +293,9 @@ where
     pub(crate) order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     /// All the connected peers.
     pub(crate) peer_to_info:         HashMap<PeerId, StromPeer>,
-    /// Mode-specific state and behavior (using PhantomData since only static methods are called)
-    pub(crate) _mode:                PhantomData<M>
+    /// Mode-specific state and behavior (using PhantomData since only static
+    /// methods are called)
+    pub(crate) _mode:                PhantomData<fn() -> M>
 }
 
 impl<V, GlobalSync, NH, M> PoolManager<V, GlobalSync, NH, M>
@@ -292,7 +303,7 @@ where
     V: OrderValidatorHandle<Order = AllOrders>,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode,
-    NH: NetworkHandle,
+    NH: NetworkHandle
 {
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
@@ -432,10 +443,8 @@ where
                 PoolInnerEvent::Propagation(order) => Some(order),
                 PoolInnerEvent::BadOrderMessages(o) => {
                     o.into_iter().for_each(|peer| {
-                        self.network.peer_reputation_change(
-                            peer,
-                            ReputationChangeKind::InvalidOrder
-                        );
+                        self.network
+                            .peer_reputation_change(peer, ReputationChangeKind::InvalidOrder);
                     });
                     None
                 }
@@ -489,7 +498,7 @@ where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode,
-    NH: NetworkHandle + Unpin,
+    NH: NetworkHandle + Unpin
 {
     type Output = ();
 
@@ -560,15 +569,14 @@ pub(crate) struct StromPeer {
     pub(crate) cancellations: LruCache<B256>
 }
 
-// Type aliases for convenience
-// Type aliases moved to angstrom-net crate to avoid coupling
+// Type aliases are now available in the crate root (lib.rs) for convenience
 
 // Mode-specific constructor implementations
 impl<V, GlobalSync, NH> PoolManagerBuilder<V, GlobalSync, NH, crate::consensus::ConsensusMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle + Send + Sync + 'static + Unpin,
+    NH: NetworkHandle + Send + Sync + 'static
 {
     /// Create a new consensus pool manager builder
     pub fn new_consensus(
@@ -585,8 +593,7 @@ where
             network_handle,
             eth_network_events,
             order_events,
-            global_sync,
-            crate::consensus::ConsensusMode::new()
+            global_sync
         )
     }
 }
@@ -595,7 +602,7 @@ impl<V, GlobalSync, NH> PoolManagerBuilder<V, GlobalSync, NH, crate::rollup::Rol
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle + Send + Sync + 'static + Unpin,
+    NH: NetworkHandle + Send + Sync + 'static
 {
     /// Create a new rollup pool manager builder
     pub fn new_rollup(
@@ -612,8 +619,7 @@ where
             network_handle,
             eth_network_events,
             order_events,
-            global_sync,
-            crate::rollup::RollupMode::new()
+            global_sync
         )
     }
 }

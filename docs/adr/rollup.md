@@ -14,6 +14,7 @@ This document outlines the architectural decisions made for the rollup mode of a
     - `ConsensusMode` contains consensus and networking related logic and state.
     - `RollupMode` contains rollup related logic and state.
     - We then use concrete implementations of each type state to express the logic for each mode.
+    - Nice to have: A type alias for each mode.
 
 ## Reasoning
 

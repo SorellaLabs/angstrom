@@ -10,7 +10,7 @@ use alloy_primitives::aliases::I24;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag, Filter};
 use alloy_sol_types::SolEvent;
 use angstrom::components::initialize_strom_handles;
-use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
+use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
@@ -277,7 +277,7 @@ impl ReplayRunner {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, 50>(
+        let uniswap_pool_manager = configure_uniswap_manager::<_, _, 50>(
             rpc.clone().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry.clone(),
@@ -445,7 +445,7 @@ impl ReplayRunner {
         let consensus_client = ConsensusHandler(strom_handles.consensus_tx_rpc.clone());
 
         // spin up amm quoter
-        let amm = QuoterManager::new(
+        let amm = ConsensusQuoterManager::new(
             global_block_sync.clone(),
             order_storage.clone(),
             strom_handles.quoter_rx,

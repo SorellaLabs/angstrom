@@ -4,19 +4,19 @@ use std::{
     pin::Pin,
     str::FromStr,
     sync::Arc,
-    time::Duration,
+    time::Duration
 };
 
 use alloy::{
     self,
     eips::{BlockId, BlockNumberOrTag},
     primitives::Address,
-    providers::{Provider, ProviderBuilder, network::Ethereum},
+    providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use angstrom_amm_quoter::{RollupQuoterManager, Slot0Update};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
-    manager::{EthDataCleanser, EthEvent},
+    manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::NetworkOrderEvent;
 use angstrom_types::{
@@ -27,11 +27,11 @@ use angstrom_types::{
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
         CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PeerId, PoolId,
-        UniswapPoolRegistry,
+        UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
-    submission::SubmissionHandler,
+    submission::SubmissionHandler
 };
 use consensus::AngstromValidator;
 use futures::Stream;
@@ -44,28 +44,28 @@ use reth::{
     core::exit::NodeExitFuture,
     primitives::EthPrimitives,
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
-    tasks::TaskExecutor,
+    tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_node_builder::{
-    FullNode, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns,
+    FullNode, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
 };
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_primitives::{OpBlock, OpPrimitives, OpReceipt};
 use reth_provider::{
-    BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider,
+    BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
 use telemetry::init_telemetry;
 use tokio::sync::{
     mpsc,
-    mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel},
+    mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
 };
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
 use validation::{
     common::TokenPriceGenerator,
     init_validation,
-    validator::{ValidationClient, ValidationRequest},
+    validator::{ValidationClient, ValidationRequest}
 };
 
 use crate::AngstromConfig;
@@ -97,14 +97,14 @@ pub struct StromHandles<N: NodePrimitives = EthPrimitives> {
 
     // only 1 set cur
     pub matching_tx: Sender<MatcherCommand>,
-    pub matching_rx: Receiver<MatcherCommand>,
+    pub matching_rx: Receiver<MatcherCommand>
 }
 
 impl<N: NodePrimitives> StromHandles<N> {
     pub fn get_pool_handle(&self) -> DefaultPoolHandle {
         PoolHandle {
-            manager_tx: self.orderpool_tx.clone(),
-            pool_manager_tx: self.pool_manager_tx.clone(),
+            manager_tx:      self.orderpool_tx.clone(),
+            pool_manager_tx: self.pool_manager_tx.clone()
         }
     }
 }
@@ -134,7 +134,7 @@ pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
         matching_tx,
         matching_rx,
         eth_handle_tx: Some(eth_handle_tx),
-        eth_handle_rx: Some(eth_handle_rx),
+        eth_handle_rx: Some(eth_handle_rx)
     }
 }
 
@@ -167,7 +167,7 @@ pub async fn initialize_strom_components<Node, AddOns, S>(
     node: &FullNode<Node, AddOns>,
     executor: TaskExecutor,
     exit: NodeExitFuture,
-    node_set: HashSet<Address>,
+    node_set: HashSet<Address>
 ) -> eyre::Result<()>
 where
     Node: FullNodeComponents
@@ -178,7 +178,7 @@ where
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
         TryIntoHistoricalStateProvider + ReceiptProvider,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider: BlockNumReader,
-    S: AngstromMetaSigner,
+    S: AngstromMetaSigner
 {
     let node_address = signer.address();
 
@@ -227,7 +227,7 @@ where
         &angstrom_submission_nodes,
         &mev_boost_endpoints,
         angstrom_address,
-        signer.clone(),
+        signer.clone()
     );
 
     tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
@@ -247,10 +247,10 @@ where
         AngstromPoolConfigStore::load_from_chain(
             angstrom_address,
             BlockId::Number(BlockNumberOrTag::Latest),
-            &querying_provider,
+            &querying_provider
         )
         .await
-        .unwrap(),
+        .unwrap()
     );
 
     // load the angstrom pools;
@@ -259,7 +259,7 @@ where
         deploy_block as usize,
         block_id as usize,
         angstrom_address,
-        &node.provider,
+        &node.provider
     )
     .await;
     tracing::info!("found pools");
@@ -278,7 +278,7 @@ where
     // let block_id = querying_provider.get_block_number().await.unwrap();
     let block_id = match sub.recv().await.expect("first block") {
         CanonStateNotification::Commit { new } => new.tip().number,
-        CanonStateNotification::Reorg { new, .. } => new.tip().number,
+        CanonStateNotification::Reorg { new, .. } => new.tip().number
     };
 
     tracing::info!(?block_id, "starting up with block");
@@ -304,7 +304,7 @@ where
         pool_config_store.clone(),
         global_block_sync.clone(),
         node_set.clone(),
-        vec![handles.eth_handle_tx.take().unwrap()],
+        vec![handles.eth_handle_tx.take().unwrap()]
     )
     .unwrap();
 
@@ -323,7 +323,7 @@ where
         block_id,
         global_block_sync.clone(),
         pool_manager,
-        network_stream,
+        network_stream
     )
     .await;
 
@@ -338,7 +338,7 @@ where
         block_id,
         uniswap_pools.clone(),
         gas_token,
-        None,
+        None
     )
     .await
     .expect("failed to start token price generator");
@@ -346,7 +346,7 @@ where
     let update_stream = Box::pin(PairsWithPrice::into_price_update_stream::<_, OpPrimitives>(
         angstrom_address,
         node.provider.canonical_state_stream(),
-        querying_provider.clone(),
+        querying_provider.clone()
     ));
 
     let block_height = node.provider.best_block_number().unwrap();
@@ -360,7 +360,7 @@ where
         uniswap_pools.clone(),
         price_generator,
         pool_config_store.clone(),
-        handles.validator_rx,
+        handles.validator_rx
     );
 
     let validation_handle = ValidationClient(handles.validator_tx.clone());
@@ -381,7 +381,7 @@ where
         network_handle.clone(),
         eth_handle.subscribe_network(),
         handles.pool_rx,
-        global_block_sync.clone(),
+        global_block_sync.clone()
     )
     .with_config(pool_config)
     .build_with_channels(
@@ -390,7 +390,7 @@ where
         handles.orderpool_rx,
         handles.pool_manager_tx,
         block_id,
-        |_| {},
+        |_| {}
     );
     let validators = node_set
         .into_iter()
@@ -412,7 +412,7 @@ where
             .num_threads(6)
             .build()
             .expect("failed to build rayon thread pool"),
-        Duration::from_millis(100),
+        Duration::from_millis(100)
     );
 
     executor.spawn_critical("amm quoting service", amm);
@@ -423,7 +423,7 @@ where
 }
 
 async fn handle_init_block_spam(
-    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification<OpPrimitives>>,
+    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification<OpPrimitives>>
 ) {
     // wait for the first notification
     let _ = canon.recv().await.expect("first block");

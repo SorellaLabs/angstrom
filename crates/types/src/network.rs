@@ -2,7 +2,7 @@ use futures_core::Stream;
 use reth_eth_wire::DisconnectReason;
 
 use crate::{
-    orders::CancelOrderRequest, primitive::PeerId, sol_bindings::grouped_orders::AllOrders,
+    orders::CancelOrderRequest, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
 };
 
 /// (Non-exhaustive) Events emitted by the network that are of interest for
@@ -17,24 +17,24 @@ pub enum StromNetworkEvent {
         /// The identifier of the peer to which a session was closed.
         peer_id: PeerId,
         /// Why the disconnect was triggered
-        reason: Option<DisconnectReason>,
+        reason:  Option<DisconnectReason>
     },
     /// Established a new session with the given peer.
     SessionEstablished {
         /// The identifier of the peer to which a session was established.
-        peer_id: PeerId,
+        peer_id: PeerId
     },
     /// Event emitted when a new peer is added
     PeerAdded(PeerId),
     /// Event emitted when a new peer is removed
-    PeerRemoved(PeerId),
+    PeerRemoved(PeerId)
 }
 
 /// All events related to orders emitted by the network.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NetworkOrderEvent {
     IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> },
-    CancelOrder { peer_id: PeerId, request: CancelOrderRequest },
+    CancelOrder { peer_id: PeerId, request: CancelOrderRequest }
 }
 
 /// Various kinds of reputation changes.
@@ -51,7 +51,7 @@ pub enum ReputationChangeKind {
     /// a order that failed validation
     InvalidOrder,
     /// Reset the reputation to the default value.
-    Reset,
+    Reset
 }
 
 impl ReputationChangeKind {
@@ -65,7 +65,7 @@ impl ReputationChangeKind {
 #[derive(Clone)]
 pub enum PoolNetworkMessage {
     PropagatePooledOrders(Vec<crate::sol_bindings::grouped_orders::AllOrders>),
-    OrderCancellation(crate::orders::CancelOrderRequest),
+    OrderCancellation(crate::orders::CancelOrderRequest)
 }
 
 /// Trait for network handles used by pool manager

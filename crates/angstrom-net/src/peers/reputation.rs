@@ -39,25 +39,25 @@ pub(crate) fn is_banned_reputation(reputation: i32) -> bool {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ReputationChangeWeights {
     /// Weight for [`ReputationChangeKind::BadMessage`]
-    pub bad_message: Reputation,
+    pub bad_message:          Reputation,
     /// Weight for [`ReputationChangeKind::BadOrder`]
-    pub bad_order: Reputation,
+    pub bad_order:            Reputation,
     /// Weight for [`ReputationChangeKind::BadComposableOrder`]
     pub bad_composable_order: Reputation,
     /// Weight for [`ReputationChangeKind::BadBundle`]
-    pub bad_bundle: Reputation,
+    pub bad_bundle:           Reputation,
     /// Weight for [`ReputationChangeKind::InvalidOrder`]
-    pub invalid_order: Reputation,
+    pub invalid_order:        Reputation
 }
 
 impl Default for ReputationChangeWeights {
     fn default() -> Self {
         Self {
-            bad_message: BAD_MESSAGE_REPUTATION_CHANGE,
-            bad_order: BAD_ORDER_REPUTATION_CHANGE,
+            bad_message:          BAD_MESSAGE_REPUTATION_CHANGE,
+            bad_order:            BAD_ORDER_REPUTATION_CHANGE,
             bad_composable_order: BAD_COMPOSABLE_ORDER_REPUTATION_CHANGE,
-            bad_bundle: BAD_BUNDLE_REPUTATION_CHANGE,
-            invalid_order: INVALID_ORDER_REPUTATION_CHANGE,
+            bad_bundle:           BAD_BUNDLE_REPUTATION_CHANGE,
+            invalid_order:        INVALID_ORDER_REPUTATION_CHANGE
         }
     }
 }
@@ -72,7 +72,7 @@ impl ReputationChangeWeights {
             ReputationChangeKind::BadComposableOrder => self.bad_composable_order.into(),
             ReputationChangeKind::BadBundle => self.bad_bundle.into(),
             ReputationChangeKind::InvalidOrder => self.invalid_order.into(),
-            ReputationChangeKind::Reset => DEFAULT_REPUTATION.into(),
+            ReputationChangeKind::Reset => DEFAULT_REPUTATION.into()
         }
     }
 }

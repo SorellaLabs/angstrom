@@ -1,9 +1,9 @@
 use angstrom::components::{DefaultPoolHandle, StromHandles};
 use angstrom_eth::handle::EthCommand;
 use angstrom_network::NetworkOrderEvent;
-use pool_manager::{OrderCommand, PoolHandle};
 use angstrom_types::consensus::StromConsensusEvent;
 use order_pool::PoolManagerUpdate;
+use pool_manager::{OrderCommand, PoolHandle};
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 

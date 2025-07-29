@@ -4,14 +4,14 @@ use std::{
     pin::Pin,
     sync::{Arc, atomic::AtomicUsize},
     task::{Context, Poll},
-    time::Duration,
+    time::Duration
 };
 
 use alloy::primitives::{Address, FixedBytes};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     consensus::StromConsensusEvent,
-    network::{NetworkOrderEvent, StromNetworkEvent},
+    network::{NetworkOrderEvent, StromNetworkEvent}
 };
 use futures::{FutureExt, StreamExt};
 use itertools::Itertools;
@@ -27,7 +27,7 @@ use tracing::error;
 
 use crate::{
     CachedPeer, CachedPeers, StromMessage, StromNetworkHandle, StromNetworkHandleMsg, Swarm,
-    SwarmEvent,
+    SwarmEvent
 };
 
 // use a thread local lazy to avoid synchronization overhead since path is
@@ -49,20 +49,20 @@ thread_local! {
 pub struct StromNetworkManager<DB: Unpin, P: Peers + Unpin> {
     handle: StromNetworkHandle,
 
-    from_handle_rx: UnboundedReceiverStream<StromNetworkHandleMsg>,
-    to_pool_manager: Option<UnboundedMeteredSender<NetworkOrderEvent>>,
+    from_handle_rx:       UnboundedReceiverStream<StromNetworkHandleMsg>,
+    to_pool_manager:      Option<UnboundedMeteredSender<NetworkOrderEvent>>,
     to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>,
-    eth_handle: UnboundedReceiver<EthEvent>,
+    eth_handle:           UnboundedReceiver<EthEvent>,
 
-    event_listeners: Vec<UnboundedSender<StromNetworkEvent>>,
-    swarm: Swarm<DB>,
+    event_listeners:  Vec<UnboundedSender<StromNetworkEvent>>,
+    swarm:            Swarm<DB>,
     /// This is updated via internal events and shared via `Arc` with the
     /// [`NetworkHandle`] Updated by the `NetworkWorker` and loaded by the
     /// `NetworkService`.
     num_active_peers: Arc<AtomicUsize>,
-    reth_network: P,
+    reth_network:     P,
     // for debuging
-    not_future: Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>,
+    not_future:       Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>
 }
 
 impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
@@ -79,7 +79,7 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
         eth_handle: UnboundedReceiver<EthEvent>,
         to_pool_manager: Option<UnboundedMeteredSender<NetworkOrderEvent>>,
         to_consensus_manager: Option<UnboundedMeteredSender<StromConsensusEvent>>,
-        reth_network: P,
+        reth_network: P
     ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -104,7 +104,7 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
                     let peers = cpeers.load(std::sync::atomic::Ordering::SeqCst);
                     tracing::info!(angstrom_peers = peers, "angstrom network peers");
                 }
-            }),
+            })
         }
     }
 
@@ -178,7 +178,7 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
 
     pub fn swap_consensus_manager(
         &mut self,
-        tx: UnboundedMeteredSender<StromConsensusEvent>,
+        tx: UnboundedMeteredSender<StromConsensusEvent>
     ) -> Option<UnboundedMeteredSender<StromConsensusEvent>> {
         let mut other = Some(tx);
         std::mem::swap(&mut self.to_consensus_manager, &mut other);
@@ -195,7 +195,7 @@ impl<DB: Unpin, P: Peers + Unpin> StromNetworkManager<DB, P> {
 
     pub fn swap_pool_manager(
         &mut self,
-        tx: UnboundedMeteredSender<NetworkOrderEvent>,
+        tx: UnboundedMeteredSender<NetworkOrderEvent>
     ) -> Option<UnboundedMeteredSender<NetworkOrderEvent>> {
         let mut other = Some(tx);
         std::mem::swap(&mut self.to_pool_manager, &mut other);
@@ -329,7 +329,7 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                             StromMessage::BundleUnlockAttestation(block, p) => {
                                 self.to_consensus_manager.as_ref().inspect(|tx| {
                                     let _ = tx.send(StromConsensusEvent::BundleUnlockAttestation(
-                                        address, block, p,
+                                        address, block, p
                                     ));
                                 });
                             }
@@ -348,7 +348,7 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                                 self.to_pool_manager.as_ref().inspect(|tx| {
                                     let _ = tx.send(NetworkOrderEvent::IncomingOrders {
                                         peer_id,
-                                        orders: a,
+                                        orders: a
                                     });
                                 });
                             }
@@ -356,7 +356,7 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                                 self.to_pool_manager.as_ref().inspect(|tx| {
                                     let _ = tx.send(NetworkOrderEvent::CancelOrder {
                                         peer_id,
-                                        request: a,
+                                        request: a
                                     });
                                 });
                             }
@@ -368,7 +368,7 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
                             .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                         self.notify_listeners(StromNetworkEvent::SessionClosed {
                             peer_id,
-                            reason: None,
+                            reason: None
                         })
                     }
                     SwarmEvent::SessionEstablished { peer_id } => {

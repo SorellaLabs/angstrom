@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
     sync::Arc,
-    time::Duration,
+    time::Duration
 };
 
 use alloy::{primitives::Address, providers::Provider, signers::local::PrivateKeySigner};
@@ -12,12 +12,12 @@ use angstrom::components::StromHandles;
 use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
 use angstrom_eth::{
     handle::Eth,
-    manager::{EthDataCleanser, EthEvent},
+    manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::StromNetworkHandle;
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
-    api::{ConsensusApiServer, OrderApiServer},
+    api::{ConsensusApiServer, OrderApiServer}
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
@@ -27,7 +27,7 @@ use angstrom_types::{
     primitive::{PoolId, UniswapPoolRegistry},
     sol_bindings::testnet::TestnetHub,
     submission::{ChainSubmitterHolder, SubmissionHandler},
-    testnet::InitialTestnetState,
+    testnet::InitialTestnetState
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::{Future, Stream, StreamExt};
@@ -43,7 +43,7 @@ use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager};
 use validation::{
     common::{TokenPriceGenerator, WETH_ADDRESS},
     order::state::pools::AngstromPoolsTracker,
-    validator::ValidationClient,
+    validator::ValidationClient
 };
 
 use crate::{
@@ -51,21 +51,21 @@ use crate::{
     contracts::anvil::WalletProviderRpc,
     providers::{
         AnvilProvider, AnvilStateProvider, AnvilSubmissionProvider, WalletProvider,
-        utils::StromContractInstance,
+        utils::StromContractInstance
     },
     types::{
-        GlobalTestingConfig, SendingStromHandles, WithWalletProvider, config::TestingNodeConfig,
+        GlobalTestingConfig, SendingStromHandles, WithWalletProvider, config::TestingNodeConfig
     },
-    validation::TestOrderValidator,
+    validation::TestOrderValidator
 };
 
 pub struct AngstromNodeInternals<P> {
-    pub rpc_port: u64,
-    pub state_provider: AnvilProvider<P>,
-    pub order_storage: Arc<OrderStorage>,
-    pub pool_handle: PoolHandle,
+    pub rpc_port:         u64,
+    pub state_provider:   AnvilProvider<P>,
+    pub order_storage:    Arc<OrderStorage>,
+    pub pool_handle:      PoolHandle,
     pub tx_strom_handles: SendingStromHandles,
-    pub testnet_hub: StromContractInstance,
+    pub testnet_hub:      StromContractInstance
 }
 
 impl<P: WithWalletProvider> AngstromNodeInternals<P> {
@@ -80,18 +80,18 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         block_sync: GlobalBlockSync,
         executor: TaskExecutor,
         state_updates: Option<UnboundedSender<ConsensusRoundName>>,
-        token_price_snapshot: Option<(HashMap<PoolId, VecDeque<PairsWithPrice>>, u128)>,
+        token_price_snapshot: Option<(HashMap<PoolId, VecDeque<PairsWithPrice>>, u128)>
     ) -> eyre::Result<(
         Self,
         ConsensusManager<WalletProviderRpc, MatcherHandle, GlobalBlockSync, PrivateKeySigner>,
-        TestOrderValidator<AnvilStateProvider<WalletProvider>>,
+        TestOrderValidator<AnvilStateProvider<WalletProvider>>
     )>
     where
         F: for<'a> Fn(
             &'a InitialTestnetState,
-            AgentConfig,
+            AgentConfig
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
-        F: Clone,
+        F: Clone
     {
         let start_block = state_provider
             .rpc_provider()
@@ -132,10 +132,10 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             AngstromPoolConfigStore::load_from_chain(
                 inital_angstrom_state.angstrom_addr,
                 BlockId::number(block_number),
-                &state_provider.rpc_provider(),
+                &state_provider.rpc_provider()
             )
             .await
-            .map_err(|e| eyre::eyre!("{e}"))?,
+            .map_err(|e| eyre::eyre!("{e}"))?
         );
         tracing::debug!("pool config loaded");
 
@@ -167,7 +167,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             pool_config_store.clone(),
             block_sync.clone(),
             node_set,
-            vec![],
+            vec![]
         )
         .unwrap();
 
@@ -191,7 +191,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             block_number,
             block_sync.clone(),
             inital_angstrom_state.pool_manager_addr,
-            network_stream,
+            network_stream
         )
         .await;
         tracing::debug!("uniswap configured");
@@ -203,7 +203,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 tracing::Level::ERROR,
                 "pool manager",
                 node_config.node_id
-            ))),
+            )))
         );
 
         let token_conversion = if let Some((prev_prices, base_wei)) = token_price_snapshot {
@@ -212,7 +212,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 uniswap_pools.clone(),
                 prev_prices,
                 WETH_ADDRESS,
-                base_wei,
+                base_wei
             )
         } else {
             TokenPriceGenerator::new(
@@ -220,7 +220,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 block_number,
                 uniswap_pools.clone(),
                 WETH_ADDRESS,
-                Some(1),
+                Some(1)
             )
             .await
             .expect("failed to start price generator")
@@ -231,12 +231,12 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let token_price_update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
             inital_angstrom_state.angstrom_addr,
             token_price_update_stream,
-            Arc::new(state_provider.rpc_provider()),
+            Arc::new(state_provider.rpc_provider())
         ));
 
         let pool_storage = AngstromPoolsTracker::new(
             inital_angstrom_state.angstrom_addr,
-            pool_config_store.clone(),
+            pool_config_store.clone()
         );
 
         let validator = TestOrderValidator::new(
@@ -249,7 +249,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             token_conversion,
             token_price_update_stream,
             pool_storage.clone(),
-            node_config.node_id,
+            node_config.node_id
         )
         .await?;
 
@@ -266,7 +266,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
             block_sync.clone(),
-            strom_network_handle.subscribe_network_events(),
+            strom_network_handle.subscribe_network_events()
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -275,7 +275,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             strom_handles.orderpool_rx,
             strom_handles.pool_manager_tx,
             block_number,
-            |_| {},
+            |_| {}
         );
 
         let rpc_port = node_config.strom_rpc_port();
@@ -293,7 +293,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 let server_handle = server.start(rpcs);
                 tracing::info!("rpc server started on: {}", addr);
                 let _ = server_handle.stopped().await;
-            }),
+            })
         );
 
         let testnet_hub =
@@ -305,16 +305,16 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         tracing::debug!("created testnet hub and uniswap registry");
 
         let anvil = AnvilSubmissionProvider {
-            provider: state_provider.rpc_provider(),
-            angstrom_address: inital_angstrom_state.angstrom_addr,
+            provider:         state_provider.rpc_provider(),
+            angstrom_address: inital_angstrom_state.angstrom_addr
         };
 
         let mev_boost_provider = SubmissionHandler {
             node_provider: Arc::new(state_provider.rpc_provider()),
-            submitters: vec![Box::new(ChainSubmitterHolder::new(
+            submitters:    vec![Box::new(ChainSubmitterHolder::new(
                 anvil,
-                node_config.angstrom_signer(),
-            ))],
+                node_config.angstrom_signer()
+            ))]
         };
 
         tracing::debug!("created mev boost provider");
@@ -323,7 +323,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             ManagerNetworkDeps::new(
                 strom_network_handle.clone(),
                 eth_handle.subscribe_cannon_state_notifications().await,
-                strom_handles.consensus_rx_op,
+                strom_handles.consensus_rx_op
             ),
             node_config.angstrom_signer(),
             initial_validators,
@@ -336,7 +336,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             matching_handle,
             block_sync.clone(),
             strom_handles.consensus_rx_rpc,
-            state_updates,
+            state_updates
         );
 
         // spin up amm quoter
@@ -350,7 +350,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 .build()
                 .expect("failed to build rayon thread pool"),
             Duration::from_millis(100),
-            consensus_client.subscribe_consensus_round_event(),
+            consensus_client.subscribe_consensus_round_event()
         );
 
         executor.spawn_critical("amm quoting service", amm);
@@ -361,7 +361,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             agent_id: node_config.node_id,
             rpc_address: addr,
             current_block: block_number,
-            state_provider: state_provider.state_provider(),
+            state_provider: state_provider.state_provider()
         };
 
         futures::stream::iter(agents.into_iter())
@@ -382,10 +382,10 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 order_storage,
                 pool_handle,
                 tx_strom_handles,
-                testnet_hub,
+                testnet_hub
             },
             consensus,
-            validator,
+            validator
         ))
     }
 }

@@ -2,13 +2,13 @@ use std::sync::{Arc, atomic::AtomicUsize};
 
 use angstrom_types::{
     network::{ReputationChangeKind, StromNetworkEvent},
-    primitive::PeerId,
+    primitive::PeerId
 };
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;
 use tokio::sync::{
     mpsc::{UnboundedSender, unbounded_channel},
-    oneshot,
+    oneshot
 };
 
 use crate::StromMessage;
@@ -20,13 +20,13 @@ use crate::StromMessage;
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct StromNetworkHandle {
-    inner: Arc<StromNetworkInner>,
+    inner: Arc<StromNetworkInner>
 }
 
 impl StromNetworkHandle {
     pub fn new(
         num_active_peers: Arc<AtomicUsize>,
-        to_manager_tx: UnboundedMeteredSender<StromNetworkHandleMsg>,
+        to_manager_tx: UnboundedMeteredSender<StromNetworkHandleMsg>
     ) -> Self {
         Self { inner: Arc::new(StromNetworkInner { num_active_peers, to_manager_tx }) }
     }
@@ -51,7 +51,7 @@ impl StromNetworkHandle {
     }
 
     pub fn subscribe_network_events(
-        &self,
+        &self
     ) -> tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent> {
         let (tx, rx) = unbounded_channel();
         self.send_to_network_manager(StromNetworkHandleMsg::SubscribeEvents(tx));
@@ -87,7 +87,7 @@ impl StromNetworkHandle {
 struct StromNetworkInner {
     num_active_peers: Arc<AtomicUsize>,
 
-    to_manager_tx: UnboundedMeteredSender<StromNetworkHandleMsg>,
+    to_manager_tx: UnboundedMeteredSender<StromNetworkHandleMsg>
 }
 
 #[derive(Debug)]
@@ -101,18 +101,18 @@ pub enum StromNetworkHandleMsg {
     /// Sends the strom message to a single peer.
     SendStromMessage {
         peer_id: PeerId,
-        msg: StromMessage,
+        msg:     StromMessage
     },
 
     /// Broadcasts the storm message to all peers
     BroadcastStromMessage {
-        msg: StromMessage,
+        msg: StromMessage
     },
 
     /// Apply a reputation change to the given peer.
     ReputationChange(PeerId, ReputationChangeKind),
     /// Gracefully shutdown network
-    Shutdown(oneshot::Sender<()>),
+    Shutdown(oneshot::Sender<()>)
 }
 
 // Implementation of NetworkHandle trait from angstrom-types
@@ -122,7 +122,7 @@ impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
     fn send_message(
         &mut self,
         peer_id: PeerId,
-        message: angstrom_types::network::PoolNetworkMessage,
+        message: angstrom_types::network::PoolNetworkMessage
     ) {
         // Convert pool message to full StromMessage
         let strom_msg = match message {

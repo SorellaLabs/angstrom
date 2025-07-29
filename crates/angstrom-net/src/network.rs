@@ -50,11 +50,13 @@ impl StromNetworkHandle {
         self.send_to_network_manager(StromNetworkHandleMsg::ReputationChange(peer, change));
     }
 
-    pub fn subscribe_network_events(&self) -> tokio::sync::mpsc::UnboundedReceiver<StromNetworkEvent> {
+    pub fn subscribe_network_events(
+        &self
+    ) -> tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent> {
         let (tx, rx) = unbounded_channel();
         self.send_to_network_manager(StromNetworkHandleMsg::SubscribeEvents(tx));
 
-        rx
+        tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
     }
 
     /// Send message to gracefully shutdown node.
@@ -115,6 +117,8 @@ pub enum StromNetworkHandleMsg {
 
 // Implementation of NetworkHandle trait from angstrom-types
 impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
+    type Events<'a> = tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent>;
+
     fn send_message(
         &mut self,
         peer_id: PeerId,
@@ -138,8 +142,8 @@ impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
         StromNetworkHandle::peer_reputation_change(self, peer_id, change);
     }
 
-    fn subscribe_network_events(&self) -> tokio::sync::mpsc::UnboundedReceiver<StromNetworkEvent> {
-        // Call the inherent method on self, not the trait method
-        StromNetworkHandle::subscribe_network_events(self)
+    fn subscribe_network_events(&self) -> Self::Events<'_> {
+        let rx = StromNetworkHandle::subscribe_network_events(self);
+        tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
     }
 }

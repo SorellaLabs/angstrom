@@ -13,6 +13,7 @@ bytes.workspace = true
 dashmap.workspace = true
 eyre.workspace = true
 futures.workspace = true
+futures-core.workspace = true
 hsm-signer.workspace = true
 itertools.workspace = true
 k256.workspace = true

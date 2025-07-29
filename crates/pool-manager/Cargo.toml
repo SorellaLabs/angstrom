@@ -38,13 +38,8 @@ parking_lot.workspace = true
 rand.workspace = true
 rayon = "1"
 reth.workspace = true
-reth-eth-wire.workspace = true
 reth-metrics.workspace = true
-reth-net-banlist = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
-reth-network.workspace = true
-reth-network-p2p = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
 reth-network-peers.workspace = true
-reth-node-builder.workspace = true
 reth-primitives.workspace = true
 reth-provider.workspace = true
 reth-tasks.workspace = true

@@ -165,6 +165,10 @@ impl OrderPoolHandle for PoolHandle {
     }
 }
 
+/// Builder for constructing PoolManager instances.
+///
+/// The default mode is ConsensusMode, but it's recommended to use the explicit
+/// constructors `new_consensus()` or `new_rollup()` for clarity.
 pub struct PoolManagerBuilder<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
 where
     V: OrderValidatorHandle,
@@ -201,9 +205,7 @@ where
             order_events,
             global_sync,
             eth_network_events,
-            strom_network_events: UnboundedReceiverStream::new(
-                network_handle.subscribe_network_events()
-            ),
+            strom_network_events: network_handle.subscribe_network_events(),
             network_handle,
             validator,
             order_storage,
@@ -233,7 +235,7 @@ where
     ) -> PoolHandle
     where
         M: PoolManagerMode,
-        NH: NetworkHandle + Send + Sync + 'static + Unpin
+        NH: NetworkHandle + Send + Sync + 'static
     {
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -251,7 +253,7 @@ where
         self.global_sync.register(MODULE_NAME);
 
         task_spawner.spawn_critical(
-            "transaction manager",
+            "order pool manager",
             Box::pin(PoolManager::<V, GlobalSync, NH, M> {
                 eth_network_events:   self.eth_network_events,
                 strom_network_events: self.strom_network_events,
@@ -498,7 +500,7 @@ where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode,
-    NH: NetworkHandle + Unpin
+    NH: NetworkHandle
 {
     type Output = ();
 

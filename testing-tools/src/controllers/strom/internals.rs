@@ -266,6 +266,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
             block_sync.clone(),
+            strom_network_handle.subscribe_network_events(),
         )
         .with_config(pool_config)
         .build_with_channels(

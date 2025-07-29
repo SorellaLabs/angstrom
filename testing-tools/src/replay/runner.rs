@@ -368,6 +368,7 @@ impl ReplayRunner {
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
             global_block_sync.clone(),
+            network_handle.subscribe_network_events(),
         )
         .with_config(pool_config)
         .build_with_channels(

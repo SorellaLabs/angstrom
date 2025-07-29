@@ -10,9 +10,9 @@ use alloy::signers::local::PrivateKeySigner;
 use alloy_primitives::Address;
 use angstrom::components::initialize_strom_handles;
 use angstrom_network::{
-    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager,
-    pool_manager::PoolHandle
+    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager
 };
+use pool_manager::PoolHandle;
 use angstrom_types::{
     block_sync::GlobalBlockSync,
     consensus::ConsensusRoundName,

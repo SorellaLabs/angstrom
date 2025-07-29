@@ -190,7 +190,11 @@ impl<V, GlobalSync, NH, M> PoolManagerBuilder<V, GlobalSync, NH, M>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + Send + Sync + 'static,
+    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
+        + Send
+        + Sync
+        + Unpin
+        + 'static,
     M: PoolManagerMode,
 {
     fn new(
@@ -200,12 +204,13 @@ where
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync,
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     ) -> Self {
         Self {
             order_events,
             global_sync,
             eth_network_events,
-            strom_network_events: network_handle.subscribe_network_events(),
+            strom_network_events,
             network_handle,
             validator,
             order_storage,
@@ -235,7 +240,11 @@ where
     ) -> PoolHandle
     where
         M: PoolManagerMode,
-        NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + Send + Sync + 'static,
+        NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
+            + Send
+            + Sync
+            + Unpin
+            + 'static,
     {
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -305,7 +314,7 @@ where
     V: OrderValidatorHandle<Order = AllOrders>,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>,
+    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + 'static,
 {
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
@@ -498,7 +507,9 @@ where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + Unpin,
+    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
+        + Unpin
+        + 'static,
 {
     type Output = ();
 
@@ -576,7 +587,11 @@ impl<V, GlobalSync, NH> PoolManagerBuilder<V, GlobalSync, NH, crate::consensus::
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + Send + Sync + 'static,
+    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
+        + Send
+        + Sync
+        + Unpin
+        + 'static,
 {
     /// Create a new consensus pool manager builder
     pub fn new_consensus(
@@ -586,6 +601,7 @@ where
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync,
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     ) -> Self {
         Self::new(
             validator,
@@ -594,6 +610,7 @@ where
             eth_network_events,
             order_events,
             global_sync,
+            strom_network_events,
         )
     }
 }
@@ -602,7 +619,11 @@ impl<V, GlobalSync, NH> PoolManagerBuilder<V, GlobalSync, NH, crate::rollup::Rol
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + Send + Sync + 'static,
+    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
+        + Send
+        + Sync
+        + Unpin
+        + 'static,
 {
     /// Create a new rollup pool manager builder
     pub fn new_rollup(
@@ -612,6 +633,7 @@ where
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync,
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     ) -> Self {
         Self::new(
             validator,
@@ -620,6 +642,7 @@ where
             eth_network_events,
             order_events,
             global_sync,
+            strom_network_events,
         )
     }
 }

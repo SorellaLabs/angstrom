@@ -269,6 +269,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         eth_event_rx_stream_pmb,
         handles.pool_rx,
         global_block_sync.clone(),
+        network_handle.subscribe_network_events(),
     )
     .with_config(pool_config)
     .build_with_channels(

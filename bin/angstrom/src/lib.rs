@@ -10,26 +10,26 @@ use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
 use angstrom_network::AngstromNetworkBuilder;
-use pool_manager::PoolHandle;
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
-    api::{ConsensusApiServer, OrderApiServer}
+    api::{ConsensusApiServer, OrderApiServer},
 };
 use angstrom_types::{
     contract_bindings::controller_v_1::ControllerV1,
     primitive::{
         ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, CONTROLLER_V1_ADDRESS,
-        init_with_chain_id
-    }
+        init_with_chain_id,
+    },
 };
 use clap::Parser;
 use cli::AngstromConfig;
 use consensus::ConsensusHandler;
 use parking_lot::RwLock;
+use pool_manager::PoolHandle;
 use reth::{
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
     cli::Cli,
-    tasks::TaskExecutor
+    tasks::TaskExecutor,
 };
 use reth_db::DatabaseEnv;
 use reth_node_builder::{Node, NodeBuilder, NodeHandle, WithLaunchContext};
@@ -37,7 +37,7 @@ use reth_node_ethereum::node::{EthereumAddOns, EthereumNode};
 use validation::validator::ValidationClient;
 
 use crate::components::{
-    StromHandles, init_network_builder, initialize_strom_components, initialize_strom_handles
+    StromHandles, init_network_builder, initialize_strom_components, initialize_strom_handles,
 };
 
 pub mod cli;
@@ -58,7 +58,7 @@ pub fn run() -> eyre::Result<()> {
             NamedChain::Mainnet => {
                 init_with_chain_id(NamedChain::Mainnet as u64);
             }
-            chain => panic!("we do not support chain {chain}")
+            chain => panic!("we do not support chain {chain}"),
         }
 
         if args.metrics_enabled {
@@ -109,7 +109,7 @@ pub fn run() -> eyre::Result<()> {
                 signer,
                 args,
                 channels,
-                builder
+                builder,
             )
             .await
         } else if let Some(signer) = args.get_hsm_signer()? {
@@ -123,7 +123,7 @@ pub fn run() -> eyre::Result<()> {
                 signer,
                 args,
                 channels,
-                builder
+                builder,
             )
             .await
         } else {
@@ -142,12 +142,12 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     secret_key: AngstromSigner<S>,
     args: AngstromConfig,
     mut channels: StromHandles,
-    builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, ChainSpec>>
+    builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, ChainSpec>>,
 ) -> eyre::Result<()> {
     let mut network = init_network_builder(
         secret_key.clone(),
         channels.eth_handle_rx.take().unwrap(),
-        Arc::new(RwLock::new(node_set.clone()))
+        Arc::new(RwLock::new(node_set.clone())),
     )?;
 
     let protocol_handle = network.build_protocol_handler();
@@ -158,7 +158,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         .with_components(
             EthereumNode::default()
                 .components_builder()
-                .network(AngstromNetworkBuilder::new(protocol_handle))
+                .network(AngstromNetworkBuilder::new(protocol_handle)),
         )
         .with_add_ons::<EthereumAddOns<_, _, _>>(Default::default())
         .extend_rpc_modules(move |rpc_context| {
@@ -166,7 +166,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
                 pool.clone(),
                 executor_clone.clone(),
                 validation_client,
-                quoter_handle
+                quoter_handle,
             );
             let consensus = ConsensusApi::new(cloned_consensus_client, executor_clone);
             rpc_context.modules.merge_configured(order_api.into_rpc())?;
@@ -187,7 +187,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         executor,
         node_exit_future,
         node_set,
-        consensus_client
+        consensus_client,
     )
     .await
 }

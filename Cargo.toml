@@ -97,6 +97,7 @@ angstrom-utils = { path = "./crates/utils/" }
 anyhow = "1"
 aquamarine = "0"
 arbitrary = "1"
+arraydeque = "0"
 assert_matches = "1"
 async-trait = "0"
 auto_impl = "1"
@@ -116,7 +117,9 @@ divan = "0"
 enr = { version = "0", default-features = false, features = ["k256"] }
 eyre = "0"
 futures = "0"
+futures-core = "0"
 futures-util = "0"
+hex = "0.4.3"
 hex-literal = "0"
 homedir = "0"
 hsm-signer = { git = "https://github.com/SorellaLabs/hsm-signer" }
@@ -126,6 +129,7 @@ jsonrpsee-core = "0.25.1"
 jsonrpsee-http-client = "0.25.1"
 jsonrpsee-types = "0.25.1"
 k256 = { version = "0", default-features = false }
+linked_hash_set = "0"
 malachite = "0.4"
 malachite-q = "0.4"
 matching-engine = { path = "./crates/matching-engine/" }

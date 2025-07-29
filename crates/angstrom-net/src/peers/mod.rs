@@ -2,5 +2,5 @@
 
 pub mod manager;
 mod reputation;
-pub use manager::*;
 pub use angstrom_types::network::ReputationChangeKind;
+pub use manager::*;

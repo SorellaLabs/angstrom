@@ -4,7 +4,7 @@ use alloy::{
     network::{Ethereum, EthereumWallet},
     node_bindings::{Anvil, AnvilInstance},
     primitives::Address,
-    providers::Provider
+    providers::Provider,
 };
 use alloy_primitives::aliases::I24;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag, Filter};
@@ -13,22 +13,22 @@ use angstrom::components::initialize_strom_handles;
 use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
 use angstrom_eth::{
     handle::Eth,
-    manager::{EthDataCleanser, EthEvent}
+    manager::{EthDataCleanser, EthEvent},
 };
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
-    api::{ConsensusApiServer, OrderApiServer}
+    api::{ConsensusApiServer, OrderApiServer},
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_bindings::{
         angstrom::Angstrom::PoolKey,
-        controller_v_1::ControllerV1::{self, PoolConfigured, PoolRemoved}
+        controller_v_1::ControllerV1::{self, PoolConfigured, PoolRemoved},
     },
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{AngstromSigner, UniswapPoolRegistry, try_init_with_chain_id, *},
-    submission::{ChainSubmitterHolder, SubmissionHandler}
+    submission::{ChainSubmitterHolder, SubmissionHandler},
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::{Stream, StreamExt};
@@ -43,12 +43,12 @@ use telemetry_recorder::TelemetryMessage;
 use tracing::{Instrument, span};
 use uniswap_v4::configure_uniswap_manager;
 use validation::{
-    common::TokenPriceGenerator, init_validation_replay, validator::ValidationClient
+    common::TokenPriceGenerator, init_validation_replay, validator::ValidationClient,
 };
 
 use super::fake_network::FakeNetwork;
 use crate::providers::{
-    AnvilProvider, AnvilStateProvider, AnvilSubmissionProvider, WalletProvider
+    AnvilProvider, AnvilStateProvider, AnvilSubmissionProvider, WalletProvider,
 };
 
 /// Replay Runner
@@ -57,11 +57,11 @@ use crate::providers::{
 /// in order to allow us to debug quickly.
 pub struct ReplayRunner {
     #[allow(dead_code)]
-    anvil:          AnvilInstance,
+    anvil: AnvilInstance,
     anvil_provider: AnvilProvider<WalletProvider>,
-    fake_network:   FakeNetwork,
-    block_log:      BlockLog,
-    pool_handle:    PoolHandle
+    fake_network: FakeNetwork,
+    block_log: BlockLog,
+    pool_handle: PoolHandle,
 }
 
 impl ReplayRunner {
@@ -89,7 +89,7 @@ impl ReplayRunner {
                 .state_provider()
                 .canon_state_tx
                 .send(reth_provider::CanonStateNotification::Reorg { old, new })
-                .unwrap()
+                .unwrap(),
         };
 
         let mut last_timestamp = self.block_log.eth_snapshot.as_ref().unwrap().timestamp;
@@ -136,7 +136,7 @@ impl ReplayRunner {
                         .send(event.clone())
                         .unwrap();
                 }
-                _ => ()
+                _ => (),
             }
         }
         tracing::info!("everything completed");
@@ -148,7 +148,7 @@ impl ReplayRunner {
         block_log: BlockLog,
         fork_url: String,
         rpc_port: u16,
-        executor: TaskExecutor
+        executor: TaskExecutor,
     ) -> eyre::Result<Self> {
         let chain_id = block_log.constants.as_ref().unwrap().chain_id;
         try_init_with_chain_id(chain_id).unwrap();
@@ -235,17 +235,17 @@ impl ReplayRunner {
             AngstromPoolConfigStore::load_from_chain(
                 angstrom_address,
                 BlockId::Number(BlockNumberOrTag::Latest),
-                &rpc
+                &rpc,
             )
             .await
-            .unwrap()
+            .unwrap(),
         );
         let pools = fetch_angstrom_pools(
             deploy_block as usize,
             block_number as usize,
             angstrom_address,
             controller,
-            &rpc
+            &rpc,
         )
         .await;
 
@@ -268,7 +268,7 @@ impl ReplayRunner {
             eth_snap.pool_store.clone(),
             global_block_sync.clone(),
             eth_snap.node_set.clone(),
-            vec![]
+            vec![],
         )
         .unwrap();
 
@@ -284,7 +284,7 @@ impl ReplayRunner {
             block_number + 1,
             global_block_sync.clone(),
             pool_manager,
-            network_stream
+            network_stream,
         )
         .await;
         tracing::debug!("uniswap configured");
@@ -293,8 +293,8 @@ impl ReplayRunner {
         executor.spawn_critical(
             "uniswap",
             Box::pin(
-                uniswap_pool_manager.instrument(span!(tracing::Level::ERROR, "pool manager",))
-            )
+                uniswap_pool_manager.instrument(span!(tracing::Level::ERROR, "pool manager",)),
+            ),
         );
 
         let token_conversion =
@@ -304,7 +304,7 @@ impl ReplayRunner {
                     uniswap_pools.clone(),
                     prev_prices.clone(),
                     gas_token,
-                    *base_wei
+                    *base_wei,
                 )
             } else {
                 TokenPriceGenerator::new(
@@ -312,7 +312,7 @@ impl ReplayRunner {
                     block_number,
                     uniswap_pools.clone(),
                     gas_token,
-                    Some(1)
+                    Some(1),
                 )
                 .await
                 .expect("failed to start price generator")
@@ -322,7 +322,7 @@ impl ReplayRunner {
         let token_price_update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
             angstrom_address,
             token_price_update_stream,
-            Arc::new(anvil_provider.rpc_provider())
+            Arc::new(anvil_provider.rpc_provider()),
         ));
 
         let user_account = block_log
@@ -342,7 +342,7 @@ impl ReplayRunner {
             token_conversion,
             pool_config_store.clone(),
             strom_handles.validator_rx,
-            |validator| validator.set_user_account(user_account)
+            |validator| validator.set_user_account(user_account),
         );
 
         let pool_config = PoolConfig {
@@ -356,7 +356,7 @@ impl ReplayRunner {
         let fake_network = FakeNetwork::new(
             Some(strom_handles.pool_tx),
             Some(strom_handles.consensus_tx_op),
-            strom_handles.eth_handle_rx.take().unwrap()
+            strom_handles.eth_handle_rx.take().unwrap(),
         );
 
         let network_handle = fake_network.handle.clone();
@@ -367,7 +367,7 @@ impl ReplayRunner {
             network_handle.clone(),
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
-            global_block_sync.clone()
+            global_block_sync.clone(),
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -379,7 +379,7 @@ impl ReplayRunner {
             |order_indexer| {
                 // Order storage is set above.
                 order_indexer.set_tracker(pool_snapshot.order_tracker);
-            }
+            },
         );
 
         let server = ServerBuilder::default()
@@ -396,7 +396,7 @@ impl ReplayRunner {
                 let server_handle = server.start(rpcs);
                 tracing::info!("rpc server started on: {}", addr);
                 let _ = server_handle.stopped().await;
-            })
+            }),
         );
 
         let pool_registry =
@@ -407,10 +407,10 @@ impl ReplayRunner {
 
         let mev_boost_provider = SubmissionHandler {
             node_provider: Arc::new(anvil_provider.rpc_provider()),
-            submitters:    vec![Box::new(ChainSubmitterHolder::new(
+            submitters: vec![Box::new(ChainSubmitterHolder::new(
                 anvil_sub,
-                angstrom_signer.clone()
-            ))]
+                angstrom_signer.clone(),
+            ))],
         };
 
         tracing::debug!("created mev boost provider");
@@ -424,7 +424,7 @@ impl ReplayRunner {
             ManagerNetworkDeps::new(
                 network_handle.clone(),
                 eth_handle.subscribe_cannon_state_notifications().await,
-                strom_handles.consensus_rx_op
+                strom_handles.consensus_rx_op,
             ),
             angstrom_signer,
             validators,
@@ -437,7 +437,7 @@ impl ReplayRunner {
             matching_handle,
             global_block_sync.clone(),
             strom_handles.consensus_rx_rpc,
-            None
+            None,
         );
         executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
             consensus.run_till_shutdown(grace)
@@ -455,7 +455,7 @@ impl ReplayRunner {
                 .build()
                 .expect("failed to build rayon thread pool"),
             Duration::from_millis(100),
-            consensus_client.subscribe_consensus_round_event()
+            consensus_client.subscribe_consensus_round_event(),
         );
 
         executor.spawn_critical("amm quoting service", amm);
@@ -473,10 +473,10 @@ async fn fetch_angstrom_pools<P>(
     end_block: usize,
     angstrom_address: Address,
     controller_address: Address,
-    db: &P
+    db: &P,
 ) -> Vec<PoolKey>
 where
-    P: Provider
+    P: Provider,
 {
     let mut filters = vec![];
 
@@ -516,9 +516,9 @@ where
         .fold(HashSet::new(), |mut set, log| {
             if let Ok(pool) = PoolConfigured::decode_log(&log.clone().into_inner()) {
                 let pool_key = PoolKey {
-                    currency0:   pool.asset0,
-                    currency1:   pool.asset1,
-                    fee:         pool.bundleFee,
+                    currency0: pool.asset0,
+                    currency1: pool.asset1,
+                    fee: pool.bundleFee,
                     tickSpacing: I24::try_from_be_slice(&{
                         let bytes = pool.tickSpacing.to_be_bytes();
                         let mut a = [0u8; 3];
@@ -526,7 +526,7 @@ where
                         a
                     })
                     .unwrap(),
-                    hooks:       angstrom_address
+                    hooks: angstrom_address,
                 };
 
                 set.insert(pool_key);
@@ -535,11 +535,11 @@ where
 
             if let Ok(pool) = PoolRemoved::decode_log(&log.clone().into_inner()) {
                 let pool_key = PoolKey {
-                    currency0:   pool.asset0,
-                    currency1:   pool.asset1,
-                    fee:         pool.feeInE6,
+                    currency0: pool.asset0,
+                    currency1: pool.asset1,
+                    fee: pool.feeInE6,
                     tickSpacing: pool.tickSpacing,
-                    hooks:       angstrom_address
+                    hooks: angstrom_address,
                 };
 
                 set.remove(&pool_key);

@@ -1,4 +1,6 @@
-use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders, network::NetworkHandle};
+use angstrom_types::{
+    block_sync::BlockSyncConsumer, network::NetworkHandle, sol_bindings::grouped_orders::AllOrders,
+};
 use validation::order::OrderValidatorHandle;
 
 use crate::order::{PoolManager, PoolManagerMode};
@@ -27,7 +29,7 @@ impl PoolManagerMode for RollupMode {
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
         NH: NetworkHandle,
-        Self: Sized
+        Self: Sized,
     {
         // In rollup mode, we process all orders without consensus filtering
         // This is typically simpler and more direct

@@ -9,17 +9,17 @@ use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
-use pool_manager::PoolHandle;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::{
     contract_bindings::controller_v_1::ControllerV1,
     primitive::{
         ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, CONTROLLER_V1_ADDRESS,
-        init_with_chain_id
-    }
+        init_with_chain_id,
+    },
 };
 use clap::Parser;
 use cli::AngstromConfig;
+use pool_manager::PoolHandle;
 use reth::{chainspec::EthChainSpec, tasks::TaskExecutor};
 use reth_db::DatabaseEnv;
 use reth_node_builder::{Node, NodeBuilder, NodeHandle, WithLaunchContext};
@@ -53,7 +53,7 @@ pub fn run() -> eyre::Result<()> {
             .cloned()
             .expect(
                 "op-angstrom does not support chain {chain} (supported chains: \
-                 {SUPPORTED_CHAINS:?})"
+                 {SUPPORTED_CHAINS:?})",
             );
 
         init_with_chain_id(chain as u64);
@@ -105,7 +105,7 @@ pub fn run() -> eyre::Result<()> {
                 signer,
                 args,
                 channels,
-                builder
+                builder,
             )
             .await
         } else if let Some(signer) = args.get_hsm_signer()? {
@@ -118,7 +118,7 @@ pub fn run() -> eyre::Result<()> {
                 signer,
                 args,
                 channels,
-                builder
+                builder,
             )
             .await
         } else {
@@ -136,7 +136,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     secret_key: AngstromSigner<S>,
     args: AngstromConfig,
     channels: StromHandles<OpPrimitives>,
-    builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>
+    builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>,
 ) -> eyre::Result<()> {
     let executor_clone = executor.clone();
     let NodeHandle { node, node_exit_future } = builder
@@ -148,7 +148,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
                 pool.clone(),
                 executor_clone.clone(),
                 validation_client,
-                quoter_handle
+                quoter_handle,
             );
             rpc_context.modules.merge_configured(order_api.into_rpc())?;
 
@@ -164,7 +164,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         &node,
         executor,
         node_exit_future,
-        node_set
+        node_set,
     )
     .await
 }

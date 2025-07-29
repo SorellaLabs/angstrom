@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     pin::Pin,
-    sync::{Arc, atomic::AtomicUsize}
+    sync::{Arc, atomic::AtomicUsize},
 };
 
 use alloy::{self, eips::BlockId, network::Network, primitives::Address, providers::Provider};
@@ -17,11 +17,11 @@ use angstrom_types::{
         CONFIG_STORE_SLOT, POOL_CONFIG_STORE_ENTRY_SIZE,
         angstrom::{
             AngPoolConfigEntry, AngstromPoolConfigStore, AngstromPoolPartialKey,
-            UniswapAngstromRegistry
-        }
+            UniswapAngstromRegistry,
+        },
     },
     primitive::{AngstromSigner, UniswapPoolRegistry},
-    submission::SubmissionHandler
+    submission::SubmissionHandler,
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
 use dashmap::DashMap;
@@ -43,11 +43,11 @@ use crate::{providers::AnvilProvider, types::WithWalletProvider};
 pub async fn load_poolconfig_from_chain<N, P>(
     angstrom_contract: Address,
     block_id: BlockId,
-    provider: &P
+    provider: &P,
 ) -> eyre::Result<DashMap<AngstromPoolPartialKey, AngPoolConfigEntry>>
 where
     N: Network,
-    P: Provider<N>
+    P: Provider<N>,
 {
     // offset of 6 bytes
     let value = provider
@@ -103,8 +103,8 @@ entries: incorrect length after removing safety byte"
                     pool_partial_key,
                     tick_spacing,
                     fee_in_e6,
-                    store_index: index
-                }
+                    store_index: index,
+                },
             )
         })
         .collect();
@@ -117,12 +117,12 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     provider: AnvilProvider<Provider>,
     executor: TaskExecutor,
     pools: Vec<PoolKey>,
-    block_id: u64
+    block_id: u64,
 ) -> eyre::Result<(
     AnvilProvider<Provider>,
     PoolHandle,
     tokio::sync::mpsc::UnboundedReceiver<ConsensusRoundName>,
-    TestCanonStateSubscriptions
+    TestCanonStateSubscriptions,
 )> {
     // Get our URL
 
@@ -153,7 +153,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         &[],
         &[],
         angstrom_contract,
-        signer.clone()
+        signer.clone(),
     );
 
     // EXTERNAL DATA - we can specify block by using a specific ID
@@ -172,10 +172,10 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         AngstromPoolConfigStore::load_from_chain(
             angstrom_contract,
             BlockId::number(block_id),
-            &provider.rpc_provider()
+            &provider.rpc_provider(),
         )
         .await
-        .map_err(|e| eyre::eyre!("{e}"))?
+        .map_err(|e| eyre::eyre!("{e}"))?,
     );
 
     // re-fetch given the fetch pools takes awhile. given this, we do techincally
@@ -210,7 +210,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         block_id,
         global_block_sync.clone(),
         pool_manager,
-        network_stream
+        network_stream,
     )
     .await;
 
@@ -227,7 +227,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         block_id,
         uniswap_pools.clone(),
         gas_token,
-        Some(1)
+        Some(1),
     )
     .await
     .expect("failed to start token price generator");
@@ -238,7 +238,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let update_stream = Box::pin(
         mock_canon
             .canonical_state_stream()
-            .then(async |_| (0_u64, 0_u128, vec![]))
+            .then(async |_| (0_u64, 0_u128, vec![])),
     );
     init_validation(
         provider.state_provider(),
@@ -251,7 +251,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         uniswap_pools.clone(),
         price_generator,
         pool_config.clone(),
-        handles.validator_rx
+        handles.validator_rx,
     );
 
     let (sn_tx, _sn_rx) = metered_unbounded_channel("replay");
@@ -268,7 +268,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         network_handle.clone(),
         eth_event_rx_stream_pmb,
         handles.pool_rx,
-        global_block_sync.clone()
+        global_block_sync.clone(),
     )
     .with_config(pool_config)
     .build_with_channels(
@@ -277,7 +277,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         handles.orderpool_rx,
         handles.pool_manager_tx,
         block_id,
-        |_| {}
+        |_| {},
     );
     let validators = node_set
         .into_iter()
@@ -294,7 +294,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         ManagerNetworkDeps::new(
             network_handle.clone(),
             mock_canon.subscribe_to_canonical_state(),
-            handles.consensus_rx_op
+            handles.consensus_rx_op,
         ),
         signer,
         validators,
@@ -307,7 +307,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         matching_handle,
         global_block_sync.clone(),
         handles.consensus_rx_rpc,
-        Some(state_tx)
+        Some(state_tx),
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

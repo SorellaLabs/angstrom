@@ -1,5 +1,5 @@
 use angstrom_types::{
-    block_sync::BlockSyncConsumer, network::NetworkHandle, sol_bindings::grouped_orders::AllOrders
+    block_sync::BlockSyncConsumer, network::NetworkHandle, sol_bindings::grouped_orders::AllOrders,
 };
 use validation::order::OrderValidatorHandle;
 
@@ -29,7 +29,7 @@ impl PoolManagerMode for RollupMode {
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
         NH: NetworkHandle,
-        Self: Sized
+        Self: Sized,
     {
         // In rollup mode, we process all orders without consensus filtering
         // This is typically simpler and more direct
@@ -46,7 +46,7 @@ impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, NH, RollupMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle
+    NH: NetworkHandle,
 {
     /// Rollup-specific order processing logic
     ///

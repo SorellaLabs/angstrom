@@ -143,7 +143,6 @@ impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
     }
 
     fn subscribe_network_events(&self) -> Self::Events<'_> {
-        let rx = StromNetworkHandle::subscribe_network_events(self);
-        tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+        StromNetworkHandle::subscribe_network_events(self)
     }
 }

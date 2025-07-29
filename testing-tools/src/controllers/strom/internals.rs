@@ -15,7 +15,6 @@ use angstrom_eth::{
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::StromNetworkHandle;
-use pool_manager::{PoolHandle, PoolManagerBuilder};
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}
@@ -35,6 +34,7 @@ use futures::{Future, Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::{MatchingManager, manager::MatcherHandle};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
+use pool_manager::{PoolHandle, PoolManagerBuilder};
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
 use tokio::sync::mpsc::UnboundedSender;
@@ -259,7 +259,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         };
         let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-        let pool_handle = PoolManagerBuilder::new(
+        let pool_handle = PoolManagerBuilder::new_consensus(
             validator.client.clone(),
             Some(order_storage.clone()),
             strom_network_handle.clone(),

@@ -20,10 +20,8 @@ use angstrom_eth::{
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, StatusState,
-    VerificationSidecar
+    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, StatusState, VerificationSidecar
 };
-use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::StromConsensusEvent,
@@ -43,6 +41,7 @@ use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
 use parking_lot::RwLock;
+use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,

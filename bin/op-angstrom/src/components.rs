@@ -19,7 +19,6 @@ use angstrom_eth::{
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::NetworkOrderEvent;
-use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
@@ -38,6 +37,7 @@ use consensus::AngstromValidator;
 use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
+use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -143,18 +143,20 @@ pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
 struct StubNetworkHandle;
 
 impl NetworkHandle for StubNetworkHandle {
+    type Events<'a> = tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent>;
+
     fn send_message(&mut self, _peer_id: PeerId, _message: PoolNetworkMessage) {
         // Op-angstrom doesn't use networking, so this is a no-op
     }
-    
+
     fn peer_reputation_change(&mut self, _peer_id: PeerId, _change: ReputationChangeKind) {
         // Op-angstrom doesn't use networking, so this is a no-op
     }
-    
-    fn subscribe_network_events(&self) -> tokio::sync::mpsc::UnboundedReceiver<StromNetworkEvent> {
+
+    fn subscribe_network_events(&self) -> Self::Events<'_> {
         // Return an empty receiver since op-angstrom doesn't have network events
         let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-        rx
+        tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
     }
 }
 

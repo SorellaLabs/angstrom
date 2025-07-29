@@ -143,7 +143,7 @@ pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
 struct StubNetworkHandle;
 
 impl NetworkHandle for StubNetworkHandle {
-    type Events<'a> = tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent>;
+    type Events<'a> = UnboundedReceiverStream<StromNetworkEvent>;
 
     fn send_message(&mut self, _peer_id: PeerId, _message: PoolNetworkMessage) {
         // Op-angstrom doesn't use networking, so this is a no-op
@@ -156,7 +156,7 @@ impl NetworkHandle for StubNetworkHandle {
     fn subscribe_network_events(&self) -> Self::Events<'_> {
         // Return an empty receiver since op-angstrom doesn't have network events
         let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-        tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+        UnboundedReceiverStream::new(rx)
     }
 }
 

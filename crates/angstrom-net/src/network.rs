@@ -10,6 +10,7 @@ use tokio::sync::{
     mpsc::{UnboundedSender, unbounded_channel},
     oneshot
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::StromMessage;
 
@@ -50,13 +51,11 @@ impl StromNetworkHandle {
         self.send_to_network_manager(StromNetworkHandleMsg::ReputationChange(peer, change));
     }
 
-    pub fn subscribe_network_events(
-        &self
-    ) -> tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent> {
+    pub fn subscribe_network_events(&self) -> UnboundedReceiverStream<StromNetworkEvent> {
         let (tx, rx) = unbounded_channel();
         self.send_to_network_manager(StromNetworkHandleMsg::SubscribeEvents(tx));
 
-        tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+        UnboundedReceiverStream::new(rx)
     }
 
     /// Send message to gracefully shutdown node.
@@ -117,7 +116,7 @@ pub enum StromNetworkHandleMsg {
 
 // Implementation of NetworkHandle trait from angstrom-types
 impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
-    type Events<'a> = tokio_stream::wrappers::UnboundedReceiverStream<StromNetworkEvent>;
+    type Events<'a> = UnboundedReceiverStream<StromNetworkEvent>;
 
     fn send_message(
         &mut self,

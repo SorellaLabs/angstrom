@@ -18,10 +18,7 @@ use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::{EthDataCleanser, EthEvent}
 };
-use angstrom_network::{
-    NetworkOrderEvent, PoolManagerBuilder,
-    pool_manager::{OrderCommand, PoolHandle}
-};
+use angstrom_network::NetworkOrderEvent;
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
@@ -39,6 +36,7 @@ use consensus::AngstromValidator;
 use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
+use pool_manager::{OrderCommand, PoolHandle, RollupPoolManager};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -350,13 +348,11 @@ where
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    // TODO: PoolManagerBuilder should have optional network handle
-    let _pool_handle = PoolManagerBuilder::new(
+    // PoolManagerBuilder for op-angstrom
+    let _pool_handle = RollupPoolManager::new(
         validation_handle.clone(),
         Some(order_storage.clone()),
-        network_handle.clone(),
         eth_handle.subscribe_network(),
-        handles.pool_rx,
         global_block_sync.clone()
     )
     .with_config(pool_config)

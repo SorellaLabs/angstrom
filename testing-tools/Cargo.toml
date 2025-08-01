@@ -31,6 +31,7 @@ matching-engine.workspace = true
 order-pool.workspace = true
 pade.workspace = true
 parking_lot.workspace = true
+pool-manager.workspace = true
 rand.workspace = true
 rand_chacha = "0.3"
 rand_distr.workspace = true

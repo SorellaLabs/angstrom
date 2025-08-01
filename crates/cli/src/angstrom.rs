@@ -24,6 +24,7 @@ use parking_lot::RwLock;
 use reth::{
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
     cli::Cli,
+    primitives::EthPrimitives,
     tasks::TaskExecutor
 };
 use reth_db::DatabaseEnv;
@@ -32,7 +33,9 @@ use reth_node_ethereum::{EthereumAddOns, EthereumNode};
 use validation::validator::ValidationClient;
 
 use crate::{
-    components::init_network_builder, config::AngstromConfig, handles::ConsensusHandles,
+    components::{AngstromLauncher, init_network_builder},
+    config::AngstromConfig,
+    handles::ConsensusHandles,
     metrics::init_metrics
 };
 
@@ -146,7 +149,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     let protocol_handle = network.build_protocol_handler();
     let cloned_consensus_client = consensus_client.clone();
     let executor_clone = executor.clone();
-    let NodeHandle { node, node_exit_future } = builder
+    let node_handle = builder
         .with_types::<EthereumNode>()
         .with_components(
             EthereumNode::default()
@@ -169,18 +172,26 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         })
         .launch()
         .await?;
-    network = network.with_reth(node.network.clone());
 
-    initialize_strom_components(
-        args,
-        secret_key,
-        channels,
-        network,
-        &node,
-        executor,
-        node_exit_future,
-        node_set,
-        consensus_client
-    )
-    .await
+    AngstromLauncher::<_, _, EthPrimitives, _>::new(args, node_handle, secret_key)
+        .with_network(network)
+        .with_consensus_client(consensus_client)
+        .with_node_set(node_set)
+        .launch()
+        .await?;
+
+    // initialize_strom_components(
+    //     args,
+    //     secret_key,
+    //     channels,
+    //     network,
+    //     &node,
+    //     executor,
+    //     node_exit_future,
+    //     node_set,
+    //     consensus_client
+    // )
+    // .await
+
+    Ok(())
 }

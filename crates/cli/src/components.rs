@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    marker::PhantomData,
     pin::Pin,
     str::FromStr,
     sync::Arc,
@@ -13,25 +14,22 @@ use alloy::{
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
-use angstrom_amm_quoter::{ConsensusQuoterManager, Slot0Update};
+use angstrom_amm_quoter::ConsensusQuoterManager;
 use angstrom_eth::{
-    handle::{Eth, EthCommand},
+    handle::Eth,
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    VerificationSidecar,
-    pool_manager::{OrderCommand, PoolHandle}
+    NetworkBuilder as StromNetworkBuilder, PoolManagerBuilder, StatusState, StromNetworkHandle,
+    VerificationSidecar
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
-    consensus::StromConsensusEvent,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId,
-        UniswapPoolRegistry
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
@@ -39,8 +37,8 @@ use angstrom_types::{
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
-use matching_engine::{MatchingManager, manager::MatcherCommand};
-use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
+use matching_engine::MatchingManager;
+use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
 use reth::{
     api::NodeAddOns,
@@ -51,29 +49,24 @@ use reth::{
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
-use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_network::{NetworkHandle, Peers};
 use reth_node_builder::{
-    FullNode, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
+    FullNode, Node, NodeHandle, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
 };
-use reth_optimism_primitives::OpPrimitives;
+use reth_optimism_chainspec::OpChainSpec;
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
 use telemetry::init_telemetry;
-use tokio::sync::{
-    mpsc,
-    mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
-};
+use tokio::sync::mpsc::UnboundedReceiver;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
-use validation::{
-    common::TokenPriceGenerator,
-    init_validation,
-    validator::{ValidationClient, ValidationRequest}
-};
+use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
 
-use crate::AngstromConfig;
+use crate::{
+    AngstromConfig,
+    handles::{AngstromMode, StromHandles}
+};
 
 pub fn init_network_builder<S: AngstromMetaSigner>(
     secret_key: AngstromSigner<S>,
@@ -95,7 +88,77 @@ pub fn init_network_builder<S: AngstromMetaSigner>(
     Ok(StromNetworkBuilder::new(verification, eth_handle, validator_set))
 }
 
-pub async fn initialize_strom_components<Node, AddOns, P: Peers + Unpin + 'static, S>(
+pub(crate) struct AngstromLauncher<N, AO, P, S>
+where
+    N: FullNodeComponents,
+    N::Provider: BlockReader<Block = P::Block, Receipt = P::Receipt, Header = P::BlockHeader>
+        + DatabaseProviderFactory,
+    AO: NodeAddOns<N> + RethRpcAddOns<N>,
+    P: NodePrimitives,
+    S: AngstromMetaSigner
+{
+    config:           AngstromConfig,
+    node:             FullNode<N, AO>,
+    node_exit_future: NodeExitFuture,
+    signer:           AngstromSigner<S>,
+    phantom:          PhantomData<P>,
+
+    // Optional fields (non-rollup mode)
+    consensus_client: Option<ConsensusHandler>,
+    network_builder:  Option<StromNetworkBuilder<N::Network, S>>,
+    node_set:         Option<HashSet<Address>>
+}
+
+impl<N, AO, P, S> AngstromLauncher<N, AO, P, S>
+where
+    N: FullNodeComponents,
+    N::Provider: BlockReader<Block = P::Block, Receipt = P::Receipt, Header = P::BlockHeader>
+        + DatabaseProviderFactory,
+    AO: NodeAddOns<N> + RethRpcAddOns<N>,
+    P: NodePrimitives,
+    S: AngstromMetaSigner
+{
+    pub fn new(
+        config: AngstromConfig,
+        handle: NodeHandle<N, AO>,
+        signer: AngstromSigner<S>
+    ) -> Self {
+        let NodeHandle { node, node_exit_future } = handle;
+
+        Self {
+            config,
+            node,
+            node_exit_future,
+            signer,
+            phantom: PhantomData,
+            network_builder: None,
+            consensus_client: None,
+            node_set: None
+        }
+    }
+
+    /// Initialize the network builder with the node's network handle.
+    pub fn with_network(self, network_builder: StromNetworkBuilder<N::Network, S>) -> Self {
+        let network_builder = network_builder.with_reth(self.node.network.clone());
+        Self { network_builder: Some(network_builder), ..self }
+    }
+
+    /// Initialize the consensus client.
+    pub fn with_consensus_client(self, consensus_client: ConsensusHandler) -> Self {
+        Self { consensus_client: Some(consensus_client), ..self }
+    }
+
+    /// Initialize the node set.
+    pub fn with_node_set(self, node_set: HashSet<Address>) -> Self {
+        Self { node_set: Some(node_set), ..self }
+    }
+
+    pub async fn launch(self) -> eyre::Result<()> {
+        Ok(())
+    }
+}
+
+pub async fn initialize_strom_components<Node, AddOns, M, P: Peers + Unpin + 'static, S>(
     config: AngstromConfig,
     signer: AngstromSigner<S>,
     mut handles: StromHandles<M>,
@@ -107,12 +170,13 @@ pub async fn initialize_strom_components<Node, AddOns, P: Peers + Unpin + 'stati
     consensus_client: ConsensusHandler
 ) -> eyre::Result<()>
 where
+    M: AngstromMode,
     Node: FullNodeComponents
-        + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
+        + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = M::Primitives>>,
     Node::Provider: BlockReader<
-            Block = reth::primitives::Block,
-            Receipt = reth::primitives::Receipt,
-            Header = reth::primitives::Header
+            Block = <M::Primitives as NodePrimitives>::Block,
+            Receipt = <M::Primitives as NodePrimitives>::Receipt,
+            Header = <M::Primitives as NodePrimitives>::BlockHeader
         > + DatabaseProviderFactory,
     AddOns: NodeAddOns<Node> + RethRpcAddOns<Node>,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:

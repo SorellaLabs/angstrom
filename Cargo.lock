@@ -12622,6 +12622,7 @@ dependencies = [
  "alloy-sol-types",
  "angstrom",
  "angstrom-amm-quoter",
+ "angstrom-cli",
  "angstrom-eth",
  "angstrom-network",
  "angstrom-rpc",

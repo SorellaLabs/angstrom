@@ -9,8 +9,8 @@ use alloy::{
 use alloy_primitives::aliases::I24;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag, Filter};
 use alloy_sol_types::SolEvent;
-use angstrom::components::initialize_strom_handles;
 use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
+use angstrom_cli::components::initialize_strom_handles;
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}

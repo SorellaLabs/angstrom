@@ -39,7 +39,9 @@ impl PoolManagerMode for RollupMode {
     }
 
     // The default no-op for poll_mode_specific is sufficient for RollupMode
-    // as it doesn't need any mode-specific polling behavior
+    // as it doesn't need any mode-specific polling behavior.
+    // Specifically, RollupMode does NOT poll network events since it operates
+    // without direct peer networking
 }
 
 impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, NH, RollupMode>

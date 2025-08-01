@@ -1,8 +1,12 @@
-use std::task::Context;
+use std::task::{Context, Poll};
 
 use angstrom_types::{
-    block_sync::BlockSyncConsumer, network::NetworkHandle, sol_bindings::grouped_orders::AllOrders
+    block_sync::BlockSyncConsumer,
+    network::{NetworkHandle, StromNetworkEvent},
+    sol_bindings::grouped_orders::AllOrders
 };
+use futures::StreamExt;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::order::{PoolManager, PoolManagerMode};
@@ -43,18 +47,17 @@ impl PoolManagerMode for ConsensusMode {
             .into_all_orders()
     }
 
-    fn poll_mode_specific<V, GS, NH>(
-        _pool: &mut PoolManager<V, GS, NH, Self>,
-        _cx: &mut Context<'_>
-    ) where
+    fn poll_mode_specific<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>, cx: &mut Context<'_>)
+    where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
-        NH: NetworkHandle,
+        NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + 'static,
         Self: Sized
     {
-        // In the future, this could poll consensus streams, handle pre-proposal
-        // events, etc. For now, consensus mode doesn't need additional
-        // polling beyond the shared logic
+        // Poll network/peer related events - only in consensus mode
+        while let Poll::Ready(Some(event)) = pool.strom_network_events.poll_next_unpin(cx) {
+            pool.on_network_event(event);
+        }
     }
 }
 

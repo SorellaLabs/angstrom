@@ -68,7 +68,7 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
     ) where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
-        NH: NetworkHandle,
+        NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + 'static,
         Self: Sized
     {
         // Default to no-op - modes can override if they need specific polling
@@ -417,7 +417,7 @@ where
         }
     }
 
-    fn on_network_event(&mut self, event: StromNetworkEvent) {
+    pub(crate) fn on_network_event(&mut self, event: StromNetworkEvent) {
         match event {
             StromNetworkEvent::SessionEstablished { peer_id } => {
                 // insert a new peer into the peerset
@@ -531,17 +531,13 @@ where
                 this.on_eth_event(eth, cx.waker().clone());
             }
 
-            // drain network/peer related events
-            while let Poll::Ready(Some(event)) = this.strom_network_events.poll_next_unpin(cx) {
-                this.on_network_event(event);
-            }
-
             // poll underlying pool. This is the validation process that's being polled
             while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
                 this.on_pool_events(orders, || cx.waker().clone());
             }
 
             // Call the mode-specific hook for any additional polling logic
+            // Note: Network events are only polled in ConsensusMode::poll_mode_specific
             M::poll_mode_specific(this, cx);
 
             // halt dealing with these till we have synced

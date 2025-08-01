@@ -22,11 +22,10 @@ use angstrom_network::NetworkOrderEvent;
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
-    network::{NetworkHandle, PoolNetworkMessage, ReputationChangeKind, StromNetworkEvent},
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PeerId, PoolId,
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId,
         UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
@@ -136,28 +135,6 @@ pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
         matching_rx,
         eth_handle_tx: Some(eth_handle_tx),
         eth_handle_rx: Some(eth_handle_rx)
-    }
-}
-
-// Stub network handle for op-angstrom that doesn't use networking
-#[derive(Clone)]
-struct StubNetworkHandle;
-
-impl NetworkHandle for StubNetworkHandle {
-    type Events<'a> = UnboundedReceiverStream<StromNetworkEvent>;
-
-    fn send_message(&mut self, _peer_id: PeerId, _message: PoolNetworkMessage) {
-        // Op-angstrom doesn't use networking, so this is a no-op
-    }
-
-    fn peer_reputation_change(&mut self, _peer_id: PeerId, _change: ReputationChangeKind) {
-        // Op-angstrom doesn't use networking, so this is a no-op
-    }
-
-    fn subscribe_network_events(&self) -> Self::Events<'_> {
-        // Return an empty receiver since op-angstrom doesn't have network events
-        let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-        UnboundedReceiverStream::new(rx)
     }
 }
 
@@ -367,23 +344,18 @@ where
     let validation_handle = ValidationClient(handles.validator_tx.clone());
     tracing::info!("validation manager start");
 
-    // Create stub network handle for op-angstrom (no networking)
-    let network_handle = StubNetworkHandle;
-
     // fetch pool ids
 
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    // PoolManagerBuilder with stub network handle for op-angstrom
+    // PoolManagerBuilder for op-angstrom
     let _pool_handle = RollupPoolManager::new(
         validation_handle.clone(),
         Some(order_storage.clone()),
-        network_handle.clone(),
         eth_handle.subscribe_network(),
         handles.pool_rx,
-        global_block_sync.clone(),
-        network_handle.subscribe_network_events()
+        global_block_sync.clone()
     )
     .with_config(pool_config)
     .build_with_channels(

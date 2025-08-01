@@ -11,7 +11,9 @@ use alloy::primitives::{Address, FixedBytes};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     consensus::StromConsensusEvent,
-    network::{NetworkOrderEvent, StromNetworkEvent}
+    orders::CancelOrderRequest,
+    primitive::PeerId,
+    sol_bindings::grouped_orders::AllOrders
 };
 use futures::{FutureExt, StreamExt};
 use itertools::Itertools;
@@ -29,6 +31,38 @@ use crate::{
     CachedPeer, CachedPeers, StromMessage, StromNetworkHandle, StromNetworkHandleMsg, Swarm,
     SwarmEvent
 };
+
+/// (Non-exhaustive) Events emitted by the network that are of interest for
+/// subscribers.
+///
+/// This includes any event types that may be relevant to tasks, for metrics,
+/// keep track of peers etc.
+#[derive(Debug, Clone)]
+pub enum StromNetworkEvent {
+    /// Closed the peer session.
+    SessionClosed {
+        /// The identifier of the peer to which a session was closed.
+        peer_id: PeerId,
+        /// Why the disconnect was triggered
+        reason:  Option<DisconnectReason>
+    },
+    /// Established a new session with the given peer.
+    SessionEstablished {
+        /// The identifier of the peer to which a session was established.
+        peer_id: PeerId
+    },
+    /// Event emitted when a new peer is added
+    PeerAdded(PeerId),
+    /// Event emitted when a new peer is removed
+    PeerRemoved(PeerId)
+}
+
+/// All events related to orders emitted by the network.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NetworkOrderEvent {
+    IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> },
+    CancelOrder { peer_id: PeerId, request: CancelOrderRequest }
+}
 
 // use a thread local lazy to avoid synchronization overhead since path is
 // always the same

@@ -1,9 +1,6 @@
 use std::sync::{Arc, atomic::AtomicUsize};
 
-use angstrom_types::{
-    network::{ReputationChangeKind, StromNetworkEvent},
-    primitive::PeerId
-};
+use angstrom_types::{network::ReputationChangeKind, primitive::PeerId};
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;
 use tokio::sync::{
@@ -12,7 +9,7 @@ use tokio::sync::{
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::StromMessage;
+use crate::{StromMessage, StromNetworkEvent};
 
 //TODO:
 // 1) Implement the order pool manager
@@ -114,8 +111,8 @@ pub enum StromNetworkHandleMsg {
     Shutdown(oneshot::Sender<()>)
 }
 
-// Implementation of NetworkHandle trait from angstrom-types
-impl angstrom_types::network::NetworkHandle for StromNetworkHandle {
+// Implementation of NetworkHandle trait
+impl crate::NetworkHandle for StromNetworkHandle {
     type Events<'a> = UnboundedReceiverStream<StromNetworkEvent>;
 
     fn send_message(

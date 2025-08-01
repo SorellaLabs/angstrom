@@ -9,12 +9,10 @@ use std::{
 
 use alloy::primitives::{Address, B256, FixedBytes};
 use angstrom_eth::manager::EthEvent;
+use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    network::{
-        NetworkHandle, NetworkOrderEvent, PoolNetworkMessage, ReputationChangeKind,
-        StromNetworkEvent
-    },
+    network::{PoolNetworkMessage, ReputationChangeKind},
     orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
     primitive::{NewInitializedPool, OrderValidationError, PeerId, PoolId},
     sol_bindings::grouped_orders::AllOrders
@@ -44,6 +42,9 @@ pub(crate) const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
 /// customize specific aspects of pool management behavior while sharing the
 /// bulk of the implementation.
 pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
+    /// Whether this mode requires networking functionality
+    const REQUIRES_NETWORKING: bool;
+
     /// Mode-specific logic for processing/filtering orders for a proposal.
     ///
     /// Different modes may have different requirements for which orders should
@@ -418,32 +419,34 @@ where
     }
 
     pub(crate) fn on_network_event(&mut self, event: StromNetworkEvent) {
-        match event {
-            StromNetworkEvent::SessionEstablished { peer_id } => {
-                // insert a new peer into the peerset
-                self.peer_to_info.insert(
-                    peer_id,
-                    StromPeer {
-                        orders:        LruCache::new(
-                            NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
-                        ),
-                        cancellations: LruCache::new(
-                            NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
-                        )
-                    }
-                );
-                let all_orders = M::get_proposable_orders(self);
+        if M::REQUIRES_NETWORKING {
+            match event {
+                StromNetworkEvent::SessionEstablished { peer_id } => {
+                    // insert a new peer into the peerset
+                    self.peer_to_info.insert(
+                        peer_id,
+                        StromPeer {
+                            orders:        LruCache::new(
+                                NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
+                            ),
+                            cancellations: LruCache::new(
+                                NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
+                            )
+                        }
+                    );
+                    let all_orders = M::get_proposable_orders(self);
 
-                self.broadcast_order_to_peer(all_orders, peer_id);
+                    self.broadcast_order_to_peer(all_orders, peer_id);
+                }
+                StromNetworkEvent::SessionClosed { peer_id, .. } => {
+                    // remove the peer
+                    self.peer_to_info.remove(&peer_id);
+                }
+                StromNetworkEvent::PeerRemoved(peer_id) => {
+                    self.peer_to_info.remove(&peer_id);
+                }
+                StromNetworkEvent::PeerAdded(_) => {}
             }
-            StromNetworkEvent::SessionClosed { peer_id, .. } => {
-                // remove the peer
-                self.peer_to_info.remove(&peer_id);
-            }
-            StromNetworkEvent::PeerRemoved(peer_id) => {
-                self.peer_to_info.remove(&peer_id);
-            }
-            StromNetworkEvent::PeerAdded(_) => {}
         }
     }
 
@@ -484,20 +487,24 @@ where
     }
 
     fn broadcast_order_to_peer(&mut self, valid_orders: Vec<AllOrders>, peer: PeerId) {
-        self.network
-            .send_message(peer, PoolNetworkMessage::PropagatePooledOrders(valid_orders));
+        if M::REQUIRES_NETWORKING {
+            self.network
+                .send_message(peer, PoolNetworkMessage::PropagatePooledOrders(valid_orders));
+        }
     }
 
     fn broadcast_orders_to_peers(&mut self, valid_orders: Vec<AllOrders>) {
-        for order in valid_orders.iter() {
-            for (peer_id, info) in self.peer_to_info.iter_mut() {
-                let order_hash = order.order_hash();
-                if !info.orders.contains(&order_hash) {
-                    self.network.send_message(
-                        *peer_id,
-                        PoolNetworkMessage::PropagatePooledOrders(vec![order.clone()])
-                    );
-                    info.orders.insert(order_hash);
+        if M::REQUIRES_NETWORKING {
+            for order in valid_orders.iter() {
+                for (peer_id, info) in self.peer_to_info.iter_mut() {
+                    let order_hash = order.order_hash();
+                    if !info.orders.contains(&order_hash) {
+                        self.network.send_message(
+                            *peer_id,
+                            PoolNetworkMessage::PropagatePooledOrders(vec![order.clone()])
+                        );
+                        info.orders.insert(order_hash);
+                    }
                 }
             }
         }

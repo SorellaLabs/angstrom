@@ -1,9 +1,9 @@
 use std::{sync::Arc, task::{Context, Poll}};
 
 use angstrom_eth::manager::EthEvent;
+use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent},
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
@@ -71,6 +71,8 @@ impl Default for ConsensusMode {
 }
 
 impl PoolManagerMode for ConsensusMode {
+    const REQUIRES_NETWORKING: bool = true;
+
     fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,

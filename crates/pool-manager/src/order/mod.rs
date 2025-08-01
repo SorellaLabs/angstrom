@@ -1,24 +1,15 @@
-use std::sync::Arc;
-
 use alloy::primitives::{Address, B256, FixedBytes};
 use angstrom_eth::manager::EthEvent;
-use angstrom_network::{NetworkHandle, StromNetworkEvent};
+use angstrom_network::NetworkHandle;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    network::{PoolNetworkMessage, ReputationChangeKind},
     orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
-    primitive::{NewInitializedPool, OrderValidationError, PeerId, PoolId},
+    primitive::{OrderValidationError, PeerId},
     sol_bindings::grouped_orders::AllOrders
 };
-use futures::{Future, FutureExt, StreamExt};
-use order_pool::{
-    OrderIndexer, OrderPoolHandle, PoolConfig, PoolInnerEvent, PoolManagerUpdate,
-    order_storage::OrderStorage
-};
-use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
-use reth_tasks::TaskSpawner;
-use telemetry_recorder::telemetry_event;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::SendError};
+use futures::{Future, FutureExt};
+use order_pool::{OrderIndexer, OrderPoolHandle, PoolManagerUpdate};
+use tokio::sync::mpsc::{UnboundedSender, error::SendError};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
@@ -115,109 +106,6 @@ impl OrderPoolHandle for PoolHandle {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let _ = self.send(OrderCommand::CancelOrder(req, tx));
         rx.map(|res| res.unwrap_or(false))
-    }
-}
-
-/// Builder for constructing PoolManager instances.
-///
-/// The default mode is ConsensusMode, but it's recommended to use the type
-/// aliases `ConsensusPoolManager::new()` or `RollupPoolManager::new()` for
-/// clarity.
-pub struct PoolManagerBuilder<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
-where
-    V: OrderValidatorHandle,
-    GlobalSync: BlockSyncConsumer,
-    M: PoolManagerMode
-{
-    validator:          V,
-    global_sync:        GlobalSync,
-    order_storage:      Option<Arc<OrderStorage>>,
-    network_handle:     NH,
-    eth_network_events: UnboundedReceiverStream<EthEvent>,
-    config:             PoolConfig,
-    mode:               M
-}
-
-impl<V, GlobalSync, NH, M> PoolManagerBuilder<V, GlobalSync, NH, M>
-where
-    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
-        + Send
-        + Sync
-        + Unpin
-        + 'static,
-    M: PoolManagerMode
-{
-    pub fn new(
-        validator: V,
-        order_storage: Option<Arc<OrderStorage>>,
-        network_handle: NH,
-        eth_network_events: UnboundedReceiverStream<EthEvent>,
-        global_sync: GlobalSync,
-        mode: M
-    ) -> Self {
-        Self {
-            global_sync,
-            eth_network_events,
-            network_handle,
-            validator,
-            order_storage,
-            config: Default::default(),
-            mode
-        }
-    }
-
-    pub fn with_config(mut self, config: PoolConfig) -> Self {
-        self.config = config;
-        self
-    }
-
-    pub fn with_storage(mut self, order_storage: Arc<OrderStorage>) -> Self {
-        let _ = self.order_storage.insert(order_storage);
-        self
-    }
-
-    pub fn build_with_channels<TP: TaskSpawner>(
-        self,
-        task_spawner: TP,
-        tx: UnboundedSender<OrderCommand>,
-        rx: UnboundedReceiver<OrderCommand>,
-        pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
-        block_number: u64,
-        replay: impl FnOnce(&mut OrderIndexer<V>) + Send + 'static
-    ) -> PoolHandle
-    where
-        M: PoolManagerMode
-    {
-        let rx = UnboundedReceiverStream::new(rx);
-        let order_storage = self
-            .order_storage
-            .unwrap_or_else(|| Arc::new(OrderStorage::new(&self.config)));
-        let handle =
-            PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
-        let mut inner = OrderIndexer::new(
-            self.validator.clone(),
-            order_storage.clone(),
-            block_number,
-            pool_manager_tx.clone()
-        );
-        replay(&mut inner);
-        self.global_sync.register(MODULE_NAME);
-
-        task_spawner.spawn_critical(
-            "order pool manager",
-            Box::pin(PoolManager::<V, GlobalSync, NH, M> {
-                eth_network_events: self.eth_network_events,
-                order_indexer:      inner,
-                network:            self.network_handle,
-                command_rx:         rx,
-                global_sync:        self.global_sync,
-                mode:               self.mode
-            })
-        );
-
-        handle
     }
 }
 

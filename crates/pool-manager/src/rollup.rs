@@ -1,7 +1,7 @@
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
 use angstrom_eth::manager::EthEvent;
-use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
+use angstrom_network::{NetworkHandle, StromNetworkEvent};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     network::{PoolNetworkMessage, ReputationChangeKind},
@@ -10,7 +10,6 @@ use angstrom_types::{
 };
 use futures::{Future, StreamExt};
 use order_pool::{PoolConfig, PoolInnerEvent, order_storage::OrderStorage};
-use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -155,6 +154,7 @@ where
             global_sync
         )
     }
+
 }
 
 /// Rollup mode for PoolManager - simpler behavior without consensus logic

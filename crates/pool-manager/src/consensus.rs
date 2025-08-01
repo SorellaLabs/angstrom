@@ -264,8 +264,6 @@ where
     pub(crate) fn on_network_event(&mut self, event: StromNetworkEvent) {
         use std::num::NonZeroUsize;
 
-        use angstrom_types::network::ReputationChangeKind;
-
         use crate::{cache::LruCache, order::PEER_ORDER_CACHE_LIMIT};
 
         match event {

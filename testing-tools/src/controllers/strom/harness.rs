@@ -29,7 +29,7 @@ use eyre::eyre;
 use futures::{Stream, StreamExt};
 use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
-use pool_manager::{PoolHandle, PoolManagerBuilder};
+use pool_manager::{PoolHandle, ConsensusPoolManager};
 use reth::{providers::CanonStateSubscriptions, tasks::TaskExecutor};
 use reth_metrics::common::mpsc::metered_unbounded_channel;
 use reth_provider::test_utils::TestCanonStateSubscriptions;
@@ -262,7 +262,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    let pool_handle = PoolManagerBuilder::new_consensus(
+    let pool_handle = ConsensusPoolManager::new(
         validation_client.clone(),
         Some(order_storage.clone()),
         network_handle.clone(),

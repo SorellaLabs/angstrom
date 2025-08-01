@@ -41,7 +41,7 @@ use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
 use parking_lot::RwLock;
-use pool_manager::{OrderCommand, PoolHandle, PoolManagerBuilder};
+use pool_manager::{OrderCommand, PoolHandle, ConsensusPoolManager};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -394,7 +394,7 @@ where
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    let _pool_handle = PoolManagerBuilder::new_consensus(
+    let _pool_handle = ConsensusPoolManager::new(
         validation_handle.clone(),
         Some(order_storage.clone()),
         network_handle.clone(),

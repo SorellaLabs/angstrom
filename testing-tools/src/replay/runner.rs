@@ -35,7 +35,7 @@ use futures::{Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
 use order_pool::{OrderPoolHandle, PoolConfig};
-use pool_manager::{PoolHandle, PoolManagerBuilder};
+use pool_manager::{PoolHandle, ConsensusPoolManager};
 use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
@@ -361,7 +361,7 @@ impl ReplayRunner {
 
         let network_handle = fake_network.handle.clone();
 
-        let pool_handle = PoolManagerBuilder::new_consensus(
+        let pool_handle = ConsensusPoolManager::new(
             validation_client.clone(),
             Some(order_storage.clone()),
             network_handle.clone(),

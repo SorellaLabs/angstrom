@@ -1,15 +1,53 @@
-use std::task::{Context, Poll};
+use std::{sync::Arc, task::{Context, Poll}};
 
+use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    network::{NetworkHandle, StromNetworkEvent},
+    network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent},
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
+use order_pool::order_storage::OrderStorage;
+use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::order::{PoolManager, PoolManagerMode};
+
+/// A type alias for the consensus pool manager.
+pub type ConsensusPoolManager<V, GS, NH> = PoolManager<V, GS, NH, ConsensusMode>;
+
+impl<V, GS, NH> ConsensusPoolManager<V, GS, NH>
+where
+    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
+    GS: BlockSyncConsumer,
+    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
+        + Send
+        + Sync
+        + Unpin
+        + 'static,
+{
+    /// Create a new consensus pool manager builder
+    pub fn new(
+        validator: V,
+        order_storage: Option<Arc<OrderStorage>>,
+        network_handle: NH,
+        eth_network_events: UnboundedReceiverStream<EthEvent>,
+        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
+        global_sync: GS,
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
+    ) -> crate::order::PoolManagerBuilder<V, GS, NH, ConsensusMode> {
+        crate::order::PoolManagerBuilder::new(
+            validator,
+            order_storage,
+            network_handle,
+            eth_network_events,
+            order_events,
+            global_sync,
+            strom_network_events
+        )
+    }
+}
 
 /// Consensus mode for PoolManager - includes consensus-specific state and
 /// behavior

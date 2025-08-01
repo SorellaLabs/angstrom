@@ -167,8 +167,8 @@ impl OrderPoolHandle for PoolHandle {
 
 /// Builder for constructing PoolManager instances.
 ///
-/// The default mode is ConsensusMode, but it's recommended to use the explicit
-/// constructors `new_consensus()` or `new_rollup()` for clarity.
+/// The default mode is ConsensusMode, but it's recommended to use the type aliases
+/// `ConsensusPoolManager::new()` or `RollupPoolManager::new()` for clarity.
 pub struct PoolManagerBuilder<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
 where
     V: OrderValidatorHandle,
@@ -197,7 +197,7 @@ where
         + 'static,
     M: PoolManagerMode
 {
-    fn new(
+    pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         network_handle: NH,
@@ -581,66 +581,4 @@ pub(crate) struct StromPeer {
 // Type aliases are now available in the crate root (lib.rs) for convenience
 
 // Mode-specific constructor implementations
-impl<V, GlobalSync, NH> PoolManagerBuilder<V, GlobalSync, NH, crate::consensus::ConsensusMode>
-where
-    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
-        + Send
-        + Sync
-        + Unpin
-        + 'static
-{
-    /// Create a new consensus pool manager builder
-    pub fn new_consensus(
-        validator: V,
-        order_storage: Option<Arc<OrderStorage>>,
-        network_handle: NH,
-        eth_network_events: UnboundedReceiverStream<EthEvent>,
-        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        global_sync: GlobalSync,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
-    ) -> Self {
-        Self::new(
-            validator,
-            order_storage,
-            network_handle,
-            eth_network_events,
-            order_events,
-            global_sync,
-            strom_network_events
-        )
-    }
-}
 
-impl<V, GlobalSync, NH> PoolManagerBuilder<V, GlobalSync, NH, crate::rollup::RollupMode>
-where
-    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
-        + Send
-        + Sync
-        + Unpin
-        + 'static
-{
-    /// Create a new rollup pool manager builder
-    pub fn new_rollup(
-        validator: V,
-        order_storage: Option<Arc<OrderStorage>>,
-        network_handle: NH,
-        eth_network_events: UnboundedReceiverStream<EthEvent>,
-        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
-        global_sync: GlobalSync,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
-    ) -> Self {
-        Self::new(
-            validator,
-            order_storage,
-            network_handle,
-            eth_network_events,
-            order_events,
-            global_sync,
-            strom_network_events
-        )
-    }
-}

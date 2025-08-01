@@ -1,9 +1,50 @@
+use std::sync::Arc;
+
+use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    block_sync::BlockSyncConsumer, network::NetworkHandle, sol_bindings::grouped_orders::AllOrders
+    block_sync::BlockSyncConsumer, network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent}, sol_bindings::grouped_orders::AllOrders
 };
+use order_pool::order_storage::OrderStorage;
+use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::order::{PoolManager, PoolManagerMode};
+
+/// A type alias for the rollup pool manager.
+pub type RollupPoolManager<V, GS, NH> = PoolManager<V, GS, NH, RollupMode>;
+
+impl<V, GS, NH> RollupPoolManager<V, GS, NH>
+where
+    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
+    GS: BlockSyncConsumer,
+    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
+        + Send
+        + Sync
+        + Unpin
+        + 'static,
+{
+    /// Create a new rollup pool manager builder
+    pub fn new(
+        validator: V,
+        order_storage: Option<Arc<OrderStorage>>,
+        network_handle: NH,
+        eth_network_events: UnboundedReceiverStream<EthEvent>,
+        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
+        global_sync: GS,
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
+    ) -> crate::order::PoolManagerBuilder<V, GS, NH, RollupMode> {
+        crate::order::PoolManagerBuilder::new(
+            validator,
+            order_storage,
+            network_handle,
+            eth_network_events,
+            order_events,
+            global_sync,
+            strom_network_events
+        )
+    }
+}
 
 /// Rollup mode for PoolManager - simpler behavior without consensus logic
 #[derive(Debug)]

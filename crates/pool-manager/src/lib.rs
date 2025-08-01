@@ -34,6 +34,23 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
         NH: NetworkHandle,
         Self: Sized;
 
+    /// Poll mode-specific streams and handle mode-specific events.
+    ///
+    /// This method allows each mode to handle its own polling logic and event processing,
+    /// keeping the main Future implementation cleaner and more maintainable.
+    fn poll_mode_specific<V, GS, NH>(
+        pool: &mut order::PoolManager<V, GS, NH, Self>,
+        cx: &mut std::task::Context<'_>
+    ) where
+        V: OrderValidatorHandle<Order = AllOrders> + Unpin,
+        GS: BlockSyncConsumer,
+        NH: NetworkHandle,
+        Self: Sized
+    {
+        // Default implementation does nothing - modes can override as needed
+        let _ = (pool, cx);
+    }
+
 }
 
 // Re-export order pool management types

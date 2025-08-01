@@ -199,6 +199,32 @@ impl PoolManagerMode for ConsensusMode {
             .get_all_orders_with_parked()
             .into_all_orders()
     }
+
+    fn poll_mode_specific<V, GS, NH>(
+        pool: &mut PoolManager<V, GS, NH, Self>,
+        cx: &mut std::task::Context<'_>
+    ) where
+        V: OrderValidatorHandle<Order = AllOrders> + Unpin,
+        GS: BlockSyncConsumer,
+        NH: NetworkHandle,
+        Self: Sized
+    {
+        use futures::StreamExt;
+
+        // Poll network/peer related events - consensus mode specific
+        while let std::task::Poll::Ready(Some(event)) = pool.mode.strom_network_events.poll_next_unpin(cx)
+        {
+            pool.on_network_event(event);
+        }
+
+        // Poll incoming network order events - consensus mode specific
+        if pool.global_sync.can_operate() {
+            if let std::task::Poll::Ready(Some(event)) = pool.mode.order_events.poll_next_unpin(cx) {
+                pool.on_network_order_event(event);
+                cx.waker().wake_by_ref();
+            }
+        }
+    }
 }
 
 impl<V, GlobalSync, NH> PoolManager<V, GlobalSync, NH, ConsensusMode>
@@ -473,19 +499,8 @@ where
                 this.on_pool_events(orders, || cx.waker().clone());
             }
 
-            // Poll network/peer related events - consensus mode specific
-            while let Poll::Ready(Some(event)) = this.mode.strom_network_events.poll_next_unpin(cx)
-            {
-                this.on_network_event(event);
-            }
-
-            // Poll incoming network order events - consensus mode specific
-            if this.global_sync.can_operate() {
-                if let Poll::Ready(Some(event)) = this.mode.order_events.poll_next_unpin(cx) {
-                    this.on_network_order_event(event);
-                    cx.waker().wake_by_ref();
-                }
-            }
+            // Poll mode-specific events
+            ConsensusMode::poll_mode_specific(this, cx);
 
             // halt dealing with these till we have synced
             if this.global_sync.can_operate() {

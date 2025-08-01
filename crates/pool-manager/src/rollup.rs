@@ -335,7 +335,8 @@ where
                 this.on_pool_events(orders, || cx.waker().clone());
             }
 
-            // RollupMode does NOT poll network events since it operates without networking
+            // Poll mode-specific events (no-op for RollupMode)
+            RollupMode::poll_mode_specific(this, cx);
 
             // halt dealing with these till we have synced
             if this.global_sync.can_operate() {

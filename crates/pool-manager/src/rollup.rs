@@ -17,8 +17,9 @@ use validation::order::OrderValidatorHandle;
 
 use order_pool::{OrderIndexer, PoolManagerUpdate};
 
-use crate::order::{
-    MODULE_NAME, OrderCommand, PoolHandle, PoolManager, PoolManagerMode
+use crate::{
+    PoolManagerMode,
+    order::{MODULE_NAME, OrderCommand, PoolHandle, PoolManager}
 };
 
 /// Unit type used as a placeholder for network handle in rollup mode

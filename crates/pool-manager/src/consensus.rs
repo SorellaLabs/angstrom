@@ -12,7 +12,7 @@ use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
-use crate::order::{PoolManager, PoolManagerMode};
+use crate::{PoolManagerMode, order::PoolManager};
 
 /// A type alias for the consensus pool manager.
 pub type ConsensusPoolManager<V, GS, NH> = PoolManager<V, GS, NH, ConsensusMode>;

@@ -29,53 +29,13 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::SendError};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-use crate::cache::LruCache;
+use crate::{cache::LruCache, PoolManagerMode};
 
 pub(crate) const MODULE_NAME: &str = "Order Pool";
 
 /// Cache limit of transactions to keep track of for a single peer.
 pub(crate) const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
 
-/// Trait defining mode-specific behavior for PoolManager
-///
-/// This trait allows different operational modes (Consensus, Rollup) to
-/// customize specific aspects of pool management behavior while sharing the
-/// bulk of the implementation.
-pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
-    /// Whether this mode requires networking functionality
-    const REQUIRES_NETWORKING: bool;
-
-    /// Mode-specific logic for processing/filtering orders for a proposal.
-    ///
-    /// Different modes may have different requirements for which orders should
-    /// be included in proposals (e.g., consensus mode might filter based on
-    /// consensus state).
-    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
-    where
-        V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-        GS: BlockSyncConsumer,
-        NH: NetworkHandle,
-        Self: Sized;
-
-    /// Hook for any mode-specific polling logic within the main future's poll
-    /// loop.
-    ///
-    /// This allows modes to add their own polling behavior (e.g., consensus
-    /// streams, mode-specific timers, etc.) without duplicating the entire
-    /// Future implementation.
-    fn poll_mode_specific<V, GS, NH>(
-        _pool: &mut PoolManager<V, GS, NH, Self>,
-        _cx: &mut Context<'_>
-    ) where
-        V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-        GS: BlockSyncConsumer,
-        NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + 'static,
-        Self: Sized
-    {
-        // Default to no-op - modes can override if they need specific polling
-        // behavior
-    }
-}
 
 /// Api to interact with [`PoolManager`] task.
 #[derive(Debug, Clone)]

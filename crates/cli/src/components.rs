@@ -1,6 +1,6 @@
-//! CLI definition and entrypoint to executable
 use std::{
     collections::{HashMap, HashSet},
+    marker::PhantomData,
     pin::Pin,
     str::FromStr,
     sync::Arc,
@@ -9,30 +9,28 @@ use std::{
 
 use alloy::{
     self,
+    consensus::BlockHeader,
     eips::{BlockId, BlockNumberOrTag},
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
-use angstrom_amm_quoter::{ConsensusQuoterManager, Slot0Update};
+use angstrom_amm_quoter::ConsensusQuoterManager;
 use angstrom_eth::{
-    handle::{Eth, EthCommand},
+    handle::Eth,
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    VerificationSidecar,
-    pool_manager::{OrderCommand, PoolHandle}
+    NetworkBuilder as StromNetworkBuilder, PoolManagerBuilder, StatusState, StromNetworkHandle,
+    VerificationSidecar
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
-    consensus::StromConsensusEvent,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId,
-        UniswapPoolRegistry
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
@@ -40,8 +38,8 @@ use angstrom_types::{
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
-use matching_engine::{MatchingManager, manager::MatcherCommand};
-use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
+use matching_engine::MatchingManager;
+use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
 use reth::{
     api::NodeAddOns,
@@ -52,26 +50,25 @@ use reth::{
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
-use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_network::{NetworkHandle, Peers};
-use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns};
+use reth_node_builder::{
+    FullNode, Node, NodeHandle, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
+};
+use reth_optimism_chainspec::OpChainSpec;
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
+use serde::Serialize;
 use telemetry::init_telemetry;
-use tokio::sync::{
-    mpsc,
-    mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
-};
+use tokio::sync::mpsc::UnboundedReceiver;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
-use validation::{
-    common::TokenPriceGenerator,
-    init_validation,
-    validator::{ValidationClient, ValidationRequest}
-};
+use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
 
-use crate::AngstromConfig;
+use crate::{
+    AngstromConfig,
+    handles::{AngstromMode, StromHandles}
+};
 
 pub fn init_network_builder<S: AngstromMetaSigner>(
     secret_key: AngstromSigner<S>,
@@ -93,91 +90,80 @@ pub fn init_network_builder<S: AngstromMetaSigner>(
     Ok(StromNetworkBuilder::new(verification, eth_handle, validator_set))
 }
 
-pub type DefaultPoolHandle = PoolHandle;
-type DefaultOrderCommand = OrderCommand;
+pub(crate) struct AngstromLauncher<N, AO, P, S>
+where
+    N: FullNodeComponents,
+    N::Provider: BlockReader<Block = P::Block, Receipt = P::Receipt, Header = P::BlockHeader>
+        + DatabaseProviderFactory,
+    AO: NodeAddOns<N> + RethRpcAddOns<N>,
+    P: NodePrimitives,
+    S: AngstromMetaSigner
+{
+    config:           AngstromConfig,
+    node:             FullNode<N, AO>,
+    node_exit_future: NodeExitFuture,
+    signer:           AngstromSigner<S>,
+    phantom:          PhantomData<P>,
 
-// due to how the init process works with reth. we need to init like this
-pub struct StromHandles {
-    pub eth_tx: Sender<EthCommand>,
-    pub eth_rx: Receiver<EthCommand>,
-
-    pub pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
-    pub pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
-
-    pub orderpool_tx: UnboundedSender<DefaultOrderCommand>,
-    pub orderpool_rx: UnboundedReceiver<DefaultOrderCommand>,
-
-    pub quoter_tx: mpsc::Sender<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-    pub quoter_rx: mpsc::Receiver<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-
-    pub validator_tx: UnboundedSender<ValidationRequest>,
-    pub validator_rx: UnboundedReceiver<ValidationRequest>,
-
-    pub eth_handle_tx: Option<UnboundedSender<EthEvent>>,
-    pub eth_handle_rx: Option<UnboundedReceiver<EthEvent>>,
-
-    pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
-
-    pub consensus_tx_op: UnboundedMeteredSender<StromConsensusEvent>,
-    pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>,
-
-    pub consensus_tx_rpc: UnboundedSender<consensus::ConsensusRequest>,
-    pub consensus_rx_rpc: UnboundedReceiver<consensus::ConsensusRequest>,
-
-    // only 1 set cur
-    pub matching_tx: Sender<MatcherCommand>,
-    pub matching_rx: Receiver<MatcherCommand>
+    // Optional fields (non-rollup mode)
+    consensus_client: Option<ConsensusHandler>,
+    network_builder:  Option<StromNetworkBuilder<N::Network, S>>,
+    node_set:         Option<HashSet<Address>>
 }
 
-impl StromHandles {
-    pub fn get_pool_handle(&self) -> DefaultPoolHandle {
-        PoolHandle {
-            manager_tx:      self.orderpool_tx.clone(),
-            pool_manager_tx: self.pool_manager_tx.clone()
+impl<N, AO, P, S> AngstromLauncher<N, AO, P, S>
+where
+    N: FullNodeComponents,
+    N::Provider: BlockReader<Block = P::Block, Receipt = P::Receipt, Header = P::BlockHeader>
+        + DatabaseProviderFactory,
+    AO: NodeAddOns<N> + RethRpcAddOns<N>,
+    P: NodePrimitives,
+    S: AngstromMetaSigner
+{
+    pub fn new(
+        config: AngstromConfig,
+        handle: NodeHandle<N, AO>,
+        signer: AngstromSigner<S>
+    ) -> Self {
+        let NodeHandle { node, node_exit_future } = handle;
+
+        Self {
+            config,
+            node,
+            node_exit_future,
+            signer,
+            phantom: PhantomData,
+            network_builder: None,
+            consensus_client: None,
+            node_set: None
         }
     }
-}
 
-pub fn initialize_strom_handles() -> StromHandles {
-    let (eth_tx, eth_rx) = channel(100);
-    let (matching_tx, matching_rx) = channel(100);
-    let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
-    let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
-    let (orderpool_tx, orderpool_rx) = unbounded_channel();
-    let (validator_tx, validator_rx) = unbounded_channel();
-    let (eth_handle_tx, eth_handle_rx) = unbounded_channel();
-    let (quoter_tx, quoter_rx) = channel(1000);
-    let (consensus_tx_rpc, consensus_rx_rpc) = unbounded_channel();
-    let (consensus_tx_op, consensus_rx_op) =
-        reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
+    /// Initialize the network builder with the node's network handle.
+    pub fn with_network(self, network_builder: StromNetworkBuilder<N::Network, S>) -> Self {
+        let network_builder = network_builder.with_reth(self.node.network.clone());
+        Self { network_builder: Some(network_builder), ..self }
+    }
 
-    StromHandles {
-        eth_tx,
-        quoter_tx,
-        quoter_rx,
-        eth_rx,
-        pool_tx,
-        pool_rx,
-        orderpool_tx,
-        orderpool_rx,
-        validator_tx,
-        validator_rx,
-        pool_manager_tx,
-        consensus_tx_op,
-        consensus_rx_op,
-        matching_tx,
-        matching_rx,
-        consensus_tx_rpc,
-        consensus_rx_rpc,
-        eth_handle_tx: Some(eth_handle_tx),
-        eth_handle_rx: Some(eth_handle_rx)
+    /// Initialize the consensus client.
+    pub fn with_consensus_client(self, consensus_client: ConsensusHandler) -> Self {
+        Self { consensus_client: Some(consensus_client), ..self }
+    }
+
+    /// Initialize the node set.
+    pub fn with_node_set(self, node_set: HashSet<Address>) -> Self {
+        Self { node_set: Some(node_set), ..self }
+    }
+
+    pub async fn launch(self) -> eyre::Result<()> {
+        Ok(())
     }
 }
 
-pub async fn initialize_strom_components<Node, AddOns, P: Peers + Unpin + 'static, S>(
+pub async fn initialize_strom_components<Node, AddOns, M, P: Peers + Unpin + 'static, S>(
     config: AngstromConfig,
     signer: AngstromSigner<S>,
-    mut handles: StromHandles,
+    mut handles: StromHandles<M>,
     network_builder: StromNetworkBuilder<P, S>,
     node: &FullNode<Node, AddOns>,
     executor: TaskExecutor,
@@ -186,12 +172,14 @@ pub async fn initialize_strom_components<Node, AddOns, P: Peers + Unpin + 'stati
     consensus_client: ConsensusHandler
 ) -> eyre::Result<()>
 where
+    M: AngstromMode,
+    M::Primitives: NodePrimitives + Serialize,
     Node: FullNodeComponents
-        + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
+        + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = M::Primitives>>,
     Node::Provider: BlockReader<
-            Block = reth::primitives::Block,
-            Receipt = reth::primitives::Receipt,
-            Header = reth::primitives::Header
+            Block = <M::Primitives as NodePrimitives>::Block,
+            Receipt = <M::Primitives as NodePrimitives>::Receipt,
+            Header = <M::Primitives as NodePrimitives>::BlockHeader
         > + DatabaseProviderFactory,
     AddOns: NodeAddOns<Node> + RethRpcAddOns<Node>,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
@@ -296,8 +284,8 @@ where
     // critical but we will want to fix this down the road.
     // let block_id = querying_provider.get_block_number().await.unwrap();
     let block_id = match sub.recv().await.expect("first block") {
-        CanonStateNotification::Commit { new } => new.tip().number,
-        CanonStateNotification::Reorg { new, .. } => new.tip().number
+        CanonStateNotification::Commit { new } => new.tip().number(),
+        CanonStateNotification::Reorg { new, .. } => new.tip().number()
     };
 
     tracing::info!(?block_id, "starting up with block");
@@ -335,7 +323,7 @@ where
         init_telemetry(signer_addr, grace_shutdown)
     });
 
-    let uniswap_pool_manager = configure_uniswap_manager::<_, EthPrimitives, DEFAULT_TICKS>(
+    let uniswap_pool_manager = configure_uniswap_manager::<_, M::Primitives, DEFAULT_TICKS>(
         querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,
@@ -387,7 +375,7 @@ where
 
     let network_handle = network_builder
         .with_pool_manager(handles.pool_tx)
-        .with_consensus_manager(handles.consensus_tx_op)
+        .with_consensus_manager(handles.mode.consensus_tx_op)
         .build_handle(executor.clone(), node.provider.clone());
 
     // fetch pool ids
@@ -467,8 +455,8 @@ where
     exit.await
 }
 
-async fn handle_init_block_spam(
-    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification>
+async fn handle_init_block_spam<N: NodePrimitives>(
+    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification<N>>
 ) {
     // wait for the first notification
     let _ = canon.recv().await.expect("first block");

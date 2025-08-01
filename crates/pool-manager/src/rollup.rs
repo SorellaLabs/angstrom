@@ -1,4 +1,8 @@
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll}
+};
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkHandle, StromNetworkEvent};
@@ -9,13 +13,13 @@ use angstrom_types::{
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::{Future, StreamExt};
-use order_pool::{PoolConfig, PoolInnerEvent, order_storage::OrderStorage};
+use order_pool::{
+    OrderIndexer, PoolConfig, PoolInnerEvent, PoolManagerUpdate, order_storage::OrderStorage
+};
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
-
-use order_pool::{OrderIndexer, PoolManagerUpdate};
 
 use crate::{
     PoolManagerMode,
@@ -47,7 +51,7 @@ impl NetworkHandle for NoNetwork {
     }
 }
 
-/// A type alias for the rollup pool manager.
+/// Type alias for rollup pool manager - follows QuoterManager naming pattern
 pub type RollupPoolManager<V, GS> = PoolManager<V, GS, NoNetwork, RollupMode>;
 
 /// Builder for constructing RollupPoolManager instances.
@@ -140,21 +144,16 @@ where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GS: BlockSyncConsumer
 {
-    /// Create a new rollup pool manager builder
+    /// Create a new rollup pool manager builder - follows QuoterManager
+    /// constructor pattern
     pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         global_sync: GS
     ) -> RollupPoolManagerBuilder<V, GS> {
-        RollupPoolManagerBuilder::new(
-            validator,
-            order_storage,
-            eth_network_events,
-            global_sync
-        )
+        RollupPoolManagerBuilder::new(validator, order_storage, eth_network_events, global_sync)
     }
-
 }
 
 /// Rollup mode for PoolManager - simpler behavior without consensus logic
@@ -211,7 +210,11 @@ where
         RollupMode::get_proposable_orders(self)
     }
 
-    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> std::task::Waker) {
+    fn on_pool_events(
+        &mut self,
+        orders: Vec<PoolInnerEvent>,
+        waker: impl Fn() -> std::task::Waker
+    ) {
         let valid_orders = orders
             .into_iter()
             .filter_map(|order| match order {
@@ -221,15 +224,19 @@ where
                     None
                 }
                 PoolInnerEvent::HasTransitionedToNewBlock(block) => {
-                    self.global_sync
-                        .sign_off_on_block(crate::order::MODULE_NAME, block, Some(waker()));
+                    self.global_sync.sign_off_on_block(
+                        crate::order::MODULE_NAME,
+                        block,
+                        Some(waker())
+                    );
                     None
                 }
                 PoolInnerEvent::None => None
             })
             .collect::<Vec<_>>();
 
-        // In rollup mode, no need to broadcast orders to peers since there's no networking
+        // In rollup mode, no need to broadcast orders to peers since there's no
+        // networking
         let _ = valid_orders;
     }
 

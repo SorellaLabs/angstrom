@@ -109,30 +109,36 @@ impl OrderPoolHandle for PoolHandle {
     }
 }
 
+/// Core PoolManager struct - manages order pools with mode-specific behavior
+///
+/// Follows QuoterManager pattern with mode parameter defaulting to
+/// ConsensusMode. Uses type state pattern for compile-time mode
+/// differentiation.
 pub struct PoolManager<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
 where
     V: OrderValidatorHandle,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode
 {
-    /// access to validation and sorted storage of orders.
+    /// Access to validation and sorted storage of orders
     pub(crate) order_indexer:      OrderIndexer<V>,
+    /// Global blockchain synchronization coordinator
     pub(crate) global_sync:        GlobalSync,
-    /// Network access.
+    /// Network access for peer communication
     pub(crate) network:            NH,
     /// Ethereum updates stream that tells the pool manager about orders that
     /// have been filled
     pub(crate) eth_network_events: UnboundedReceiverStream<EthEvent>,
-    /// receiver half of the commands to the pool manager
+    /// Receiver half of the commands to the pool manager
     pub(crate) command_rx:         UnboundedReceiverStream<OrderCommand>,
-    /// Mode-specific state and behavior
+    /// Mode-specific state and behavior (ConsensusMode or RollupMode)
     pub(crate) mode:               M
 }
 
-// All pool manager implementation methods are now mode-specific.
-// See consensus.rs and rollup.rs for the specific implementations.
-
-// Future implementations are now mode-specific - see consensus.rs and rollup.rs
+// PoolManager implementation methods are mode-specific following QuoterManager
+// pattern. Common trait methods are defined in PoolManagerMode trait in lib.rs.
+// Mode-specific implementations and Future traits are in consensus.rs and
+// rollup.rs.
 
 /// All events related to orders emitted by the network.
 #[derive(Debug)]
@@ -152,6 +158,5 @@ pub(crate) struct StromPeer {
     pub(crate) cancellations: LruCache<B256>
 }
 
-// Type aliases are now available in the crate root (lib.rs) for convenience
-
-// Mode-specific constructor implementations
+// Type aliases are re-exported from lib.rs following QuoterManager pattern
+// Mode-specific constructors and implementations are in respective mode files

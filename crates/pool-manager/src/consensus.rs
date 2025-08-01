@@ -21,7 +21,7 @@ use crate::{
     order::{OrderCommand, PoolManager, StromPeer}
 };
 
-/// A type alias for the consensus pool manager.
+/// Type alias for consensus pool manager - follows QuoterManager naming pattern
 pub type ConsensusPoolManager<V, GS, NH> = PoolManager<V, GS, NH, ConsensusMode>;
 
 /// Builder for constructing ConsensusPoolManager instances.
@@ -136,7 +136,8 @@ where
         + Unpin
         + 'static
 {
-    /// Create a new consensus pool manager builder
+    /// Create a new consensus pool manager builder - follows QuoterManager
+    /// constructor pattern
     pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
@@ -212,14 +213,16 @@ impl PoolManagerMode for ConsensusMode {
         use futures::StreamExt;
 
         // Poll network/peer related events - consensus mode specific
-        while let std::task::Poll::Ready(Some(event)) = pool.mode.strom_network_events.poll_next_unpin(cx)
+        while let std::task::Poll::Ready(Some(event)) =
+            pool.mode.strom_network_events.poll_next_unpin(cx)
         {
             pool.on_network_event(event);
         }
 
         // Poll incoming network order events - consensus mode specific
         if pool.global_sync.can_operate() {
-            if let std::task::Poll::Ready(Some(event)) = pool.mode.order_events.poll_next_unpin(cx) {
+            if let std::task::Poll::Ready(Some(event)) = pool.mode.order_events.poll_next_unpin(cx)
+            {
                 pool.on_network_order_event(event);
                 cx.waker().wake_by_ref();
             }

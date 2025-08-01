@@ -3,9 +3,10 @@
 //! This crate provides pool management functionality for Angstrom, including:
 //! - Order pool management for the network layer
 //! - Type state pattern implementation for consensus vs rollup modes
+//! - Mode-specific behavior through trait abstraction
 
-use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
 use angstrom_network::NetworkHandle;
+use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
 use validation::order::OrderValidatorHandle;
 
 pub mod cache;
@@ -27,7 +28,9 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
     /// Different modes may have different requirements for which orders should
     /// be included in proposals (e.g., consensus mode might filter based on
     /// consensus state).
-    fn get_proposable_orders<V, GS, NH>(pool: &mut order::PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
+    fn get_proposable_orders<V, GS, NH>(
+        pool: &mut order::PoolManager<V, GS, NH, Self>
+    ) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
         GS: BlockSyncConsumer,
@@ -36,8 +39,9 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
 
     /// Poll mode-specific streams and handle mode-specific events.
     ///
-    /// This method allows each mode to handle its own polling logic and event processing,
-    /// keeping the main Future implementation cleaner and more maintainable.
+    /// This method allows each mode to handle its own polling logic and event
+    /// processing, keeping the main Future implementation cleaner and more
+    /// maintainable.
     fn poll_mode_specific<V, GS, NH>(
         pool: &mut order::PoolManager<V, GS, NH, Self>,
         cx: &mut std::task::Context<'_>
@@ -50,11 +54,10 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
         // Default implementation does nothing - modes can override as needed
         let _ = (pool, cx);
     }
-
 }
 
-// Re-export order pool management types
-// Re-export mode types for convenience
+// Re-export main types and modes for convenience - following QuoterManager
+// pattern
 pub use consensus::{ConsensusMode, ConsensusPoolManager};
 pub use order::*;
-pub use rollup::{RollupMode, RollupPoolManager};
+pub use rollup::{NoNetwork, RollupMode, RollupPoolManager};

@@ -214,12 +214,12 @@ pub trait StorageWithData: RawPoolOrder {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use std::collections::HashSet;
 
     use alloy::primitives::{Address, U256};
     use angstrom_types::{
-        primitive::{AngstromSigner, PoolId},
+        primitive::{AngstromAddressConfig, AngstromSigner, PoolId},
         sol_bindings::RawPoolOrder
     };
     use testing_tools::type_generator::orders::UserOrderBuilder;
@@ -244,6 +244,7 @@ pub mod tests {
     }
 
     fn setup_test_account_processor() -> UserAccountProcessor<MockFetch> {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
         init_tracing();
         UserAccountProcessor {
             user_accounts: UserAccounts::new(),

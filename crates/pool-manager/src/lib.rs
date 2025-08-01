@@ -14,11 +14,3 @@ pub mod rollup;
 pub use consensus::{ConsensusMode, ConsensusPoolManager};
 pub use order::*;
 pub use rollup::{RollupMode, RollupPoolManager};
-
-/// Type alias for consensus pool manager builder
-pub type ConsensusPoolManagerBuilder<V, GS, NH> =
-    order::PoolManagerBuilder<V, GS, NH, consensus::ConsensusMode>;
-
-/// Type alias for rollup pool manager builder  
-pub type RollupPoolManagerBuilder<V, GS, NH> =
-    order::PoolManagerBuilder<V, GS, NH, rollup::RollupMode>;

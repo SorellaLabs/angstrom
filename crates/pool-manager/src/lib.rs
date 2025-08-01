@@ -56,8 +56,7 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
     }
 }
 
-// Re-export main types and modes for convenience - following QuoterManager
-// pattern
+// Re-export main types and modes for convenience
 pub use consensus::{ConsensusMode, ConsensusPoolManager};
 pub use order::*;
 pub use rollup::{NoNetwork, RollupMode, RollupPoolManager};

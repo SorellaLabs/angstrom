@@ -136,8 +136,7 @@ where
         + Unpin
         + 'static
 {
-    /// Create a new consensus pool manager builder - follows QuoterManager
-    /// constructor pattern
+    /// Create a new consensus pool manager builder
     pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
@@ -244,15 +243,6 @@ where
         ConsensusMode::get_proposable_orders(self)
     }
 
-    /// Handle consensus-specific events
-    ///
-    /// This can be extended in the future to handle consensus streams,
-    /// pre-proposal processing, consensus round transitions, etc.
-    pub fn on_consensus_event(&mut self, _event: ()) {
-        // Handle consensus-specific events here
-        // This could include pre-proposal processing, consensus round
-        // transitions, etc.
-    }
 
     /// Handle incoming network order events - consensus mode specific
     pub(crate) fn on_network_order_event(&mut self, event: NetworkOrderEvent) {

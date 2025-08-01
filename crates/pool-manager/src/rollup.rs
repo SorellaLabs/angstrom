@@ -144,8 +144,7 @@ where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GS: BlockSyncConsumer
 {
-    /// Create a new rollup pool manager builder - follows QuoterManager
-    /// constructor pattern
+    /// Create a new rollup pool manager builder
     pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
@@ -215,13 +214,14 @@ where
         orders: Vec<PoolInnerEvent>,
         waker: impl Fn() -> std::task::Waker
     ) {
-        let valid_orders = orders
-            .into_iter()
-            .filter_map(|order| match order {
-                PoolInnerEvent::Propagation(order) => Some(order),
+        for order in orders {
+            match order {
+                PoolInnerEvent::Propagation(_order) => {
+                    // In rollup mode, no need to broadcast orders to peers since there's no
+                    // networking
+                }
                 PoolInnerEvent::BadOrderMessages(_o) => {
                     // In rollup mode, we don't have networking, so no reputation changes
-                    None
                 }
                 PoolInnerEvent::HasTransitionedToNewBlock(block) => {
                     self.global_sync.sign_off_on_block(
@@ -229,15 +229,10 @@ where
                         block,
                         Some(waker())
                     );
-                    None
                 }
-                PoolInnerEvent::None => None
-            })
-            .collect::<Vec<_>>();
-
-        // In rollup mode, no need to broadcast orders to peers since there's no
-        // networking
-        let _ = valid_orders;
+                PoolInnerEvent::None => {}
+            }
+        }
     }
 
     fn on_eth_event(&mut self, eth: EthEvent, waker: std::task::Waker) {

@@ -59,7 +59,6 @@ use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
 };
-use tokio_stream::wrappers::UnboundedReceiverStream;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
 use validation::{
@@ -354,7 +353,6 @@ where
         validation_handle.clone(),
         Some(order_storage.clone()),
         eth_handle.subscribe_network(),
-        handles.pool_rx,
         global_block_sync.clone()
     )
     .with_config(pool_config)

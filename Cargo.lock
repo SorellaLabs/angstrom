@@ -1117,6 +1117,7 @@ dependencies = [
  "reth-optimism-node",
  "reth-optimism-primitives",
  "reth-provider",
+ "serde",
  "telemetry",
  "tokio",
  "tracing",

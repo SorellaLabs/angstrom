@@ -9,6 +9,7 @@ use std::{
 
 use alloy::{
     self,
+    consensus::BlockHeader,
     eips::{BlockId, BlockNumberOrTag},
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
@@ -57,6 +58,7 @@ use reth_optimism_chainspec::OpChainSpec;
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
+use serde::Serialize;
 use telemetry::init_telemetry;
 use tokio::sync::mpsc::UnboundedReceiver;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
@@ -171,6 +173,7 @@ pub async fn initialize_strom_components<Node, AddOns, M, P: Peers + Unpin + 'st
 ) -> eyre::Result<()>
 where
     M: AngstromMode,
+    M::Primitives: NodePrimitives + Serialize,
     Node: FullNodeComponents
         + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = M::Primitives>>,
     Node::Provider: BlockReader<
@@ -281,8 +284,8 @@ where
     // critical but we will want to fix this down the road.
     // let block_id = querying_provider.get_block_number().await.unwrap();
     let block_id = match sub.recv().await.expect("first block") {
-        CanonStateNotification::Commit { new } => new.tip().number,
-        CanonStateNotification::Reorg { new, .. } => new.tip().number
+        CanonStateNotification::Commit { new } => new.tip().number(),
+        CanonStateNotification::Reorg { new, .. } => new.tip().number()
     };
 
     tracing::info!(?block_id, "starting up with block");
@@ -320,7 +323,7 @@ where
         init_telemetry(signer_addr, grace_shutdown)
     });
 
-    let uniswap_pool_manager = configure_uniswap_manager::<_, EthPrimitives, DEFAULT_TICKS>(
+    let uniswap_pool_manager = configure_uniswap_manager::<_, M::Primitives, DEFAULT_TICKS>(
         querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,
@@ -372,7 +375,7 @@ where
 
     let network_handle = network_builder
         .with_pool_manager(handles.pool_tx)
-        .with_consensus_manager(handles.consensus_tx_op)
+        .with_consensus_manager(handles.mode.consensus_tx_op)
         .build_handle(executor.clone(), node.provider.clone());
 
     // fetch pool ids
@@ -452,8 +455,8 @@ where
     exit.await
 }
 
-async fn handle_init_block_spam(
-    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification>
+async fn handle_init_block_spam<N: NodePrimitives>(
+    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification<N>>
 ) {
     // wait for the first notification
     let _ = canon.recv().await.expect("first block");

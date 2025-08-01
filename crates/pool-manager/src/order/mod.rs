@@ -388,7 +388,7 @@ where
         }
     }
 
-    fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
+    pub(crate) fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
         match event {
             NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
                 let block_num = self.global_sync.current_block_number();
@@ -544,7 +544,7 @@ where
             }
 
             // Call the mode-specific hook for any additional polling logic
-            // Note: Network events are only polled in ConsensusMode::poll_mode_specific
+            // Note: Network events (both strom_network and order_events) are only polled in ConsensusMode::poll_mode_specific
             M::poll_mode_specific(this, cx);
 
             // halt dealing with these till we have synced
@@ -552,12 +552,6 @@ where
                 // drain commands
                 if let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
                     this.on_command(cmd);
-                    cx.waker().wake_by_ref();
-                }
-
-                // drain incoming transaction events
-                if let Poll::Ready(Some(event)) = this.order_events.poll_next_unpin(cx) {
-                    this.on_network_order_event(event);
                     cx.waker().wake_by_ref();
                 }
             }

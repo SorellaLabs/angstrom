@@ -1,11 +1,11 @@
-use std::{sync::Arc, task::{Context, Poll}};
+use std::{
+    sync::Arc,
+    task::{Context, Poll}
+};
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
-use angstrom_types::{
-    block_sync::BlockSyncConsumer,
-    sol_bindings::grouped_orders::AllOrders
-};
+use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
 use futures::StreamExt;
 use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
@@ -25,7 +25,7 @@ where
         + Send
         + Sync
         + Unpin
-        + 'static,
+        + 'static
 {
     /// Create a new consensus pool manager builder
     pub fn new(
@@ -97,6 +97,14 @@ impl PoolManagerMode for ConsensusMode {
         // Poll network/peer related events - only in consensus mode
         while let Poll::Ready(Some(event)) = pool.strom_network_events.poll_next_unpin(cx) {
             pool.on_network_event(event);
+        }
+
+        // Poll incoming network order events - only in consensus mode
+        if pool.global_sync.can_operate() {
+            if let Poll::Ready(Some(event)) = pool.order_events.poll_next_unpin(cx) {
+                pool.on_network_order_event(event);
+                cx.waker().wake_by_ref();
+            }
         }
     }
 }

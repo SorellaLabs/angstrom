@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
@@ -8,7 +8,8 @@ use angstrom_types::{
     primitive::PeerId,
     sol_bindings::grouped_orders::AllOrders
 };
-use order_pool::{PoolConfig, order_storage::OrderStorage};
+use futures::{Future, StreamExt};
+use order_pool::{PoolConfig, PoolInnerEvent, order_storage::OrderStorage};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -60,7 +61,6 @@ where
     global_sync:        GlobalSync,
     order_storage:      Option<Arc<OrderStorage>>,
     eth_network_events: UnboundedReceiverStream<EthEvent>,
-    order_events:       UnboundedMeteredReceiver<NetworkOrderEvent>,
     config:             PoolConfig
 }
 
@@ -73,11 +73,9 @@ where
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
-        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync
     ) -> Self {
         Self {
-            order_events,
             global_sync,
             eth_network_events,
             validator,
@@ -120,22 +118,17 @@ where
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
 
-        // Create empty network event stream for rollup mode
-        let (_, network_events_rx) = tokio::sync::mpsc::unbounded_channel();
-        let strom_network_events = UnboundedReceiverStream::new(network_events_rx);
+        let mode = RollupMode::new();
 
         task_spawner.spawn_critical(
             "order pool manager",
             Box::pin(PoolManager::<V, GlobalSync, NoNetwork, RollupMode> {
                 eth_network_events: self.eth_network_events,
-                strom_network_events,
-                order_events: self.order_events,
-                peer_to_info: std::collections::HashMap::default(),
                 order_indexer: inner,
                 network: NoNetwork,
                 command_rx: rx,
                 global_sync: self.global_sync,
-                _mode: PhantomData
+                mode
             })
         );
 
@@ -153,14 +146,12 @@ where
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
-        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GS
     ) -> RollupPoolManagerBuilder<V, GS> {
         RollupPoolManagerBuilder::new(
             validator,
             order_storage,
             eth_network_events,
-            order_events,
             global_sync
         )
     }
@@ -218,5 +209,144 @@ where
     /// for rollup mode, which processes all orders without consensus filtering.
     pub fn get_rollup_orders(&mut self) -> Vec<AllOrders> {
         RollupMode::get_proposable_orders(self)
+    }
+
+    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> std::task::Waker) {
+        let valid_orders = orders
+            .into_iter()
+            .filter_map(|order| match order {
+                PoolInnerEvent::Propagation(order) => Some(order),
+                PoolInnerEvent::BadOrderMessages(_o) => {
+                    // In rollup mode, we don't have networking, so no reputation changes
+                    None
+                }
+                PoolInnerEvent::HasTransitionedToNewBlock(block) => {
+                    self.global_sync
+                        .sign_off_on_block(crate::order::MODULE_NAME, block, Some(waker()));
+                    None
+                }
+                PoolInnerEvent::None => None
+            })
+            .collect::<Vec<_>>();
+
+        // In rollup mode, no need to broadcast orders to peers since there's no networking
+        let _ = valid_orders;
+    }
+
+    fn on_eth_event(&mut self, eth: EthEvent, waker: std::task::Waker) {
+        use angstrom_types::primitive::{NewInitializedPool, PoolId};
+
+        match eth {
+            EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
+                self.order_indexer.start_new_block_processing(
+                    block_number,
+                    filled_orders,
+                    address_changeset
+                );
+                waker.clone().wake_by_ref();
+            }
+            EthEvent::ReorgedOrders(orders, range) => {
+                self.order_indexer.reorg(orders);
+                self.global_sync
+                    .sign_off_reorg(crate::order::MODULE_NAME, range, Some(waker))
+            }
+            EthEvent::FinalizedBlock(block) => {
+                self.order_indexer.finalized_block(block);
+            }
+            EthEvent::NewPool { pool } => {
+                let t0 = pool.currency0;
+                let t1 = pool.currency1;
+                let id: PoolId = pool.into();
+
+                let pool = NewInitializedPool { currency_in: t0, currency_out: t1, id };
+
+                self.order_indexer.new_pool(pool);
+            }
+            EthEvent::RemovedPool { pool } => {
+                self.order_indexer.remove_pool(pool.into());
+            }
+            EthEvent::AddedNode(_) => {}
+            EthEvent::RemovedNode(_) => {}
+            EthEvent::NewBlock(_) => {}
+        }
+    }
+
+    fn on_command(&mut self, cmd: OrderCommand) {
+        use angstrom_types::orders::OrderOrigin;
+        use telemetry_recorder::telemetry_event;
+
+        match cmd {
+            OrderCommand::NewOrder(origin, order, validation_response) => {
+                let blocknum = self.global_sync.current_block_number();
+                telemetry_event!(blocknum, origin, order.clone());
+
+                self.order_indexer
+                    .new_rpc_order(OrderOrigin::External, order, validation_response)
+            }
+            OrderCommand::CancelOrder(req, receiver) => {
+                let blocknum = self.global_sync.current_block_number();
+                telemetry_event!(blocknum, req.clone());
+
+                let res = self.order_indexer.cancel_order(&req);
+                // In rollup mode, no need to broadcast cancellation to peers
+                let _ = receiver.send(res);
+            }
+            OrderCommand::PendingOrders(from, receiver) => {
+                let res = self.order_indexer.pending_orders_for_address(from);
+                let _ = receiver.send(res.into_iter().map(|o| o.order).collect());
+            }
+            OrderCommand::OrderStatus(order_hash, tx) => {
+                let res = self.order_indexer.order_status(order_hash);
+                let _ = tx.send(res);
+            }
+            OrderCommand::OrdersByPool(pool_id, location, tx) => {
+                let res = self.order_indexer.orders_by_pool(pool_id, location);
+                let _ = tx.send(res);
+            }
+        }
+    }
+}
+
+impl<V, GlobalSync> Future for PoolManager<V, GlobalSync, NoNetwork, RollupMode>
+where
+    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
+    GlobalSync: BlockSyncConsumer
+{
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+
+        let mut work = 30;
+        loop {
+            work -= 1;
+            if work == 0 {
+                cx.waker().wake_by_ref();
+                break;
+            }
+
+            // pull all eth events
+            while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
+                this.on_eth_event(eth, cx.waker().clone());
+            }
+
+            // poll underlying pool. This is the validation process that's being polled
+            while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
+                this.on_pool_events(orders, || cx.waker().clone());
+            }
+
+            // RollupMode does NOT poll network events since it operates without networking
+
+            // halt dealing with these till we have synced
+            if this.global_sync.can_operate() {
+                // drain commands
+                if let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
+                    this.on_command(cmd);
+                    cx.waker().wake_by_ref();
+                }
+            }
+        }
+
+        Poll::Pending
     }
 }

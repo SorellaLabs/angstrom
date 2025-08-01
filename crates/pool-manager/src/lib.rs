@@ -4,11 +4,8 @@
 //! - Order pool management for the network layer
 //! - Type state pattern implementation for consensus vs rollup modes
 
-use std::task::Context;
-
-use angstrom_network::{NetworkHandle, StromNetworkEvent};
 use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use angstrom_network::NetworkHandle;
 use validation::order::OrderValidatorHandle;
 
 pub mod cache;
@@ -37,24 +34,6 @@ pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
         NH: NetworkHandle,
         Self: Sized;
 
-    /// Hook for any mode-specific polling logic within the main future's poll
-    /// loop.
-    ///
-    /// This allows modes to add their own polling behavior (e.g., consensus
-    /// streams, mode-specific timers, etc.) without duplicating the entire
-    /// Future implementation.
-    fn poll_mode_specific<V, GS, NH>(
-        _pool: &mut order::PoolManager<V, GS, NH, Self>,
-        _cx: &mut Context<'_>
-    ) where
-        V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-        GS: BlockSyncConsumer,
-        NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + 'static,
-        Self: Sized
-    {
-        // Default to no-op - modes can override if they need specific polling
-        // behavior
-    }
 }
 
 // Re-export order pool management types

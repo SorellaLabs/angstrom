@@ -1,15 +1,8 @@
-use core::marker::PhantomData;
-use std::{
-    collections::HashMap,
-    num::NonZeroUsize,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Waker}
-};
+use std::sync::Arc;
 
 use alloy::primitives::{Address, B256, FixedBytes};
 use angstrom_eth::manager::EthEvent;
-use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
+use angstrom_network::{NetworkHandle, StromNetworkEvent};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     network::{PoolNetworkMessage, ReputationChangeKind},
@@ -29,13 +22,12 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::SendError};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
-use crate::{cache::LruCache, PoolManagerMode};
+use crate::{PoolManagerMode, cache::LruCache};
 
 pub(crate) const MODULE_NAME: &str = "Order Pool";
 
 /// Cache limit of transactions to keep track of for a single peer.
 pub(crate) const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
-
 
 /// Api to interact with [`PoolManager`] task.
 #[derive(Debug, Clone)]
@@ -128,23 +120,22 @@ impl OrderPoolHandle for PoolHandle {
 
 /// Builder for constructing PoolManager instances.
 ///
-/// The default mode is ConsensusMode, but it's recommended to use the type aliases
-/// `ConsensusPoolManager::new()` or `RollupPoolManager::new()` for clarity.
+/// The default mode is ConsensusMode, but it's recommended to use the type
+/// aliases `ConsensusPoolManager::new()` or `RollupPoolManager::new()` for
+/// clarity.
 pub struct PoolManagerBuilder<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
 where
     V: OrderValidatorHandle,
     GlobalSync: BlockSyncConsumer,
     M: PoolManagerMode
 {
-    validator:            V,
-    global_sync:          GlobalSync,
-    order_storage:        Option<Arc<OrderStorage>>,
-    network_handle:       NH,
-    strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
-    eth_network_events:   UnboundedReceiverStream<EthEvent>,
-    order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
-    config:               PoolConfig,
-    _mode:                PhantomData<fn() -> M>
+    validator:          V,
+    global_sync:        GlobalSync,
+    order_storage:      Option<Arc<OrderStorage>>,
+    network_handle:     NH,
+    eth_network_events: UnboundedReceiverStream<EthEvent>,
+    config:             PoolConfig,
+    mode:               M
 }
 
 impl<V, GlobalSync, NH, M> PoolManagerBuilder<V, GlobalSync, NH, M>
@@ -163,20 +154,17 @@ where
         order_storage: Option<Arc<OrderStorage>>,
         network_handle: NH,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
-        order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
+        mode: M
     ) -> Self {
         Self {
-            order_events,
             global_sync,
             eth_network_events,
-            strom_network_events,
             network_handle,
             validator,
             order_storage,
             config: Default::default(),
-            _mode: PhantomData
+            mode
         }
     }
 
@@ -200,12 +188,7 @@ where
         replay: impl FnOnce(&mut OrderIndexer<V>) + Send + 'static
     ) -> PoolHandle
     where
-        M: PoolManagerMode,
-        NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
-            + Send
-            + Sync
-            + Unpin
-            + 'static
+        M: PoolManagerMode
     {
         let rx = UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -225,15 +208,12 @@ where
         task_spawner.spawn_critical(
             "order pool manager",
             Box::pin(PoolManager::<V, GlobalSync, NH, M> {
-                eth_network_events:   self.eth_network_events,
-                strom_network_events: self.strom_network_events,
-                order_events:         self.order_events,
-                peer_to_info:         HashMap::default(),
-                order_indexer:        inner,
-                network:              self.network_handle,
-                command_rx:           rx,
-                global_sync:          self.global_sync,
-                _mode:                PhantomData
+                eth_network_events: self.eth_network_events,
+                order_indexer:      inner,
+                network:            self.network_handle,
+                command_rx:         rx,
+                global_sync:        self.global_sync,
+                mode:               self.mode
             })
         );
 
@@ -248,278 +228,23 @@ where
     M: PoolManagerMode
 {
     /// access to validation and sorted storage of orders.
-    pub(crate) order_indexer:        OrderIndexer<V>,
-    pub(crate) global_sync:          GlobalSync,
+    pub(crate) order_indexer:      OrderIndexer<V>,
+    pub(crate) global_sync:        GlobalSync,
     /// Network access.
-    pub(crate) network:              NH,
-    /// Subscriptions to all the strom-network related events.
-    ///
-    /// From which we get all new incoming order related messages.
-    pub(crate) strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
+    pub(crate) network:            NH,
     /// Ethereum updates stream that tells the pool manager about orders that
     /// have been filled
-    pub(crate) eth_network_events:   UnboundedReceiverStream<EthEvent>,
+    pub(crate) eth_network_events: UnboundedReceiverStream<EthEvent>,
     /// receiver half of the commands to the pool manager
-    pub(crate) command_rx:           UnboundedReceiverStream<OrderCommand>,
-    /// Incoming events from the ProtocolManager.
-    pub(crate) order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
-    /// All the connected peers.
-    pub(crate) peer_to_info:         HashMap<PeerId, StromPeer>,
-    /// Mode-specific state and behavior (using PhantomData since only static
-    /// methods are called)
-    pub(crate) _mode:                PhantomData<fn() -> M>
+    pub(crate) command_rx:         UnboundedReceiverStream<OrderCommand>,
+    /// Mode-specific state and behavior
+    pub(crate) mode:               M
 }
 
-impl<V, GlobalSync, NH, M> PoolManager<V, GlobalSync, NH, M>
-where
-    V: OrderValidatorHandle<Order = AllOrders>,
-    GlobalSync: BlockSyncConsumer,
-    M: PoolManagerMode,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>> + 'static
-{
-    fn on_command(&mut self, cmd: OrderCommand) {
-        match cmd {
-            OrderCommand::NewOrder(origin, order, validation_response) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, origin, order.clone());
+// All pool manager implementation methods are now mode-specific.
+// See consensus.rs and rollup.rs for the specific implementations.
 
-                self.order_indexer
-                    .new_rpc_order(OrderOrigin::External, order, validation_response)
-            }
-            OrderCommand::CancelOrder(req, receiver) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, req.clone());
-
-                let res = self.order_indexer.cancel_order(&req);
-                if res {
-                    self.broadcast_cancel_to_peers(req);
-                }
-                let _ = receiver.send(res);
-            }
-            OrderCommand::PendingOrders(from, receiver) => {
-                let res = self.order_indexer.pending_orders_for_address(from);
-                let _ = receiver.send(res.into_iter().map(|o| o.order).collect());
-            }
-            OrderCommand::OrderStatus(order_hash, tx) => {
-                let res = self.order_indexer.order_status(order_hash);
-                let _ = tx.send(res);
-            }
-
-            OrderCommand::OrdersByPool(pool_id, location, tx) => {
-                let res = self.order_indexer.orders_by_pool(pool_id, location);
-                let _ = tx.send(res);
-            }
-        }
-    }
-
-    fn on_eth_event(&mut self, eth: EthEvent, waker: Waker) {
-        match eth {
-            EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
-                self.order_indexer.start_new_block_processing(
-                    block_number,
-                    filled_orders,
-                    address_changeset
-                );
-                waker.clone().wake_by_ref();
-            }
-            EthEvent::ReorgedOrders(orders, range) => {
-                self.order_indexer.reorg(orders);
-                self.global_sync
-                    .sign_off_reorg(MODULE_NAME, range, Some(waker))
-            }
-            EthEvent::FinalizedBlock(block) => {
-                self.order_indexer.finalized_block(block);
-            }
-            EthEvent::NewPool { pool } => {
-                let t0 = pool.currency0;
-                let t1 = pool.currency1;
-                let id: PoolId = pool.into();
-
-                let pool = NewInitializedPool { currency_in: t0, currency_out: t1, id };
-
-                self.order_indexer.new_pool(pool);
-            }
-            EthEvent::RemovedPool { pool } => {
-                self.order_indexer.remove_pool(pool.into());
-            }
-            EthEvent::AddedNode(_) => {}
-            EthEvent::RemovedNode(_) => {}
-            EthEvent::NewBlock(_) => {}
-        }
-    }
-
-    pub(crate) fn on_network_order_event(&mut self, event: NetworkOrderEvent) {
-        match event {
-            NetworkOrderEvent::IncomingOrders { peer_id, orders } => {
-                let block_num = self.global_sync.current_block_number();
-
-                orders.into_iter().for_each(|order| {
-                    self.peer_to_info
-                        .get_mut(&peer_id)
-                        .map(|peer| peer.orders.insert(order.order_hash()));
-
-                    telemetry_event!(block_num, OrderOrigin::External, order.clone());
-                    self.order_indexer.new_network_order(
-                        peer_id,
-                        OrderOrigin::External,
-                        order.clone()
-                    );
-                });
-            }
-            NetworkOrderEvent::CancelOrder { request, .. } => {
-                let block_num = self.global_sync.current_block_number();
-                telemetry_event!(block_num, request.clone());
-
-                let res = self.order_indexer.cancel_order(&request);
-                if res {
-                    self.broadcast_cancel_to_peers(request);
-                }
-            }
-        }
-    }
-
-    pub(crate) fn on_network_event(&mut self, event: StromNetworkEvent) {
-        if M::REQUIRES_NETWORKING {
-            match event {
-                StromNetworkEvent::SessionEstablished { peer_id } => {
-                    // insert a new peer into the peerset
-                    self.peer_to_info.insert(
-                        peer_id,
-                        StromPeer {
-                            orders:        LruCache::new(
-                                NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
-                            ),
-                            cancellations: LruCache::new(
-                                NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
-                            )
-                        }
-                    );
-                    let all_orders = M::get_proposable_orders(self);
-
-                    self.broadcast_order_to_peer(all_orders, peer_id);
-                }
-                StromNetworkEvent::SessionClosed { peer_id, .. } => {
-                    // remove the peer
-                    self.peer_to_info.remove(&peer_id);
-                }
-                StromNetworkEvent::PeerRemoved(peer_id) => {
-                    self.peer_to_info.remove(&peer_id);
-                }
-                StromNetworkEvent::PeerAdded(_) => {}
-            }
-        }
-    }
-
-    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
-        let valid_orders = orders
-            .into_iter()
-            .filter_map(|order| match order {
-                PoolInnerEvent::Propagation(order) => Some(order),
-                PoolInnerEvent::BadOrderMessages(o) => {
-                    o.into_iter().for_each(|peer| {
-                        self.network
-                            .peer_reputation_change(peer, ReputationChangeKind::InvalidOrder);
-                    });
-                    None
-                }
-                PoolInnerEvent::HasTransitionedToNewBlock(block) => {
-                    self.global_sync
-                        .sign_off_on_block(MODULE_NAME, block, Some(waker()));
-                    None
-                }
-                PoolInnerEvent::None => None
-            })
-            .collect::<Vec<_>>();
-
-        self.broadcast_orders_to_peers(valid_orders);
-    }
-
-    fn broadcast_cancel_to_peers(&mut self, cancel: CancelOrderRequest) {
-        for (peer_id, info) in self.peer_to_info.iter_mut() {
-            let order_hash = cancel.order_id;
-            if !info.cancellations.contains(&order_hash) {
-                self.network
-                    .send_message(*peer_id, PoolNetworkMessage::OrderCancellation(cancel.clone()));
-
-                info.cancellations.insert(order_hash);
-            }
-        }
-    }
-
-    fn broadcast_order_to_peer(&mut self, valid_orders: Vec<AllOrders>, peer: PeerId) {
-        if M::REQUIRES_NETWORKING {
-            self.network
-                .send_message(peer, PoolNetworkMessage::PropagatePooledOrders(valid_orders));
-        }
-    }
-
-    fn broadcast_orders_to_peers(&mut self, valid_orders: Vec<AllOrders>) {
-        if M::REQUIRES_NETWORKING {
-            for order in valid_orders.iter() {
-                for (peer_id, info) in self.peer_to_info.iter_mut() {
-                    let order_hash = order.order_hash();
-                    if !info.orders.contains(&order_hash) {
-                        self.network.send_message(
-                            *peer_id,
-                            PoolNetworkMessage::PropagatePooledOrders(vec![order.clone()])
-                        );
-                        info.orders.insert(order_hash);
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl<V, GlobalSync, NH, M> Future for PoolManager<V, GlobalSync, NH, M>
-where
-    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer,
-    M: PoolManagerMode,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
-        + Unpin
-        + 'static
-{
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-
-        let mut work = 30;
-        loop {
-            work -= 1;
-            if work == 0 {
-                cx.waker().wake_by_ref();
-                break;
-            }
-
-            // pull all eth events
-            while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
-                this.on_eth_event(eth, cx.waker().clone());
-            }
-
-            // poll underlying pool. This is the validation process that's being polled
-            while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
-                this.on_pool_events(orders, || cx.waker().clone());
-            }
-
-            // Call the mode-specific hook for any additional polling logic
-            // Note: Network events (both strom_network and order_events) are only polled in ConsensusMode::poll_mode_specific
-            M::poll_mode_specific(this, cx);
-
-            // halt dealing with these till we have synced
-            if this.global_sync.can_operate() {
-                // drain commands
-                if let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
-                    this.on_command(cmd);
-                    cx.waker().wake_by_ref();
-                }
-            }
-        }
-
-        Poll::Pending
-    }
-}
+// Future implementations are now mode-specific - see consensus.rs and rollup.rs
 
 /// All events related to orders emitted by the network.
 #[derive(Debug)]
@@ -542,4 +267,3 @@ pub(crate) struct StromPeer {
 // Type aliases are now available in the crate root (lib.rs) for convenience
 
 // Mode-specific constructor implementations
-

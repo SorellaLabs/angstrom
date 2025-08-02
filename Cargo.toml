@@ -214,3 +214,9 @@ uniswap-v4 = { path = "./crates/uniswap-v4/" }
 uniswap_v3_math = { git = "https://github.com/SorellaLabs/v3-math", branch = "main" }
 url = "2"
 validation = { path = "./crates/validation/" }
+
+# OP-stack support
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
+reth-optimism-cli = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
+reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
+reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }

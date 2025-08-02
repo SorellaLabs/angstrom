@@ -17,6 +17,7 @@ use angstrom_types::{
 };
 use futures::Stream;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use reth_node_builder::NodePrimitives;
 use reth_provider::{
     CanonStateNotifications, DatabaseProviderFactory, ReceiptProvider, StateProvider,
     TryIntoHistoricalStateProvider
@@ -119,16 +120,20 @@ where
         .collect::<Vec<_>>()
 }
 
-pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer, const TICKS: u16>(
+pub async fn configure_uniswap_manager<
+    BlockSync: BlockSyncConsumer,
+    N: NodePrimitives,
+    const TICKS: u16
+>(
     provider: Arc<impl Provider + 'static>,
-    state_notification: CanonStateNotifications,
+    state_notification: CanonStateNotifications<N>,
     uniswap_pool_registry: UniswapPoolRegistry,
     current_block: BlockNumber,
     block_sync: BlockSync,
     pool_manager_address: Address,
     update_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>
 ) -> UniswapPoolManager<
-    CanonicalStateAdapter<impl Provider + 'static>,
+    CanonicalStateAdapter<impl Provider + 'static, N>,
     impl Provider + 'static,
     BlockSync,
     TICKS
@@ -139,8 +144,11 @@ pub async fn configure_uniswap_manager<BlockSync: BlockSyncConsumer, const TICKS
         pool_manager_address
     );
 
-    let notifier =
-        Arc::new(CanonicalStateAdapter::new(state_notification, provider.clone(), current_block));
+    let notifier = Arc::new(CanonicalStateAdapter::<_, N>::new(
+        state_notification,
+        provider.clone(),
+        current_block
+    ));
 
     UniswapPoolManager::new(factory, current_block, notifier, block_sync, update_stream).await
 }

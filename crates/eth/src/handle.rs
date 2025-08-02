@@ -2,13 +2,14 @@ use std::pin::Pin;
 
 use futures::Future;
 use futures_util::Stream;
+use reth_primitives::{EthPrimitives, NodePrimitives};
 use reth_provider::CanonStateNotification;
 use tokio::sync::mpsc::{Sender, UnboundedSender, unbounded_channel};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::manager::EthEvent;
 
-pub trait Eth: Clone + Send + Sync {
+pub trait Eth<N: NodePrimitives>: Clone + Send + Sync {
     fn subscribe_network_stream(&self) -> Pin<Box<dyn Stream<Item = EthEvent> + Send>> {
         Box::pin(self.subscribe_network())
     }
@@ -16,33 +17,33 @@ pub trait Eth: Clone + Send + Sync {
     fn subscribe_network(&self) -> UnboundedReceiverStream<EthEvent>;
     fn subscribe_cannon_state_notifications(
         &self
-    ) -> impl Future<Output = tokio::sync::broadcast::Receiver<CanonStateNotification>> + Send;
+    ) -> impl Future<Output = tokio::sync::broadcast::Receiver<CanonStateNotification<N>>> + Send;
 }
 
-pub enum EthCommand {
+pub enum EthCommand<N: NodePrimitives = EthPrimitives> {
     SubscribeEthNetworkEvents(UnboundedSender<EthEvent>),
     SubscribeCannon(
-        tokio::sync::oneshot::Sender<tokio::sync::broadcast::Receiver<CanonStateNotification>>
+        tokio::sync::oneshot::Sender<tokio::sync::broadcast::Receiver<CanonStateNotification<N>>>
     )
 }
 
 #[derive(Debug, Clone)]
-pub struct EthHandle {
-    pub sender: Sender<EthCommand>
+pub struct EthHandle<N: NodePrimitives = EthPrimitives> {
+    pub sender: Sender<EthCommand<N>>
 }
 
-impl EthHandle {
-    pub fn new(sender: Sender<EthCommand>) -> Self {
+impl<N: NodePrimitives> EthHandle<N> {
+    pub fn new(sender: Sender<EthCommand<N>>) -> Self {
         Self { sender }
     }
 }
 
-impl Eth for EthHandle {
+impl<N: NodePrimitives> Eth<N> for EthHandle<N> {
     async fn subscribe_cannon_state_notifications(
         &self
-    ) -> tokio::sync::broadcast::Receiver<CanonStateNotification> {
+    ) -> tokio::sync::broadcast::Receiver<CanonStateNotification<N>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let _ = self.sender.send(EthCommand::SubscribeCannon(tx)).await;
+        let _ = self.sender.send(EthCommand::<N>::SubscribeCannon(tx)).await;
         rx.await.unwrap()
     }
 
@@ -50,7 +51,7 @@ impl Eth for EthHandle {
         let (tx, rx) = unbounded_channel();
         let _ = self
             .sender
-            .try_send(EthCommand::SubscribeEthNetworkEvents(tx));
+            .try_send(EthCommand::<N>::SubscribeEthNetworkEvents(tx));
 
         UnboundedReceiverStream::new(rx)
     }

@@ -10,6 +10,7 @@ use angstrom_types::{
 };
 use chrono::Utc;
 use reth_execution_types::Chain;
+use reth_primitives::{EthPrimitives, NodePrimitives};
 use reth_provider::CanonStateNotification;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
@@ -20,10 +21,10 @@ use crate::manager::EthDataCleanser;
 /// The state of our eth-updater, right before we go to the next block
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EthUpdaterSnapshot {
+pub struct EthUpdaterSnapshot<N: NodePrimitives = EthPrimitives> {
     pub angstrom_address:  Address,
     pub periphery_address: Address,
-    pub chain_update:      AngstromChainUpdate,
+    pub chain_update:      AngstromChainUpdate<N>,
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub angstrom_tokens:   HashMap<Address, usize>,
 
@@ -33,10 +34,10 @@ pub struct EthUpdaterSnapshot {
     pub timestamp:  chrono::DateTime<Utc>
 }
 
-impl<Sync: BlockSyncProducer> From<(&EthDataCleanser<Sync>, CanonStateNotification)>
-    for EthUpdaterSnapshot
+impl<Sync: BlockSyncProducer, N: NodePrimitives>
+    From<(&EthDataCleanser<Sync, N>, CanonStateNotification<N>)> for EthUpdaterSnapshot<N>
 {
-    fn from((data, update): (&EthDataCleanser<Sync>, CanonStateNotification)) -> Self {
+    fn from((data, update): (&EthDataCleanser<Sync, N>, CanonStateNotification<N>)) -> Self {
         Self {
             angstrom_tokens:   data.angstrom_tokens.clone(),
             angstrom_address:  data.angstrom_address,
@@ -49,7 +50,7 @@ impl<Sync: BlockSyncProducer> From<(&EthDataCleanser<Sync>, CanonStateNotificati
     }
 }
 
-impl OrderTelemetryExt for EthUpdaterSnapshot {
+impl<N: NodePrimitives + Serialize> OrderTelemetryExt for EthUpdaterSnapshot<N> {
     fn into_message(self) -> Option<telemetry_recorder::TelemetryMessage> {
         let block = self.chain_update.get_block_number();
 
@@ -61,12 +62,12 @@ impl OrderTelemetryExt for EthUpdaterSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AngstromChainUpdate {
-    New(Arc<Chain>),
-    Reorg { new: Arc<Chain>, old: Arc<Chain> }
+pub enum AngstromChainUpdate<N: NodePrimitives = EthPrimitives> {
+    New(Arc<Chain<N>>),
+    Reorg { new: Arc<Chain<N>>, old: Arc<Chain<N>> }
 }
 
-impl AngstromChainUpdate {
+impl<N: NodePrimitives> AngstromChainUpdate<N> {
     fn get_block_number(&self) -> u64 {
         match self {
             Self::New(n) => n.tip_number(),
@@ -75,8 +76,8 @@ impl AngstromChainUpdate {
     }
 }
 
-impl From<CanonStateNotification> for AngstromChainUpdate {
-    fn from(value: CanonStateNotification) -> Self {
+impl<N: NodePrimitives> From<CanonStateNotification<N>> for AngstromChainUpdate<N> {
+    fn from(value: CanonStateNotification<N>) -> Self {
         match value {
             CanonStateNotification::Commit { new } => Self::New(new),
             CanonStateNotification::Reorg { old, new } => Self::Reorg { new, old }

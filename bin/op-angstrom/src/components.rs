@@ -13,20 +13,17 @@ use alloy::{
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
-use alloy_chains::Chain;
-use angstrom_amm_quoter::{ConsensusQuoterManager, Slot0Update};
+use angstrom_amm_quoter::{RollupQuoterManager, Slot0Update};
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    VerificationSidecar,
+    NetworkOrderEvent, PoolManagerBuilder,
     pool_manager::{OrderCommand, PoolHandle}
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
-    consensus::StromConsensusEvent,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
@@ -38,23 +35,24 @@ use angstrom_types::{
     reth_db_wrapper::RethDbWrapper,
     submission::SubmissionHandler
 };
-use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
+use consensus::AngstromValidator;
 use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
-use parking_lot::RwLock;
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
-    chainspec::ChainSpec,
     core::exit::NodeExitFuture,
     primitives::EthPrimitives,
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
-use reth_network::{NetworkHandle, Peers};
-use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns};
+use reth_node_builder::{
+    FullNode, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
+};
+use reth_optimism_chainspec::OpChainSpec;
+use reth_optimism_primitives::{OpBlock, OpPrimitives, OpReceipt};
 use reth_provider::{
     BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
@@ -73,33 +71,13 @@ use validation::{
 
 use crate::AngstromConfig;
 
-pub fn init_network_builder<S: AngstromMetaSigner>(
-    secret_key: AngstromSigner<S>,
-    eth_handle: UnboundedReceiver<EthEvent>,
-    validator_set: Arc<RwLock<HashSet<Address>>>
-) -> eyre::Result<StromNetworkBuilder<NetworkHandle, S>> {
-    let public_key = secret_key.id();
-
-    let state = StatusState {
-        version:   0,
-        chain:     Chain::mainnet().id(),
-        peer:      public_key,
-        timestamp: 0
-    };
-
-    let verification =
-        VerificationSidecar { status: state, has_sent: false, has_received: false, secret_key };
-
-    Ok(StromNetworkBuilder::new(verification, eth_handle, validator_set))
-}
-
 pub type DefaultPoolHandle = PoolHandle;
 type DefaultOrderCommand = OrderCommand;
 
 // due to how the init process works with reth. we need to init like this
-pub struct StromHandles {
-    pub eth_tx: Sender<EthCommand>,
-    pub eth_rx: Receiver<EthCommand>,
+pub struct StromHandles<N: NodePrimitives = EthPrimitives> {
+    pub eth_tx: Sender<EthCommand<N>>,
+    pub eth_rx: Receiver<EthCommand<N>>,
 
     pub pool_tx: UnboundedMeteredSender<NetworkOrderEvent>,
     pub pool_rx: UnboundedMeteredReceiver<NetworkOrderEvent>,
@@ -118,18 +96,12 @@ pub struct StromHandles {
 
     pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
 
-    pub consensus_tx_op: UnboundedMeteredSender<StromConsensusEvent>,
-    pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>,
-
-    pub consensus_tx_rpc: UnboundedSender<consensus::ConsensusRequest>,
-    pub consensus_rx_rpc: UnboundedReceiver<consensus::ConsensusRequest>,
-
     // only 1 set cur
     pub matching_tx: Sender<MatcherCommand>,
     pub matching_rx: Receiver<MatcherCommand>
 }
 
-impl StromHandles {
+impl<N: NodePrimitives> StromHandles<N> {
     pub fn get_pool_handle(&self) -> DefaultPoolHandle {
         PoolHandle {
             manager_tx:      self.orderpool_tx.clone(),
@@ -138,7 +110,7 @@ impl StromHandles {
     }
 }
 
-pub fn initialize_strom_handles() -> StromHandles {
+pub fn initialize_strom_handles<N: NodePrimitives>() -> StromHandles<N> {
     let (eth_tx, eth_rx) = channel(100);
     let (matching_tx, matching_rx) = channel(100);
     let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
@@ -147,9 +119,6 @@ pub fn initialize_strom_handles() -> StromHandles {
     let (validator_tx, validator_rx) = unbounded_channel();
     let (eth_handle_tx, eth_handle_rx) = unbounded_channel();
     let (quoter_tx, quoter_rx) = channel(1000);
-    let (consensus_tx_rpc, consensus_rx_rpc) = unbounded_channel();
-    let (consensus_tx_op, consensus_rx_op) =
-        reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
 
     StromHandles {
         eth_tx,
@@ -163,36 +132,27 @@ pub fn initialize_strom_handles() -> StromHandles {
         validator_tx,
         validator_rx,
         pool_manager_tx,
-        consensus_tx_op,
-        consensus_rx_op,
         matching_tx,
         matching_rx,
-        consensus_tx_rpc,
-        consensus_rx_rpc,
         eth_handle_tx: Some(eth_handle_tx),
         eth_handle_rx: Some(eth_handle_rx)
     }
 }
 
-pub async fn initialize_strom_components<Node, AddOns, P: Peers + Unpin + 'static, S>(
+pub async fn initialize_strom_components<Node, AddOns, S>(
     config: AngstromConfig,
     signer: AngstromSigner<S>,
-    mut handles: StromHandles,
-    network_builder: StromNetworkBuilder<P, S>,
+    mut handles: StromHandles<OpPrimitives>,
     node: &FullNode<Node, AddOns>,
     executor: TaskExecutor,
     exit: NodeExitFuture,
-    node_set: HashSet<Address>,
-    consensus_client: ConsensusHandler
+    node_set: HashSet<Address>
 ) -> eyre::Result<()>
 where
     Node: FullNodeComponents
-        + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
-    Node::Provider: BlockReader<
-            Block = reth::primitives::Block,
-            Receipt = reth::primitives::Receipt,
-            Header = reth::primitives::Header
-        > + DatabaseProviderFactory,
+        + FullNodeTypes<Types: NodeTypes<ChainSpec = OpChainSpec, Primitives = OpPrimitives>>,
+    Node::Provider: BlockReader<Block = OpBlock, Receipt = OpReceipt, Header = reth::primitives::Header>
+        + DatabaseProviderFactory,
     AddOns: NodeAddOns<Node> + RethRpcAddOns<Node>,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
         TryIntoHistoricalStateProvider + ReceiptProvider,
@@ -312,7 +272,7 @@ where
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
     // created
-    let eth_handle = EthDataCleanser::spawn(
+    let eth_handle = EthDataCleanser::<_, OpPrimitives>::spawn(
         angstrom_address,
         controller,
         eth_data_sub,
@@ -335,7 +295,7 @@ where
         init_telemetry(signer_addr, grace_shutdown)
     });
 
-    let uniswap_pool_manager = configure_uniswap_manager::<_, EthPrimitives, DEFAULT_TICKS>(
+    let uniswap_pool_manager = configure_uniswap_manager::<_, OpPrimitives, DEFAULT_TICKS>(
         querying_provider.clone(),
         eth_handle.subscribe_cannon_state_notifications().await,
         uniswap_registry,
@@ -362,7 +322,7 @@ where
     .await
     .expect("failed to start token price generator");
 
-    let update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
+    let update_stream = Box::pin(PairsWithPrice::into_price_update_stream::<_, OpPrimitives>(
         angstrom_address,
         node.provider.canonical_state_stream(),
         querying_provider.clone()
@@ -385,16 +345,12 @@ where
     let validation_handle = ValidationClient(handles.validator_tx.clone());
     tracing::info!("validation manager start");
 
-    let network_handle = network_builder
-        .with_pool_manager(handles.pool_tx)
-        .with_consensus_manager(handles.consensus_tx_op)
-        .build_handle(executor.clone(), node.provider.clone());
-
     // fetch pool ids
 
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
+    // TODO: PoolManagerBuilder should have optional network handle
     let _pool_handle = PoolManagerBuilder::new(
         validation_handle.clone(),
         Some(order_storage.clone()),
@@ -423,7 +379,7 @@ where
     let matching_handle = MatchingManager::spawn(executor.clone(), validation_handle.clone());
 
     // spin up amm quoter
-    let amm = ConsensusQuoterManager::new(
+    let amm = RollupQuoterManager::new(
         global_block_sync.clone(),
         order_storage.clone(),
         handles.quoter_rx,
@@ -432,35 +388,10 @@ where
             .num_threads(6)
             .build()
             .expect("failed to build rayon thread pool"),
-        Duration::from_millis(100),
-        consensus_client.subscribe_consensus_round_event()
+        Duration::from_millis(100)
     );
 
     executor.spawn_critical("amm quoting service", amm);
-
-    let manager = ConsensusManager::new(
-        ManagerNetworkDeps::new(
-            network_handle.clone(),
-            eth_handle.subscribe_cannon_state_notifications().await,
-            handles.consensus_rx_op
-        ),
-        signer,
-        validators,
-        order_storage.clone(),
-        deploy_block,
-        block_height,
-        uni_ang_registry,
-        uniswap_pools.clone(),
-        submission_handler,
-        matching_handle,
-        global_block_sync.clone(),
-        handles.consensus_rx_rpc,
-        None
-    );
-
-    executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
-        manager.run_till_shutdown(grace)
-    });
 
     global_block_sync.finalize_modules();
     tracing::info!("started angstrom");
@@ -468,7 +399,7 @@ where
 }
 
 async fn handle_init_block_spam(
-    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification>
+    canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification<OpPrimitives>>
 ) {
     // wait for the first notification
     let _ = canon.recv().await.expect("first block");

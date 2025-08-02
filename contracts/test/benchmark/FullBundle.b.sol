@@ -35,6 +35,10 @@ contract FullBundleBenchmark is BaseTest {
     address controller = makeAddr("controller");
     address node = makeAddr("the_one");
 
+    bool constant TOB_INTERNAL = false;
+
+    uint128 constant DONATION_AMOUNT = 6.0e18;
+
     function setUp() public {
         uni = new PoolManager(address(0));
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, controller));
@@ -53,54 +57,54 @@ contract FullBundleBenchmark is BaseTest {
     }
 
     function test_exactFlashInternal_solo_1() public {
-        _bundleWithExactFlashInternal(1);
+        _bundleWithExactFlashInternal("test_exactFlashInternal_solo_1", 1);
     }
 
     function test_exactFlashInternal_solo_2() public {
-        _bundleWithExactFlashInternal(2);
+        _bundleWithExactFlashInternal("test_exactFlashInternal_solo_2", 2);
     }
 
     function test_exactFlashInternal_solo_3() public {
-        _bundleWithExactFlashInternal(3);
+        _bundleWithExactFlashInternal("test_exactFlashInternal_solo_3", 3);
     }
 
     function test_exactStandingLiquidNonZeroNonce_solo_1() public {
-        _bundleWithExactStandingLiquid(1);
+        _bundleWithExactStandingLiquid("test_exactStandingLiquidNonZeroNonce_solo_1", 1);
     }
 
     function test_exactStandingLiquidNonZeroNonce_solo_2() public {
-        _bundleWithExactStandingLiquid(2);
+        _bundleWithExactStandingLiquid("test_exactStandingLiquidNonZeroNonce_solo_2", 2);
     }
 
     function test_exactStandingLiquidNonZeroNonce_solo_3() public {
-        _bundleWithExactStandingLiquid(3);
+        _bundleWithExactStandingLiquid("test_exactStandingLiquidNonZeroNonce_solo_3", 3);
     }
 
     function test_exactFlashInternal_amm_1() public {
-        _bundleWithExactFlashInternal_amm(1);
+        _bundleWithExactFlashInternal_amm("test_exactFlashInternal_amm_1", 1);
     }
 
     function test_exactFlashInternal_amm_2() public {
-        _bundleWithExactFlashInternal_amm(2);
+        _bundleWithExactFlashInternal_amm("test_exactFlashInternal_amm_2", 2);
     }
 
     function test_exactFlashInternal_amm_3() public {
-        _bundleWithExactFlashInternal_amm(3);
+        _bundleWithExactFlashInternal_amm("test_exactFlashInternal_amm_3", 3);
     }
 
     function test_exactStandingLiquidNonZeroNonce_amm_1() public {
-        _bundleWithExactStandingLiquid_amm(1);
+        _bundleWithExactStandingLiquid_amm("test_exactStandingLiquidNonZeroNonce_amm_1", 1);
     }
 
     function test_exactStandingLiquidNonZeroNonce_amm_2() public {
-        _bundleWithExactStandingLiquid_amm(2);
+        _bundleWithExactStandingLiquid_amm("test_exactStandingLiquidNonZeroNonce_amm_2", 2);
     }
 
     function test_exactStandingLiquidNonZeroNonce_amm_3() public {
-        _bundleWithExactStandingLiquid_amm(3);
+        _bundleWithExactStandingLiquid_amm("test_exactStandingLiquidNonZeroNonce_amm_3", 3);
     }
 
-    function _bundleWithExactFlashInternal_amm(uint256 total) internal {
+    function _bundleWithExactFlashInternal_amm(string memory snapshot, uint256 total) internal {
         Bundle memory bundle;
         uint128 amountIn = 1.0e18;
         uint128 amountOut = 1.0e18;
@@ -112,7 +116,8 @@ contract FullBundleBenchmark is BaseTest {
             update.assetIn = asset1;
             update.assetOut = asset0;
             update.amountIn = 100.0e18;
-            update.rewardUpdate = RewardLib.CurrentOnly(uni, poolId(angstrom, asset0, asset1), 0);
+            update.rewardUpdate =
+                RewardLib.CurrentOnly(uni, poolId(angstrom, asset0, asset1), DONATION_AMOUNT);
         }
 
         bundle.userOrders = new UserOrder[](total);
@@ -177,20 +182,20 @@ contract FullBundleBenchmark is BaseTest {
 
                 MockERC20(asset0).mint(mr_tob.addr, amount0);
                 MockERC20(asset0).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset0, amount0);
+                if (TOB_INTERNAL) angstrom.deposit(asset0, amount0);
 
                 MockERC20(asset1).mint(mr_tob.addr, amount1);
                 MockERC20(asset1).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset1, amount1);
+                if (TOB_INTERNAL) angstrom.deposit(asset1, amount1);
 
                 vm.stopPrank();
             }
 
             TopOfBlockOrder memory tob;
             tob.quantityIn = tobIn;
-            tob.quantityOut = tobOut;
+            tob.quantityOut = tobOut - DONATION_AMOUNT;
             tob.maxGasAsset0 = 0.1e18;
-            tob.useInternal = true;
+            tob.useInternal = TOB_INTERNAL;
             tob.assetIn = asset1;
             tob.assetOut = asset0;
             tob.validForBlock = uint64(block.number);
@@ -217,11 +222,13 @@ contract FullBundleBenchmark is BaseTest {
             vm.breakpoint("c");
             vm.prank(node);
 
+            vm.startSnapshotGas("Full Bundle Benchmark", snapshot);
             angstrom.execute(payload);
+            vm.stopSnapshotGas();
         }
     }
 
-    function _bundleWithExactStandingLiquid_amm(uint256 total) internal {
+    function _bundleWithExactStandingLiquid_amm(string memory snapshot, uint256 total) internal {
         Bundle memory bundle;
         uint128 amountIn = 1.0e18;
         uint128 amountOut = 1.0e18;
@@ -233,7 +240,8 @@ contract FullBundleBenchmark is BaseTest {
             update.assetIn = asset1;
             update.assetOut = asset0;
             update.amountIn = 100.0e18;
-            update.rewardUpdate = RewardLib.CurrentOnly(uni, poolId(angstrom, asset0, asset1), 0);
+            update.rewardUpdate =
+                RewardLib.CurrentOnly(uni, poolId(angstrom, asset0, asset1), DONATION_AMOUNT);
         }
 
         bundle.userOrders = new UserOrder[](total);
@@ -297,20 +305,20 @@ contract FullBundleBenchmark is BaseTest {
 
                 MockERC20(asset0).mint(mr_tob.addr, amount0);
                 MockERC20(asset0).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset0, amount0);
+                if (TOB_INTERNAL) angstrom.deposit(asset0, amount0);
 
                 MockERC20(asset1).mint(mr_tob.addr, amount1);
                 MockERC20(asset1).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset1, amount1);
+                if (TOB_INTERNAL) angstrom.deposit(asset1, amount1);
 
                 vm.stopPrank();
             }
 
             TopOfBlockOrder memory tob;
             tob.quantityIn = tobIn;
-            tob.quantityOut = tobOut;
+            tob.quantityOut = tobOut - DONATION_AMOUNT;
             tob.maxGasAsset0 = 0.1e18;
-            tob.useInternal = true;
+            tob.useInternal = TOB_INTERNAL;
             tob.assetIn = asset1;
             tob.assetOut = asset0;
             tob.validForBlock = uint64(block.number);
@@ -335,13 +343,14 @@ contract FullBundleBenchmark is BaseTest {
         }
         console.log("cdCost: %s", cdCost);
 
-        vm.breakpoint("c");
         vm.prank(node);
 
+        vm.startSnapshotGas("Full Bundle Benchmark", snapshot);
         angstrom.execute(payload);
+        vm.stopSnapshotGas();
     }
 
-    function _bundleWithExactFlashInternal(uint256 total) internal {
+    function _bundleWithExactFlashInternal(string memory snapshot, uint256 total) internal {
         Bundle memory bundle;
         uint128 amountIn = 1.0e18;
         uint128 amountOut = 1.0e18;
@@ -409,11 +418,11 @@ contract FullBundleBenchmark is BaseTest {
 
                 MockERC20(asset0).mint(mr_tob.addr, amount0);
                 MockERC20(asset0).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset0, amount0);
+                if (TOB_INTERNAL) angstrom.deposit(asset0, amount0);
 
                 MockERC20(asset1).mint(mr_tob.addr, amount1);
                 MockERC20(asset1).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset1, amount1);
+                if (TOB_INTERNAL) angstrom.deposit(asset1, amount1);
 
                 vm.stopPrank();
             }
@@ -422,7 +431,7 @@ contract FullBundleBenchmark is BaseTest {
             tob.quantityIn = tobIn;
             tob.quantityOut = tobOut;
             tob.maxGasAsset0 = 0.1e18;
-            tob.useInternal = true;
+            tob.useInternal = TOB_INTERNAL;
             tob.assetIn = asset1;
             tob.assetOut = asset0;
             tob.validForBlock = uint64(block.number);
@@ -444,16 +453,17 @@ contract FullBundleBenchmark is BaseTest {
                     cdCost += 16;
                 }
             }
-            console.log("cdCost: %s", cdCost);
 
-            vm.breakpoint("c");
+            console.log("cdCost: %s", cdCost);
             vm.prank(node);
 
+            vm.startSnapshotGas("Full Bundle Benchmark", snapshot);
             angstrom.execute(payload);
+            vm.stopSnapshotGas();
         }
     }
 
-    function _bundleWithExactStandingLiquid(uint256 total) internal {
+    function _bundleWithExactStandingLiquid(string memory snapshot, uint256 total) internal {
         Bundle memory bundle;
         uint128 amountIn = 1.0e18;
         uint128 amountOut = 1.0e18;
@@ -520,11 +530,11 @@ contract FullBundleBenchmark is BaseTest {
 
                 MockERC20(asset0).mint(mr_tob.addr, amount0);
                 MockERC20(asset0).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset0, amount0);
+                if (TOB_INTERNAL) angstrom.deposit(asset0, amount0);
 
                 MockERC20(asset1).mint(mr_tob.addr, amount1);
                 MockERC20(asset1).approve(address(angstrom), type(uint256).max);
-                angstrom.deposit(asset1, amount1);
+                if (TOB_INTERNAL) angstrom.deposit(asset1, amount1);
 
                 vm.stopPrank();
             }
@@ -533,7 +543,7 @@ contract FullBundleBenchmark is BaseTest {
             tob.quantityIn = tobIn;
             tob.quantityOut = tobOut;
             tob.maxGasAsset0 = 0.1e18;
-            tob.useInternal = true;
+            tob.useInternal = TOB_INTERNAL;
             tob.assetIn = asset1;
             tob.assetOut = asset0;
             tob.validForBlock = uint64(block.number);
@@ -555,12 +565,13 @@ contract FullBundleBenchmark is BaseTest {
                     cdCost += 16;
                 }
             }
-            console.log("cdCost: %s", cdCost);
 
-            vm.breakpoint("c");
+            console.log("cdCost: %s", cdCost);
             vm.prank(node);
 
+            vm.startSnapshotGas("Full Bundle Benchmark", snapshot);
             angstrom.execute(payload);
+            vm.stopSnapshotGas();
         }
     }
 }

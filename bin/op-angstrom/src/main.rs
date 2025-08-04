@@ -4,7 +4,7 @@
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() {
-    if let Err(err) = angstrom::run() {
+    if let Err(err) = op_angstrom::run() {
         eprintln!("Error: {err:?}");
         std::process::exit(1);
     }

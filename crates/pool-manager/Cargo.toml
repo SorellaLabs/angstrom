@@ -1,0 +1,96 @@
+[package]
+name = "pool-manager"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = """
+Pool management for Angstrom - handles both Uniswap V4 pools and order pools
+"""
+
+[lints.clippy]
+large_enum_variant = "allow"
+too_long_first_doc_paragraph = "allow"
+
+[dependencies]
+# Core dependencies
+alloy.workspace = true
+alloy-chains.workspace = true
+alloy-primitives.workspace = true
+angstrom-eth.workspace = true
+angstrom-network.workspace = true
+angstrom-types.workspace = true
+arraydeque.workspace = true
+bincode.workspace = true
+dashmap.workspace = true
+eyre.workspace = true
+futures.workspace = true
+futures-util.workspace = true
+hex.workspace = true
+homedir.workspace = true
+itertools.workspace = true
+linked_hash_set.workspace = true
+malachite.workspace = true
+once_cell.workspace = true
+order-pool.workspace = true
+parking_lot.workspace = true
+rand.workspace = true
+rayon.workspace = true
+reth.workspace = true
+reth-metrics.workspace = true
+reth-network-peers.workspace = true
+reth-primitives.workspace = true
+reth-provider.workspace = true
+reth-tasks.workspace = true
+reth-transaction-pool.workspace = true
+secp256k1.workspace = true
+serde.workspace = true
+telemetry-recorder.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uniswap_v3_math.workspace = true
+validation.workspace = true
+
+[dev-dependencies]
+angstrom-network.workspace = true
+divan.workspace = true
+pade.workspace = true
+pade-macro.workspace = true
+rand.workspace = true
+reth-discv4 = { workspace = true, features = ["test-utils"] }
+reth-metrics.workspace = true
+reth-network = { workspace = true, features = ["test-utils"] }
+reth-primitives = { workspace = true, features = ["test-utils"] }
+reth-provider = { workspace = true, features = ["test-utils"] }
+reth-tracing.workspace = true
+reth-transaction-pool = { workspace = true, features = ["test-utils"] }
+revm.workspace = true
+revm-bytecode.workspace = true
+revm-database.workspace = true
+revm-primitives.workspace = true
+revm-state.workspace = true
+secp256k1.workspace = true
+serial_test.workspace = true
+tempfile.workspace = true
+testing-tools.workspace = true
+tokio-stream.workspace = true
+toml.workspace = true
+validation.workspace = true
+
+[build-dependencies]
+convert_case.workspace = true
+itertools.workspace = true
+
+[features]
+default = ["serde"]
+serde = ["secp256k1/serde"]
+test-utils = ["reth-provider/test-utils"]
+geth-tests = []
+anvil = []

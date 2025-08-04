@@ -18,6 +18,7 @@ consensus.workspace = true
 futures.workspace = true
 jsonrpsee = { workspace = true, features = ["server", "macros", "ws-client"] }
 order-pool.workspace = true
+pool-manager.workspace = true
 reth-tasks.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -9,7 +9,6 @@ use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
-use angstrom_network::pool_manager::PoolHandle;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::{
     contract_bindings::controller_v_1::ControllerV1,
@@ -20,6 +19,7 @@ use angstrom_types::{
 };
 use clap::Parser;
 use cli::AngstromConfig;
+use pool_manager::PoolHandle;
 use reth::{chainspec::EthChainSpec, tasks::TaskExecutor};
 use reth_db::DatabaseEnv;
 use reth_node_builder::{Node, NodeBuilder, NodeHandle, WithLaunchContext};

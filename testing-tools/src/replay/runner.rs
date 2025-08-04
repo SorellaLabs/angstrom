@@ -15,7 +15,6 @@ use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
 };
-use angstrom_network::{PoolManagerBuilder, pool_manager::PoolHandle};
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}
@@ -36,6 +35,7 @@ use futures::{Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
 use order_pool::{OrderPoolHandle, PoolConfig};
+use pool_manager::{ConsensusPoolManager, PoolHandle};
 use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
@@ -361,13 +361,14 @@ impl ReplayRunner {
 
         let network_handle = fake_network.handle.clone();
 
-        let pool_handle = PoolManagerBuilder::new(
+        let pool_handle = ConsensusPoolManager::new(
             validation_client.clone(),
             Some(order_storage.clone()),
             network_handle.clone(),
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
-            global_block_sync.clone()
+            global_block_sync.clone(),
+            network_handle.subscribe_network_events()
         )
         .with_config(pool_config)
         .build_with_channels(

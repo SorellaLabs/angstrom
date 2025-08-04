@@ -9,7 +9,7 @@ use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
-use angstrom_network::{AngstromNetworkBuilder, pool_manager::PoolHandle};
+use angstrom_network::AngstromNetworkBuilder;
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}
@@ -25,6 +25,7 @@ use clap::Parser;
 use cli::AngstromConfig;
 use consensus::ConsensusHandler;
 use parking_lot::RwLock;
+use pool_manager::PoolHandle;
 use reth::{
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
     cli::Cli,

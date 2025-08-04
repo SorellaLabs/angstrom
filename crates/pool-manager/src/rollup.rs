@@ -51,7 +51,7 @@ impl NetworkHandle for NoNetwork {
     }
 }
 
-/// Type alias for rollup pool manager - follows QuoterManager naming pattern
+/// Type alias for rollup pool manager
 pub type RollupPoolManager<V, GS> = PoolManager<V, GS, NoNetwork, RollupMode>;
 
 /// Builder for constructing RollupPoolManager instances.

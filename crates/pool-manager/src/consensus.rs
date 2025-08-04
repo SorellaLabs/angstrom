@@ -21,7 +21,7 @@ use crate::{
     order::{OrderCommand, PoolManager, StromPeer}
 };
 
-/// Type alias for consensus pool manager - follows QuoterManager naming pattern
+/// Type alias for consensus pool manager
 pub type ConsensusPoolManager<V, GS, NH> = PoolManager<V, GS, NH, ConsensusMode>;
 
 /// Builder for constructing ConsensusPoolManager instances.

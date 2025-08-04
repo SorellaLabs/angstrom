@@ -184,8 +184,6 @@ impl ConsensusMode {
 // parameters
 
 impl PoolManagerMode for ConsensusMode {
-    const REQUIRES_NETWORKING: bool = true;
-
     fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,

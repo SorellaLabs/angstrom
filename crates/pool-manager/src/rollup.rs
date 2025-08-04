@@ -174,8 +174,6 @@ impl Default for RollupMode {
 }
 
 impl PoolManagerMode for RollupMode {
-    const REQUIRES_NETWORKING: bool = false;
-
     fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
     where
         V: OrderValidatorHandle<Order = AllOrders> + Unpin,
@@ -217,11 +215,12 @@ where
         for order in orders {
             match order {
                 PoolInnerEvent::Propagation(_order) => {
-                    // In rollup mode, no need to broadcast orders to peers since there's no
-                    // networking
+                    // In rollup mode, no need to broadcast orders to peers
+                    // since there's no networking
                 }
                 PoolInnerEvent::BadOrderMessages(_o) => {
-                    // In rollup mode, we don't have networking, so no reputation changes
+                    // In rollup mode, we don't have networking, so no
+                    // reputation changes
                 }
                 PoolInnerEvent::HasTransitionedToNewBlock(block) => {
                     self.global_sync.sign_off_on_block(

@@ -20,9 +20,6 @@ pub mod rollup;
 /// customize specific aspects of pool management behavior while sharing the
 /// bulk of the implementation.
 pub trait PoolManagerMode: Send + Sync + Unpin + 'static {
-    /// Whether this mode requires networking functionality
-    const REQUIRES_NETWORKING: bool;
-
     /// Mode-specific logic for processing/filtering orders for a proposal.
     ///
     /// Different modes may have different requirements for which orders should

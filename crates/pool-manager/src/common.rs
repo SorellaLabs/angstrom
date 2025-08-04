@@ -1,5 +1,7 @@
 //! Common traits and functionality shared between pool manager implementations
 
+use std::task::Waker;
+
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
@@ -36,7 +38,7 @@ pub trait PoolManagerCommon {
     fn command_rx_mut(&mut self) -> &mut UnboundedReceiverStream<OrderCommand>;
 
     /// Handle Ethereum events - common implementation
-    fn on_eth_event(&mut self, eth: EthEvent, waker: std::task::Waker) {
+    fn on_eth_event(&mut self, eth: EthEvent, waker: Waker) {
         match eth {
             EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
                 self.order_indexer_mut().start_new_block_processing(
@@ -76,7 +78,7 @@ pub trait PoolManagerCommon {
     fn on_command(&mut self, cmd: OrderCommand);
 
     /// Handle pool events - mode-specific implementation required
-    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> std::task::Waker);
+    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker);
 }
 
 /// Simple macro to implement the repetitive getter methods for

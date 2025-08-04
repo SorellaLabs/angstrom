@@ -1,7 +1,7 @@
 use std::{
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll}
+    task::{Context, Poll, Waker}
 };
 
 use angstrom_eth::manager::EthEvent;
@@ -200,11 +200,7 @@ where
         }
     }
 
-    fn on_pool_events(
-        &mut self,
-        orders: Vec<PoolInnerEvent>,
-        waker: impl Fn() -> std::task::Waker
-    ) {
+    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
         for order in orders {
             match order {
                 PoolInnerEvent::Propagation(_order) => {
@@ -240,7 +236,8 @@ where
             this.on_eth_event(eth, cx.waker().clone());
         }
 
-        // High priority: poll underlying pool. This is the validation process that's being polled
+        // High priority: poll underlying pool. This is the validation process that's
+        // being polled
         while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
             this.on_pool_events(orders, || cx.waker().clone());
         }

@@ -1,8 +1,9 @@
 use std::{
     collections::HashMap,
+    num::NonZeroUsize,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll}
+    task::{Context, Poll, Waker}
 };
 
 use angstrom_eth::manager::EthEvent;
@@ -17,6 +18,8 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::{
+    PEER_ORDER_CACHE_LIMIT,
+    cache::LruCache,
     common::PoolManagerCommon,
     impl_common_getters,
     order::{MODULE_NAME, OrderCommand, PoolHandle, StromPeer}
@@ -235,10 +238,6 @@ where
 
     /// Handle network peer events - consensus mode specific
     pub(crate) fn on_network_event(&mut self, event: StromNetworkEvent) {
-        use std::num::NonZeroUsize;
-
-        use crate::{cache::LruCache, order::PEER_ORDER_CACHE_LIMIT};
-
         match event {
             StromNetworkEvent::SessionEstablished { peer_id } => {
                 // insert a new peer into the peerset
@@ -305,11 +304,7 @@ where
         }
     }
 
-    fn on_pool_events(
-        &mut self,
-        orders: Vec<PoolInnerEvent>,
-        waker: impl Fn() -> std::task::Waker
-    ) {
+    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
         use angstrom_types::network::ReputationChangeKind;
 
         let valid_orders = orders
@@ -389,11 +384,7 @@ where
         }
     }
 
-    fn on_pool_events(
-        &mut self,
-        orders: Vec<PoolInnerEvent>,
-        waker: impl Fn() -> std::task::Waker
-    ) {
+    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
         use angstrom_types::network::ReputationChangeKind;
 
         let valid_orders = orders
@@ -438,21 +429,20 @@ where
             this.on_eth_event(eth, cx.waker().clone());
         }
 
-        // High priority: poll underlying pool. This is the validation process that's being polled
+        // High priority: poll underlying pool. This is the validation process that's
+        // being polled
         while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
             this.on_pool_events(orders, || cx.waker().clone());
         }
 
         // Medium priority: Poll network/peer related events - consensus mode specific
-        while let std::task::Poll::Ready(Some(event)) =
-            this.strom_network_events.poll_next_unpin(cx)
-        {
+        while let Poll::Ready(Some(event)) = this.strom_network_events.poll_next_unpin(cx) {
             this.on_network_event(event);
         }
 
         // Medium priority: Poll incoming network order events - consensus mode specific
         if this.global_sync.can_operate() {
-            while let std::task::Poll::Ready(Some(event)) = this.order_events.poll_next_unpin(cx) {
+            while let Poll::Ready(Some(event)) = this.order_events.poll_next_unpin(cx) {
                 this.on_network_order_event(event);
             }
         }

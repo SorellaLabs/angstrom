@@ -79,41 +79,33 @@ pub trait PoolManagerCommon {
     fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> std::task::Waker);
 }
 
-/// Helper macro to implement common getters for pool managers
+/// Simple macro to implement the repetitive getter methods for
+/// PoolManagerCommon
 #[macro_export]
-macro_rules! impl_pool_manager_common_getters {
-    ($struct_name:ident < $($gen:ident),* >) => {
-        impl<$($gen),*> $crate::common::PoolManagerCommon for $struct_name<$($gen),*>
-        where
-            V: validation::order::OrderValidatorHandle<Order = angstrom_types::sol_bindings::grouped_orders::AllOrders> + Unpin,
-            GS: angstrom_types::block_sync::BlockSyncConsumer
-        {
-            type Validator = V;
-            type GlobalSync = GS;
+macro_rules! impl_common_getters {
+    ($struct_name:ty, $validator:ty, $global_sync:ty) => {
+        fn order_indexer(&self) -> &OrderIndexer<Self::Validator> {
+            &self.order_indexer
+        }
 
-            fn order_indexer(&self) -> &order_pool::OrderIndexer<Self::Validator> {
-                &self.order_indexer
-            }
+        fn order_indexer_mut(&mut self) -> &mut OrderIndexer<Self::Validator> {
+            &mut self.order_indexer
+        }
 
-            fn order_indexer_mut(&mut self) -> &mut order_pool::OrderIndexer<Self::Validator> {
-                &mut self.order_indexer
-            }
+        fn global_sync(&self) -> &Self::GlobalSync {
+            &self.global_sync
+        }
 
-            fn global_sync(&self) -> &Self::GlobalSync {
-                &self.global_sync
-            }
+        fn global_sync_mut(&mut self) -> &mut Self::GlobalSync {
+            &mut self.global_sync
+        }
 
-            fn global_sync_mut(&mut self) -> &mut Self::GlobalSync {
-                &mut self.global_sync
-            }
+        fn eth_network_events_mut(&mut self) -> &mut UnboundedReceiverStream<EthEvent> {
+            &mut self.eth_network_events
+        }
 
-            fn eth_network_events_mut(&mut self) -> &mut tokio_stream::wrappers::UnboundedReceiverStream<angstrom_eth::manager::EthEvent> {
-                &mut self.eth_network_events
-            }
-
-            fn command_rx_mut(&mut self) -> &mut tokio_stream::wrappers::UnboundedReceiverStream<$crate::order::OrderCommand> {
-                &mut self.command_rx
-            }
+        fn command_rx_mut(&mut self) -> &mut UnboundedReceiverStream<OrderCommand> {
+            &mut self.command_rx
         }
     };
 }

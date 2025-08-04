@@ -18,6 +18,7 @@ use validation::order::OrderValidatorHandle;
 
 use crate::{
     common::PoolManagerCommon,
+    impl_common_getters,
     order::{MODULE_NAME, OrderCommand, PoolHandle, StromPeer}
 };
 
@@ -348,29 +349,8 @@ where
     type GlobalSync = GS;
     type Validator = V;
 
-    fn order_indexer(&self) -> &OrderIndexer<Self::Validator> {
-        &self.order_indexer
-    }
-
-    fn order_indexer_mut(&mut self) -> &mut OrderIndexer<Self::Validator> {
-        &mut self.order_indexer
-    }
-
-    fn global_sync(&self) -> &Self::GlobalSync {
-        &self.global_sync
-    }
-
-    fn global_sync_mut(&mut self) -> &mut Self::GlobalSync {
-        &mut self.global_sync
-    }
-
-    fn eth_network_events_mut(&mut self) -> &mut UnboundedReceiverStream<EthEvent> {
-        &mut self.eth_network_events
-    }
-
-    fn command_rx_mut(&mut self) -> &mut UnboundedReceiverStream<OrderCommand> {
-        &mut self.command_rx
-    }
+    // Use macro to avoid duplication of getter methods
+    impl_common_getters!(ConsensusPoolManager<V, GS, NH>, V, GS);
 
     fn on_command(&mut self, cmd: OrderCommand) {
         use angstrom_types::orders::OrderOrigin;

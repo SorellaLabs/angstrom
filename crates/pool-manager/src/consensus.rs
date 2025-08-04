@@ -209,8 +209,6 @@ impl PoolManagerMode for ConsensusMode {
         NH: NetworkHandle,
         Self: Sized
     {
-        use futures::StreamExt;
-
         // Poll network/peer related events - consensus mode specific
         while let std::task::Poll::Ready(Some(event)) =
             pool.mode.strom_network_events.poll_next_unpin(cx)
@@ -242,7 +240,6 @@ where
     pub fn get_consensus_orders(&mut self) -> Vec<AllOrders> {
         ConsensusMode::get_proposable_orders(self)
     }
-
 
     /// Handle incoming network order events - consensus mode specific
     pub(crate) fn on_network_order_event(&mut self, event: NetworkOrderEvent) {

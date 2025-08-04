@@ -5,13 +5,7 @@ use std::{
 };
 
 use angstrom_eth::manager::EthEvent;
-use angstrom_network::{NetworkHandle, StromNetworkEvent};
-use angstrom_types::{
-    block_sync::BlockSyncConsumer,
-    network::{PoolNetworkMessage, ReputationChangeKind},
-    primitive::PeerId,
-    sol_bindings::grouped_orders::AllOrders
-};
+use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
 use futures::{Future, StreamExt};
 use order_pool::{
     OrderIndexer, PoolConfig, PoolInnerEvent, PoolManagerUpdate, order_storage::OrderStorage
@@ -22,37 +16,26 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::{
-    PoolManagerMode,
-    order::{MODULE_NAME, OrderCommand, PoolHandle, PoolManager}
+    common::PoolManagerCommon,
+    order::{MODULE_NAME, OrderCommand, PoolHandle}
 };
 
-/// Unit type used as a placeholder for network handle in rollup mode
-#[derive(Debug, Clone, Copy)]
-pub struct NoNetwork;
-
-impl NetworkHandle for NoNetwork {
-    type Events<'a>
-        = UnboundedReceiverStream<StromNetworkEvent>
-    where
-        Self: 'a;
-
-    fn send_message(&mut self, _peer_id: PeerId, _message: PoolNetworkMessage) {
-        // No-op for rollup mode
-    }
-
-    fn peer_reputation_change(&mut self, _peer_id: PeerId, _change: ReputationChangeKind) {
-        // No-op for rollup mode
-    }
-
-    fn subscribe_network_events(&self) -> Self::Events<'_> {
-        // Return an empty receiver since rollup mode doesn't have network events
-        let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-        UnboundedReceiverStream::new(rx)
-    }
+/// Rollup-mode pool manager without networking capabilities
+pub struct RollupPoolManager<V, GS>
+where
+    V: OrderValidatorHandle,
+    GS: BlockSyncConsumer
+{
+    /// Access to validation and sorted storage of orders
+    pub(crate) order_indexer:      OrderIndexer<V>,
+    /// Global blockchain synchronization coordinator
+    pub(crate) global_sync:        GS,
+    /// Ethereum updates stream that tells the pool manager about orders that
+    /// have been filled
+    pub(crate) eth_network_events: UnboundedReceiverStream<EthEvent>,
+    /// Receiver half of the commands to the pool manager
+    pub(crate) command_rx:         UnboundedReceiverStream<OrderCommand>
 }
-
-/// Type alias for rollup pool manager
-pub type RollupPoolManager<V, GS> = PoolManager<V, GS, NoNetwork, RollupMode>;
 
 /// Builder for constructing RollupPoolManager instances.
 pub struct RollupPoolManagerBuilder<V, GlobalSync>
@@ -121,17 +104,13 @@ where
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
 
-        let mode = RollupMode::new();
-
         task_spawner.spawn_critical(
             "order pool manager",
-            Box::pin(PoolManager::<V, GlobalSync, NoNetwork, RollupMode> {
+            Box::pin(RollupPoolManager {
                 eth_network_events: self.eth_network_events,
-                order_indexer: inner,
-                network: NoNetwork,
-                command_rx: rx,
-                global_sync: self.global_sync,
-                mode
+                order_indexer:      inner,
+                command_rx:         rx,
+                global_sync:        self.global_sync
             })
         );
 
@@ -155,46 +134,7 @@ where
     }
 }
 
-/// Rollup mode for PoolManager - simpler behavior without consensus logic
-#[derive(Debug)]
-pub struct RollupMode;
-
-// RollupMode automatically derives Send + Sync since it has no fields
-
-impl RollupMode {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for RollupMode {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PoolManagerMode for RollupMode {
-    fn get_proposable_orders<V, GS, NH>(pool: &mut PoolManager<V, GS, NH, Self>) -> Vec<AllOrders>
-    where
-        V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-        GS: BlockSyncConsumer,
-        NH: NetworkHandle,
-        Self: Sized
-    {
-        // In rollup mode, we process all orders without consensus filtering
-        // This is typically simpler and more direct
-        pool.order_indexer
-            .get_all_orders_with_parked()
-            .into_all_orders()
-    }
-
-    // The default no-op for poll_mode_specific is sufficient for RollupMode
-    // as it doesn't need any mode-specific polling behavior.
-    // Specifically, RollupMode does NOT poll network events since it operates
-    // without direct peer networking
-}
-
-impl<V, GlobalSync> PoolManager<V, GlobalSync, NoNetwork, RollupMode>
+impl<V, GlobalSync> RollupPoolManager<V, GlobalSync>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer
@@ -204,72 +144,45 @@ where
     /// This method provides a convenient way to get proposable orders
     /// for rollup mode, which processes all orders without consensus filtering.
     pub fn get_rollup_orders(&mut self) -> Vec<AllOrders> {
-        RollupMode::get_proposable_orders(self)
+        // In rollup mode, we process all orders without consensus filtering
+        // This is typically simpler and more direct
+        self.order_indexer
+            .get_all_orders_with_parked()
+            .into_all_orders()
+    }
+}
+
+// Implement the PoolManagerCommon trait methods
+impl<V, GS> PoolManagerCommon for RollupPoolManager<V, GS>
+where
+    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
+    GS: BlockSyncConsumer
+{
+    type GlobalSync = GS;
+    type Validator = V;
+
+    fn order_indexer(&self) -> &OrderIndexer<Self::Validator> {
+        &self.order_indexer
     }
 
-    fn on_pool_events(
-        &mut self,
-        orders: Vec<PoolInnerEvent>,
-        waker: impl Fn() -> std::task::Waker
-    ) {
-        for order in orders {
-            match order {
-                PoolInnerEvent::Propagation(_order) => {
-                    // In rollup mode, no need to broadcast orders to peers
-                    // since there's no networking
-                }
-                PoolInnerEvent::BadOrderMessages(_o) => {
-                    // In rollup mode, we don't have networking, so no
-                    // reputation changes
-                }
-                PoolInnerEvent::HasTransitionedToNewBlock(block) => {
-                    self.global_sync.sign_off_on_block(
-                        crate::order::MODULE_NAME,
-                        block,
-                        Some(waker())
-                    );
-                }
-                PoolInnerEvent::None => {}
-            }
-        }
+    fn order_indexer_mut(&mut self) -> &mut OrderIndexer<Self::Validator> {
+        &mut self.order_indexer
     }
 
-    fn on_eth_event(&mut self, eth: EthEvent, waker: std::task::Waker) {
-        use angstrom_types::primitive::{NewInitializedPool, PoolId};
+    fn global_sync(&self) -> &Self::GlobalSync {
+        &self.global_sync
+    }
 
-        match eth {
-            EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
-                self.order_indexer.start_new_block_processing(
-                    block_number,
-                    filled_orders,
-                    address_changeset
-                );
-                waker.clone().wake_by_ref();
-            }
-            EthEvent::ReorgedOrders(orders, range) => {
-                self.order_indexer.reorg(orders);
-                self.global_sync
-                    .sign_off_reorg(crate::order::MODULE_NAME, range, Some(waker))
-            }
-            EthEvent::FinalizedBlock(block) => {
-                self.order_indexer.finalized_block(block);
-            }
-            EthEvent::NewPool { pool } => {
-                let t0 = pool.currency0;
-                let t1 = pool.currency1;
-                let id: PoolId = pool.into();
+    fn global_sync_mut(&mut self) -> &mut Self::GlobalSync {
+        &mut self.global_sync
+    }
 
-                let pool = NewInitializedPool { currency_in: t0, currency_out: t1, id };
+    fn eth_network_events_mut(&mut self) -> &mut UnboundedReceiverStream<EthEvent> {
+        &mut self.eth_network_events
+    }
 
-                self.order_indexer.new_pool(pool);
-            }
-            EthEvent::RemovedPool { pool } => {
-                self.order_indexer.remove_pool(pool.into());
-            }
-            EthEvent::AddedNode(_) => {}
-            EthEvent::RemovedNode(_) => {}
-            EthEvent::NewBlock(_) => {}
-        }
+    fn command_rx_mut(&mut self) -> &mut UnboundedReceiverStream<OrderCommand> {
+        &mut self.command_rx
     }
 
     fn on_command(&mut self, cmd: OrderCommand) {
@@ -306,9 +219,33 @@ where
             }
         }
     }
+
+    fn on_pool_events(
+        &mut self,
+        orders: Vec<PoolInnerEvent>,
+        waker: impl Fn() -> std::task::Waker
+    ) {
+        for order in orders {
+            match order {
+                PoolInnerEvent::Propagation(_order) => {
+                    // In rollup mode, no need to broadcast orders to peers
+                    // since there's no networking
+                }
+                PoolInnerEvent::BadOrderMessages(_o) => {
+                    // In rollup mode, we don't have networking, so no
+                    // reputation changes
+                }
+                PoolInnerEvent::HasTransitionedToNewBlock(block) => {
+                    self.global_sync
+                        .sign_off_on_block(MODULE_NAME, block, Some(waker()));
+                }
+                PoolInnerEvent::None => {}
+            }
+        }
+    }
 }
 
-impl<V, GlobalSync> Future for PoolManager<V, GlobalSync, NoNetwork, RollupMode>
+impl<V, GlobalSync> Future for RollupPoolManager<V, GlobalSync>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GlobalSync: BlockSyncConsumer
@@ -336,8 +273,7 @@ where
                 this.on_pool_events(orders, || cx.waker().clone());
             }
 
-            // Poll mode-specific events (no-op for RollupMode)
-            RollupMode::poll_mode_specific(this, cx);
+            // Rollup mode has no mode-specific polling
 
             // halt dealing with these till we have synced
             if this.global_sync.can_operate() {

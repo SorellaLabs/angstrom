@@ -1,19 +1,16 @@
 use alloy::primitives::{Address, B256, FixedBytes};
-use angstrom_eth::manager::EthEvent;
-use angstrom_network::NetworkHandle;
 use angstrom_types::{
-    block_sync::BlockSyncConsumer,
     orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
     primitive::{OrderValidationError, PeerId},
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::{Future, FutureExt};
-use order_pool::{OrderIndexer, OrderPoolHandle, PoolManagerUpdate};
+use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use tokio::sync::mpsc::{UnboundedSender, error::SendError};
-use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
-use validation::order::{OrderValidationResults, OrderValidatorHandle};
+use tokio_stream::wrappers::BroadcastStream;
+use validation::order::OrderValidationResults;
 
-use crate::{PoolManagerMode, cache::LruCache};
+use crate::cache::LruCache;
 
 pub(crate) const MODULE_NAME: &str = "Order Pool";
 
@@ -107,35 +104,6 @@ impl OrderPoolHandle for PoolHandle {
         rx.map(|res| res.unwrap_or(false))
     }
 }
-
-/// Core PoolManager struct - manages order pools with mode-specific behavior
-///
-/// Defaulting to ConsensusMode. Uses type state pattern for compile-time mode
-/// differentiation.
-pub struct PoolManager<V, GlobalSync, NH: NetworkHandle, M = crate::consensus::ConsensusMode>
-where
-    V: OrderValidatorHandle,
-    GlobalSync: BlockSyncConsumer,
-    M: PoolManagerMode
-{
-    /// Access to validation and sorted storage of orders
-    pub(crate) order_indexer:      OrderIndexer<V>,
-    /// Global blockchain synchronization coordinator
-    pub(crate) global_sync:        GlobalSync,
-    /// Network access for peer communication
-    pub(crate) network:            NH,
-    /// Ethereum updates stream that tells the pool manager about orders that
-    /// have been filled
-    pub(crate) eth_network_events: UnboundedReceiverStream<EthEvent>,
-    /// Receiver half of the commands to the pool manager
-    pub(crate) command_rx:         UnboundedReceiverStream<OrderCommand>,
-    /// Mode-specific state and behavior (ConsensusMode or RollupMode)
-    pub(crate) mode:               M
-}
-
-// PoolManager implementation methods are mode-specific. Common trait methods
-// are defined in PoolManagerMode trait in lib.rs. Mode-specific implementations
-// and Future traits are in consensus.rs and rollup.rs.
 
 /// All events related to orders emitted by the network.
 #[derive(Debug)]

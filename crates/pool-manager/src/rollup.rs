@@ -235,33 +235,23 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        let mut work = 30;
-        loop {
-            work -= 1;
-            if work == 0 {
-                cx.waker().wake_by_ref();
-                break;
-            }
+        // High priority: pull all eth events
+        while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
+            this.on_eth_event(eth, cx.waker().clone());
+        }
 
-            // pull all eth events
-            while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
-                this.on_eth_event(eth, cx.waker().clone());
-            }
+        // High priority: poll underlying pool. This is the validation process that's being polled
+        while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
+            this.on_pool_events(orders, || cx.waker().clone());
+        }
 
-            // poll underlying pool. This is the validation process that's being polled
-            while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
-                this.on_pool_events(orders, || cx.waker().clone());
-            }
+        // Rollup mode has no mode-specific polling
 
-            // Rollup mode has no mode-specific polling
-
-            // halt dealing with these till we have synced
-            if this.global_sync.can_operate() {
-                // drain commands
-                if let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
-                    this.on_command(cmd);
-                    cx.waker().wake_by_ref();
-                }
+        // Low priority: halt dealing with these till we have synced
+        if this.global_sync.can_operate() {
+            // drain commands
+            while let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
+                this.on_command(cmd);
             }
         }
 

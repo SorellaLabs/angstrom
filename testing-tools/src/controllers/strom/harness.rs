@@ -29,7 +29,7 @@ use eyre::eyre;
 use futures::{Stream, StreamExt};
 use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
-use pool_manager::{PoolHandle, ConsensusPoolManager};
+use pool_manager::{ConsensusPoolManager, PoolHandle};
 use reth::{providers::CanonStateSubscriptions, tasks::TaskExecutor};
 use reth_metrics::common::mpsc::metered_unbounded_channel;
 use reth_provider::test_utils::TestCanonStateSubscriptions;

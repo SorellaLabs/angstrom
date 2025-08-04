@@ -10,9 +10,7 @@ use std::{
 use alloy::primitives::{Address, FixedBytes};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
-    consensus::StromConsensusEvent,
-    orders::CancelOrderRequest,
-    primitive::PeerId,
+    consensus::StromConsensusEvent, orders::CancelOrderRequest, primitive::PeerId,
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::{FutureExt, StreamExt};

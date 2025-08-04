@@ -1,8 +1,8 @@
-use futures::Stream;
 use angstrom_types::{
     network::{PoolNetworkMessage, ReputationChangeKind},
     primitive::PeerId
 };
+use futures::Stream;
 
 use crate::StromNetworkEvent;
 

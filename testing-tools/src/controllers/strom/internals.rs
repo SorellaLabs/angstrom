@@ -34,7 +34,7 @@ use futures::{Future, Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::{MatchingManager, manager::MatcherHandle};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
-use pool_manager::{PoolHandle, ConsensusPoolManager};
+use pool_manager::{ConsensusPoolManager, PoolHandle};
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
 use tokio::sync::mpsc::UnboundedSender;

@@ -29,7 +29,6 @@ pub struct PoolHandle {
 
 #[derive(Debug)]
 pub enum OrderCommand {
-    // new orders
     NewOrder(OrderOrigin, AllOrders, tokio::sync::oneshot::Sender<OrderValidationResults>),
     CancelOrder(CancelOrderRequest, tokio::sync::oneshot::Sender<bool>),
     PendingOrders(Address, tokio::sync::oneshot::Sender<Vec<AllOrders>>),

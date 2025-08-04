@@ -41,7 +41,7 @@ use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
 use parking_lot::RwLock;
-use pool_manager::{OrderCommand, PoolHandle, ConsensusPoolManager};
+use pool_manager::{ConsensusPoolManager, OrderCommand, PoolHandle};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,

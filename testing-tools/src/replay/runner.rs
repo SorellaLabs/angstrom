@@ -35,7 +35,7 @@ use futures::{Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
 use order_pool::{OrderPoolHandle, PoolConfig};
-use pool_manager::{PoolHandle, ConsensusPoolManager};
+use pool_manager::{ConsensusPoolManager, PoolHandle};
 use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;

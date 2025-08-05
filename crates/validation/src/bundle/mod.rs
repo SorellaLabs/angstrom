@@ -166,7 +166,7 @@ where
                 };
 
                 if !result.is_success() {
-                    tracing::warn!(?result);
+                    tracing::error!(?result);
                     let _ = sender.send(Err(eyre!("transaction simulation failed")));
                     return;
                 }

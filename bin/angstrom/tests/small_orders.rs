@@ -5,20 +5,40 @@ use std::{
 
 use alloy::{
     network::Ethereum,
-    primitives::Address,
+    primitives::{Address, address},
     providers::{Provider, ProviderBuilder},
-    rpc::types::{BlockId, BlockNumberOrTag, Filter},
+    rpc::{
+        types as alloy_rpc_types,
+        types::{BlockId, BlockNumberOrTag, Filter}
+    },
     sol_types::SolEvent
 };
-use alloy_primitives::aliases::I24;
+use alloy_primitives::{B256, BlockNumber, U256, aliases::I24};
 use angstrom::components::initialize_strom_handles;
+use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
+    block_sync::GlobalBlockSync,
     contract_bindings::{angstrom::Angstrom::PoolKey, controller_v_1::ControllerV1::*},
-    contract_payloads::angstrom::AngstromPoolConfigStore,
-    primitive::*
+    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    pair_with_price::PairsWithPrice,
+    primitive::*,
+    reth_db_wrapper::{DBError, SetBlock},
+    sol_bindings::Ray
 };
 use futures::StreamExt;
-use validation::validator::ValidationClient;
+use reth::{
+    primitives::EthPrimitives,
+    providers::{BlockHashReader, BlockNumReader, ProviderResult},
+    revm as reth_revm
+};
+use reth_provider::{CanonStateNotification, CanonStateSubscriptions, NodePrimitivesProvider};
+use revm::{bytecode::Bytecode, state::AccountInfo};
+use serde::{Deserialize, Serialize};
+use uniswap_v4::{
+    configure_uniswap_manager,
+    uniswap::pool_manager::{SyncedUniswapPool, SyncedUniswapPools}
+};
+use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
 // The goal of this test is to spinup matching engine and assert that our
 // uniswap v4 pool swaps match against all critical points,
 // 1) matching engine output <> bundle building endpoint
@@ -74,13 +94,24 @@ pub async fn test_small_orders_matching_engine() {
             acc
         });
 
+    let global_block_sync = GlobalBlockSync::new(block_id);
+
     let uniswap_registry: UniswapPoolRegistry = pools.into();
     let uni_ang_registry =
         UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
 
-    let uniswap_pool_manager = configure_uniswap_manager::<_, DEFAULT_TICKS>(
+    let (tx, rx) = tokio::sync::broadcast::channel(50);
+
+    let (wrap_tx, wrap_rx) = tokio::sync::broadcast::channel(50);
+
+    let network_stream = Box::pin(
+        tokio_stream::wrappers::BroadcastStream::new(wrap_rx)
+            .map(|data: Result<EthEvent, _>| data.unwrap())
+    );
+
+    let uniswap_pool_manager = configure_uniswap_manager::<_, 100>(
         querying_provider.clone(),
-        eth_handle.subscribe_cannon_state_notifications().await,
+        rx,
         uniswap_registry,
         block_id,
         global_block_sync.clone(),
@@ -89,7 +120,138 @@ pub async fn test_small_orders_matching_engine() {
     )
     .await;
 
+    let uniswap_pools = uniswap_pool_manager.pools();
+
+    let price_generator = TokenPriceGenerator::new(
+        querying_provider.clone(),
+        block_id,
+        uniswap_pools.clone(),
+        gas_token,
+        None
+    )
+    .await
+    .expect("failed to start token price generator");
+    let stream = MockStream { tx: tx.clone() };
+
+    let update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
+        angstrom_address,
+        stream.canonical_state_stream(),
+        querying_provider.clone()
+    ));
+
+    init_validation(
+        StateProvider { provider: querying_provider.clone() },
+        block_id,
+        angstrom_address,
+        address!("0xc41ae140ca9b281d8a1dc254c50e446019517d04"),
+        update_stream,
+        uniswap_pools.clone(),
+        price_generator,
+        pool_config_store.clone(),
+        channels.validator_rx
+    );
+
+    // uniswap_pools.
+
     assert!(true);
+}
+
+const INTERNAL_SLIPPAGE_BPS: usize = 350;
+
+async fn quote_single_hop_order_inner(
+    &self,
+    order: OrderToEstimate,
+    pool_state: SyncedUniswapPool
+) -> eyre::Result<EstimatedOrder> {
+    tracing::debug!("order to estimate: {order:?}");
+
+    let mut amount = I256::unchecked_from(order.amount());
+    if !order.exact_in() {
+        amount = -amount;
+    };
+
+    // take the price t1 over t0, ensure we are within the sqrt price bounds.
+    // then convert properly into sqrtPriceX96. Filtering is fine here as
+    // the swap function will bound it to min / max
+    let limit_price: Option<U256> = order
+        .limit_price()
+        .map(SqrtPriceX96::from)
+        .map(|lp| if order.is_bid() { Ray::from(lp).inv_ray() } else { Ray::from(lp) })
+        .filter(|price_1_over_0| price_1_over_0.within_sqrt_price_bounds())
+        .map(|price| SqrtPriceX96::from(price).into());
+
+    let SwapResult { amount0, amount1, sqrt_price_x_96, .. } = pool_state
+        ._simulate_swap(order.token_in(), amount, limit_price, false)
+        .map_err(|e| eyre!("no gas found"))?;
+
+    let mut amount_in = u128::try_convert_from(amount0.abs())?;
+    let mut amount_out = u128::try_convert_from(amount1.abs())?;
+    let mut price = Ray::from(SqrtPriceX96::from(sqrt_price_x_96));
+
+    let mut gas_amount_t0 = self
+        .cache
+        .on_chain_cache()
+        .get_gas(pool_state.token0, pool_state.token1)
+        .ok_or_else(|| eyre!("no gas found"))?;
+
+    // modify to give tolerance.
+    gas_amount_t0 = gas_amount_t0 * 4 / 3;
+
+    // t1 -> t0, then when we flip price, will cross, so we want to make lower so
+    // when flip its higher
+    let price = if order.token_in() != pool_state.token0 {
+        std::mem::swap(&mut amount_in, &mut amount_out);
+        price.inv_ray_assign_round(false);
+
+        // we are subtracting gas fee here to make price higher.
+        let new_price = if order.exact_in() {
+            let amount_out = price.quantity(amount_in, false) + gas_amount_t0;
+            Ray::from_quantities(amount_out, amount_in, true)
+        } else {
+            let amount_in = price.inverse_quantity(amount_out - gas_amount_t0, true);
+            Ray::from_quantities(amount_out, amount_in, true)
+        };
+
+        new_price.scale_to_fee(pool_state.book_fee as u128 + INTERNAL_SLIPPAGE_BPS)
+    } else {
+        // t0 -> t1, given this, we want to lower price.
+        let new_price = if order.exact_in() {
+            let amount_out = price.quantity(amount_in + gas_amount_t0, false);
+            Ray::from_quantities(amount_out, amount_in, true)
+        } else {
+            let amount_in = price.inverse_quantity(amount_out, true) - gas_amount_t0;
+            Ray::from_quantities(amount_out, amount_in, true)
+        };
+
+        new_price.scale_to_fee(pool_state.book_fee as u128 + INTERNAL_SLIPPAGE_BPS)
+    };
+
+    let estimated_order =
+        EstimatedOrder::new(order.token_in(), order.token_out(), amount_in, amount_out, price);
+    tracing::debug!("estimated order: {estimated_order:?}");
+
+    Ok(estimated_order)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EstimatedOrder {
+    pub token_in:  Address,
+    pub token_out: Address,
+    pub amt_in:    Ray,
+    pub amt_out:   Ray,
+    pub ucp:       Ray
+}
+
+impl EstimatedOrder {
+    pub fn new(
+        token_in: Address,
+        token_out: Address,
+        amt_in: u128,
+        amt_out: u128,
+        ucp: Ray
+    ) -> Self {
+        Self { token_in, token_out, amt_in: amt_in.into(), amt_out: amt_out.into(), ucp }
+    }
 }
 
 async fn fetch_angstrom_pools<P>(
@@ -175,4 +337,191 @@ where
         })
         .into_iter()
         .collect::<Vec<_>>()
+}
+
+pub struct MockStream {
+    tx: tokio::sync::broadcast::Sender<CanonStateNotification>
+}
+
+impl NodePrimitivesProvider for MockStream {
+    type Primitives = EthPrimitives;
+}
+
+impl CanonStateSubscriptions for MockStream {
+    fn subscribe_to_canonical_state(
+        &self
+    ) -> reth_provider::CanonStateNotifications<Self::Primitives> {
+        self.tx.subscribe()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StateProvider<P> {
+    provider: Arc<P>
+}
+
+impl<P: Send + Sync + 'static> SetBlock for StateProvider<P> {
+    fn set_block(&self, _: u64) {}
+}
+
+impl<P: Provider> reth_revm::DatabaseRef for StateProvider<P> {
+    type Error = DBError;
+
+    fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        let acc = async_to_sync(self.provider.get_account(address).latest().into_future())?;
+        let code = async_to_sync(self.provider.get_code_at(address).latest().into_future())?;
+        let code = Some(Bytecode::new_raw(code));
+
+        Ok(Some(AccountInfo {
+            code_hash: acc.code_hash,
+            balance: acc.balance,
+            nonce: acc.nonce,
+            code
+        }))
+    }
+
+    fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
+        let acc = async_to_sync(self.provider.get_storage_at(address, index).into_future())?;
+        Ok(acc)
+    }
+
+    fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
+        let acc = async_to_sync(
+            self.provider
+                .get_block_by_number(alloy_rpc_types::BlockNumberOrTag::Number(number))
+                .into_future()
+        )?;
+
+        let Some(block) = acc else { return Err(DBError::String("no block".to_string())) };
+        Ok(block.header.hash)
+    }
+
+    fn code_by_hash_ref(&self, _: B256) -> Result<Bytecode, Self::Error> {
+        panic!("This should not be called, as the code is already loaded");
+    }
+}
+impl<P: Provider> BlockNumReader for StateProvider<P> {
+    fn chain_info(&self) -> ProviderResult<reth::chainspec::ChainInfo> {
+        panic!("never used");
+    }
+
+    fn block_number(&self, _: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
+        panic!("never used");
+    }
+
+    fn convert_number(
+        &self,
+        _: alloy_rpc_types::BlockHashOrNumber
+    ) -> ProviderResult<Option<alloy_primitives::B256>> {
+        panic!("never used");
+    }
+
+    fn best_block_number(&self) -> ProviderResult<BlockNumber> {
+        Ok(async_to_sync(self.provider.get_block_number().into_future()).unwrap())
+    }
+
+    fn last_block_number(&self) -> ProviderResult<BlockNumber> {
+        Ok(async_to_sync(self.provider.get_block_number().into_future()).unwrap())
+    }
+
+    fn convert_hash_or_number(
+        &self,
+        _: alloy_rpc_types::BlockHashOrNumber
+    ) -> ProviderResult<Option<BlockNumber>> {
+        panic!("never used");
+    }
+}
+impl<P: Provider> BlockHashReader for StateProvider<P> {
+    fn block_hash(&self, _: BlockNumber) -> ProviderResult<Option<alloy_primitives::B256>> {
+        panic!("never used");
+    }
+
+    fn convert_block_hash(
+        &self,
+        _: alloy_rpc_types::BlockHashOrNumber
+    ) -> ProviderResult<Option<alloy_primitives::B256>> {
+        panic!("never used");
+    }
+
+    fn canonical_hashes_range(
+        &self,
+        _: BlockNumber,
+        _: BlockNumber
+    ) -> ProviderResult<Vec<alloy_primitives::B256>> {
+        panic!("never used");
+    }
+}
+
+pub fn async_to_sync<F: Future>(f: F) -> F::Output {
+    let handle = tokio::runtime::Handle::try_current().expect("No tokio runtime found");
+    tokio::task::block_in_place(|| handle.block_on(f))
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OrderToEstimate {
+    order_params: OrderParams
+}
+
+impl OrderToEstimate {
+    pub fn new(
+        token_in: Address,
+        token_out: Address,
+        amount: u128,
+        exact_in: bool,
+        limit_price: Option<U256>,
+        slippage: Option<u128>
+    ) -> Self {
+        Self {
+            order_params: OrderParams {
+                amount,
+                exact_in,
+                slippage,
+                limit_price,
+                token_in,
+                token_out
+            }
+        }
+    }
+
+    pub fn pool_token0(&self) -> Address {
+        std::cmp::min(self.order_params.token_in, self.order_params.token_out)
+    }
+
+    pub fn pool_token1(&self) -> Address {
+        std::cmp::max(self.order_params.token_in, self.order_params.token_out)
+    }
+
+    pub fn amount(&self) -> u128 {
+        self.order_params.amount
+    }
+
+    pub fn limit_price(&self) -> Option<U256> {
+        self.order_params.limit_price
+    }
+
+    pub fn token_in(&self) -> Address {
+        self.order_params.token_in
+    }
+
+    pub fn token_out(&self) -> Address {
+        self.order_params.token_out
+    }
+
+    pub fn exact_in(&self) -> bool {
+        self.order_params.exact_in
+    }
+
+    pub fn is_bid(&self) -> bool {
+        self.token_in() > self.token_out()
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OrderParams {
+    pub amount:      u128,
+    pub exact_in:    bool,
+    pub limit_price: Option<U256>,
+    pub slippage:    Option<u128>,
+    pub token_in:    Address,
+    pub token_out:   Address
 }

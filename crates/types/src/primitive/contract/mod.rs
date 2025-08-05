@@ -327,6 +327,19 @@ impl UniswapPoolRegistry {
         self.pools.get(pool_id)
     }
 
+    pub fn get_pools_by_token_pair(&self, token0: Address, token1: Address) -> Vec<&PoolKey> {
+        // Normalize token order
+        let (normalized_token0, normalized_token1) =
+            if token0 < token1 { (token0, token1) } else { (token1, token0) };
+
+        self.pools
+            .values()
+            .filter(|pool_key| {
+                pool_key.currency0 == normalized_token0 && pool_key.currency1 == normalized_token1
+            })
+            .collect()
+    }
+
     pub fn pools(&self) -> HashMap<PoolId, PoolKey> {
         self.pools.clone()
     }

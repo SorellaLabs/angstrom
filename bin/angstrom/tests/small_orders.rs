@@ -13,42 +13,58 @@ use alloy::{
     },
     sol_types::SolEvent
 };
-use alloy_primitives::{B256, BlockNumber, U256, aliases::I24};
+use alloy_primitives::{B256, BlockNumber, I256, U256, aliases::I24};
 use angstrom::components::initialize_strom_handles;
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::GlobalBlockSync,
     contract_bindings::{angstrom::Angstrom::PoolKey, controller_v_1::ControllerV1::*},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    matching::SqrtPriceX96,
     pair_with_price::PairsWithPrice,
     primitive::*,
     reth_db_wrapper::{DBError, SetBlock},
     sol_bindings::Ray
 };
+use eyre::eyre;
 use futures::StreamExt;
+use matching_engine::MatchingManager;
 use reth::{
     primitives::EthPrimitives,
     providers::{BlockHashReader, BlockNumReader, ProviderResult},
-    revm as reth_revm
+    revm as reth_revm,
+    tasks::TokioTaskExecutor
 };
 use reth_provider::{CanonStateNotification, CanonStateSubscriptions, NodePrimitivesProvider};
 use revm::{bytecode::Bytecode, state::AccountInfo};
 use serde::{Deserialize, Serialize};
+use testing_tools::type_generator::orders::UserOrderBuilder;
+use tracing::*;
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, *};
 use uniswap_v4::{
     configure_uniswap_manager,
-    uniswap::pool_manager::{SyncedUniswapPool, SyncedUniswapPools}
+    uniswap::{
+        pool::SwapResult,
+        pool_manager::{SyncedUniswapPool, SyncedUniswapPools}
+    }
 };
 use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
+
+const USDT: Address = address!("0xdac17f958d2ee523a2206206994597c13d831ec7");
+const WETH: Address = address!("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
+
 // The goal of this test is to spinup matching engine and assert that our
 // uniswap v4 pool swaps match against all critical points,
 // 1) matching engine output <> bundle building endpoint
 // 2) bundle_bundling <> revm sim
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 pub async fn test_small_orders_matching_engine() {
     init_with_chain_id(1);
+    init_tracing();
+
     let channels = initialize_strom_handles();
     let validation_client = ValidationClient(channels.validator_tx.clone());
-    let url = "";
+    let url = std::env::var("RPC_URL").unwrap();
 
     let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
         .with_recommended_fillers()
@@ -112,7 +128,7 @@ pub async fn test_small_orders_matching_engine() {
     let uniswap_pool_manager = configure_uniswap_manager::<_, 100>(
         querying_provider.clone(),
         rx,
-        uniswap_registry,
+        uniswap_registry.clone(),
         block_id,
         global_block_sync.clone(),
         pool_manager,
@@ -151,15 +167,78 @@ pub async fn test_small_orders_matching_engine() {
         channels.validator_rx
     );
 
-    // uniswap_pools.
+    // get pool_key
+    let pool_key = uniswap_registry.get_pools_by_token_pair(WETH, USDT)[0].clone();
+    let pool = uniswap_pools
+        .get(&PoolId::from(pool_key))
+        .unwrap()
+        .value()
+        .clone();
+
+    let estimation = OrderToEstimate {
+        order_params: OrderParams {
+            amount:      4e6 as u128,
+            exact_in:    true,
+            limit_price: None,
+            slippage:    None,
+            token_in:    USDT,
+            token_out:   WETH
+        }
+    };
+
+    println!("{:#?}", estimation);
+
+    let output = quote_single_hop_order_inner(estimation, pool)
+        .await
+        .unwrap();
+    println!("{:#?}", output);
+
+    // next thing we need to do is run the matching engine to see results
+    let signer = AngstromSigner::random();
+
+    let order = UserOrderBuilder::default()
+        .asset_in(USDT)
+        .asset_out(WETH)
+        .min_price(output.ucp)
+        .exact_in(true)
+        .exact()
+        .kill_or_fill()
+        .block(block_id + 1)
+        .signing_key(Some(signer))
+        .amount(output.amt_in)
+        .with_storage()
+        .bid()
+        .valid_block(block_id + 1)
+        .pool_id(PoolId::from(pool_key))
+        .build();
+    println!("{:#?}", order);
+
+    let pool_snapshots = uniswap_pools
+        .iter()
+        .filter_map(|item| {
+            let key = item.key();
+            let pool = item.value();
+            tracing::info!(?key, "getting snapshot");
+            let (token_a, token_b, snapshot) = pool.read().unwrap().fetch_pool_snapshot().ok()?;
+            let entry = uni_ang_registry.get_ang_entry(key)?;
+
+            Some((*key, (token_a, token_b, snapshot, entry.store_index as u16)))
+        })
+        .collect::<HashMap<_, _>>();
+
+    let executor = TokioTaskExecutor::default();
+    let matching_manager = MatchingManager::new(executor, validation_client.clone());
+
+    let output = matching_manager
+        .build_proposal(vec![order], vec![], pool_snapshots)
+        .await;
 
     assert!(true);
 }
 
-const INTERNAL_SLIPPAGE_BPS: usize = 350;
+const INTERNAL_SLIPPAGE_BPS: u128 = 350;
 
 async fn quote_single_hop_order_inner(
-    &self,
     order: OrderToEstimate,
     pool_state: SyncedUniswapPool
 ) -> eyre::Result<EstimatedOrder> {
@@ -169,6 +248,8 @@ async fn quote_single_hop_order_inner(
     if !order.exact_in() {
         amount = -amount;
     };
+
+    let pool_state = pool_state.read().unwrap();
 
     // take the price t1 over t0, ensure we are within the sqrt price bounds.
     // then convert properly into sqrtPriceX96. Filtering is fine here as
@@ -182,18 +263,14 @@ async fn quote_single_hop_order_inner(
 
     let SwapResult { amount0, amount1, sqrt_price_x_96, .. } = pool_state
         ._simulate_swap(order.token_in(), amount, limit_price, false)
-        .map_err(|e| eyre!("no gas found"))?;
+        .map_err(|_| eyre!("no gas found"))?;
 
+    tracing::info!(?sqrt_price_x_96, "simulation sqrt price");
     let mut amount_in = u128::try_convert_from(amount0.abs())?;
     let mut amount_out = u128::try_convert_from(amount1.abs())?;
     let mut price = Ray::from(SqrtPriceX96::from(sqrt_price_x_96));
 
-    let mut gas_amount_t0 = self
-        .cache
-        .on_chain_cache()
-        .get_gas(pool_state.token0, pool_state.token1)
-        .ok_or_else(|| eyre!("no gas found"))?;
-
+    let mut gas_amount_t0 = 10;
     // modify to give tolerance.
     gas_amount_t0 = gas_amount_t0 * 4 / 3;
 
@@ -237,8 +314,8 @@ async fn quote_single_hop_order_inner(
 pub struct EstimatedOrder {
     pub token_in:  Address,
     pub token_out: Address,
-    pub amt_in:    Ray,
-    pub amt_out:   Ray,
+    pub amt_in:    u128,
+    pub amt_out:   u128,
     pub ucp:       Ray
 }
 
@@ -250,7 +327,7 @@ impl EstimatedOrder {
         amt_out: u128,
         ucp: Ray
     ) -> Self {
-        Self { token_in, token_out, amt_in: amt_in.into(), amt_out: amt_out.into(), ucp }
+        Self { token_in, token_out, amt_in, amt_out, ucp }
     }
 }
 
@@ -274,7 +351,6 @@ where
             break;
         }
 
-        println!("{:?} {:?}", deploy_block, this_end_block);
         let filter = Filter::new()
             .from_block(deploy_block as u64)
             .to_block(this_end_block as u64)
@@ -524,4 +600,47 @@ pub struct OrderParams {
     pub slippage:    Option<u128>,
     pub token_in:    Address,
     pub token_out:   Address
+}
+
+#[allow(clippy::result_large_err)]
+pub trait TryFromConversion<T, E>
+where
+    Self: Sized,
+    Self: TryFrom<T, Error = E> + Sized,
+    E: ToString
+{
+    fn try_convert_from(value: T) -> eyre::Result<Self> {
+        Self::try_from(value).map_err(|e: E| eyre!("failed to convert {}", e.to_string()))
+    }
+}
+
+impl<D, T, E> TryFromConversion<T, E> for D
+where
+    D: TryFrom<T, Error = E> + Sized,
+    E: ToString
+{
+}
+
+pub fn init_tracing() {
+    let envfilter = filter::EnvFilter::builder().try_from_env().ok();
+    let format = tracing_subscriber::fmt::layer()
+        .with_ansi(true)
+        .with_target(true);
+
+    let _ = tracing_subscriber::registry()
+        .with(format)
+        .with(envfilter)
+        .try_init();
+}
+
+fn layer_builder(filter_str: String) -> Box<dyn Layer<Registry> + Send + Sync> {
+    let filter = EnvFilter::builder()
+        .with_default_directive(filter_str.parse().unwrap())
+        .from_env_lossy();
+
+    tracing_subscriber::fmt::layer()
+        .with_ansi(true)
+        .with_target(true)
+        .with_filter(filter)
+        .boxed()
 }

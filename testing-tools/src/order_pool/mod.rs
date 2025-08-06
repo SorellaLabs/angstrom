@@ -3,11 +3,13 @@ use std::{pin::Pin, sync::Arc, task::Poll, time::Duration};
 use angstrom::components::DefaultPoolHandle;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{
-    pool_manager::{OrderCommand, PoolHandle, PoolManager},
-    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle
+    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle,
+    pool_manager::{OrderCommand, PoolHandle, PoolManager}
 };
-use futures::{future::poll_fn, Future, FutureExt};
-use order_pool::{order_storage::OrderStorage, OrderIndexer, PoolConfig};
+use futures::{Future, FutureExt, future::poll_fn};
+use order_pool::{
+    OrderIndexer, PoolConfig, order_storage::OrderStorage, order_tracker::ChainConfig
+};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -46,8 +48,13 @@ impl TestnetOrderPool {
         let handle =
             PoolHandle { manager_tx: tx.clone(), pool_manager_tx: pool_manager_tx.clone() };
         let order_storage = Arc::new(OrderStorage::new(&config));
-        let inner =
-            OrderIndexer::new(validator, order_storage.clone(), block_number, sub_tx, pool_tracker);
+        let inner = OrderIndexer::new(
+            validator,
+            order_storage.clone(),
+            block_number,
+            sub_tx,
+            ChainConfig::ethereum()
+        );
 
         Self {
             pool_manager: PoolManager::new(

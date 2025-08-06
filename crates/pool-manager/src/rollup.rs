@@ -7,7 +7,8 @@ use std::{
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
 use order_pool::{
-    OrderIndexer, PoolConfig, PoolInnerEvent, PoolManagerUpdate, order_storage::OrderStorage
+    OrderIndexer, PoolConfig, PoolInnerEvent, PoolManagerUpdate, order_storage::OrderStorage,
+    order_tracker::ChainConfig
 };
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -90,7 +91,8 @@ where
             self.validator.clone(),
             order_storage.clone(),
             block_number,
-            pool_manager_tx.clone()
+            pool_manager_tx.clone(),
+            ChainConfig::op_angstrom()
         );
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);

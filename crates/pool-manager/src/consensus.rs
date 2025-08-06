@@ -11,8 +11,10 @@ use angstrom_network::{NetworkOrderEvent, StromMessage, StromNetworkEvent, Strom
 use angstrom_types::{
     block_sync::BlockSyncConsumer, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
 };
-use futures::StreamExt;
-use order_pool::{OrderIndexer, PoolInnerEvent, order_storage::OrderStorage};
+use futures::{Future, StreamExt};
+use order_pool::{
+    OrderIndexer, PoolInnerEvent, order_storage::OrderStorage, order_tracker::ChainConfig
+};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
@@ -126,7 +128,8 @@ where
             self.validator.clone(),
             order_storage.clone(),
             block_number,
-            pool_manager_tx.clone()
+            pool_manager_tx.clone(),
+            ChainConfig::ethereum()
         );
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);

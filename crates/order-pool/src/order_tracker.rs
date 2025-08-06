@@ -18,10 +18,27 @@ use crate::{
     order_indexer::InnerCancelOrderRequest, order_storage::OrderStorage, validator::OrderValidator
 };
 
-/// This is used to remove validated orders. During validation
-/// the same check wil be ran but with more accuracy
-const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
-const MAX_NEW_ORDER_DELAY_PROPAGATION: u64 = 7000;
+#[derive(Debug, Clone)]
+pub struct ChainConfig {
+    pub block_time:                  Duration,
+    pub max_order_delay_propagation: u64
+}
+
+impl ChainConfig {
+    pub fn ethereum() -> Self {
+        Self {
+            block_time:                  Duration::from_secs(12),
+            max_order_delay_propagation: 7000
+        }
+    }
+
+    pub fn op_angstrom() -> Self {
+        Self {
+            block_time:                  Duration::from_secs(2),
+            max_order_delay_propagation: 1500
+        }
+    }
+}
 
 /// Used as a storage of order hashes to order ids of validated and pending
 /// validation orders.
@@ -116,10 +133,11 @@ impl OrderTracker {
     pub fn remove_expired_orders(
         &mut self,
         block_number: u64,
-        storage: &OrderStorage
+        storage: &OrderStorage,
+        block_time: Duration
     ) -> Vec<OrderWithStorageData<AllOrders>> {
         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs()); // grab all expired hashes
+        let expiry_deadline = U256::from((time + block_time).as_secs()); // grab all expired hashes
 
         // clear canceled order cache
         self.cancelled_orders
@@ -185,12 +203,18 @@ impl OrderTracker {
         self.address_to_orders.entry(user).or_default().insert(id);
     }
 
-    fn cancel_with_next_block_deadline(&mut self, from: Address, order_hash: &B256) {
+    fn cancel_with_next_block_deadline(
+        &mut self,
+        from: Address,
+        order_hash: &B256,
+        max_delay_propagation: u64,
+        block_time: Duration
+    ) {
         let deadline = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
-            + MAX_NEW_ORDER_DELAY_PROPAGATION * ETH_BLOCK_TIME.as_secs();
+            + max_delay_propagation * block_time.as_secs();
         self.insert_cancel_with_deadline(from, order_hash, Some(U256::from(deadline)));
     }
 
@@ -221,7 +245,9 @@ impl OrderTracker {
         &mut self,
         from: Address,
         hash: B256,
-        storage: &OrderStorage
+        storage: &OrderStorage,
+        max_delay_propagation: u64,
+        block_time: Duration
     ) -> Option<(bool, PoolId)> {
         self.order_hash_to_order_id
             .remove(&hash)
@@ -236,7 +262,12 @@ impl OrderTracker {
             .or_else(|| {
                 // in the case we haven't index the order yet, we are going to add it
                 // in the cancel to register
-                self.cancel_with_next_block_deadline(from, &hash);
+                self.cancel_with_next_block_deadline(
+                    from,
+                    &hash,
+                    max_delay_propagation,
+                    block_time
+                );
 
                 None
             })

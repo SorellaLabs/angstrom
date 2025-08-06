@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{collections::HashMap, pin::Pin};
 
 use alloy::{
     eips::{eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip2718::Encodable2718},
@@ -11,6 +11,7 @@ use angstrom_types::{
     submission::{ChainSubmitter, TxFeatureInfo}
 };
 use futures::Future;
+use validation::{find_slot_offset_for_approval, find_slot_offset_for_balance};
 
 use crate::contracts::anvil::WalletProviderRpc;
 
@@ -47,17 +48,34 @@ impl ChainSubmitter for AnvilSubmissionProvider {
                 let order_overrides = bundle.fetch_needed_overrides(block);
                 let angstrom_address = self.angstrom_address();
 
-                let _ = futures::stream::iter(
-                    order_overrides.into_slots_with_overrides(angstrom_address)
-                )
-                .then(|(token, slot, value)| async move {
-                    self.provider
-                        .anvil_set_storage_at(token, slot.into(), value.into())
-                        .await
-                        .expect("failed to use anvil_set_storage_at");
-                })
-                .collect::<Vec<_>>()
-                .await;
+                // let mut balances = HashMap::new();
+                // let mut approvals = HashMap::new();
+
+                // for (token, _) in &order_overrides.balances {
+                //     tracing::info!(?token, "finding balance offset");
+                //     balances.insert(*token, find_slot_offset_for_balance(&db,
+                // *token).unwrap()); }
+                //
+                // for (token, _) in &order_overrides.approvals {
+                //     tracing::info!(?token, "finding approval offset");
+                //     approvals.insert(*token,
+                // find_slot_offset_for_approval(&db, *token).unwrap());
+                // }
+                //
+                // let _ = futures::stream::iter(order_overrides.
+                // into_slots_with_overrides(
+                //     angstrom_address,
+                //     balances,
+                //     approvals,
+                // ))
+                // .then(|(token, slot, value)| async move {
+                //     self.provider
+                //         .anvil_set_storage_at(token, slot.into(),
+                // value.into())         .await
+                //         .expect("failed to use anvil_set_storage_at");
+                // })
+                // .collect::<Vec<_>>()
+                // .await;
             }
 
             let tx = self

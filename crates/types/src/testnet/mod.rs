@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use alloy::sol_types::SolValue;
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
@@ -41,7 +41,9 @@ pub struct TestnetStateOverrides {
 impl TestnetStateOverrides {
     pub fn into_slots_with_overrides(
         self,
-        angstrom_addr: Address
+        angstrom_addr: Address,
+        balance_slots: HashMap<Address, u64>,
+        approval_slots: HashMap<Address, u64>
     ) -> impl Iterator<Item = (Address, B256, U256)> + 'static {
         // First, collect contract token balance overrides
         let contract_balances: Vec<_> = self
@@ -51,7 +53,8 @@ impl TestnetStateOverrides {
                 // Calculate total amount needed for this token
                 let total_needed: u128 = user_balances.values().sum();
                 // Set contract's ERC20 balance: token.balanceOf[angstrom_addr] = total_needed
-                let contract_balance_slot = keccak256((angstrom_addr, 1).abi_encode());
+                let contract_balance_slot =
+                    keccak256((angstrom_addr, balance_slots.get(token).unwrap()).abi_encode());
                 (*token, contract_balance_slot, U256::from(total_needed) * U256::from(2))
             })
             .collect();
@@ -59,15 +62,18 @@ impl TestnetStateOverrides {
         self.approvals
             .into_iter()
             .flat_map(move |(token, i)| {
+                let approval = *approval_slots.get(&token).unwrap();
                 i.into_iter().map(move |(user, amount)| {
-                    let slot =
-                        keccak256((angstrom_addr, keccak256((user, 2).abi_encode())).abi_encode());
+                    let slot = keccak256(
+                        (angstrom_addr, keccak256((user, approval).abi_encode())).abi_encode()
+                    );
                     (token, slot, U256::from(amount) * U256::from(2))
                 })
             })
             .chain(self.balances.into_iter().flat_map(move |(token, i)| {
+                let balance_slot = *balance_slots.get(&token).unwrap();
                 i.into_iter().map(move |(user, qty)| {
-                    let slot = keccak256((user, 1).abi_encode());
+                    let slot = keccak256((user, balance_slot).abi_encode());
                     (token, slot, U256::from(qty) * U256::from(2))
                 })
             }))

@@ -588,6 +588,7 @@ impl<'a> DeltaMatcher<'a> {
         let Ok(res) = pool.swap_to_price(end_price_sqrt) else {
             return Default::default();
         };
+        tracing::warn!(?res);
 
         let mut tob_amm = NetAmmOrder::new(direction);
         tob_amm.add_quantity(res.total_d_t0, res.total_d_t1);

@@ -6,11 +6,8 @@ use std::{
 use alloy::{
     network::Ethereum,
     primitives::{Address, address},
-    providers::{Provider, ProviderBuilder},
-    rpc::{
-        types as alloy_rpc_types,
-        types::{BlockId, BlockNumberOrTag, Filter}
-    },
+    providers::{Provider, ProviderBuilder, ext::DebugApi},
+    rpc::types::{self as alloy_rpc_types, BlockId, BlockNumberOrTag, Filter},
     sol_types::SolEvent
 };
 use alloy_primitives::{B256, BlockNumber, I256, U256, aliases::I24};
@@ -175,14 +172,16 @@ pub async fn test_small_orders_matching_engine() {
         .value()
         .clone();
 
+    let exact_in = true;
+
     let estimation = OrderToEstimate {
         order_params: OrderParams {
-            amount:      4e6 as u128,
-            exact_in:    true,
+            amount: 3e6 as u128,
+            exact_in,
             limit_price: None,
-            slippage:    None,
-            token_in:    USDT,
-            token_out:   WETH
+            slippage: None,
+            token_out: WETH,
+            token_in: USDT
         }
     };
 
@@ -200,7 +199,7 @@ pub async fn test_small_orders_matching_engine() {
         .asset_in(USDT)
         .asset_out(WETH)
         .min_price(output.ucp)
-        .exact_in(true)
+        .exact_in(exact_in)
         .exact()
         .kill_or_fill()
         .block(block_id + 1)
@@ -231,7 +230,8 @@ pub async fn test_small_orders_matching_engine() {
 
     let output = matching_manager
         .build_proposal(vec![order], vec![], pool_snapshots)
-        .await;
+        .await
+        .unwrap();
 
     assert!(true);
 }
@@ -270,7 +270,7 @@ async fn quote_single_hop_order_inner(
     let mut amount_out = u128::try_convert_from(amount1.abs())?;
     let mut price = Ray::from(SqrtPriceX96::from(sqrt_price_x_96));
 
-    let mut gas_amount_t0 = 10;
+    let mut gas_amount_t0 = 1379;
     // modify to give tolerance.
     gas_amount_t0 = gas_amount_t0 * 4 / 3;
 
@@ -282,22 +282,23 @@ async fn quote_single_hop_order_inner(
 
         // we are subtracting gas fee here to make price higher.
         let new_price = if order.exact_in() {
-            let amount_out = price.quantity(amount_in, false) + gas_amount_t0;
-            Ray::from_quantities(amount_out, amount_in, true)
+            let amount_out = price.quantity(amount_in, false) - gas_amount_t0;
+            Ray::from_quantities(amount_out, amount_in, false)
         } else {
-            let amount_in = price.inverse_quantity(amount_out - gas_amount_t0, true);
-            Ray::from_quantities(amount_out, amount_in, true)
+            let amount_in = price.inverse_quantity(amount_out + gas_amount_t0, true);
+            Ray::from_quantities(amount_out, amount_in, false)
         };
 
         new_price.scale_to_fee(pool_state.book_fee as u128 + INTERNAL_SLIPPAGE_BPS)
     } else {
         // t0 -> t1, given this, we want to lower price.
+        // we are adding gas fee here to make price higher.
         let new_price = if order.exact_in() {
-            let amount_out = price.quantity(amount_in + gas_amount_t0, false);
-            Ray::from_quantities(amount_out, amount_in, true)
+            let amount_out = price.quantity(amount_in - gas_amount_t0, false);
+            Ray::from_quantities(amount_out, amount_in, false)
         } else {
-            let amount_in = price.inverse_quantity(amount_out, true) - gas_amount_t0;
-            Ray::from_quantities(amount_out, amount_in, true)
+            let amount_in = price.inverse_quantity(amount_out, true) + gas_amount_t0;
+            Ray::from_quantities(amount_out, amount_in, false)
         };
 
         new_price.scale_to_fee(pool_state.book_fee as u128 + INTERNAL_SLIPPAGE_BPS)
@@ -444,9 +445,12 @@ impl<P: Provider> reth_revm::DatabaseRef for StateProvider<P> {
     type Error = DBError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        let acc = async_to_sync(self.provider.get_account(address).latest().into_future())?;
-        let code = async_to_sync(self.provider.get_code_at(address).latest().into_future())?;
-        let code = Some(Bytecode::new_raw(code));
+        let acc = async_to_sync(self.provider.get_account(address).latest().into_future())
+            .unwrap_or_default();
+
+        let code = async_to_sync(self.provider.get_code_at(address).latest().into_future())
+            .ok()
+            .map(Bytecode::new_raw);
 
         Ok(Some(AccountInfo {
             code_hash: acc.code_hash,
@@ -457,7 +461,8 @@ impl<P: Provider> reth_revm::DatabaseRef for StateProvider<P> {
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        let acc = async_to_sync(self.provider.get_storage_at(address, index).into_future())?;
+        let acc =
+            async_to_sync(self.provider.get_storage_at(address, index).into_future()).unwrap();
         Ok(acc)
     }
 
@@ -466,14 +471,26 @@ impl<P: Provider> reth_revm::DatabaseRef for StateProvider<P> {
             self.provider
                 .get_block_by_number(alloy_rpc_types::BlockNumberOrTag::Number(number))
                 .into_future()
-        )?;
+        )
+        .unwrap()
+        .unwrap();
 
-        let Some(block) = acc else { return Err(DBError::String("no block".to_string())) };
-        Ok(block.header.hash)
+        // let Some(block) = acc else { return Err(DBError::String("no
+        // block".to_string())) };
+        Ok(acc.header.hash)
     }
 
-    fn code_by_hash_ref(&self, _: B256) -> Result<Bytecode, Self::Error> {
-        panic!("This should not be called, as the code is already loaded");
+    fn code_by_hash_ref(&self, code: B256) -> Result<Bytecode, Self::Error> {
+        let block = async_to_sync(self.provider.get_block_number().into_future()).unwrap();
+        let code = async_to_sync(
+            self.provider
+                .debug_code_by_hash(code, Some(block.into()))
+                .into_future()
+        )
+        .unwrap()
+        .unwrap_or_default();
+
+        Ok(Bytecode::new_raw(code))
     }
 }
 impl<P: Provider> BlockNumReader for StateProvider<P> {

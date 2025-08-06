@@ -68,8 +68,8 @@ where
 
         let output = evm
             .replay()
+            .map_err(|e| eyre::eyre!("{e:?}"))
             .unwrap()
-            // .map_err(|e| eyre::eyre!("{e:?}"))?
             .result
             .output()
             .unwrap()

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, pin::Pin, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, pin::Pin, sync::Arc};
 
 use alloy::{
     primitives::{Address, U256},
@@ -21,7 +21,8 @@ use revm::{
 use tokio::runtime::Handle;
 
 use crate::{
-    common::key_split_threadpool::KeySplitThreadpool, order::sim::console_log::CallDataInspector
+    common::key_split_threadpool::KeySplitThreadpool, find_slot_offset_for_approval,
+    find_slot_offset_for_balance, order::sim::console_log::CallDataInspector
 };
 
 pub mod validator;
@@ -91,12 +92,26 @@ where
             let pool_manager_addr = *angstrom_types::primitive::POOL_MANAGER_ADDRESS.get().unwrap();
 
             // This is the address that testnet uses
-            if alloy::primitives::address!("0x48bC5A530873DcF0b890aD50120e7ee5283E0112") == pool_manager_addr
+            if alloy::primitives::address!("0x000000000004444c5dc75cB358380D2e3dE08A90") == pool_manager_addr
             {
                 tracing::info!("local testnet overrides");
 
                 let overrides = bundle.fetch_needed_overrides(number + 1);
-                for (token, slot, value) in overrides.into_slots_with_overrides(angstrom_address) {
+                let mut balances = HashMap::new();
+                let mut approvals= HashMap::new();
+
+                for (token, _)in &overrides.balances {
+                    tracing::info!(?token, "finding balance offset");
+                    balances.insert(*token, find_slot_offset_for_balance(&db, *token).unwrap());
+                }
+
+                for (token,_) in &overrides.approvals {
+                    tracing::info!(?token, "finding approval offset");
+                    approvals.insert(*token, find_slot_offset_for_approval(&db, *token).unwrap());
+                }
+
+
+                for (token, slot, value) in overrides.into_slots_with_overrides(angstrom_address, balances, approvals) {
                     tracing::trace!(?token, ?slot, ?value, "Inserting bundle override");
                     db.insert_account_storage(token, slot.into(), value).unwrap();
                 }

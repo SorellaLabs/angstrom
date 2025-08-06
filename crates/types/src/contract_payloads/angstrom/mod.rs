@@ -688,7 +688,7 @@ impl AngstromBundle {
             book_swap_vec.unwrap_or_else(|| snapshot.noop())
         };
 
-        trace!(
+        tracing::info!(
             net_t0 = net_pool_vec.total_d_t0,
             net_t1 = net_pool_vec.total_d_t1,
             end_price = ?net_pool_vec.end_price,

@@ -1212,6 +1212,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "angstrom-sequencer"
+version = "0.1.0"
+dependencies = [
+ "angstrom-types",
+ "url",
+]
+
+[[package]]
 name = "angstrom-types"
 version = "0.1.0"
 dependencies = [

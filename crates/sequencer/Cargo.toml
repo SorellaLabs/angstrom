@@ -1,0 +1,22 @@
+[package]
+name = "angstrom-sequencer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[features]
+# Root feature for OP Stack-related functionality (submission and, in future, streams)
+op-stack = []
+# Chain-specific flags build on top of the root OP Stack feature
+op-stack-unichain = ["op-stack"]
+op-stack-base = ["op-stack"]
+
+default = []
+
+[dependencies]
+angstrom-types.workspace = true
+url.workspace = true

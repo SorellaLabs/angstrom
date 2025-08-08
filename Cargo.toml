@@ -95,6 +95,7 @@ angstrom-network = { path = "./crates/angstrom-net/" }
 angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-types = { path = "./crates/types/" }
 angstrom-utils = { path = "./crates/utils/" }
+angstrom-sequencer = { path = "./crates/sequencer/" }
 anyhow = "1"
 aquamarine = "0"
 arbitrary = "1"

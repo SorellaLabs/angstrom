@@ -1223,6 +1223,7 @@ dependencies = [
  "alloy-transport-http",
  "angstrom-types",
  "eyre",
+ "metrics 0.21.1",
  "tokio",
  "tracing",
  "url",

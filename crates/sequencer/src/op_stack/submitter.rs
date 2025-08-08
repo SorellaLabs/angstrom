@@ -9,6 +9,8 @@ use std::future::Future;
 use std::pin::Pin;
 #[cfg(feature = "op-stack")]
 use alloy_provider::{Provider, ProviderBuilder, RootProvider};
+#[cfg(feature = "op-stack")]
+use tokio::time::{sleep, Duration};
 
 /// Minimal OP Stack submitter stub. Implements `ChainSubmitter` and returns
 /// `Ok(None)` for now. Real submission logic will be added next.
@@ -89,10 +91,21 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
 
                 let encoded_tx = tx.encoded_2718();
                 let tx_hash = *tx.tx_hash();
-                client
-                    .send_raw_transaction(&encoded_tx)
-                    .await
-                    .inspect_err(|e| tracing::warn!(err=%e, "failed to send L2 tx"))?;
+                // Basic retry with exponential backoff (3 attempts)
+                let mut attempt = 0u32;
+                let mut last_err: Option<eyre::Report> = None;
+                while attempt < 3 {
+                    match client.send_raw_transaction(&encoded_tx).await {
+                        Ok(_) => { last_err = None; break; }
+                        Err(e) => {
+                            tracing::warn!(err=%e, attempt, "failed to send L2 tx");
+                            last_err = Some(eyre::eyre!(e));
+                            attempt += 1;
+                            if attempt < 3 { sleep(Duration::from_millis(200u64 << attempt)).await; }
+                        }
+                    }
+                }
+                if let Some(e) = last_err { return Err(e); }
                 return Ok(Some(tx_hash));
             }
 

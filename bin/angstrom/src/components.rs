@@ -242,26 +242,34 @@ where
         .map(|url| Url::from_str(&url).unwrap())
         .collect::<Vec<_>>();
 
-    let submission_handler = SubmissionHandler::new(
-        querying_provider.clone(),
-        &normal_nodes,
-        &angstrom_submission_nodes,
-        &mev_boost_endpoints,
-        angstrom_address,
-        signer.clone()
-    );
-    #[allow(unused_variables)]
-    let submission_handler = {
-        #[cfg(feature = "op-stack")]
-        {
-            // Instantiate OP Stack submitter to ensure crate linkage; no wiring yet.
-            let _stub = OpStackSequencerSubmitter::new(angstrom_address);
-            submission_handler
-        }
-        #[cfg(not(feature = "op-stack"))]
-        {
-            submission_handler
-        }
+    #[allow(unused_mut)]
+    let mut extra_submitters: Vec<Box<dyn angstrom_types::submission::ChainSubmitterWrapper>> =
+        Vec::new();
+    #[cfg(feature = "op-stack")]
+    {
+        // Include OP Stack submitter stub under feature flag. It returns Ok(None), so no behavior change.
+        let stub = OpStackSequencerSubmitter::new(angstrom_address).into_wrapper(signer.clone());
+        extra_submitters.push(stub);
+    }
+    let submission_handler = if extra_submitters.is_empty() {
+        SubmissionHandler::new(
+            querying_provider.clone(),
+            &normal_nodes,
+            &angstrom_submission_nodes,
+            &mev_boost_endpoints,
+            angstrom_address,
+            signer.clone(),
+        )
+    } else {
+        SubmissionHandler::new_with_submitters(
+            querying_provider.clone(),
+            &normal_nodes,
+            &angstrom_submission_nodes,
+            &mev_boost_endpoints,
+            angstrom_address,
+            signer.clone(),
+            extra_submitters,
+        )
     };
 
     tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \

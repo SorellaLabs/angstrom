@@ -1,4 +1,7 @@
-use angstrom_types::submission::{AngstromBundle, AngstromMetaSigner, AngstromSigner, ChainSubmitter, TxFeatureInfo};
+use angstrom_types::submission::{
+    AngstromBundle, AngstromMetaSigner, AngstromSigner, ChainSubmitter, ChainSubmitterHolder,
+    ChainSubmitterWrapper, TxFeatureInfo,
+};
 use alloy_primitives::Address;
 use alloy_primitives::TxHash;
 use eyre::Result;
@@ -16,6 +19,15 @@ impl OpStackSequencerSubmitter {
     /// Create a new OP Stack submitter for a given Angstrom address.
     pub fn new(angstrom_address: Address) -> Self {
         Self { angstrom_address }
+    }
+
+    /// Helper to wrap this submitter with a signer into a `ChainSubmitterWrapper` that can be
+    /// plugged into `SubmissionHandler::new_with_submitters`.
+    pub fn into_wrapper<S: AngstromMetaSigner + 'static>(
+        self,
+        signer: AngstromSigner<S>,
+    ) -> Box<dyn ChainSubmitterWrapper> {
+        Box::new(ChainSubmitterHolder::new(self, signer))
     }
 }
 

@@ -162,6 +162,35 @@ where
         Self { node_provider, submitters: vec![mempool, angstrom, mev_boost] }
     }
 
+    /// Extended constructor that accepts additional custom submitters.
+    /// This preserves the existing behavior unless extra submitters are provided by callers.
+    pub fn new_with_submitters<S: AngstromMetaSigner + 'static>(
+        node_provider: Arc<P>,
+        mempool: &[Url],
+        angstrom: &[Url],
+        mev_boost: &[Url],
+        angstom_address: Address,
+        signer: AngstromSigner<S>,
+        mut extra_submitters: Vec<Box<dyn ChainSubmitterWrapper>>
+    ) -> Self {
+        let mempool = Box::new(ChainSubmitterHolder::new(
+            MempoolSubmitter::new(mempool, angstom_address),
+            signer.clone()
+        )) as Box<dyn ChainSubmitterWrapper>;
+        let angstrom = Box::new(ChainSubmitterHolder::new(
+            AngstromSubmitter::new(angstrom, angstom_address),
+            signer.clone()
+        )) as Box<dyn ChainSubmitterWrapper>;
+        let mev_boost = Box::new(ChainSubmitterHolder::new(
+            MevBoostSubmitter::new(mev_boost, angstom_address),
+            signer
+        )) as Box<dyn ChainSubmitterWrapper>;
+
+        let mut submitters = vec![mempool, angstrom, mev_boost];
+        submitters.append(&mut extra_submitters);
+        Self { node_provider, submitters }
+    }
+
     pub async fn submit_tx<S: AngstromMetaSigner>(
         &self,
         signer: AngstromSigner<S>,

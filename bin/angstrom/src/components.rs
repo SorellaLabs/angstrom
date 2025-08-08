@@ -248,7 +248,9 @@ where
     #[cfg(feature = "op-stack")]
     if config.l2.l2_enabled {
         // Include OP Stack submitter stub under feature flag when L2 is enabled.
-        let stub = OpStackSequencerSubmitter::new(angstrom_address).into_wrapper(signer.clone());
+        let mut stub = OpStackSequencerSubmitter::new(angstrom_address);
+        if let Some(ref http) = config.l2.l2_http_rpc { stub = stub.with_l2_http_rpc(http); }
+        let stub = stub.into_wrapper(signer.clone());
         extra_submitters.push(stub);
     }
     let submission_handler = if extra_submitters.is_empty() {

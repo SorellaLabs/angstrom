@@ -13,12 +13,15 @@ use std::pin::Pin;
 #[derive(Clone, Debug)]
 pub struct OpStackSequencerSubmitter {
     angstrom_address: Address,
+    /// Optional: L2 HTTP RPC endpoint; when provided, the submitter can self-derive
+    /// nonce/fees/chain_id and dispatch transactions directly.
+    l2_http_rpc:      Option<String>,
 }
 
 impl OpStackSequencerSubmitter {
     /// Create a new OP Stack submitter for a given Angstrom address.
     pub fn new(angstrom_address: Address) -> Self {
-        Self { angstrom_address }
+        Self { angstrom_address, l2_http_rpc: None }
     }
 
     /// Helper to wrap this submitter with a signer into a `ChainSubmitterWrapper` that can be
@@ -28,6 +31,12 @@ impl OpStackSequencerSubmitter {
         signer: AngstromSigner<S>,
     ) -> Box<dyn ChainSubmitterWrapper> {
         Box::new(ChainSubmitterHolder::new(self, signer))
+    }
+
+    /// Configure the L2 HTTP RPC endpoint to enable direct submission.
+    pub fn with_l2_http_rpc(mut self, http_url: impl Into<String>) -> Self {
+        self.l2_http_rpc = Some(http_url.into());
+        self
     }
 }
 

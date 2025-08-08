@@ -23,3 +23,13 @@ url.workspace = true
 alloy-provider = { workspace = true, optional = true }
 alloy-transport-http = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+eyre.workspace = true
+alloy-primitives.workspace = true
+alloy-signer-local = { workspace = true, optional = true }
+alloy = { workspace = true }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+alloy = { workspace = true, features = ["signer-local"] }
+alloy-signer-local = { workspace = true }

@@ -1,19 +1,26 @@
+use angstrom_types::contract_payloads::angstrom::AngstromBundle;
+use angstrom_types::primitive::{AngstromMetaSigner, AngstromSigner};
 use angstrom_types::submission::{
-    AngstromBundle, AngstromMetaSigner, AngstromSigner, ChainSubmitter, ChainSubmitterHolder,
-    ChainSubmitterWrapper, TxFeatureInfo, EXTRA_GAS_LIMIT,
+    ChainSubmitter, ChainSubmitterHolder, ChainSubmitterWrapper, TxFeatureInfo,
 };
-use alloy_primitives::Address;
-use alloy_primitives::TxHash;
+use alloy_primitives::{Address, TxHash};
+use url::Url;
 use eyre::Result;
 use std::future::Future;
 use std::pin::Pin;
 #[cfg(feature = "op-stack")]
-use alloy_provider::{Provider, ProviderBuilder, RootProvider};
+use alloy::{
+    eips::Encodable2718,
+    network::TransactionBuilder,
+    providers::{Provider, ProviderBuilder, RootProvider},
+};
+#[cfg(feature = "op-stack")]
+use tracing::warn;
 #[cfg(feature = "op-stack")]
 use tokio::time::{sleep, Duration};
 
-/// Minimal OP Stack submitter stub. Implements `ChainSubmitter` and returns
-/// `Ok(None)` for now. Real submission logic will be added next.
+/// Minimal OP Stack submitter. Can be a no-op when not configured with L2 HTTP
+/// RPC; otherwise submits to L2.
 #[derive(Clone, Debug)]
 pub struct OpStackSequencerSubmitter {
     angstrom_address: Address,
@@ -70,9 +77,8 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
 
             #[cfg(feature = "op-stack")]
             {
-                let client: RootProvider = ProviderBuilder::default()
-                    .with_recommended_fillers()
-                    .on_http(http.parse().map_err(|e| eyre::eyre!("invalid L2 HTTP: {e}"))?);
+                let client: RootProvider = ProviderBuilder::<_, _, _>::default()
+                    .connect_http(Url::parse(&http).map_err(|e| eyre::eyre!("invalid L2 HTTP: {e}"))?);
 
                 // We still require a bundle to submit; otherwise no-op.
                 let bundle = match _bundle { Some(b) => b, None => return Ok(None) };
@@ -92,7 +98,7 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
                             .estimate_gas(tx.clone())
                             .await
                             .unwrap_or(bundle.crude_gas_estimation())
-                            + EXTRA_GAS_LIMIT;
+                            + L2_EXTRA_GAS_LIMIT;
                         tx.with_gas_limit(gas)
                     })
                     .await;
@@ -106,8 +112,8 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
                     match client.send_raw_transaction(&encoded_tx).await {
                         Ok(_) => { last_err = None; break; }
                         Err(e) => {
-                            tracing::warn!(err=%e, attempt, "failed to send L2 tx");
-                            last_err = Some(eyre::eyre!(e));
+                            warn!(err=%e, attempt, "failed to send L2 tx");
+                            last_err = Some(eyre::eyre!(format!("{e}")));
                             attempt += 1;
                             if attempt < 3 { sleep(Duration::from_millis(200u64 << attempt)).await; }
                         }
@@ -122,3 +128,5 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
         })
     }
 }
+
+const L2_EXTRA_GAS_LIMIT: u64 = 100_000;

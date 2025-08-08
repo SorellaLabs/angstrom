@@ -9,6 +9,7 @@
 /// Feature-gated modules for OP Stack chains live here in the future.
 #[cfg(feature = "op-stack")]
 pub mod op_stack {
+    /// OP Stack submitter and future modules.
     pub mod submitter;
     /// Placeholder for OP Stack-specific configuration.
     #[derive(Clone, Debug)]

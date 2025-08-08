@@ -1216,10 +1216,15 @@ dependencies = [
 name = "angstrom-sequencer"
 version = "0.1.0"
 dependencies = [
+ "alloy",
+ "alloy-primitives",
  "alloy-provider",
+ "alloy-signer-local",
  "alloy-transport-http",
  "angstrom-types",
+ "eyre",
  "tokio",
+ "tracing",
  "url",
 ]
 

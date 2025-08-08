@@ -27,7 +27,9 @@ pub struct AngstromConfig {
     #[clap(short, long, num_args(0..=10), require_equals = true, default_values = ETH_ANGSTROM_RPC)]
     pub angstrom_submission_nodes: Vec<String>,
     #[clap(flatten)]
-    pub key_config:                KeyConfig
+    pub key_config:                KeyConfig,
+    #[clap(flatten)]
+    pub l2:                        L2Config
 }
 
 impl AngstromConfig {
@@ -86,4 +88,32 @@ pub struct KeyConfig {
         default_value = "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so"
     )]
     pub pkcs11_lib_path:           String
+}
+
+#[derive(Debug, Clone, Default, clap::Args)]
+pub struct L2Config {
+    /// Enable L2 sequencer submission path (OP Stack feature must be compiled)
+    #[clap(long, default_value = "false")]
+    pub l2_enabled:       bool,
+    /// Target L2 chain (unichain|base)
+    #[clap(long, value_enum)]
+    pub l2_chain:         Option<L2Chain>,
+    /// L2 HTTP RPC endpoint for submission
+    #[clap(long)]
+    pub l2_http_rpc:      Option<String>,
+    /// L2 WS RPC endpoint (reserved for future block streaming)
+    #[clap(long)]
+    pub l2_ws_rpc:        Option<String>,
+    /// L2 chain ID override (if not derivable)
+    #[clap(long)]
+    pub l2_chain_id:      Option<u64>,
+    /// L2 Angstrom contract address override
+    #[clap(long)]
+    pub l2_ang_address:   Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum L2Chain {
+    Unichain,
+    Base,
 }

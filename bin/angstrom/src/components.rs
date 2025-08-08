@@ -246,8 +246,8 @@ where
     let mut extra_submitters: Vec<Box<dyn angstrom_types::submission::ChainSubmitterWrapper>> =
         Vec::new();
     #[cfg(feature = "op-stack")]
-    {
-        // Include OP Stack submitter stub under feature flag. It returns Ok(None), so no behavior change.
+    if config.l2.l2_enabled {
+        // Include OP Stack submitter stub under feature flag when L2 is enabled.
         let stub = OpStackSequencerSubmitter::new(angstrom_address).into_wrapper(signer.clone());
         extra_submitters.push(stub);
     }

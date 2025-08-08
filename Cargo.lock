@@ -1043,6 +1043,7 @@ dependencies = [
  "angstrom-metrics",
  "angstrom-network",
  "angstrom-rpc",
+ "angstrom-sequencer",
  "angstrom-types",
  "clap",
  "consensus",

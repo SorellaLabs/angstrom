@@ -70,6 +70,8 @@ use validation::{
     init_validation,
     validator::{ValidationClient, ValidationRequest}
 };
+#[cfg(feature = "op-stack")]
+use angstrom_sequencer::OpStackSequencerSubmitter;
 
 use crate::AngstromConfig;
 
@@ -248,6 +250,19 @@ where
         angstrom_address,
         signer.clone()
     );
+    #[allow(unused_variables)]
+    let submission_handler = {
+        #[cfg(feature = "op-stack")]
+        {
+            // Instantiate OP Stack submitter to ensure crate linkage; no wiring yet.
+            let _stub = OpStackSequencerSubmitter::new(angstrom_address);
+            submission_handler
+        }
+        #[cfg(not(feature = "op-stack"))]
+        {
+            submission_handler
+        }
+    };
 
     tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
         this is done to ensure all modules start on the same state and we don't hit the rare  \

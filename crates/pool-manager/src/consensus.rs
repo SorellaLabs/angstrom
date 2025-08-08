@@ -304,7 +304,7 @@ where
         }
     }
 
-    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
+    fn handle_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
         use angstrom_types::network::ReputationChangeKind;
 
         let valid_orders = orders
@@ -319,11 +319,8 @@ where
                     None
                 }
                 PoolInnerEvent::HasTransitionedToNewBlock(block) => {
-                    self.global_sync.sign_off_on_block(
-                        crate::order::MODULE_NAME,
-                        block,
-                        Some(waker())
-                    );
+                    self.global_sync
+                        .sign_off_on_block(MODULE_NAME, block, Some(waker()));
                     None
                 }
                 PoolInnerEvent::None => None
@@ -385,29 +382,8 @@ where
     }
 
     fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
-        use angstrom_types::network::ReputationChangeKind;
-
-        let valid_orders = orders
-            .into_iter()
-            .filter_map(|order| match order {
-                PoolInnerEvent::Propagation(order) => Some(order),
-                PoolInnerEvent::BadOrderMessages(o) => {
-                    o.into_iter().for_each(|peer| {
-                        self.network
-                            .peer_reputation_change(peer, ReputationChangeKind::InvalidOrder);
-                    });
-                    None
-                }
-                PoolInnerEvent::HasTransitionedToNewBlock(block) => {
-                    self.global_sync
-                        .sign_off_on_block(MODULE_NAME, block, Some(waker()));
-                    None
-                }
-                PoolInnerEvent::None => None
-            })
-            .collect::<Vec<_>>();
-
-        self.broadcast_orders_to_peers(valid_orders);
+        // Delegate to the single handler to avoid duplication and drift
+        self.handle_pool_events(orders, waker)
     }
 }
 
@@ -432,7 +408,7 @@ where
         // High priority: poll underlying pool. This is the validation process that's
         // being polled
         while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
-            this.on_pool_events(orders, || cx.waker().clone());
+            this.handle_pool_events(orders, || cx.waker().clone());
         }
 
         // Medium priority: Poll network/peer related events - consensus mode specific

@@ -18,6 +18,8 @@ use alloy::{
 use tracing::warn;
 #[cfg(feature = "op-stack")]
 use tokio::time::{sleep, Duration};
+#[cfg(feature = "op-stack")]
+use metrics::counter;
 
 /// Minimal OP Stack submitter. Can be a no-op when not configured with L2 HTTP
 /// RPC; otherwise submits to L2.
@@ -77,6 +79,7 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
 
             #[cfg(feature = "op-stack")]
             {
+                counter!("op_submit.attempts", 1);
                 let client: RootProvider = ProviderBuilder::<_, _, _>::default()
                     .connect_http(Url::parse(&http).map_err(|e| eyre::eyre!("invalid L2 HTTP: {e}"))?);
 
@@ -119,7 +122,8 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
                         }
                     }
                 }
-                if let Some(e) = last_err { return Err(e); }
+                if let Some(e) = last_err { counter!("op_submit.failures", 1); return Err(e); }
+                counter!("op_submit.success", 1);
                 return Ok(Some(tx_hash));
             }
 

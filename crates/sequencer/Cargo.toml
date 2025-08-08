@@ -10,7 +10,7 @@ exclude.workspace = true
 
 [features]
 # Root feature for OP Stack-related functionality (submission and, in future, streams)
-op-stack = ["dep:alloy-provider", "dep:alloy-transport-http", "dep:tokio"]
+op-stack = ["dep:alloy-provider", "dep:alloy-transport-http", "dep:tokio", "dep:metrics"]
 # Chain-specific flags build on top of the root OP Stack feature
 op-stack-unichain = ["op-stack"]
 op-stack-base = ["op-stack"]
@@ -28,6 +28,7 @@ alloy-primitives.workspace = true
 alloy-signer-local = { workspace = true, optional = true }
 alloy = { workspace = true }
 tracing.workspace = true
+metrics = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

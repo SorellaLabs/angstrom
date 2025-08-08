@@ -191,6 +191,14 @@ where
         Self { node_provider, submitters }
     }
 
+    /// Constructor that uses only the provided submitters, without adding defaults.
+    pub fn from_submitters(
+        node_provider: Arc<P>,
+        submitters: Vec<Box<dyn ChainSubmitterWrapper>>
+    ) -> Self {
+        Self { node_provider, submitters }
+    }
+
     pub async fn submit_tx<S: AngstromMetaSigner>(
         &self,
         signer: AngstromSigner<S>,

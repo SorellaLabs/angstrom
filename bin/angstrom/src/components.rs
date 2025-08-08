@@ -262,6 +262,9 @@ where
             angstrom_address,
             signer.clone(),
         )
+    } else if config.l2.l2_enabled {
+        // In L2 mode, consider using only L2 submitters to avoid double submissions.
+        SubmissionHandler::from_submitters(querying_provider.clone(), extra_submitters)
     } else {
         SubmissionHandler::new_with_submitters(
             querying_provider.clone(),

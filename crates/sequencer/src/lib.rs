@@ -9,6 +9,7 @@
 /// Feature-gated modules for OP Stack chains live here in the future.
 #[cfg(feature = "op-stack")]
 pub mod op_stack {
+    pub mod submitter;
     /// Placeholder for OP Stack-specific configuration.
     #[derive(Clone, Debug)]
     pub struct OpStackConfig {
@@ -51,3 +52,6 @@ pub enum StreamKind {
     /// Finalized head.
     Finalized,
 }
+
+#[cfg(feature = "op-stack")]
+pub use op_stack::submitter::OpStackSequencerSubmitter;

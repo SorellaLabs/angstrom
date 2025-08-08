@@ -23,7 +23,7 @@ use crate::{
     PoolManagerUpdate,
     order_storage::OrderStorage,
     order_subscribers::OrderSubscriptionTracker,
-    order_tracker::OrderTracker,
+    order_tracker::{ChainConfig, OrderTracker},
     telemetry::OrderPoolSnapshot,
     validator::{OrderValidator, OrderValidatorRes}
 };
@@ -47,7 +47,9 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     pub(crate) validator:     OrderValidator<V>,
     /// List of subscribers for order validation result
     /// order
-    pub(crate) subscribers:   OrderSubscriptionTracker
+    pub(crate) subscribers:   OrderSubscriptionTracker,
+    /// Chain configuration for timing parameters
+    pub(crate) chain_config:  ChainConfig
 }
 
 impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
@@ -55,14 +57,16 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         validator: V,
         order_storage: Arc<OrderStorage>,
         block_number: BlockNumber,
-        orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
+        orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
+        chain_config: ChainConfig
     ) -> Self {
         Self {
             order_storage,
             order_tracker: OrderTracker::default(),
             block_number,
             validator: OrderValidator::new(validator),
-            subscribers: OrderSubscriptionTracker::new(orders_subscriber_tx)
+            subscribers: OrderSubscriptionTracker::new(orders_subscriber_tx),
+            chain_config
         }
     }
 
@@ -133,7 +137,9 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         if let Some((is_tob, pool_id)) = self.order_tracker.cancel_order(
             request.user_address,
             request.order_id,
-            &self.order_storage
+            &self.order_storage,
+            self.chain_config.max_order_delay_propagation,
+            self.chain_config.block_time
         ) {
             // grab all parked orders and see if there valid now
             self.order_tracker
@@ -411,9 +417,11 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         // deal with changed orders
         self.eoa_state_change(&address_changes);
         // add expired orders to completed
-        let expired_orders = self
-            .order_tracker
-            .remove_expired_orders(block_number, &self.order_storage);
+        let expired_orders = self.order_tracker.remove_expired_orders(
+            block_number,
+            &self.order_storage,
+            self.chain_config.block_time
+        );
         self.subscribers.notify_expired_orders(&expired_orders);
 
         completed_orders.extend(expired_orders.into_iter().map(|o| o.order_id.hash));
@@ -510,7 +518,7 @@ mod tests {
         let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
         let validator = MockValidator::default();
 
-        OrderIndexer::new(validator, order_storage, 1, tx)
+        OrderIndexer::new(validator, order_storage, 1, tx, ChainConfig::ethereum())
     }
 
     fn setup_test_indexer_with_fn(
@@ -522,7 +530,7 @@ mod tests {
         let mut validator = MockValidator::default();
         f(&mut validator);
 
-        OrderIndexer::new(validator, order_storage, 1, tx)
+        OrderIndexer::new(validator, order_storage, 1, tx, ChainConfig::ethereum())
     }
 
     /// Initialize the tracing subscriber for tests
@@ -650,7 +658,7 @@ mod tests {
         // Simulate block transition
         let expired_hashes = indexer
             .order_tracker
-            .remove_expired_orders(2, &indexer.order_storage)
+            .remove_expired_orders(2, &indexer.order_storage, std::time::Duration::from_secs(12))
             .into_iter()
             .map(|o| o.order_id.hash)
             .collect::<Vec<_>>();
@@ -1173,5 +1181,50 @@ mod tests {
         assert!(!all_order_storage_hashes.contains(&order_hash));
 
         // assert!(!indexer.order_tracker.or)
+    }
+
+    #[tokio::test]
+    async fn test_cancel_order_deadline_op_angstrom() {
+        init_tracing();
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let (tx, _) = broadcast::channel(100);
+        let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
+        let validator = MockValidator::default();
+
+        // Use OP Angstrom chain config (2s block time, 1500-block propagation window)
+        let mut indexer =
+            OrderIndexer::new(validator, order_storage, 1, tx, ChainConfig::op_angstrom());
+
+        // Prepare a valid cancel request for an order that hasn't been indexed
+        let signer = AngstromSigner::random();
+        let from = signer.address();
+        let order_hash = B256::random();
+        let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        let cancel_request =
+            angstrom_types::orders::CancelOrderRequest::new(from, order_hash, &signer);
+
+        // This will register a cancellation with a computed deadline
+        let _ = indexer.cancel_order(&cancel_request);
+
+        let req = indexer
+            .order_tracker
+            .cancelled_orders
+            .get(&order_hash)
+            .expect("cancel should be registered for unknown order");
+
+        // Deadline should be ~1500 * 2 seconds from now (allow small timing tolerance)
+        let deadline = req.deadline;
+        let now_u256 = U256::from(now_secs);
+        let delta = deadline.saturating_sub(now_u256);
+        let expected = U256::from(1500u64 * 2u64);
+        let tol = U256::from(3u64); // a few seconds of slack for test runtime
+
+        assert!(
+            delta >= expected.saturating_sub(tol) && delta <= expected.saturating_add(tol),
+            "unexpected cancel deadline delta: {:?}, expected ~{:?}",
+            delta,
+            expected
+        );
     }
 }

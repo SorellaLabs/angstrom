@@ -20,12 +20,14 @@ pub struct OpStackSequencerSubmitter {
     /// Optional: L2 HTTP RPC endpoint; when provided, the submitter can self-derive
     /// nonce/fees/chain_id and dispatch transactions directly.
     l2_http_rpc:      Option<String>,
+    /// Optional: Chain ID override for L2 submissions.
+    l2_chain_id:      Option<u64>,
 }
 
 impl OpStackSequencerSubmitter {
     /// Create a new OP Stack submitter for a given Angstrom address.
     pub fn new(angstrom_address: Address) -> Self {
-        Self { angstrom_address, l2_http_rpc: None }
+        Self { angstrom_address, l2_http_rpc: None, l2_chain_id: None }
     }
 
     /// Helper to wrap this submitter with a signer into a `ChainSubmitterWrapper` that can be
@@ -40,6 +42,12 @@ impl OpStackSequencerSubmitter {
     /// Configure the L2 HTTP RPC endpoint to enable direct submission.
     pub fn with_l2_http_rpc(mut self, http_url: impl Into<String>) -> Self {
         self.l2_http_rpc = Some(http_url.into());
+        self
+    }
+
+    /// Configure an explicit chain ID for L2 submission.
+    pub fn with_l2_chain_id(mut self, chain_id: u64) -> Self {
+        self.l2_chain_id = Some(chain_id);
         self
     }
 }
@@ -74,7 +82,7 @@ impl ChainSubmitter for OpStackSequencerSubmitter {
                 let latest_block = client.get_block_number().await?;
                 let nonce = client.get_transaction_count(from).number(latest_block).await?;
                 let fees = client.estimate_eip1559_fees().await?;
-                let chain_id = client.get_chain_id().await?;
+                let chain_id = match self.l2_chain_id { Some(id) => id, None => client.get_chain_id().await? };
                 let tx_features = TxFeatureInfo { nonce, fees, chain_id, target_block: latest_block };
 
                 // Gas estimate and sign, mirroring mempool submitter

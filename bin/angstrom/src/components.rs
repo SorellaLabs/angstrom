@@ -218,7 +218,7 @@ where
         .unwrap()
         .into();
 
-    let angstrom_address = *ANGSTROM_ADDRESS.get().unwrap();
+    let mut angstrom_address = *ANGSTROM_ADDRESS.get().unwrap();
     let controller = *CONTROLLER_V1_ADDRESS.get().unwrap();
     let deploy_block = *ANGSTROM_DEPLOYED_BLOCK.get().unwrap();
     let gas_token = *GAS_TOKEN_ADDRESS.get().unwrap();
@@ -247,9 +247,14 @@ where
         Vec::new();
     #[cfg(feature = "op-stack")]
     if config.l2.l2_enabled {
+        // Allow overriding Angstrom address for L2 via CLI flag
+        if let Some(ref addr) = config.l2.l2_ang_address {
+            if let Ok(parsed) = addr.parse() { angstrom_address = parsed; }
+        }
         // Include OP Stack submitter stub under feature flag when L2 is enabled.
         let mut stub = OpStackSequencerSubmitter::new(angstrom_address);
         if let Some(ref http) = config.l2.l2_http_rpc { stub = stub.with_l2_http_rpc(http); }
+        if let Some(id) = config.l2.l2_chain_id { stub = stub.with_l2_chain_id(id); }
         let stub = stub.into_wrapper(signer.clone());
         extra_submitters.push(stub);
     }

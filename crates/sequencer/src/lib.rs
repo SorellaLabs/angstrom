@@ -56,3 +56,30 @@ pub enum StreamKind {
 
 #[cfg(feature = "op-stack")]
 pub use op_stack::submitter::OpStackSequencerSubmitter;
+
+/// A minimal concrete `SequencerClient` backed by an OP Stack submitter.
+#[cfg(feature = "op-stack")]
+#[derive(Clone, Debug)]
+pub struct OpSequencerClient {
+    name:      &'static str,
+    healthy:   std::sync::atomic::AtomicBool,
+}
+
+#[cfg(feature = "op-stack")]
+impl OpSequencerClient {
+    /// Construct a new client. Health defaults to true; callers can set based on checks.
+    pub fn new(name: &'static str) -> Self {
+        Self { name, healthy: std::sync::atomic::AtomicBool::new(true) }
+    }
+
+    /// Update health status.
+    pub fn set_health(&self, is_healthy: bool) {
+        self.healthy.store(is_healthy, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+#[cfg(feature = "op-stack")]
+impl SequencerClient for OpSequencerClient {
+    fn name(&self) -> &'static str { self.name }
+    fn is_healthy(&self) -> bool { self.healthy.load(std::sync::atomic::Ordering::Relaxed) }
+}

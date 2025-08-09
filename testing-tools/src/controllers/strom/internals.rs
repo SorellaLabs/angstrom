@@ -9,7 +9,7 @@ use std::{
 use alloy::{primitives::Address, providers::Provider, signers::local::PrivateKeySigner};
 use alloy_rpc_types::BlockId;
 use angstrom::components::StromHandles;
-use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
+use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
@@ -183,7 +183,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, DEFAULT_TICKS>(
+        let uniswap_pool_manager = configure_uniswap_manager::<_, _, DEFAULT_TICKS>(
             state_provider.rpc_provider().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry.clone(),
@@ -338,7 +338,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         );
 
         // spin up amm quoter
-        let amm = QuoterManager::new(
+        let amm = ConsensusQuoterManager::new(
             block_sync.clone(),
             order_storage.clone(),
             strom_handles.quoter_rx,

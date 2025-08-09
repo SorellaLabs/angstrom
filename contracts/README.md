@@ -5,7 +5,6 @@ contracts enforce decisions made by the off-chain network.
 
 For docs see [./docs](./docs/).
 
-
 ## Build Instructions
 
 1. Ensure you have the foundry toolchain installed (otherwise get it from `https://getfoundry.sh/`)
@@ -15,8 +14,10 @@ For docs see [./docs](./docs/).
 5. Run tests with `forge test --ffi`
 
 ### Alternative Python Environment
+
 If you do not have Python 3.12 or simply want to use your global installation instead of a virtual
 environment you can tweak what python executable is used for the FFI tests by:
+
 1. Opening [`test/_helpers/BaseTest.sol`](./test/_helpers/BaseTest.sol)
 2. Changing `args[0]` in `pythonRunCmd()` to a different path e.g.
 
@@ -32,19 +33,24 @@ function pythonRunCmd() internal pure returns (string[] memory args) {
 
 ### Total Cost
 
-Amortized cost of `N` orders not including the ToB order cost.
+Amortized cost of `N` orders not including the ToB order cost (~ f40kor liquid balance ToB). When
+with AMM the donate is a `CurrentOnly` donate with a non-zero amount.
 
 - EFI = Exact Flash Order \w Internal Balances
 - ESLn = Exact Standing Order \w Liquid Tokens (Nonce non-zero)
 
-|Order Count|EFI (\w AMM)|EFI (No AMM)|ESLn (\w AMM)|ESLn (No AMM)|
-|-----------|------------|------------|-------------|-------------|
-| 1| 135.3k | 65.2k | 148.2k | 92.9k |
-| 2| 77.3k | 42.3k | 90.3k | 62.6k |
-| 3| 58.0k | 34.7k | 71.0k | 52.5k |
-| 4| 48.4k | 30.8k | 61.3k | 47.5k |
-| 5| 42.6k | 28.6k | 55.5k | 44.4k |
-|10| 31.0k | 24.0k | 43.9k | 38.4k |
-|20| 25.2k | 21.7k | 38.1k | 35.4k |
-|50| 21.7k | 20.3k | 34.7k | 33.5k |
+| Order Count | EFI (\w AMM) | EFI (No AMM) | ESLn (\w AMM) | ESLn (No AMM) |
+| ----------- | ------------ | ------------ | ------------- | ------------- |
+| 1           | 148.9k       | 70.4k        | 159.0k        | 80.7k         |
+| 2           | 84.2k        | 44.9k        | 95.7k         | 56.5k         |
+| 3           | 62.6k        | 36.4k        | 74.6k         | 48.4k         |
+| 4           | 51.8k        | 32.2k        | 64.0k         | 44.4k         |
+| 5           | 45.3k        | 29.6k        | 57.7k         | 42.0k         |
+| 10          | 32.4k        | 24.5k        | 45.0k         | 37.2k         |
+| 20          | 25.9k        | 22.0k        | 38.7k         | 34.8k         |
+| 50          | 22.0k        | 20.4k        | 34.9k         | 33.3k         |
 
+## Uni Benchmarks
+
+Test uni v4 direct swap: 123,144
+V4Router_ExactInputSingle: 134,001

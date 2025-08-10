@@ -285,8 +285,9 @@ impl Ray {
             return *self;
         }
         let numerator = Natural::from_limbs_asc(self.0.as_limbs()) * const_1e6();
-        let one_minus_fee = const_1e6().saturating_sub(Natural::from(fee));
-        let res = numerator.div_round(one_minus_fee, RoundingMode::Floor).0;
+        let res = numerator
+            .div_round(const_1e6().saturating_sub(Natural::from(fee)), RoundingMode::Floor)
+            .0;
         Self(Uint::from_limbs_slice(&res.into_limbs_asc()))
     }
 
@@ -298,7 +299,7 @@ impl Ray {
         }
         let numerator = Natural::from_limbs_asc(self.0.as_limbs())
             * const_1e6().saturating_sub(Natural::from(fee));
-        let res = numerator.div_round(const_1e6(), RoundingMode::Floor).0;
+        let res = numerator.div_round(const_1e6(), RoundingMode::Ceiling).0;
         Self(Uint::from_limbs_slice(&res.into_limbs_asc()))
     }
 
@@ -493,6 +494,18 @@ mod tests {
     use rand::{Rng, rng};
 
     use super::*;
+
+    #[test]
+    fn ensure_scaling_eq() {
+        let price = Ray::from(U256::from(4219975774122163712u128));
+        let price_with_fee = price.scale_to_fee(350);
+        let price_back = price_with_fee.unscale_to_fee(350);
+
+        assert_eq!(price, price_back);
+        let ucp = Ray::from(U256::from(4221265177006214436u128));
+        let fee_adjusted = ucp.scale_to_fee(350);
+        panic!("{fee_adjusted:?}");
+    }
 
     #[test]
     fn from_quantities() {

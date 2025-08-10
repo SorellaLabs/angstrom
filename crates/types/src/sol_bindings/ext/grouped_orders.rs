@@ -167,10 +167,11 @@ impl<Order> OrderWithStorageData<Order> {
 
 impl OrderWithStorageData<AllOrders> {
     pub fn pre_fee_and_gas_price(&self, fee: u128) -> Ray {
-        let price =
-            self.unscale_by_gas_fee(self.order.price(), self.priority_data.gas.to::<u128>());
+        // let price =
+        //     self.unscale_by_gas_fee(self.order.price(),
+        // self.priority_data.gas.to::<u128>());
 
-        price.unscale_to_fee(fee)
+        self.order.price().unscale_to_fee(fee)
     }
 }
 
@@ -560,8 +561,8 @@ impl RawPoolOrder for PartialFlashOrder {
                 let amount_in = self.max_amount_in;
                 let amount_out = price.quantity(amount_in, false) + gas_amount_t0;
 
-                // We always round up to leave a buffer
-                Ray::from_quantities(amount_out, amount_in, true)
+                // we round down to make closer to limit
+                Ray::from_quantities(amount_out, amount_in, false)
             }
             false => {
                 // exact in ask
@@ -571,6 +572,7 @@ impl RawPoolOrder for PartialFlashOrder {
                 let amount_in = self.max_amount_in;
                 let amount_out = price.quantity(amount_in + gas_amount_t0, false);
 
+                // we round up to make closer to limit
                 Ray::from_quantities(amount_out, amount_in, true)
             }
         }

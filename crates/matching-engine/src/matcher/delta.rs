@@ -507,7 +507,13 @@ impl<'a> DeltaMatcher<'a> {
                     // Killed orders are killed
                     OrderFillState::Killed
                 } else {
-                    match (o.price_t1_over_t0().cmp(&fetch.ucp), o.is_bid) {
+                    let price = if o.is_bid {
+                        o.pre_fee_and_gas_price(self.fee).inv_ray_round(false)
+                    } else {
+                        o.pre_fee_and_gas_price(self.fee)
+                    };
+
+                    match (price.cmp(&fetch.ucp), o.is_bid) {
                         // A bid with a higher price than UCP or an ask with a lower price than UCP
                         // is filled
                         (Ordering::Greater, true) | (Ordering::Less, false) => {
@@ -588,7 +594,6 @@ impl<'a> DeltaMatcher<'a> {
         let Ok(res) = pool.swap_to_price(end_price_sqrt) else {
             return Default::default();
         };
-        tracing::warn!(?res);
 
         let mut tob_amm = NetAmmOrder::new(direction);
         tob_amm.add_quantity(res.total_d_t0, res.total_d_t1);
@@ -616,6 +621,8 @@ impl<'a> DeltaMatcher<'a> {
                 ..Default::default()
             };
         };
+
+        tracing::info!(ucp=?price_and_partial_solution.ucp);
 
         let limit = self.fetch_orders_at_ucp(&price_and_partial_solution);
         let mut amm = self.fetch_amm_movement_at_ucp(price_and_partial_solution.ucp);
@@ -695,7 +702,7 @@ impl<'a> DeltaMatcher<'a> {
             if let (Sign::Positive, e) = total_liq.into_sign_and_abs() {
                 // Check to see if our excess is within one price unit
                 if e < U256::from(price_for_one) {
-                    trace!("Valid dust solution found");
+                    trace!(?p_mid, "Valid dust solution found");
                     // We have a dust solution, let's store it
                     let dust_q = dust.as_ref().map(|d| d.0).unwrap_or(U256::MAX);
                     if e < dust_q {

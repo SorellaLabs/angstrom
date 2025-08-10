@@ -1062,6 +1062,7 @@ dependencies = [
  "reth-provider",
  "revm",
  "serde",
+ "serde_json",
  "telemetry",
  "testing-tools",
  "tikv-jemallocator",

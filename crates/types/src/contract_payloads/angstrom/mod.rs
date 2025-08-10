@@ -536,6 +536,7 @@ impl AngstromBundle {
                 outcome.is_filled()
             })
         {
+            println!("{:#?}", order);
             total_user_fees = total_user_fees.saturating_add(Self::apply_user_order(
                 outcome,
                 order,

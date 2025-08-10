@@ -60,7 +60,7 @@ impl FinalizationState {
                     .zip(verification_solution)
                     .all(|(p, v)| p == v)
                 {
-                    tracing::error!(
+                    tracing::warn!(
                         "Violation DETECTED. in future this will be related to slashing"
                     );
                     return false;

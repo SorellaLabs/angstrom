@@ -13,7 +13,7 @@ use alloy::{
         client::ClientBuilder,
         json_rpc::{RequestPacket, ResponsePacket}
     },
-    signers::{Signer, local::PrivateKeySigner},
+    signers::Signer,
     transports::{TransportError, TransportErrorKind, TransportFut}
 };
 use alloy_primitives::{Address, TxHash};
@@ -33,11 +33,12 @@ pub struct MevBoostSubmitter {
 }
 
 impl MevBoostSubmitter {
-    pub fn new(urls: &[Url], angstrom_address: Address) -> Self {
+    pub fn new<S: AngstromMetaSigner>(urls: &[Url], signer: AngstromSigner<S>) -> Self {
+        let angstrom_address = signer.address();
         let clients = urls
             .iter()
             .map(|url| {
-                let transport = MevHttp::new_flashbots(url.clone());
+                let transport = MevHttp::new_flashbots(url.clone(), (*signer).clone());
                 let client = ClientBuilder::default().transport(transport, false);
                 RootProvider::new(client)
             })
@@ -158,9 +159,11 @@ struct MevHttp {
 }
 
 impl MevHttp {
-    pub fn new_flashbots(endpoint: Url) -> Self {
-        let bundle_signer = PrivateKeySigner::random();
-        let signer = BundleSigner::flashbots(bundle_signer);
+    pub fn new_flashbots<S>(endpoint: Url, signer: S) -> Self
+    where
+        S: Signer + Send + Sync + 'static
+    {
+        let signer = BundleSigner::flashbots(signer);
         Self { signer, endpoint, http: reqwest::Client::new() }
     }
 

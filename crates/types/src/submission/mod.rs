@@ -155,7 +155,7 @@ where
             signer.clone()
         )) as Box<dyn ChainSubmitterWrapper>;
         let mev_boost = Box::new(ChainSubmitterHolder::new(
-            MevBoostSubmitter::new(mev_boost, angstom_address),
+            MevBoostSubmitter::new(mev_boost, signer.clone()),
             signer
         )) as Box<dyn ChainSubmitterWrapper>;
 

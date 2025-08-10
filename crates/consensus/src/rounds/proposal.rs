@@ -13,12 +13,13 @@ use angstrom_types::{
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty
 };
 use futures::{FutureExt, StreamExt, future::BoxFuture};
-use matching_engine::MatchingEngineHandle;
+use matching_engine::{MatchingEngineHandle, manager::MatchingEngineError};
 
 use super::{ConsensusState, SharedRoundState};
 use crate::rounds::{ConsensusMessage, preproposal_wait_trigger::LastRoundInfo};
 
-type MatchingEngineFuture = BoxFuture<'static, eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>;
+type MatchingEngineFuture =
+    BoxFuture<'static, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>;
 
 /// Proposal State.
 ///
@@ -66,7 +67,7 @@ impl ProposalState {
     fn try_build_proposal<P, Matching, S: AngstromMetaSigner>(
         &mut self,
         cx: &mut Context<'_>,
-        result: eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>,
+        result: Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>,
         handles: &mut SharedRoundState<P, Matching, S>
     ) -> bool
     where
@@ -84,7 +85,7 @@ impl ProposalState {
         tracing::debug!("starting to build proposal");
 
         let Ok(possible_bundle) = result.inspect_err(|e| {
-            tracing::error!(err=%e,
+            tracing::info!(err=%e,
                 "Failed to properly build proposal, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
             )})
             .map(|(pool_solution, gas_info)| {
@@ -101,7 +102,7 @@ impl ProposalState {
                 let all_orders = handles.order_storage.get_all_orders();
 
                      AngstromBundle::from_proposal(&proposal,all_orders, gas_info, &snapshot).inspect_err(|e| {
-                        tracing::error!(err=%e,
+                        tracing::info!(err=%e,
                             "failed to encode angstrom bundle, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
                         );
                     }).ok()

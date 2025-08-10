@@ -24,7 +24,7 @@ use angstrom_types::{
 };
 use bid_aggregation::BidAggregationState;
 use futures::{FutureExt, Stream, future::BoxFuture};
-use matching_engine::MatchingEngineHandle;
+use matching_engine::{MatchingEngineHandle, manager::MatchingEngineError};
 use order_pool::order_storage::OrderStorage;
 use preproposal_wait_trigger::{LastRoundInfo, PreProposalWaitTrigger};
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
@@ -240,7 +240,8 @@ where
     fn matching_engine_output(
         &self,
         pre_proposal_aggregation: HashSet<PreProposalAggregation>
-    ) -> BoxFuture<'static, eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> {
+    ) -> BoxFuture<'static, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>
+    {
         // fetch
         let mut limit = Vec::new();
         let mut searcher = Vec::new();

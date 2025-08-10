@@ -134,7 +134,7 @@ where
             }
 
             metrics.simulate_bundle(|| {
-                let bundle = bundle.pade_encode();
+                let encoded_bundle = bundle.pade_encode();
                 let console_log_inspector = CallDataInspector {};
 
                  let mut evm = Context {
@@ -159,7 +159,7 @@ where
                         tx.chain_id = Some(*CHAIN_ID.get().unwrap());
                         tx.data =
                         angstrom_types::contract_bindings::angstrom::Angstrom::executeCall::new((
-                            bundle.into(),
+                            encoded_bundle.into(),
                         ))
                         .abi_encode()
                         .into();
@@ -181,7 +181,7 @@ where
                 };
 
                 if !result.is_success() {
-                    tracing::error!(?result);
+                    tracing::error!(?result, block_number=%number + 1);
                     let _ = sender.send(Err(eyre!("transaction simulation failed")));
                     return;
                 }

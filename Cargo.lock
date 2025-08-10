@@ -6232,6 +6232,7 @@ dependencies = [
  "serde",
  "serde_json",
  "testing-tools",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.19",

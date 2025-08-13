@@ -1,14 +1,9 @@
-use std::{
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Waker}
-};
+use std::sync::Arc;
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
-use futures::{Future, StreamExt};
 use order_pool::{
-    OrderIndexer, PoolConfig, PoolInnerEvent, PoolManagerUpdate, order_storage::OrderStorage
+    OrderIndexer, PoolConfig, PoolManagerUpdate, order_storage::OrderStorage
 };
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -16,27 +11,9 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::{
-    common::PoolManagerCommon,
-    impl_common_getters,
+    manager::{PoolManager, RollupMode},
     order::{MODULE_NAME, OrderCommand, PoolHandle}
 };
-
-/// Rollup-mode pool manager without networking capabilities
-pub struct RollupPoolManager<V, GS>
-where
-    V: OrderValidatorHandle,
-    GS: BlockSyncConsumer
-{
-    /// Access to validation and sorted storage of orders
-    pub(crate) order_indexer:      OrderIndexer<V>,
-    /// Global blockchain synchronization coordinator
-    pub(crate) global_sync:        GS,
-    /// Ethereum updates stream that tells the pool manager about orders that
-    /// have been filled
-    pub(crate) eth_network_events: UnboundedReceiverStream<EthEvent>,
-    /// Receiver half of the commands to the pool manager
-    pub(crate) command_rx:         UnboundedReceiverStream<OrderCommand>
-}
 
 /// Builder for constructing RollupPoolManager instances.
 pub struct RollupPoolManagerBuilder<V, GlobalSync>
@@ -107,11 +84,12 @@ where
 
         task_spawner.spawn_critical(
             "order pool manager",
-            Box::pin(RollupPoolManager {
+            Box::pin(PoolManager {
                 eth_network_events: self.eth_network_events,
                 order_indexer:      inner,
                 command_rx:         rx,
-                global_sync:        self.global_sync
+                global_sync:        self.global_sync,
+                mode:               RollupMode,
             })
         );
 
@@ -119,7 +97,7 @@ where
     }
 }
 
-impl<V, GS> RollupPoolManager<V, GS>
+impl<V, GS> super::manager::RollupPoolManager<V, GS>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GS: BlockSyncConsumer
@@ -134,124 +112,4 @@ where
         RollupPoolManagerBuilder::new(validator, order_storage, eth_network_events, global_sync)
     }
 }
-
-impl<V, GlobalSync> RollupPoolManager<V, GlobalSync>
-where
-    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
-{
-    /// Rollup-specific order processing logic
-    ///
-    /// This method provides a convenient way to get proposable orders
-    /// for rollup mode, which processes all orders without consensus filtering.
-    pub fn get_rollup_orders(&mut self) -> Vec<AllOrders> {
-        // In rollup mode, we process all orders without consensus filtering
-        // This is typically simpler and more direct
-        self.order_indexer
-            .get_all_orders_with_parked()
-            .into_all_orders()
-    }
-}
-
-// Implement the PoolManagerCommon trait methods
-impl<V, GS> PoolManagerCommon for RollupPoolManager<V, GS>
-where
-    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GS: BlockSyncConsumer
-{
-    type GlobalSync = GS;
-    type Validator = V;
-
-    // Use macro to avoid duplication of getter methods
-    impl_common_getters!(RollupPoolManager<V, GS>, V, GS);
-
-    fn on_command(&mut self, cmd: OrderCommand) {
-        use angstrom_types::orders::OrderOrigin;
-        use telemetry_recorder::telemetry_event;
-
-        match cmd {
-            OrderCommand::NewOrder(origin, order, validation_response) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, origin, order.clone());
-
-                self.order_indexer
-                    .new_rpc_order(OrderOrigin::External, order, validation_response)
-            }
-            OrderCommand::CancelOrder(req, receiver) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, req.clone());
-
-                let res = self.order_indexer.cancel_order(&req);
-                // In rollup mode, no need to broadcast cancellation to peers
-                let _ = receiver.send(res);
-            }
-            OrderCommand::PendingOrders(from, receiver) => {
-                let res = self.order_indexer.pending_orders_for_address(from);
-                let _ = receiver.send(res.into_iter().map(|o| o.order).collect());
-            }
-            OrderCommand::OrderStatus(order_hash, tx) => {
-                let res = self.order_indexer.order_status(order_hash);
-                let _ = tx.send(res);
-            }
-            OrderCommand::OrdersByPool(pool_id, location, tx) => {
-                let res = self.order_indexer.orders_by_pool(pool_id, location);
-                let _ = tx.send(res);
-            }
-        }
-    }
-
-    fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
-        for order in orders {
-            match order {
-                PoolInnerEvent::Propagation(_order) => {
-                    // In rollup mode, no need to broadcast orders to peers
-                    // since there's no networking
-                }
-                PoolInnerEvent::BadOrderMessages(_o) => {
-                    // In rollup mode, we don't have networking, so no
-                    // reputation changes
-                }
-                PoolInnerEvent::HasTransitionedToNewBlock(block) => {
-                    self.global_sync
-                        .sign_off_on_block(MODULE_NAME, block, Some(waker()));
-                }
-                PoolInnerEvent::None => {}
-            }
-        }
-    }
-}
-
-impl<V, GlobalSync> Future for RollupPoolManager<V, GlobalSync>
-where
-    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer
-{
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-
-        // High priority: pull all eth events
-        while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
-            this.on_eth_event(eth, cx.waker().clone());
-        }
-
-        // High priority: poll underlying pool. This is the validation process that's
-        // being polled
-        while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
-            this.on_pool_events(orders, || cx.waker().clone());
-        }
-
-        // Rollup mode has no mode-specific polling
-
-        // Low priority: halt dealing with these till we have synced
-        if this.global_sync.can_operate() {
-            // drain commands
-            while let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
-                this.on_command(cmd);
-            }
-        }
-
-        Poll::Pending
-    }
-}
+// All runtime behavior is implemented on the generic manager

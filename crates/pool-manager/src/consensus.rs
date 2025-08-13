@@ -10,7 +10,7 @@ use validation::order::OrderValidatorHandle;
 
 use crate::{
     manager::{self, ConsensusMode},
-    order::{MODULE_NAME, PoolHandle},
+    order::{MODULE_NAME, PoolHandle}
 };
 
 /// Builder for constructing ConsensusPoolManager instances.
@@ -18,16 +18,16 @@ pub struct ConsensusPoolManagerBuilder<V, GlobalSync, NH>
 where
     V: OrderValidatorHandle,
     GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle,
+    NH: NetworkHandle
 {
-    validator: V,
-    global_sync: GlobalSync,
-    order_storage: Option<Arc<OrderStorage>>,
-    network_handle: NH,
-    eth_network_events: UnboundedReceiverStream<EthEvent>,
-    order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
+    validator:            V,
+    global_sync:          GlobalSync,
+    order_storage:        Option<Arc<OrderStorage>>,
+    network_handle:       NH,
+    eth_network_events:   UnboundedReceiverStream<EthEvent>,
+    order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
-    config: order_pool::PoolConfig,
+    config:               order_pool::PoolConfig
 }
 
 impl<V, GlobalSync, NH> ConsensusPoolManagerBuilder<V, GlobalSync, NH>
@@ -38,7 +38,7 @@ where
         + Send
         + Sync
         + Unpin
-        + 'static,
+        + 'static
 {
     pub fn new(
         validator: V,
@@ -47,7 +47,7 @@ where
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
     ) -> Self {
         Self {
             validator,
@@ -57,7 +57,7 @@ where
             eth_network_events,
             order_events,
             strom_network_events,
-            config: Default::default(),
+            config: Default::default()
         }
     }
 
@@ -78,7 +78,7 @@ where
         rx: tokio::sync::mpsc::UnboundedReceiver<crate::order::OrderCommand>,
         pool_manager_tx: tokio::sync::broadcast::Sender<order_pool::PoolManagerUpdate>,
         block_number: u64,
-        replay: impl FnOnce(&mut order_pool::OrderIndexer<V>) + Send + 'static,
+        replay: impl FnOnce(&mut order_pool::OrderIndexer<V>) + Send + 'static
     ) -> crate::order::PoolHandle {
         let rx = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
         let order_storage = self
@@ -90,7 +90,7 @@ where
             self.validator.clone(),
             order_storage.clone(),
             block_number,
-            pool_manager_tx.clone(),
+            pool_manager_tx.clone()
         );
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
@@ -102,11 +102,11 @@ where
             rx,
             self.global_sync,
             ConsensusMode {
-                network: self.network_handle,
+                network:              self.network_handle,
                 strom_network_events: self.strom_network_events,
-                order_events: self.order_events,
-                peer_to_info: HashMap::new(),
-            },
+                order_events:         self.order_events,
+                peer_to_info:         HashMap::new()
+            }
         );
 
         handle
@@ -121,7 +121,7 @@ where
         + Send
         + Sync
         + Unpin
-        + 'static,
+        + 'static
 {
     /// Create a new consensus pool manager builder
     pub fn new(
@@ -131,7 +131,7 @@ where
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GS,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
     ) -> ConsensusPoolManagerBuilder<V, GS, NH> {
         ConsensusPoolManagerBuilder::new(
             validator,
@@ -140,7 +140,7 @@ where
             eth_network_events,
             order_events,
             global_sync,
-            strom_network_events,
+            strom_network_events
         )
     }
 }

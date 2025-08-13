@@ -6,7 +6,7 @@ use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     primitive::{NewInitializedPool, PoolId},
-    sol_bindings::grouped_orders::AllOrders,
+    sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
 use order_pool::{OrderIndexer, PoolInnerEvent};
@@ -45,7 +45,7 @@ pub trait PoolManagerCommon {
                 self.order_indexer_mut().start_new_block_processing(
                     block_number,
                     filled_orders,
-                    address_changeset,
+                    address_changeset
                 );
                 waker.clone().wake_by_ref();
             }

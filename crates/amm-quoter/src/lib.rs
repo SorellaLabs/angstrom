@@ -197,10 +197,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
             ang_pool_subs.retain(|subscriber| subscriber.try_send(slot_update.clone()).is_ok());
         };
 
-        if let Some(uni_pool_subs) = self
-            .pool_to_subscribers
-            .get_mut(&slot_update.angstrom_pool_id)
-        {
+        if let Some(uni_pool_subs) = self.pool_to_subscribers.get_mut(&slot_update.uni_pool_id) {
             uni_pool_subs.retain(|subscriber| subscriber.try_send(slot_update.clone()).is_ok());
         };
     }

@@ -1,13 +1,14 @@
 //! Common traits and functionality shared between pool manager implementations
 
-use std::task::Waker;
+use std::task::{Context, Poll, Waker};
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     primitive::{NewInitializedPool, PoolId},
-    sol_bindings::grouped_orders::AllOrders
+    sol_bindings::grouped_orders::AllOrders,
 };
+use futures::StreamExt;
 use order_pool::{OrderIndexer, PoolInnerEvent};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
@@ -44,7 +45,7 @@ pub trait PoolManagerCommon {
                 self.order_indexer_mut().start_new_block_processing(
                     block_number,
                     filled_orders,
-                    address_changeset
+                    address_changeset,
                 );
                 waker.clone().wake_by_ref();
             }
@@ -79,6 +80,26 @@ pub trait PoolManagerCommon {
 
     /// Handle pool events - mode-specific implementation required
     fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker);
+
+    /// Default helper: poll eth events and pool indexer
+    fn poll_eth_and_pool(&mut self, cx: &mut Context<'_>) {
+        while let Poll::Ready(Some(eth)) = self.eth_network_events_mut().poll_next_unpin(cx) {
+            self.on_eth_event(eth, cx.waker().clone());
+        }
+
+        while let Poll::Ready(Some(orders)) = self.order_indexer_mut().poll_next_unpin(cx) {
+            self.on_pool_events(orders, || cx.waker().clone());
+        }
+    }
+
+    /// Default helper: drain command queue if global sync allows progress
+    fn drain_commands_if_synced(&mut self, cx: &mut Context<'_>) {
+        if self.global_sync().can_operate() {
+            while let Poll::Ready(Some(cmd)) = self.command_rx_mut().poll_next_unpin(cx) {
+                self.on_command(cmd);
+            }
+        }
+    }
 }
 
 /// Simple macro to implement the repetitive getter methods for

@@ -7,11 +7,13 @@
 
 pub mod cache;
 pub mod common;
-pub mod manager;
 pub mod consensus;
+pub mod manager;
 pub mod order;
 pub mod rollup;
 
 // Re-export main types for convenience
-pub use manager::{ConsensusMode, ConsensusPoolManager, PoolManager, RollupMode, RollupPoolManager};
+pub use manager::{
+    ConsensusMode, ConsensusPoolManager, PoolManager, RollupMode, RollupPoolManager,
+};
 pub use order::*;

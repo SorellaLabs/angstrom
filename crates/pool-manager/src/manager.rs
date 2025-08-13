@@ -4,18 +4,21 @@
 //! struct parameterized by a mode type that carries mode-specific state
 //! and behavior.
 
-use std::{collections::HashMap, pin::Pin, task::{Context, Poll, Waker}};
+use std::{
+    collections::HashMap,
+    pin::Pin,
+    task::{Context, Poll, Waker},
+};
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
 use angstrom_types::{
-    block_sync::BlockSyncConsumer,
-    primitive::PeerId,
-    sol_bindings::grouped_orders::AllOrders,
+    block_sync::BlockSyncConsumer, primitive::PeerId, sol_bindings::grouped_orders::AllOrders,
 };
 use futures::{Future, StreamExt};
 use order_pool::{OrderIndexer, PoolInnerEvent};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
+use reth_tasks::TaskSpawner;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
@@ -57,18 +60,82 @@ where
 pub type RollupPoolManager<V, GS> = PoolManager<V, GS, RollupMode>;
 pub type ConsensusPoolManager<V, GS, NH> = PoolManager<V, GS, ConsensusMode<NH>>;
 
-impl<V, GS> PoolManager<V, GS, RollupMode>
+impl<V, GS, M> PoolManager<V, GS, M>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GS: BlockSyncConsumer,
 {
-    /// Rollup-specific helper to fetch orders; currently identical to consensus,
-    /// but kept here to mirror the previous API surface.
-    pub fn get_rollup_orders(&mut self) -> Vec<AllOrders> {
+    pub fn all_orders(&mut self) -> Vec<AllOrders> {
         self.order_indexer
             .get_all_orders_with_parked()
             .into_all_orders()
     }
+
+    fn handle_new_order(
+        &mut self,
+        origin: angstrom_types::orders::OrderOrigin,
+        order: AllOrders,
+        validation_response: tokio::sync::oneshot::Sender<
+            validation::order::OrderValidationResults,
+        >,
+    ) {
+        let blocknum = self.global_sync.current_block_number();
+        telemetry_recorder::telemetry_event!(blocknum, origin, order.clone());
+
+        self.order_indexer.new_rpc_order(
+            angstrom_types::orders::OrderOrigin::External,
+            order,
+            validation_response,
+        );
+    }
+
+    fn handle_cancel(&mut self, req: angstrom_types::orders::CancelOrderRequest) -> bool {
+        let blocknum = self.global_sync.current_block_number();
+        telemetry_recorder::telemetry_event!(blocknum, req.clone());
+        self.order_indexer.cancel_order(&req)
+    }
+
+    fn handle_pending_orders(&mut self, from: alloy::primitives::Address) -> Vec<AllOrders> {
+        self.order_indexer
+            .pending_orders_for_address(from)
+            .into_iter()
+            .map(|o| o.order)
+            .collect()
+    }
+
+    fn handle_order_status(
+        &mut self,
+        hash: alloy::primitives::B256,
+    ) -> Option<angstrom_types::orders::OrderStatus> {
+        self.order_indexer.order_status(hash)
+    }
+
+    fn handle_orders_by_pool(
+        &mut self,
+        pool_id: alloy::primitives::FixedBytes<32>,
+        loc: angstrom_types::orders::OrderLocation,
+    ) -> Vec<AllOrders> {
+        self.order_indexer.orders_by_pool(pool_id, loc)
+    }
+}
+
+pub(crate) fn spawn_manager<V, GS, M, TP: TaskSpawner>(
+    task_spawner: TP,
+    eth_network_events: UnboundedReceiverStream<EthEvent>,
+    order_indexer: OrderIndexer<V>,
+    command_rx: UnboundedReceiverStream<OrderCommand>,
+    global_sync: GS,
+    mode: M,
+) where
+    V: OrderValidatorHandle<Order = AllOrders> + Unpin + Clone + 'static,
+    GS: BlockSyncConsumer + 'static,
+    M: 'static,
+    PoolManager<V, GS, M>: Future<Output = ()> + Send + 'static,
+{
+    task_spawner.spawn_critical(
+        "order pool manager",
+        Box::pin(PoolManager { eth_network_events, order_indexer, command_rx, global_sync, mode }),
+    );
 }
 
 impl<V, GS, NH> PoolManager<V, GS, ConsensusMode<NH>>
@@ -77,17 +144,7 @@ where
     GS: BlockSyncConsumer,
     NH: NetworkHandle,
 {
-    /// Consensus-specific helper to fetch orders; may apply filtering later.
-    pub fn get_consensus_orders(&mut self) -> Vec<AllOrders> {
-        self.order_indexer
-            .get_all_orders_with_parked()
-            .into_all_orders()
-    }
-
-    fn broadcast_cancel_to_peers(
-        &mut self,
-        cancel: angstrom_types::orders::CancelOrderRequest,
-    ) {
+    fn broadcast_cancel_to_peers(&mut self, cancel: angstrom_types::orders::CancelOrderRequest) {
         use angstrom_types::network::PoolNetworkMessage;
 
         for (peer_id, info) in self.mode.peer_to_info.iter_mut() {
@@ -169,8 +226,11 @@ where
                         .map(|peer| peer.orders.insert(order.order_hash()));
 
                     telemetry_event!(block_num, OrderOrigin::External, order.clone());
-                    self.order_indexer
-                        .new_network_order(peer_id, OrderOrigin::External, order.clone());
+                    self.order_indexer.new_network_order(
+                        peer_id,
+                        OrderOrigin::External,
+                        order.clone(),
+                    );
                 });
             }
             NetworkOrderEvent::CancelOrder { request, .. } => {
@@ -192,7 +252,7 @@ where
                 self.mode.peer_to_info.insert(
                     peer_id,
                     StromPeer {
-                        orders:        crate::cache::LruCache::new(
+                        orders: crate::cache::LruCache::new(
                             std::num::NonZeroUsize::new(crate::PEER_ORDER_CACHE_LIMIT).unwrap(),
                         ),
                         cancellations: crate::cache::LruCache::new(
@@ -200,7 +260,7 @@ where
                         ),
                     },
                 );
-                let all_orders = self.get_consensus_orders();
+                let all_orders = self.all_orders();
 
                 self.broadcast_order_to_peer(all_orders, peer_id);
             }
@@ -227,36 +287,22 @@ where
     impl_common_getters!(PoolManager<V, GS, RollupMode>, V, GS);
 
     fn on_command(&mut self, cmd: OrderCommand) {
-        use angstrom_types::orders::OrderOrigin;
-        use telemetry_recorder::telemetry_event;
-
         match cmd {
             OrderCommand::NewOrder(origin, order, validation_response) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, origin, order.clone());
-
-                self.order_indexer
-                    .new_rpc_order(OrderOrigin::External, order, validation_response)
+                self.handle_new_order(origin, order, validation_response)
             }
             OrderCommand::CancelOrder(req, receiver) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, req.clone());
-
-                let res = self.order_indexer.cancel_order(&req);
-                // rollup: no broadcast
+                let res = self.handle_cancel(req);
                 let _ = receiver.send(res);
             }
             OrderCommand::PendingOrders(from, receiver) => {
-                let res = self.order_indexer.pending_orders_for_address(from);
-                let _ = receiver.send(res.into_iter().map(|o| o.order).collect());
+                let _ = receiver.send(self.handle_pending_orders(from));
             }
             OrderCommand::OrderStatus(order_hash, tx) => {
-                let res = self.order_indexer.order_status(order_hash);
-                let _ = tx.send(res);
+                let _ = tx.send(self.handle_order_status(order_hash));
             }
             OrderCommand::OrdersByPool(pool_id, location, tx) => {
-                let res = self.order_indexer.orders_by_pool(pool_id, location);
-                let _ = tx.send(res);
+                let _ = tx.send(self.handle_orders_by_pool(pool_id, location));
             }
         }
     }
@@ -292,38 +338,25 @@ where
     impl_common_getters!(PoolManager<V, GS, ConsensusMode<NH>>, V, GS);
 
     fn on_command(&mut self, cmd: OrderCommand) {
-        use angstrom_types::orders::OrderOrigin;
-        use telemetry_recorder::telemetry_event;
-
         match cmd {
             OrderCommand::NewOrder(origin, order, validation_response) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, origin, order.clone());
-
-                self.order_indexer
-                    .new_rpc_order(OrderOrigin::External, order, validation_response)
+                self.handle_new_order(origin, order, validation_response)
             }
             OrderCommand::CancelOrder(req, receiver) => {
-                let blocknum = self.global_sync.current_block_number();
-                telemetry_event!(blocknum, req.clone());
-
-                let res = self.order_indexer.cancel_order(&req);
+                let res = self.handle_cancel(req.clone());
                 if res {
                     self.broadcast_cancel_to_peers(req);
                 }
                 let _ = receiver.send(res);
             }
             OrderCommand::PendingOrders(from, receiver) => {
-                let res = self.order_indexer.pending_orders_for_address(from);
-                let _ = receiver.send(res.into_iter().map(|o| o.order).collect());
+                let _ = receiver.send(self.handle_pending_orders(from));
             }
             OrderCommand::OrderStatus(order_hash, tx) => {
-                let res = self.order_indexer.order_status(order_hash);
-                let _ = tx.send(res);
+                let _ = tx.send(self.handle_order_status(order_hash));
             }
             OrderCommand::OrdersByPool(pool_id, location, tx) => {
-                let res = self.order_indexer.orders_by_pool(pool_id, location);
-                let _ = tx.send(res);
+                let _ = tx.send(self.handle_orders_by_pool(pool_id, location));
             }
         }
     }
@@ -343,22 +376,10 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        // High priority: pull all eth events
-        while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
-            this.on_eth_event(eth, cx.waker().clone());
-        }
+        use crate::common::PoolManagerCommon;
 
-        // High priority: poll underlying pool (validation process)
-        while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
-            this.on_pool_events(orders, || cx.waker().clone());
-        }
-
-        // Low priority: drain commands after sync
-        if this.global_sync.can_operate() {
-            while let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
-                this.on_command(cmd);
-            }
-        }
+        PoolManagerCommon::poll_eth_and_pool(this, cx);
+        PoolManagerCommon::drain_commands_if_synced(this, cx);
 
         Poll::Pending
     }
@@ -375,15 +396,8 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        // High priority: pull all eth events
-        while let Poll::Ready(Some(eth)) = this.eth_network_events.poll_next_unpin(cx) {
-            this.on_eth_event(eth, cx.waker().clone());
-        }
-
-        // High priority: poll underlying pool (validation process)
-        while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
-            this.on_pool_events(orders, || cx.waker().clone());
-        }
+        use crate::common::PoolManagerCommon;
+        PoolManagerCommon::poll_eth_and_pool(this, cx);
 
         // Medium priority: network events
         while let Poll::Ready(Some(event)) = this.mode.strom_network_events.poll_next_unpin(cx) {
@@ -398,11 +412,7 @@ where
         }
 
         // Low priority: drain commands after sync
-        if this.global_sync.can_operate() {
-            while let Poll::Ready(Some(cmd)) = this.command_rx.poll_next_unpin(cx) {
-                this.on_command(cmd);
-            }
-        }
+        PoolManagerCommon::drain_commands_if_synced(this, cx);
 
         Poll::Pending
     }

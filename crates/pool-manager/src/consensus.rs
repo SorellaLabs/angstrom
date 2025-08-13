@@ -1,17 +1,16 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
 use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
-use order_pool::{OrderIndexer, order_storage::OrderStorage};
+use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::{
-    manager::{ConsensusMode, PoolManager},
-    order::{MODULE_NAME, OrderCommand, PoolHandle},
+    manager::{self, ConsensusMode},
+    order::{MODULE_NAME, PoolHandle},
 };
 
 /// Builder for constructing ConsensusPoolManager instances.
@@ -96,20 +95,18 @@ where
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
 
-        task_spawner.spawn_critical(
-            "order pool manager",
-            Box::pin(PoolManager {
-                eth_network_events: self.eth_network_events,
-                order_indexer: inner,
-                command_rx: rx,
-                global_sync: self.global_sync,
-                mode: ConsensusMode {
-                    network: self.network_handle,
-                    strom_network_events: self.strom_network_events,
-                    order_events: self.order_events,
-                    peer_to_info: HashMap::new(),
-                },
-            }),
+        manager::spawn_manager(
+            task_spawner,
+            self.eth_network_events,
+            inner,
+            rx,
+            self.global_sync,
+            ConsensusMode {
+                network: self.network_handle,
+                strom_network_events: self.strom_network_events,
+                order_events: self.order_events,
+                peer_to_info: HashMap::new(),
+            },
         );
 
         handle

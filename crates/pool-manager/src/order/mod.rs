@@ -2,7 +2,7 @@ use alloy::primitives::{Address, B256, FixedBytes};
 use angstrom_types::{
     orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
     primitive::{OrderValidationError, PeerId},
-    sol_bindings::grouped_orders::AllOrders
+    sol_bindings::grouped_orders::AllOrders,
 };
 use futures::{Future, FutureExt};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
@@ -20,8 +20,8 @@ pub(crate) const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
 /// Api to interact with [`PoolManager`] task.
 #[derive(Debug, Clone)]
 pub struct PoolHandle {
-    pub manager_tx:      UnboundedSender<OrderCommand>,
-    pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
+    pub manager_tx: UnboundedSender<OrderCommand>,
+    pub pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
 }
 
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub enum OrderCommand {
     CancelOrder(CancelOrderRequest, tokio::sync::oneshot::Sender<bool>),
     PendingOrders(Address, tokio::sync::oneshot::Sender<Vec<AllOrders>>),
     OrdersByPool(FixedBytes<32>, OrderLocation, tokio::sync::oneshot::Sender<Vec<AllOrders>>),
-    OrderStatus(B256, tokio::sync::oneshot::Sender<Option<OrderStatus>>)
+    OrderStatus(B256, tokio::sync::oneshot::Sender<Option<OrderStatus>>),
 }
 
 impl PoolHandle {
@@ -43,7 +43,7 @@ impl OrderPoolHandle for PoolHandle {
     fn new_order(
         &self,
         origin: OrderOrigin,
-        order: AllOrders
+        order: AllOrders,
     ) -> impl Future<Output = Result<FixedBytes<32>, OrderValidationError>> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let order_hash = order.order_hash();
@@ -51,13 +51,13 @@ impl OrderPoolHandle for PoolHandle {
         rx.map(move |res| {
             let Ok(result) = res else {
                 return Err(OrderValidationError::Unknown {
-                    err: "a channel failed on the backend".to_string()
+                    err: "a channel failed on the backend".to_string(),
                 });
             };
             match result {
                 OrderValidationResults::TransitionedToBlock(_)
                 | OrderValidationResults::Valid(_) => Ok(order_hash),
-                OrderValidationResults::Invalid { error, .. } => Err(error)
+                OrderValidationResults::Invalid { error, .. } => Err(error),
             }
         })
     }
@@ -69,7 +69,7 @@ impl OrderPoolHandle for PoolHandle {
     fn fetch_orders_from_pool(
         &self,
         pool_id: FixedBytes<32>,
-        location: OrderLocation
+        location: OrderLocation,
     ) -> impl Future<Output = Vec<AllOrders>> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -82,7 +82,7 @@ impl OrderPoolHandle for PoolHandle {
 
     fn fetch_order_status(
         &self,
-        order_hash: B256
+        order_hash: B256,
     ) -> impl Future<Output = Option<OrderStatus>> + Send {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let _ = self
@@ -112,13 +112,13 @@ pub enum NetworkTransactionEvent {
     /// Received list of transactions from the given peer.
     ///
     /// This represents transactions that were broadcasted to use from the peer.
-    IncomingOrders { peer_id: PeerId, msg: Vec<AllOrders> }
+    IncomingOrders { peer_id: PeerId, msg: Vec<AllOrders> },
 }
 
 /// Tracks a single peer
 #[derive(Debug)]
 pub(crate) struct StromPeer {
     /// Keeps track of transactions that we know the peer has seen.
-    pub(crate) orders:        LruCache<B256>,
-    pub(crate) cancellations: LruCache<B256>
+    pub(crate) orders: LruCache<B256>,
+    pub(crate) cancellations: LruCache<B256>,
 }

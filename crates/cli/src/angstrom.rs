@@ -24,18 +24,17 @@ use parking_lot::RwLock;
 use reth::{
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
     cli::Cli,
-    primitives::EthPrimitives,
     tasks::TaskExecutor
 };
 use reth_db::DatabaseEnv;
-use reth_node_builder::{Node, NodeBuilder, NodeHandle, WithLaunchContext};
+use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_node_ethereum::{EthereumAddOns, EthereumNode};
 use validation::validator::ValidationClient;
 
 use crate::{
     components::{AngstromLauncher, init_network_builder},
     config::AngstromConfig,
-    handles::ConsensusHandles,
+    handles::{ConsensusHandles, ConsensusMode},
     metrics::init_metrics
 };
 
@@ -173,25 +172,18 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         .launch()
         .await?;
 
-    AngstromLauncher::<_, _, EthPrimitives, _>::new(args, node_handle, secret_key)
-        .with_network(network)
-        .with_consensus_client(consensus_client)
-        .with_node_set(node_set)
-        .launch()
-        .await?;
-
-    // initialize_strom_components(
-    //     args,
-    //     secret_key,
-    //     channels,
-    //     network,
-    //     &node,
-    //     executor,
-    //     node_exit_future,
-    //     node_set,
-    //     consensus_client
-    // )
-    // .await
+    AngstromLauncher::<_, _, ConsensusMode, _>::new(
+        args,
+        executor,
+        node_handle,
+        secret_key,
+        channels
+    )
+    .with_network(network)
+    .with_consensus_client(consensus_client)
+    .with_node_set(node_set)
+    .launch()
+    .await?;
 
     Ok(())
 }

@@ -13,6 +13,7 @@ use reth::primitives::EthPrimitives;
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_node_builder::NodePrimitives;
 use reth_optimism_primitives::OpPrimitives;
+use serde::Serialize;
 use tokio::sync::{
     mpsc,
     mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, channel, unbounded_channel}
@@ -23,7 +24,7 @@ pub type DefaultPoolHandle = PoolHandle;
 type DefaultOrderCommand = OrderCommand;
 
 pub(crate) trait AngstromMode {
-    type Primitives: NodePrimitives;
+    type Primitives: NodePrimitives + Serialize;
 }
 
 pub(crate) struct ConsensusMode {

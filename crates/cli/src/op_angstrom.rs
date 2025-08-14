@@ -1,31 +1,27 @@
 //! Optimism Angstrom binary executable.
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
-use alloy::providers::{ProviderBuilder, network::Ethereum};
 use alloy_chains::NamedChain;
-use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
 use angstrom_network::pool_manager::PoolHandle;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
-use angstrom_types::{
-    contract_bindings::controller_v_1::ControllerV1,
-    primitive::{
-        ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, CONTROLLER_V1_ADDRESS,
-        init_with_chain_id
-    }
+use angstrom_types::primitive::{
+    ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, init_with_chain_id
 };
 use clap::Parser;
 use reth::{chainspec::EthChainSpec, tasks::TaskExecutor};
 use reth_db::DatabaseEnv;
-use reth_node_builder::{Node, NodeBuilder, NodeHandle, WithLaunchContext};
+use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
 use reth_optimism_node::{OpAddOns, OpNode};
 use validation::validator::ValidationClient;
 
 use crate::{
-    components::initialize_strom_components, config::AngstromConfig, handles::RollupHandles,
+    components::AngstromLauncher,
+    config::AngstromConfig,
+    handles::{RollupHandles, RollupMode},
     metrics::init_metrics
 };
 
@@ -70,29 +66,10 @@ pub fn run() -> eyre::Result<()> {
         let executor_clone = executor.clone();
         let validation_client = ValidationClient(channels.validator_tx.clone());
 
-        // get provider and node set for startup, we need this so when reth startup
-        // happens, we directly can connect to the nodes.
-        let startup_provider = ProviderBuilder::<_, _, Ethereum>::default()
-            .with_recommended_fillers()
-            .connect(&args.boot_node)
-            .await
-            .unwrap();
-
-        let periphery_c =
-            ControllerV1::new(*CONTROLLER_V1_ADDRESS.get().unwrap(), startup_provider);
-        let node_set = periphery_c
-            .nodes()
-            .call()
-            .await
-            .unwrap()
-            .into_iter()
-            .collect::<HashSet<_>>();
-
         if let Some(signer) = args.get_local_signer()? {
             run_with_signer(
                 pool,
                 executor_clone,
-                node_set,
                 validation_client,
                 quoter_handle,
                 signer,
@@ -105,7 +82,6 @@ pub fn run() -> eyre::Result<()> {
             run_with_signer(
                 pool,
                 executor_clone,
-                node_set,
                 validation_client,
                 quoter_handle,
                 signer,
@@ -123,7 +99,6 @@ pub fn run() -> eyre::Result<()> {
 async fn run_with_signer<S: AngstromMetaSigner>(
     pool: PoolHandle,
     executor: TaskExecutor,
-    node_set: HashSet<Address>,
     validation_client: ValidationClient,
     quoter_handle: QuoterHandle,
     secret_key: AngstromSigner<S>,
@@ -132,7 +107,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>
 ) -> eyre::Result<()> {
     let executor_clone = executor.clone();
-    let NodeHandle { node, node_exit_future } = builder
+    let node_handle = builder
         .with_types::<OpNode>()
         .with_components(OpNode::default().components_builder())
         .with_add_ons::<OpAddOns<_, _, _, _>>(Default::default())
@@ -150,14 +125,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         .launch()
         .await?;
 
-    initialize_strom_components(
-        args,
-        secret_key,
-        channels,
-        &node,
-        executor,
-        node_exit_future,
-        node_set
-    )
-    .await
+    AngstromLauncher::<_, _, RollupMode, _>::new(args, executor, node_handle, secret_key, channels)
+        .launch()
+        .await
 }

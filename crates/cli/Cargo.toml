@@ -1,21 +1,18 @@
 [package]
-name = "op-angstrom"
+name = "angstrom-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = """
-Angstrom Sidecar implementation
-"""
+exclude.workspace = true
 
 [dependencies]
 alloy.workspace = true
 alloy-chains.workspace = true
 alloy-primitives.workspace = true
 angstrom-amm-quoter.workspace = true
-angstrom-cli.workspace = true
 angstrom-eth.workspace = true
 angstrom-metrics.workspace = true
 angstrom-network.workspace = true
@@ -29,7 +26,7 @@ hsm-signer.workspace = true
 matching-engine.workspace = true
 order-pool.workspace = true
 parking_lot.workspace = true
-rayon = "1"
+rayon.workspace = true
 reth.workspace = true
 reth-db.workspace = true
 reth-metrics.workspace = true
@@ -40,7 +37,6 @@ reth-provider.workspace = true
 serde.workspace = true
 telemetry.workspace = true
 tokio.workspace = true
-toml.workspace = true
 tracing.workspace = true
 uniswap-v4.workspace = true
 url.workspace = true
@@ -51,15 +47,3 @@ reth-optimism-chainspec.workspace = true
 reth-optimism-cli.workspace = true
 reth-optimism-node.workspace = true
 reth-optimism-primitives.workspace = true
-
-[target.'cfg(unix)'.dependencies]
-tikv-jemallocator = { version = "0.6.0", optional = true }
-
-[features]
-default = ["jemalloc"]
-jemalloc = ["dep:tikv-jemallocator"]
-jemalloc-prof = ["jemalloc", "tikv-jemallocator?/profiling"]
-
-[[bin]]
-name = "op-angstrom"
-path = "src/main.rs"

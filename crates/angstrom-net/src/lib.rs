@@ -6,10 +6,10 @@ pub use types::*;
 pub mod state;
 
 pub mod manager;
-pub use manager::{StromNetworkEvent, StromNetworkManager};
+pub use manager::{NetworkOrderEvent, StromNetworkEvent, StromNetworkManager};
 
-pub mod pool_manager;
-pub use pool_manager::PoolManagerBuilder;
+mod network_handle;
+pub use network_handle::NetworkHandle;
 
 pub mod peers;
 pub use peers::*;
@@ -22,9 +22,6 @@ pub use builder::*;
 
 pub mod network;
 pub use network::*;
-
-pub mod cache;
-pub use cache::*;
 
 pub mod swarm;
 pub use swarm::*;

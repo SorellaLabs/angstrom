@@ -20,9 +20,7 @@ use angstrom_eth::{
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, PoolManagerBuilder, StatusState,
-    VerificationSidecar,
-    pool_manager::{OrderCommand, PoolHandle}
+    NetworkBuilder as StromNetworkBuilder, NetworkOrderEvent, StatusState, VerificationSidecar
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
@@ -43,6 +41,7 @@ use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};
 use parking_lot::RwLock;
+use pool_manager::{ConsensusPoolManager, OrderCommand, PoolHandle};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -395,13 +394,14 @@ where
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    let _pool_handle = PoolManagerBuilder::new(
+    let _pool_handle = ConsensusPoolManager::new(
         validation_handle.clone(),
         Some(order_storage.clone()),
         network_handle.clone(),
         eth_handle.subscribe_network(),
         handles.pool_rx,
-        global_block_sync.clone()
+        global_block_sync.clone(),
+        network_handle.subscribe_network_events()
     )
     .with_config(pool_config)
     .build_with_channels(

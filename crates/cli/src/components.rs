@@ -14,7 +14,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
-use angstrom_amm_quoter::ConsensusQuoterManager;
+use angstrom_amm_quoter::{ConsensusQuoterManager, RollupQuoterManager};
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
@@ -470,10 +470,255 @@ where
             Header = <OpPrimitives as NodePrimitives>::BlockHeader
         > + DatabaseProviderFactory,
     AO: NodeAddOns<N> + RethRpcAddOns<N>,
-    S: AngstromMetaSigner
+    <<N as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
+        TryIntoHistoricalStateProvider + BlockNumReader + ReceiptProvider,
+    S: AngstromMetaSigner,
+    <<N as FullNodeTypes>::Types as NodeTypes>::Primitives: Serialize,
+    <N as FullNodeTypes>::Types: NodeTypes<Primitives = OpPrimitives>
 {
     pub async fn launch(self) -> eyre::Result<()> {
-        Ok(())
+        let signer = self.signer;
+        let node = self.node;
+        let config = self.config;
+        let executor = self.executor;
+        let mut handles = self.handles;
+
+        let node_address = signer.address();
+
+        // NOTE:
+        // no key is installed and this is strictly for internal usage. Realsically, we
+        // should build a alloy provider impl that just uses the raw underlying db
+        // so it will be quicker than rpc + won't be bounded by the rpc threadpool.
+        let url = node.rpc_server_handle().ipc_endpoint().unwrap();
+        tracing::info!(?url, ?config.mev_boost_endpoints, "backup to database is");
+        let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
+            .with_recommended_fillers()
+            .layer(RethDbLayer::new(node.provider().clone()))
+            // backup
+            .connect(&url)
+            .await
+            .unwrap()
+            .into();
+
+        let angstrom_address = *ANGSTROM_ADDRESS.get().unwrap();
+        let controller = *CONTROLLER_V1_ADDRESS.get().unwrap();
+        let deploy_block = *ANGSTROM_DEPLOYED_BLOCK.get().unwrap();
+        let gas_token = *GAS_TOKEN_ADDRESS.get().unwrap();
+        let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
+
+        let normal_nodes = config
+            .normal_nodes
+            .into_iter()
+            .map(|url| Url::from_str(&url).unwrap())
+            .collect::<Vec<_>>();
+
+        let angstrom_submission_nodes = config
+            .angstrom_submission_nodes
+            .into_iter()
+            .map(|url| Url::from_str(&url).unwrap())
+            .collect::<Vec<_>>();
+
+        let mev_boost_endpoints = config
+            .mev_boost_endpoints
+            .into_iter()
+            .map(|url| Url::from_str(&url).unwrap())
+            .collect::<Vec<_>>();
+
+        let submission_handler = SubmissionHandler::new(
+            querying_provider.clone(),
+            &normal_nodes,
+            &angstrom_submission_nodes,
+            &mev_boost_endpoints,
+            angstrom_address,
+            signer.clone()
+        );
+
+        tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
+        this is done to ensure all modules start on the same state and we don't hit the rare  \
+        condition of a block while starting modules");
+
+        let mut sub = node.provider.subscribe_to_canonical_state();
+        handle_init_block_spam(&mut sub).await;
+        let _ = sub.recv().await.expect("next block");
+
+        tracing::info!(target: "angstrom::startup-sequence", "new block detected. initializing all modules");
+
+        let block_id = querying_provider.get_block_number().await.unwrap();
+
+        let pool_config_store = Arc::new(
+            AngstromPoolConfigStore::load_from_chain(
+                angstrom_address,
+                BlockId::Number(BlockNumberOrTag::Latest),
+                &querying_provider
+            )
+            .await
+            .unwrap()
+        );
+
+        // load the angstrom pools;
+        tracing::info!("starting search for pools");
+        let pools = fetch_angstrom_pools(
+            deploy_block as usize,
+            block_id as usize,
+            angstrom_address,
+            &node.provider
+        )
+        .await;
+        tracing::info!("found pools");
+
+        let angstrom_tokens = pools
+            .iter()
+            .flat_map(|pool| [pool.currency0, pool.currency1])
+            .fold(HashMap::<Address, usize>::new(), |mut acc, x| {
+                *acc.entry(x).or_default() += 1;
+                acc
+            });
+
+        // re-fetch given the fetch pools takes awhile. given this, we do techincally
+        // have a gap in which a pool is deployed durning startup. This isn't
+        // critical but we will want to fix this down the road.
+        // let block_id = querying_provider.get_block_number().await.unwrap();
+        let block_id = match sub.recv().await.expect("first block") {
+            CanonStateNotification::Commit { new } => new.tip().number(),
+            CanonStateNotification::Reorg { new, .. } => new.tip().number()
+        };
+
+        tracing::info!(?block_id, "starting up with block");
+        let eth_data_sub = node.provider.subscribe_to_canonical_state();
+
+        let global_block_sync = GlobalBlockSync::new(block_id);
+
+        // this right here problem
+        let uniswap_registry: UniswapPoolRegistry = pools.into();
+        let uni_ang_registry =
+            UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
+
+        // Build our PoolManager using the PoolConfig and OrderStorage we've already
+        // created
+        let eth_handle = EthDataCleanser::spawn(
+            angstrom_address,
+            controller,
+            eth_data_sub,
+            executor.clone(),
+            handles.eth_tx,
+            handles.eth_rx,
+            angstrom_tokens,
+            pool_config_store.clone(),
+            global_block_sync.clone(),
+            // Empty node set for rollup mode
+            HashSet::new(),
+            vec![handles.eth_handle_tx.take().unwrap()]
+        )
+        .unwrap();
+
+        let network_stream = Box::pin(eth_handle.subscribe_network())
+            as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
+
+        let signer_addr = signer.address();
+        executor.spawn_critical_with_graceful_shutdown_signal("telemetry init", |grace_shutdown| {
+            init_telemetry(signer_addr, grace_shutdown)
+        });
+
+        let uniswap_pool_manager = configure_uniswap_manager::<_, OpPrimitives, DEFAULT_TICKS>(
+            querying_provider.clone(),
+            eth_handle.subscribe_cannon_state_notifications().await,
+            uniswap_registry,
+            block_id,
+            global_block_sync.clone(),
+            pool_manager,
+            network_stream
+        )
+        .await;
+
+        tracing::info!("uniswap manager start");
+
+        let uniswap_pools = uniswap_pool_manager.pools();
+        let pool_ids = uniswap_pool_manager.pool_addresses().collect::<Vec<_>>();
+
+        executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
+        let price_generator = TokenPriceGenerator::new(
+            querying_provider.clone(),
+            block_id,
+            uniswap_pools.clone(),
+            gas_token,
+            None
+        )
+        .await
+        .expect("failed to start token price generator");
+
+        let update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
+            angstrom_address,
+            node.provider.canonical_state_stream(),
+            querying_provider.clone()
+        ));
+
+        let block_height = node.provider.best_block_number().unwrap();
+
+        init_validation(
+            RethDbWrapper::new(node.provider.clone(), block_height),
+            block_height,
+            angstrom_address,
+            node_address,
+            update_stream,
+            uniswap_pools.clone(),
+            price_generator,
+            pool_config_store.clone(),
+            handles.validator_rx
+        );
+
+        let validation_handle = ValidationClient(handles.validator_tx.clone());
+        tracing::info!("validation manager start");
+
+        // fetch pool ids
+
+        let pool_config = PoolConfig::with_pool_ids(pool_ids);
+        let order_storage = Arc::new(OrderStorage::new(&pool_config));
+
+        let _pool_handle = PoolManagerBuilder::new(
+            validation_handle.clone(),
+            Some(order_storage.clone()),
+            // TODO: When other PR is merged
+            network_handle.clone(),
+            eth_handle.subscribe_network(),
+            handles.pool_rx,
+            global_block_sync.clone()
+        )
+        .with_config(pool_config)
+        .build_with_channels(
+            executor.clone(),
+            handles.orderpool_tx,
+            handles.orderpool_rx,
+            handles.pool_manager_tx,
+            block_id,
+            |_| {}
+        );
+
+        tracing::info!("pool manager start");
+
+        // spinup matching engine
+        let matching_handle = MatchingManager::spawn(executor.clone(), validation_handle.clone());
+
+        // spin up amm quoter
+        let amm = RollupQuoterManager::new(
+            global_block_sync.clone(),
+            order_storage.clone(),
+            handles.quoter_rx,
+            uniswap_pools.clone(),
+            rayon::ThreadPoolBuilder::default()
+                .num_threads(6)
+                .build()
+                .expect("failed to build rayon thread pool"),
+            Duration::from_millis(100)
+        );
+
+        executor.spawn_critical("amm quoting service", amm);
+
+        // TODO: Manage runtime here instead of using ConsensusManager
+
+        global_block_sync.finalize_modules();
+        tracing::info!("started angstrom");
+
+        self.node_exit_future.await
     }
 }
 

@@ -8,7 +8,7 @@ use std::{
 
 use alloy::signers::local::PrivateKeySigner;
 use alloy_primitives::Address;
-use angstrom::components::initialize_strom_handles;
+use angstrom_cli::handles::ConsensusHandles;
 use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager,
     pool_manager::PoolHandle
@@ -93,12 +93,12 @@ where
         F: Clone
     {
         tracing::info!("spawning node");
-        let strom_handles = initialize_strom_handles();
+        let strom_handles = ConsensusHandles::new();
         let (strom_network, eth_peer, strom_network_manager) = TestnetNodeNetwork::new(
             c,
             &node_config,
             Some(strom_handles.pool_tx.clone()),
-            Some(strom_handles.consensus_tx_op.clone())
+            Some(strom_handles.mode.consensus_tx_op.clone())
         )
         .await;
 

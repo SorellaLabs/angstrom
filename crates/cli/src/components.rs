@@ -678,7 +678,7 @@ where
             validation_handle.clone(),
             Some(order_storage.clone()),
             // TODO: When other PR is merged
-            network_handle.clone(),
+            todo!(),
             eth_handle.subscribe_network(),
             handles.pool_rx,
             global_block_sync.clone()

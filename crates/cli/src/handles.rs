@@ -23,11 +23,11 @@ use validation::validator::ValidationRequest;
 pub type DefaultPoolHandle = PoolHandle;
 type DefaultOrderCommand = OrderCommand;
 
-pub(crate) trait AngstromMode {
+pub trait AngstromMode {
     type Primitives: NodePrimitives + Serialize;
 }
 
-pub(crate) struct ConsensusMode {
+pub struct ConsensusMode {
     pub consensus_tx_op: UnboundedMeteredSender<StromConsensusEvent>,
     pub consensus_rx_op: UnboundedMeteredReceiver<StromConsensusEvent>,
 
@@ -35,7 +35,7 @@ pub(crate) struct ConsensusMode {
     pub consensus_rx_rpc: UnboundedReceiver<consensus::ConsensusRequest>
 }
 
-pub(crate) struct RollupMode;
+pub struct RollupMode;
 
 impl AngstromMode for ConsensusMode {
     type Primitives = EthPrimitives;
@@ -46,7 +46,7 @@ impl AngstromMode for RollupMode {
 }
 
 // due to how the init process works with reth. we need to init like this
-pub(crate) struct StromHandles<M: AngstromMode> {
+pub struct StromHandles<M: AngstromMode> {
     pub eth_tx: Sender<EthCommand<M::Primitives>>,
     pub eth_rx: Receiver<EthCommand<M::Primitives>>,
 
@@ -84,7 +84,7 @@ impl<M: AngstromMode> StromHandles<M> {
 }
 
 /// [`StromHandles`] for consensus mode.
-pub(crate) type ConsensusHandles = StromHandles<ConsensusMode>;
+pub type ConsensusHandles = StromHandles<ConsensusMode>;
 
 impl ConsensusHandles {
     /// Creates a new set of handles for consensus mode.
@@ -126,7 +126,7 @@ impl ConsensusHandles {
 }
 
 /// [`StromHandles`] for rollup mode.
-pub(crate) type RollupHandles = StromHandles<RollupMode>;
+pub type RollupHandles = StromHandles<RollupMode>;
 
 impl RollupHandles {
     /// Creates a new set of handles for rollup mode.

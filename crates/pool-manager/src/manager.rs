@@ -12,7 +12,7 @@ use reth_tasks::TaskSpawner;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
-use crate::order::OrderCommand;
+use crate::handle::OrderCommand;
 
 /// Shared, generic PoolManager state.
 pub struct PoolManager<V, GS, M>

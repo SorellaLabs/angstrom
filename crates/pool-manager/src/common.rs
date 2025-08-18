@@ -13,7 +13,7 @@ use order_pool::{OrderIndexer, PoolInnerEvent};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
-use crate::order::{MODULE_NAME, OrderCommand};
+use crate::{MODULE_NAME, handle::OrderCommand};
 
 /// Common behavior shared between different pool manager implementations
 pub trait PoolManagerCommon<V, GS>

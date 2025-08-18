@@ -8,12 +8,14 @@
 pub mod cache;
 pub mod common;
 pub mod consensus;
+mod handle;
 pub mod manager;
-pub mod order;
 pub mod rollup;
 
 // Re-export main types for convenience
 pub use consensus::{ConsensusMode, ConsensusPoolManager};
+pub use handle::{OrderCommand, PoolHandle};
 pub use manager::PoolManager;
-pub use order::*;
 pub use rollup::{RollupMode, RollupPoolManager};
+
+pub(crate) const MODULE_NAME: &str = "Order Pool";

@@ -15,10 +15,10 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::{
-    PoolManager,
+    MODULE_NAME, PoolManager,
     common::PoolManagerCommon,
-    impl_common_getters, manager,
-    order::{MODULE_NAME, OrderCommand, PoolHandle}
+    handle::{OrderCommand, PoolHandle},
+    impl_common_getters, manager
 };
 
 /// Rollup mode: no networking state.

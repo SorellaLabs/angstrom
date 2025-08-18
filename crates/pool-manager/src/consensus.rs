@@ -5,6 +5,7 @@ use std::{
     task::{Context, Poll, Waker}
 };
 
+use alloy::primitives::B256;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
 use angstrom_types::{
@@ -17,11 +18,32 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use validation::order::OrderValidatorHandle;
 
 use crate::{
-    OrderCommand, PoolManager, StromPeer,
+    MODULE_NAME, PoolManager,
+    cache::LruCache,
     common::PoolManagerCommon,
-    impl_common_getters, manager,
-    order::{MODULE_NAME, PoolHandle}
+    handle::{OrderCommand, PoolHandle},
+    impl_common_getters, manager
 };
+
+/// Cache limit of transactions to keep track of for a single peer.
+pub(crate) const PEER_ORDER_CACHE_LIMIT: usize = 1024 * 10;
+
+/// All events related to orders emitted by the network.
+#[derive(Debug)]
+pub enum NetworkTransactionEvent {
+    /// Received list of transactions from the given peer.
+    ///
+    /// This represents transactions that were broadcasted to use from the peer.
+    IncomingOrders { peer_id: PeerId, msg: Vec<AllOrders> }
+}
+
+/// Tracks a single peer
+#[derive(Debug)]
+pub(crate) struct StromPeer {
+    /// Keeps track of transactions that we know the peer has seen.
+    pub(crate) orders:        LruCache<B256>,
+    pub(crate) cancellations: LruCache<B256>
+}
 
 /// Consensus mode: carries networking-related state.
 pub struct ConsensusMode {
@@ -88,12 +110,12 @@ where
     pub fn build_with_channels<TP: reth_tasks::TaskSpawner>(
         self,
         task_spawner: TP,
-        tx: tokio::sync::mpsc::UnboundedSender<crate::order::OrderCommand>,
-        rx: tokio::sync::mpsc::UnboundedReceiver<crate::order::OrderCommand>,
+        tx: tokio::sync::mpsc::UnboundedSender<OrderCommand>,
+        rx: tokio::sync::mpsc::UnboundedReceiver<OrderCommand>,
         pool_manager_tx: tokio::sync::broadcast::Sender<order_pool::PoolManagerUpdate>,
         block_number: u64,
         replay: impl FnOnce(&mut order_pool::OrderIndexer<V>) + Send + 'static
-    ) -> crate::order::PoolHandle {
+    ) -> PoolHandle {
         let rx = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
         let order_storage = self
             .order_storage
@@ -261,11 +283,11 @@ where
                 self.mode.peer_to_info.insert(
                     peer_id,
                     StromPeer {
-                        orders:        crate::cache::LruCache::new(
-                            std::num::NonZeroUsize::new(crate::PEER_ORDER_CACHE_LIMIT).unwrap()
+                        orders:        LruCache::new(
+                            std::num::NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
                         ),
-                        cancellations: crate::cache::LruCache::new(
-                            std::num::NonZeroUsize::new(crate::PEER_ORDER_CACHE_LIMIT).unwrap()
+                        cancellations: LruCache::new(
+                            std::num::NonZeroUsize::new(PEER_ORDER_CACHE_LIMIT).unwrap()
                         )
                     }
                 );

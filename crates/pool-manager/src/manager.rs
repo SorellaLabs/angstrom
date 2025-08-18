@@ -273,14 +273,11 @@ where
 }
 
 // Implement common getters and shared eth-event handler via PoolManagerCommon
-impl<V, GS> PoolManagerCommon for PoolManager<V, GS, RollupMode>
+impl<V, GS> PoolManagerCommon<V, GS> for PoolManager<V, GS, RollupMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GS: BlockSyncConsumer
 {
-    type GlobalSync = GS;
-    type Validator = V;
-
     impl_common_getters!(PoolManager<V, GS, RollupMode>, V, GS);
 
     fn on_command(&mut self, cmd: OrderCommand) {
@@ -307,31 +304,26 @@ where
     fn on_pool_events(&mut self, orders: Vec<PoolInnerEvent>, waker: impl Fn() -> Waker) {
         for order in orders {
             match order {
-                PoolInnerEvent::Propagation(_order) => {
-                    // no-op in rollup
-                }
-                PoolInnerEvent::BadOrderMessages(_o) => {
-                    // no networking in rollup
-                }
                 PoolInnerEvent::HasTransitionedToNewBlock(block) => {
                     self.global_sync
                         .sign_off_on_block(MODULE_NAME, block, Some(waker()));
                 }
-                PoolInnerEvent::None => {}
+                PoolInnerEvent::None
+                | PoolInnerEvent::Propagation(_)
+                | PoolInnerEvent::BadOrderMessages(_) => {
+                    // No networking / consensus in rollup mode.
+                }
             }
         }
     }
 }
 
-impl<V, GS, NH> PoolManagerCommon for PoolManager<V, GS, ConsensusMode<NH>>
+impl<V, GS, NH> PoolManagerCommon<V, GS> for PoolManager<V, GS, ConsensusMode<NH>>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
     GS: BlockSyncConsumer,
     NH: NetworkHandle
 {
-    type GlobalSync = GS;
-    type Validator = V;
-
     impl_common_getters!(PoolManager<V, GS, ConsensusMode<NH>>, V, GS);
 
     fn on_command(&mut self, cmd: OrderCommand) {

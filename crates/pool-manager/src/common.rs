@@ -16,21 +16,22 @@ use validation::order::OrderValidatorHandle;
 use crate::order::{MODULE_NAME, OrderCommand};
 
 /// Common behavior shared between different pool manager implementations
-pub trait PoolManagerCommon {
-    type Validator: OrderValidatorHandle<Order = AllOrders> + Unpin;
-    type GlobalSync: BlockSyncConsumer;
-
+pub trait PoolManagerCommon<V, GS>
+where
+    V: OrderValidatorHandle<Order = AllOrders> + Unpin,
+    GS: BlockSyncConsumer
+{
     /// Get a reference to the order indexer
-    fn order_indexer(&self) -> &OrderIndexer<Self::Validator>;
+    fn order_indexer(&self) -> &OrderIndexer<V>;
 
     /// Get a mutable reference to the order indexer
-    fn order_indexer_mut(&mut self) -> &mut OrderIndexer<Self::Validator>;
+    fn order_indexer_mut(&mut self) -> &mut OrderIndexer<V>;
 
     /// Get a reference to the global sync
-    fn global_sync(&self) -> &Self::GlobalSync;
+    fn global_sync(&self) -> &GS;
 
     /// Get a mutable reference to the global sync
-    fn global_sync_mut(&mut self) -> &mut Self::GlobalSync;
+    fn global_sync_mut(&mut self) -> &mut GS;
 
     /// Get a mutable reference to the eth network events stream
     fn eth_network_events_mut(&mut self) -> &mut UnboundedReceiverStream<EthEvent>;
@@ -107,19 +108,19 @@ pub trait PoolManagerCommon {
 #[macro_export]
 macro_rules! impl_common_getters {
     ($struct_name:ty, $validator:ty, $global_sync:ty) => {
-        fn order_indexer(&self) -> &OrderIndexer<Self::Validator> {
+        fn order_indexer(&self) -> &OrderIndexer<$validator> {
             &self.order_indexer
         }
 
-        fn order_indexer_mut(&mut self) -> &mut OrderIndexer<Self::Validator> {
+        fn order_indexer_mut(&mut self) -> &mut OrderIndexer<$validator> {
             &mut self.order_indexer
         }
 
-        fn global_sync(&self) -> &Self::GlobalSync {
+        fn global_sync(&self) -> &$global_sync {
             &self.global_sync
         }
 
-        fn global_sync_mut(&mut self) -> &mut Self::GlobalSync {
+        fn global_sync_mut(&mut self) -> &mut $global_sync {
             &mut self.global_sync
         }
 

@@ -2,13 +2,11 @@ use std::collections::HashSet;
 
 use angstrom_amm_quoter::Slot0Update;
 use angstrom_eth::{handle::EthCommand, manager::EthEvent};
-use angstrom_network::{
-    NetworkOrderEvent,
-    pool_manager::{OrderCommand, PoolHandle}
-};
+use angstrom_network::NetworkOrderEvent;
 use angstrom_types::{consensus::StromConsensusEvent, primitive::PoolId};
 use matching_engine::manager::MatcherCommand;
 use order_pool::PoolManagerUpdate;
+use pool_manager::{OrderCommand, PoolHandle};
 use reth::primitives::EthPrimitives;
 use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSender};
 use reth_node_builder::NodePrimitives;

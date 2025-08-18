@@ -8,7 +8,7 @@ use alloy::{self, eips::BlockId, network::Network, primitives::Address, provider
 use alloy_primitives::U256;
 use angstrom_cli::handles::ConsensusHandles;
 use angstrom_eth::manager::EthEvent;
-use angstrom_network::{PoolManagerBuilder, StromNetworkHandle, pool_manager::PoolHandle};
+use angstrom_network::StromNetworkHandle;
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::ConsensusRoundName,
@@ -29,6 +29,7 @@ use eyre::eyre;
 use futures::{Stream, StreamExt};
 use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
+use pool_manager::{ConsensusPoolManager, PoolHandle};
 use reth::{providers::CanonStateSubscriptions, tasks::TaskExecutor};
 use reth_metrics::common::mpsc::metered_unbounded_channel;
 use reth_provider::test_utils::TestCanonStateSubscriptions;
@@ -261,13 +262,14 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let pool_config = PoolConfig::with_pool_ids(pool_ids);
     let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-    let pool_handle = PoolManagerBuilder::new(
+    let pool_handle = ConsensusPoolManager::new(
         validation_client.clone(),
         Some(order_storage.clone()),
         network_handle.clone(),
         eth_event_rx_stream_pmb,
         handles.pool_rx,
-        global_block_sync.clone()
+        global_block_sync.clone(),
+        network_handle.subscribe_network_events()
     )
     .with_config(pool_config)
     .build_with_channels(

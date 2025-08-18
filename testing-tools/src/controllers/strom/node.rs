@@ -10,8 +10,7 @@ use alloy::signers::local::PrivateKeySigner;
 use alloy_primitives::Address;
 use angstrom_cli::handles::ConsensusHandles;
 use angstrom_network::{
-    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager,
-    pool_manager::PoolHandle
+    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager
 };
 use angstrom_types::{
     block_sync::GlobalBlockSync,
@@ -25,6 +24,7 @@ use consensus::{AngstromValidator, ConsensusManager};
 use futures::Future;
 use matching_engine::manager::MatcherHandle;
 use parking_lot::RwLock;
+use pool_manager::PoolHandle;
 use reth_chainspec::Hardforks;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::{

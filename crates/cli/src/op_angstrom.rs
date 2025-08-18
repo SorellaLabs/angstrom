@@ -4,12 +4,12 @@ use std::sync::Arc;
 use alloy_chains::NamedChain;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
-use angstrom_network::pool_manager::PoolHandle;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::primitive::{
     ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, init_with_chain_id
 };
 use clap::Parser;
+use pool_manager::PoolHandle;
 use reth::{chainspec::EthChainSpec, tasks::TaskExecutor};
 use reth_db::DatabaseEnv;
 use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};

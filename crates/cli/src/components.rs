@@ -19,9 +19,7 @@ use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
 };
-use angstrom_network::{
-    NetworkBuilder as StromNetworkBuilder, PoolManagerBuilder, StatusState, VerificationSidecar
-};
+use angstrom_network::{NetworkBuilder as StromNetworkBuilder, StatusState, VerificationSidecar};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
@@ -39,6 +37,7 @@ use futures::Stream;
 use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
+use pool_manager::{consensus::ConsensusPoolManagerBuilder, rollup::RollupPoolManagerBuilder};
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
@@ -387,13 +386,14 @@ where
         let pool_config = PoolConfig::with_pool_ids(pool_ids);
         let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-        let _pool_handle = PoolManagerBuilder::new(
+        let _pool_handle = ConsensusPoolManagerBuilder::new(
             validation_handle.clone(),
             Some(order_storage.clone()),
             network_handle.clone(),
             eth_handle.subscribe_network(),
             handles.pool_rx,
-            global_block_sync.clone()
+            global_block_sync.clone(),
+            network_handle.subscribe_network_events()
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -674,13 +674,10 @@ where
         let pool_config = PoolConfig::with_pool_ids(pool_ids);
         let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-        let _pool_handle = PoolManagerBuilder::new(
+        let _pool_handle = RollupPoolManagerBuilder::new(
             validation_handle.clone(),
             Some(order_storage.clone()),
-            // TODO: When other PR is merged
-            todo!(),
             eth_handle.subscribe_network(),
-            handles.pool_rx,
             global_block_sync.clone()
         )
         .with_config(pool_config)

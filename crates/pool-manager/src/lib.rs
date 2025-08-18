@@ -1,0 +1,21 @@
+//! Pool Manager
+//!
+//! This crate provides pool management functionality for Angstrom, including:
+//! - Order pool management for the network layer
+//! - Type state pattern implementation for consensus vs rollup modes
+//! - Separate struct types for each operational mode
+
+pub mod cache;
+pub mod common;
+pub mod consensus;
+mod handle;
+pub mod manager;
+pub mod rollup;
+
+// Re-export main types for convenience
+pub use consensus::{ConsensusMode, ConsensusPoolManager};
+pub use handle::{OrderCommand, PoolHandle};
+pub use manager::PoolManager;
+pub use rollup::{RollupMode, RollupPoolManager};
+
+pub(crate) const MODULE_NAME: &str = "Order Pool";

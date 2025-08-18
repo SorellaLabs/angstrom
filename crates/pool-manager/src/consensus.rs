@@ -6,7 +6,7 @@ use std::{
 };
 
 use angstrom_eth::manager::EthEvent;
-use angstrom_network::{NetworkHandle, NetworkOrderEvent, StromNetworkEvent};
+use angstrom_network::{NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
 };
@@ -24,49 +24,40 @@ use crate::{
 };
 
 /// Consensus mode: carries networking-related state.
-pub struct ConsensusMode<NH>
-where
-    NH: NetworkHandle
-{
-    pub(crate) network:              NH,
+pub struct ConsensusMode {
+    pub(crate) network:              StromNetworkHandle,
     pub(crate) strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     pub(crate) order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     pub(crate) peer_to_info:         HashMap<PeerId, StromPeer>
 }
 
-pub type ConsensusPoolManager<V, GS, NH> = PoolManager<V, GS, ConsensusMode<NH>>;
+pub type ConsensusPoolManager<V, GS> = PoolManager<V, GS, ConsensusMode>;
 
 /// Builder for constructing ConsensusPoolManager instances.
-pub struct ConsensusPoolManagerBuilder<V, GlobalSync, NH>
+pub struct ConsensusPoolManagerBuilder<V, GlobalSync>
 where
     V: OrderValidatorHandle,
-    GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle
+    GlobalSync: BlockSyncConsumer
 {
     validator:            V,
     global_sync:          GlobalSync,
     order_storage:        Option<Arc<OrderStorage>>,
-    network_handle:       NH,
+    network_handle:       StromNetworkHandle,
     eth_network_events:   UnboundedReceiverStream<EthEvent>,
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
     config:               order_pool::PoolConfig
 }
 
-impl<V, GlobalSync, NH> ConsensusPoolManagerBuilder<V, GlobalSync, NH>
+impl<V, GlobalSync> ConsensusPoolManagerBuilder<V, GlobalSync>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GlobalSync: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
-        + Send
-        + Sync
-        + Unpin
-        + 'static
+    GlobalSync: BlockSyncConsumer
 {
     pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
-        network_handle: NH,
+        network_handle: StromNetworkHandle,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync,
@@ -136,26 +127,21 @@ where
     }
 }
 
-impl<V, GS, NH> ConsensusPoolManager<V, GS, NH>
+impl<V, GS> ConsensusPoolManager<V, GS>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GS: BlockSyncConsumer,
-    NH: NetworkHandle<Events<'static> = UnboundedReceiverStream<StromNetworkEvent>>
-        + Send
-        + Sync
-        + Unpin
-        + 'static
+    GS: BlockSyncConsumer
 {
     /// Create a new consensus pool manager builder
     pub fn new(
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
-        network_handle: NH,
+        network_handle: StromNetworkHandle,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GS,
         strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
-    ) -> ConsensusPoolManagerBuilder<V, GS, NH> {
+    ) -> ConsensusPoolManagerBuilder<V, GS> {
         ConsensusPoolManagerBuilder::new(
             validator,
             order_storage,
@@ -168,21 +154,18 @@ where
     }
 }
 
-impl<V, GS, NH> PoolManager<V, GS, ConsensusMode<NH>>
+impl<V, GS> PoolManager<V, GS, ConsensusMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GS: BlockSyncConsumer,
-    NH: NetworkHandle
+    GS: BlockSyncConsumer
 {
     fn broadcast_cancel_to_peers(&mut self, cancel: angstrom_types::orders::CancelOrderRequest) {
-        use angstrom_types::network::PoolNetworkMessage;
-
         for (peer_id, info) in self.mode.peer_to_info.iter_mut() {
             let order_hash = cancel.order_id;
             if !info.cancellations.contains(&order_hash) {
                 self.mode
                     .network
-                    .send_message(*peer_id, PoolNetworkMessage::OrderCancellation(cancel.clone()));
+                    .send_message(*peer_id, StromMessage::OrderCancellation(cancel.clone()));
 
                 info.cancellations.insert(order_hash);
             }
@@ -190,23 +173,19 @@ where
     }
 
     fn broadcast_order_to_peer(&mut self, valid_orders: Vec<AllOrders>, peer: PeerId) {
-        use angstrom_types::network::PoolNetworkMessage;
-
         self.mode
             .network
-            .send_message(peer, PoolNetworkMessage::PropagatePooledOrders(valid_orders));
+            .send_message(peer, StromMessage::PropagatePooledOrders(valid_orders));
     }
 
     fn broadcast_orders_to_peers(&mut self, valid_orders: Vec<AllOrders>) {
-        use angstrom_types::network::PoolNetworkMessage;
-
         for order in valid_orders.iter() {
             for (peer_id, info) in self.mode.peer_to_info.iter_mut() {
                 let order_hash = order.order_hash();
                 if !info.orders.contains(&order_hash) {
                     self.mode.network.send_message(
                         *peer_id,
-                        PoolNetworkMessage::PropagatePooledOrders(vec![order.clone()])
+                        StromMessage::PropagatePooledOrders(vec![order.clone()])
                     );
                     info.orders.insert(order_hash);
                 }
@@ -305,13 +284,12 @@ where
     }
 }
 
-impl<V, GS, NH> PoolManagerCommon<V, GS> for PoolManager<V, GS, ConsensusMode<NH>>
+impl<V, GS> PoolManagerCommon<V, GS> for PoolManager<V, GS, ConsensusMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GS: BlockSyncConsumer,
-    NH: NetworkHandle
+    GS: BlockSyncConsumer
 {
-    impl_common_getters!(PoolManager<V, GS, ConsensusMode<NH>>, V, GS);
+    impl_common_getters!(PoolManager<V, GS, ConsensusMode>, V, GS);
 
     fn on_command(&mut self, cmd: OrderCommand) {
         match cmd {
@@ -342,11 +320,10 @@ where
     }
 }
 
-impl<V, GS, NH> Future for PoolManager<V, GS, ConsensusMode<NH>>
+impl<V, GS> Future for PoolManager<V, GS, ConsensusMode>
 where
     V: OrderValidatorHandle<Order = AllOrders> + Unpin,
-    GS: BlockSyncConsumer,
-    NH: NetworkHandle + Unpin + 'static
+    GS: BlockSyncConsumer
 {
     type Output = ();
 

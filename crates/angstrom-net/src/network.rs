@@ -110,35 +110,3 @@ pub enum StromNetworkHandleMsg {
     /// Gracefully shutdown network
     Shutdown(oneshot::Sender<()>)
 }
-
-// Implementation of NetworkHandle trait
-impl crate::NetworkHandle for StromNetworkHandle {
-    type Events<'a> = UnboundedReceiverStream<StromNetworkEvent>;
-
-    fn send_message(
-        &mut self,
-        peer_id: PeerId,
-        message: angstrom_types::network::PoolNetworkMessage
-    ) {
-        // Convert pool message to full StromMessage
-        let strom_msg = match message {
-            angstrom_types::network::PoolNetworkMessage::PropagatePooledOrders(orders) => {
-                StromMessage::PropagatePooledOrders(orders)
-            }
-            angstrom_types::network::PoolNetworkMessage::OrderCancellation(req) => {
-                StromMessage::OrderCancellation(req)
-            }
-        };
-        // Call the inherent method on self, not the trait method
-        StromNetworkHandle::send_message(self, peer_id, strom_msg);
-    }
-
-    fn peer_reputation_change(&mut self, peer_id: PeerId, change: ReputationChangeKind) {
-        // Call the inherent method on self, not the trait method
-        StromNetworkHandle::peer_reputation_change(self, peer_id, change);
-    }
-
-    fn subscribe_network_events(&self) -> Self::Events<'_> {
-        StromNetworkHandle::subscribe_network_events(self)
-    }
-}

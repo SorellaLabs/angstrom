@@ -21,10 +21,3 @@ impl ReputationChangeKind {
         matches!(self, Self::Reset)
     }
 }
-
-/// Pool-specific message types for network communication
-#[derive(Clone)]
-pub enum PoolNetworkMessage {
-    PropagatePooledOrders(Vec<crate::sol_bindings::grouped_orders::AllOrders>),
-    OrderCancellation(crate::orders::CancelOrderRequest)
-}

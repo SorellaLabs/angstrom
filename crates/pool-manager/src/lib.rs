@@ -13,7 +13,7 @@ pub mod order;
 pub mod rollup;
 
 // Re-export main types for convenience
-pub use manager::{
-    ConsensusMode, ConsensusPoolManager, PoolManager, RollupMode, RollupPoolManager,
-};
+pub use consensus::{ConsensusMode, ConsensusPoolManager};
+pub use manager::PoolManager;
 pub use order::*;
+pub use rollup::{RollupMode, RollupPoolManager};

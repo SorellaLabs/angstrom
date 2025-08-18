@@ -1063,6 +1063,31 @@ checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 name = "angstrom"
 version = "0.1.0"
 dependencies = [
+ "angstrom-cli",
+ "tikv-jemallocator",
+]
+
+[[package]]
+name = "angstrom-amm-quoter"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "angstrom-types",
+ "eyre",
+ "futures",
+ "matching-engine",
+ "order-pool",
+ "rayon",
+ "serde",
+ "tokio",
+ "tokio-stream",
+ "uniswap-v4",
+]
+
+[[package]]
+name = "angstrom-cli"
+version = "0.1.0"
+dependencies = [
  "alloy",
  "alloy-chains",
  "alloy-primitives",
@@ -1087,33 +1112,18 @@ dependencies = [
  "reth-network",
  "reth-node-builder",
  "reth-node-ethereum",
+ "reth-optimism-chainspec",
+ "reth-optimism-cli",
+ "reth-optimism-node",
+ "reth-optimism-primitives",
  "reth-provider",
  "serde",
  "telemetry",
- "tikv-jemallocator",
  "tokio",
- "toml",
  "tracing",
  "uniswap-v4",
  "url",
  "validation",
-]
-
-[[package]]
-name = "angstrom-amm-quoter"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "angstrom-types",
- "eyre",
- "futures",
- "matching-engine",
- "order-pool",
- "rayon",
- "serde",
- "tokio",
- "tokio-stream",
- "uniswap-v4",
 ]
 
 [[package]]
@@ -5109,7 +5119,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.57.0",
+ "windows-core 0.58.0",
 ]
 
 [[package]]
@@ -6964,6 +6974,7 @@ dependencies = [
  "alloy-chains",
  "alloy-primitives",
  "angstrom-amm-quoter",
+ "angstrom-cli",
  "angstrom-eth",
  "angstrom-metrics",
  "angstrom-network",
@@ -12612,6 +12623,7 @@ dependencies = [
  "alloy-sol-types",
  "angstrom",
  "angstrom-amm-quoter",
+ "angstrom-cli",
  "angstrom-eth",
  "angstrom-network",
  "angstrom-rpc",

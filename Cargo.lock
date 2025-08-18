@@ -1063,6 +1063,31 @@ checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 name = "angstrom"
 version = "0.1.0"
 dependencies = [
+ "angstrom-cli",
+ "tikv-jemallocator",
+]
+
+[[package]]
+name = "angstrom-amm-quoter"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "angstrom-types",
+ "eyre",
+ "futures",
+ "matching-engine",
+ "order-pool",
+ "rayon",
+ "serde",
+ "tokio",
+ "tokio-stream",
+ "uniswap-v4",
+]
+
+[[package]]
+name = "angstrom-cli"
+version = "0.1.0"
+dependencies = [
  "alloy",
  "alloy-chains",
  "alloy-primitives",
@@ -1088,33 +1113,18 @@ dependencies = [
  "reth-network",
  "reth-node-builder",
  "reth-node-ethereum",
+ "reth-optimism-chainspec",
+ "reth-optimism-cli",
+ "reth-optimism-node",
+ "reth-optimism-primitives",
  "reth-provider",
  "serde",
  "telemetry",
- "tikv-jemallocator",
  "tokio",
- "toml",
  "tracing",
  "uniswap-v4",
  "url",
  "validation",
-]
-
-[[package]]
-name = "angstrom-amm-quoter"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "angstrom-types",
- "eyre",
- "futures",
- "matching-engine",
- "order-pool",
- "rayon",
- "serde",
- "tokio",
- "tokio-stream",
- "uniswap-v4",
 ]
 
 [[package]]
@@ -6964,46 +6974,8 @@ dependencies = [
 name = "op-angstrom"
 version = "0.1.0"
 dependencies = [
- "alloy",
- "alloy-chains",
- "alloy-primitives",
- "angstrom-amm-quoter",
- "angstrom-eth",
- "angstrom-metrics",
- "angstrom-network",
- "angstrom-rpc",
- "angstrom-types",
- "clap",
- "consensus",
- "eyre",
- "futures",
- "hsm-signer",
- "matching-engine",
- "order-pool",
- "parking_lot",
- "pool-manager",
- "rayon",
- "reth",
- "reth-db",
- "reth-metrics",
- "reth-network",
- "reth-node-builder",
- "reth-node-ethereum",
- "reth-optimism-chainspec",
- "reth-optimism-cli",
- "reth-optimism-node",
- "reth-optimism-primitives",
- "reth-provider",
- "serde",
- "telemetry",
+ "angstrom-cli",
  "tikv-jemallocator",
- "tokio",
- "tokio-stream",
- "toml",
- "tracing",
- "uniswap-v4",
- "url",
- "validation",
 ]
 
 [[package]]
@@ -12680,6 +12652,7 @@ dependencies = [
  "alloy-sol-types",
  "angstrom",
  "angstrom-amm-quoter",
+ "angstrom-cli",
  "angstrom-eth",
  "angstrom-network",
  "angstrom-rpc",

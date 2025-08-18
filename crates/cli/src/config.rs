@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use alloy::signers::local::PrivateKeySigner;
-use angstrom_metrics::initialize_prometheus_metrics;
 use angstrom_types::primitive::{
     AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC
 };
@@ -62,12 +61,6 @@ impl AngstromConfig {
             })
             .transpose()?)
     }
-}
-
-pub async fn init_metrics(metrics_port: u16) {
-    let _ = initialize_prometheus_metrics(metrics_port)
-        .await
-        .inspect_err(|e| eprintln!("failed to start metrics endpoint - {e:?}"));
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]

@@ -6,7 +6,7 @@ use std::{
 
 use alloy::{self, eips::BlockId, network::Network, primitives::Address, providers::Provider};
 use alloy_primitives::U256;
-use angstrom::components::StromHandles;
+use angstrom_cli::handles::ConsensusHandles;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::StromNetworkHandle;
 use angstrom_types::{
@@ -112,7 +112,7 @@ entries: incorrect length after removing safety byte"
 }
 
 pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
-    handles: StromHandles,
+    handles: ConsensusHandles,
     telemetry_constants: NodeConstants,
     provider: AnvilProvider<Provider>,
     executor: TaskExecutor,
@@ -295,7 +295,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         ManagerNetworkDeps::new(
             network_handle.clone(),
             mock_canon.subscribe_to_canonical_state(),
-            handles.consensus_rx_op
+            handles.mode.consensus_rx_op
         ),
         signer,
         validators,
@@ -307,7 +307,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         submission_handler,
         matching_handle,
         global_block_sync.clone(),
-        handles.consensus_rx_rpc,
+        handles.mode.consensus_rx_rpc,
         Some(state_tx)
     );
 

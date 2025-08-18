@@ -1,4 +1,4 @@
-use angstrom::components::{DefaultPoolHandle, StromHandles};
+use angstrom_cli::handles::{ConsensusHandles, DefaultPoolHandle};
 use angstrom_eth::handle::EthCommand;
 use angstrom_network::NetworkOrderEvent;
 use angstrom_types::consensus::StromConsensusEvent;
@@ -26,15 +26,15 @@ impl SendingStromHandles {
     }
 }
 
-impl From<&StromHandles> for SendingStromHandles {
-    fn from(value: &StromHandles) -> Self {
+impl From<&ConsensusHandles> for SendingStromHandles {
+    fn from(value: &ConsensusHandles) -> Self {
         Self {
             eth_tx:          value.eth_tx.clone(),
             network_tx:      value.pool_tx.clone(),
             orderpool_tx:    value.orderpool_tx.clone(),
             pool_manager_tx: value.pool_manager_tx.clone(),
             // consensus_tx:    value.consensus_tx.clone(),
-            consensus_tx_op: value.consensus_tx_op.clone()
+            consensus_tx_op: value.mode.consensus_tx_op.clone()
         }
     }
 }

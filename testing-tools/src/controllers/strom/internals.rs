@@ -8,8 +8,8 @@ use std::{
 
 use alloy::{primitives::Address, providers::Provider, signers::local::PrivateKeySigner};
 use alloy_rpc_types::BlockId;
-use angstrom::components::StromHandles;
 use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
+use angstrom_cli::handles::ConsensusHandles;
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
@@ -72,7 +72,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
     pub async fn new<G: GlobalTestingConfig, F>(
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
-        strom_handles: StromHandles,
+        strom_handles: ConsensusHandles,
         strom_network_handle: StromNetworkHandle,
         initial_validators: Vec<AngstromValidator>,
         inital_angstrom_state: InitialTestnetState,
@@ -104,7 +104,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         let validation_client = ValidationClient(strom_handles.validator_tx);
         let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
-        let consensus_client = ConsensusHandler(strom_handles.consensus_tx_rpc.clone());
+        let consensus_client = ConsensusHandler(strom_handles.mode.consensus_tx_rpc.clone());
 
         let consensus_api = ConsensusApi::new(consensus_client.clone(), executor.clone());
 
@@ -323,7 +323,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             ManagerNetworkDeps::new(
                 strom_network_handle.clone(),
                 eth_handle.subscribe_cannon_state_notifications().await,
-                strom_handles.consensus_rx_op
+                strom_handles.mode.consensus_rx_op
             ),
             node_config.angstrom_signer(),
             initial_validators,
@@ -335,7 +335,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             mev_boost_provider,
             matching_handle,
             block_sync.clone(),
-            strom_handles.consensus_rx_rpc,
+            strom_handles.mode.consensus_rx_rpc,
             state_updates
         );
 

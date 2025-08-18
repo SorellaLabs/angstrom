@@ -15,7 +15,7 @@ use reth_db::DatabaseEnv;
 use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
-use reth_optimism_node::{OpAddOns, OpNode};
+use reth_optimism_node::{OpAddOns, OpNode, args::RollupArgs};
 use validation::validator::ValidationClient;
 
 use crate::{
@@ -29,12 +29,20 @@ use crate::{
 const SUPPORTED_CHAINS: &[NamedChain] =
     &[NamedChain::Base, NamedChain::BaseSepolia, NamedChain::Unichain, NamedChain::UnichainSepolia];
 
+#[derive(Debug, Clone, Parser)]
+pub struct CombinedArgs {
+    #[command(flatten)]
+    pub rollup:   RollupArgs,
+    #[command(flatten)]
+    pub angstrom: AngstromConfig
+}
+
 /// Convenience function for parsing CLI options, set up logging and run the
 /// chosen command.
 #[inline]
 pub fn run() -> eyre::Result<()> {
     // TODO: This should also contain rollup args.
-    OpCli::<OpChainSpecParser, AngstromConfig>::parse().run(|builder, args| async move {
+    OpCli::<OpChainSpecParser, CombinedArgs>::parse().run(|builder, args| async move {
         let executor = builder.task_executor().clone();
         let chain = builder.config().chain.chain().named().unwrap();
 
@@ -49,8 +57,8 @@ pub fn run() -> eyre::Result<()> {
 
         init_with_chain_id(chain as u64);
 
-        if args.metrics_enabled {
-            executor.spawn_critical("metrics", init_metrics(args.metrics_port));
+        if args.angstrom.metrics_enabled {
+            executor.spawn_critical("metrics", init_metrics(args.angstrom.metrics_port));
             METRICS_ENABLED.set(true).unwrap();
         } else {
             METRICS_ENABLED.set(false).unwrap();
@@ -66,7 +74,7 @@ pub fn run() -> eyre::Result<()> {
         let executor_clone = executor.clone();
         let validation_client = ValidationClient(channels.validator_tx.clone());
 
-        if let Some(signer) = args.get_local_signer()? {
+        if let Some(signer) = args.angstrom.get_local_signer()? {
             run_with_signer(
                 pool,
                 executor_clone,
@@ -78,7 +86,7 @@ pub fn run() -> eyre::Result<()> {
                 builder
             )
             .await
-        } else if let Some(signer) = args.get_hsm_signer()? {
+        } else if let Some(signer) = args.angstrom.get_hsm_signer()? {
             run_with_signer(
                 pool,
                 executor_clone,
@@ -102,14 +110,14 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     validation_client: ValidationClient,
     quoter_handle: QuoterHandle,
     secret_key: AngstromSigner<S>,
-    args: AngstromConfig,
+    args: CombinedArgs,
     channels: RollupHandles,
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>
 ) -> eyre::Result<()> {
     let executor_clone = executor.clone();
     let node_handle = builder
         .with_types::<OpNode>()
-        .with_components(OpNode::default().components_builder())
+        .with_components(OpNode::new(args.rollup).components_builder())
         .with_add_ons::<OpAddOns<_, _, _, _>>(Default::default())
         .extend_rpc_modules(move |rpc_context| {
             let order_api = OrderApi::new(
@@ -125,7 +133,13 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         .launch()
         .await?;
 
-    AngstromLauncher::<_, _, RollupMode, _>::new(args, executor, node_handle, secret_key, channels)
-        .launch()
-        .await
+    AngstromLauncher::<_, _, RollupMode, _>::new(
+        args.angstrom,
+        executor,
+        node_handle,
+        secret_key,
+        channels
+    )
+    .launch()
+    .await
 }

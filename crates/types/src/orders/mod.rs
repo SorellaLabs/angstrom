@@ -49,6 +49,14 @@ where
             .collect()
     }
 
+    /// Convert thee order set to the limit and searcher orders, without any
+    /// filtering.
+    pub fn into_all_book_and_searcher(
+        self
+    ) -> (Vec<OrderWithStorageData<Limit>>, Vec<OrderWithStorageData<Searcher>>) {
+        (self.limit, self.searcher)
+    }
+
     pub fn into_book_and_searcher(
         self,
         valid_limit: Vec<B256>,

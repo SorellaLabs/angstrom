@@ -33,10 +33,7 @@ impl ChainConfig {
     }
 
     pub fn op_angstrom() -> Self {
-        Self {
-            block_time:                  Duration::from_secs(2),
-            max_order_delay_propagation: 1500
-        }
+        Self { block_time: Duration::from_secs(2), max_order_delay_propagation: 0 }
     }
 }
 

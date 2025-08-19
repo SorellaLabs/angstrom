@@ -879,24 +879,26 @@ where
 
         loop {
             match this.canonical_block_stream.poll_next_unpin(cx) {
-                Poll::Ready(Some(Ok(notification))) => {
-                    this.on_blockchain_state(notification, cx.waker().clone());
-                    continue;
-                }
-                Poll::Ready(Some(Err(e))) => {
-                    tracing::error!("Error receiving chain state notification: {e:?}");
+                Poll::Ready(Some(result)) => {
+                    match result {
+                        Ok(notification) => {
+                            this.on_blockchain_state(notification, cx.waker().clone());
+                        }
+                        Err(e) => {
+                            tracing::error!("Error receiving chain state notification: {e:?}");
+                        }
+                    }
+
                     continue;
                 }
                 Poll::Ready(None) => {
                     tracing::warn!("No more chain state notifications");
                     return Poll::Ready(());
                 }
-                Poll::Pending => {
-                    return Poll::Pending;
-                }
+                Poll::Pending => {}
             }
-        }
 
-        return Poll::Pending;
+            return Poll::Pending;
+        }
     }
 }

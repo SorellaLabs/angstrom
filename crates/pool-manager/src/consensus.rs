@@ -11,7 +11,7 @@ use angstrom_network::{NetworkOrderEvent, StromMessage, StromNetworkEvent, Strom
 use angstrom_types::{
     block_sync::BlockSyncConsumer, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
 };
-use futures::{Future, StreamExt};
+use futures::StreamExt;
 use order_pool::{
     OrderIndexer, PoolInnerEvent, order_storage::OrderStorage, order_tracker::ChainConfig
 };

@@ -3,6 +3,7 @@ use std::{
     pin::Pin,
     str::FromStr,
     sync::Arc,
+    task::{Context, Poll, Waker},
     time::Duration
 };
 
@@ -14,6 +15,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
+use alloy_primitives::BlockNumber;
 use angstrom_amm_quoter::{ConsensusQuoterManager, RollupQuoterManager};
 use angstrom_eth::{
     handle::Eth,
@@ -21,20 +23,21 @@ use angstrom_eth::{
 };
 use angstrom_network::{NetworkBuilder as StromNetworkBuilder, StatusState, VerificationSidecar};
 use angstrom_types::{
-    block_sync::{BlockSyncProducer, GlobalBlockSync},
+    block_sync::{BlockSyncConsumer, BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, UniswapPoolRegistry
+        CONTROLLER_V1_ADDRESS, ChainExt, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS,
+        UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
     submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
-use futures::Stream;
-use matching_engine::MatchingManager;
+use futures::{Stream, StreamExt};
+use matching_engine::{MatchingEngineHandle, MatchingManager};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
 use pool_manager::{consensus::ConsensusPoolManagerBuilder, rollup::RollupPoolManagerBuilder};
@@ -56,8 +59,12 @@ use reth_provider::{
 };
 use serde::Serialize;
 use telemetry::init_telemetry;
-use tokio::sync::mpsc::UnboundedReceiver;
-use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
+use tokio::{sync::mpsc::UnboundedReceiver, time::Sleep};
+use tokio_stream::wrappers::BroadcastStream;
+use uniswap_v4::{
+    DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools,
+    uniswap::pool_manager::SyncedUniswapPools
+};
 use url::Url;
 use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
 
@@ -739,4 +746,157 @@ async fn handle_init_block_spam<N: NodePrimitives>(
         }
     }
     tracing::info!("finished handling block-spam");
+}
+
+/// The runtime driver for rollup mode. Advances the global Angstrom state
+/// machine without consensus or networking.
+pub struct RollupDriver<P, M, BS, S>
+where
+    P: Provider + Unpin + 'static,
+    S: AngstromMetaSigner
+{
+    current_height:         BlockNumber,
+    // TODO: If we make this a generic driver, don't use concrete type here
+    canonical_block_stream: BroadcastStream<CanonStateNotification<OpPrimitives>>,
+    block_sync:             BS,
+    /// Contains all orders that came in through the RPC.
+    order_storage:          Arc<OrderStorage>,
+    pool_registry:          UniswapAngstromRegistry,
+    uniswap_pools:          SyncedUniswapPools,
+    provider:               SubmissionHandler<P>,
+    matching_engine:        M,
+    signer:                 AngstromSigner<S>,
+
+    state: DriverState
+}
+
+/// The driver state machine.
+///
+/// # States
+#[derive(Debug)]
+enum DriverState {
+    /// The driver is initialized and waiting for the first block.
+    Initialized,
+    /// The driver is waiting for the bid aggregation deadline to pass.
+    BidAggregation {
+        /// The sleep future to wait for the bid aggregation deadline.
+        /// NOTE: This is boxed and pinned to make it `Unpin`.
+        sleep: Pin<Box<Sleep>>
+    }
+}
+
+// How do we ingest orders and cancellations? They used to come from the network
+// as [`StromMessage`]s, but we don't have those anymore.
+// We should get them straight from the RPC I guess?
+
+impl<P, M, BS, S> RollupDriver<P, M, BS, S>
+where
+    P: Provider + Unpin + 'static,
+    M: MatchingEngineHandle,
+    BS: BlockSyncConsumer,
+    S: AngstromMetaSigner
+{
+    /// Initialize a new [`RollupDriver`] instance.
+    pub fn new(
+        current_height: BlockNumber,
+        canonical_block_stream: BroadcastStream<CanonStateNotification<OpPrimitives>>,
+        block_sync: BS,
+        order_storage: Arc<OrderStorage>,
+        pool_registry: UniswapAngstromRegistry,
+        uniswap_pools: SyncedUniswapPools,
+        provider: SubmissionHandler<P>,
+        matching_engine: M,
+        signer: AngstromSigner<S>
+    ) -> Self {
+        block_sync.register("RollupDriver");
+
+        Self {
+            current_height,
+            canonical_block_stream,
+            block_sync,
+            order_storage,
+            pool_registry,
+            uniswap_pools,
+            provider,
+            matching_engine,
+            signer,
+            state: DriverState::Initialized
+        }
+    }
+
+    /// Handles a new blockchain state notification.
+    fn on_blockchain_state(
+        &mut self,
+        notification: CanonStateNotification<OpPrimitives>,
+        waker: Waker
+    ) {
+        let new_block = notification.tip();
+        let number = new_block.number();
+
+        tracing::info!(?number, "New blockchain state");
+        self.current_height = number;
+
+        // TODO: What else needs to happen here?
+        // In consensus mode, this is where a new round starts. But we just need
+        // to arrive at the finalization state immediately based on our local view.
+        //
+        // We also need to wait for the slot time - delta time to pass before actually
+        // matching and submitting the bundle.
+        //
+        // - Reset previous round state
+        // - Wait until some threshold of time has passed since the last block
+        // - Get all valid orders
+        // - Call `matching_engine.match_order_and_create_bundle()`
+        // - Call `provider.submit_bundle()`
+
+        match notification {
+            CanonStateNotification::Commit { .. } => {
+                self.block_sync
+                    .sign_off_on_block("RollupDriver", self.current_height, Some(waker));
+            }
+
+            CanonStateNotification::Reorg { old, new } => {
+                let tip = new.tip_number();
+                let reorg = old.reorged_range(&new).unwrap_or(tip..=tip);
+                self.block_sync
+                    .sign_off_reorg("RollupDriver", reorg, Some(waker));
+            }
+        }
+    }
+}
+
+impl<P, M, BS, S> Future for RollupDriver<P, M, BS, S>
+where
+    P: Provider + Unpin + 'static,
+    M: MatchingEngineHandle,
+    BS: BlockSyncConsumer,
+    S: AngstromMetaSigner
+{
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+
+        loop {
+            match this.canonical_block_stream.poll_next_unpin(cx) {
+                Poll::Ready(Some(Ok(notification))) => {
+                    this.on_blockchain_state(notification, cx.waker().clone());
+                    continue;
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    tracing::error!("Error receiving chain state notification: {e:?}");
+                    continue;
+                }
+                Poll::Ready(None) => {
+                    tracing::warn!("No more chain state notifications");
+                    return Poll::Ready(());
+                }
+                Poll::Pending => {
+                    return Poll::Pending;
+                }
+            }
+        }
+
+        return Poll::Pending;
+    }
 }

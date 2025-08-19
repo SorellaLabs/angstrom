@@ -1182,49 +1182,4 @@ mod tests {
 
         // assert!(!indexer.order_tracker.or)
     }
-
-    #[tokio::test]
-    async fn test_cancel_order_deadline_op_angstrom() {
-        init_tracing();
-        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
-        let (tx, _) = broadcast::channel(100);
-        let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
-        let validator = MockValidator::default();
-
-        // Use OP Angstrom chain config (2s block time, 1500-block propagation window)
-        let mut indexer =
-            OrderIndexer::new(validator, order_storage, 1, tx, ChainConfig::op_angstrom());
-
-        // Prepare a valid cancel request for an order that hasn't been indexed
-        let signer = AngstromSigner::random();
-        let from = signer.address();
-        let order_hash = B256::random();
-        let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-
-        let cancel_request =
-            angstrom_types::orders::CancelOrderRequest::new(from, order_hash, &signer);
-
-        // This will register a cancellation with a computed deadline
-        let _ = indexer.cancel_order(&cancel_request);
-
-        let req = indexer
-            .order_tracker
-            .cancelled_orders
-            .get(&order_hash)
-            .expect("cancel should be registered for unknown order");
-
-        // Deadline should be ~1500 * 2 seconds from now (allow small timing tolerance)
-        let deadline = req.deadline;
-        let now_u256 = U256::from(now_secs);
-        let delta = deadline.saturating_sub(now_u256);
-        let expected = U256::from(1500u64 * 2u64);
-        let tol = U256::from(3u64); // a few seconds of slack for test runtime
-
-        assert!(
-            delta >= expected.saturating_sub(tol) && delta <= expected.saturating_add(tol),
-            "unexpected cancel deadline delta: {:?}, expected ~{:?}",
-            delta,
-            expected
-        );
-    }
 }

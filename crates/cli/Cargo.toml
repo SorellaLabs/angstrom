@@ -38,6 +38,7 @@ reth-provider.workspace = true
 serde.workspace = true
 telemetry.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
 tracing.workspace = true
 uniswap-v4.workspace = true
 url.workspace = true

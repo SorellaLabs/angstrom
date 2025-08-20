@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque, hash_map::Entry},
+    collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     pin::Pin,
     sync::Arc,
@@ -17,7 +17,7 @@ use angstrom_types::{
         StromConsensusEvent
     },
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
-    orders::PoolSolution,
+    orders::{PoolSolution, unique_searcher_orders_per_pool},
     primitive::{AngstromMetaSigner, AngstromSigner},
     submission::SubmissionHandler,
     uni_structure::BaselinePoolState
@@ -258,31 +258,7 @@ where
 
         let (limit, searcher) = orders.into_book_and_searcher(valid_limit, valid_searcher);
 
-        // searchers need to be unique by pool-key
-        let searcher = searcher
-            .into_iter()
-            .fold(HashMap::new(), |mut acc, searcher| {
-                match acc.entry(searcher.pool_id) {
-                    Entry::Vacant(v) => {
-                        v.insert(searcher);
-                    }
-                    Entry::Occupied(mut o) => {
-                        let current = o.get();
-                        // if this order on same pool_id has a higher tob reward or they are the
-                        // same and it has a lower order hash. replace
-                        if searcher.tob_reward > current.tob_reward
-                            || (searcher.tob_reward == current.tob_reward
-                                && searcher.order_id.hash < current.order_id.hash)
-                        {
-                            o.insert(searcher);
-                        }
-                    }
-                };
-
-                acc
-            })
-            .into_values()
-            .collect();
+        let searcher = unique_searcher_orders_per_pool(searcher);
 
         let pool_snapshots = self.fetch_pool_snapshot();
         let matcher = self.matching_engine.clone();

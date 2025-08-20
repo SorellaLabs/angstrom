@@ -26,7 +26,11 @@ pub struct AngstromConfig {
     #[clap(short, long, num_args(0..=10), require_equals = true, default_values = ETH_ANGSTROM_RPC)]
     pub angstrom_submission_nodes: Vec<String>,
     #[clap(flatten)]
-    pub key_config:                KeyConfig
+    pub key_config:                KeyConfig,
+    /// The expected block time in milliseconds. Used to coordinate auction
+    /// timing.
+    #[clap(long, default_value_t = 12000, global = true, alias = "block-time")]
+    pub block_time_ms:             u64
 }
 
 impl AngstromConfig {

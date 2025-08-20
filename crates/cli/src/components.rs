@@ -57,13 +57,15 @@ use reth_provider::{
 use serde::Serialize;
 use telemetry::init_telemetry;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio_stream::wrappers::BroadcastStream;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
 use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
 
 use crate::{
     AngstromConfig,
-    handles::{AngstromMode, ConsensusMode, RollupMode, StromHandles}
+    handles::{AngstromMode, ConsensusMode, RollupMode, StromHandles},
+    manager::RollupManager
 };
 
 pub fn init_network_builder<S: AngstromMetaSigner>(
@@ -593,8 +595,6 @@ where
         let uni_ang_registry =
             UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
 
-        // Build our PoolManager using the PoolConfig and OrderStorage we've already
-        // created
         let eth_handle = EthDataCleanser::spawn(
             angstrom_address,
             controller,
@@ -710,7 +710,22 @@ where
 
         executor.spawn_critical("amm quoting service", amm);
 
-        // TODO: Manage runtime here instead of using ConsensusManager
+        let driver = RollupManager::new(
+            block_height,
+            Duration::from_millis(config.block_time_ms),
+            BroadcastStream::new(eth_handle.subscribe_cannon_state_notifications().await),
+            global_block_sync.clone(),
+            order_storage,
+            uni_ang_registry,
+            uniswap_pools,
+            Arc::new(submission_handler),
+            matching_handle,
+            signer
+        );
+
+        executor.spawn_critical_with_graceful_shutdown_signal("rollup driver", move |grace| {
+            driver.run_till_shutdown(grace)
+        });
 
         global_block_sync.finalize_modules();
         tracing::info!("started angstrom");

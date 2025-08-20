@@ -1,15 +1,23 @@
-use std::ops::{Add, Sub};
+use std::{
+    collections::HashMap,
+    ops::{Add, Sub}
+};
 
-use alloy::primitives::I256;
+use alloy::primitives::{Address, I256};
 use liquidity_base::BaselineLiquidity;
 use pool_swap::{PoolSwap, PoolSwapResult};
 use serde::{Deserialize, Serialize};
 
-use crate::matching::{SqrtPriceX96, uniswap::Quantity};
+use crate::{
+    matching::{SqrtPriceX96, uniswap::Quantity},
+    primitive::PoolId
+};
 
 pub mod donation;
 pub mod liquidity_base;
 pub mod pool_swap;
+
+pub type PoolSnapshots = HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BaselinePoolState {

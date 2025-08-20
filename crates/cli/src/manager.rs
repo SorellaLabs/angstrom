@@ -102,6 +102,18 @@ impl DriverState {
     /// Reset the driver state to [`DriverState::BidAggregation`] with a new
     /// timeout.
     fn reset(&mut self, timeout: Duration) {
+        match &self {
+            DriverState::BidAggregation { .. } => {
+                tracing::error!("Invalid state transition: `BidAggregation` -> `BidAggregation`");
+            }
+            DriverState::Solving { .. } => {
+                tracing::error!("Invalid state transition: `Solving` -> `BidAggregation`");
+            }
+            DriverState::Waiting => {
+                tracing::debug!("Reset driver state: `Waiting` -> `BidAggregation`");
+            }
+        }
+
         *self = DriverState::BidAggregation { sleep: Box::pin(tokio::time::sleep(timeout)) };
     }
 }

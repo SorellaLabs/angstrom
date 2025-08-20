@@ -8,9 +8,7 @@ use angstrom_network::{
 };
 use angstrom_types::primitive::ChainConfig;
 use futures::{Future, FutureExt, future::poll_fn};
-use order_pool::{
-    OrderIndexer, PoolConfig, order_storage::OrderStorage
-};
+use order_pool::{OrderIndexer, PoolConfig, order_storage::OrderStorage};
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;

@@ -57,6 +57,7 @@ use reth_provider::{
 use serde::Serialize;
 use telemetry::init_telemetry;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio_stream::wrappers::BroadcastStream;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
 use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
@@ -712,7 +713,7 @@ where
         let driver = RollupManager::new(
             block_height,
             Duration::from_millis(config.block_time_ms),
-            node.provider.canonical_state_stream(),
+            BroadcastStream::new(eth_handle.subscribe_cannon_state_notifications().await),
             global_block_sync.clone(),
             order_storage,
             uni_ang_registry,

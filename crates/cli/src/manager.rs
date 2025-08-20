@@ -21,8 +21,9 @@ use matching_engine::MatchingEngineHandle;
 use order_pool::order_storage::OrderStorage;
 use reth::tasks::shutdown::GracefulShutdown;
 use reth_optimism_primitives::OpPrimitives;
-use reth_provider::{CanonStateNotification, CanonStateNotificationStream};
+use reth_provider::CanonStateNotification;
 use tokio::time::Sleep;
+use tokio_stream::wrappers::BroadcastStream;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 // TODO(mempirate): Is this a good value?
@@ -43,7 +44,7 @@ where
     current_height:         BlockNumber,
     block_time:             Duration,
     // TODO(mempirate): If we make this a generic driver, don't use concrete type here
-    canonical_block_stream: CanonStateNotificationStream<OpPrimitives>,
+    canonical_block_stream: BroadcastStream<CanonStateNotification<OpPrimitives>>,
     block_sync:             BS,
     /// Contains all orders that came in through the RPC.
     order_storage:          Arc<OrderStorage>,
@@ -129,7 +130,7 @@ where
     pub fn new(
         current_height: BlockNumber,
         block_time: Duration,
-        canonical_block_stream: CanonStateNotificationStream<OpPrimitives>,
+        canonical_block_stream: BroadcastStream<CanonStateNotification<OpPrimitives>>,
         block_sync: BS,
         order_storage: Arc<OrderStorage>,
         pool_registry: UniswapAngstromRegistry,
@@ -357,10 +358,13 @@ where
             }
 
             match this.canonical_block_stream.poll_next_unpin(cx) {
-                Poll::Ready(Some(notification)) => {
+                Poll::Ready(Some(Ok(notification))) => {
                     this.on_blockchain_state(notification, cx.waker().clone());
 
                     continue;
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    tracing::error!(?e, "Stream lagging behind");
                 }
                 Poll::Ready(None) => {
                     // We exit the rollup driver when we receive no more chain notifications.

@@ -1,5 +1,7 @@
 mod fillstate;
 mod origin;
+use std::collections::{HashMap, hash_map::Entry};
+
 use alloy::primitives::{Address, B256, Signature};
 pub mod orderpool;
 
@@ -28,6 +30,37 @@ use crate::{
 pub struct OrderSet<Limit, Searcher> {
     pub limit:    Vec<OrderWithStorageData<Limit>>,
     pub searcher: Vec<OrderWithStorageData<Searcher>>
+}
+
+/// Filters the searcher orders to only include the unique orders per pool ID
+/// with the highest tob reward.
+pub fn unique_searcher_orders_per_pool<Searcher>(
+    orders: Vec<OrderWithStorageData<Searcher>>
+) -> Vec<OrderWithStorageData<Searcher>> {
+    orders
+        .into_iter()
+        .fold(HashMap::new(), |mut acc, order| {
+            match acc.entry(order.pool_id) {
+                Entry::Vacant(v) => {
+                    v.insert(order);
+                }
+                Entry::Occupied(mut o) => {
+                    let current = o.get();
+                    // if this order on same pool_id has a higher tob reward or they are the
+                    // same and it has a lower order hash. replace
+                    if order.tob_reward > current.tob_reward
+                        || (order.tob_reward == current.tob_reward
+                            && order.order_id.hash < current.order_id.hash)
+                    {
+                        o.insert(order);
+                    }
+                }
+            };
+
+            acc
+        })
+        .into_values()
+        .collect()
 }
 
 impl<Limit, Searcher> OrderSet<Limit, Searcher>

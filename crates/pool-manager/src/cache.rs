@@ -10,7 +10,7 @@ use linked_hash_set::LinkedHashSet;
 #[derive(Debug, Clone)]
 pub struct LruCache<T: Hash + Eq> {
     limit: NonZeroUsize,
-    inner: LinkedHashSet<T>,
+    inner: LinkedHashSet<T>
 }
 
 impl<T: Hash + Eq> LruCache<T> {
@@ -50,7 +50,7 @@ impl<T: Hash + Eq> LruCache<T> {
     pub fn contains<Q>(&self, value: &Q) -> bool
     where
         T: Borrow<Q>,
-        Q: ?Sized + Hash + Eq,
+        Q: ?Sized + Hash + Eq
     {
         self.inner.contains(value)
     }
@@ -63,7 +63,7 @@ impl<T: Hash + Eq> LruCache<T> {
 
 impl<T> Extend<T> for LruCache<T>
 where
-    T: Eq + Hash,
+    T: Eq + Hash
 {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter.into_iter() {

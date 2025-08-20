@@ -118,10 +118,6 @@ impl DriverState {
     }
 }
 
-// How do we ingest orders and cancellations? They used to come from the network
-// as [`StromMessage`]s, but we don't have those anymore.
-// We should get them straight from the RPC I guess?
-
 impl<P, M, BS, S> RollupManager<P, M, BS, S>
 where
     P: Provider + Unpin + 'static,

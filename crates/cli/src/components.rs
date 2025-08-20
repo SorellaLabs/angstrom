@@ -713,8 +713,7 @@ where
 
         let driver = RollupManager::new(
             block_height,
-            // TODO(mempirate): Replace with config
-            Duration::from_millis(2000),
+            Duration::from_millis(config.block_time_ms),
             node.provider.canonical_state_stream(),
             global_block_sync.clone(),
             order_storage,

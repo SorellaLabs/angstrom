@@ -35,7 +35,7 @@ const BID_AGGREGATION_DEADLINE_FACTOR: f64 = 0.8;
 
 /// The runtime driver for rollup mode. Advances the global Angstrom state
 /// machine without consensus or networking.
-pub struct RollupDriver<P, M, BS, S>
+pub struct RollupManager<P, M, BS, S>
 where
     P: Provider + Unpin + 'static,
     S: AngstromMetaSigner
@@ -57,18 +57,19 @@ where
 }
 
 /// The driver state machine.
-///
-/// # States
 enum DriverState {
-    /// The driver is initialized and waiting for the first block.
-    Initialized,
-    /// The driver is waiting for the bid aggregation deadline to pass.
+    /// The driver is waiting for a new block to start the
+    /// [`DriverState::BidAggregation`] state.
+    Waiting,
+    /// The driver is waiting for the bid aggregation deadline to pass. After
+    /// this it will move on to the [`DriverState::Solving`] state.
     BidAggregation {
         /// The sleep future to wait for the bid aggregation deadline.
         /// NOTE: This is boxed and pinned to make it `Unpin`.
         sleep: Pin<Box<Sleep>>
     },
-    /// The driver is solving the book.
+    /// The driver is solving the book. When the solution is found, it will
+    /// reset to the [`DriverState::Waiting`] state.
     Solving {
         future:
             BoxFuture<'static, eyre::Result<(PoolSnapshots, Vec<PoolSolution>, BundleGasDetails)>>
@@ -109,14 +110,14 @@ impl DriverState {
 // as [`StromMessage`]s, but we don't have those anymore.
 // We should get them straight from the RPC I guess?
 
-impl<P, M, BS, S> RollupDriver<P, M, BS, S>
+impl<P, M, BS, S> RollupManager<P, M, BS, S>
 where
     P: Provider + Unpin + 'static,
     M: MatchingEngineHandle,
     BS: BlockSyncConsumer,
     S: AngstromMetaSigner
 {
-    /// Initialize a new [`RollupDriver`] instance.
+    /// Initialize a new [`RollupManager`] instance.
     pub fn new(
         current_height: BlockNumber,
         block_time: Duration,
@@ -129,7 +130,7 @@ where
         matching_engine: M,
         signer: AngstromSigner<S>
     ) -> Self {
-        block_sync.register("RollupDriver");
+        block_sync.register("RollupManager");
 
         Self {
             current_height,
@@ -142,7 +143,7 @@ where
             provider,
             matching_engine,
             signer,
-            state: DriverState::Initialized
+            state: DriverState::Waiting
         }
     }
 
@@ -164,15 +165,18 @@ where
 
         match notification {
             CanonStateNotification::Commit { .. } => {
-                self.block_sync
-                    .sign_off_on_block("RollupDriver", self.current_height, Some(waker));
+                self.block_sync.sign_off_on_block(
+                    "RollupManager",
+                    self.current_height,
+                    Some(waker)
+                );
             }
 
             CanonStateNotification::Reorg { old, new } => {
                 let tip = new.tip_number();
                 let reorg = old.reorged_range(&new).unwrap_or(tip..=tip);
                 self.block_sync
-                    .sign_off_reorg("RollupDriver", reorg, Some(waker));
+                    .sign_off_reorg("RollupManager", reorg, Some(waker));
             }
         }
     }
@@ -255,6 +259,8 @@ where
             }
         };
 
+        self.state = DriverState::Waiting;
+
         let target_block = self.current_height + 1;
         let provider = self.provider.clone();
         let signer = self.signer.clone();
@@ -324,13 +330,13 @@ where
             _ = &mut self => {
             }
             _ = sig => {
-                tracing::info!("Shutting down RollupDriver");
+                tracing::info!("Shutting down RollupManager");
             }
         }
     }
 }
 
-impl<P, M, BS, S> Future for RollupDriver<P, M, BS, S>
+impl<P, M, BS, S> Future for RollupManager<P, M, BS, S>
 where
     P: Provider + Unpin + 'static,
     M: MatchingEngineHandle,

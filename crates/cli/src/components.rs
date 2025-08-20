@@ -63,8 +63,8 @@ use validation::{common::TokenPriceGenerator, init_validation, validator::Valida
 
 use crate::{
     AngstromConfig,
-    driver::RollupDriver,
-    handles::{AngstromMode, ConsensusMode, RollupMode, StromHandles}
+    handles::{AngstromMode, ConsensusMode, RollupMode, StromHandles},
+    manager::RollupManager
 };
 
 pub fn init_network_builder<S: AngstromMetaSigner>(
@@ -711,7 +711,7 @@ where
 
         executor.spawn_critical("amm quoting service", amm);
 
-        let driver = RollupDriver::new(
+        let driver = RollupManager::new(
             block_height,
             // TODO(mempirate): Replace with config
             Duration::from_millis(2000),

@@ -1,8 +1,8 @@
 pub mod angstrom;
 mod components;
 mod config;
-mod driver;
 pub mod handles;
+mod manager;
 mod metrics;
 pub mod op_angstrom;
 

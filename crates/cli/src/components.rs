@@ -30,7 +30,7 @@ use angstrom_types::{
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
-    submission::{ConsensusSubmissionHandler, RollupSubmissionHandler}
+    submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
@@ -232,14 +232,13 @@ where
             .map(|url| Url::from_str(&url).unwrap())
             .collect::<Vec<_>>();
 
-        let submission_handler = ConsensusSubmissionHandler::new(
+        let submission_handler = SubmissionHandler::new(
             querying_provider.clone(),
             &normal_nodes,
             &angstrom_submission_nodes,
-            &mev_boost_endpoints,
             angstrom_address,
             signer.clone()
-        );
+        ).with_mev_boost(&mev_boost_endpoints, angstrom_address, signer.clone());
 
         tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
         this is done to ensure all modules start on the same state and we don't hit the rare  \
@@ -518,7 +517,7 @@ where
             .map(|url| Url::from_str(&url).unwrap())
             .collect::<Vec<_>>();
 
-        let submission_handler = RollupSubmissionHandler::new(
+        let submission_handler = SubmissionHandler::new(
             querying_provider.clone(),
             &normal_nodes,
             &angstrom_submission_nodes,

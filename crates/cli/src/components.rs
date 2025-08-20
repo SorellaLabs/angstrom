@@ -594,8 +594,6 @@ where
         let uni_ang_registry =
             UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
 
-        // Build our PoolManager using the PoolConfig and OrderStorage we've already
-        // created
         let eth_handle = EthDataCleanser::spawn(
             angstrom_address,
             controller,

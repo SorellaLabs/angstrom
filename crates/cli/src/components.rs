@@ -30,7 +30,7 @@ use angstrom_types::{
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
-    submission::SubmissionHandler
+    submission::{ConsensusSubmissionHandler, RollupSubmissionHandler}
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
@@ -232,7 +232,7 @@ where
             .map(|url| Url::from_str(&url).unwrap())
             .collect::<Vec<_>>();
 
-        let submission_handler = SubmissionHandler::new(
+        let submission_handler = ConsensusSubmissionHandler::new(
             querying_provider.clone(),
             &normal_nodes,
             &angstrom_submission_nodes,
@@ -518,17 +518,10 @@ where
             .map(|url| Url::from_str(&url).unwrap())
             .collect::<Vec<_>>();
 
-        let mev_boost_endpoints = config
-            .mev_boost_endpoints
-            .into_iter()
-            .map(|url| Url::from_str(&url).unwrap())
-            .collect::<Vec<_>>();
-
-        let submission_handler = SubmissionHandler::new(
+        let submission_handler = RollupSubmissionHandler::new(
             querying_provider.clone(),
             &normal_nodes,
             &angstrom_submission_nodes,
-            &mev_boost_endpoints,
             angstrom_address,
             signer.clone()
         );

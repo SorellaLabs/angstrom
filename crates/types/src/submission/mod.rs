@@ -37,6 +37,83 @@ pub struct TxFeatureInfo {
     pub target_block: u64
 }
 
+pub struct RollupMode;
+pub struct ConsensusMode;
+
+pub type RollupSubmissionHandler<P> = SubmissionHandler<P, RollupMode>;
+pub type ConsensusSubmissionHandler<P> = SubmissionHandler<P, ConsensusMode>;
+
+pub struct SubmissionHandler<P, M = ConsensusMode> {
+    pub node_provider: Arc<P>,
+    pub submitters:    Vec<Box<dyn ChainSubmitterWrapper>>,
+    pub mode:          M
+}
+
+impl<P, M> Deref for SubmissionHandler<P, M>
+where
+    P: Provider + Unpin + 'static
+{
+    type Target = P;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node_provider
+    }
+}
+
+impl<P> SubmissionHandler<P, RollupMode>
+where
+    P: Provider + 'static + Unpin
+{
+    pub fn new<S: AngstromMetaSigner + 'static>(
+        node_provider: Arc<P>,
+        mempool: &[Url],
+        angstrom: &[Url],
+        angstom_address: Address,
+        signer: AngstromSigner<S>
+    ) -> Self {
+        let mempool = Box::new(ChainSubmitterHolder::new(
+            MempoolSubmitter::new(mempool, angstom_address),
+            signer.clone()
+        )) as Box<dyn ChainSubmitterWrapper>;
+
+        let angstrom = Box::new(ChainSubmitterHolder::new(
+            AngstromSubmitter::new(angstrom, angstom_address),
+            signer.clone()
+        )) as Box<dyn ChainSubmitterWrapper>;
+
+        Self { node_provider, submitters: vec![mempool, angstrom], mode: RollupMode }
+    }
+}
+
+impl<P> SubmissionHandler<P, ConsensusMode>
+where
+    P: Provider + 'static + Unpin
+{
+    pub fn new<S: AngstromMetaSigner + 'static>(
+        node_provider: Arc<P>,
+        mempool: &[Url],
+        angstrom: &[Url],
+        mev_boost: &[Url],
+        angstom_address: Address,
+        signer: AngstromSigner<S>
+    ) -> Self {
+        let mempool = Box::new(ChainSubmitterHolder::new(
+            MempoolSubmitter::new(mempool, angstom_address),
+            signer.clone()
+        )) as Box<dyn ChainSubmitterWrapper>;
+        let angstrom = Box::new(ChainSubmitterHolder::new(
+            AngstromSubmitter::new(angstrom, angstom_address),
+            signer.clone()
+        )) as Box<dyn ChainSubmitterWrapper>;
+        let mev_boost = Box::new(ChainSubmitterHolder::new(
+            MevBoostSubmitter::new(mev_boost, angstom_address),
+            signer
+        )) as Box<dyn ChainSubmitterWrapper>;
+
+        Self { node_provider, submitters: vec![mempool, angstrom, mev_boost], mode: ConsensusMode }
+    }
+}
+
 /// a chain submitter is a trait that deals with submitting a bundle to the
 /// different configured endpoints.
 pub trait ChainSubmitter: Send + Sync + Unpin + 'static {
@@ -86,53 +163,10 @@ pub trait ChainSubmitter: Send + Sync + Unpin + 'static {
     }
 }
 
-pub struct SubmissionHandler<P>
-where
-    P: Provider + 'static
-{
-    pub node_provider: Arc<P>,
-    pub submitters:    Vec<Box<dyn ChainSubmitterWrapper>>
-}
-
-impl<P> Deref for SubmissionHandler<P>
-where
-    P: Provider + Unpin + 'static
-{
-    type Target = P;
-
-    fn deref(&self) -> &Self::Target {
-        &self.node_provider
-    }
-}
-
-impl<P> SubmissionHandler<P>
+impl<P, M> SubmissionHandler<P, M>
 where
     P: Provider + 'static + Unpin
 {
-    pub fn new<S: AngstromMetaSigner + 'static>(
-        node_provider: Arc<P>,
-        mempool: &[Url],
-        angstrom: &[Url],
-        mev_boost: &[Url],
-        angstom_address: Address,
-        signer: AngstromSigner<S>
-    ) -> Self {
-        let mempool = Box::new(ChainSubmitterHolder::new(
-            MempoolSubmitter::new(mempool, angstom_address),
-            signer.clone()
-        )) as Box<dyn ChainSubmitterWrapper>;
-        let angstrom = Box::new(ChainSubmitterHolder::new(
-            AngstromSubmitter::new(angstrom, angstom_address),
-            signer.clone()
-        )) as Box<dyn ChainSubmitterWrapper>;
-        let mev_boost = Box::new(ChainSubmitterHolder::new(
-            MevBoostSubmitter::new(mev_boost, angstom_address),
-            signer
-        )) as Box<dyn ChainSubmitterWrapper>;
-
-        Self { node_provider, submitters: vec![mempool, angstrom, mev_boost] }
-    }
-
     pub async fn submit_tx<S: AngstromMetaSigner>(
         &self,
         signer: AngstromSigner<S>,

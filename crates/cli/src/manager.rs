@@ -271,6 +271,8 @@ where
             }
         };
 
+        // Reset the state to waiting. State transition cycle is now complete, ready for
+        // the next block to start the next cycle.
         self.state = DriverState::Waiting;
 
         let target_block = self.current_height + 1;

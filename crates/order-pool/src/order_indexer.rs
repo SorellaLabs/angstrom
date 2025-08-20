@@ -7,7 +7,7 @@ use std::{
 use alloy::primitives::{Address, B256, BlockNumber, U256};
 use angstrom_types::{
     orders::{OrderId, OrderLocation, OrderOrigin, OrderSet, OrderStatus},
-    primitive::{NewInitializedPool, PeerId, PoolId},
+    primitive::{ChainConfig, NewInitializedPool, PeerId, PoolId},
     sol_bindings::{
         RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData},
@@ -23,7 +23,7 @@ use crate::{
     PoolManagerUpdate,
     order_storage::OrderStorage,
     order_subscribers::OrderSubscriptionTracker,
-    order_tracker::{ChainConfig, OrderTracker},
+    order_tracker::OrderTracker,
     telemetry::OrderPoolSnapshot,
     validator::{OrderValidator, OrderValidatorRes}
 };

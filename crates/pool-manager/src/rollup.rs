@@ -5,10 +5,9 @@ use std::{
 };
 
 use angstrom_eth::manager::EthEvent;
-use angstrom_types::{block_sync::BlockSyncConsumer, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types::{block_sync::BlockSyncConsumer, primitive::ChainConfig, sol_bindings::grouped_orders::AllOrders};
 use order_pool::{
-    OrderIndexer, PoolConfig, PoolInnerEvent, PoolManagerUpdate, order_storage::OrderStorage,
-    order_tracker::ChainConfig
+    OrderIndexer, PoolConfig, PoolInnerEvent, PoolManagerUpdate, order_storage::OrderStorage
 };
 use reth_tasks::TaskSpawner;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

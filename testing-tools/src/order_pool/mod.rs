@@ -6,9 +6,10 @@ use angstrom_network::{
     NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle,
     pool_manager::{OrderCommand, PoolHandle, PoolManager}
 };
+use angstrom_types::primitive::ChainConfig;
 use futures::{Future, FutureExt, future::poll_fn};
 use order_pool::{
-    OrderIndexer, PoolConfig, order_storage::OrderStorage, order_tracker::ChainConfig
+    OrderIndexer, PoolConfig, order_storage::OrderStorage
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio::sync::mpsc::unbounded_channel;

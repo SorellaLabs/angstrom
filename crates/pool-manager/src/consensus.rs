@@ -9,11 +9,11 @@ use alloy::primitives::B256;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
 use angstrom_types::{
-    block_sync::BlockSyncConsumer, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
+    block_sync::BlockSyncConsumer, primitive::{ChainConfig, PeerId}, sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
 use order_pool::{
-    OrderIndexer, PoolInnerEvent, order_storage::OrderStorage, order_tracker::ChainConfig
+    OrderIndexer, PoolInnerEvent, order_storage::OrderStorage
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
 use tokio_stream::wrappers::UnboundedReceiverStream;

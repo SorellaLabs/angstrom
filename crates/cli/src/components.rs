@@ -1,9 +1,8 @@
 use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{HashMap, HashSet},
     pin::Pin,
     str::FromStr,
     sync::Arc,
-    task::{Context, Poll, Waker},
     time::Duration
 };
 
@@ -15,7 +14,6 @@ use alloy::{
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
-use alloy_primitives::BlockNumber;
 use angstrom_amm_quoter::{ConsensusQuoterManager, RollupQuoterManager};
 use angstrom_eth::{
     handle::Eth,
@@ -23,25 +21,20 @@ use angstrom_eth::{
 };
 use angstrom_network::{NetworkBuilder as StromNetworkBuilder, StatusState, VerificationSidecar};
 use angstrom_types::{
-    block_sync::{BlockSyncConsumer, BlockSyncProducer, GlobalBlockSync},
-    contract_payloads::angstrom::{
-        AngstromPoolConfigStore, BundleGasDetails, UniswapAngstromRegistry
-    },
-    orders::PoolSolution,
+    block_sync::{BlockSyncProducer, GlobalBlockSync},
+    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, ChainExt, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId,
-        UniswapPoolRegistry
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
-    submission::SubmissionHandler,
-    uni_structure::BaselinePoolState
+    submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
-use futures::{FutureExt, Stream, StreamExt, future::BoxFuture};
-use matching_engine::{MatchingEngineHandle, MatchingManager};
+use futures::Stream;
+use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
 use pool_manager::{consensus::ConsensusPoolManagerBuilder, rollup::RollupPoolManagerBuilder};
@@ -59,22 +52,18 @@ use reth_node_builder::{
 };
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{
-    BlockReader, CanonStateNotificationStream, DatabaseProviderFactory, ReceiptProvider,
-    TryIntoHistoricalStateProvider
+    BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
 };
 use serde::Serialize;
 use telemetry::init_telemetry;
-use tokio::{sync::mpsc::UnboundedReceiver, time::Sleep};
-use tokio_stream::wrappers::BroadcastStream;
-use uniswap_v4::{
-    DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools,
-    uniswap::pool_manager::SyncedUniswapPools
-};
+use tokio::sync::mpsc::UnboundedReceiver;
+use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
 use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
 
 use crate::{
     AngstromConfig,
+    driver::RollupDriver,
     handles::{AngstromMode, ConsensusMode, RollupMode, StromHandles}
 };
 
@@ -722,7 +711,23 @@ where
 
         executor.spawn_critical("amm quoting service", amm);
 
-        // TODO: Manage runtime here instead of using ConsensusManager
+        let driver = RollupDriver::new(
+            block_height,
+            // TODO(mempirate): Replace with config
+            Duration::from_millis(2000),
+            node.provider.canonical_state_stream(),
+            global_block_sync.clone(),
+            order_storage,
+            uni_ang_registry,
+            uniswap_pools,
+            Arc::new(submission_handler),
+            matching_handle,
+            signer
+        );
+
+        executor.spawn_critical_with_graceful_shutdown_signal("rollup driver", move |grace| {
+            driver.run_till_shutdown(grace)
+        });
 
         global_block_sync.finalize_modules();
         tracing::info!("started angstrom");
@@ -751,263 +756,4 @@ async fn handle_init_block_spam<N: NodePrimitives>(
         }
     }
     tracing::info!("finished handling block-spam");
-}
-
-/// The runtime driver for rollup mode. Advances the global Angstrom state
-/// machine without consensus or networking.
-pub struct RollupDriver<P, M, BS, S>
-where
-    P: Provider + Unpin + 'static,
-    S: AngstromMetaSigner
-{
-    current_height:         BlockNumber,
-    // TODO: If we make this a generic driver, don't use concrete type here
-    canonical_block_stream: CanonStateNotificationStream<OpPrimitives>,
-    block_sync:             BS,
-    /// Contains all orders that came in through the RPC.
-    order_storage:          Arc<OrderStorage>,
-    pool_registry:          UniswapAngstromRegistry,
-    uniswap_pools:          SyncedUniswapPools,
-    provider:               Arc<SubmissionHandler<P>>,
-    matching_engine:        M,
-    signer:                 AngstromSigner<S>,
-
-    state: DriverState
-}
-
-/// The driver state machine.
-///
-/// # States
-enum DriverState {
-    /// The driver is initialized and waiting for the first block.
-    Initialized,
-    /// The driver is waiting for the bid aggregation deadline to pass.
-    BidAggregation {
-        /// The sleep future to wait for the bid aggregation deadline.
-        /// NOTE: This is boxed and pinned to make it `Unpin`.
-        sleep: Pin<Box<Sleep>>
-    },
-    /// The driver is solving the book.
-    Solving { future: BoxFuture<'static, eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> }
-}
-
-impl DriverState {
-    /// Poll the sleep future if in the [`DriverState::BidAggregation`] state.
-    /// Returns `Poll::Ready` when the sleep is complete,
-    /// otherwise `Poll::Pending`. Also returns `Poll::Pending` if the driver is
-    /// not in the `BidAggregation` state.
-    fn poll_sleep(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        match self {
-            DriverState::BidAggregation { sleep } => sleep.poll_unpin(cx),
-            _ => Poll::Pending
-        }
-    }
-
-    /// Poll the solving future if in the [`DriverState::Solving`] state.
-    fn poll_solver(
-        &mut self,
-        cx: &mut Context<'_>
-    ) -> Poll<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> {
-        match self {
-            DriverState::Solving { future } => future.poll_unpin(cx),
-            _ => Poll::Pending
-        }
-    }
-
-    /// Reset the driver state to [`DriverState::BidAggregation`] with a new
-    /// timeout.
-    fn reset(&mut self, timeout: Duration) {
-        *self = DriverState::BidAggregation { sleep: Box::pin(tokio::time::sleep(timeout)) };
-    }
-}
-
-// How do we ingest orders and cancellations? They used to come from the network
-// as [`StromMessage`]s, but we don't have those anymore.
-// We should get them straight from the RPC I guess?
-
-impl<P, M, BS, S> RollupDriver<P, M, BS, S>
-where
-    P: Provider + Unpin + 'static,
-    M: MatchingEngineHandle,
-    BS: BlockSyncConsumer,
-    S: AngstromMetaSigner
-{
-    /// Initialize a new [`RollupDriver`] instance.
-    pub fn new(
-        current_height: BlockNumber,
-        canonical_block_stream: CanonStateNotificationStream<OpPrimitives>,
-        block_sync: BS,
-        order_storage: Arc<OrderStorage>,
-        pool_registry: UniswapAngstromRegistry,
-        uniswap_pools: SyncedUniswapPools,
-        provider: Arc<SubmissionHandler<P>>,
-        matching_engine: M,
-        signer: AngstromSigner<S>
-    ) -> Self {
-        block_sync.register("RollupDriver");
-
-        Self {
-            current_height,
-            canonical_block_stream,
-            block_sync,
-            order_storage,
-            pool_registry,
-            uniswap_pools,
-            provider,
-            matching_engine,
-            signer,
-            state: DriverState::Initialized
-        }
-    }
-
-    /// Handles a new blockchain state notification.
-    fn on_blockchain_state(
-        &mut self,
-        notification: CanonStateNotification<OpPrimitives>,
-        waker: Waker
-    ) {
-        let new_block = notification.tip();
-        let number = new_block.number();
-
-        tracing::info!(?number, "New blockchain state");
-        self.current_height = number;
-
-        // Reset the timeout.
-        self.state.reset(Duration::from_millis(todo!("SLOT TIME")));
-
-        match notification {
-            CanonStateNotification::Commit { .. } => {
-                self.block_sync
-                    .sign_off_on_block("RollupDriver", self.current_height, Some(waker));
-            }
-
-            CanonStateNotification::Reorg { old, new } => {
-                let tip = new.tip_number();
-                let reorg = old.reorged_range(&new).unwrap_or(tip..=tip);
-                self.block_sync
-                    .sign_off_reorg("RollupDriver", reorg, Some(waker));
-            }
-        }
-    }
-
-    /// Handles the bid aggregation deadline: starts the solving process.
-    fn on_aggregation_deadline(&mut self) {
-        let orders = self.order_storage.get_all_orders();
-
-        let (limit, searcher) = orders.into_all_book_and_searcher();
-
-        // searchers need to be unique by pool-key
-        let searcher = searcher
-            .into_iter()
-            .fold(HashMap::new(), |mut acc, searcher| {
-                match acc.entry(searcher.pool_id) {
-                    Entry::Vacant(v) => {
-                        v.insert(searcher);
-                    }
-                    Entry::Occupied(mut o) => {
-                        let current = o.get();
-                        // if this order on same pool_id has a higher tob reward or they are the
-                        // same and it has a lower order hash. replace
-                        if searcher.tob_reward > current.tob_reward
-                            || (searcher.tob_reward == current.tob_reward
-                                && searcher.order_id.hash < current.order_id.hash)
-                        {
-                            o.insert(searcher);
-                        }
-                    }
-                };
-
-                acc
-            })
-            .into_values()
-            .collect();
-
-        let pool_snapshots = self.fetch_pool_snapshot();
-        let matcher = self.matching_engine.clone();
-
-        let future =
-            async move { matcher.solve_pools(limit, searcher, pool_snapshots).await }.boxed();
-
-        // Change state to solving.
-        self.state = DriverState::Solving { future };
-    }
-
-    fn on_solving_result(&mut self, pool_solutions: Vec<PoolSolution>, details: BundleGasDetails) {
-        let target_block = self.current_height + 1;
-        let provider = self.provider.clone();
-        let signer = self.signer.clone();
-
-        // TODO: Build a proposal (but not actually), to build an `AngstromBundle`, and
-        // then submit that.
-        todo!()
-    }
-
-    fn fetch_pool_snapshot(&self) -> HashMap<PoolId, (Address, Address, BaselinePoolState, u16)> {
-        self.uniswap_pools
-            .iter()
-            .filter_map(|item| {
-                let key = item.key();
-                let pool = item.value();
-                tracing::info!(?key, "getting snapshot");
-                let (token_a, token_b, snapshot) =
-                    pool.read().unwrap().fetch_pool_snapshot().ok()?;
-                let entry = self.pool_registry.get_ang_entry(key)?;
-
-                Some((*key, (token_a, token_b, snapshot, entry.store_index as u16)))
-            })
-            .collect::<HashMap<_, _>>()
-    }
-}
-
-impl<P, M, BS, S> Future for RollupDriver<P, M, BS, S>
-where
-    P: Provider + Unpin + 'static,
-    M: MatchingEngineHandle,
-    BS: BlockSyncConsumer,
-    S: AngstromMetaSigner
-{
-    type Output = ();
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-
-        loop {
-            // If this is ready, the bid aggregation deadline has passed and we proceed to
-            // the next stage.
-            if let Poll::Ready(()) = this.state.poll_sleep(cx) {
-                this.on_aggregation_deadline();
-            }
-
-            if let Poll::Ready(result) = this.state.poll_solver(cx) {
-                match result {
-                    Ok((pool_solutions, details)) => {
-                        this.on_solving_result(pool_solutions, details);
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            ?e,
-                            height = this.current_height,
-                            "Error solving pools, no bundle will be submitted!"
-                        );
-                    }
-                }
-            }
-
-            match this.canonical_block_stream.poll_next_unpin(cx) {
-                Poll::Ready(Some(notification)) => {
-                    this.on_blockchain_state(notification, cx.waker().clone());
-
-                    continue;
-                }
-                Poll::Ready(None) => {
-                    // We exit the rollup driver when we receive no more chain notifications.
-                    tracing::warn!("No more chain state notifications");
-                    return Poll::Ready(());
-                }
-                Poll::Pending => {}
-            }
-
-            return Poll::Pending;
-        }
-    }
 }

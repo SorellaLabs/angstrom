@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::HashMap,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
@@ -25,7 +25,7 @@ use reth_provider::{CanonStateNotification, CanonStateNotificationStream};
 use tokio::time::Sleep;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
-// TODO: Is this a good value?
+// TODO(mempirate): Is this a good value?
 /// The factor by which the block time is multiplied to get the bid aggregation
 /// deadline. = 80% of the block time.
 ///
@@ -42,7 +42,7 @@ where
 {
     current_height:         BlockNumber,
     block_time:             Duration,
-    // TODO: If we make this a generic driver, don't use concrete type here
+    // TODO(mempirate): If we make this a generic driver, don't use concrete type here
     canonical_block_stream: CanonStateNotificationStream<OpPrimitives>,
     block_sync:             BS,
     /// Contains all orders that came in through the RPC.

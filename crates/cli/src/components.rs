@@ -237,11 +237,11 @@ where
         let submission_handler = SubmissionHandler::new(
             querying_provider.clone(),
             &normal_nodes,
-            &angstrom_submission_nodes,
-            &mev_boost_endpoints,
             angstrom_address,
             signer.clone()
-        );
+        )
+        .with_angstrom(&angstrom_submission_nodes, angstrom_address, signer.clone())
+        .with_mev_boost(&mev_boost_endpoints, angstrom_address, signer.clone());
 
         tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
         this is done to ensure all modules start on the same state and we don't hit the rare  \
@@ -514,23 +514,9 @@ where
             .map(|url| Url::from_str(&url).unwrap())
             .collect::<Vec<_>>();
 
-        let angstrom_submission_nodes = config
-            .angstrom_submission_nodes
-            .into_iter()
-            .map(|url| Url::from_str(&url).unwrap())
-            .collect::<Vec<_>>();
-
-        let mev_boost_endpoints = config
-            .mev_boost_endpoints
-            .into_iter()
-            .map(|url| Url::from_str(&url).unwrap())
-            .collect::<Vec<_>>();
-
         let submission_handler = SubmissionHandler::new(
             querying_provider.clone(),
             &normal_nodes,
-            &angstrom_submission_nodes,
-            &mev_boost_endpoints,
             angstrom_address,
             signer.clone()
         );

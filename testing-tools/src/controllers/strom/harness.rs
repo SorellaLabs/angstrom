@@ -150,8 +150,6 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let submission_handler = SubmissionHandler::new(
         provider.rpc_provider().into(),
         &[],
-        &[],
-        &[],
         angstrom_contract,
         signer.clone()
     );

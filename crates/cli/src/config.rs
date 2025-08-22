@@ -5,6 +5,7 @@ use angstrom_types::primitive::{
     AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC
 };
 use hsm_signer::{Pkcs11Signer, Pkcs11SignerConfig};
+use url::Url;
 
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
@@ -67,10 +68,16 @@ impl AngstromConfig {
     }
 
     /// Get normal nodes from config or default to ETH_DEFAULT_RPC
-    pub fn get_normal_nodes(&self) -> Vec<String> {
+    pub fn get_normal_nodes(&self) -> Vec<Url> {
         self.normal_nodes
-            .clone()
-            .unwrap_or_else(|| ETH_DEFAULT_RPC.iter().map(|s| s.to_string()).collect())
+            .as_ref()
+            .map(|v| v.iter().map(|s| Url::parse(s).unwrap()).collect())
+            .unwrap_or_else(|| {
+                ETH_DEFAULT_RPC
+                    .iter()
+                    .map(|s| Url::parse(s).unwrap())
+                    .collect()
+            })
     }
 }
 

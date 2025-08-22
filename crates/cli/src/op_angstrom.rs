@@ -66,6 +66,10 @@ pub fn run() -> eyre::Result<()> {
 
         tracing::info!(domain=?ANGSTROM_DOMAIN);
 
+        // --rollup.sequencer must be provided.
+        if args.rollup.sequencer.is_none() {
+            return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
+        }
         // In rollup mode, use --rollup.sequencer.
         // It can be HTTP or WS; map ws(s) -> http(s).
         if let Some(l2_url) = args.rollup.sequencer.as_ref().map(|s| {
@@ -78,11 +82,6 @@ pub fn run() -> eyre::Result<()> {
             }
         }) {
             args.angstrom.normal_nodes = Some(vec![l2_url]);
-        }
-
-        // --rollup.sequencer must be provided.
-        if args.rollup.sequencer.is_none() {
-            return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         }
 
         let channels = RollupHandles::new();

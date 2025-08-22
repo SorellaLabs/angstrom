@@ -77,7 +77,12 @@ pub fn run() -> eyre::Result<()> {
 
         let l2_url = sequencer.clone();
 
-        args.angstrom.normal_nodes = Some(vec![l2_url]);
+        // Add sequencer to normal nodes
+        if let Some(ref mut nodes) = args.angstrom.normal_nodes {
+            nodes.push(l2_url);
+        } else {
+            args.angstrom.normal_nodes = Some(vec![l2_url]);
+        }
 
         let channels = RollupHandles::new();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());

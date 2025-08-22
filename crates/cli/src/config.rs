@@ -6,6 +6,7 @@ use angstrom_types::primitive::{
 };
 use consensus::ConsensusTimingConfig;
 use hsm_signer::{Pkcs11Signer, Pkcs11SignerConfig};
+use url::Url;
 
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
@@ -22,8 +23,8 @@ pub struct AngstromConfig {
     /// starting the internal reth node
     #[clap(short, long, default_value = "https://eth.drpc.org")]
     pub boot_node:                 String,
-    #[clap(short, long, num_args(0..=5), require_equals = true, default_values = ETH_DEFAULT_RPC)]
-    pub normal_nodes:              Vec<String>,
+    #[clap(short, long, num_args(1..=5), require_equals = true)]
+    pub normal_nodes:              Option<Vec<String>>,
     #[clap(short, long, num_args(0..=10), require_equals = true, default_values = ETH_ANGSTROM_RPC)]
     pub angstrom_submission_nodes: Vec<String>,
     #[clap(flatten)]
@@ -67,6 +68,19 @@ impl AngstromConfig {
                 .map(AngstromSigner::new)
             })
             .transpose()?)
+    }
+
+    /// Get normal nodes from config or default to ETH_DEFAULT_RPC
+    pub fn get_normal_nodes(&self) -> Vec<Url> {
+        self.normal_nodes
+            .as_ref()
+            .map(|v| v.iter().map(|s| Url::parse(s).unwrap()).collect())
+            .unwrap_or_else(|| {
+                ETH_DEFAULT_RPC
+                    .iter()
+                    .map(|s| Url::parse(s).unwrap())
+                    .collect()
+            })
     }
 }
 

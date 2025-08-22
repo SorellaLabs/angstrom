@@ -216,11 +216,7 @@ where
         let gas_token = *GAS_TOKEN_ADDRESS.get().unwrap();
         let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
 
-        let normal_nodes = config
-            .normal_nodes
-            .into_iter()
-            .map(|url| Url::from_str(&url).unwrap())
-            .collect::<Vec<_>>();
+        let normal_nodes = config.get_normal_nodes();
 
         let angstrom_submission_nodes = config
             .angstrom_submission_nodes
@@ -510,11 +506,7 @@ where
         let gas_token = *GAS_TOKEN_ADDRESS.get().unwrap();
         let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
 
-        let normal_nodes = config
-            .normal_nodes
-            .into_iter()
-            .map(|url| Url::from_str(&url).unwrap())
-            .collect::<Vec<_>>();
+        let normal_nodes = config.get_normal_nodes();
 
         let submission_handler = SubmissionHandler::new(
             querying_provider.clone(),

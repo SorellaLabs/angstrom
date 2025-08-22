@@ -14,7 +14,6 @@ alloy-chains.workspace = true
 alloy-primitives.workspace = true
 alloy-rpc-types.workspace = true
 alloy-sol-types.workspace = true
-angstrom.workspace = true
 angstrom-amm-quoter.workspace = true
 angstrom-cli.workspace = true
 angstrom-eth.workspace = true

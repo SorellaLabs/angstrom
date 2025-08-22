@@ -2,14 +2,17 @@ use std::{
     collections::HashMap,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker}
+    task::{Context, Poll, Waker},
+    time::Duration
 };
 
 use alloy::primitives::B256;
 use angstrom_eth::manager::EthEvent;
 use angstrom_network::{NetworkOrderEvent, StromMessage, StromNetworkEvent, StromNetworkHandle};
 use angstrom_types::{
-    block_sync::BlockSyncConsumer, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
+    block_sync::BlockSyncConsumer,
+    primitive::{ChainConfig, PeerId},
+    sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
 use order_pool::{OrderIndexer, PoolInnerEvent, order_storage::OrderStorage};
@@ -68,7 +71,8 @@ where
     eth_network_events:   UnboundedReceiverStream<EthEvent>,
     order_events:         UnboundedMeteredReceiver<NetworkOrderEvent>,
     strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
-    config:               order_pool::PoolConfig
+    config:               order_pool::PoolConfig,
+    block_time:           Duration
 }
 
 impl<V, GlobalSync> ConsensusPoolManagerBuilder<V, GlobalSync>
@@ -83,7 +87,8 @@ where
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GlobalSync,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
+        block_time: Duration
     ) -> Self {
         Self {
             validator,
@@ -93,7 +98,8 @@ where
             eth_network_events,
             order_events,
             strom_network_events,
-            config: Default::default()
+            config: Default::default(),
+            block_time
         }
     }
 
@@ -126,7 +132,8 @@ where
             self.validator.clone(),
             order_storage.clone(),
             block_number,
-            pool_manager_tx.clone()
+            pool_manager_tx.clone(),
+            ChainConfig::ethereum(self.block_time)
         );
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
@@ -162,7 +169,8 @@ where
         eth_network_events: UnboundedReceiverStream<EthEvent>,
         order_events: UnboundedMeteredReceiver<NetworkOrderEvent>,
         global_sync: GS,
-        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>
+        strom_network_events: UnboundedReceiverStream<StromNetworkEvent>,
+        block_time: Duration
     ) -> ConsensusPoolManagerBuilder<V, GS> {
         ConsensusPoolManagerBuilder::new(
             validator,
@@ -171,7 +179,8 @@ where
             eth_network_events,
             order_events,
             global_sync,
-            strom_network_events
+            strom_network_events,
+            block_time
         )
     }
 }

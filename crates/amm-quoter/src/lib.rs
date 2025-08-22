@@ -78,7 +78,6 @@ pub struct QuoterManager<BlockSync: BlockSyncConsumer> {
     amms: SyncedUniswapPools,
     threadpool: ThreadPool,
     recv: mpsc::Receiver<(HashSet<PoolId>, mpsc::Sender<Slot0Update>)>,
-    book_snapshots: HashMap<PoolId, (PoolId, BaselinePoolState)>,
     pending_tasks: FuturesUnordered<BoxFuture<'static, eyre::Result<Slot0Update>>>,
     pool_to_subscribers: HashMap<PoolId, Vec<mpsc::Sender<Slot0Update>>>,
     consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>,
@@ -104,18 +103,6 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
         consensus_stream: Pin<Box<dyn Stream<Item = ConsensusRoundOrderHashes> + Send>>
     ) -> Self {
         let cur_block = block_sync.current_block_number();
-        let book_snapshots = amms
-            .iter()
-            .map(|entry| {
-                let pool_lock = entry.value().read().unwrap();
-
-                let pk = pool_lock.public_address();
-                let uni_key = pool_lock.data_loader().private_address();
-                let snapshot_data = pool_lock.fetch_pool_snapshot().unwrap().2;
-                (pk, (uni_key, snapshot_data))
-            })
-            .collect();
-
         assert!(
             update_interval > Duration::from_millis(10),
             "cannot update quicker than every 10ms"
@@ -128,7 +115,6 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
             amms,
             recv,
             cur_block,
-            book_snapshots,
             threadpool,
             pending_tasks: FuturesUnordered::new(),
             pool_to_subscribers: HashMap::default(),
@@ -140,10 +126,14 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
 
     fn handle_new_subscription(&mut self, pools: HashSet<PoolId>, chan: mpsc::Sender<Slot0Update>) {
         let keys = self
-            .book_snapshots
+            .amms
             .iter()
-            .flat_map(|(ang_key, (uni_key, _))| [ang_key, uni_key])
-            .copied()
+            .flat_map(|k| {
+                let pool = k.value();
+                let lock = pool.read().unwrap();
+
+                [lock.private_address(), lock.public_address()]
+            })
             .collect::<HashSet<_>>();
 
         for pool in &pools {
@@ -171,8 +161,19 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
     }
 
     fn spawn_book_solvers(&mut self, seq_id: u16) {
+        let snapshot = self
+            .amms
+            .iter()
+            .map(|entry| {
+                let pool_lock = entry.value().read().unwrap();
+                let uni_key = pool_lock.data_loader().private_address();
+                let snapshot_data = pool_lock.fetch_pool_snapshot().unwrap().2;
+                (*entry.key(), (uni_key, snapshot_data))
+            })
+            .collect();
+
         let OrderSet { limit, searcher } = self.all_orders_with_consensus();
-        let mut books = build_non_proposal_books(limit, &self.book_snapshots);
+        let mut books = build_non_proposal_books(limit, &snapshot);
 
         let searcher_orders = searcher
             .into_iter()
@@ -197,17 +198,15 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
                 acc
             });
 
-        for (book_id, (uni_pool_id, amm)) in &self.book_snapshots {
+        for (book_id, (uni_pool_id, amm)) in snapshot {
             // Default as if we don't have a book, we want to still send update.
-            let mut book = books.remove(book_id).unwrap_or_default();
-            book.id = *book_id;
-            book.set_amm_if_missing(|| amm.clone());
+            let mut book = books.remove(&book_id).unwrap_or_default();
+            book.id = book_id;
+            book.set_amm_if_missing(|| amm);
 
             let searcher = searcher_orders.get(&book.id()).cloned();
             let (tx, rx) = oneshot::channel();
             let block = self.cur_block;
-
-            let uni_pool_id = *uni_pool_id;
 
             self.threadpool.spawn(move || {
                 let b = book;
@@ -228,19 +227,6 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
 
             self.pending_tasks.push(rx.map_err(Into::into).boxed())
         }
-    }
-
-    fn update_book_state(&mut self) {
-        self.book_snapshots = self
-            .amms
-            .iter()
-            .map(|entry| {
-                let pool_lock = entry.value().read().unwrap();
-                let uni_key = pool_lock.data_loader().private_address();
-                let snapshot_data = pool_lock.fetch_pool_snapshot().unwrap().2;
-                (*entry.key(), (uni_key, snapshot_data))
-            })
-            .collect();
     }
 
     fn update_consensus_state(&mut self, round: ConsensusRoundOrderHashes) {
@@ -291,7 +277,6 @@ impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync> {
 
             // update block number, amm snapshot and reset seq id
             if self.cur_block != self.block_sync.current_block_number() {
-                self.update_book_state();
                 self.cur_block = self.block_sync.current_block_number();
                 self.active_pre_proposal_aggr_order_hashes = None;
                 self.seq_id = 0;

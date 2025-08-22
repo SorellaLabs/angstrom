@@ -82,7 +82,10 @@ pub fn run() -> eyre::Result<()> {
 
         // Add sequencer to normal nodes
         if let Some(ref mut nodes) = args.angstrom.normal_nodes {
-            nodes.push(l2_url);
+            // Don't add the the endpoint if it's already in the list
+            if !nodes.contains(&l2_url) {
+                nodes.push(l2_url);
+            }
         } else {
             args.angstrom.normal_nodes = Some(vec![l2_url]);
         }

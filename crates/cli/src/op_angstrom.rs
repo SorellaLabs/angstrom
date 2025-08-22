@@ -50,10 +50,10 @@ pub fn run() -> eyre::Result<()> {
             .iter()
             .find(|c| *c == &chain)
             .cloned()
-            .expect(
+            .expect(&format!(
                 "op-angstrom does not support chain {chain} (supported chains: \
                  {SUPPORTED_CHAINS:?})"
-            );
+            ));
 
         init_with_chain_id(chain as u64);
 
@@ -99,7 +99,7 @@ pub fn run() -> eyre::Result<()> {
             )
             .await
         } else {
-            unreachable!()
+            panic!("No signer provided");
         }
     })
 }

@@ -71,15 +71,11 @@ pub fn run() -> eyre::Result<()> {
             return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         };
 
-        // In rollup mode, use --rollup.sequencer.
-        // It can be HTTP or WS; map ws(s) -> http(s).
-        let l2_url = if let Some(rest) = sequencer.strip_prefix("ws://") {
-            format!("http://{}", rest)
-        } else if let Some(rest) = sequencer.strip_prefix("wss://") {
-            format!("https://{}", rest)
-        } else {
-            sequencer.clone()
-        };
+        if sequencer.starts_with("ws://") || sequencer.starts_with("wss://") {
+            return Err(eyre::eyre!("Sequencer URL must be HTTP, not WS"));
+        }
+
+        let l2_url = sequencer.clone();
 
         args.angstrom.normal_nodes = Some(vec![l2_url]);
 

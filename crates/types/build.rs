@@ -4,7 +4,7 @@ use convert_case::{Case, Casing};
 use itertools::Itertools;
 
 const CONTRACT_LOCATION: &str = "contracts/";
-const OUT_DIRECTORY: &str = "contracts/out/";
+const OUT_DIRECTORY: &str = "abis-types/";
 const SRC_DIRECTORY: &str = "contracts/src";
 const BINDINGS_PATH: &str = "/src/contract_bindings/mod.rs";
 
@@ -36,23 +36,38 @@ fn main() {
     if let Some(src_dir_str) = src_dir.to_str() {
         println!("cargo::rerun-if-changed={src_dir_str}");
     }
+    println!("cargo::rerun-if-changed={OUT_DIRECTORY}");
 
     let mut out_dir = base_dir.clone();
     out_dir.push(OUT_DIRECTORY);
 
-    let res = Command::new("forge")
-        .arg("build")
-        .arg("--optimize")
-        .arg("--optimizer-runs")
-        .arg("9999999999")
+    let Ok(mut res) = Command::new("forge")
+        .arg("bind")
+        .arg("--out")
+        .arg(format!("../{OUT_DIRECTORY}"))
         .current_dir(contract_dir)
         .spawn()
-        .expect("foundry is not installed on this machine.\n https://book.getfoundry.sh/getting-started/installation go to here to install")
-        .wait()
-        .unwrap();
+    else {
+        println!("didn't update binding because foundry isn't installed");
+
+        return;
+    };
+    let res = res.wait().unwrap();
+
+    std::fs::read_dir(&out_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            let file_name = entry.file_name();
+            let file_name_str = file_name.to_str().unwrap();
+            !WANTED_CONTRACTS.contains(&file_name_str)
+        })
+        .for_each(|entry| {
+            let _ = std::fs::remove_dir_all(entry.path());
+        });
 
     if res.into_raw() != 0 {
-        panic!("foundry failed to build files");
+        return;
     }
 
     let sol_macro_invocation = std::fs::read_dir(out_dir)

@@ -9,7 +9,7 @@ use angstrom_types::{
     uni_structure::BaselinePoolState
 };
 use futures::{FutureExt, future::BoxFuture};
-use matching_engine::{MatchingEngineHandle, book::BookOrder};
+use matching_engine::{MatchingEngineHandle, book::BookOrder, manager::MatchingEngineError};
 
 #[derive(Clone)]
 pub struct MockMatchingEngine {}
@@ -20,7 +20,7 @@ impl MatchingEngineHandle for MockMatchingEngine {
         _: Vec<BookOrder>,
         _: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         _: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
-    ) -> BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>> {
+    ) -> BoxFuture<Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>> {
         async move { Ok((vec![], BundleGasDetails::default())) }.boxed()
     }
 }

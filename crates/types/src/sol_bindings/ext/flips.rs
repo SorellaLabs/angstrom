@@ -1,10 +1,7 @@
 use alloy::{primitives::U256, signers::SignerSync};
 use pade::PadeEncode;
 
-use super::{
-    GenerateFlippedOrder,
-    grouped_orders::{FlashVariants, GroupedVanillaOrder, StandingVariants}
-};
+use super::GenerateFlippedOrder;
 use crate::{
     matching::Ray,
     primitive::{ANGSTROM_DOMAIN, AngstromSigner},
@@ -124,41 +121,5 @@ impl GenerateFlippedOrder for PartialStandingOrder {
         this.meta =
             OrderMeta { isEcdsa: true, from: addr, signature: sig.pade_encode().into() };
         this
-    }
-}
-
-impl GenerateFlippedOrder for GroupedVanillaOrder {
-    fn flip(&self) -> Self
-    where
-        Self: Sized
-    {
-        match self {
-            GroupedVanillaOrder::Standing(s) => GroupedVanillaOrder::Standing(s.flip()),
-            GroupedVanillaOrder::KillOrFill(s) => GroupedVanillaOrder::KillOrFill(s.flip())
-        }
-    }
-}
-
-impl GenerateFlippedOrder for StandingVariants {
-    fn flip(&self) -> Self
-    where
-        Self: Sized
-    {
-        match self {
-            StandingVariants::Partial(s) => StandingVariants::Partial(s.flip()),
-            StandingVariants::Exact(s) => StandingVariants::Exact(s.flip())
-        }
-    }
-}
-
-impl GenerateFlippedOrder for FlashVariants {
-    fn flip(&self) -> Self
-    where
-        Self: Sized
-    {
-        match self {
-            FlashVariants::Partial(s) => FlashVariants::Partial(s.flip()),
-            FlashVariants::Exact(s) => FlashVariants::Exact(s.flip())
-        }
     }
 }

@@ -7,3 +7,4 @@
 cc f4ef3bea529a41a219a0bd725f4a8fd5cb5c3f006a0dfe617f7e6248bba46ddc # shrinks to tob_amount = 1, book_amounts = [1], initial_balance = 8000
 cc d8573d86d880161763bc116ce20f459d6fa9ebde52b4002d57991ad6536f39f6 # shrinks to token1_amounts = [1], token2_amounts = [1], initial_balance = 10000
 cc 7a74e415377cbe4d045fef30d248e7fb68ed03765bc9317217eb0b1c8e053cfc # shrinks to order_amounts = [1, 1], initial_balance = 10002, initial_approval = 43722
+cc d27ca8105ff4281ceab42868a35c6c9a8d1846d6d0a8008bd62faf41dee73c17 # shrinks to initial_balance = 5149, tob_amount = 2027, book_amounts = [1241, 1788, 2604]

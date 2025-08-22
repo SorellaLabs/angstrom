@@ -135,6 +135,7 @@ fn setup_inputs(
         .iter()
         .filter(|f| !f.is_bid())
         .map(|ask| OrderWithStorageData {
+            cancel_requested: false,
             invalidates: vec![],
             order: ask.clone(),
             priority_data: OrderPriorityData {
@@ -165,6 +166,7 @@ fn setup_inputs(
         .filter(|f| f.is_bid())
         .map(|bid| OrderWithStorageData {
             invalidates: vec![],
+            cancel_requested: false,
             order: bid.clone(),
             priority_data: OrderPriorityData {
                 price:     *bid.price(),
@@ -192,6 +194,7 @@ fn setup_inputs(
 
     let tob = OrderWithStorageData {
         invalidates: vec![],
+        cancel_requested: false,
         order: tob.clone(),
         priority_data: OrderPriorityData {
             price:     tob.limit_price(),

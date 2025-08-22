@@ -63,6 +63,8 @@ pub trait RawPoolOrder: fmt::Debug + Send + Sync + Clone + Unpin + 'static {
     /// Limit Price
     fn limit_price(&self) -> U256;
 
+    fn unscale_by_gas_fee(&self, price: Ray, gas_amount_t0: u128) -> Ray;
+
     /// Order deadline
     fn deadline(&self) -> Option<U256>;
     /// order flash block

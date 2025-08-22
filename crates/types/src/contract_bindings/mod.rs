@@ -5,7 +5,7 @@ pub mod angstrom {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         Angstrom,
-        "../../contracts/out/Angstrom.sol/Angstrom.json"
+        "../../abis-types/Angstrom.sol/Angstrom.json"
     );
 }
 #[rustfmt::skip]
@@ -15,7 +15,7 @@ pub mod controller_v_1 {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         ControllerV1,
-        "../../contracts/out/ControllerV1.sol/ControllerV1.json"
+        "../../abis-types/ControllerV1.sol/ControllerV1.json"
     );
 }
 #[rustfmt::skip]
@@ -25,7 +25,7 @@ pub mod i_position_descriptor {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         IPositionDescriptor,
-        "../../contracts/out/IPositionDescriptor.sol/IPositionDescriptor.json"
+        "../../abis-types/IPositionDescriptor.sol/IPositionDescriptor.json"
     );
 }
 #[rustfmt::skip]
@@ -35,7 +35,7 @@ pub mod mintable_mock_erc_20 {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         MintableMockERC20,
-        "../../contracts/out/MintableMockERC20.sol/MintableMockERC20.json"
+        "../../abis-types/MintableMockERC20.sol/MintableMockERC20.json"
     );
 }
 #[rustfmt::skip]
@@ -45,7 +45,7 @@ pub mod mock_rewards_manager {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         MockRewardsManager,
-        "../../contracts/out/MockRewardsManager.sol/MockRewardsManager.json"
+        "../../abis-types/MockRewardsManager.sol/MockRewardsManager.json"
     );
 }
 #[rustfmt::skip]
@@ -55,7 +55,7 @@ pub mod pool_gate {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         PoolGate,
-        "../../contracts/out/PoolGate.sol/PoolGate.json"
+        "../../abis-types/PoolGate.sol/PoolGate.json"
     );
 }
 #[rustfmt::skip]
@@ -65,7 +65,7 @@ pub mod pool_manager {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         PoolManager,
-        "../../contracts/out/PoolManager.sol/PoolManager.json"
+        "../../abis-types/PoolManager.sol/PoolManager.json"
     );
 }
 #[rustfmt::skip]
@@ -75,7 +75,7 @@ pub mod position_fetcher {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         PositionFetcher,
-        "../../contracts/out/PositionFetcher.sol/PositionFetcher.json"
+        "../../abis-types/PositionFetcher.sol/PositionFetcher.json"
     );
 }
 #[rustfmt::skip]
@@ -85,6 +85,6 @@ pub mod position_manager {
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         PositionManager,
-        "../../contracts/out/PositionManager.sol/PositionManager.json"
+        "../../abis-types/PositionManager.sol/PositionManager.json"
     );
 }

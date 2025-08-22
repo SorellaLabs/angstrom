@@ -9,12 +9,12 @@ use angstrom_types::{
         uniswap::{LiqRange, PoolPrice, PoolSnapshot}
     },
     primitive::PoolId,
-    sol_bindings::grouped_orders::{GroupedVanillaOrder, OrderWithStorageData}
+    sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 
 #[derive(Debug)]
 pub enum OrderType {
-    FixedOrders(Vec<OrderWithStorageData<GroupedVanillaOrder>>),
+    FixedOrders(Vec<OrderWithStorageData<AllOrders>>),
     GeneratedOrders(usize)
 }
 

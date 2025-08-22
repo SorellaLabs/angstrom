@@ -3,13 +3,14 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
-use alloy::primitives::{Address, B256, U256};
+use alloy::{
+    primitives::{Address, B256, U256},
+    signers::k256::elliptic_curve::rand_core::block
+};
 use angstrom_types::{
     orders::{OrderId, OrderLocation},
     primitive::{PeerId, PoolId},
-    sol_bindings::{
-        RawPoolOrder, ext::grouped_orders::AllOrders, grouped_orders::OrderWithStorageData
-    }
+    sol_bindings::{ext::grouped_orders::AllOrders, grouped_orders::OrderWithStorageData}
 };
 use serde_with::{DisplayFromStr, serde_as};
 use validation::order::OrderValidatorHandle;
@@ -193,14 +194,15 @@ impl OrderTracker {
             .unwrap()
             .as_secs()
             + max_delay_propagation * block_time.as_secs();
-        self.insert_cancel_with_deadline(from, order_hash, Some(U256::from(deadline)));
+        self.insert_cancel_with_deadline(from, order_hash, Some(U256::from(deadline)), block_time);
     }
 
-    fn insert_cancel_with_deadline(
+    pub(crate) fn insert_cancel_with_deadline(
         &mut self,
         from: Address,
         order_hash: &B256,
-        deadline: Option<U256>
+        deadline: Option<U256>,
+        block_time: Duration
     ) {
         let valid_until = deadline.map_or_else(
             || {
@@ -211,6 +213,8 @@ impl OrderTracker {
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_secs()
+                        - block_time.as_secs()
+                        - 1
                 )
             },
             |deadline| deadline
@@ -227,28 +231,21 @@ impl OrderTracker {
         max_delay_propagation: u64,
         block_time: Duration
     ) -> Option<(bool, PoolId)> {
-        self.order_hash_to_order_id
+        let (canceled, pool_id, is_tob) = self
+            .order_hash_to_order_id
             .remove(&hash)
-            .and_then(|v| storage.cancel_order(&v))
-            .map(|order| {
-                self.order_hash_to_order_id.remove(&order.order_hash());
-                self.order_hash_to_peer_id.remove(&order.order_hash());
-                self.insert_cancel_with_deadline(order.from(), &hash, order.deadline());
-
-                (order.is_tob(), order.pool_id)
+            .map(|v| {
+                (storage.cancel_order(&v), v.pool_id, matches!(v.location, OrderLocation::Searcher))
             })
-            .or_else(|| {
-                // in the case we haven't index the order yet, we are going to add it
-                // in the cancel to register
-                self.cancel_with_next_block_deadline(
-                    from,
-                    &hash,
-                    max_delay_propagation,
-                    block_time
-                );
+            .unwrap_or_default();
 
-                None
-            })
+        if !canceled {
+            // When we purge our cancelled orders, this will update with actual deadline.
+            self.cancel_with_next_block_deadline(from, &hash, max_delay_propagation, block_time);
+            None
+        } else {
+            Some((is_tob, pool_id))
+        }
     }
 
     pub fn pending_orders_for_address<F>(

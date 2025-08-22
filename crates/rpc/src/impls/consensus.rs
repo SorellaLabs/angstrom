@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 
 use alloy_primitives::Address;
-use consensus::{AngstromValidator, ConsensusDataWithBlock, ConsensusHandle};
+use consensus::{
+    AngstromValidator, ConsensusDataWithBlock, ConsensusHandle, ConsensusTimingConfig
+};
 use futures::StreamExt;
 use jsonrpsee::{
     PendingSubscriptionSink, SubscriptionMessage,
@@ -33,6 +35,22 @@ where
         Ok(self
             .consensus
             .get_current_leader()
+            .await
+            .map_err(|_| ErrorObjectOwned::from(ErrorCode::from(-1)))?)
+    }
+
+    async fn get_timing(&self) -> RpcResult<ConsensusDataWithBlock<ConsensusTimingConfig>> {
+        Ok(self
+            .consensus
+            .timings()
+            .await
+            .map_err(|_| ErrorObjectOwned::from(ErrorCode::from(-1)))?)
+    }
+
+    async fn is_round_closed(&self) -> RpcResult<ConsensusDataWithBlock<bool>> {
+        Ok(self
+            .consensus
+            .is_round_closed()
             .await
             .map_err(|_| ErrorObjectOwned::from(ErrorCode::from(-1)))?)
     }

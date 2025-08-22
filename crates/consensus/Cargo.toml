@@ -13,6 +13,7 @@ alloy.workspace = true
 angstrom-metrics.workspace = true
 angstrom-network.workspace = true
 angstrom-types.workspace = true
+clap.workspace = true
 eyre.workspace = true
 futures.workspace = true
 itertools.workspace = true

@@ -35,7 +35,7 @@ use crate::{
     validator::{ValidationClient, ValidationRequest}
 };
 
-const MAX_VALIDATION_PER_ADDR: usize = 1;
+const MAX_VALIDATION_PER_ADDR: usize = 3;
 
 #[allow(clippy::too_many_arguments)]
 pub fn init_validation<
@@ -105,7 +105,7 @@ pub fn init_validation_replay<
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
-            .worker_threads(4)
+            .worker_threads(8)
             .build()
             .unwrap();
 

@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use prometheus::IntGauge;
 
 use crate::METRICS_ENABLED;
@@ -46,6 +48,8 @@ impl FinalizationOrderPoolMetrics {
     }
 }
 
+static METRICS_INSTANCE: OnceLock<FinalizationOrderPoolMetricsWrapper> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct FinalizationOrderPoolMetricsWrapper(Option<FinalizationOrderPoolMetrics>);
 
@@ -57,13 +61,17 @@ impl Default for FinalizationOrderPoolMetricsWrapper {
 
 impl FinalizationOrderPoolMetricsWrapper {
     pub fn new() -> Self {
-        Self(
-            METRICS_ENABLED
-                .get()
-                .copied()
-                .unwrap_or_default()
-                .then(FinalizationOrderPoolMetrics::default)
-        )
+        METRICS_INSTANCE
+            .get_or_init(|| {
+                Self(
+                    METRICS_ENABLED
+                        .get()
+                        .copied()
+                        .unwrap_or_default()
+                        .then(FinalizationOrderPoolMetrics::default)
+                )
+            })
+            .clone()
     }
 
     pub fn incr_total_orders(&self) {

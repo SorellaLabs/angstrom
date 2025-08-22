@@ -1,7 +1,7 @@
 use rand::{Rng, distr::StandardUniform, prelude::Distribution};
 
 use crate::sol_bindings::{
-    grouped_orders::{AllOrders, FlashVariants, StandingVariants},
+    grouped_orders::AllOrders,
     rpc_orders::{
         ExactFlashOrder, ExactStandingOrder, OrderMeta, PartialFlashOrder, PartialStandingOrder,
         TopOfBlockOrder
@@ -24,18 +24,6 @@ impl Distribution<AllOrders> for StandardUniform {
     }
 }
 
-impl Distribution<FlashVariants> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> FlashVariants {
-        let rand_variant = rng.random_range(0..2);
-
-        match rand_variant {
-            0 => FlashVariants::Exact(rng.random()),
-            1 => FlashVariants::Partial(rng.random()),
-            _ => unreachable!()
-        }
-    }
-}
-
 impl Distribution<ExactFlashOrder> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ExactFlashOrder {
         ExactFlashOrder { hook_data: rng.gen_sized::<150>(), ..rng.random() }
@@ -45,18 +33,6 @@ impl Distribution<ExactFlashOrder> for StandardUniform {
 impl Distribution<PartialFlashOrder> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> PartialFlashOrder {
         PartialFlashOrder { hook_data: rng.gen_sized::<150>(), ..rng.random() }
-    }
-}
-
-impl Distribution<StandingVariants> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> StandingVariants {
-        let rand_variant = rng.random_range(0..2);
-
-        match rand_variant {
-            0 => StandingVariants::Exact(rng.random()),
-            1 => StandingVariants::Partial(rng.random()),
-            _ => unreachable!()
-        }
     }
 }
 

@@ -5,25 +5,25 @@ use std::{
 };
 
 use alloy::{
+    eips::Encodable2718,
     hex,
-    network::TransactionBuilder,
     primitives::keccak256,
     providers::{Provider, RootProvider},
     rpc::{
         client::ClientBuilder,
         json_rpc::{RequestPacket, ResponsePacket}
     },
-    signers::{Signer, local::PrivateKeySigner},
+    signers::Signer,
     transports::{TransportError, TransportErrorKind, TransportFut}
 };
 use alloy_primitives::{Address, TxHash};
 use futures::stream::{StreamExt, iter};
 use itertools::Itertools;
-use reth::rpc::types::mev::EthSendPrivateTransaction;
+use reth::rpc::types::mev::{EthBundleHash, EthSendBundle};
 
 use super::{
-    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
-    EXTRA_GAS_LIMIT, TxFeatureInfo, Url
+    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY, TxFeatureInfo,
+    Url
 };
 use crate::primitive::AngstromMetaSigner;
 
@@ -33,11 +33,12 @@ pub struct MevBoostSubmitter {
 }
 
 impl MevBoostSubmitter {
-    pub fn new(urls: &[Url], angstrom_address: Address) -> Self {
+    pub fn new<S: AngstromMetaSigner>(urls: &[Url], signer: AngstromSigner<S>) -> Self {
+        let angstrom_address = signer.address();
         let clients = urls
             .iter()
             .map(|url| {
-                let transport = MevHttp::new_flashbots(url.clone());
+                let transport = MevHttp::new_flashbots(url.clone(), (*signer).clone());
                 let client = ClientBuilder::default().transport(transport, false);
                 RootProvider::new(client)
             })
@@ -61,46 +62,29 @@ impl ChainSubmitter for MevBoostSubmitter {
         Box::pin(async move {
             let bundle = bundle.ok_or_else(|| eyre::eyre!("no bundle was past in"))?;
 
-            let client = self
-                .clients
-                .first()
-                .ok_or(eyre::eyre!("no mev-boost clients found"))?
-                .clone();
-
             let tx = self
-                .build_and_sign_tx_with_gas(signer, bundle, tx_features, |tx| async move {
-                    let gas = client
-                        .estimate_gas(tx.clone())
-                        .await
-                        .inspect_err(|e| {
-                            tracing::error!(err=%e, "failed to query gas");
-                        })
-                        .unwrap_or(bundle.crude_gas_estimation())
-                        + EXTRA_GAS_LIMIT;
-
-                    tx.with_gas_limit(gas)
-                })
+                .build_and_sign_tx_with_gas(signer, bundle, tx_features)
                 .await;
 
             let hash = *tx.tx_hash();
 
-            let private_tx = EthSendPrivateTransaction::new(&tx)
-                .max_block_number(tx_features.target_block)
-                .with_preferences(
-                    reth::rpc::types::mev::PrivateTransactionPreferences::default().into_fast()
-                );
+            let bundle = EthSendBundle {
+                txs: vec![tx.encoded_2718().into()],
+                block_number: tx_features.target_block,
+                ..Default::default()
+            };
 
             // Clone here is fine as its in a Arc
             let _: Vec<_> = iter(self.clients.clone())
                 .map(async |client| {
                     client
-                        .raw_request::<(&EthSendPrivateTransaction,), TxHash>(
-                            "eth_sendPrivateTransaction".into(),
-                            (&private_tx,)
+                        .raw_request::<(&EthSendBundle,), EthBundleHash>(
+                            "eth_sendBundle".into(),
+                            (&bundle,)
                         )
                         .await
                         .inspect_err(|e| {
-                            tracing::warn!(err=?e, "failed to submit to mev-boost");
+                            tracing::warn!(err=%e, "failed to submit to mev-boost");
                         })
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)
@@ -161,10 +145,11 @@ struct MevHttp {
 }
 
 impl MevHttp {
-    pub fn new_flashbots(endpoint: Url) -> Self {
-        let bundle_signer = PrivateKeySigner::random();
-        let signer = BundleSigner::flashbots(bundle_signer);
-        Self { signer, endpoint, http: reqwest::Client::new() }
+    pub fn new_flashbots<S>(endpoint: Url, signer: S) -> Self
+    where
+        S: Signer + Send + Sync + 'static
+    {
+        Self { signer: BundleSigner::flashbots(signer), endpoint, http: reqwest::Client::new() }
     }
 
     fn send_request(&self, req: RequestPacket) -> TransportFut<'static> {

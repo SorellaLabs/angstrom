@@ -166,7 +166,7 @@ where
                     (false, false) => TOB_GAS
                 };
 
-                let Some(amount) = self
+                let Some(mut amount) = self
                     .utils
                     .token_pricing_ref()
                     .get_eth_conversion_price(token_0, token_1, gas_in_wei)
@@ -175,6 +175,10 @@ where
                     return;
                 };
                 let block = self.utils.token_pricing_ref().current_block();
+
+                if amount == 0 {
+                    amount += 1;
+                }
 
                 let _ = sender.send(Ok((U256::from(amount), block)));
             }

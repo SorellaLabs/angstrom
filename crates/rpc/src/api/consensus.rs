@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use alloy_primitives::Address;
-use consensus::{AngstromValidator, ConsensusDataWithBlock};
+use consensus::{AngstromValidator, ConsensusDataWithBlock, ConsensusTimingConfig};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "consensus"))]
@@ -17,6 +17,12 @@ pub trait ConsensusApi {
 
     #[method(name = "getCurrentLeader")]
     async fn get_current_leader(&self) -> RpcResult<ConsensusDataWithBlock<Address>>;
+
+    #[method(name = "getTiming")]
+    async fn get_timing(&self) -> RpcResult<ConsensusDataWithBlock<ConsensusTimingConfig>>;
+
+    #[method(name = "isRoundClosed")]
+    async fn is_round_closed(&self) -> RpcResult<ConsensusDataWithBlock<bool>>;
 
     #[method(name = "fetchConsensusState")]
     async fn fetch_consensus_state(

@@ -8,25 +8,17 @@ use std::{
 use rand::Rng;
 use tokio::time::{Interval, interval};
 
-use crate::rounds::OrderStorage;
+use crate::{ConsensusTimingConfig, rounds::OrderStorage};
 
-/// How soon we send our pre-proposal
-const DEFAULT_DURATION: Duration = Duration::from_secs(9);
 /// The frequency we adjust our duration estimate. we have it super frequent
 /// because its very low overhead to check
 const CHECK_INTERVAL: Duration = Duration::from_millis(1);
 /// How much to scale per order in the order pool
 const ORDER_SCALING: Duration = Duration::from_millis(10);
 /// How close we want to be to the creation of the ethereum block
-const TARGET_SUBMISSION_TIME_REM: Duration = Duration::from_millis(800);
-/// Eth block time
-const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
+const TARGET_SUBMISSION_TIME_POST_MAX: Duration = Duration::from_millis(200);
 /// The amount of the difference we scale by to reach
-const SCALING_REM_ADJUSTMENT: u32 = 3;
-/// Minimum wait time before consensus starts (in seconds)
-pub const MIN_WAIT_DURATION: f64 = ETH_BLOCK_TIME.as_secs() as f64 - 3.905;
-/// Maximum wait time before consensus starts (in seconds)
-pub const MAX_WAIT_DURATION: f64 = ETH_BLOCK_TIME.as_secs() as f64 - 3.305;
+const SCALING_REM_ADJUSTMENT: u32 = 10;
 
 /// When we should trigger to build our pre-proposals
 /// this is very important for maximizing how long we can
@@ -42,30 +34,35 @@ pub struct PreProposalWaitTrigger {
     /// to track our scaling
     order_storage:  Arc<OrderStorage>,
     /// Waker
-    check_interval: Interval
+    check_interval: Interval,
+    config:         ConsensusTimingConfig
 }
 
 impl Clone for PreProposalWaitTrigger {
     fn clone(&self) -> Self {
+        let mut rng = rand::rng();
+        let jitter = Duration::from_millis(rng.random_range(3..=40));
         Self {
-            wait_duration:  self.wait_duration,
+            wait_duration:  self.wait_duration + jitter,
             start_instant:  Instant::now(),
             order_storage:  self.order_storage.clone(),
-            check_interval: interval(CHECK_INTERVAL)
+            check_interval: interval(CHECK_INTERVAL),
+            config:         self.config
         }
     }
 }
 
 impl PreProposalWaitTrigger {
-    pub fn new(order_storage: Arc<OrderStorage>) -> Self {
+    pub fn new(order_storage: Arc<OrderStorage>, config: ConsensusTimingConfig) -> Self {
         let mut rng = rand::rng();
-        let jitter = Duration::from_millis(rng.random_range(30..=100));
+        let jitter = Duration::from_millis(rng.random_range(3..=40));
 
         Self {
-            wait_duration: DEFAULT_DURATION + jitter,
+            wait_duration: config.default_duration() + jitter,
             order_storage,
             start_instant: Instant::now(),
-            check_interval: interval(CHECK_INTERVAL)
+            check_interval: interval(CHECK_INTERVAL),
+            config
         }
     }
 
@@ -80,11 +77,11 @@ impl PreProposalWaitTrigger {
     pub fn reset_before_submission(&mut self) {
         self.wait_duration = self
             .wait_duration
-            .saturating_sub(TARGET_SUBMISSION_TIME_REM);
+            .saturating_sub(TARGET_SUBMISSION_TIME_POST_MAX);
     }
 
     fn update_wait_duration_base(&mut self, info: LastRoundInfo) {
-        let base = ETH_BLOCK_TIME - TARGET_SUBMISSION_TIME_REM;
+        let base = self.config.max_wait_time_ms() + TARGET_SUBMISSION_TIME_POST_MAX;
 
         let delta = if info.time_to_complete < base {
             (base - info.time_to_complete) / SCALING_REM_ADJUSTMENT
@@ -98,10 +95,32 @@ impl PreProposalWaitTrigger {
             self.wait_duration = self.wait_duration.saturating_sub(delta);
         }
 
-        self.wait_duration = sigmoid_clamp(self.wait_duration);
+        self.wait_duration = self.sigmoid_clamp(self.wait_duration);
 
         let millis = self.wait_duration.as_millis();
         tracing::info!(trigger = millis, "Updated wait duration to trigger building");
+    }
+
+    /// Sigmoid function to clamp the wait time between [`MIN_WAIT_DURATION`]
+    /// and [`MAX_WAIT_DURATION`].
+    #[inline(always)]
+    fn sigmoid_clamp(&self, x: Duration) -> Duration {
+        let x_o = self.config.min_wait_time_ms().as_secs_f64()
+            + self.config.max_wait_time_ms().as_secs_f64() / 2.0;
+        const K: f64 = 1.5; // Steepness of sigmoid
+
+        let x_secs = x.as_secs_f64();
+        let adjusted = self.config.min_wait_time_ms().as_secs_f64()
+            + ((self.config.max_wait_time_ms() - self.config.min_wait_time_ms()).as_secs_f64())
+                / (1.0 + (-K * (x_secs - x_o)).exp());
+
+        // safety lol
+        let adjusted = adjusted.clamp(
+            self.config.min_wait_time_ms().as_secs_f64(),
+            self.config.max_wait_time_ms().as_secs_f64()
+        );
+
+        Duration::from_secs_f64(adjusted)
     }
 }
 
@@ -136,21 +155,4 @@ impl Future for PreProposalWaitTrigger {
 pub struct LastRoundInfo {
     /// the start of the round to submitting the bundle
     pub time_to_complete: Duration
-}
-
-/// Sigmoid function to clamp the wait time between [`MIN_WAIT_DURATION`] and
-/// [`MAX_WAIT_DURATION`].
-#[inline(always)]
-fn sigmoid_clamp(x: Duration) -> Duration {
-    const X_O: f64 = (MIN_WAIT_DURATION + MAX_WAIT_DURATION) / 2.0; // Center point
-    const K: f64 = 1.5; // Steepness of sigmoid
-
-    let x_secs = x.as_secs_f64();
-    let adjusted = MIN_WAIT_DURATION
-        + (MAX_WAIT_DURATION - MIN_WAIT_DURATION) / (1.0 + (-K * (x_secs - X_O)).exp());
-
-    // its starting way early still
-    let adjusted = adjusted.clamp(MIN_WAIT_DURATION, MAX_WAIT_DURATION);
-
-    Duration::from_secs_f64(adjusted)
 }

@@ -18,6 +18,7 @@ metrics-exporter-prometheus = "0.16.2"
 metrics-process = "1"
 metrics-util = "0.20.0"
 prometheus = "0"
+reth-node-metrics.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
 tower = "0.5.2"
 tracing.workspace = true

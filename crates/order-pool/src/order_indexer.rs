@@ -183,6 +183,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         // if the order has been canceled, we just notify the validation subscribers
         // that its a cancelled order
         if self.order_tracker.is_valid_cancel(&hash, order.from()) {
+            // we only try to notify here as there is a condition where a cancel occurs
+            // while we are validating.
             self.subscribers.notify_validation_subscribers(
                 &hash,
                 OrderValidationResults::Invalid {
@@ -278,7 +280,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 self.order_tracker.stop_validating(&hash);
 
                 if valid.valid_block != self.block_number {
-                    self.subscribers.notify_validation_subscribers(
+                    self.subscribers.try_notify_validation_subscribers(
                         &hash,
                         OrderValidationResults::Invalid {
                             hash,
@@ -295,7 +297,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
                 // check to see if the transaction is parked.
                 if let Some(ref error) = valid.is_currently_valid {
-                    self.subscribers.notify_validation_subscribers(
+                    self.subscribers.try_notify_validation_subscribers(
                         &hash,
                         OrderValidationResults::Invalid {
                             hash,
@@ -305,7 +307,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                         }
                     );
                 } else {
-                    self.subscribers.notify_validation_subscribers(
+                    self.subscribers.try_notify_validation_subscribers(
                         &hash,
                         OrderValidationResults::Valid(valid.clone())
                     );
@@ -341,7 +343,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             }
             this @ OrderValidationResults::Invalid { hash, .. } => {
                 self.order_tracker.stop_validating(&hash);
-                self.subscribers.notify_validation_subscribers(&hash, this);
+                self.subscribers
+                    .try_notify_validation_subscribers(&hash, this);
                 self.order_storage.remove_invalid_order(hash);
                 let peers = self.order_tracker.invalid_verification(hash);
                 Ok(PoolInnerEvent::BadOrderMessages(peers))
@@ -379,6 +382,14 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         }
     }
 
+    /// This should only be used when building the Proposal. This is because
+    /// we want to ignore cancelled orders as if the cancellation happened after
+    /// consensus closed. we ignore these.
+    pub fn get_all_orders_with_cancelled(&self) -> OrderSet<AllOrders, TopOfBlockOrder> {
+        self.order_storage
+            .get_all_orders_with_ingoing_cancellations()
+    }
+
     pub fn get_all_orders_with_parked(&self) -> OrderSet<AllOrders, TopOfBlockOrder> {
         self.order_storage.get_all_orders_with_parked()
     }
@@ -402,6 +413,27 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             .on_new_block(block_number, completed_orders, address_changes);
     }
 
+    // given that we cant acutally remove orders on cancel.
+    pub fn purge_cancelled(&mut self) {
+        for order in self.order_storage.purge_tob_orders() {
+            self.order_tracker.insert_cancel_with_deadline(
+                order.from(),
+                &order.order_hash(),
+                order.deadline(),
+                self.chain_config.block_time
+            );
+        }
+
+        for order in self.order_storage.purge_user_orders() {
+            self.order_tracker.insert_cancel_with_deadline(
+                order.from(),
+                &order.order_hash(),
+                order.deadline(),
+                self.chain_config.block_time
+            );
+        }
+    }
+
     fn finish_new_block_processing(
         &mut self,
         block_number: BlockNumber,
@@ -414,15 +446,21 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.order_tracker.clear_invalid();
         // deal with filled orders
         self.filled_orders(block_number, &completed_orders);
-        // deal with changed orders
-        self.eoa_state_change(&address_changes);
-        // add expired orders to completed
+
+        self.purge_cancelled();
         let expired_orders = self.order_tracker.remove_expired_orders(
             block_number,
             &self.order_storage,
             self.chain_config.block_time
         );
         self.subscribers.notify_expired_orders(&expired_orders);
+
+        // deal with changed orders
+        self.eoa_state_change(&address_changes);
+
+        // Given we retain cancelled tobs given we want to look them up
+        // if the cancel occured after consensus, we want to ensure
+        // we properly clear them out now that they are no longer needed.
 
         completed_orders.extend(expired_orders.into_iter().map(|o| o.order_id.hash));
 
@@ -647,6 +685,7 @@ mod tests {
                 },
                 valid_block: 1,
                 pool_id,
+                cancel_requested: false,
                 is_bid: true,
                 is_currently_valid: None,
                 is_valid: true,
@@ -722,6 +761,9 @@ mod tests {
         indexer
             .handle_validated_order(OrderValidationResults::Valid(OrderWithStorageData {
                 order: order.clone(),
+
+                cancel_requested: false,
+
                 order_id: OrderId {
                     address: from,
                     reuse_avoidance: RespendAvoidanceMethod::Nonce(1),
@@ -804,6 +846,7 @@ mod tests {
         // Validate order
         indexer
             .handle_validated_order(OrderValidationResults::Valid(OrderWithStorageData {
+                cancel_requested: false,
                 order: order.clone(),
                 order_id: OrderId {
                     hash: order_hash,
@@ -943,6 +986,7 @@ mod tests {
         let order_hash = order.order_hash();
         indexer
             .handle_validated_order(OrderValidationResults::Valid(OrderWithStorageData {
+                cancel_requested: false,
                 order: order.clone(),
                 order_id: OrderId {
                     address: from,
@@ -1016,6 +1060,7 @@ mod tests {
         // Simulate validation completion
         indexer
             .handle_validated_order(OrderValidationResults::Valid(OrderWithStorageData {
+                cancel_requested: false,
                 order: order.clone(),
                 order_id: OrderId {
                     address: from,
@@ -1075,6 +1120,7 @@ mod tests {
         indexer
             .handle_validated_order(OrderValidationResults::Valid(OrderWithStorageData {
                 order: order.clone(),
+                cancel_requested: false,
                 order_id: OrderId {
                     address: from,
                     reuse_avoidance: RespendAvoidanceMethod::Nonce(1),
@@ -1150,6 +1196,7 @@ mod tests {
         indexer
             .handle_validated_order(OrderValidationResults::Valid(OrderWithStorageData {
                 order: order.clone(),
+                cancel_requested: false,
                 order_id: OrderId {
                     address: from,
                     reuse_avoidance: RespendAvoidanceMethod::Nonce(1),

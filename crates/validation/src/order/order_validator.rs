@@ -168,7 +168,6 @@ where
                             })
                             .await;
                     }
-                    _ => unreachable!()
                 }
             })
         );

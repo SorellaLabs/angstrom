@@ -37,6 +37,7 @@ pub fn order_distribution(
                 }
             );
             OrderWithStorageData {
+                cancel_requested: false,
                 invalidates: vec![],
                 order,
                 priority_data: OrderPriorityData {

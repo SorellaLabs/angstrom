@@ -450,7 +450,8 @@ where
             matching_handle,
             global_block_sync.clone(),
             handles.mode.consensus_rx_rpc,
-            None
+            None,
+            config.consensus_timing
         );
 
         executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

@@ -461,7 +461,9 @@ impl TokenPriceGenerator {
             // t1 / t0 *  gas / t1 = gas / t0
             Some(first_hop_price.mul_ray(second_hop_price))
         } else {
-            panic!("found a token that doesn't have a 1 hop to WETH");
+            tracing::error!("found a token that doesn't have a 1 hop to WETH");
+
+            return None;
         }
     }
 

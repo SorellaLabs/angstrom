@@ -21,6 +21,12 @@ pub enum ConsensusRoundName {
     Proposal
 }
 
+impl ConsensusRoundName {
+    pub fn is_closed(&self) -> bool {
+        !matches!(self, ConsensusRoundName::BidAggregation)
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StromConsensusEvent {
     PreProposal(Address, PreProposal),

@@ -77,6 +77,21 @@ impl SearcherPool {
         Ok(())
     }
 
+    pub fn cancel_order(&mut self, id: &OrderId) -> bool {
+        if let Some(pool) = self.searcher_orders.get_mut(&id.pool_id) {
+            return pool.cancel_order(id.hash);
+        }
+
+        false
+    }
+
+    pub fn remove_all_cancelled_orders(&mut self) -> Vec<OrderWithStorageData<TopOfBlockOrder>> {
+        self.searcher_orders
+            .values_mut()
+            .flat_map(|pool| pool.remove_all_cancelled_orders())
+            .collect()
+    }
+
     pub fn remove_order(&mut self, id: &OrderId) -> Option<OrderWithStorageData<TopOfBlockOrder>> {
         self.searcher_orders
             .get_mut(&id.pool_id)
@@ -97,6 +112,15 @@ impl SearcherPool {
         self.searcher_orders
             .get(pool_id)
             .map(|pool| pool.get_all_orders())
+    }
+
+    pub fn get_orders_for_pool_including_canceled(
+        &self,
+        pool_id: &PoolId
+    ) -> Option<Vec<OrderWithStorageData<TopOfBlockOrder>>> {
+        self.searcher_orders
+            .get(pool_id)
+            .map(|pool| pool.get_all_orders_with_cancelled())
     }
 
     pub fn get_orders_for_pool_with_hashes(

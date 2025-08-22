@@ -105,6 +105,7 @@ impl StoredOrderBuilder {
         };
         let tob_reward = self.tob_reward.unwrap_or_default();
         OrderWithStorageData {
+            cancel_requested: false,
             invalidates: vec![],
             order: self.order,
             priority_data,
@@ -188,6 +189,7 @@ pub fn generate_top_of_block_order(
     // StoredOrderBuilder::new(order).is_bid(is_bid).valid_block(valid_block).
     // pool_id(pool_id).build();
     OrderWithStorageData {
+        cancel_requested: false,
         invalidates: vec![],
         order,
         priority_data,

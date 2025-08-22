@@ -4,6 +4,7 @@ use alloy::signers::local::PrivateKeySigner;
 use angstrom_types::primitive::{
     AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC
 };
+use consensus::ConsensusTimingConfig;
 use hsm_signer::{Pkcs11Signer, Pkcs11SignerConfig};
 
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -30,7 +31,9 @@ pub struct AngstromConfig {
     /// The expected block time in milliseconds. Used to coordinate auction
     /// timing.
     #[clap(long, default_value_t = 12000, global = true, alias = "block-time")]
-    pub block_time_ms:             u64
+    pub block_time_ms:             u64,
+    #[clap(flatten)]
+    pub consensus_timing:          ConsensusTimingConfig
 }
 
 impl AngstromConfig {

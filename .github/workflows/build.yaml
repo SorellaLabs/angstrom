@@ -27,31 +27,8 @@ jobs:
           rustup toolchain install nightly
           rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
 
-      - name: cargo +nightly fmt
+      - name: Run formatting
         run: cargo +nightly fmt --all -- --check
-
-  cargo-check:
-    name: cargo check
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Check-Out
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: cargo-check
-          cache-on-failure: true
-
-      - name: cargo check --workspace --all-features
-        run: cargo check --workspace --all-features
 
   cargo-clippy:
     name: cargo clippy
@@ -67,17 +44,19 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: cargo-clippy
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: true
 
-      - name: cargo clippy --workspace --all-features
-        run: cargo clippy --workspace --all-features
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-features --profile debug-fast
 
-  cargo-fix:
-    name: cargo fix
+  cargo-test-unit:
+    name: cargo test (unit)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -90,49 +69,45 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: cargo-fix
           cache-on-failure: true
-
-      - name: cargo fix --workspace --all-features
-        run: |
-          # Run cargo fix on the project
-          cargo fix --workspace --all-features
-
-          # Check for local git changes
-          if ! git diff --exit-code; then
-              echo "There are local changes after running 'cargo fix --workspace --all-features' ❌"
-              exit 1
-          else
-              echo "No changes detected after running 'cargo fix --workspace --all-features' ✅"
-          fi
-
-  cargo-test:
-    name: cargo test
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Check-Out
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: cargo-test
-          cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: true
 
       - uses: taiki-e/install-action@nextest
 
-      - name: Run tests
-        run: cargo nextest run --retries 3 --no-tests=warn
+      - name: Run unit tests
+        run: cargo nextest run --workspace --exclude testnet --retries 3 --no-tests=warn --cargo-profile debug-fast
+
+  cargo-test-integration:
+    name: cargo test (integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check-Out
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+          cache: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: true
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Run integration tests
+        run: cargo nextest run --package testnet --retries 1 --no-tests=warn --cargo-profile debug-fast
 
   contracts:
     name: forge fmt && forge test
@@ -150,6 +125,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+          cache: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -168,8 +144,10 @@ jobs:
       - name: Utilize Shared Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          key: forge
           cache-on-failure: true
+          shared-key: "rust-cache-v1"
+          save-if: true
+          workspaces: "./contracts -> target"
 
       - name: Run Forge fmt
         run: forge fmt --check

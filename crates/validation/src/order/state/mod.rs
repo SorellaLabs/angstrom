@@ -145,15 +145,19 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
         conversion_rate: Ray,
         metrics: ValidationMetrics
     ) -> OrderValidationResults {
-        self.handle_orders(order, block, metrics, false, async |order, pool_info| {
+        self.handle_orders(order, block, metrics.clone(), false, async |order, pool_info| {
             let pool_address = pool_info.pool_id;
             // lifetimes :(
             let with_storage = OrderWithStorageData::with_default(order.clone());
-            let total_reward = self
-                .uniswap_pools
-                .calculate_rewards(pool_address, &with_storage)
-                .await
-                .map_err(|_| UserAccountVerificationError::InvalidToBSwap)?;
+            let total_reward = metrics
+                .v4_sim(async || {
+                    self.uniswap_pools
+                        .calculate_rewards(pool_address, &with_storage)
+                        .await
+                        .map_err(|_| UserAccountVerificationError::InvalidToBSwap)
+                })
+                .await?;
+
             // given the price is always t1 / t0,
             let rewards_in_token_in = if order.is_bid() {
                 conversion_rate.quantity(total_reward, false)

@@ -21,13 +21,15 @@ pub mod strategy;
 
 pub use manager::MatchingManager;
 
+use crate::manager::MatchingEngineError;
+
 pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
     fn solve_pools(
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
-    ) -> BoxFuture<eyre::Result<(Vec<PoolSolution>, BundleGasDetails)>>;
+    ) -> BoxFuture<Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>;
 }
 
 pub fn build_book(

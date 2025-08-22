@@ -66,6 +66,14 @@ impl LimitOrderPool {
         expired_orders
     }
 
+    pub fn cancel_order(&mut self, id: &OrderId) -> bool {
+        self.limit_orders.cancel_order(id)
+    }
+
+    pub fn remove_all_cancelled_orders(&mut self) -> Vec<OrderWithStorageData<AllOrders>> {
+        self.limit_orders.remove_all_cancelled_orders()
+    }
+
     pub fn get_order_status(&self, order_hash: B256) -> Option<OrderStatus> {
         self.limit_orders.get_order_status(order_hash)
     }
@@ -105,6 +113,10 @@ impl LimitOrderPool {
         hashes: &HashSet<B256>
     ) -> Vec<OrderWithStorageData<AllOrders>> {
         self.limit_orders.get_all_orders_with_hashes(hashes)
+    }
+
+    pub fn get_all_orders_with_parked_and_cancelled(&self) -> Vec<OrderWithStorageData<AllOrders>> {
+        self.limit_orders.get_all_orders_with_cancelled_and_parked()
     }
 
     pub fn get_all_orders_with_parked(&self) -> Vec<OrderWithStorageData<AllOrders>> {

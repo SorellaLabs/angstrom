@@ -208,18 +208,19 @@ pub trait StorageWithData: RawPoolOrder {
             order_id: OrderId::from_all_orders(&self, pool_info.pool_id),
             invalidates,
             order: self,
-            tob_reward
+            tob_reward,
+            cancel_requested: false
         }
     }
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use std::collections::HashSet;
 
     use alloy::primitives::{Address, U256};
     use angstrom_types::{
-        primitive::{AngstromSigner, PoolId},
+        primitive::{AngstromAddressConfig, AngstromSigner, PoolId},
         sol_bindings::RawPoolOrder
     };
     use testing_tools::type_generator::orders::UserOrderBuilder;
@@ -244,7 +245,9 @@ pub mod tests {
     }
 
     fn setup_test_account_processor() -> UserAccountProcessor<MockFetch> {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
         init_tracing();
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
         UserAccountProcessor {
             user_accounts: UserAccounts::new(),
             fetch_utils:   MockFetch::default()

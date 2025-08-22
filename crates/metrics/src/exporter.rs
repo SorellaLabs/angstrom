@@ -12,8 +12,9 @@ use hyper::{
 };
 #[allow(unused_imports)]
 use metrics::Unit;
-use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
-use metrics_util::layers::{PrefixLayer, Stack};
+use metrics_exporter_prometheus::PrometheusHandle;
+use prometheus::{Encoder, TextEncoder};
+use reth_node_metrics::recorder::install_prometheus_recorder;
 
 pub(crate) trait Hook: Fn() + Send + Sync {}
 impl<T: Fn() + Send + Sync> Hook for T {}
@@ -28,21 +29,15 @@ pub(crate) async fn initialize_with_hooks<F: Hook + 'static>(
     listen_addr: SocketAddr,
     hooks: impl IntoIterator<Item = F>
 ) -> eyre::Result<()> {
-    let recorder = PrometheusBuilder::new().build_recorder();
-    let handle = recorder.handle();
+    let recorder = install_prometheus_recorder();
+    let handle = recorder.handle().clone();
 
     let hooks: Vec<_> = hooks.into_iter().collect();
 
-    // Start endpoint
     start_endpoint(listen_addr, handle, Arc::new(move || hooks.iter().for_each(|hook| hook())))
+        // Start endpoint
         .await
         .wrap_err("Could not start Prometheus endpoint")?;
-
-    Stack::new(recorder)
-        .push(PrefixLayer::new("angstrom"))
-        .install()
-        .wrap_err("Couldn't set metrics recorder.")?;
-    // Build metrics stack
 
     Ok(())
 }
@@ -67,8 +62,18 @@ async fn start_endpoint<F: Hook + 'static>(
             let h_clone = handle.clone();
             let service = tower::service_fn(move |_| {
                 (hook)();
-                let metrics = h_clone.render();
-                let mut response = Response::new(metrics);
+                h_clone.run_upkeep();
+                let mut metrics_render = h_clone.render();
+
+                let mut buffer = Vec::new();
+                let encoder = TextEncoder::new();
+                // Gather the metrics.
+                let metric_families = prometheus::gather();
+                // Encode them to send.
+                encoder.encode(&metric_families, &mut buffer).unwrap();
+                metrics_render += &String::from_utf8(buffer.clone()).unwrap();
+                let mut response = Response::new(metrics_render);
+
                 response
                     .headers_mut()
                     .insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));

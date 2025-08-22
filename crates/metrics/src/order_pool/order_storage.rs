@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use prometheus::IntGauge;
 
 use crate::METRICS_ENABLED;
@@ -23,43 +25,43 @@ struct OrderStorageMetrics {
 impl Default for OrderStorageMetrics {
     fn default() -> Self {
         let vanilla_limit_orders = prometheus::register_int_gauge!(
-            "order_storage_vanilla_limit_orders",
+            "ang_order_storage_vanilla_limit_orders",
             "number of vanilla limit orders",
         )
         .unwrap();
 
         let composable_limit_orders = prometheus::register_int_gauge!(
-            "order_storage_composable_limit_orders",
+            "ang_order_storage_composable_limit_orders",
             "number of composable limit orders",
         )
         .unwrap();
 
         let searcher_orders = prometheus::register_int_gauge!(
-            "order_storage_searcher_orders",
+            "ang_order_storage_searcher_orders",
             "number of searcher orders",
         )
         .unwrap();
 
         let pending_finalization_orders = prometheus::register_int_gauge!(
-            "order_storage_pending_finalization_orders",
+            "ang_order_storage_pending_finalization_orders",
             "number of pending finalization orders",
         )
         .unwrap();
 
         let cancelled_vanilla_orders = prometheus::register_int_gauge!(
-            "order_storage_cancelled_vanilla_orders",
+            "ang_order_storage_cancelled_vanilla_orders",
             "number of cancelled vanilla orders",
         )
         .unwrap();
 
         let cancelled_composable_orders = prometheus::register_int_gauge!(
-            "order_storage_cancelled_composable_orders",
+            "ang_order_storage_cancelled_composable_orders",
             "number of cancelled composable orders",
         )
         .unwrap();
 
         let cancelled_searcher_orders = prometheus::register_int_gauge!(
-            "order_storage_cancelled_searcher_orders",
+            "ang_order_storage_cancelled_searcher_orders",
             "number of cancelled searcher orders",
         )
         .unwrap();
@@ -122,6 +124,8 @@ impl OrderStorageMetrics {
     }
 }
 
+static METRICS_INSTANCE: OnceLock<OrderStorageMetricsWrapper> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct OrderStorageMetricsWrapper(Option<OrderStorageMetrics>);
 
@@ -132,18 +136,18 @@ impl Default for OrderStorageMetricsWrapper {
 }
 
 impl OrderStorageMetricsWrapper {
-    pub fn empty() -> Self {
-        Self(None)
-    }
-
     pub fn new() -> Self {
-        Self(
-            METRICS_ENABLED
-                .get()
-                .copied()
-                .unwrap_or_default()
-                .then(OrderStorageMetrics::default)
-        )
+        METRICS_INSTANCE
+            .get_or_init(|| {
+                Self(
+                    METRICS_ENABLED
+                        .get()
+                        .copied()
+                        .unwrap_or_default()
+                        .then(OrderStorageMetrics::default)
+                )
+            })
+            .clone()
     }
 
     pub fn incr_vanilla_limit_orders(&self, count: usize) {

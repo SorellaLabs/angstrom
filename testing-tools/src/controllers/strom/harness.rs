@@ -307,7 +307,8 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         matching_handle,
         global_block_sync.clone(),
         handles.mode.consensus_rx_rpc,
-        Some(state_tx)
+        Some(state_tx),
+        consensus::ConsensusTimingConfig::default()
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

@@ -6,7 +6,7 @@ use angstrom_types::{
     primitive::OrderValidationError,
     sol_bindings::{
         ext::RawPoolOrder,
-        grouped_orders::{AllOrders, GroupedComposableOrder, OrderWithStorageData}
+        grouped_orders::{AllOrders, OrderWithStorageData}
     }
 };
 use sim::{GasReturn, SimValidation};
@@ -177,14 +177,12 @@ impl OrderValidationResults {
 
 pub enum OrderValidation {
     Limit(Sender<OrderValidationResults>, AllOrders, OrderOrigin),
-    LimitComposable(Sender<OrderValidationResults>, GroupedComposableOrder, OrderOrigin),
     Searcher(Sender<OrderValidationResults>, AllOrders, OrderOrigin)
 }
 impl OrderValidation {
     pub fn user(&self) -> Address {
         match &self {
             Self::Searcher(_, u, _) => u.from(),
-            Self::LimitComposable(_, u, _) => u.from(),
             Self::Limit(_, u, _) => u.from()
         }
     }

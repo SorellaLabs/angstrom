@@ -94,7 +94,7 @@ where
     }
 
     fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> eyre::Result<U256> {
-        Ok(self.metrics.loading_balances(|| {
+        Ok(self.metrics.loading_angstrom_balances(|| {
             self.balances
                 .fetch_balance_in_angstrom(user, token, &self.db)
         }))

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, sync::OnceLock, time::Instant};
 
 use prometheus::{IntGauge, IntGaugeVec};
 
@@ -97,6 +97,8 @@ impl ConsensusMetrics {
     }
 }
 
+static METRICS_INSTANCE: OnceLock<ConsensusMetricsWrapper> = OnceLock::new();
+
 #[derive(Clone)]
 pub struct ConsensusMetricsWrapper(Option<ConsensusMetrics>);
 
@@ -108,13 +110,17 @@ impl Default for ConsensusMetricsWrapper {
 
 impl ConsensusMetricsWrapper {
     pub fn new() -> Self {
-        Self(
-            METRICS_ENABLED
-                .get()
-                .copied()
-                .unwrap_or_default()
-                .then(ConsensusMetrics::default)
-        )
+        METRICS_INSTANCE
+            .get_or_init(|| {
+                Self(
+                    METRICS_ENABLED
+                        .get()
+                        .copied()
+                        .unwrap_or_default()
+                        .then(ConsensusMetrics::default)
+                )
+            })
+            .clone()
     }
 
     pub fn set_consensus_completion_time(&self, block_number: u64, time: u128) {

@@ -1,7 +1,7 @@
 use std::{hash::Hash, ops::Deref};
 
 use alloy::{
-    primitives::{Address, Bytes, FixedBytes, TxHash, U256},
+    primitives::{Address, FixedBytes, TxHash, U256},
     signers::Signature
 };
 use alloy_primitives::B256;
@@ -28,149 +28,11 @@ pub enum AllOrders {
     TOB(TopOfBlockOrder)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub enum StandingVariants {
-    Partial(PartialStandingOrder),
-    Exact(ExactStandingOrder)
-}
-
-impl StandingVariants {
-    pub fn signature(&self) -> &Bytes {
-        match self {
-            StandingVariants::Exact(o) => &o.meta.signature,
-            StandingVariants::Partial(o) => &o.meta.signature
-        }
-    }
-
-    pub fn hook_data(&self) -> &Bytes {
-        match self {
-            StandingVariants::Exact(o) => &o.hook_data,
-            StandingVariants::Partial(o) => &o.hook_data
-        }
-    }
-
-    /// Maximum quantity accepted by this order
-    pub fn max_q(&self) -> u128 {
-        match self {
-            Self::Exact(o) => o.amount,
-            Self::Partial(o) => o.max_amount_in
-        }
-    }
-
-    pub fn exact_in(&self) -> bool {
-        match self {
-            StandingVariants::Exact(o) => o.exact_in,
-            StandingVariants::Partial(_) => true
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub enum FlashVariants {
-    Partial(PartialFlashOrder),
-    Exact(ExactFlashOrder)
-}
-
-impl FlashVariants {
-    pub fn signature(&self) -> &Bytes {
-        match self {
-            FlashVariants::Exact(o) => &o.meta.signature,
-            FlashVariants::Partial(o) => &o.meta.signature
-        }
-    }
-
-    pub fn hook_data(&self) -> &Bytes {
-        match self {
-            FlashVariants::Exact(o) => &o.hook_data,
-            FlashVariants::Partial(o) => &o.hook_data
-        }
-    }
-
-    pub fn max_q(&self) -> u128 {
-        match self {
-            Self::Exact(o) => o.amount,
-            Self::Partial(o) => o.max_amount_in
-        }
-    }
-
-    pub fn min_q(&self) -> u128 {
-        match self {
-            Self::Exact(o) => o.amount,
-            Self::Partial(o) => o.max_amount_in
-        }
-    }
-
-    /// The quantity available for this order to match in terms of T0
-    pub fn quantity(&self) -> u128 {
-        let is_bid = self.is_bid();
-        let exact_in = self.exact_in();
-        let raw_q = match self {
-            Self::Exact(o) => o.amount,
-            Self::Partial(o) => o.max_amount_in
-        };
-        match (is_bid, exact_in) {
-            // Exact In bid
-            (true, true) => {
-                // In this case the price is stored as T0/T1 so we use mul_quantity
-                // to get the number of T0 for this amount of T1
-                let order_price = Ray::from(self.limit_price());
-                order_price.mul_quantity(U256::from(raw_q)).saturating_to()
-            }
-            // Exact Out ask
-            (false, false) => {
-                let order_price = Ray::from(self.limit_price());
-                order_price.inverse_quantity(raw_q, true)
-            }
-            // Exact Out bid (normal bid) and Exact In ask (normal ask)
-            (true, false) | (false, true) => raw_q
-        }
-    }
-
-    pub fn exact_in(&self) -> bool {
-        match self {
-            FlashVariants::Exact(o) => o.exact_in,
-            FlashVariants::Partial(_) => true
-        }
-    }
-}
-
 impl From<TopOfBlockOrder> for AllOrders {
     fn from(value: TopOfBlockOrder) -> Self {
         Self::TOB(value)
     }
 }
-// impl From<GroupedComposableOrder> for AllOrders {
-//     fn from(value: GroupedComposableOrder) -> Self {
-//         match value {
-//             GroupedComposableOrder::Partial(p) => AllOrders::Standing(p),
-//             GroupedComposableOrder::KillOrFill(kof) => AllOrders::Flash(kof),
-//         }
-//     }
-// }
-//
-// impl From<GroupedVanillaOrder> for AllOrders {
-//     fn from(value: GroupedVanillaOrder) -> Self {
-//         match value {
-//             GroupedVanillaOrder::Standing(p) => AllOrders::Standing(p),
-//             GroupedVanillaOrder::KillOrFill(kof) => AllOrders::Flash(kof),
-//         }
-//     }
-// }
-
-// impl From<GroupedUserOrder> for AllOrders {
-//     fn from(value: GroupedUserOrder) -> Self {
-//         match value {
-//             GroupedUserOrder::Vanilla(v) => match v {
-//                 GroupedVanillaOrder::Standing(p) => AllOrders::Standing(p),
-//                 GroupedVanillaOrder::KillOrFill(kof) =>
-// AllOrders::Flash(kof),             },
-//             GroupedUserOrder::Composable(v) => match v {
-//                 GroupedComposableOrder::Partial(p) => AllOrders::Standing(p),
-//                 GroupedComposableOrder::KillOrFill(kof) =>
-// AllOrders::Flash(kof),             },
-//         }
-//     }
-// }
 
 impl AllOrders {
     pub fn order_hash(&self) -> FixedBytes<32> {
@@ -215,7 +77,8 @@ pub struct OrderWithStorageData<Order> {
     pub valid_block:        u64,
     /// holds expiry data
     pub order_id:           OrderId,
-    pub tob_reward:         U256
+    pub tob_reward:         U256,
+    pub cancel_requested:   bool
 }
 
 impl<O: RawPoolOrder> OrderWithStorageData<O> {
@@ -234,43 +97,8 @@ impl<O: RawPoolOrder> OrderWithStorageData<O> {
             is_valid: true,
             valid_block: 0,
             order_id: OrderId::default(),
-            tob_reward: U256::default()
-        }
-    }
-
-    pub fn fetch_supply_or_demand_contribution_with_fee_partial(
-        &self,
-        price: Ray,
-        _pool_fee: u32
-    ) -> (Ray, Option<Ray>) {
-        let limit_price = if self.is_bid {
-            Ray::from(self.limit_price()).inv_ray_round(true)
-        } else {
-            Ray::from(self.limit_price())
-        };
-
-        let (max, min) = (self.amount(), self.min_amount());
-
-        if limit_price == price {
-            if self.is_bid {
-                let high = Ray::from(price.inverse_quantity(max, false))
-                    - Ray::from(self.priority_data.gas);
-
-                let low = Ray::from(price.inverse_quantity(min, false))
-                    - Ray::from(self.priority_data.gas);
-
-                (high, Some(high - low))
-            } else {
-                let (max, min) = (Ray::from(self.amount()), Ray::from(self.min_amount()));
-                (max, Some(max - min))
-            }
-        } else if self.is_bid {
-            let high = Ray::from(U256::from(price.inverse_quantity(max, false)))
-                - Ray::from(self.priority_data.gas);
-
-            (high, None)
-        } else {
-            (Ray::from(self.amount()), None)
+            tob_reward: U256::default(),
+            cancel_requested: false
         }
     }
 }
@@ -331,276 +159,18 @@ impl<Order> OrderWithStorageData<Order> {
             is_currently_valid: self.is_currently_valid,
             is_valid:           self.is_valid,
             order_id:           self.order_id,
-            tob_reward:         self.tob_reward
+            tob_reward:         self.tob_reward,
+            cancel_requested:   self.cancel_requested
         })
     }
 }
 
-#[derive(Debug)]
-pub enum GroupedUserOrder {
-    Vanilla(GroupedVanillaOrder),
-    Composable(GroupedComposableOrder)
-}
+impl OrderWithStorageData<AllOrders> {
+    pub fn pre_fee_and_gas_price(&self, fee: u128) -> Ray {
+        let price =
+            self.unscale_by_gas_fee(self.order.price(), self.priority_data.gas.to::<u128>());
 
-impl GroupedUserOrder {
-    pub fn is_vanilla(&self) -> bool {
-        matches!(self, Self::Vanilla(_))
-    }
-
-    pub fn is_composable(&self) -> bool {
-        matches!(self, Self::Composable(_))
-    }
-
-    pub fn order_hash(&self) -> B256 {
-        match self {
-            GroupedUserOrder::Vanilla(v) => v.order_hash(),
-            GroupedUserOrder::Composable(c) => c.order_hash()
-        }
-    }
-}
-
-impl RawPoolOrder for StandingVariants {
-    fn min_amount(&self) -> u128 {
-        match self {
-            StandingVariants::Exact(e) => e.min_amount(),
-            StandingVariants::Partial(p) => p.min_amount()
-        }
-    }
-
-    fn has_hook(&self) -> bool {
-        match self {
-            StandingVariants::Exact(e) => e.has_hook(),
-            StandingVariants::Partial(p) => p.has_hook()
-        }
-    }
-
-    fn exact_in(&self) -> bool {
-        match self {
-            StandingVariants::Exact(e) => e.exact_in(),
-            StandingVariants::Partial(p) => p.exact_in()
-        }
-    }
-
-    fn max_gas_token_0(&self) -> u128 {
-        match self {
-            StandingVariants::Exact(e) => e.max_gas_token_0(),
-            StandingVariants::Partial(p) => p.max_gas_token_0()
-        }
-    }
-
-    fn token_out(&self) -> Address {
-        match self {
-            StandingVariants::Exact(e) => e.token_out(),
-            StandingVariants::Partial(p) => p.token_out()
-        }
-    }
-
-    fn token_in(&self) -> Address {
-        match self {
-            StandingVariants::Exact(e) => e.token_in(),
-            StandingVariants::Partial(p) => p.token_in()
-        }
-    }
-
-    fn order_hash(&self) -> TxHash {
-        match self {
-            StandingVariants::Exact(e) => e.order_hash(),
-            StandingVariants::Partial(p) => p.order_hash()
-        }
-    }
-
-    fn from(&self) -> Address {
-        match self {
-            StandingVariants::Exact(e) => e.meta.from,
-            StandingVariants::Partial(p) => p.meta.from
-        }
-    }
-
-    fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        match self {
-            StandingVariants::Exact(e) => e.respend_avoidance_strategy(),
-            StandingVariants::Partial(p) => p.respend_avoidance_strategy()
-        }
-    }
-
-    fn deadline(&self) -> Option<U256> {
-        match self {
-            StandingVariants::Exact(e) => e.deadline(),
-            StandingVariants::Partial(p) => p.deadline()
-        }
-    }
-
-    fn amount(&self) -> u128 {
-        match self {
-            StandingVariants::Exact(e) => e.amount(),
-            StandingVariants::Partial(p) => p.amount()
-        }
-    }
-
-    fn limit_price(&self) -> U256 {
-        match self {
-            StandingVariants::Exact(e) => e.limit_price(),
-            StandingVariants::Partial(p) => p.limit_price()
-        }
-    }
-
-    fn flash_block(&self) -> Option<u64> {
-        None
-    }
-
-    fn is_valid_signature(&self) -> bool {
-        match self {
-            StandingVariants::Exact(e) => e.is_valid_signature(),
-            StandingVariants::Partial(p) => p.is_valid_signature()
-        }
-    }
-
-    fn order_location(&self) -> OrderLocation {
-        OrderLocation::Limit
-    }
-
-    fn use_internal(&self) -> bool {
-        match self {
-            StandingVariants::Exact(e) => e.use_internal(),
-            StandingVariants::Partial(p) => p.use_internal()
-        }
-    }
-
-    fn order_signature(&self) -> eyre::Result<Signature> {
-        match self {
-            StandingVariants::Exact(e) => e.order_signature(),
-            StandingVariants::Partial(p) => p.order_signature()
-        }
-    }
-}
-
-impl RawPoolOrder for FlashVariants {
-    fn has_hook(&self) -> bool {
-        match self {
-            FlashVariants::Exact(e) => e.has_hook(),
-            FlashVariants::Partial(p) => p.has_hook()
-        }
-    }
-
-    fn min_amount(&self) -> u128 {
-        match self {
-            FlashVariants::Exact(e) => e.min_amount(),
-            FlashVariants::Partial(p) => p.min_amount()
-        }
-    }
-
-    fn exact_in(&self) -> bool {
-        match self {
-            FlashVariants::Exact(e) => e.exact_in(),
-            FlashVariants::Partial(p) => p.exact_in()
-        }
-    }
-
-    fn max_gas_token_0(&self) -> u128 {
-        match self {
-            FlashVariants::Exact(e) => e.max_extra_fee_asset0,
-            FlashVariants::Partial(p) => p.max_extra_fee_asset0
-        }
-    }
-
-    fn is_valid_signature(&self) -> bool {
-        match self {
-            FlashVariants::Exact(e) => e.is_valid_signature(),
-            FlashVariants::Partial(p) => p.is_valid_signature()
-        }
-    }
-
-    fn order_hash(&self) -> TxHash {
-        match self {
-            FlashVariants::Exact(e) => e.order_hash(),
-            FlashVariants::Partial(p) => p.order_hash()
-        }
-    }
-
-    fn from(&self) -> Address {
-        match self {
-            FlashVariants::Exact(e) => e.meta.from,
-            FlashVariants::Partial(p) => p.meta.from
-        }
-    }
-
-    fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        match self {
-            FlashVariants::Exact(e) => e.respend_avoidance_strategy(),
-            FlashVariants::Partial(p) => p.respend_avoidance_strategy()
-        }
-    }
-
-    fn deadline(&self) -> Option<U256> {
-        match self {
-            FlashVariants::Exact(e) => e.deadline(),
-            FlashVariants::Partial(p) => p.deadline()
-        }
-    }
-
-    fn amount(&self) -> u128 {
-        match self {
-            FlashVariants::Exact(e) => e.amount(),
-            FlashVariants::Partial(p) => p.amount()
-        }
-    }
-
-    fn limit_price(&self) -> U256 {
-        match self {
-            FlashVariants::Exact(e) => e.limit_price(),
-            FlashVariants::Partial(p) => p.limit_price()
-        }
-    }
-
-    fn token_out(&self) -> Address {
-        match self {
-            FlashVariants::Exact(e) => e.token_out(),
-            FlashVariants::Partial(p) => p.token_out()
-        }
-    }
-
-    fn token_in(&self) -> Address {
-        match self {
-            FlashVariants::Exact(e) => e.token_in(),
-            FlashVariants::Partial(p) => p.token_in()
-        }
-    }
-
-    fn flash_block(&self) -> Option<u64> {
-        match self {
-            FlashVariants::Exact(e) => e.flash_block(),
-            FlashVariants::Partial(p) => p.flash_block()
-        }
-    }
-
-    fn order_location(&self) -> OrderLocation {
-        OrderLocation::Limit
-    }
-
-    fn use_internal(&self) -> bool {
-        match self {
-            FlashVariants::Exact(e) => e.use_internal(),
-            FlashVariants::Partial(p) => p.use_internal()
-        }
-    }
-
-    fn order_signature(&self) -> eyre::Result<Signature> {
-        match self {
-            FlashVariants::Exact(e) => e.order_signature(),
-            FlashVariants::Partial(p) => p.order_signature()
-        }
-    }
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GroupedVanillaOrder {
-    Standing(StandingVariants),
-    KillOrFill(FlashVariants)
-}
-
-impl Default for GroupedVanillaOrder {
-    fn default() -> Self {
-        GroupedVanillaOrder::Standing(StandingVariants::Exact(ExactStandingOrder::default()))
+        price.unscale_to_fee(fee)
     }
 }
 
@@ -641,37 +211,16 @@ impl AllOrders {
         if self.is_bid() { self.price().inv_ray_round(true) } else { self.price() }
     }
 
-    /// Provides a price that, post fee scaling, will be equal to this price.
-    /// Used for matching.
-    pub fn pre_fee_price(&self, fee: u128) -> Ray {
-        self.price().unscale_to_fee(fee)
+    pub fn pre_fee_and_gas_price(&self, fee: u128, gas_t0: u128) -> Ray {
+        let price = self.price().unscale_to_fee(fee);
+
+        self.unscale_by_gas_fee(price, gas_t0)
     }
 
     /// Provides the fee-adjusted price to be used for accounting.  Note that
     /// for bids this can be inverse
     pub fn fee_adj_price(&self, fee: u128) -> Ray {
         self.price().scale_to_fee(fee)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum GroupedComposableOrder {
-    Partial(StandingVariants),
-    KillOrFill(FlashVariants)
-}
-
-impl GroupedComposableOrder {
-    pub fn hash(&self) -> B256 {
-        match self {
-            Self::Partial(p) => match p {
-                StandingVariants::Partial(p) => p.unique_order_hash(p.from()),
-                StandingVariants::Exact(e) => e.unique_order_hash(e.from())
-            },
-            Self::KillOrFill(k) => match k {
-                FlashVariants::Partial(p) => p.unique_order_hash(p.from()),
-                FlashVariants::Exact(e) => e.unique_order_hash(e.from())
-            }
-        }
     }
 }
 
@@ -710,6 +259,11 @@ impl RawPoolOrder for TopOfBlockOrder {
 
     fn order_hash(&self) -> TxHash {
         self.unique_order_hash(self.from())
+    }
+
+    // gas fee doesn't need scaling for tob.
+    fn unscale_by_gas_fee(&self, price: Ray, _: u128) -> Ray {
+        price
     }
 
     fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
@@ -762,6 +316,32 @@ impl RawPoolOrder for TopOfBlockOrder {
 }
 
 impl RawPoolOrder for PartialStandingOrder {
+    fn unscale_by_gas_fee(&self, price: Ray, gas_amount_t0: u128) -> Ray {
+        match self.is_bid() {
+            true => {
+                // if exact in bid
+                // t1 -> t0
+                // quantityOut = price.convertDown(quantityIn) - fee;
+                // quantityIn = AmountIn.wrap(quantity);
+                let amount_in = self.max_amount_in;
+                let amount_out = price.quantity(amount_in, false) + gas_amount_t0;
+
+                // We always round up to leave a buffer
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            false => {
+                // exact in ask
+                // t0 -> t1
+                // quantityIn = AmountIn.wrap(quantity);
+                // quantityOut = price.convertDown(quantityIn - fee);
+                let amount_in = self.max_amount_in;
+                let amount_out = price.quantity(amount_in + gas_amount_t0, false);
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+        }
+    }
+
     fn has_hook(&self) -> bool {
         !self.hook_data.is_empty()
     }
@@ -843,6 +423,52 @@ impl RawPoolOrder for PartialStandingOrder {
 }
 
 impl RawPoolOrder for ExactStandingOrder {
+    fn unscale_by_gas_fee(&self, price: Ray, gas_amount_t0: u128) -> Ray {
+        match (self.exact_in, self.is_bid()) {
+            (true, true) => {
+                // if exact in bid
+                // t1 -> t0
+                // quantityOut = price.convertDown(quantityIn) - fee;
+                // quantityIn = AmountIn.wrap(quantity);
+                let amount_in = self.amount;
+                let amount_out = price.quantity(amount_in, false) + gas_amount_t0;
+
+                // We always round up to leave a buffer
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            (false, true) => {
+                // exact out bid
+                // t1 -> t0
+                // quantityOut = AmountOut.wrap(quantity);
+                // quantityIn = price.convertUp(quantityOut + fee);
+                let amount_out = self.amount;
+                let amount_in = price.inverse_quantity(amount_out - gas_amount_t0, true);
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            (true, false) => {
+                // exact in ask
+                // t0 -> t1
+                // quantityIn = AmountIn.wrap(quantity);
+                // quantityOut = price.convertDown(quantityIn - fee);
+                let amount_in = self.amount;
+                let amount_out = price.quantity(amount_in + gas_amount_t0, false);
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            (false, false) => {
+                // exact out ask
+                // t0 -> t1
+                // quantityOut = AmountOut.wrap(quantity);
+                // quantityIn = price.convertUp(quantityOut) + fee;
+                let amount_out = self.amount;
+                let amount_in = price.inverse_quantity(amount_out, true) - gas_amount_t0;
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+        }
+    }
+
     fn has_hook(&self) -> bool {
         !self.hook_data.is_empty()
     }
@@ -924,6 +550,32 @@ impl RawPoolOrder for ExactStandingOrder {
 }
 
 impl RawPoolOrder for PartialFlashOrder {
+    fn unscale_by_gas_fee(&self, price: Ray, gas_amount_t0: u128) -> Ray {
+        match self.is_bid() {
+            true => {
+                // if exact in bid
+                // t1 -> t0
+                // quantityOut = price.convertDown(quantityIn) - fee;
+                // quantityIn = AmountIn.wrap(quantity);
+                let amount_in = self.max_amount_in;
+                let amount_out = price.quantity(amount_in, false) + gas_amount_t0;
+
+                // We always round up to leave a buffer
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            false => {
+                // exact in ask
+                // t0 -> t1
+                // quantityIn = AmountIn.wrap(quantity);
+                // quantityOut = price.convertDown(quantityIn - fee);
+                let amount_in = self.max_amount_in;
+                let amount_out = price.quantity(amount_in + gas_amount_t0, false);
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+        }
+    }
+
     fn has_hook(&self) -> bool {
         !self.hook_data.is_empty()
     }
@@ -1005,6 +657,52 @@ impl RawPoolOrder for PartialFlashOrder {
 }
 
 impl RawPoolOrder for ExactFlashOrder {
+    fn unscale_by_gas_fee(&self, price: Ray, gas_amount_t0: u128) -> Ray {
+        match (self.exact_in, self.is_bid()) {
+            (true, true) => {
+                // if exact in bid
+                // t1 -> t0
+                // quantityOut = price.convertDown(quantityIn) - fee;
+                // quantityIn = AmountIn.wrap(quantity);
+                let amount_in = self.amount;
+                let amount_out = price.quantity(amount_in, false) + gas_amount_t0;
+
+                // We always round up to leave a buffer
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            (false, true) => {
+                // exact out bid
+                // t1 -> t0
+                // quantityOut = AmountOut.wrap(quantity);
+                // quantityIn = price.convertUp(quantityOut + fee);
+                let amount_out = self.amount;
+                let amount_in = price.inverse_quantity(amount_out - gas_amount_t0, true);
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            (true, false) => {
+                // exact in ask
+                // t0 -> t1
+                // quantityIn = AmountIn.wrap(quantity);
+                // quantityOut = price.convertDown(quantityIn - fee);
+                let amount_in = self.amount;
+                let amount_out = price.quantity(amount_in + gas_amount_t0, false);
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+            (false, false) => {
+                // exact out ask
+                // t0 -> t1
+                // quantityOut = AmountOut.wrap(quantity);
+                // quantityIn = price.convertUp(quantityOut) + fee;
+                let amount_out = self.amount;
+                let amount_in = price.inverse_quantity(amount_out, true) - gas_amount_t0;
+
+                Ray::from_quantities(amount_out, amount_in, true)
+            }
+        }
+    }
+
     fn has_hook(&self) -> bool {
         !self.hook_data.is_empty()
     }
@@ -1088,6 +786,16 @@ impl RawPoolOrder for ExactFlashOrder {
 impl RawPoolOrder for AllOrders {
     fn is_tob(&self) -> bool {
         matches!(self, AllOrders::TOB(_))
+    }
+
+    fn unscale_by_gas_fee(&self, price: Ray, gas_amount_t0: u128) -> Ray {
+        match self {
+            AllOrders::ExactStanding(p) => p.unscale_by_gas_fee(price, gas_amount_t0),
+            AllOrders::PartialStanding(p) => p.unscale_by_gas_fee(price, gas_amount_t0),
+            AllOrders::ExactFlash(p) => p.unscale_by_gas_fee(price, gas_amount_t0),
+            AllOrders::PartialFlash(p) => p.unscale_by_gas_fee(price, gas_amount_t0),
+            AllOrders::TOB(t) => t.unscale_by_gas_fee(price, gas_amount_t0)
+        }
     }
 
     fn has_hook(&self) -> bool {
@@ -1257,248 +965,6 @@ impl RawPoolOrder for AllOrders {
             AllOrders::ExactFlash(p) => p.order_signature(),
             AllOrders::PartialFlash(p) => p.order_signature(),
             AllOrders::TOB(t) => t.order_signature()
-        }
-    }
-}
-
-impl RawPoolOrder for GroupedVanillaOrder {
-    fn exact_in(&self) -> bool {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.exact_in(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.exact_in()
-        }
-    }
-
-    fn has_hook(&self) -> bool {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.has_hook(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.has_hook()
-        }
-    }
-
-    fn min_amount(&self) -> u128 {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.min_amount(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.min_amount()
-        }
-    }
-
-    fn max_gas_token_0(&self) -> u128 {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.max_gas_token_0(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.max_gas_token_0()
-        }
-    }
-
-    fn is_valid_signature(&self) -> bool {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.is_valid_signature(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.is_valid_signature()
-        }
-    }
-
-    fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.respend_avoidance_strategy(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.respend_avoidance_strategy()
-        }
-    }
-
-    fn flash_block(&self) -> Option<u64> {
-        match self {
-            GroupedVanillaOrder::Standing(_) => None,
-            GroupedVanillaOrder::KillOrFill(kof) => kof.flash_block()
-        }
-    }
-
-    fn token_in(&self) -> Address {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.token_in(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.token_in()
-        }
-    }
-
-    fn token_out(&self) -> Address {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.token_out(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.token_out()
-        }
-    }
-
-    fn from(&self) -> Address {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.from(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.from()
-        }
-    }
-
-    fn order_hash(&self) -> TxHash {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.order_hash(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.order_hash()
-        }
-    }
-
-    fn deadline(&self) -> Option<U256> {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.deadline(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.deadline()
-        }
-    }
-
-    fn amount(&self) -> u128 {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.amount(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.amount()
-        }
-    }
-
-    fn limit_price(&self) -> U256 {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.limit_price(),
-            GroupedVanillaOrder::KillOrFill(p) => p.limit_price()
-        }
-    }
-
-    fn order_location(&self) -> OrderLocation {
-        match &self {
-            GroupedVanillaOrder::Standing(_) => OrderLocation::Limit,
-            GroupedVanillaOrder::KillOrFill(_) => OrderLocation::Limit
-        }
-    }
-
-    fn use_internal(&self) -> bool {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.use_internal(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.use_internal()
-        }
-    }
-
-    fn order_signature(&self) -> eyre::Result<Signature> {
-        match self {
-            GroupedVanillaOrder::Standing(p) => p.order_signature(),
-            GroupedVanillaOrder::KillOrFill(kof) => kof.order_signature()
-        }
-    }
-}
-
-impl RawPoolOrder for GroupedComposableOrder {
-    fn has_hook(&self) -> bool {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.has_hook(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.has_hook()
-        }
-    }
-
-    fn min_amount(&self) -> u128 {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.min_amount(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.min_amount()
-        }
-    }
-
-    fn exact_in(&self) -> bool {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.exact_in(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.exact_in()
-        }
-    }
-
-    fn max_gas_token_0(&self) -> u128 {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.max_gas_token_0(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.max_gas_token_0()
-        }
-    }
-
-    fn flash_block(&self) -> Option<u64> {
-        match self {
-            GroupedComposableOrder::Partial(_) => None,
-            GroupedComposableOrder::KillOrFill(kof) => kof.flash_block()
-        }
-    }
-
-    fn respend_avoidance_strategy(&self) -> RespendAvoidanceMethod {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.respend_avoidance_strategy(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.respend_avoidance_strategy()
-        }
-    }
-
-    fn token_in(&self) -> Address {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.token_in(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.token_in()
-        }
-    }
-
-    fn token_out(&self) -> Address {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.token_out(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.token_out()
-        }
-    }
-
-    fn from(&self) -> Address {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.from(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.from()
-        }
-    }
-
-    fn order_hash(&self) -> TxHash {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.order_hash(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.order_hash()
-        }
-    }
-
-    fn deadline(&self) -> Option<U256> {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.deadline(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.deadline()
-        }
-    }
-
-    fn amount(&self) -> u128 {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.amount(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.amount()
-        }
-    }
-
-    fn limit_price(&self) -> U256 {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.limit_price(),
-            GroupedComposableOrder::KillOrFill(p) => p.limit_price()
-        }
-    }
-
-    fn is_valid_signature(&self) -> bool {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.is_valid_signature(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.is_valid_signature()
-        }
-    }
-
-    fn order_location(&self) -> OrderLocation {
-        match &self {
-            GroupedComposableOrder::Partial(_) => OrderLocation::Limit,
-            GroupedComposableOrder::KillOrFill(_) => OrderLocation::Limit
-        }
-    }
-
-    fn use_internal(&self) -> bool {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.use_internal(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.use_internal()
-        }
-    }
-
-    fn order_signature(&self) -> eyre::Result<Signature> {
-        match self {
-            GroupedComposableOrder::Partial(p) => p.order_signature(),
-            GroupedComposableOrder::KillOrFill(kof) => kof.order_signature()
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use alloy::{
-    eips::{eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip2718::Encodable2718},
+    eips::eip2718::Encodable2718,
     primitives::{Address, TxHash},
     providers::Provider
 };
@@ -61,9 +61,7 @@ impl ChainSubmitter for AnvilSubmissionProvider {
             }
 
             let tx = self
-                .build_and_sign_tx_with_gas(signer, bundle, tx_features, |tx| async move {
-                    tx.gas_limit(ETHEREUM_BLOCK_GAS_LIMIT_30M)
-                })
+                .build_and_sign_tx_with_gas(signer, bundle, tx_features)
                 .await;
             let hash = *tx.tx_hash();
             let encoded = tx.encoded_2718();

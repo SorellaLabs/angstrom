@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use angstrom_types::primitive::PoolId;
 use prometheus::{IntGauge, IntGaugeVec};
 
@@ -14,13 +16,13 @@ struct SearcherOrderPoolMetrics {
 impl Default for SearcherOrderPoolMetrics {
     fn default() -> Self {
         let total_orders = prometheus::register_int_gauge!(
-            "searcher_order_pool_total_orders",
+            "ang_searcher_order_pool_total_orders",
             "number of searcher orders",
         )
         .unwrap();
 
         let all_orders = prometheus::register_int_gauge_vec!(
-            "searcher_order_pool_all_orders",
+            "ang_searcher_order_pool_all_orders",
             " number of orders per pool",
             &["pool_id"]
         )
@@ -58,6 +60,8 @@ impl SearcherOrderPoolMetrics {
     }
 }
 
+static METRICS_INSTANCE: OnceLock<SearcherOrderPoolMetricsWrapper> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct SearcherOrderPoolMetricsWrapper(Option<SearcherOrderPoolMetrics>);
 
@@ -69,13 +73,17 @@ impl Default for SearcherOrderPoolMetricsWrapper {
 
 impl SearcherOrderPoolMetricsWrapper {
     pub fn new() -> Self {
-        Self(
-            METRICS_ENABLED
-                .get()
-                .copied()
-                .unwrap_or_default()
-                .then(SearcherOrderPoolMetrics::default)
-        )
+        METRICS_INSTANCE
+            .get_or_init(|| {
+                Self(
+                    METRICS_ENABLED
+                        .get()
+                        .copied()
+                        .unwrap_or_default()
+                        .then(SearcherOrderPoolMetrics::default)
+                )
+            })
+            .clone()
     }
 
     pub fn incr_total_orders(&self, count: usize) {

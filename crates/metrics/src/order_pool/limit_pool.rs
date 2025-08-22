@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use angstrom_types::primitive::PoolId;
 use prometheus::{IntGauge, IntGaugeVec};
 
@@ -123,6 +125,8 @@ impl VanillaLimitOrderPoolMetrics {
     }
 }
 
+static VANILLA_METRICS_INSTANCE: OnceLock<VanillaLimitOrderPoolMetricsWrapper> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct VanillaLimitOrderPoolMetricsWrapper(Option<VanillaLimitOrderPoolMetrics>);
 
@@ -134,13 +138,17 @@ impl Default for VanillaLimitOrderPoolMetricsWrapper {
 
 impl VanillaLimitOrderPoolMetricsWrapper {
     pub fn new() -> Self {
-        Self(
-            METRICS_ENABLED
-                .get()
-                .copied()
-                .unwrap_or_default()
-                .then(VanillaLimitOrderPoolMetrics::default)
-        )
+        VANILLA_METRICS_INSTANCE
+            .get_or_init(|| {
+                Self(
+                    METRICS_ENABLED
+                        .get()
+                        .copied()
+                        .unwrap_or_default()
+                        .then(VanillaLimitOrderPoolMetrics::default)
+                )
+            })
+            .clone()
     }
 
     pub fn incr_parked_orders(&self, pool_id: PoolId, count: usize) {
@@ -223,6 +231,9 @@ impl ComposableLimitOrderPoolMetrics {
     }
 }
 
+static COMPOSABLE_METRICS_INSTANCE: OnceLock<ComposableLimitOrderPoolMetricsWrapper> =
+    OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct ComposableLimitOrderPoolMetricsWrapper(Option<ComposableLimitOrderPoolMetrics>);
 
@@ -234,13 +245,17 @@ impl Default for ComposableLimitOrderPoolMetricsWrapper {
 
 impl ComposableLimitOrderPoolMetricsWrapper {
     pub fn new() -> Self {
-        Self(
-            METRICS_ENABLED
-                .get()
-                .copied()
-                .unwrap_or_default()
-                .then(ComposableLimitOrderPoolMetrics::default)
-        )
+        COMPOSABLE_METRICS_INSTANCE
+            .get_or_init(|| {
+                Self(
+                    METRICS_ENABLED
+                        .get()
+                        .copied()
+                        .unwrap_or_default()
+                        .then(ComposableLimitOrderPoolMetrics::default)
+                )
+            })
+            .clone()
     }
 
     pub fn incr_all_orders(&self, pool_id: PoolId, count: usize) {

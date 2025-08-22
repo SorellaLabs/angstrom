@@ -46,31 +46,22 @@ impl ChainSubmitter for AngstromSubmitter {
         tx_features: &'a TxFeatureInfo
     ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
         Box::pin(async move {
+            let mut tx_hash = None;
             let payload = if let Some(bundle) = bundle {
-                let client = self
-                    .clients
-                    .first()
-                    .ok_or(eyre::eyre!("no angstrom submission clients found"))?
-                    .0
-                    .clone();
-
                 let mut tx = self.build_tx(signer, bundle, tx_features);
-                let gas_used = client
-                    .estimate_gas(tx.clone())
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(err=%e, "failed to query gas");
-                    })
-                    .unwrap_or(bundle.crude_gas_estimation())
-                    + EXTRA_GAS_LIMIT;
+                let gas_used = (tx_features.bundle_gas_used)(tx.clone()).await + EXTRA_GAS_LIMIT;
                 tx = tx.with_gas_limit(gas_used);
+                // Angstrom integrators have max priority gas set to 0.
+                tx.set_max_priority_fee_per_gas(0);
 
                 let gas = tx.max_priority_fee_per_gas.unwrap();
                 // TODO: manipulate gas before signing based of off defined rebate spec.
                 // This is pending with talks with titan so leaving it for now
 
                 let signed_tx = tx.build(signer).await.unwrap();
+                tx_hash = Some(*signed_tx.hash());
                 let tx_payload = Bytes::from(signed_tx.encoded_2718());
+
                 AngstromIntegrationSubmission {
                     tx: tx_payload,
                     unlock_data: Bytes::new(),
@@ -79,22 +70,25 @@ impl ChainSubmitter for AngstromSubmitter {
             } else {
                 let unlock_data =
                     AttestAngstromBlockEmpty::sign_and_encode(tx_features.target_block, signer);
-                AngstromIntegrationSubmission {
-                    tx: Bytes::new(),
-                    unlock_data,
-                    ..Default::default()
-                }
+                let unlock_sig = AttestAngstromBlockEmpty::sign(tx_features.target_block, signer);
+
+                let signed_tx = self
+                    .build_and_sign_unlock(signer, unlock_sig, tx_features)
+                    .await;
+                let tx_payload = Bytes::from(signed_tx.encoded_2718());
+
+                AngstromIntegrationSubmission { tx: tx_payload, unlock_data, ..Default::default() }
             };
 
             Ok(iter(self.clients.clone())
                 .map(async |(client, url)| {
                     client
-                        .raw_request::<(&AngstromIntegrationSubmission,), Option<TxHash>>(
+                        .raw_request::<(&AngstromIntegrationSubmission,), String>(
                             "angstrom_submitBundle".into(),
                             (&payload,)
                         )
                         .await.inspect_err(|e| {
-                            tracing::warn!(url=?url, err=?e, "failed to send angstrom intergration message to url");
+                            tracing::info!(url=%url.as_str(), err=%e, "failed to send angstrom integration message to url");
                         })
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)
@@ -103,6 +97,7 @@ impl ChainSubmitter for AngstromSubmitter {
                 .into_iter()
                 .flatten()
                 .next()
+                .map(|_| tx_hash)
                 .unwrap_or_default())
         })
     }

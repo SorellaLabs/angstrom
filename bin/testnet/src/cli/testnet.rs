@@ -46,7 +46,7 @@ pub struct TestnetCli {
 }
 
 impl TestnetCli {
-    pub(crate) fn make_config(&self) -> eyre::Result<TestnetConfig> {
+    pub fn make_config(&self) -> eyre::Result<TestnetConfig> {
         let initial_state_config = AllPoolKeyInners::load_toml_config(&self.pool_key_config)?;
 
         Ok(TestnetConfig::new(

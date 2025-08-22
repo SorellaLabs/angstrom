@@ -62,6 +62,18 @@ impl OrderSubscriptionTracker {
         }
     }
 
+    pub fn try_notify_validation_subscribers(
+        &mut self,
+        hash: &B256,
+        result: OrderValidationResults
+    ) {
+        let Some(subscribers) = self.order_validation_subs.remove(hash) else { return };
+
+        for subscriber in subscribers {
+            let _ = subscriber.send(result.clone());
+        }
+    }
+
     pub fn notify_validation_subscribers(&mut self, hash: &B256, result: OrderValidationResults) {
         let Some(subscribers) = self.order_validation_subs.remove(hash) else { return };
 

@@ -14,10 +14,10 @@ test-integration:
     cargo nextest run --workspace --tests
 
 check-format:
-    cargo fmt --all -- --check
+    cargo +nightly fmt --all -- --check
 
 fix-format:
-    cargo fmt --all
+    cargo +nightly fmt --all
 
 check-clippy:
     cargo clippy --all-targets -- -D warnings

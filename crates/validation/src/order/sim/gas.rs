@@ -17,8 +17,8 @@ use super::GasUsed;
 // internal balance on book should be 27k gas cheaper
 pub const BOOK_GAS: u64 = 92_000;
 pub const BOOK_GAS_INTERNAL: u64 = 65_000;
-pub const TOB_GAS: u64 = 160_000;
-pub const TOB_GAS_INTERNAL: u64 = 150_000;
+pub const TOB_GAS: u64 = 1;
+pub const TOB_GAS_INTERNAL: u64 = 1;
 /// deals with the calculation of gas for a given type of order.
 /// user orders and tob orders take different paths and are different size and
 /// as such, pay different amount of gas in order to execute.

@@ -91,6 +91,30 @@ impl LimitPool {
             })
     }
 
+    pub fn cancel_order(&mut self, id: &OrderId) -> bool {
+        if let Some(pool) = self.pending_orders.get_mut(&id.pool_id) {
+            return pool.cancel_order(id.hash);
+        }
+
+        if let Some(pool) = self.parked_orders.get_mut(&id.pool_id) {
+            return pool.cancel_order(id.hash);
+        }
+
+        false
+    }
+
+    pub fn remove_all_cancelled_orders(&mut self) -> Vec<OrderWithStorageData<AllOrders>> {
+        self.pending_orders
+            .values_mut()
+            .flat_map(|pool| pool.remove_all_cancelled_orders())
+            .chain(
+                self.parked_orders
+                    .values_mut()
+                    .flat_map(|pool| pool.remove_all_cancelled_orders())
+            )
+            .collect()
+    }
+
     pub fn get_order(
         &self,
         pool_id: PoolId,
@@ -169,6 +193,18 @@ impl LimitPool {
             .collect()
     }
 
+    pub fn get_all_orders_with_cancelled_and_parked(&self) -> Vec<OrderWithStorageData<AllOrders>> {
+        self.pending_orders
+            .values()
+            .flat_map(|p| p.get_all_orders_with_cancelled())
+            .chain(
+                self.parked_orders
+                    .values()
+                    .flat_map(|p| p.get_all_orders_with_cancelled())
+            )
+            .collect()
+    }
+
     pub fn get_all_orders_with_hashes(
         &self,
         hashes: &HashSet<B256>
@@ -176,6 +212,11 @@ impl LimitPool {
         self.pending_orders
             .values()
             .flat_map(|p| p.get_all_orders_with_hashes(hashes))
+            .chain(
+                self.parked_orders
+                    .values()
+                    .flat_map(|p| p.get_all_orders_with_hashes(hashes))
+            )
             .collect()
     }
 

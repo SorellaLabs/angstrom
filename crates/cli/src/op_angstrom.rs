@@ -16,6 +16,7 @@ use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
 use reth_optimism_node::{OpAddOns, OpNode, args::RollupArgs};
+use url::Url;
 use validation::validator::ValidationClient;
 
 use crate::{
@@ -71,8 +72,10 @@ pub fn run() -> eyre::Result<()> {
             return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         };
 
-        if sequencer.starts_with("ws://") || sequencer.starts_with("wss://") {
-            return Err(eyre::eyre!("Sequencer URL must be HTTP, not WS"));
+        if let Ok(url) = Url::parse(sequencer) {
+            if matches!(url.scheme(), "ws" | "wss") {
+                return Err(eyre::eyre!("Sequencer URL must be HTTP, not WS"));
+            }
         }
 
         let l2_url = sequencer.clone();

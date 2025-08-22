@@ -42,7 +42,7 @@ pub struct CombinedArgs {
 #[inline]
 pub fn run() -> eyre::Result<()> {
     // TODO: This should also contain rollup args.
-    OpCli::<OpChainSpecParser, CombinedArgs>::parse().run(|builder, args| async move {
+    OpCli::<OpChainSpecParser, CombinedArgs>::parse().run(|builder, mut args| async move {
         let executor = builder.task_executor().clone();
         let chain = builder.config().chain.chain().named().unwrap();
 
@@ -65,6 +65,25 @@ pub fn run() -> eyre::Result<()> {
         }
 
         tracing::info!(domain=?ANGSTROM_DOMAIN);
+
+        // In rollup mode, use --rollup.sequencer.
+        // It can be HTTP or WS; map ws(s) -> http(s).
+        if let Some(l2_url) = args.rollup.sequencer.as_ref().map(|s| {
+            if let Some(rest) = s.strip_prefix("ws://") {
+                format!("http://{}", rest)
+            } else if let Some(rest) = s.strip_prefix("wss://") {
+                format!("https://{}", rest)
+            } else {
+                s.clone()
+            }
+        }) {
+            args.angstrom.normal_nodes = Some(vec![l2_url]);
+        }
+
+        // --rollup.sequencer must be provided.
+        if args.rollup.sequencer.is_none() {
+            return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
+        }
 
         let channels = RollupHandles::new();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());

@@ -217,9 +217,9 @@ where
         let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
 
         let normal_nodes = config
-            .normal_nodes
-            .into_iter()
-            .map(|url| Url::from_str(&url).unwrap())
+            .get_normal_nodes()
+            .iter()
+            .map(|url| Url::from_str(url).unwrap())
             .collect::<Vec<_>>();
 
         let angstrom_submission_nodes = config
@@ -510,9 +510,9 @@ where
         let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
 
         let normal_nodes = config
-            .normal_nodes
-            .into_iter()
-            .map(|url| Url::from_str(&url).unwrap())
+            .get_normal_nodes()
+            .iter()
+            .map(|url| Url::from_str(url).unwrap())
             .collect::<Vec<_>>();
 
         let submission_handler = SubmissionHandler::new(

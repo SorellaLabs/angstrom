@@ -241,7 +241,7 @@ where
             signer.clone()
         )
         .with_angstrom(&angstrom_submission_nodes, angstrom_address, signer.clone())
-        .with_mev_boost(&mev_boost_endpoints, angstrom_address, signer.clone());
+        .with_mev_boost(&mev_boost_endpoints, signer.clone());
 
         tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
         this is done to ensure all modules start on the same state and we don't hit the rare  \

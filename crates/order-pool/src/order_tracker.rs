@@ -3,10 +3,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
-use alloy::{
-    primitives::{Address, B256, U256},
-    signers::k256::elliptic_curve::rand_core::block
-};
+use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
     orders::{OrderId, OrderLocation},
     primitive::{PeerId, PoolId},

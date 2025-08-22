@@ -223,7 +223,9 @@ where
         // Sort the pool solutions by pool id (expected in some of the calls below).
         pool_solutions.sort();
 
-        let all_orders = self.order_storage.get_all_orders();
+        let all_orders = self
+            .order_storage
+            .get_all_orders_with_ingoing_cancellations();
 
         // Build the Angstrom bundle from the pool solutions.
         tracing::trace!(height = self.current_height, "Building bundle");

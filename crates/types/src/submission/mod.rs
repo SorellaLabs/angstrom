@@ -170,7 +170,6 @@ where
     pub fn with_mev_boost<S: AngstromMetaSigner + 'static>(
         mut self,
         mev_boost: &[Url],
-        angstom_address: Address,
         signer: AngstromSigner<S>
     ) -> Self {
         let mev_boost = Box::new(ChainSubmitterHolder::new(

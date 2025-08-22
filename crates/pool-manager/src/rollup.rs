@@ -1,7 +1,8 @@
 use std::{
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker}
+    task::{Context, Poll, Waker},
+    time::Duration
 };
 
 use angstrom_eth::manager::EthEvent;
@@ -40,7 +41,8 @@ where
     global_sync:        GlobalSync,
     order_storage:      Option<Arc<OrderStorage>>,
     eth_network_events: UnboundedReceiverStream<EthEvent>,
-    config:             PoolConfig
+    config:             PoolConfig,
+    block_time:         Duration
 }
 
 impl<V, GlobalSync> RollupPoolManagerBuilder<V, GlobalSync>
@@ -52,14 +54,16 @@ where
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
-        global_sync: GlobalSync
+        global_sync: GlobalSync,
+        block_time: Duration
     ) -> Self {
         Self {
             global_sync,
             eth_network_events,
             validator,
             order_storage,
-            config: Default::default()
+            config: Default::default(),
+            block_time
         }
     }
 
@@ -93,7 +97,7 @@ where
             order_storage.clone(),
             block_number,
             pool_manager_tx.clone(),
-            ChainConfig::op_angstrom()
+            ChainConfig::op_angstrom(self.block_time)
         );
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
@@ -121,9 +125,16 @@ where
         validator: V,
         order_storage: Option<Arc<OrderStorage>>,
         eth_network_events: UnboundedReceiverStream<EthEvent>,
-        global_sync: GS
+        global_sync: GS,
+        block_time: Duration
     ) -> RollupPoolManagerBuilder<V, GS> {
-        RollupPoolManagerBuilder::new(validator, order_storage, eth_network_events, global_sync)
+        RollupPoolManagerBuilder::new(
+            validator,
+            order_storage,
+            eth_network_events,
+            global_sync,
+            block_time
+        )
     }
 }
 // All runtime behavior is implemented on the generic manager

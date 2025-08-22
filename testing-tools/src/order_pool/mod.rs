@@ -52,7 +52,7 @@ impl TestnetOrderPool {
             order_storage.clone(),
             block_number,
             sub_tx,
-            ChainConfig::ethereum()
+            ChainConfig::ethereum(Duration::from_secs(12))
         );
 
         Self {

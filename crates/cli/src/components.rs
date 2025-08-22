@@ -395,7 +395,8 @@ where
             eth_handle.subscribe_network(),
             handles.pool_rx,
             global_block_sync.clone(),
-            network_handle.subscribe_network_events()
+            network_handle.subscribe_network_events(),
+            Duration::from_millis(config.block_time_ms)
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -664,7 +665,8 @@ where
             validation_handle.clone(),
             Some(order_storage.clone()),
             eth_handle.subscribe_network(),
-            global_block_sync.clone()
+            global_block_sync.clone(),
+            Duration::from_millis(config.block_time_ms)
         )
         .with_config(pool_config)
         .build_with_channels(

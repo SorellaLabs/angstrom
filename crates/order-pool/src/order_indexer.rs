@@ -491,7 +491,7 @@ mod tests {
     use std::{
         collections::HashSet,
         sync::Arc,
-        time::{SystemTime, UNIX_EPOCH}
+        time::{Duration, SystemTime, UNIX_EPOCH}
     };
 
     use alloy::{primitives::U256, signers::local::PrivateKeySigner};
@@ -518,7 +518,13 @@ mod tests {
         let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
         let validator = MockValidator::default();
 
-        OrderIndexer::new(validator, order_storage, 1, tx, ChainConfig::ethereum())
+        OrderIndexer::new(
+            validator,
+            order_storage,
+            1,
+            tx,
+            ChainConfig::ethereum(Duration::from_secs(12))
+        )
     }
 
     fn setup_test_indexer_with_fn(
@@ -530,7 +536,13 @@ mod tests {
         let mut validator = MockValidator::default();
         f(&mut validator);
 
-        OrderIndexer::new(validator, order_storage, 1, tx, ChainConfig::ethereum())
+        OrderIndexer::new(
+            validator,
+            order_storage,
+            1,
+            tx,
+            ChainConfig::ethereum(Duration::from_secs(12))
+        )
     }
 
     /// Initialize the tracing subscriber for tests

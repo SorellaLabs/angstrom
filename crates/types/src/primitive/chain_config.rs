@@ -7,14 +7,11 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub fn ethereum() -> Self {
-        Self {
-            block_time:                  Duration::from_secs(12),
-            max_order_delay_propagation: 7000
-        }
+    pub fn ethereum(block_time: Duration) -> Self {
+        Self { block_time, max_order_delay_propagation: 7000 }
     }
 
-    pub fn op_angstrom() -> Self {
-        Self { block_time: Duration::from_secs(2), max_order_delay_propagation: 0 }
+    pub fn op_angstrom(block_time: Duration) -> Self {
+        Self { block_time, max_order_delay_propagation: 0 }
     }
 }

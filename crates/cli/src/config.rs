@@ -21,7 +21,7 @@ pub struct AngstromConfig {
     /// starting the internal reth node
     #[clap(short, long, default_value = "https://eth.drpc.org")]
     pub boot_node:                 String,
-    #[clap(short, long, num_args(0..=5), require_equals = true)]
+    #[clap(short, long, num_args(1..=5), require_equals = true)]
     pub normal_nodes:              Option<Vec<String>>,
     #[clap(short, long, num_args(0..=10), require_equals = true, default_values = ETH_ANGSTROM_RPC)]
     pub angstrom_submission_nodes: Vec<String>,

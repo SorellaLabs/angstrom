@@ -236,13 +236,9 @@ impl OrderTracker {
             })
             .unwrap_or_default();
 
-        if !canceled {
-            // When we purge our cancelled orders, this will update with actual deadline.
-            self.cancel_with_next_block_deadline(from, &hash, max_delay_propagation, block_time);
-            None
-        } else {
-            Some((is_tob, pool_id))
-        }
+        self.cancel_with_next_block_deadline(from, &hash, max_delay_propagation, block_time);
+
+        canceled.then_some((is_tob, pool_id))
     }
 
     pub fn pending_orders_for_address<F>(

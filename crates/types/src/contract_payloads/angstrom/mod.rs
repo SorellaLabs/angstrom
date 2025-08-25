@@ -38,7 +38,7 @@ use crate::{
         rpc_orders::TopOfBlockOrder as RpcTopOfBlockOrder
     },
     testnet::TestnetStateOverrides,
-    uni_structure::{BaselinePoolState, donation::DonationCalculation}
+    uni_structure::{BaselinePoolState, PoolSnapshots, donation::DonationCalculation}
 };
 
 mod order;
@@ -837,6 +837,108 @@ impl AngstromBundle {
             acc.entry(x.pool_id).or_default().insert(x);
             acc
         })
+    }
+
+    /// Break out our input orders into lists of orders by pool.
+    fn orders_by_pool(
+        orders: OrderSet<AllOrders, RpcTopOfBlockOrder>
+    ) -> HashMap<PoolId, HashSet<OrderWithStorageData<AllOrders>>> {
+        let (limit_orders, _) = orders.into_all_book_and_searcher();
+        limit_orders.into_iter().fold(HashMap::new(), |mut acc, x| {
+            acc.entry(x.pool_id).or_default().insert(x);
+            acc
+        })
+    }
+
+    pub fn from_pool_solutions(
+        solutions: Vec<PoolSolution>,
+        orders: OrderSet<AllOrders, RpcTopOfBlockOrder>,
+        pools: &PoolSnapshots,
+        _gas_details: BundleGasDetails
+    ) -> eyre::Result<Self> {
+        let mut top_of_block_orders = Vec::new();
+        let mut pool_updates = Vec::new();
+        let mut pairs = Vec::new();
+        let mut user_orders = Vec::new();
+        let mut asset_builder = AssetBuilder::new();
+
+        let orders_by_pool = Self::orders_by_pool(orders);
+
+        // fetch the accumulated amount of gas delegated to the users
+        let (total_swaps, _) =
+            Self::fetch_total_orders_and_gas_delegated_to_orders(&orders_by_pool, &solutions);
+        // this should never underflow. if it does. means that there is underlying
+        // problem with the gas delegation module
+
+        if total_swaps == 0 {
+            return Err(eyre::eyre!("have a total swaps count of 0"));
+        }
+
+        // what we need to do is go through and first add all the tokens,
+        // then sort them and change the offests before we index all orders
+        for solution in solutions.iter() {
+            let Some((t0, t1, ..)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!(
+                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
+                    pools, solution.id
+                );
+                continue;
+            };
+            asset_builder.add_or_get_asset(*t0);
+            asset_builder.add_or_get_asset(*t1);
+        }
+        asset_builder.order_assets_properly();
+
+        // fetch gas used
+        // Walk through our solutions to add them to the structure
+        for solution in solutions.iter().sorted_unstable_by_key(|k| {
+            let Some((t0, t1, ..)) = pools.get(&k.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                return 0usize;
+            };
+            let t0_idx = asset_builder.add_or_get_asset(*t0);
+            let t1_idx = asset_builder.add_or_get_asset(*t1);
+            (t0_idx << 16) | t1_idx
+        }) {
+            // Get the information for the pool or skip this solution if we can't find a
+            // pool for it
+            let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
+                // This should never happen but let's handle it as gracefully as possible -
+                // right now will skip the pool, not produce an error
+                warn!(
+                    "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
+                    pools, solution.id
+                );
+                continue;
+            };
+
+            // Call our processing function with a fixed amount of shared gas
+            Self::process_solution(
+                &mut pairs,
+                &mut asset_builder,
+                &mut user_orders,
+                &orders_by_pool,
+                &mut top_of_block_orders,
+                &mut pool_updates,
+                solution,
+                snapshot,
+                *t0,
+                *t1,
+                *store_index,
+                Some(U256::ZERO)
+            )?;
+        }
+
+        Ok(Self::new(
+            asset_builder.get_asset_array(),
+            pairs,
+            pool_updates,
+            top_of_block_orders,
+            user_orders
+        ))
     }
 
     pub fn from_proposal(

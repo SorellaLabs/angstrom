@@ -8,13 +8,13 @@ use std::{
 
 use alloy::{primitives::Address, providers::Provider, signers::local::PrivateKeySigner};
 use alloy_rpc_types::BlockId;
-use angstrom::components::StromHandles;
-use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
+use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
+use angstrom_cli::handles::ConsensusHandles;
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
 };
-use angstrom_network::{PoolManagerBuilder, StromNetworkHandle, pool_manager::PoolHandle};
+use angstrom_network::StromNetworkHandle;
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}
@@ -34,6 +34,7 @@ use futures::{Future, Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::{MatchingManager, manager::MatcherHandle};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
+use pool_manager::{ConsensusPoolManager, PoolHandle};
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
 use tokio::sync::mpsc::UnboundedSender;
@@ -71,7 +72,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
     pub async fn new<G: GlobalTestingConfig, F>(
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
-        strom_handles: StromHandles,
+        strom_handles: ConsensusHandles,
         strom_network_handle: StromNetworkHandle,
         initial_validators: Vec<AngstromValidator>,
         inital_angstrom_state: InitialTestnetState,
@@ -103,7 +104,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         let validation_client = ValidationClient(strom_handles.validator_tx);
         let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
-        let consensus_client = ConsensusHandler(strom_handles.consensus_tx_rpc.clone());
+        let consensus_client = ConsensusHandler(strom_handles.mode.consensus_tx_rpc.clone());
 
         let consensus_api = ConsensusApi::new(consensus_client.clone(), executor.clone());
 
@@ -183,7 +184,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, DEFAULT_TICKS>(
+        let uniswap_pool_manager = configure_uniswap_manager::<_, _, DEFAULT_TICKS>(
             state_provider.rpc_provider().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry.clone(),
@@ -258,13 +259,15 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         };
         let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
-        let pool_handle = PoolManagerBuilder::new(
+        let pool_handle = ConsensusPoolManager::new(
             validator.client.clone(),
             Some(order_storage.clone()),
             strom_network_handle.clone(),
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
-            block_sync.clone()
+            block_sync.clone(),
+            strom_network_handle.subscribe_network_events(),
+            std::time::Duration::from_secs(12)
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -321,7 +324,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             ManagerNetworkDeps::new(
                 strom_network_handle.clone(),
                 eth_handle.subscribe_cannon_state_notifications().await,
-                strom_handles.consensus_rx_op
+                strom_handles.mode.consensus_rx_op
             ),
             node_config.angstrom_signer(),
             initial_validators,
@@ -333,13 +336,13 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             mev_boost_provider,
             matching_handle,
             block_sync.clone(),
-            strom_handles.consensus_rx_rpc,
+            strom_handles.mode.consensus_rx_rpc,
             state_updates,
             consensus::ConsensusTimingConfig::default()
         );
 
         // spin up amm quoter
-        let amm = QuoterManager::new(
+        let amm = ConsensusQuoterManager::new(
             block_sync.clone(),
             order_storage.clone(),
             strom_handles.quoter_rx,

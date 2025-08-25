@@ -13,7 +13,6 @@ alloy.workspace = true
 alloy-primitives.workspace = true
 alloy-rpc-types.workspace = true
 alloy-signer-local.workspace = true
-angstrom.workspace = true
 angstrom-metrics.workspace = true
 angstrom-rpc.workspace = true
 angstrom-types = { workspace = true }

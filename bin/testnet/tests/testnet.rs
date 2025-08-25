@@ -35,7 +35,9 @@ fn testnet_deploy() {
             ctx.task_executor
         )
         .await;
-        assert!(testnet.is_ok());
+        if let Err(e) = &testnet {
+            panic!("spawn_testnet failed: {e:#?}");
+        }
         eyre::Ok(())
     });
 }
@@ -65,7 +67,7 @@ fn testnet_bundle_unlock() {
             ctx.task_executor.clone()
         )
         .await
-        .expect("failed to start angstrom testnet");
+        .unwrap_or_else(|e| panic!("failed to start angstrom testnet: {e:?}"));
 
         // Get validator provider (first node)
         let validator_provider = testnet.node_provider(Some(0));

@@ -42,7 +42,6 @@ pub struct CombinedArgs {
 /// chosen command.
 #[inline]
 pub fn run() -> eyre::Result<()> {
-    // TODO: This should also contain rollup args.
     OpCli::<OpChainSpecParser, CombinedArgs>::parse().run(|builder, mut args| async move {
         let executor = builder.task_executor().clone();
         let chain = builder.config().chain.chain().named().unwrap();

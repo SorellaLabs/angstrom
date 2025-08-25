@@ -249,14 +249,56 @@ pub fn book_snapshots_from_amms(
 mod tests {
     use alloy_primitives::fixed_bytes;
     use angstrom_types::{
-        matching::SqrtPriceX96, sol_bindings::grouped_orders::OrderWithStorageData,
+        matching::SqrtPriceX96,
+        sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::ExactFlashOrder},
         uni_structure::liquidity_base::BaselineLiquidity
     };
+    use proptest::prelude::*;
 
     use super::*;
 
+    // Test helper functions
     fn make_order_with_pool(pool_id: PoolId, is_bid: bool) -> BookOrder {
         let mut o = OrderWithStorageData::with_default(AllOrders::ExactFlash(Default::default()));
+        o.pool_id = pool_id;
+        o.is_bid = is_bid;
+        o
+    }
+
+    fn make_test_pool_id(suffix: u8) -> PoolId {
+        let mut bytes = [0u8; 32];
+        bytes[31] = suffix;
+        PoolId::from(bytes)
+    }
+
+    fn make_test_baseline_pool_state(tick: i32, liquidity: u128) -> BaselinePoolState {
+        let liq = BaselineLiquidity::new(
+            tick,
+            0,
+            SqrtPriceX96::at_tick(tick).unwrap_or_default(),
+            liquidity,
+            Default::default(),
+            Default::default()
+        );
+        BaselinePoolState::new(liq, 1, 3000)
+    }
+
+    fn make_slot0_update(seq_id: u16, pool_id: PoolId) -> Slot0Update {
+        Slot0Update {
+            seq_id,
+            current_block: 100,
+            angstrom_pool_id: pool_id,
+            uni_pool_id: pool_id,
+            sqrt_price_x96: U160::from(1000),
+            liquidity: 1000000,
+            tick: 0
+        }
+    }
+
+    fn make_detailed_order(pool_id: PoolId, is_bid: bool, amount: u128) -> BookOrder {
+        let mut flash_order = ExactFlashOrder::default();
+        flash_order.amount = amount;
+        let mut o = OrderWithStorageData::with_default(AllOrders::ExactFlash(flash_order));
         o.pool_id = pool_id;
         o.is_bid = is_bid;
         o
@@ -322,5 +364,251 @@ mod tests {
         let book = books.get(&pool_id).expect("book for pool");
         assert_eq!(book.id(), pool_id);
         assert!(book.amm().is_none());
+    }
+
+    #[test]
+    fn slot0_update_creation() {
+        let pool_id = make_test_pool_id(1);
+        let update = make_slot0_update(10, pool_id);
+
+        assert_eq!(update.seq_id, 10);
+        assert_eq!(update.current_block, 100);
+        assert_eq!(update.angstrom_pool_id, pool_id);
+        assert_eq!(update.uni_pool_id, pool_id);
+        assert_eq!(update.sqrt_price_x96, U160::from(1000));
+        assert_eq!(update.liquidity, 1000000);
+        assert_eq!(update.tick, 0);
+    }
+
+    #[test]
+    fn slot0_update_equality() {
+        let pool_id = make_test_pool_id(1);
+        let update1 = make_slot0_update(10, pool_id);
+        let update2 = make_slot0_update(10, pool_id);
+        let update3 = make_slot0_update(11, pool_id);
+
+        assert_eq!(update1, update2);
+        assert_ne!(update1, update3);
+    }
+
+    #[test]
+    fn slot0_update_hash() {
+        use std::collections::HashSet;
+
+        let pool_id = make_test_pool_id(1);
+        let update1 = make_slot0_update(10, pool_id);
+        let update2 = make_slot0_update(10, pool_id);
+        let update3 = make_slot0_update(11, pool_id);
+
+        let mut set = HashSet::new();
+        set.insert(update1.clone());
+
+        assert!(set.contains(&update2));
+        assert!(!set.contains(&update3));
+    }
+
+    #[test]
+    fn orders_sorted_by_pool_id_empty() {
+        let grouped = orders_sorted_by_pool_id(vec![]);
+        assert!(grouped.is_empty());
+    }
+
+    #[test]
+    fn orders_sorted_by_pool_id_single_order() {
+        let pool_id = make_test_pool_id(1);
+        let order = make_order_with_pool(pool_id, true);
+
+        let grouped = orders_sorted_by_pool_id(vec![order.clone()]);
+
+        assert_eq!(grouped.len(), 1);
+        assert!(grouped.contains_key(&pool_id));
+        assert_eq!(grouped.get(&pool_id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn orders_sorted_by_pool_id_duplicate_handling() {
+        let pool_id = make_test_pool_id(1);
+        let order1 = make_detailed_order(pool_id, true, 100);
+        let order2 = make_detailed_order(pool_id, true, 200);
+
+        let grouped = orders_sorted_by_pool_id(vec![order1.clone(), order2.clone()]);
+
+        assert_eq!(grouped.len(), 1);
+        assert_eq!(grouped.get(&pool_id).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn build_non_proposal_books_empty_orders() {
+        let snapshots = HashMap::new();
+        let books = build_non_proposal_books(vec![], &snapshots);
+        assert!(books.is_empty());
+    }
+
+    #[test]
+    fn build_non_proposal_books_multiple_pools() {
+        let pool_a = make_test_pool_id(1);
+        let pool_b = make_test_pool_id(2);
+        let uni_pool_a = make_test_pool_id(11);
+        let uni_pool_b = make_test_pool_id(12);
+
+        let mut snapshots = HashMap::new();
+        snapshots.insert(pool_a, (uni_pool_a, make_test_baseline_pool_state(60, 1000000)));
+        snapshots.insert(pool_b, (uni_pool_b, make_test_baseline_pool_state(-60, 2000000)));
+
+        let orders = vec![
+            make_order_with_pool(pool_a, true),
+            make_order_with_pool(pool_a, false),
+            make_order_with_pool(pool_b, true),
+        ];
+
+        let books = build_non_proposal_books(orders, &snapshots);
+
+        assert_eq!(books.len(), 2);
+        assert!(books.contains_key(&pool_a));
+        assert!(books.contains_key(&pool_b));
+        assert!(books.get(&pool_a).unwrap().amm().is_some());
+        assert!(books.get(&pool_b).unwrap().amm().is_some());
+    }
+
+    #[test]
+    fn build_non_proposal_books_mixed_snapshot_availability() {
+        let pool_with_snapshot = make_test_pool_id(1);
+        let pool_without_snapshot = make_test_pool_id(2);
+        let uni_pool = make_test_pool_id(11);
+
+        let mut snapshots = HashMap::new();
+        snapshots.insert(pool_with_snapshot, (uni_pool, make_test_baseline_pool_state(0, 1000000)));
+
+        let orders = vec![
+            make_order_with_pool(pool_with_snapshot, true),
+            make_order_with_pool(pool_without_snapshot, false),
+        ];
+
+        let books = build_non_proposal_books(orders, &snapshots);
+
+        assert_eq!(books.len(), 2);
+        assert!(books.get(&pool_with_snapshot).unwrap().amm().is_some());
+        assert!(books.get(&pool_without_snapshot).unwrap().amm().is_none());
+    }
+
+    #[tokio::test]
+    async fn quoter_handle_subscribe_creates_stream() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let handle = QuoterHandle(tx);
+
+        let pool_id = make_test_pool_id(1);
+        let mut pools = HashSet::new();
+        pools.insert(pool_id);
+
+        let _stream = handle.subscribe_to_updates(pools).await;
+
+        // Check that subscription was sent
+        if let Some((received_pools, _)) = rx.recv().await {
+            assert!(received_pools.contains(&pool_id));
+        } else {
+            panic!("No subscription received");
+        }
+    }
+
+    #[tokio::test]
+    async fn quoter_handle_multiple_subscriptions() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let handle = QuoterHandle(tx);
+
+        let pool_a = make_test_pool_id(1);
+        let pool_b = make_test_pool_id(2);
+
+        let mut pools_a = HashSet::new();
+        pools_a.insert(pool_a);
+
+        let mut pools_b = HashSet::new();
+        pools_b.insert(pool_b);
+
+        let _stream_a = handle.subscribe_to_updates(pools_a.clone()).await;
+        let _stream_b = handle.subscribe_to_updates(pools_b.clone()).await;
+
+        // Check both subscriptions were sent
+        let mut received_pools = HashSet::new();
+        if let Some((pools, _)) = rx.recv().await {
+            received_pools.extend(pools);
+        }
+        if let Some((pools, _)) = rx.recv().await {
+            received_pools.extend(pools);
+        }
+
+        assert!(received_pools.contains(&pool_a));
+        assert!(received_pools.contains(&pool_b));
+    }
+
+    proptest! {
+        #[test]
+        fn prop_orders_sorted_preserves_all_orders(
+            orders in prop::collection::vec((0u8..10, any::<bool>(), 1u128..1000000), 0..50)
+        ) {
+            let book_orders: Vec<BookOrder> = orders
+                .into_iter()
+                .map(|(pool_suffix, is_bid, amount)| {
+                    let pool_id = make_test_pool_id(pool_suffix);
+                    make_detailed_order(pool_id, is_bid, amount)
+                })
+                .collect();
+
+            let original_count = book_orders.len();
+            let grouped = orders_sorted_by_pool_id(book_orders);
+
+            let grouped_count: usize = grouped.values().map(|set| set.len()).sum();
+            assert_eq!(original_count, grouped_count);
+        }
+
+        #[test]
+        fn prop_build_books_maintains_pool_ids(
+            orders in prop::collection::vec((0u8..5, any::<bool>()), 0..20)
+        ) {
+            let book_orders: Vec<BookOrder> = orders
+                .into_iter()
+                .map(|(pool_suffix, is_bid)| {
+                    let pool_id = make_test_pool_id(pool_suffix);
+                    make_order_with_pool(pool_id, is_bid)
+                })
+                .collect();
+
+            let pool_ids: HashSet<PoolId> = book_orders
+                .iter()
+                .map(|o| o.pool_id)
+                .collect();
+
+            let books = build_non_proposal_books(book_orders, &HashMap::new());
+
+            // All pool IDs from orders should be in books
+            for pool_id in pool_ids {
+                assert!(books.contains_key(&pool_id));
+                assert_eq!(books.get(&pool_id).unwrap().id(), pool_id);
+            }
+        }
+
+        #[test]
+        fn prop_slot0_update_consistency(
+            seq_id in 0u16..u16::MAX,
+            block in 0u64..1000000,
+            tick in -887272i32..887272,
+            liquidity in 0u128..u128::MAX
+        ) {
+            let pool_id = make_test_pool_id(1);
+            let update = Slot0Update {
+                seq_id,
+                current_block: block,
+                angstrom_pool_id: pool_id,
+                uni_pool_id: pool_id,
+                sqrt_price_x96: SqrtPriceX96::at_tick(tick).unwrap_or_default().into(),
+                liquidity,
+                tick,
+            };
+
+            // Test that fields are preserved
+            assert_eq!(update.seq_id, seq_id);
+            assert_eq!(update.current_block, block);
+            assert_eq!(update.liquidity, liquidity);
+            assert_eq!(update.tick, tick);
+        }
     }
 }

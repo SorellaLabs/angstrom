@@ -1072,6 +1072,7 @@ name = "angstrom-amm-quoter"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-primitives",
  "angstrom-types",
  "eyre",
  "futures",

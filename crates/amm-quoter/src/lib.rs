@@ -93,6 +93,7 @@ pub struct QuoterManager<BlockSync: BlockSyncConsumer, M = ConsensusMode> {
 }
 
 impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
+    /// Handle new subscription
     fn handle_new_subscription(&mut self, pools: HashSet<PoolId>, chan: mpsc::Sender<Slot0Update>) {
         let keys = self
             .book_snapshots
@@ -116,6 +117,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
         }
     }
 
+    /// Spawn book solvers for each book
     fn spawn_book_solvers(&mut self, seq_id: u16, orders: OrderSet<AllOrders, TopOfBlockOrder>) {
         let OrderSet { limit, searcher } = orders;
         let mut books = build_non_proposal_books(limit, &self.book_snapshots);
@@ -176,6 +178,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
         }
     }
 
+    /// Update book state from amms
     fn update_book_state(&mut self) {
         self.book_snapshots = self
             .amms
@@ -189,6 +192,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
             .collect();
     }
 
+    /// Send out slot0 updates to subscribers
     fn send_out_result(&mut self, slot_update: Slot0Update) {
         if let Some(ang_pool_subs) = self
             .pool_to_subscribers
@@ -203,6 +207,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
     }
 }
 
+/// Build non-proposal books from orders
 pub fn build_non_proposal_books(
     limit: Vec<BookOrder>,
     pool_snapshots: &HashMap<PoolId, (PoolId, BaselinePoolState)>
@@ -218,6 +223,7 @@ pub fn build_non_proposal_books(
         .collect()
 }
 
+/// Sort orders by pool id
 pub fn orders_sorted_by_pool_id(limit: Vec<BookOrder>) -> HashMap<PoolId, HashSet<BookOrder>> {
     limit.into_iter().fold(HashMap::new(), |mut acc, order| {
         acc.entry(order.pool_id).or_default().insert(order);
@@ -225,6 +231,7 @@ pub fn orders_sorted_by_pool_id(limit: Vec<BookOrder>) -> HashMap<PoolId, HashSe
     })
 }
 
+/// Get book snapshots from amms
 pub fn book_snapshots_from_amms(
     amms: &SyncedUniswapPools
 ) -> HashMap<PoolId, (PoolId, BaselinePoolState)> {
@@ -236,4 +243,84 @@ pub fn book_snapshots_from_amms(
             (*entry.key(), (uni_key, snapshot_data))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::fixed_bytes;
+    use angstrom_types::{
+        matching::SqrtPriceX96, sol_bindings::grouped_orders::OrderWithStorageData,
+        uni_structure::liquidity_base::BaselineLiquidity
+    };
+
+    use super::*;
+
+    fn make_order_with_pool(pool_id: PoolId, is_bid: bool) -> BookOrder {
+        let mut o = OrderWithStorageData::with_default(AllOrders::ExactFlash(Default::default()));
+        o.pool_id = pool_id;
+        o.is_bid = is_bid;
+        o
+    }
+
+    #[test]
+    fn orders_grouped_by_pool_id_basic() {
+        let pool_a: PoolId =
+            fixed_bytes!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let pool_b: PoolId =
+            fixed_bytes!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+
+        let o1 = make_order_with_pool(pool_a, true);
+        let o2 = make_order_with_pool(pool_a, false);
+        let o3 = make_order_with_pool(pool_b, true);
+
+        let grouped = orders_sorted_by_pool_id(vec![o1.clone(), o2.clone(), o3.clone()]);
+
+        assert_eq!(grouped.len(), 2);
+        assert!(grouped.contains_key(&pool_a));
+        assert!(grouped.contains_key(&pool_b));
+        assert_eq!(grouped.get(&pool_a).unwrap().len(), 2);
+        assert_eq!(grouped.get(&pool_b).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn build_non_proposal_books_sets_amm_when_snapshot_exists() {
+        let pool_id: PoolId =
+            fixed_bytes!("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+
+        // Minimal BaselinePoolState
+        let liq = BaselineLiquidity::new(
+            60,
+            0,
+            SqrtPriceX96::at_tick(0).unwrap(),
+            0,
+            Default::default(),
+            Default::default()
+        );
+        let baseline = BaselinePoolState::new(liq, 1, 3000);
+
+        let mut snapshots = HashMap::new();
+        let uni_pool_id: PoolId =
+            fixed_bytes!("0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+        snapshots.insert(pool_id, (uni_pool_id, baseline));
+
+        // one order for this pool
+        let o = make_order_with_pool(pool_id, true);
+        let books = build_non_proposal_books(vec![o], &snapshots);
+
+        let book = books.get(&pool_id).expect("book for pool");
+        assert_eq!(book.id(), pool_id);
+        assert!(book.amm().is_some());
+    }
+
+    #[test]
+    fn build_non_proposal_books_no_amm_when_snapshot_missing() {
+        let pool_id: PoolId =
+            fixed_bytes!("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+
+        let books =
+            build_non_proposal_books(vec![make_order_with_pool(pool_id, false)], &HashMap::new());
+        let book = books.get(&pool_id).expect("book for pool");
+        assert_eq!(book.id(), pool_id);
+        assert!(book.amm().is_none());
+    }
 }

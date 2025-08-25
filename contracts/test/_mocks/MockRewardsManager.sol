@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {CalldataReader, CalldataReaderLib} from "src/types/CalldataReader.sol";
-import {Asset, AssetArray, AssetLib} from "src/types/Asset.sol";
+import {AssetArray, AssetLib} from "src/types/Asset.sol";
 import {PairArray, PairLib} from "src/types/Pair.sol";
 import {SwapCall, SwapCallLib} from "src/types/SwapCall.sol";
 import {PoolUpdates} from "src/modules/PoolUpdates.sol";
@@ -12,7 +12,6 @@ import {UniConsumer} from "src/modules/UniConsumer.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {IUniV4, IPoolManager} from "src/interfaces/IUniV4.sol";
 
-import {console} from "forge-std/console.sol";
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
 
 /// @author philogy <https://github.com/philogy>

@@ -3,8 +3,6 @@ pragma solidity ^0.8.24;
 
 import {UserOrderVariantMap} from "src/types/UserOrderVariantMap.sol";
 import {OrderVariant as RefOrderVariant} from "./OrderVariant.sol";
-import {UserOrderBufferLib} from "src/types/UserOrderBuffer.sol";
-import {ToBOrderBufferLib} from "src/types/ToBOrderBuffer.sol";
 import {SafeCastLib} from "solady/src/utils/SafeCastLib.sol";
 import {Pair, PairLib} from "./Pair.sol";
 import {
@@ -16,7 +14,6 @@ import {
 } from "./SignedTypes.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-import {console} from "forge-std/console.sol";
 
 struct OrderMeta {
     bool isEcdsa;

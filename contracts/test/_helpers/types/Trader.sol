@@ -6,8 +6,6 @@ import {UintVec, VecLib} from "super-sol/collections/Vec.sol";
 import {UserOrder, OrderMeta} from "test/_reference/UserOrder.sol";
 import {TypedDataHasher} from "src/types/TypedDataHasher.sol";
 
-import {console2 as console} from "forge-std/console2.sol";
-
 struct Trader {
     uint256 key;
     address addr;
@@ -20,6 +18,7 @@ using TraderLib for Trader global;
 library TraderLib {
     using VecLib for UintVec;
 
+    /// forge-lint: disable-next-line(screaming-snake-case-const)
     Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     /// @dev `keccak256("Trader.nonceCache.slot") - 1`

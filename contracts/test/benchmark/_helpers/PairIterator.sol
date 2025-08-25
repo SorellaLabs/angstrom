@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {console2 as console} from "forge-std/console2.sol";
-
 struct PairItem {
     address asset0;
     address asset1;

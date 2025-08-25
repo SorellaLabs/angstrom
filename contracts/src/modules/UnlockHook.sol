@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {IBeforeSwapHook, IAfterSwapHook} from "../interfaces/IHooks.sol";
 import {UniConsumer} from "./UniConsumer.sol";
 import {TopLevelAuth} from "./TopLevelAuth.sol";
-import {PoolConfigStoreLib} from "../libraries/PoolConfigStore.sol";
 import {StoreKey, StoreKeyLib} from "../types/StoreKey.sol";
 import {tint256} from "transient-goodies/TransientPrimitives.sol";
 

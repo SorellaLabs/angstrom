@@ -3,9 +3,8 @@ pragma solidity ^0.8.0;
 
 import {IAngstromAuth, ConfigEntryUpdate} from "../interfaces/IAngstromAuth.sol";
 import {Ownable} from "solady/src/auth/Ownable.sol";
-import {PoolConfigStore, STORE_HEADER_SIZE} from "../libraries/PoolConfigStore.sol";
+import {PoolConfigStore} from "../libraries/PoolConfigStore.sol";
 import {StoreKey, StoreKeyLib} from "../types/StoreKey.sol";
-import {ConfigEntry, ENTRY_SIZE, KEY_MASK} from "../types/ConfigEntry.sol";
 import {AddressSet} from "solady/src/utils/g/EnumerableSetLib.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {AngstromView} from "./AngstromView.sol";

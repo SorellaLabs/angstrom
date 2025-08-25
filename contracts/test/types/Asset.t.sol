@@ -6,8 +6,6 @@ import {Asset as RefAsset, AssetLib as RefAssetLib} from "test/_reference/Asset.
 import {CalldataReader, CalldataReaderLib} from "src/types/CalldataReader.sol";
 import {Asset, AssetArray, AssetLib} from "src/types/Asset.sol";
 
-import {console} from "forge-std/console.sol";
-
 /// @author philogy <https://github.com/philogy>
 contract AssetTest is Test {
     using RefAssetLib for RefAsset[];

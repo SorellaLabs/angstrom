@@ -25,6 +25,15 @@ remappings = [
   "core/src/=src/",
 ]
 
+[lint]
+exclude_lints = [
+  "asm-keccak256",
+  "mixed-case-variable",
+  "mixed-case-function",
+  "incorrect-shift",
+  "screaming-snake-case-immutable",
+]
+
 [profile.default.fmt]
 line_length = 100
 

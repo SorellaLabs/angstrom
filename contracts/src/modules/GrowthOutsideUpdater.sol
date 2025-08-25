@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {PoolId} from "v4-core/src/types/PoolId.sol";
+/// forge-lint: disable-next-line(unused-import)
 import {PoolRewards, REWARD_GROWTH_SIZE} from "../types/PoolRewards.sol";
 import {CalldataReader} from "../types/CalldataReader.sol";
 import {IPoolManager, IUniV4} from "../interfaces/IUniV4.sol";

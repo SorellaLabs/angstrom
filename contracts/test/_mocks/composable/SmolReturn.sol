@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {
-    IAngstromComposable,
-    EXPECTED_HOOK_RETURN_MAGIC
-} from "../../../src/interfaces/IAngstromComposable.sol";
+import {IAngstromComposable} from "../../../src/interfaces/IAngstromComposable.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract SmolReturn is IAngstromComposable {

@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {Test} from "forge-std/Test.sol";
-
-import {console} from "forge-std/console.sol";
 
 /// @author philogy <https://github.com/philogy>
 abstract contract HookDeployer is Test {

@@ -8,10 +8,9 @@ import {PairLib as ActualPairLib} from "src/types/Pair.sol";
 import {PriceAB} from "src/types/Price.sol";
 import {PoolConfigStore, STORE_HEADER_SIZE} from "src/libraries/PoolConfigStore.sol";
 import {StoreKey, StoreKeyLib} from "src/types/StoreKey.sol";
-import {ConfigEntry, ENTRY_SIZE} from "src/types/ConfigEntry.sol";
+import {ENTRY_SIZE} from "src/types/ConfigEntry.sol";
 
 import {FormatLib} from "super-sol/libraries/FormatLib.sol";
-import {console} from "forge-std/console.sol";
 
 struct Pair {
     address asset0;

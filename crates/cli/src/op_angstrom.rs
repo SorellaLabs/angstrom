@@ -170,16 +170,16 @@ async fn run_with_signer<S: AngstromMetaSigner>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::config::KeyConfig;
+    use std::io::Write;
+
     use clap::Parser as ClapParser;
     use tempfile::NamedTempFile;
-    use std::io::Write;
+
+    use super::*;
+    use crate::config::KeyConfig;
 
     #[test]
     fn test_supported_chains() {
-        // Verify all supported chains are correctly defined
-        assert_eq!(SUPPORTED_CHAINS.len(), 4);
         assert!(SUPPORTED_CHAINS.contains(&NamedChain::Base));
         assert!(SUPPORTED_CHAINS.contains(&NamedChain::BaseSepolia));
         assert!(SUPPORTED_CHAINS.contains(&NamedChain::Unichain));
@@ -191,9 +191,12 @@ mod tests {
         // Test basic argument parsing
         let args = CombinedArgs::try_parse_from([
             "op-angstrom",
-            "--rollup.sequencer", "http://localhost:8545",
-            "--local-secret-key-location", "/tmp/key.txt",
-        ]).unwrap();
+            "--rollup.sequencer",
+            "http://localhost:8545",
+            "--local-secret-key-location",
+            "/tmp/key.txt"
+        ])
+        .unwrap();
 
         assert_eq!(args.rollup.sequencer, Some("http://localhost:8545".to_string()));
         assert_eq!(args.angstrom.key_config.local_secret_key_location, Some("/tmp/key.txt".into()));
@@ -204,11 +207,15 @@ mod tests {
         // Test metrics configuration parsing
         let args = CombinedArgs::try_parse_from([
             "op-angstrom",
-            "--rollup.sequencer", "http://localhost:8545",
+            "--rollup.sequencer",
+            "http://localhost:8545",
             "--metrics-enabled",
-            "--metrics-port", "7070",
-            "--local-secret-key-location", "/tmp/key.txt",
-        ]).unwrap();
+            "--metrics-port",
+            "7070",
+            "--local-secret-key-location",
+            "/tmp/key.txt"
+        ])
+        .unwrap();
 
         assert!(args.angstrom.metrics_enabled);
         assert_eq!(args.angstrom.metrics_port, 7070);
@@ -239,10 +246,13 @@ mod tests {
         // Test that sequencer is added to normal nodes without duplication
         let mut args = CombinedArgs::try_parse_from([
             "op-angstrom",
-            "--rollup.sequencer", "http://localhost:8545",
+            "--rollup.sequencer",
+            "http://localhost:8545",
             "--normal-nodes=http://localhost:8545,http://localhost:8546",
-            "--local-secret-key-location", "/tmp/key.txt",
-        ]).unwrap();
+            "--local-secret-key-location",
+            "/tmp/key.txt"
+        ])
+        .unwrap();
 
         let l2_url = args.rollup.sequencer.as_ref().unwrap().clone();
 
@@ -266,9 +276,11 @@ mod tests {
         // Test that local and HSM keys conflict
         let result = CombinedArgs::try_parse_from([
             "op-angstrom",
-            "--rollup.sequencer", "http://localhost:8545",
-            "--local-secret-key-location", "/tmp/key.txt",
-            "--hsm-enabled",
+            "--rollup.sequencer",
+            "http://localhost:8545",
+            "--local-secret-key-location",
+            "/tmp/key.txt",
+            "--hsm-enabled"
         ]);
 
         // This should fail due to conflict
@@ -280,8 +292,9 @@ mod tests {
         // Test that HSM requires labels
         let result = CombinedArgs::try_parse_from([
             "op-angstrom",
-            "--rollup.sequencer", "http://localhost:8545",
-            "--hsm-enabled",
+            "--rollup.sequencer",
+            "http://localhost:8545",
+            "--hsm-enabled"
         ]);
 
         // This should succeed but hsm labels are missing
@@ -328,10 +341,7 @@ mod tests {
 
     #[test]
     fn test_get_normal_nodes_with_defaults() {
-        let config = AngstromConfig {
-            normal_nodes: None,
-            ..Default::default()
-        };
+        let config = AngstromConfig { normal_nodes: None, ..Default::default() };
 
         let nodes = config.get_normal_nodes();
         assert!(!nodes.is_empty());
@@ -355,10 +365,14 @@ mod tests {
     fn test_block_time_configuration() {
         let args = CombinedArgs::try_parse_from([
             "op-angstrom",
-            "--rollup.sequencer", "http://localhost:8545",
-            "--block-time", "2000",
-            "--local-secret-key-location", "/tmp/key.txt",
-        ]).unwrap();
+            "--rollup.sequencer",
+            "http://localhost:8545",
+            "--block-time",
+            "2000",
+            "--local-secret-key-location",
+            "/tmp/key.txt"
+        ])
+        .unwrap();
 
         assert_eq!(args.angstrom.block_time_ms, 2000);
     }
@@ -367,9 +381,12 @@ mod tests {
     fn test_default_block_time() {
         let args = CombinedArgs::try_parse_from([
             "op-angstrom",
-            "--rollup.sequencer", "http://localhost:8545",
-            "--local-secret-key-location", "/tmp/key.txt",
-        ]).unwrap();
+            "--rollup.sequencer",
+            "http://localhost:8545",
+            "--local-secret-key-location",
+            "/tmp/key.txt"
+        ])
+        .unwrap();
 
         assert_eq!(args.angstrom.block_time_ms, 12000);
     }

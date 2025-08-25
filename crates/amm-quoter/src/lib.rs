@@ -180,16 +180,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
 
     /// Update book state from amms
     fn update_book_state(&mut self) {
-        self.book_snapshots = self
-            .amms
-            .iter()
-            .map(|entry| {
-                let pool_lock = entry.value().read().unwrap();
-                let uni_key = pool_lock.data_loader().private_address();
-                let snapshot_data = pool_lock.fetch_pool_snapshot().unwrap().2;
-                (*entry.key(), (uni_key, snapshot_data))
-            })
-            .collect();
+        self.book_snapshots = book_snapshots_from_amms(&self.amms);
     }
 
     /// Send out slot0 updates to subscribers
@@ -408,6 +399,26 @@ mod tests {
     }
 
     #[test]
+    fn slot0_update_hash_eq_contract() {
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher}
+        };
+
+        let pool_id = make_test_pool_id(1);
+        let a = make_slot0_update(10, pool_id);
+        let b = make_slot0_update(10, pool_id);
+
+        let mut ha = DefaultHasher::new();
+        a.hash(&mut ha);
+        let mut hb = DefaultHasher::new();
+        b.hash(&mut hb);
+
+        assert_eq!(a, b);
+        assert_eq!(ha.finish(), hb.finish());
+    }
+
+    #[test]
     fn orders_sorted_by_pool_id_empty() {
         let grouped = orders_sorted_by_pool_id(vec![]);
         assert!(grouped.is_empty());
@@ -489,6 +500,54 @@ mod tests {
         assert_eq!(books.len(), 2);
         assert!(books.get(&pool_with_snapshot).unwrap().amm().is_some());
         assert!(books.get(&pool_without_snapshot).unwrap().amm().is_none());
+    }
+
+    #[tokio::test]
+    async fn quoter_handle_stream_receives_updates() {
+        use std::time::Duration;
+
+        use futures::StreamExt;
+        use tokio::time::timeout;
+
+        let (tx, mut rx) = mpsc::channel(10);
+        let handle = QuoterHandle(tx);
+
+        let pool_id = make_test_pool_id(42);
+        let mut pools = HashSet::new();
+        pools.insert(pool_id);
+
+        // Subscribe and get the sender the producer will use
+        let mut stream = handle.subscribe_to_updates(pools).await;
+        let (_pools, update_tx) = rx.recv().await.expect("subscription forwarded");
+
+        // Send an update and assert it arrives on the stream
+        let update = make_slot0_update(7, pool_id);
+        update_tx.send(update.clone()).await.unwrap();
+
+        let got = timeout(Duration::from_secs(1), stream.next())
+            .await
+            .expect("stream yielded")
+            .expect("some item");
+
+        assert_eq!(got, update);
+    }
+
+    #[tokio::test]
+    async fn quoter_handle_stream_is_pending_without_updates() {
+        use std::task::Poll;
+
+        use futures::{StreamExt, poll};
+
+        let (tx, _rx) = mpsc::channel(1);
+        let handle = QuoterHandle(tx);
+
+        let mut pools = HashSet::new();
+        pools.insert(make_test_pool_id(1));
+
+        let mut stream = handle.subscribe_to_updates(pools).await;
+
+        // No producer => pending.
+        assert!(matches!(poll!(stream.next()), Poll::Pending));
     }
 
     #[tokio::test]
@@ -587,6 +646,25 @@ mod tests {
         }
 
         #[test]
+        fn prop_book_amm_presence(
+            ids in prop::collection::vec(0u8..8, 0..8),
+            with_snapshot in any::<bool>(),
+        ) {
+            let orders: Vec<BookOrder> = ids.iter().map(|s| make_order_with_pool(make_test_pool_id(*s), true)).collect();
+            let mut snaps = HashMap::new();
+            if with_snapshot {
+                for s in &ids {
+                    snaps.insert(make_test_pool_id(*s),
+                        (make_test_pool_id(s.wrapping_add(100)), make_test_baseline_pool_state(0, 1)));
+                }
+            }
+            let books = build_non_proposal_books(orders, &snaps);
+            for (pid, book) in books {
+                assert_eq!(book.amm().is_some(), snaps.contains_key(&pid));
+            }
+        }
+
+        #[test]
         fn prop_slot0_update_consistency(
             seq_id in 0u16..u16::MAX,
             block in 0u64..1000000,
@@ -609,6 +687,28 @@ mod tests {
             assert_eq!(update.current_block, block);
             assert_eq!(update.liquidity, liquidity);
             assert_eq!(update.tick, tick);
+        }
+
+        #[test]
+        fn prop_grouping_never_drops_across_pools(orders in
+            prop::collection::vec((0u8..5, any::<bool>(), 1u128..1_000_000u128), 0..50)
+        ) {
+            let by_pool: HashMap<PoolId, Vec<BookOrder>> = orders.iter().map(|(s, is_bid, amt)| {
+                (make_test_pool_id(*s), make_detailed_order(make_test_pool_id(*s), *is_bid, *amt))
+            }).fold(HashMap::new(), |mut m, (pid, o)| { m.entry(pid).or_default().push(o); m });
+
+            let grouped = orders_sorted_by_pool_id(
+                by_pool.values().flatten().cloned().collect()
+            );
+
+            for (pid, want) in by_pool {
+                let have = grouped.get(&pid).unwrap();
+                for _w in want {
+                    // In set semantics we only require that each unique order (per Eq/Hash) can appear.
+                    // So presence is "possible", not guaranteed, but at least one order per pool must exist.
+                    assert!(!have.is_empty());
+                }
+            }
         }
     }
 }

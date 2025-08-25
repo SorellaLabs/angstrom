@@ -186,66 +186,62 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_sequencer_url_valid_http() {
-        // Should pass for valid HTTP URLs
-        assert!(validate_sequencer_url("http://example.com").is_ok());
-        assert!(validate_sequencer_url("https://example.com").is_ok());
-        assert!(validate_sequencer_url("https://example.com:8080/path").is_ok());
+    fn validate_sequencer_url_accepts_http() {
+        for url in [
+            "http://example.com",
+            "https://example.com",
+            "https://example.com:8080/path",
+            "https://example.com/path?x=1#frag"
+        ] {
+            assert!(validate_sequencer_url(url).is_ok(), "accepted: {url}");
+        }
     }
 
     #[test]
-    fn test_validate_sequencer_url_rejects_websocket() {
-        // Should reject WebSocket URLs
-        let result = validate_sequencer_url("ws://example.com");
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Sequencer URL must be HTTP, not WS");
-
-        let result = validate_sequencer_url("wss://example.com");
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Sequencer URL must be HTTP, not WS");
+    fn validate_sequencer_url_rejects_websocket() {
+        for url in ["ws://example.com", "wss://example.com", "WS://EXAMPLE.COM", "Wss://x.y"] {
+            let err = validate_sequencer_url(url).unwrap_err();
+            assert_eq!(err.to_string(), "Sequencer URL must be HTTP, not WS", "url={url}");
+        }
     }
 
     #[test]
-    fn test_validate_sequencer_url_invalid_format() {
-        // Should pass for invalid URL formats (no validation applied)
-        assert!(validate_sequencer_url("not-a-url").is_err());
-        assert!(validate_sequencer_url("").is_err());
-        assert!(validate_sequencer_url("://invalid").is_err());
+    fn validate_sequencer_url_invalids() {
+        for url in ["", "not-a-url", "://invalid", "http://"] {
+            assert!(validate_sequencer_url(url).is_err(), "invalid accepted: {url}");
+        }
     }
 
     #[test]
-    fn test_add_sequencer_to_normal_nodes_none() {
-        let sequencer = "node1";
-        let mut config = AngstromConfig { normal_nodes: None, ..Default::default() };
-        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
-        assert_eq!(config.normal_nodes, Some(vec![sequencer.to_string()]));
+    fn add_sequencer_to_normal_nodes_none() {
+        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
+        add_sequencer_to_normal_nodes(&mut cfg, "node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
     }
 
     #[test]
-    fn test_add_sequencer_to_normal_nodes_some_without_sequencer() {
-        let sequencer = "node1";
-        let mut config =
-            AngstromConfig { normal_nodes: Some(vec!["node2".to_string()]), ..Default::default() };
-        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
-        assert_eq!(config.normal_nodes, Some(vec!["node2".to_string(), sequencer.to_string()]));
+    fn add_sequencer_to_normal_nodes_some_without_sequencer() {
+        let mut cfg =
+            AngstromConfig { normal_nodes: Some(vec!["node2".into()]), ..Default::default() };
+        add_sequencer_to_normal_nodes(&mut cfg, "node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node2", "node1"]);
     }
 
     #[test]
-    fn test_add_sequencer_to_normal_nodes_some_with_sequencer() {
-        let sequencer = "node1";
-        let mut config = AngstromConfig {
-            normal_nodes: Some(vec![sequencer.to_string()]),
+    fn add_sequencer_to_normal_nodes_some_with_sequencer() {
+        let mut cfg =
+            AngstromConfig { normal_nodes: Some(vec!["node1".into()]), ..Default::default() };
+        add_sequencer_to_normal_nodes(&mut cfg, "node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
+    }
+
+    #[test]
+    fn add_sequencer_to_normal_nodes_appends_new() {
+        let mut cfg = AngstromConfig {
+            normal_nodes: Some(vec!["a".into(), "b".into()]),
             ..Default::default()
         };
-        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
-        assert_eq!(config.normal_nodes, Some(vec![sequencer.to_string()]));
-    }
-
-    #[test]
-    fn test_add_sequencer_to_normal_nodes_empty_string() {
-        let sequencer = "";
-        let mut config = AngstromConfig { normal_nodes: None, ..Default::default() };
-        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
-        assert_eq!(config.normal_nodes, Some(vec![sequencer.to_string()]));
+        add_sequencer_to_normal_nodes(&mut cfg, "c").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["a", "b", "c"]);
     }
 }

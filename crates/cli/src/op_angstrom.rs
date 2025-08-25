@@ -71,24 +71,8 @@ pub fn run() -> eyre::Result<()> {
         let Some(sequencer) = args.rollup.sequencer.as_ref() else {
             return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         };
-
-        if let Ok(url) = Url::parse(sequencer) {
-            if matches!(url.scheme(), "ws" | "wss") {
-                return Err(eyre::eyre!("Sequencer URL must be HTTP, not WS"));
-            }
-        }
-
-        let l2_url = sequencer.clone();
-
-        // Add sequencer to normal nodes
-        if let Some(ref mut nodes) = args.angstrom.normal_nodes {
-            // Don't add the the endpoint if it's already in the list
-            if !nodes.contains(&l2_url) {
-                nodes.push(l2_url);
-            }
-        } else {
-            args.angstrom.normal_nodes = Some(vec![l2_url]);
-        }
+        validate_sequencer_url(sequencer)?;
+        add_sequencer_to_normal_nodes(&mut args.angstrom, sequencer)?;
 
         let channels = RollupHandles::new();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());
@@ -166,4 +150,103 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     )
     .launch()
     .await
+}
+
+/// Validates that the sequencer URL is not a WebSocket URL.
+/// Returns an error if the URL scheme is "ws" or "wss".
+fn validate_sequencer_url(sequencer: &str) -> eyre::Result<()> {
+    if let Ok(url) = Url::parse(sequencer) {
+        if matches!(url.scheme(), "ws" | "wss") {
+            return Err(eyre::eyre!("Sequencer URL must be HTTP, not WS"));
+        }
+    }
+    Ok(())
+}
+
+/// Add sequencer to normal nodes if it's not already in the list
+fn add_sequencer_to_normal_nodes(
+    angstrom_config: &mut AngstromConfig,
+    sequencer: &str
+) -> eyre::Result<()> {
+    match &mut angstrom_config.normal_nodes {
+        Some(nodes) => {
+            if !nodes.contains(&sequencer.to_string()) {
+                nodes.push(sequencer.to_string());
+            }
+        }
+        None => {
+            angstrom_config.normal_nodes = Some(vec![sequencer.to_string()]);
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_sequencer_url_valid_http() {
+        // Should pass for valid HTTP URLs
+        assert!(validate_sequencer_url("http://example.com").is_ok());
+        assert!(validate_sequencer_url("https://example.com").is_ok());
+        assert!(validate_sequencer_url("https://example.com:8080/path").is_ok());
+    }
+
+    #[test]
+    fn test_validate_sequencer_url_rejects_websocket() {
+        // Should reject WebSocket URLs
+        let result = validate_sequencer_url("ws://example.com");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "Sequencer URL must be HTTP, not WS");
+
+        let result = validate_sequencer_url("wss://example.com");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "Sequencer URL must be HTTP, not WS");
+    }
+
+    #[test]
+    fn test_validate_sequencer_url_invalid_format() {
+        // Should pass for invalid URL formats (no validation applied)
+        assert!(validate_sequencer_url("not-a-url").is_ok());
+        assert!(validate_sequencer_url("").is_ok());
+        assert!(validate_sequencer_url("://invalid").is_ok());
+    }
+
+    #[test]
+    fn test_add_sequencer_to_normal_nodes_none() {
+        let sequencer = "node1";
+        let mut config = AngstromConfig { normal_nodes: None, ..Default::default() };
+        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
+        assert_eq!(config.normal_nodes, Some(vec![sequencer.to_string()]));
+    }
+
+    #[test]
+    fn test_add_sequencer_to_normal_nodes_some_without_sequencer() {
+        let sequencer = "node1";
+        let mut config =
+            AngstromConfig { normal_nodes: Some(vec!["node2".to_string()]), ..Default::default() };
+        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
+        assert_eq!(config.normal_nodes, Some(vec!["node2".to_string(), sequencer.to_string()]));
+    }
+
+    #[test]
+    fn test_add_sequencer_to_normal_nodes_some_with_sequencer() {
+        let sequencer = "node1";
+        let mut config = AngstromConfig {
+            normal_nodes: Some(vec![sequencer.to_string()]),
+            ..Default::default()
+        };
+        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
+        assert_eq!(config.normal_nodes, Some(vec![sequencer.to_string()]));
+    }
+
+    #[test]
+    fn test_add_sequencer_to_normal_nodes_empty_string() {
+        let sequencer = "";
+        let mut config = AngstromConfig { normal_nodes: None, ..Default::default() };
+        add_sequencer_to_normal_nodes(&mut config, sequencer).unwrap();
+        assert_eq!(config.normal_nodes, Some(vec![sequencer.to_string()]));
+    }
 }

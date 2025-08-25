@@ -1078,7 +1078,6 @@ dependencies = [
  "futures",
  "matching-engine",
  "order-pool",
- "proptest",
  "rayon",
  "serde",
  "tokio",

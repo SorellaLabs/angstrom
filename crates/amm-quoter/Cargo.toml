@@ -23,5 +23,4 @@ uniswap-v4.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
-proptest.workspace = true
 alloy-primitives.workspace = true

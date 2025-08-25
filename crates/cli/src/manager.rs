@@ -43,7 +43,6 @@ where
 {
     current_height:         BlockNumber,
     block_time:             Duration,
-    // TODO(mempirate): If we make this a generic driver, don't use concrete type here
     canonical_block_stream: BroadcastStream<CanonStateNotification<OpPrimitives>>,
     block_sync:             BS,
     /// Contains all orders that came in through the RPC.

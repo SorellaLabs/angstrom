@@ -20,3 +20,7 @@ serde.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 uniswap-v4.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+alloy-primitives.workspace = true

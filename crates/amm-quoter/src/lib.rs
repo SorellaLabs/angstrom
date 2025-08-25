@@ -54,7 +54,7 @@ pub struct Slot0Update {
 }
 
 pub trait AngstromBookQuoter: Send + Sync + Unpin + 'static {
-    /// will configure this stream to receieve updates of the given pool
+    /// will configure this stream to receive updates of the given pool
     fn subscribe_to_updates(
         &self,
         pool_id: HashSet<PoolId>
@@ -93,6 +93,7 @@ pub struct QuoterManager<BlockSync: BlockSyncConsumer, M = ConsensusMode> {
 }
 
 impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
+    /// Handle new subscription
     fn handle_new_subscription(&mut self, pools: HashSet<PoolId>, chan: mpsc::Sender<Slot0Update>) {
         let keys = self
             .book_snapshots
@@ -116,6 +117,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
         }
     }
 
+    /// Spawn book solvers for each book
     fn spawn_book_solvers(&mut self, seq_id: u16, orders: OrderSet<AllOrders, TopOfBlockOrder>) {
         let OrderSet { limit, searcher } = orders;
         let mut books = build_non_proposal_books(limit, &self.book_snapshots);
@@ -176,19 +178,12 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
         }
     }
 
+    /// Update book state from amms
     fn update_book_state(&mut self) {
-        self.book_snapshots = self
-            .amms
-            .iter()
-            .map(|entry| {
-                let pool_lock = entry.value().read().unwrap();
-                let uni_key = pool_lock.data_loader().private_address();
-                let snapshot_data = pool_lock.fetch_pool_snapshot().unwrap().2;
-                (*entry.key(), (uni_key, snapshot_data))
-            })
-            .collect();
+        self.book_snapshots = book_snapshots_from_amms(&self.amms);
     }
 
+    /// Send out slot0 updates to subscribers
     fn send_out_result(&mut self, slot_update: Slot0Update) {
         if let Some(ang_pool_subs) = self
             .pool_to_subscribers
@@ -203,6 +198,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
     }
 }
 
+/// Build non-proposal books from orders
 pub fn build_non_proposal_books(
     limit: Vec<BookOrder>,
     pool_snapshots: &HashMap<PoolId, (PoolId, BaselinePoolState)>
@@ -218,6 +214,7 @@ pub fn build_non_proposal_books(
         .collect()
 }
 
+/// Sort orders by pool id
 pub fn orders_sorted_by_pool_id(limit: Vec<BookOrder>) -> HashMap<PoolId, HashSet<BookOrder>> {
     limit.into_iter().fold(HashMap::new(), |mut acc, order| {
         acc.entry(order.pool_id).or_default().insert(order);
@@ -225,6 +222,7 @@ pub fn orders_sorted_by_pool_id(limit: Vec<BookOrder>) -> HashMap<PoolId, HashSe
     })
 }
 
+/// Get book snapshots from amms
 pub fn book_snapshots_from_amms(
     amms: &SyncedUniswapPools
 ) -> HashMap<PoolId, (PoolId, BaselinePoolState)> {
@@ -236,4 +234,171 @@ pub fn book_snapshots_from_amms(
             (*entry.key(), (uni_key, snapshot_data))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use alloy_primitives::fixed_bytes;
+    use angstrom_types::{
+        matching::SqrtPriceX96,
+        sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::ExactFlashOrder},
+        uni_structure::liquidity_base::BaselineLiquidity
+    };
+    use futures::StreamExt;
+    use tokio::time::timeout;
+
+    use super::*;
+
+    // Test helper functions
+    fn make_order_with_pool(pool_id: PoolId, is_bid: bool) -> BookOrder {
+        let mut o = OrderWithStorageData::with_default(AllOrders::ExactFlash(Default::default()));
+        o.pool_id = pool_id;
+        o.is_bid = is_bid;
+        o
+    }
+
+    fn make_test_pool_id(suffix: u8) -> PoolId {
+        let mut bytes = [0u8; 32];
+        bytes[31] = suffix;
+        PoolId::from(bytes)
+    }
+
+    fn make_test_baseline_pool_state(tick: i32, liquidity: u128) -> BaselinePoolState {
+        let liq = BaselineLiquidity::new(
+            tick,
+            0,
+            SqrtPriceX96::at_tick(tick).unwrap_or_default(),
+            liquidity,
+            Default::default(),
+            Default::default()
+        );
+        BaselinePoolState::new(liq, 1, 3000)
+    }
+
+    fn make_slot0_update(seq_id: u16, pool_id: PoolId) -> Slot0Update {
+        Slot0Update {
+            seq_id,
+            current_block: 100,
+            angstrom_pool_id: pool_id,
+            uni_pool_id: pool_id,
+            sqrt_price_x96: U160::from(1000),
+            liquidity: 1000000,
+            tick: 0
+        }
+    }
+
+    fn make_detailed_order(pool_id: PoolId, is_bid: bool, amount: u128) -> BookOrder {
+        let mut flash_order = ExactFlashOrder::default();
+        flash_order.amount = amount;
+        let mut o = OrderWithStorageData::with_default(AllOrders::ExactFlash(flash_order));
+        o.pool_id = pool_id;
+        o.is_bid = is_bid;
+        o
+    }
+
+    #[test]
+    fn orders_grouped_by_pool_id_basic() {
+        let pool_a: PoolId =
+            fixed_bytes!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let pool_b: PoolId =
+            fixed_bytes!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+
+        let o1 = make_order_with_pool(pool_a, true);
+        let o2 = make_order_with_pool(pool_a, false);
+        let o3 = make_order_with_pool(pool_b, true);
+
+        let grouped = orders_sorted_by_pool_id(vec![o1.clone(), o2.clone(), o3.clone()]);
+
+        assert_eq!(grouped.len(), 2);
+        assert!(grouped.contains_key(&pool_a));
+        assert!(grouped.contains_key(&pool_b));
+        assert_eq!(grouped.get(&pool_a).unwrap().len(), 2);
+        assert_eq!(grouped.get(&pool_b).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn orders_sorted_by_pool_id_duplicate_handling() {
+        let pool_id = make_test_pool_id(1);
+        let order1 = make_detailed_order(pool_id, true, 100);
+        let order2 = make_detailed_order(pool_id, true, 200);
+
+        let grouped = orders_sorted_by_pool_id(vec![order1.clone(), order2.clone()]);
+
+        assert_eq!(grouped.len(), 1);
+        assert_eq!(grouped.get(&pool_id).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn build_non_proposal_books_empty_orders() {
+        let snapshots = HashMap::new();
+        let books = build_non_proposal_books(vec![], &snapshots);
+        assert!(books.is_empty());
+    }
+
+    #[test]
+    fn build_non_proposal_books_mixed_snapshot_availability() {
+        let pool_with_snapshot = make_test_pool_id(1);
+        let pool_without_snapshot = make_test_pool_id(2);
+        let uni_pool = make_test_pool_id(11);
+
+        let mut snapshots = HashMap::new();
+        snapshots.insert(pool_with_snapshot, (uni_pool, make_test_baseline_pool_state(0, 1000000)));
+
+        let orders = vec![
+            make_order_with_pool(pool_with_snapshot, true),
+            make_order_with_pool(pool_without_snapshot, false),
+        ];
+
+        let books = build_non_proposal_books(orders, &snapshots);
+
+        assert_eq!(books.len(), 2);
+        assert!(books.get(&pool_with_snapshot).unwrap().amm().is_some());
+        assert!(books.get(&pool_without_snapshot).unwrap().amm().is_none());
+    }
+
+    #[tokio::test]
+    async fn quoter_handle_stream_receives_updates() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let handle = QuoterHandle(tx);
+
+        let pool_id = make_test_pool_id(42);
+        let mut pools = HashSet::new();
+        pools.insert(pool_id);
+
+        // Subscribe and get the sender the producer will use
+        let mut stream = handle.subscribe_to_updates(pools).await;
+        let (_pools, update_tx) = rx.recv().await.expect("subscription forwarded");
+
+        // Send an update and assert it arrives on the stream
+        let update = make_slot0_update(7, pool_id);
+        update_tx.send(update.clone()).await.unwrap();
+
+        let got = timeout(Duration::from_secs(1), stream.next())
+            .await
+            .expect("stream yielded")
+            .expect("some item");
+
+        assert_eq!(got, update);
+    }
+
+    #[tokio::test]
+    async fn quoter_handle_subscribe_creates_stream() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let handle = QuoterHandle(tx);
+
+        let pool_id = make_test_pool_id(1);
+        let mut pools = HashSet::new();
+        pools.insert(pool_id);
+
+        let _stream = handle.subscribe_to_updates(pools).await;
+
+        // Check that subscription was sent
+        if let Some((received_pools, _)) = rx.recv().await {
+            assert!(received_pools.contains(&pool_id));
+        } else {
+            panic!("No subscription received");
+        }
+    }
 }

@@ -1,0 +1,33 @@
+# Rust build artifacts
+target/
+**/target/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Node modules (if any)
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Cache directories
+.cache/

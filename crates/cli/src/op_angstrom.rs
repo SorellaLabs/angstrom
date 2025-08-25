@@ -155,12 +155,11 @@ async fn run_with_signer<S: AngstromMetaSigner>(
 /// Validates that the sequencer URL is not a WebSocket URL.
 /// Returns an error if the URL scheme is "ws" or "wss".
 fn validate_sequencer_url(sequencer: &str) -> eyre::Result<()> {
-    if let Ok(url) = Url::parse(sequencer) {
-        if matches!(url.scheme(), "ws" | "wss") {
-            return Err(eyre::eyre!("Sequencer URL must be HTTP, not WS"));
-        }
+    let url = Url::parse(sequencer)?;
+    match url.scheme() {
+        "ws" | "wss" => Err(eyre::eyre!("Sequencer URL must be HTTP, not WS")),
+        _ => Ok(())
     }
-    Ok(())
 }
 
 /// Add sequencer to normal nodes if it's not already in the list
@@ -209,9 +208,9 @@ mod tests {
     #[test]
     fn test_validate_sequencer_url_invalid_format() {
         // Should pass for invalid URL formats (no validation applied)
-        assert!(validate_sequencer_url("not-a-url").is_ok());
-        assert!(validate_sequencer_url("").is_ok());
-        assert!(validate_sequencer_url("://invalid").is_ok());
+        assert!(validate_sequencer_url("not-a-url").is_err());
+        assert!(validate_sequencer_url("").is_err());
+        assert!(validate_sequencer_url("://invalid").is_err());
     }
 
     #[test]

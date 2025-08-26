@@ -6996,6 +6996,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-testnet"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-primitives",
+ "alloy-rpc-types",
+ "alloy-signer-local",
+ "angstrom-metrics",
+ "angstrom-rpc",
+ "angstrom-types",
+ "clap",
+ "consensus",
+ "enr",
+ "eyre",
+ "futures",
+ "itertools 0.10.5",
+ "jsonrpsee",
+ "pade",
+ "reth",
+ "reth-network-peers",
+ "reth-provider",
+ "reth-tasks",
+ "secp256k1 0.30.0",
+ "serde",
+ "serial_test",
+ "testing-tools",
+ "tikv-jemallocator",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber 0.3.19",
+ "validation",
+]
+
+[[package]]
 name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

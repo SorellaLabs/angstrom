@@ -11,6 +11,7 @@ use angstrom_types::{
 };
 use futures::{Future, FutureExt, StreamExt, stream::FuturesUnordered};
 use jsonrpsee::http_client::HttpClient;
+use op_testnet::cli::{init_tracing, testnet::TestnetCli};
 use pade::PadeDecode;
 use reth_provider::{CanonStateSubscriptions, test_utils::NoopProvider};
 use reth_tasks::TaskExecutor;
@@ -20,7 +21,6 @@ use testing_tools::{
     controllers::enviroments::AngstromTestnet,
     order_generator::{GeneratedPoolOrders, InternalBalanceMode, OrderGenerator}
 };
-use testnet::cli::{init_tracing, testnet::TestnetCli};
 use tokio::time::timeout;
 use tracing::{Instrument, Level, span};
 

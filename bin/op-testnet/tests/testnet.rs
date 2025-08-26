@@ -11,9 +11,9 @@ use angstrom_types::{
     primitive::{ANGSTROM_ADDRESS, AngstromAddressConfig, CHAIN_ID},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty
 };
+use op_testnet::cli::{init_tracing, testnet::TestnetCli};
 use reth_provider::test_utils::NoopProvider;
 use testing_tools::{controllers::enviroments::AngstromTestnet, utils::noop_agent};
-use testnet::cli::{init_tracing, testnet::TestnetCli};
 
 #[test]
 #[serial_test::serial]

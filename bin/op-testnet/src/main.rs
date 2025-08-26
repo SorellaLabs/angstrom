@@ -4,7 +4,7 @@
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() {
-    if let Err(err) = testnet::run() {
+    if let Err(err) = op_testnet::run() {
         eprintln!("Error: {err:?}");
         std::process::exit(1);
     }

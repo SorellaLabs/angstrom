@@ -1,5 +1,5 @@
 [package]
-name = "testnet"
+name = "op-testnet"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -42,7 +42,7 @@ validation = { workspace = true }
 tikv-jemallocator = { version = "0", optional = true }
 
 [[bin]]
-name = "testnet"
+name = "op-testnet"
 path = "src/main.rs"
 
 [features]

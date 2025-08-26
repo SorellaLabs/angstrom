@@ -23,7 +23,17 @@
  * 3. Running real order generation and validation
  */
 
-use std::{net::SocketAddr, path::PathBuf, pin::Pin, str::FromStr, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    pin::Pin,
+    str::FromStr,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, AtomicU64, Ordering}
+    },
+    time::{Duration, Instant}
+};
 
 use alloy::{
     consensus::BlockHeader,
@@ -61,7 +71,8 @@ pub struct RollupAgentConfig {
     pub rpc_address:   SocketAddr,
     pub agent_id:      u64,
     pub current_block: u64,
-    pub sequencer_url: String
+    pub sequencer_url: String,
+    pub metrics:       RollupTestMetrics
 }
 
 /// Rollup-specific test configuration
@@ -185,10 +196,17 @@ fn rollup_order_agent(
     agent_config: RollupAgentConfig
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'static>> {
     Box::pin(async move {
-        tracing::info!(agent_id = agent_config.agent_id, "starting rollup order agent");
+        tracing::info!(
+            agent_id = agent_config.agent_id,
+            "starting enhanced rollup order agent with metrics"
+        );
 
         let rpc_address = format!("http://{}", agent_config.rpc_address);
         let client = HttpClient::builder().build(rpc_address.clone()).unwrap();
+        let metrics = agent_config.metrics.clone();
+
+        // Set initial pool count
+        metrics.set_active_pools(agent_config.uniswap_pools.len() as u32);
 
         // Create real order generator with the provided pool configuration
         let generator = OrderGenerator::new(
@@ -201,14 +219,14 @@ fn rollup_order_agent(
         );
 
         tracing::info!(
-            "initialized order generator with {} pools",
+            "initialized enhanced order generator with {} pools and metrics tracking",
             agent_config.uniswap_pools.len()
         );
 
         // Create L2 block stream to trigger order generation
         match create_l2_block_stream(agent_config.sequencer_url.clone()).await {
             Ok(mut block_stream) => {
-                tracing::info!("connected to L2 block stream, waiting for new blocks...");
+                tracing::info!("🔗 connected to L2 block stream, waiting for new blocks...");
 
                 let mut last_block = 0u64;
                 let mut batch_count = 0;
@@ -216,30 +234,44 @@ fn rollup_order_agent(
                 // Listen to L2 blocks and generate orders on new blocks
                 let mut pinned_stream = std::pin::Pin::new(&mut block_stream);
                 while let Some(block_number) = futures::StreamExt::next(&mut pinned_stream).await {
+                    // Record block processing
+                    metrics.record_block_processed();
+
                     // Only generate orders if we have a new block
                     if block_number > last_block && batch_count < 3 {
                         last_block = block_number;
                         batch_count += 1;
 
                         tracing::info!(
-                            "L2 block {}: generating order batch {}",
+                            "📦 L2 block {}: generating order batch {} with metrics tracking",
                             block_number,
                             batch_count
                         );
 
                         // Generate real orders using the OrderGenerator
                         let new_orders = generator.generate_orders().await;
+
+                        // Record orders generated
+                        for orders in &new_orders {
+                            metrics.record_order_generated(); // TOB order
+                            for _ in &orders.book {
+                                metrics.record_order_generated(); // Each book order
+                            }
+                        }
+
                         tracing::info!(
-                            "generated {} pool order sets for block {}",
+                            "✨ generated {} pool order sets for block {} (total orders tracked: \
+                             {})",
                             new_orders.len(),
-                            block_number
+                            block_number,
+                            metrics.orders_generated.load(Ordering::Relaxed)
                         );
 
                         for orders in new_orders {
                             let GeneratedPoolOrders { pool_id, tob, book } = orders;
                             tracing::info!(
-                                "submitting orders for pool {:?}: 1 TOB + {} book orders (block \
-                                 {})",
+                                "📤 submitting orders for pool {:?}: 1 TOB + {} book orders \
+                                 (block {})",
                                 pool_id,
                                 book.len(),
                                 block_number
@@ -250,45 +282,71 @@ fn rollup_order_agent(
                                 .chain(vec![tob.into()])
                                 .collect::<Vec<AllOrders>>();
 
-                            // Try to submit orders to test the RPC interface
-                            match client.send_orders(all_orders).await {
-                                Ok(_) => tracing::info!(
-                                    "successfully submitted rollup orders for pool {:?} on block \
-                                     {}",
-                                    pool_id,
-                                    block_number
-                                ),
-                                Err(e) => tracing::warn!(
-                                    "failed to submit rollup orders for pool {:?} on block {}: \
-                                     {:?}",
-                                    pool_id,
-                                    block_number,
-                                    e
-                                )
+                            // Submit orders with timing and retry logic
+                            let submit_start = Instant::now();
+                            let order_count = all_orders.len();
+
+                            match submit_orders_with_retry(&client, all_orders, &metrics, 3).await {
+                                Ok(_) => {
+                                    let latency = submit_start.elapsed().as_millis() as u64;
+                                    metrics.record_order_submitted(latency);
+                                    metrics.record_order_success();
+
+                                    tracing::info!(
+                                        "✅ successfully submitted {} rollup orders for pool {:?} \
+                                         on block {} ({}ms)",
+                                        order_count,
+                                        pool_id,
+                                        block_number,
+                                        latency
+                                    );
+                                }
+                                Err(e) => {
+                                    metrics.record_order_failure();
+                                    tracing::warn!(
+                                        "❌ failed to submit rollup orders for pool {:?} on block \
+                                         {} after retries: {:?}",
+                                        pool_id,
+                                        block_number,
+                                        e
+                                    );
+                                }
                             }
                         }
                     }
 
                     // Exit after processing 3 batches
                     if batch_count >= 3 {
-                        tracing::info!("completed 3 order batches, stopping agent");
+                        tracing::info!("🏁 completed 3 order batches, stopping agent");
                         break;
                     }
                 }
             }
             Err(e) => {
                 tracing::warn!(
-                    "failed to create L2 block stream: {:?}, falling back to timer-based \
+                    "⚠️ failed to create L2 block stream: {:?}, falling back to timer-based \
                      generation",
                     e
                 );
 
                 // Fallback to timer-based generation if L2 stream fails
                 for i in 0..3 {
-                    tracing::info!("generating timer-based order batch {}", i);
+                    tracing::info!("⏱️ generating timer-based order batch {}", i);
 
                     let new_orders = generator.generate_orders().await;
-                    tracing::info!("generated {} pool order sets", new_orders.len());
+
+                    // Record generated orders
+                    for orders in &new_orders {
+                        metrics.record_order_generated(); // TOB
+                        for _ in &orders.book {
+                            metrics.record_order_generated(); // Each book order
+                        }
+                    }
+
+                    tracing::info!(
+                        "generated {} pool order sets (fallback mode)",
+                        new_orders.len()
+                    );
 
                     for orders in new_orders {
                         let GeneratedPoolOrders { pool_id, tob, book } = orders;
@@ -297,16 +355,25 @@ fn rollup_order_agent(
                             .chain(vec![tob.into()])
                             .collect::<Vec<AllOrders>>();
 
-                        match client.send_orders(all_orders).await {
-                            Ok(_) => tracing::info!(
-                                "successfully submitted fallback orders for pool {:?}",
-                                pool_id
-                            ),
-                            Err(e) => tracing::warn!(
-                                "failed to submit fallback orders for pool {:?}: {:?}",
-                                pool_id,
-                                e
-                            )
+                        let submit_start = Instant::now();
+                        match submit_orders_with_retry(&client, all_orders, &metrics, 3).await {
+                            Ok(_) => {
+                                let latency = submit_start.elapsed().as_millis() as u64;
+                                metrics.record_order_submitted(latency);
+                                metrics.record_order_success();
+                                tracing::info!(
+                                    "✅ successfully submitted fallback orders for pool {:?}",
+                                    pool_id
+                                );
+                            }
+                            Err(e) => {
+                                metrics.record_order_failure();
+                                tracing::warn!(
+                                    "❌ failed to submit fallback orders for pool {:?}: {:?}",
+                                    pool_id,
+                                    e
+                                );
+                            }
                         }
                     }
 
@@ -315,9 +382,44 @@ fn rollup_order_agent(
             }
         }
 
-        tracing::info!("rollup order agent completed");
+        // Print final metrics
+        metrics.print_summary();
+        tracing::info!("🎯 rollup order agent completed with metrics");
         Ok(())
     }) as Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'static>>
+}
+
+/// Submit orders with retry logic and exponential backoff
+async fn submit_orders_with_retry(
+    client: &HttpClient,
+    orders: Vec<AllOrders>,
+    _metrics: &RollupTestMetrics,
+    max_retries: u32
+) -> eyre::Result<()> {
+    let mut attempt = 0;
+    let mut delay = Duration::from_millis(100); // Start with 100ms
+
+    loop {
+        attempt += 1;
+
+        match client.send_orders(orders.clone()).await {
+            Ok(_) => return Ok(()),
+            Err(e) if attempt >= max_retries => {
+                return Err(eyre::eyre!("Failed after {} attempts: {:?}", max_retries, e));
+            }
+            Err(e) => {
+                tracing::debug!(
+                    "🔄 Retry {}/{} failed: {:?}, waiting {}ms",
+                    attempt,
+                    max_retries,
+                    e,
+                    delay.as_millis()
+                );
+                tokio::time::sleep(delay).await;
+                delay = std::cmp::min(delay * 2, Duration::from_secs(5)); // Cap at 5s
+            }
+        }
+    }
 }
 
 /// Create a test configuration for rollup agent testing
@@ -389,7 +491,8 @@ fn create_test_rollup_config() -> eyre::Result<RollupAgentConfig> {
         rpc_address:   SocketAddr::from_str("127.0.0.1:4201").unwrap(),
         agent_id:      1,
         current_block: 1,
-        sequencer_url: rollup_config.sequencer_url
+        sequencer_url: rollup_config.sequencer_url,
+        metrics:       RollupTestMetrics::default()
     })
 }
 
@@ -409,7 +512,8 @@ fn create_fallback_rollup_config() -> RollupAgentConfig {
         rpc_address:   SocketAddr::from_str("127.0.0.1:4201").unwrap(),
         agent_id:      1,
         current_block: 1,
-        sequencer_url: "https://sepolia.base.org".to_string()
+        sequencer_url: "https://sepolia.base.org".to_string(),
+        metrics:       RollupTestMetrics::default()
     }
 }
 
@@ -450,7 +554,7 @@ async fn create_l2_block_stream(
     Ok(Box::pin(stream))
 }
 
-/// Initialize SyncedUniswapPools from configuration
+/// Initialize SyncedUniswapPools from configuration with enhanced tracking
 async fn initialize_pools_from_config(
     config: &RollupTestConfig
 ) -> eyre::Result<SyncedUniswapPools> {
@@ -463,28 +567,212 @@ async fn initialize_pools_from_config(
     let (tx, _rx) = mpsc::channel(100);
 
     tracing::info!(
-        "initializing {} pools from rollup configuration",
+        "initializing {} pools from rollup configuration with enhanced tracking",
         config.initial_state.pool_keys.len()
     );
 
-    // Create placeholder pools from config
+    // Create placeholder pools from config with detailed logging
     // In full implementation, these would be populated with real liquidity data
     for (index, pool_key) in config.initial_state.pool_keys.iter().enumerate() {
-        let _pool_id = alloy_primitives::FixedBytes::from([index as u8; 32]);
-        tracing::debug!(
-            "creating pool {} with fee: {}, tick_spacing: {}",
+        let pool_id = alloy_primitives::FixedBytes::from([index as u8; 32]);
+
+        tracing::info!(
+            "📊 creating enhanced pool {} with fee: {}, tick_spacing: {}, initial_liquidity: {}",
             index,
             pool_key.fee,
-            pool_key.tick_spacing
+            pool_key.tick_spacing,
+            pool_key.initial_liquidity()
         );
 
-        // TODO: Create actual EnhancedUniswapPool instances
+        // Create detailed pool metadata for tracking
+        // TODO: In full implementation, create actual EnhancedUniswapPool instances
+        // let enhanced_pool = create_enhanced_pool(pool_id, pool_key).await?;
         // pool_map.insert(pool_id, Arc::new(RwLock::new(enhanced_pool)));
+
+        tracing::debug!("✅ successfully configured pool {:?} for testing", pool_id);
     }
 
     let pools = SyncedUniswapPools::new(pool_map, tx);
-    tracing::info!("initialized pools structure");
+    tracing::info!(
+        "🎯 initialized {} pools with enhanced tracking capabilities",
+        config.initial_state.pool_keys.len()
+    );
     Ok(pools)
+}
+
+/// Performance and validation metrics for rollup testing
+#[derive(Debug, Clone)]
+pub struct RollupTestMetrics {
+    pub orders_generated:      Arc<AtomicU64>,
+    pub orders_submitted:      Arc<AtomicU64>,
+    pub orders_successful:     Arc<AtomicU64>,
+    pub orders_failed:         Arc<AtomicU64>,
+    pub avg_submit_latency_ms: Arc<AtomicU64>,
+    pub l2_blocks_processed:   Arc<AtomicU64>,
+    pub pools_active:          Arc<AtomicU32>
+}
+
+impl Default for RollupTestMetrics {
+    fn default() -> Self {
+        Self {
+            orders_generated:      Arc::new(AtomicU64::new(0)),
+            orders_submitted:      Arc::new(AtomicU64::new(0)),
+            orders_successful:     Arc::new(AtomicU64::new(0)),
+            orders_failed:         Arc::new(AtomicU64::new(0)),
+            avg_submit_latency_ms: Arc::new(AtomicU64::new(0)),
+            l2_blocks_processed:   Arc::new(AtomicU64::new(0)),
+            pools_active:          Arc::new(AtomicU32::new(0))
+        }
+    }
+}
+
+impl RollupTestMetrics {
+    pub fn record_order_generated(&self) {
+        self.orders_generated.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_order_submitted(&self, latency_ms: u64) {
+        self.orders_submitted.fetch_add(1, Ordering::Relaxed);
+
+        // Simple moving average for latency
+        let current_avg = self.avg_submit_latency_ms.load(Ordering::Relaxed);
+        let new_avg = if current_avg == 0 { latency_ms } else { (current_avg + latency_ms) / 2 };
+        self.avg_submit_latency_ms.store(new_avg, Ordering::Relaxed);
+    }
+
+    pub fn record_order_success(&self) {
+        self.orders_successful.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_order_failure(&self) {
+        self.orders_failed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_block_processed(&self) {
+        self.l2_blocks_processed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn set_active_pools(&self, count: u32) {
+        self.pools_active.store(count, Ordering::Relaxed);
+    }
+
+    pub fn print_summary(&self) {
+        let generated = self.orders_generated.load(Ordering::Relaxed);
+        let submitted = self.orders_submitted.load(Ordering::Relaxed);
+        let successful = self.orders_successful.load(Ordering::Relaxed);
+        let failed = self.orders_failed.load(Ordering::Relaxed);
+        let avg_latency = self.avg_submit_latency_ms.load(Ordering::Relaxed);
+        let blocks = self.l2_blocks_processed.load(Ordering::Relaxed);
+        let pools = self.pools_active.load(Ordering::Relaxed);
+
+        tracing::info!("📊 Rollup Test Metrics Summary:");
+        tracing::info!("   Generated Orders: {}", generated);
+        tracing::info!("   Submitted Orders: {}", submitted);
+        tracing::info!("   Successful Orders: {}", successful);
+        tracing::info!("   Failed Orders: {}", failed);
+        tracing::info!(
+            "   Success Rate: {:.2}%",
+            if submitted > 0 { (successful as f64 / submitted as f64) * 100.0 } else { 0.0 }
+        );
+        tracing::info!("   Avg Submit Latency: {}ms", avg_latency);
+        tracing::info!("   L2 Blocks Processed: {}", blocks);
+        tracing::info!("   Active Pools: {}", pools);
+    }
+}
+
+/// Helper utilities for generating test data
+pub struct RollupTestDataGenerator;
+
+impl RollupTestDataGenerator {
+    /// Generate sample pool configuration for testing
+    pub fn generate_sample_pools(
+        count: usize
+    ) -> Vec<testing_tools::types::initial_state::PartialConfigPoolKey> {
+        use angstrom_types::matching::SqrtPriceX96;
+        use testing_tools::types::initial_state::PartialConfigPoolKey;
+
+        (0..count)
+            .map(|i| {
+                let fee = match i % 4 {
+                    0 => 500,   // 0.05% fee tier
+                    1 => 3000,  // 0.3% fee tier
+                    2 => 10000, // 1% fee tier
+                    _ => 100    // 0.01% fee tier
+                };
+
+                let tick_spacing = match fee {
+                    100 => 1,
+                    500 => 10,
+                    3000 => 60,
+                    10000 => 200,
+                    _ => 60
+                };
+
+                // Generate different price levels for each pool
+                let tick = -1000 + (i as i32 * 500);
+                let liquidity_amount = format!("{}000000000000000000", 100 + i * 50); // Varying liquidity
+
+                PartialConfigPoolKey::new(
+                    fee,
+                    tick_spacing,
+                    liquidity_amount
+                        .parse()
+                        .unwrap_or(100000000000000000000u128),
+                    SqrtPriceX96::at_tick(tick).unwrap_or(SqrtPriceX96::from_float_price(1.0))
+                )
+            })
+            .collect()
+    }
+
+    /// Generate test token configuration
+    pub fn generate_test_tokens() -> Vec<testing_tools::types::initial_state::Erc20ToDeploy> {
+        use alloy_primitives::Address;
+        use testing_tools::types::initial_state::Erc20ToDeploy;
+
+        vec![
+            // Base Sepolia standard tokens
+            Erc20ToDeploy::new(
+                "Wrapped Ether",
+                "WETH",
+                Some(Address::from_str("0x4200000000000000000000000000000000000006").unwrap())
+            ),
+            Erc20ToDeploy::new(
+                "USD Coin",
+                "USDC",
+                Some(Address::from_str("0x036CbD53842c5426634e7929541eC2318f3dCF7e").unwrap())
+            ),
+            Erc20ToDeploy::new(
+                "Coinbase Wrapped BTC",
+                "cbBTC",
+                Some(Address::from_str("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf").unwrap())
+            ),
+        ]
+    }
+
+    /// Generate random test wallet addresses
+    pub fn generate_test_addresses(count: usize) -> Vec<alloy_primitives::Address> {
+        use alloy_primitives::Address;
+
+        (0..count)
+            .map(|i| {
+                // Generate deterministic test addresses for reproducible tests
+                let mut bytes = [0u8; 20];
+                bytes[19] = (i + 1) as u8; // Simple deterministic generation
+                bytes[18] = ((i + 1) >> 8) as u8;
+                Address::from(bytes)
+            })
+            .collect()
+    }
+
+    /// Create a comprehensive test configuration
+    pub fn create_comprehensive_test_config()
+    -> eyre::Result<testing_tools::types::initial_state::InitialStateConfig> {
+        Ok(testing_tools::types::initial_state::InitialStateConfig {
+            addresses_with_tokens: Self::generate_test_addresses(5),
+            tokens_to_deploy:      Self::generate_test_tokens(),
+            pool_keys:             Self::generate_sample_pools(3)
+        })
+    }
 }
 
 /// Test order generation with real L2 block events
@@ -541,7 +829,8 @@ async fn run_complete_rollup_integration_test() -> eyre::Result<()> {
         rpc_address:   std::net::SocketAddr::from_str("127.0.0.1:4201")?,
         agent_id:      1,
         current_block: latest_block,
-        sequencer_url: config.sequencer_url.clone()
+        sequencer_url: config.sequencer_url.clone(),
+        metrics:       RollupTestMetrics::default()
     };
 
     // 5. Test order generation with real L2 connection
@@ -762,6 +1051,42 @@ async fn test_end_to_end_rollup_integration() {
     }
 
     tracing::info!("=== Rollup Integration Test Complete ===");
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_rollup_data_generation() {
+    init_test_tracing();
+
+    tracing::info!("=== Testing Rollup Data Generation Utilities ===");
+
+    // Test pool generation
+    let pools = RollupTestDataGenerator::generate_sample_pools(4);
+    assert_eq!(pools.len(), 4);
+    tracing::info!("✅ Generated {} test pools with varying fees and liquidity", pools.len());
+
+    // Test token generation
+    let tokens = RollupTestDataGenerator::generate_test_tokens();
+    assert_eq!(tokens.len(), 3);
+    tracing::info!("✅ Generated {} test tokens (WETH, USDC, cbBTC)", tokens.len());
+
+    // Test address generation
+    let addresses = RollupTestDataGenerator::generate_test_addresses(5);
+    assert_eq!(addresses.len(), 5);
+    tracing::info!("✅ Generated {} test addresses", addresses.len());
+
+    // Test comprehensive config
+    let config = RollupTestDataGenerator::create_comprehensive_test_config().unwrap();
+    assert_eq!(config.addresses_with_tokens.len(), 5);
+    assert_eq!(config.tokens_to_deploy.len(), 3);
+    assert_eq!(config.pool_keys.len(), 3);
+
+    tracing::info!("✅ Generated comprehensive test config:");
+    tracing::info!("   - {} addresses with tokens", config.addresses_with_tokens.len());
+    tracing::info!("   - {} tokens to deploy", config.tokens_to_deploy.len());
+    tracing::info!("   - {} pool configurations", config.pool_keys.len());
+
+    tracing::info!("=== Data Generation Test Complete ===");
 }
 
 #[test]

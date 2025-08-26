@@ -27,7 +27,8 @@ use angstrom_types::{
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, UniswapPoolRegistry
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId,
+        UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
@@ -300,9 +301,7 @@ where
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
         let signer_addr = signer.address();
-        executor.spawn_critical_with_graceful_shutdown_signal("telemetry init", |grace_shutdown| {
-            init_telemetry(signer_addr, grace_shutdown)
-        });
+        init_telemetry_task(&executor, signer_addr);
 
         let uniswap_pool_manager = configure_uniswap_manager::<_, EthPrimitives, DEFAULT_TICKS>(
             querying_provider.clone(),
@@ -361,8 +360,7 @@ where
 
         // fetch pool ids
 
-        let pool_config = PoolConfig::with_pool_ids(pool_ids);
-        let order_storage = Arc::new(OrderStorage::new(&pool_config));
+        let (pool_config, order_storage) = create_pool_config_and_storage(pool_ids);
 
         let _pool_handle = ConsensusPoolManagerBuilder::new(
             validation_handle.clone(),
@@ -399,10 +397,7 @@ where
             order_storage.clone(),
             handles.quoter_rx,
             uniswap_pools.clone(),
-            rayon::ThreadPoolBuilder::default()
-                .num_threads(6)
-                .build()
-                .expect("failed to build rayon thread pool"),
+            create_thread_pool(),
             Duration::from_millis(100),
             consensus_client.subscribe_consensus_round_event()
         );
@@ -554,9 +549,7 @@ where
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
         let signer_addr = signer.address();
-        executor.spawn_critical_with_graceful_shutdown_signal("telemetry init", |grace_shutdown| {
-            init_telemetry(signer_addr, grace_shutdown)
-        });
+        init_telemetry_task(&executor, signer_addr);
 
         let uniswap_pool_manager = configure_uniswap_manager::<_, OpPrimitives, DEFAULT_TICKS>(
             querying_provider.clone(),
@@ -610,8 +603,7 @@ where
 
         // fetch pool ids
 
-        let pool_config = PoolConfig::with_pool_ids(pool_ids);
-        let order_storage = Arc::new(OrderStorage::new(&pool_config));
+        let (pool_config, order_storage) = create_pool_config_and_storage(pool_ids);
 
         let _pool_handle = RollupPoolManagerBuilder::new(
             validation_handle.clone(),
@@ -641,10 +633,7 @@ where
             order_storage.clone(),
             handles.quoter_rx,
             uniswap_pools.clone(),
-            rayon::ThreadPoolBuilder::default()
-                .num_threads(6)
-                .build()
-                .expect("failed to build rayon thread pool"),
+            create_thread_pool(),
             Duration::from_millis(100)
         );
 
@@ -672,6 +661,28 @@ where
 
         self.node_exit_future.await
     }
+}
+
+/// Create rayon thread pool with standard settings
+fn create_thread_pool() -> rayon::ThreadPool {
+    rayon::ThreadPoolBuilder::default()
+        .num_threads(6)
+        .build()
+        .expect("failed to build rayon thread pool")
+}
+
+/// Create pool config and order storage from pool IDs
+fn create_pool_config_and_storage(pool_ids: Vec<PoolId>) -> (PoolConfig, Arc<OrderStorage>) {
+    let pool_config = PoolConfig::with_pool_ids(pool_ids);
+    let order_storage = Arc::new(OrderStorage::new(&pool_config));
+    (pool_config, order_storage)
+}
+
+/// Initialize telemetry with standard pattern
+fn init_telemetry_task(executor: &TaskExecutor, signer_addr: Address) {
+    executor.spawn_critical_with_graceful_shutdown_signal("telemetry init", |grace_shutdown| {
+        init_telemetry(signer_addr, grace_shutdown)
+    });
 }
 
 /// Extract tokens from pools

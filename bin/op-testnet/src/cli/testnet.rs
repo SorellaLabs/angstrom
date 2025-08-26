@@ -20,7 +20,7 @@ use secp256k1::{Secp256k1, SecretKey};
 use serde::Deserialize;
 use testing_tools::{
     types::{
-        config::TestnetConfig,
+        config::OpTestnetConfig,
         initial_state::{Erc20ToDeploy, InitialStateConfig, PartialConfigPoolKey}
     },
     utils::workspace_dir
@@ -29,14 +29,7 @@ use testing_tools::{
 #[derive(Debug, Clone, clap::Parser)]
 pub struct TestnetCli {
     #[clap(long)]
-    pub mev_guard:              bool,
-    #[clap(short, long)]
-    pub leader_eth_rpc_port:    Option<u16>,
-    #[clap(short, long)]
     pub angstrom_base_rpc_port: Option<u16>,
-    /// the amount of testnet nodes that will be spawned and connected to.
-    #[clap(short, long, default_value = "1")]
-    pub nodes_in_network:       u64,
     /// eth rpc/ipc fork url
     #[clap(short, long, default_value = "ws://localhost:8546")]
     pub eth_fork_url:           String,
@@ -46,14 +39,11 @@ pub struct TestnetCli {
 }
 
 impl TestnetCli {
-    pub fn make_config(&self) -> eyre::Result<TestnetConfig> {
+    pub fn make_config(&self) -> eyre::Result<OpTestnetConfig> {
         let initial_state_config = AllPoolKeyInners::load_toml_config(&self.pool_key_config)?;
 
-        Ok(TestnetConfig::new(
-            self.nodes_in_network,
+        Ok(OpTestnetConfig::new(
             &self.eth_fork_url,
-            self.mev_guard,
-            self.leader_eth_rpc_port,
             self.angstrom_base_rpc_port,
             initial_state_config
         ))
@@ -65,10 +55,7 @@ impl Default for TestnetCli {
         let mut workspace_dir = workspace_dir();
         workspace_dir.push("bin/op-testnet/testnet-config.toml");
         Self {
-            mev_guard:              false,
-            leader_eth_rpc_port:    None,
             angstrom_base_rpc_port: None,
-            nodes_in_network:       1,
             eth_fork_url:           "ws://localhost:8546".to_string(),
             pool_key_config:        workspace_dir
         }

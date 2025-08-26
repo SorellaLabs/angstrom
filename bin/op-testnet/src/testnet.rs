@@ -5,7 +5,7 @@ use futures::Future;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TaskExecutor;
 use testing_tools::{
-    agents::AgentConfig, controllers::enviroments::AngstromTestnet, types::config::TestnetConfig,
+    agents::AgentConfig, controllers::enviroments::AngstromTestnet, types::config::OpTestnetConfig,
     utils::noop_agent
 };
 

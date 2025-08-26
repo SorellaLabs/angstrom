@@ -7,7 +7,7 @@ use clap::{ArgAction, Parser, Subcommand};
 use devnet::DevnetCli;
 use e2e_orders::End2EndOrdersCli;
 use reth_tasks::TaskExecutor;
-use testing_tools::types::config::{DevnetConfig, TestnetConfig};
+use testing_tools::types::config::{DevnetConfig, OpTestnetConfig};
 use testnet::TestnetCli;
 use tracing::Level;
 use tracing_subscriber::{

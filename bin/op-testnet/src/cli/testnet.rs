@@ -28,13 +28,20 @@ use testing_tools::{
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct TestnetCli {
+    #[clap(long)]
+    pub mev_guard:              bool,
+    #[clap(short, long)]
+    pub leader_eth_rpc_port:    Option<u16>,
     #[clap(short, long)]
     pub angstrom_base_rpc_port: Option<u16>,
+    /// the amount of testnet nodes that will be spawned and connected to.
+    #[clap(short, long, default_value = "1")]
+    pub nodes_in_network:       u64,
     /// eth rpc/ipc fork url
     #[clap(short, long, default_value = "ws://localhost:8546")]
     pub eth_fork_url:           String,
     /// path to the toml file with the pool keys
-    #[clap(short, long, default_value = "./bin/testnet/testnet-config.toml")]
+    #[clap(short, long, default_value = "./bin/op-testnet/testnet-config.toml")]
     pub pool_key_config:        PathBuf
 }
 
@@ -56,9 +63,12 @@ impl TestnetCli {
 impl Default for TestnetCli {
     fn default() -> Self {
         let mut workspace_dir = workspace_dir();
-        workspace_dir.push("bin/testnet/testnet-config.toml");
+        workspace_dir.push("bin/op-testnet/testnet-config.toml");
         Self {
+            mev_guard:              false,
+            leader_eth_rpc_port:    None,
             angstrom_base_rpc_port: None,
+            nodes_in_network:       1,
             eth_fork_url:           "ws://localhost:8546".to_string(),
             pool_key_config:        workspace_dir
         }

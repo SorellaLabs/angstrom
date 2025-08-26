@@ -29,7 +29,7 @@ pub struct DevnetCli {
     #[clap(long, requires = "fork_block")]
     pub fork_url:                Option<String>,
     /// path to the toml file with the pool keys
-    #[clap(short, long, default_value = "./bin/testnet/testnet-config.toml")]
+    #[clap(short, long, default_value = "./bin/op-testnet/testnet-config.toml")]
     pub pool_key_config:         PathBuf
 }
 

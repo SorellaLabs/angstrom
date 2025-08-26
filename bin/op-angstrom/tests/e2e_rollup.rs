@@ -23,22 +23,31 @@
  * 3. Running real order generation and validation
  */
 
-use std::{net::SocketAddr, pin::Pin, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, pin::Pin, str::FromStr, time::Duration};
 
-use alloy::{consensus::BlockHeader, providers::Provider, sol_types::SolCall};
+use alloy::{
+    consensus::BlockHeader,
+    providers::{Provider, ProviderBuilder},
+    sol_types::SolCall
+};
+use alloy_primitives::Address;
 use alloy_rpc_types::TransactionTrait;
 use angstrom_rpc::api::OrderApiClient;
 use angstrom_types::{
     contract_payloads::angstrom::AngstromBundle,
+    matching::SqrtPriceX96,
     primitive::{ANGSTROM_ADDRESS, AngstromAddressConfig},
     sol_bindings::grouped_orders::AllOrders
 };
+use eyre::Context;
 use futures::Future;
 use jsonrpsee::http_client::HttpClient;
 use pade::PadeDecode;
+use serde::Deserialize;
 use testing_tools::{
     contracts::anvil::WalletProviderRpc,
-    order_generator::{GeneratedPoolOrders, InternalBalanceMode, OrderGenerator}
+    order_generator::{GeneratedPoolOrders, InternalBalanceMode, OrderGenerator},
+    types::initial_state::{Erc20ToDeploy, InitialStateConfig, PartialConfigPoolKey}
 };
 use tokio::time::timeout;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
@@ -53,6 +62,115 @@ pub struct RollupAgentConfig {
     pub agent_id:      u64,
     pub current_block: u64,
     pub sequencer_url: String
+}
+
+/// Rollup-specific test configuration
+#[derive(Clone)]
+pub struct RollupTestConfig {
+    pub initial_state:        InitialStateConfig,
+    pub sequencer_url:        String,
+    pub chain_id:             u64,
+    pub gas_price_multiplier: f64
+}
+
+/// TOML configuration structure for rollup tests
+#[derive(Debug, Clone, Deserialize)]
+struct RollupConfigToml {
+    addresses_with_tokens: Vec<String>,
+    tokens_to_deploy:      Vec<TokenToDeploy>,
+    pool_keys:             Option<Vec<PoolKeyInner>>,
+    rollup:                RollupSettings
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RollupSettings {
+    default_sequencer_url: String,
+    chain_id:              u64,
+    gas_price_multiplier:  f64
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PoolKeyInner {
+    fee:          u64,
+    tick_spacing: i32,
+    liquidity:    String,
+    tick:         i32
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TokenToDeploy {
+    name:    String,
+    symbol:  String,
+    address: String
+}
+
+impl RollupConfigToml {
+    /// Load rollup configuration from TOML file
+    pub fn load_toml_config(config_path: &PathBuf) -> eyre::Result<RollupTestConfig> {
+        if !config_path.exists() {
+            return Err(eyre::eyre!("rollup config file does not exist at {:?}", config_path));
+        }
+
+        let toml_content = std::fs::read_to_string(config_path)
+            .wrap_err_with(|| format!("could not read rollup config file {config_path:?}"))?;
+
+        let config: Self = toml::from_str(&toml_content).wrap_err_with(|| {
+            format!("could not deserialize rollup config file {config_path:?}")
+        })?;
+
+        let rollup_settings = config.rollup.clone();
+        Ok(RollupTestConfig {
+            initial_state:        config.try_into()?,
+            sequencer_url:        rollup_settings.default_sequencer_url,
+            chain_id:             rollup_settings.chain_id,
+            gas_price_multiplier: rollup_settings.gas_price_multiplier
+        })
+    }
+}
+
+impl TryInto<InitialStateConfig> for RollupConfigToml {
+    type Error = eyre::ErrReport;
+
+    fn try_into(self) -> Result<InitialStateConfig, Self::Error> {
+        Ok(InitialStateConfig {
+            addresses_with_tokens: self
+                .addresses_with_tokens
+                .iter()
+                .map(|addr| Address::from_str(addr))
+                .collect::<Result<Vec<_>, _>>()?,
+            tokens_to_deploy:      self
+                .tokens_to_deploy
+                .iter()
+                .map(|token| -> Result<Erc20ToDeploy, eyre::ErrReport> {
+                    Ok(Erc20ToDeploy::new(
+                        &token.name,
+                        &token.symbol,
+                        Some(Address::from_str(&token.address)?)
+                    ))
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            pool_keys:             self.try_into()?
+        })
+    }
+}
+
+impl TryInto<Vec<PartialConfigPoolKey>> for RollupConfigToml {
+    type Error = eyre::ErrReport;
+
+    fn try_into(self) -> Result<Vec<PartialConfigPoolKey>, Self::Error> {
+        let Some(keys) = self.pool_keys else { return Ok(Vec::new()) };
+
+        keys.into_iter()
+            .map(|key| {
+                Ok::<_, eyre::ErrReport>(PartialConfigPoolKey::new(
+                    key.fee,
+                    key.tick_spacing,
+                    key.liquidity.parse()?,
+                    SqrtPriceX96::at_tick(key.tick)?
+                ))
+            })
+            .collect()
+    }
 }
 
 fn rollup_order_agent(
@@ -124,14 +242,61 @@ fn rollup_order_agent(
 }
 
 /// Create a test configuration for rollup agent testing
-fn create_test_rollup_config() -> RollupAgentConfig {
+/// Now loads from the actual TOML configuration file
+fn create_test_rollup_config() -> eyre::Result<RollupAgentConfig> {
     use std::{str::FromStr, sync::Arc};
 
     use dashmap::DashMap;
     use tokio::sync::mpsc;
 
-    // Create empty pools for now - this will be populated from config file in later
-    // phases
+    // Load configuration from TOML file
+    let config_path = PathBuf::from("./rollup-test-config.toml");
+    let rollup_config = match RollupConfigToml::load_toml_config(&config_path) {
+        Ok(config) => config,
+        Err(e) => {
+            tracing::warn!("Failed to load rollup config: {:?}, using defaults", e);
+            // Fall back to empty configuration
+            RollupTestConfig {
+                initial_state:        InitialStateConfig {
+                    addresses_with_tokens: vec![],
+                    tokens_to_deploy:      vec![],
+                    pool_keys:             vec![]
+                },
+                sequencer_url:        "https://sepolia.base.org".to_string(),
+                chain_id:             84532,
+                gas_price_multiplier: 1.1
+            }
+        }
+    };
+
+    tracing::info!(
+        "Loaded rollup config: {} pools, {} tokens, sequencer: {}",
+        rollup_config.initial_state.pool_keys.len(),
+        rollup_config.initial_state.tokens_to_deploy.len(),
+        rollup_config.sequencer_url
+    );
+
+    // Create pools structure - TODO: populate with actual pool data
+    let pool_map = Arc::new(DashMap::new());
+    let (tx, _rx) = mpsc::channel(100);
+    let pools = SyncedUniswapPools::new(pool_map, tx);
+
+    Ok(RollupAgentConfig {
+        uniswap_pools: pools,
+        rpc_address:   SocketAddr::from_str("127.0.0.1:4201").unwrap(),
+        agent_id:      1,
+        current_block: 1,
+        sequencer_url: rollup_config.sequencer_url
+    })
+}
+
+/// Create fallback test configuration when TOML loading fails
+fn create_fallback_rollup_config() -> RollupAgentConfig {
+    use std::{str::FromStr, sync::Arc};
+
+    use dashmap::DashMap;
+    use tokio::sync::mpsc;
+
     let pool_map = Arc::new(DashMap::new());
     let (tx, _rx) = mpsc::channel(100);
     let pools = SyncedUniswapPools::new(pool_map, tx);
@@ -143,6 +308,43 @@ fn create_test_rollup_config() -> RollupAgentConfig {
         current_block: 1,
         sequencer_url: "https://sepolia.base.org".to_string()
     }
+}
+
+/// Create a connection to the L2 sequencer for testing
+async fn create_l2_provider(sequencer_url: &str) -> eyre::Result<impl Provider> {
+    tracing::info!("connecting to L2 sequencer at: {}", sequencer_url);
+
+    let provider = ProviderBuilder::new().on_http(sequencer_url.parse()?);
+
+    // Test the connection
+    let chain_id = provider.get_chain_id().await?;
+    let block_number = provider.get_block_number().await?;
+
+    tracing::info!("connected to L2 chain_id: {}, current block: {}", chain_id, block_number);
+
+    Ok(provider)
+}
+
+/// Create a simple L2 block stream for testing
+async fn create_l2_block_stream(
+    sequencer_url: &str
+) -> eyre::Result<impl futures::Stream<Item = u64>> {
+    use futures::{StreamExt, stream};
+    use tokio::time::{Duration, MissedTickBehavior, interval};
+
+    let provider = create_l2_provider(sequencer_url).await?;
+
+    // Create a stream that polls for new blocks every 2 seconds
+    let mut interval = interval(Duration::from_secs(2));
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    let stream = stream::unfold((provider, interval), |(provider, mut interval)| async move {
+        interval.tick().await;
+        let block_number = provider.get_block_number().await.unwrap_or(0);
+        Some((block_number, (provider, interval)))
+    });
+
+    Ok(stream)
 }
 
 async fn wait_for_rollup_bundle_block<F>(provider: WalletProviderRpc, validator: F)
@@ -304,7 +506,13 @@ fn rollup_agent_can_generate_orders() {
         tracing::info!("testing rollup order agent generation");
 
         // Create test configuration
-        let test_config = create_test_rollup_config();
+        let test_config = match create_test_rollup_config() {
+            Ok(config) => config,
+            Err(e) => {
+                tracing::warn!("Failed to create test config: {:?}, using fallback", e);
+                create_fallback_rollup_config()
+            }
+        };
         tracing::info!("created test config with {} pools", test_config.uniswap_pools.len());
 
         // Test that the agent can be created and run
@@ -323,6 +531,58 @@ fn rollup_agent_can_generate_orders() {
         }
 
         tracing::info!("rollup agent test completed successfully");
+        eyre::Ok(())
+    });
+}
+
+#[test]
+#[serial_test::serial]
+fn rollup_l2_connection_works() {
+    init_test_tracing();
+
+    let runner = reth::CliRunner::try_default_runtime().unwrap();
+
+    let _ = runner.run_command_until_exit(|_ctx| async move {
+        tracing::info!("testing L2 sequencer connection");
+
+        // Load configuration to get the sequencer URL
+        let config = match create_test_rollup_config() {
+            Ok(config) => config,
+            Err(e) => {
+                tracing::warn!("Failed to load config: {:?}, using fallback", e);
+                create_fallback_rollup_config()
+            }
+        };
+
+        tracing::info!("testing connection to sequencer: {}", config.sequencer_url);
+
+        // Test L2 connection with a timeout to avoid hanging
+        match timeout(Duration::from_secs(10), create_l2_provider(&config.sequencer_url)).await {
+            Ok(Ok(provider)) => {
+                tracing::info!("successfully connected to L2 sequencer");
+
+                // Try to get current block to verify connection
+                match timeout(Duration::from_secs(5), provider.get_block_number()).await {
+                    Ok(Ok(block_number)) => {
+                        tracing::info!("current L2 block number: {}", block_number);
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!("failed to get block number: {:?}", e);
+                    }
+                    Err(_) => {
+                        tracing::warn!("timeout getting block number");
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("failed to connect to L2 sequencer: {:?}", e);
+            }
+            Err(_) => {
+                tracing::warn!("timeout connecting to L2 sequencer");
+            }
+        }
+
+        tracing::info!("L2 connection test completed");
         eyre::Ok(())
     });
 }

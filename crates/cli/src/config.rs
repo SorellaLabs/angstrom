@@ -31,13 +31,26 @@ pub struct AngstromConfig {
     pub key_config:                KeyConfig,
     /// The expected block time in milliseconds. Used to coordinate auction
     /// timing.
-    #[clap(long, default_value_t = 12000, global = true, alias = "block-time")]
+    ///
+    /// No generic default is set here; each binary must resolve a
+    /// network-specific default using `NetworkProfile::default_block_time_ms`.
+    /// If this is left as `0` after parsing, it will be resolved by the
+    /// respective binary.
+    #[clap(long, global = true, alias = "block-time", default_value_t = 0)]
     pub block_time_ms:             u64,
     #[clap(flatten)]
     pub consensus_timing:          ConsensusTimingConfig
 }
 
 impl AngstromConfig {
+    /// Resolve `block_time_ms` to a sensible per-network default if it was not
+    /// provided on the CLI (i.e., remains at `0`).
+    pub fn resolve_block_time_default(&mut self, profile: NetworkProfile) {
+        if self.block_time_ms == 0 {
+            self.block_time_ms = profile.default_block_time_ms();
+        }
+    }
+
     pub fn get_local_signer(&self) -> eyre::Result<Option<AngstromSigner<PrivateKeySigner>>> {
         self.key_config
             .local_secret_key_location
@@ -100,4 +113,23 @@ pub struct KeyConfig {
         default_value = "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so"
     )]
     pub pkcs11_lib_path:           String
+}
+
+/// Execution profile for selecting per-network defaults.
+#[derive(Debug, Clone, Copy)]
+pub enum NetworkProfile {
+    /// Angstrom on Ethereum L1.
+    AngstromL1,
+    /// OP Stack based rollup (op-angstrom).
+    OpAngstromL2
+}
+
+impl NetworkProfile {
+    /// Default block time in milliseconds for each profile.
+    pub fn default_block_time_ms(self) -> u64 {
+        match self {
+            NetworkProfile::AngstromL1 => 12_000,
+            NetworkProfile::OpAngstromL2 => 2_000,
+        }
+    }
 }

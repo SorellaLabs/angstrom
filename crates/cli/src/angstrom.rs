@@ -34,7 +34,7 @@ use validation::validator::ValidationClient;
 
 use crate::{
     components::{AngstromLauncher, init_network_builder},
-    config::AngstromConfig,
+    config::{AngstromConfig, NetworkProfile},
     handles::{ConsensusHandles, ConsensusMode},
     metrics::init_metrics
 };
@@ -43,7 +43,7 @@ use crate::{
 /// chosen command.
 #[inline]
 pub fn run() -> eyre::Result<()> {
-    Cli::<EthereumChainSpecParser, AngstromConfig>::parse().run(|builder, args| async move {
+    Cli::<EthereumChainSpecParser, AngstromConfig>::parse().run(|builder, mut args| async move {
         let executor = builder.task_executor().clone();
         let chain = builder.config().chain.chain().named().unwrap();
 
@@ -56,6 +56,9 @@ pub fn run() -> eyre::Result<()> {
             }
             chain => panic!("we do not support chain {chain}")
         }
+
+        // Resolve per-network default block time if not specified.
+        args.resolve_block_time_default(NetworkProfile::AngstromL1);
 
         if args.metrics_enabled {
             executor.spawn_critical("metrics", init_metrics(args.metrics_port));

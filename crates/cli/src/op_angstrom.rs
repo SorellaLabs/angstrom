@@ -21,7 +21,7 @@ use validation::validator::ValidationClient;
 
 use crate::{
     components::AngstromLauncher,
-    config::AngstromConfig,
+    config::{AngstromConfig, NetworkProfile},
     handles::{RollupHandles, RollupMode},
     metrics::init_metrics
 };
@@ -57,6 +57,9 @@ pub fn run() -> eyre::Result<()> {
             ));
 
         init_with_chain_id(chain as u64);
+
+        // Resolve per-network default block time if not specified by the user.
+        args.angstrom.resolve_block_time_default(NetworkProfile::OpAngstromL2);
 
         if args.angstrom.metrics_enabled {
             executor.spawn_critical("metrics", init_metrics(args.angstrom.metrics_port));
@@ -379,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_default_block_time() {
-        let args = CombinedArgs::try_parse_from([
+        let mut args = CombinedArgs::try_parse_from([
             "op-angstrom",
             "--rollup.sequencer",
             "http://localhost:8545",
@@ -388,6 +391,8 @@ mod tests {
         ])
         .unwrap();
 
-        assert_eq!(args.angstrom.block_time_ms, 12000);
+        // Resolve the default for op-angstrom profile
+        args.angstrom.resolve_block_time_default(NetworkProfile::OpAngstromL2);
+        assert_eq!(args.angstrom.block_time_ms, 2000);
     }
 }

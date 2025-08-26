@@ -107,6 +107,13 @@ impl AngstromConfig {
             _ => Ok(())
         }
     }
+
+    /// Validate and add sequencer to normal nodes
+    pub fn add_validated_sequencer(&mut self, sequencer: &str) -> eyre::Result<()> {
+        Self::validate_sequencer_url(sequencer)?;
+        self.add_sequencer(sequencer)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -192,5 +199,20 @@ mod tests {
                 "invalid accepted: {url}"
             );
         }
+    }
+
+    #[test]
+    fn add_validated_sequencer_success() {
+        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
+        cfg.add_validated_sequencer("https://example.com").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["https://example.com"]);
+    }
+
+    #[test]
+    fn add_validated_sequencer_rejects_websocket() {
+        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
+        let err = cfg.add_validated_sequencer("ws://example.com").unwrap_err();
+        assert_eq!(err.to_string(), "Sequencer URL must be HTTP, not WS");
+        assert_eq!(cfg.normal_nodes, None); // Should not be modified on error
     }
 }

@@ -70,8 +70,7 @@ pub fn run() -> eyre::Result<()> {
         let Some(sequencer) = args.rollup.sequencer.as_ref() else {
             return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         };
-        AngstromConfig::validate_sequencer_url(sequencer)?;
-        args.angstrom.add_sequencer(sequencer)?;
+        args.angstrom.add_validated_sequencer(sequencer)?;
 
         let channels = RollupHandles::new();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());

@@ -17,7 +17,7 @@ use tracing_subscriber::{
 use crate::{run_devnet, run_testnet, simulations::e2e_orders::run_e2e_orders};
 
 #[derive(Parser)]
-pub struct AngstromTestnetCli {
+pub struct OpAngstromTestnetCli {
     /// testnet or devnet commands
     #[clap(subcommand)]
     pub command:      TestnetSubcommmand,
@@ -39,7 +39,7 @@ pub struct AngstromTestnetCli {
     pub metrics_port: u16
 }
 
-impl AngstromTestnetCli {
+impl OpAngstromTestnetCli {
     pub async fn run_all(executor: TaskExecutor) -> eyre::Result<()> {
         let this = Self::parse();
         this.init_tracing();

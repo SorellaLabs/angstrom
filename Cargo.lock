@@ -6978,8 +6978,25 @@ dependencies = [
 name = "op-angstrom"
 version = "0.1.0"
 dependencies = [
+ "alloy",
+ "alloy-primitives",
+ "alloy-rpc-types",
  "angstrom-cli",
+ "angstrom-rpc",
+ "angstrom-types",
+ "eyre",
+ "futures",
+ "jsonrpsee",
+ "pade",
+ "reth",
+ "reth-provider",
+ "reth-tasks",
+ "serial_test",
+ "testing-tools",
  "tikv-jemallocator",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.19",
 ]
 
 [[package]]

@@ -98,6 +98,15 @@ impl AngstromConfig {
 
         Ok(())
     }
+
+    /// Validate sequencer URL format
+    pub fn validate_sequencer_url(sequencer: &str) -> eyre::Result<()> {
+        let url = Url::parse(sequencer)?;
+        match url.scheme() {
+            "ws" | "wss" => Err(eyre::eyre!("Sequencer URL must be HTTP, not WS")),
+            _ => Ok(())
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -153,5 +162,35 @@ mod tests {
         };
         cfg.add_sequencer("c").unwrap();
         assert_eq!(cfg.normal_nodes.unwrap(), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn validate_sequencer_url_accepts_http() {
+        for url in [
+            "http://example.com",
+            "https://example.com",
+            "https://example.com:8080/path",
+            "https://example.com/path?x=1#frag"
+        ] {
+            assert!(AngstromConfig::validate_sequencer_url(url).is_ok(), "accepted: {url}");
+        }
+    }
+
+    #[test]
+    fn validate_sequencer_url_rejects_websocket() {
+        for url in ["ws://example.com", "wss://example.com", "WS://EXAMPLE.COM", "Wss://x.y"] {
+            let err = AngstromConfig::validate_sequencer_url(url).unwrap_err();
+            assert_eq!(err.to_string(), "Sequencer URL must be HTTP, not WS", "url={url}");
+        }
+    }
+
+    #[test]
+    fn validate_sequencer_url_invalids() {
+        for url in ["", "not-a-url", "://invalid", "http://"] {
+            assert!(
+                AngstromConfig::validate_sequencer_url(url).is_err(),
+                "invalid accepted: {url}"
+            );
+        }
     }
 }

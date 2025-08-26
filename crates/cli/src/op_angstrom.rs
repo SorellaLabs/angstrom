@@ -16,7 +16,6 @@ use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
 use reth_optimism_node::{OpAddOns, OpNode, args::RollupArgs};
-use url::Url;
 use validation::validator::ValidationClient;
 
 use crate::{
@@ -71,7 +70,7 @@ pub fn run() -> eyre::Result<()> {
         let Some(sequencer) = args.rollup.sequencer.as_ref() else {
             return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         };
-        validate_sequencer_url(sequencer)?;
+        AngstromConfig::validate_sequencer_url(sequencer)?;
         args.angstrom.add_sequencer(sequencer)?;
 
         let channels = RollupHandles::new();
@@ -150,46 +149,4 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     )
     .launch()
     .await
-}
-
-/// Validates that the sequencer URL is not a WebSocket URL.
-/// Returns an error if the URL scheme is "ws" or "wss".
-fn validate_sequencer_url(sequencer: &str) -> eyre::Result<()> {
-    let url = Url::parse(sequencer)?;
-    match url.scheme() {
-        "ws" | "wss" => Err(eyre::eyre!("Sequencer URL must be HTTP, not WS")),
-        _ => Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validate_sequencer_url_accepts_http() {
-        for url in [
-            "http://example.com",
-            "https://example.com",
-            "https://example.com:8080/path",
-            "https://example.com/path?x=1#frag"
-        ] {
-            assert!(validate_sequencer_url(url).is_ok(), "accepted: {url}");
-        }
-    }
-
-    #[test]
-    fn validate_sequencer_url_rejects_websocket() {
-        for url in ["ws://example.com", "wss://example.com", "WS://EXAMPLE.COM", "Wss://x.y"] {
-            let err = validate_sequencer_url(url).unwrap_err();
-            assert_eq!(err.to_string(), "Sequencer URL must be HTTP, not WS", "url={url}");
-        }
-    }
-
-    #[test]
-    fn validate_sequencer_url_invalids() {
-        for url in ["", "not-a-url", "://invalid", "http://"] {
-            assert!(validate_sequencer_url(url).is_err(), "invalid accepted: {url}");
-        }
-    }
 }

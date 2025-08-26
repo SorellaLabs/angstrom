@@ -35,7 +35,7 @@ pub struct TestnetCli {
     #[clap(short, long)]
     pub angstrom_base_rpc_port: Option<u16>,
     /// the amount of testnet nodes that will be spawned and connected to.
-    #[clap(short, long, default_value = "3")]
+    #[clap(short, long, default_value = "1")]
     pub nodes_in_network:       u64,
     /// eth rpc/ipc fork url
     #[clap(short, long, default_value = "ws://localhost:8546")]

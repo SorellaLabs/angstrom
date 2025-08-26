@@ -82,6 +82,38 @@ impl AngstromConfig {
                     .collect()
             })
     }
+
+    /// Add sequencer to normal nodes if it's not already in the list
+    pub fn add_sequencer(&mut self, sequencer: &str) -> eyre::Result<()> {
+        match &mut self.normal_nodes {
+            Some(nodes) => {
+                if !nodes.contains(&sequencer.to_string()) {
+                    nodes.push(sequencer.to_string());
+                }
+            }
+            None => {
+                self.normal_nodes = Some(vec![sequencer.to_string()]);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate sequencer URL format
+    pub fn validate_sequencer_url(sequencer: &str) -> eyre::Result<()> {
+        let url = Url::parse(sequencer)?;
+        match url.scheme() {
+            "ws" | "wss" => Err(eyre::eyre!("Sequencer URL must be HTTP, not WS")),
+            _ => Ok(())
+        }
+    }
+
+    /// Validate and add sequencer to normal nodes
+    pub fn add_validated_sequencer(&mut self, sequencer: &str) -> eyre::Result<()> {
+        Self::validate_sequencer_url(sequencer)?;
+        self.add_sequencer(sequencer)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -100,4 +132,87 @@ pub struct KeyConfig {
         default_value = "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so"
     )]
     pub pkcs11_lib_path:           String
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_sequencer_none() {
+        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
+        cfg.add_sequencer("node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
+    }
+
+    #[test]
+    fn add_sequencer_some_without_sequencer() {
+        let mut cfg =
+            AngstromConfig { normal_nodes: Some(vec!["node2".into()]), ..Default::default() };
+        cfg.add_sequencer("node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node2", "node1"]);
+    }
+
+    #[test]
+    fn add_sequencer_some_with_sequencer() {
+        let mut cfg =
+            AngstromConfig { normal_nodes: Some(vec!["node1".into()]), ..Default::default() };
+        cfg.add_sequencer("node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
+    }
+
+    #[test]
+    fn add_sequencer_appends_new() {
+        let mut cfg = AngstromConfig {
+            normal_nodes: Some(vec!["a".into(), "b".into()]),
+            ..Default::default()
+        };
+        cfg.add_sequencer("c").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn validate_sequencer_url_accepts_http() {
+        for url in [
+            "http://example.com",
+            "https://example.com",
+            "https://example.com:8080/path",
+            "https://example.com/path?x=1#frag"
+        ] {
+            assert!(AngstromConfig::validate_sequencer_url(url).is_ok(), "accepted: {url}");
+        }
+    }
+
+    #[test]
+    fn validate_sequencer_url_rejects_websocket() {
+        for url in ["ws://example.com", "wss://example.com", "WS://EXAMPLE.COM", "Wss://x.y"] {
+            let err = AngstromConfig::validate_sequencer_url(url).unwrap_err();
+            assert_eq!(err.to_string(), "Sequencer URL must be HTTP, not WS", "url={url}");
+        }
+    }
+
+    #[test]
+    fn validate_sequencer_url_invalids() {
+        for url in ["", "not-a-url", "://invalid", "http://"] {
+            assert!(
+                AngstromConfig::validate_sequencer_url(url).is_err(),
+                "invalid accepted: {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn add_validated_sequencer_success() {
+        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
+        cfg.add_validated_sequencer("https://example.com").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["https://example.com"]);
+    }
+
+    #[test]
+    fn add_validated_sequencer_rejects_websocket() {
+        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
+        let err = cfg.add_validated_sequencer("ws://example.com").unwrap_err();
+        assert_eq!(err.to_string(), "Sequencer URL must be HTTP, not WS");
+        assert_eq!(cfg.normal_nodes, None); // Should not be modified on error
+    }
 }

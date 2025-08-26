@@ -6984,6 +6984,7 @@ dependencies = [
  "angstrom-cli",
  "angstrom-rpc",
  "angstrom-types",
+ "dashmap 6.1.0",
  "eyre",
  "futures",
  "jsonrpsee",
@@ -6997,6 +6998,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.19",
+ "uniswap-v4",
 ]
 
 [[package]]

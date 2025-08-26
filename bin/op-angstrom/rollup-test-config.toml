@@ -1,0 +1,38 @@
+# Configuration for op-angstrom rollup e2e tests
+# Focused on Base and Unichain test environments
+
+addresses_with_tokens = [
+  "0x796fB50EAe1456A523F869f6135dd557eeaEE226",
+  "0xa7f1Aeb6e43443c683865Fdb9E15Dd01386C955b",
+  "0x9fa51eF64fDdF1A1f7Cd7Bb4475B277a2E7EAfE4",
+]
+
+# Simple pool configuration for testing - WETH/USDC pair
+[[pool_keys]]
+fee = 3000  # 0.3% fee tier
+tick_spacing = 60
+liquidity = "100000000000000000"  # 0.1 ETH equivalent
+tick = 0
+
+# Base Sepolia tokens (for testing)
+[[tokens_to_deploy]]
+name = "Wrapped Ethereum"
+symbol = "WETH"
+address = "0x4200000000000000000000000000000000000006"  # Base Sepolia WETH
+
+[[tokens_to_deploy]]
+name = "USD Coin"
+symbol = "USDC"
+address = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"  # Base Sepolia USDC
+
+# Optional: Add more tokens for extended testing
+# [[tokens_to_deploy]]
+# name = "Dai"
+# symbol = "DAI"
+# address = "0x..."
+
+[rollup]
+# Rollup-specific configuration
+default_sequencer_url = "https://sepolia.base.org"
+chain_id = 84532  # Base Sepolia
+gas_price_multiplier = 1.1

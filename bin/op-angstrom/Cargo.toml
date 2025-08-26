@@ -40,6 +40,8 @@ reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tasks.workspace = true
 serial_test.workspace = true
 testing-tools.workspace = true
+dashmap.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+uniswap-v4.workspace = true

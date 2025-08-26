@@ -12,7 +12,7 @@ use reth_provider::{CanonStateSubscriptions, test_utils::NoopProvider};
 use reth_tasks::TaskExecutor;
 use testing_tools::{
     agents::AgentConfig,
-    controllers::enviroments::AngstromTestnet,
+    controllers::enviroments::OpAngstromTestnet,
     order_generator::{GeneratedPoolOrders, InternalBalanceMode, OrderGenerator},
     types::{
         actions::WithAction, checked_actions::WithCheckedAction, checks::WithCheck,
@@ -31,7 +31,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
 
     // spawn testnet
     let testnet =
-        AngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, executor.clone())
+        OpAngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, executor.clone())
             .await?;
     tracing::info!("e2e testnet is alive");
 

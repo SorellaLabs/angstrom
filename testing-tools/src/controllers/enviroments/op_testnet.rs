@@ -12,13 +12,15 @@ use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvi
 use reth_tasks::{TaskExecutor, TaskSpawner};
 
 use super::AngstromTestnet;
+
+pub type OpAngstromTestnet<C> = AngstromTestnet<C, OpTestnetConfig, WalletProvider>;
 use crate::{
     agents::AgentConfig,
     controllers::strom::TestnetNode,
     providers::{AnvilInitializer, AnvilProvider, TestnetBlockProvider, WalletProvider},
     types::{
         GlobalTestingConfig, WithWalletProvider,
-        config::{OpTestnetConfig, TestingNodeConfig, TestnetConfig},
+        config::{OpTestnetConfig, TestingNodeConfig},
         initial_state::PartialConfigPoolKey
     }
 };

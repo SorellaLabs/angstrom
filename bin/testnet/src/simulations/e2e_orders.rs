@@ -30,7 +30,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
     tracing::info!(?ANGSTROM_DOMAIN, ?CHAIN_ID, "spinning up e2e nodes for angstrom");
 
     // spawn testnet
-    let testnet =
+    let testnet: AngstromTestnet<_, DevnetConfig, _> =
         AngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, executor.clone())
             .await?;
     tracing::info!("e2e testnet is alive");

@@ -3,6 +3,8 @@ mod op_testnet;
 pub mod replay;
 mod state_machine;
 mod testnet;
+
+pub use op_testnet::OpAngstromTestnet;
 use std::{
     collections::{HashMap, HashSet},
     future::Future

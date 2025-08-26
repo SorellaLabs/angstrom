@@ -1,0 +1,45 @@
+services:
+  op-angstrom:
+    # build:
+    #   context: ../.
+    #   dockerfile: op-angstrom.Dockerfile
+    image: op-angstrom:latest
+    ports:
+      - "8545:8545" # RPC
+      - "8546:8546" # websocket
+      - "7301:6060" # metrics
+      - "30303:30303" # P2P TCP
+      - "30303:30303/udp" # P2P UDP
+    volumes:
+      - chaindata:/data
+      - ./testkey.hex:/data/testkey.hex
+      - ./op-angstrom-entrypoint.sh:/app/op-angstrom-entrypoint.sh
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env.sepolia
+    environment:
+      - RUST_LOG=debug
+    entrypoint: /app/op-angstrom-entrypoint.sh
+  op-node:
+    image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node:v1.13.5
+    restart: unless-stopped
+    depends_on:
+      - op-angstrom
+    volumes:
+      - ./op-node-entrypoint.sh:/app/op-node-entrypoint.sh
+    ports:
+      - "7545:8545" # RPC
+      - "9222:9222" # P2P TCP
+      - "9222:9222/udp" # P2P UDP
+      - "7300:7300" # metrics
+      - "6060:6060" # pprof
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env.sepolia
+    entrypoint: /app/op-node-entrypoint.sh
+
+volumes:
+  chaindata:
+    driver: local

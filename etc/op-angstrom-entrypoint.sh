@@ -1,0 +1,47 @@
+#!/bin/bash
+set -eu
+
+IPC_PATH="/data/reth.ipc"
+RETH_DATA_DIR=/data
+RPC_PORT="${RPC_PORT:-8545}"
+WS_PORT="${WS_PORT:-8546}"
+AUTHRPC_PORT="${AUTHRPC_PORT:-8551}"
+METRICS_PORT="${METRICS_PORT:-6060}"
+DISCOVERY_PORT="${DISCOVERY_PORT:-30303}"
+P2P_PORT="${P2P_PORT:-30303}"
+
+if [[ -z "$RETH_CHAIN" ]]; then
+    echo "expected RETH_CHAIN to be set" 1>&2
+    exit 1
+fi
+
+mkdir -p $RETH_DATA_DIR
+echo "$OP_NODE_L2_ENGINE_AUTH_RAW" > "$OP_NODE_L2_ENGINE_AUTH"
+
+echo "Starting op-angstrom ($RETH_CHAIN)"
+
+exec /app/op-angstrom node \
+  -vvv \
+  --datadir="$RETH_DATA_DIR" \
+  --ws \
+  --ws.origins="*" \
+  --ws.addr=0.0.0.0 \
+  --ws.port="$WS_PORT" \
+  --ws.api=debug,eth,net,txpool \
+  --http \
+  --http.corsdomain="*" \
+  --http.addr=0.0.0.0 \
+  --http.port="$RPC_PORT" \
+  --http.api=debug,eth,net,txpool,miner \
+  --ipcpath="$IPC_PATH" \
+  --authrpc.addr=0.0.0.0 \
+  --authrpc.port="$AUTHRPC_PORT" \
+  --authrpc.jwtsecret="$OP_NODE_L2_ENGINE_AUTH" \
+  --metrics=0.0.0.0:"$METRICS_PORT" \
+  --max-outbound-peers=100 \
+  --discovery.port="$DISCOVERY_PORT" \
+  --port="$P2P_PORT" \
+  --chain "$RETH_CHAIN" \
+  --rollup.sequencer-http=$RETH_SEQUENCER_HTTP \
+  --rollup.disable-tx-pool-gossip \
+  --local-secret-key-location=/data/testkey.hex

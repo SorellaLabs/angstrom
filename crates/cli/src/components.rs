@@ -11,7 +11,7 @@ use alloy::{
     consensus::BlockHeader,
     eips::{BlockId, BlockNumberOrTag},
     primitives::Address,
-    providers::{Provider, ProviderBuilder, network::Ethereum}
+    providers::{ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
 use angstrom_amm_quoter::{ConsensusQuoterManager, RollupQuoterManager};
@@ -22,6 +22,7 @@ use angstrom_eth::{
 use angstrom_network::{NetworkBuilder as StromNetworkBuilder, StatusState, VerificationSidecar};
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
+    contract_bindings::angstrom::Angstrom::PoolKey,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
@@ -239,17 +240,8 @@ where
         .with_angstrom(&angstrom_submission_nodes, angstrom_address, signer.clone())
         .with_mev_boost(&mev_boost_endpoints, signer.clone());
 
-        tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
-        this is done to ensure all modules start on the same state and we don't hit the rare  \
-        condition of a block while starting modules");
-
-        let mut sub = node.provider.subscribe_to_canonical_state();
-        handle_init_block_spam(&mut sub).await;
-        let _ = sub.recv().await.expect("next block");
-
-        tracing::info!(target: "angstrom::startup-sequence", "new block detected. initializing all modules");
-
-        let block_id = querying_provider.get_block_number().await.unwrap();
+        // Wait for initial block
+        let block_id = wait_and_get_initial_block(&node.provider).await;
 
         let pool_config_store = Arc::new(
             AngstromPoolConfigStore::load_from_chain(
@@ -272,27 +264,15 @@ where
         .await;
         tracing::info!("found pools");
 
-        let angstrom_tokens = pools
-            .iter()
-            .flat_map(|pool| [pool.currency0, pool.currency1])
-            .fold(HashMap::<Address, usize>::new(), |mut acc, x| {
-                *acc.entry(x).or_default() += 1;
-                acc
-            });
+        let angstrom_tokens = extract_angstrom_tokens(&pools);
 
         // re-fetch given the fetch pools takes awhile. given this, we do techincally
         // have a gap in which a pool is deployed durning startup. This isn't
         // critical but we will want to fix this down the road.
-        // let block_id = querying_provider.get_block_number().await.unwrap();
-        let block_id = match sub.recv().await.expect("first block") {
-            CanonStateNotification::Commit { new } => new.tip().number(),
-            CanonStateNotification::Reorg { new, .. } => new.tip().number()
-        };
-
-        tracing::info!(?block_id, "starting up with block");
+        let final_block_id = wait_and_get_initial_block(&node.provider).await;
         let eth_data_sub = node.provider.subscribe_to_canonical_state();
 
-        let global_block_sync = GlobalBlockSync::new(block_id);
+        let global_block_sync = GlobalBlockSync::new(final_block_id);
 
         // this right here problem
         let uniswap_registry: UniswapPoolRegistry = pools.into();
@@ -328,7 +308,7 @@ where
             querying_provider.clone(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry,
-            block_id,
+            final_block_id,
             global_block_sync.clone(),
             pool_manager,
             network_stream
@@ -343,7 +323,7 @@ where
         executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
         let price_generator = TokenPriceGenerator::new(
             querying_provider.clone(),
-            block_id,
+            final_block_id,
             uniswap_pools.clone(),
             gas_token,
             None
@@ -400,7 +380,7 @@ where
             handles.orderpool_tx,
             handles.orderpool_rx,
             handles.pool_manager_tx,
-            block_id,
+            final_block_id,
             |_| {}
         );
         let validators = node_set
@@ -515,17 +495,8 @@ where
             signer.clone()
         );
 
-        tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
-        this is done to ensure all modules start on the same state and we don't hit the rare  \
-        condition of a block while starting modules");
-
-        let mut sub = node.provider.subscribe_to_canonical_state();
-        handle_init_block_spam(&mut sub).await;
-        let _ = sub.recv().await.expect("next block");
-
-        tracing::info!(target: "angstrom::startup-sequence", "new block detected. initializing all modules");
-
-        let block_id = querying_provider.get_block_number().await.unwrap();
+        // Wait for initial block
+        let block_id = wait_and_get_initial_block(&node.provider).await;
 
         let pool_config_store = Arc::new(
             AngstromPoolConfigStore::load_from_chain(
@@ -548,27 +519,15 @@ where
         .await;
         tracing::info!("found pools");
 
-        let angstrom_tokens = pools
-            .iter()
-            .flat_map(|pool| [pool.currency0, pool.currency1])
-            .fold(HashMap::<Address, usize>::new(), |mut acc, x| {
-                *acc.entry(x).or_default() += 1;
-                acc
-            });
+        let angstrom_tokens = extract_angstrom_tokens(&pools);
 
         // re-fetch given the fetch pools takes awhile. given this, we do techincally
         // have a gap in which a pool is deployed durning startup. This isn't
         // critical but we will want to fix this down the road.
-        // let block_id = querying_provider.get_block_number().await.unwrap();
-        let block_id = match sub.recv().await.expect("first block") {
-            CanonStateNotification::Commit { new } => new.tip().number(),
-            CanonStateNotification::Reorg { new, .. } => new.tip().number()
-        };
-
-        tracing::info!(?block_id, "starting up with block");
+        let final_block_id = wait_and_get_initial_block(&node.provider).await;
         let eth_data_sub = node.provider.subscribe_to_canonical_state();
 
-        let global_block_sync = GlobalBlockSync::new(block_id);
+        let global_block_sync = GlobalBlockSync::new(final_block_id);
 
         // this right here problem
         let uniswap_registry: UniswapPoolRegistry = pools.into();
@@ -603,7 +562,7 @@ where
             querying_provider.clone(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry,
-            block_id,
+            final_block_id,
             global_block_sync.clone(),
             pool_manager,
             network_stream
@@ -618,7 +577,7 @@ where
         executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
         let price_generator = TokenPriceGenerator::new(
             querying_provider.clone(),
-            block_id,
+            final_block_id,
             uniswap_pools.clone(),
             gas_token,
             None
@@ -667,7 +626,7 @@ where
             handles.orderpool_tx,
             handles.orderpool_rx,
             handles.pool_manager_tx,
-            block_id,
+            final_block_id,
             |_| {}
         );
 
@@ -713,6 +672,41 @@ where
 
         self.node_exit_future.await
     }
+}
+
+/// Extract tokens from pools
+fn extract_angstrom_tokens(pools: &[PoolKey]) -> HashMap<Address, usize> {
+    pools
+        .iter()
+        .flat_map(|pool| [pool.currency0, pool.currency1])
+        .fold(HashMap::<Address, usize>::new(), |mut acc, x| {
+            *acc.entry(x).or_default() += 1;
+            acc
+        })
+}
+
+/// Wait for initial block and return block id
+async fn wait_and_get_initial_block<N: NodePrimitives>(
+    provider: &impl CanonStateSubscriptions<Primitives = N>
+) -> u64 {
+    tracing::info!(target: "angstrom::startup-sequence", "waiting for the next block to continue startup sequence. \
+        this is done to ensure all modules start on the same state and we don't hit the rare  \
+        condition of a block while starting modules");
+
+    let mut sub = provider.subscribe_to_canonical_state();
+    handle_init_block_spam(&mut sub).await;
+    let _ = sub.recv().await.expect("next block");
+
+    tracing::info!(target: "angstrom::startup-sequence", "new block detected. initializing all modules");
+
+    // Get the block after handling spam
+    let block_id: u64 = match sub.recv().await.expect("first block") {
+        CanonStateNotification::Commit { new } => new.tip().number(),
+        CanonStateNotification::Reorg { new, .. } => new.tip().number()
+    };
+
+    tracing::info!(?block_id, "starting up with block");
+    block_id
 }
 
 async fn handle_init_block_spam<N: NodePrimitives>(

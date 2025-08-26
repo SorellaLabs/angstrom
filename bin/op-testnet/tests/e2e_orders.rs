@@ -183,7 +183,7 @@ where
     let testnet =
         AngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, ctx.clone())
             .await
-            .expect("failed to start angstrom testnet");
+            .expect("failed to start op-testnet");
 
     // grab provider so we can query from the chain later.
     let provider = testnet.node_provider(Some(1)).rpc_provider();
@@ -347,7 +347,7 @@ fn test_remove_add_pool() {
             ctx.task_executor.clone()
         )
         .await
-        .expect("failed to start angstrom testnet");
+        .expect("failed to start op-angstrom testnet");
 
         // grab provider so we can query from the chain later.
         let provider = testnet.node_provider(Some(1)).rpc_provider();

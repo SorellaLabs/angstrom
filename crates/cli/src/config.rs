@@ -82,6 +82,22 @@ impl AngstromConfig {
                     .collect()
             })
     }
+
+    /// Add sequencer to normal nodes if it's not already in the list
+    pub fn add_sequencer(&mut self, sequencer: &str) -> eyre::Result<()> {
+        match &mut self.normal_nodes {
+            Some(nodes) => {
+                if !nodes.contains(&sequencer.to_string()) {
+                    nodes.push(sequencer.to_string());
+                }
+            }
+            None => {
+                self.normal_nodes = Some(vec![sequencer.to_string()]);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -100,4 +116,42 @@ pub struct KeyConfig {
         default_value = "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so"
     )]
     pub pkcs11_lib_path:           String
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_sequencer_none() {
+        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
+        cfg.add_sequencer("node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
+    }
+
+    #[test]
+    fn add_sequencer_some_without_sequencer() {
+        let mut cfg =
+            AngstromConfig { normal_nodes: Some(vec!["node2".into()]), ..Default::default() };
+        cfg.add_sequencer("node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node2", "node1"]);
+    }
+
+    #[test]
+    fn add_sequencer_some_with_sequencer() {
+        let mut cfg =
+            AngstromConfig { normal_nodes: Some(vec!["node1".into()]), ..Default::default() };
+        cfg.add_sequencer("node1").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
+    }
+
+    #[test]
+    fn add_sequencer_appends_new() {
+        let mut cfg = AngstromConfig {
+            normal_nodes: Some(vec!["a".into(), "b".into()]),
+            ..Default::default()
+        };
+        cfg.add_sequencer("c").unwrap();
+        assert_eq!(cfg.normal_nodes.unwrap(), vec!["a", "b", "c"]);
+    }
 }

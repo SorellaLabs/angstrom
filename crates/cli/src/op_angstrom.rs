@@ -72,7 +72,7 @@ pub fn run() -> eyre::Result<()> {
             return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         };
         validate_sequencer_url(sequencer)?;
-        add_sequencer_to_normal_nodes(&mut args.angstrom, sequencer)?;
+        args.angstrom.add_sequencer(sequencer)?;
 
         let channels = RollupHandles::new();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());
@@ -162,25 +162,6 @@ fn validate_sequencer_url(sequencer: &str) -> eyre::Result<()> {
     }
 }
 
-/// Add sequencer to normal nodes if it's not already in the list
-fn add_sequencer_to_normal_nodes(
-    angstrom_config: &mut AngstromConfig,
-    sequencer: &str
-) -> eyre::Result<()> {
-    match &mut angstrom_config.normal_nodes {
-        Some(nodes) => {
-            if !nodes.contains(&sequencer.to_string()) {
-                nodes.push(sequencer.to_string());
-            }
-        }
-        None => {
-            angstrom_config.normal_nodes = Some(vec![sequencer.to_string()]);
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,38 +191,5 @@ mod tests {
         for url in ["", "not-a-url", "://invalid", "http://"] {
             assert!(validate_sequencer_url(url).is_err(), "invalid accepted: {url}");
         }
-    }
-
-    #[test]
-    fn add_sequencer_to_normal_nodes_none() {
-        let mut cfg = AngstromConfig { normal_nodes: None, ..Default::default() };
-        add_sequencer_to_normal_nodes(&mut cfg, "node1").unwrap();
-        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
-    }
-
-    #[test]
-    fn add_sequencer_to_normal_nodes_some_without_sequencer() {
-        let mut cfg =
-            AngstromConfig { normal_nodes: Some(vec!["node2".into()]), ..Default::default() };
-        add_sequencer_to_normal_nodes(&mut cfg, "node1").unwrap();
-        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node2", "node1"]);
-    }
-
-    #[test]
-    fn add_sequencer_to_normal_nodes_some_with_sequencer() {
-        let mut cfg =
-            AngstromConfig { normal_nodes: Some(vec!["node1".into()]), ..Default::default() };
-        add_sequencer_to_normal_nodes(&mut cfg, "node1").unwrap();
-        assert_eq!(cfg.normal_nodes.unwrap(), vec!["node1"]);
-    }
-
-    #[test]
-    fn add_sequencer_to_normal_nodes_appends_new() {
-        let mut cfg = AngstromConfig {
-            normal_nodes: Some(vec!["a".into(), "b".into()]),
-            ..Default::default()
-        };
-        add_sequencer_to_normal_nodes(&mut cfg, "c").unwrap();
-        assert_eq!(cfg.normal_nodes.unwrap(), vec!["a", "b", "c"]);
     }
 }

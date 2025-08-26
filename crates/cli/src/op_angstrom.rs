@@ -31,18 +31,29 @@ const SUPPORTED_CHAINS: &[NamedChain] =
     &[NamedChain::Base, NamedChain::BaseSepolia, NamedChain::Unichain, NamedChain::UnichainSepolia];
 
 #[derive(Debug, Clone, Parser)]
-pub struct CombinedArgs {
+pub struct OpAngstromArgs {
     #[command(flatten)]
-    pub rollup:   RollupArgs,
+    pub rollup:          RollupArgs,
     #[command(flatten)]
-    pub angstrom: AngstromConfig
+    pub angstrom:        AngstromConfig,
+    /// Flashblocks WebSocket URL. Enables Flashblocks support.
+    #[arg(long, value_name = "WEBSOCKET_URL")]
+    pub flashblocks_url: Option<String>
+}
+
+impl OpAngstromArgs {
+    /// Flashblocks support is enabled if the Flashblocks WebSocket URL is
+    /// provided.
+    fn flashblocks_enabled(&self) -> bool {
+        self.flashblocks_url.is_some()
+    }
 }
 
 /// Convenience function for parsing CLI options, set up logging and run the
 /// chosen command.
 #[inline]
 pub fn run() -> eyre::Result<()> {
-    OpCli::<OpChainSpecParser, CombinedArgs>::parse().run(|builder, mut args| async move {
+    OpCli::<OpChainSpecParser, OpAngstromArgs>::parse().run(|builder, mut args| async move {
         let executor = builder.task_executor().clone();
         let chain = builder.config().chain.chain().named().unwrap();
 
@@ -133,15 +144,22 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     validation_client: ValidationClient,
     quoter_handle: QuoterHandle,
     secret_key: AngstromSigner<S>,
-    args: CombinedArgs,
+    args: OpAngstromArgs,
     channels: RollupHandles,
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>
 ) -> eyre::Result<()> {
     let executor_clone = executor.clone();
+
+    let op_node = OpNode::new(args.rollup);
+
     let node_handle = builder
         .with_types::<OpNode>()
-        .with_components(OpNode::new(args.rollup).components_builder())
-        .with_add_ons::<OpAddOns<_, _, _, _>>(Default::default())
+        .with_components(op_node.components_builder())
+        .with_add_ons(op_node.add_ons())
+        .install_exex_if(args.flashblocks_enabled(), "flashblocks", {
+            // TODO: Install Flashblocks ExEx here
+            todo!();
+        })
         .extend_rpc_modules(move |rpc_context| {
             let order_api = OrderApi::new(
                 pool.clone(),

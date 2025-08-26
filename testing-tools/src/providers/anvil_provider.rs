@@ -47,10 +47,11 @@ where
             deployed_addresses
         };
         if testnet {
-            tracing::debug!("Starting up block monitoring thread");
-            let handle = tokio::runtime::Handle::current().clone();
+            tracing::debug!("Starting up block monitoring task");
             let sp = this.provider.as_wallet_state_provider();
-            std::thread::spawn(move || handle.block_on(sp.listen_to_new_blocks()));
+            // Attach to the current Tokio runtime; this task is cancelled cleanly
+            // when the runtime shuts down, avoiding shutdown panics.
+            tokio::spawn(sp.listen_to_new_blocks());
         }
         Ok(this)
     }

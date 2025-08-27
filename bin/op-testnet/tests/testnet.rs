@@ -13,7 +13,7 @@ use angstrom_types::{
 };
 use op_testnet::cli::{init_tracing, testnet::TestnetCli};
 use reth_provider::test_utils::NoopProvider;
-use testing_tools::{controllers::enviroments::AngstromTestnet, utils::noop_agent};
+use testing_tools::{controllers::enviroments::OpAngstromTestnet, utils::noop_agent};
 
 #[test]
 #[serial_test::serial]
@@ -28,7 +28,7 @@ fn testnet_deploy() {
             ..Default::default()
         };
 
-        let testnet = AngstromTestnet::spawn_testnet(
+        let testnet = OpAngstromTestnet::spawn_testnet(
             NoopProvider::default(),
             cli.make_config().unwrap(),
             vec![noop_agent],
@@ -60,7 +60,7 @@ fn testnet_bundle_unlock() {
         tracing::info!("spinning up testnet for unlock attestation test");
 
         // spawn testnet
-        let testnet = AngstromTestnet::spawn_testnet(
+        let testnet = OpAngstromTestnet::spawn_testnet(
             NoopProvider::default(),
             config,
             agents,
@@ -70,17 +70,16 @@ fn testnet_bundle_unlock() {
         .unwrap_or_else(|e| panic!("failed to start angstrom testnet: {e:?}"));
 
         // Get validator provider (first node)
-        let validator_provider = testnet.node_provider(Some(0));
+        let validator_provider = testnet.node.state_provider();
         let provider = validator_provider.rpc_provider();
 
         // Get initial state for addresses
-        let signer = testnet.get_random_peer(vec![]).get_sk();
+        let signer = testnet.node.get_sk();
 
-        let executor = ctx.task_executor.clone();
         let testnet_task = ctx.task_executor.spawn_critical(
             "testnet",
             Box::pin(async move {
-                testnet.run_to_completion(executor).await;
+                testnet.run_to_completion().await.unwrap();
                 tracing::info!("testnet run to completion");
             })
         );

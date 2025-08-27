@@ -18,7 +18,7 @@ use reth_tasks::TaskExecutor;
 use testing_tools::{
     agents::AgentConfig,
     contracts::anvil::WalletProviderRpc,
-    controllers::enviroments::AngstromTestnet,
+    controllers::enviroments::OpAngstromTestnet,
     order_generator::{GeneratedPoolOrders, InternalBalanceMode, OrderGenerator}
 };
 use tokio::time::timeout;
@@ -181,14 +181,14 @@ where
 
     // spawn testnet
     let testnet =
-        AngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, ctx.clone())
+        OpAngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, ctx.clone())
             .await
             .expect("failed to start op-testnet");
 
     // grab provider so we can query from the chain later.
-    let provider = testnet.node_provider(Some(1)).rpc_provider();
+    let provider = testnet.node.node_provider(Some(1)).rpc_provider();
 
-    let task = ctx.spawn_critical("testnet", testnet.run_to_completion(ctx.clone()).boxed());
+    let task = ctx.spawn_critical("testnet", testnet.run_to_completion().boxed());
 
     tracing::info!("waiting for valid block in {}", test_name);
     assert!(
@@ -340,7 +340,7 @@ fn test_remove_add_pool() {
         tracing::info!("spinning up e2e nodes for remove add pool test");
 
         // spawn testnet
-        let testnet = AngstromTestnet::spawn_testnet(
+        let testnet = OpAngstromTestnet::spawn_testnet(
             NoopProvider::default(),
             config,
             agents,
@@ -352,10 +352,9 @@ fn test_remove_add_pool() {
         // grab provider so we can query from the chain later.
         let provider = testnet.node_provider(Some(1)).rpc_provider();
 
-        let testnet_task = ctx.task_executor.spawn_critical(
-            "testnet",
-            testnet.run_to_completion(ctx.task_executor.clone()).boxed()
-        );
+        let testnet_task = ctx
+            .task_executor
+            .spawn_critical("testnet", testnet.run_to_completion().boxed());
 
         tokio::time::sleep(Duration::from_secs(5)).await;
 

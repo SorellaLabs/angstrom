@@ -3,9 +3,10 @@ use std::pin::Pin;
 use alloy::{
     node_bindings::AnvilInstance,
     primitives::Address,
-    providers::{WalletProvider as _, ext::AnvilApi}
+    providers::{WalletProvider as _, ext::AnvilApi},
+    signers::local::PrivateKeySigner
 };
-use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
+use angstrom_types::{block_sync::GlobalBlockSync, primitive::AngstromSigner, testnet::InitialTestnetState};
 use futures::{Future, FutureExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
@@ -23,8 +24,8 @@ use crate::{
 };
 
 pub struct OpAngstromTestnet<C: Unpin> {
-    node:            TestnetNode<C, WalletProvider, OpTestnetConfig>,
-    _anvil_instance: AnvilInstance
+    pub node:            TestnetNode<C, WalletProvider, OpTestnetConfig>,
+    pub _anvil_instance: AnvilInstance
 }
 
 impl<C> OpAngstromTestnet<C>
@@ -85,6 +86,14 @@ where
         tracing::info!("running single node to completion");
         self.node.testnet_future().await;
         Ok(())
+    }
+
+    pub fn state_provider(&self) -> &AnvilProvider<WalletProvider> {
+        self.node.state_provider()
+    }
+
+    pub fn get_sk(&self) -> AngstromSigner<PrivateKeySigner> {
+        self.node.get_sk()
     }
 
     async fn spawn_provider(

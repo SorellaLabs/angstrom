@@ -186,9 +186,16 @@ where
             .expect("failed to start op-testnet");
 
     // grab provider so we can query from the chain later.
-    let provider = testnet.node.node_provider(Some(1)).rpc_provider();
+    let provider = testnet.state_provider().rpc_provider();
 
-    let task = ctx.spawn_critical("testnet", testnet.run_to_completion().boxed());
+    let task = ctx.spawn_critical(
+        "testnet",
+        Box::pin(async move {
+            if let Err(e) = testnet.run_to_completion().await {
+                tracing::error!("testnet failed: {:?}", e);
+            }
+        })
+    );
 
     tracing::info!("waiting for valid block in {}", test_name);
     assert!(
@@ -350,11 +357,16 @@ fn test_remove_add_pool() {
         .expect("failed to start op-angstrom testnet");
 
         // grab provider so we can query from the chain later.
-        let provider = testnet.node_provider(Some(1)).rpc_provider();
+        let provider = testnet.state_provider().rpc_provider();
 
-        let testnet_task = ctx
-            .task_executor
-            .spawn_critical("testnet", testnet.run_to_completion().boxed());
+        let testnet_task = ctx.task_executor.spawn_critical(
+            "testnet",
+            Box::pin(async move {
+                if let Err(e) = testnet.run_to_completion().await {
+                    tracing::error!("testnet failed: {:?}", e);
+                }
+            })
+        );
 
         tokio::time::sleep(Duration::from_secs(5)).await;
 

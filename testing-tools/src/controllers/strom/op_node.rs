@@ -1,9 +1,12 @@
 use std::{pin::Pin, sync::Arc, time::Duration};
 
-use alloy::signers::local::PrivateKeySigner;
+use alloy::{providers::Provider, signers::local::PrivateKeySigner};
 use alloy_rpc_types::BlockId;
-use angstrom_amm_quoter::{RollupQuoterManager, QuoterHandle};
-use angstrom_eth::{handle::Eth, manager::EthEvent, manager::EthDataCleanser};
+use angstrom_amm_quoter::{QuoterHandle, RollupQuoterManager};
+use angstrom_eth::{
+    handle::Eth,
+    manager::{EthDataCleanser, EthEvent}
+};
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::{
     block_sync::GlobalBlockSync,
@@ -13,15 +16,13 @@ use angstrom_types::{
     submission::SubmissionHandler,
     testnet::InitialTestnetState
 };
-use matching_engine::MatchingEngineHandle;
 use futures::{Future, Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
-use matching_engine::MatchingManager;
+use matching_engine::{MatchingEngineHandle, MatchingManager};
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use pool_manager::rollup::RollupPoolManager;
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{Instrument, span};
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager};
 use validation::{
@@ -29,8 +30,6 @@ use validation::{
     order::state::pools::AngstromPoolsTracker,
     validator::ValidationClient
 };
-
-use alloy::providers::Provider;
 
 use crate::{
     agents::AgentConfig,
@@ -83,8 +82,7 @@ where
 
         // Load pool config and registries
         let block_number = BlockNumReader::best_block_number(&state_provider.state_provider())?;
-        let uniswap_registry: UniswapPoolRegistry =
-            inital_angstrom_state.pool_keys.clone().into();
+        let uniswap_registry: UniswapPoolRegistry = inital_angstrom_state.pool_keys.clone().into();
         let pool_config_store = Arc::new(
             AngstromPoolConfigStore::load_from_chain(
                 inital_angstrom_state.angstrom_addr,
@@ -111,10 +109,13 @@ where
             .pools()
             .values()
             .flat_map(|pool| [pool.currency0, pool.currency1])
-            .fold(std::collections::HashMap::<alloy::primitives::Address, usize>::new(), |mut acc, x| {
-                *acc.entry(x).or_default() += 1;
-                acc
-            });
+            .fold(
+                std::collections::HashMap::<alloy::primitives::Address, usize>::new(),
+                |mut acc, x| {
+                    *acc.entry(x).or_default() += 1;
+                    acc
+                }
+            );
 
         let node_set = std::iter::once(node_config.address()).collect();
         let block_sync = GlobalBlockSync::new(block_number);
@@ -193,6 +194,10 @@ where
         )
         .await?;
 
+        // Spawn validation task so it consumes requests until graceful shutdown
+        let validator_task = validator;
+        executor.spawn_critical("validator", Box::pin(validator_task));
+
         // Pool manager and storage
         let pool_config = PoolConfig {
             ids: uniswap_registry.pools().keys().cloned().collect::<Vec<_>>(),
@@ -201,7 +206,7 @@ where
         let order_storage = Arc::new(OrderStorage::new(&pool_config));
 
         let pool_handle = RollupPoolManager::new(
-            validator.client.clone(),
+            validation_client.clone(),
             Some(order_storage.clone()),
             eth_handle.subscribe_network(),
             block_sync.clone(),
@@ -260,10 +265,10 @@ where
         // Agents
         let uniswap_pools_for_agents = uniswap_pools.clone();
         let agent_config = AgentConfig {
-            uniswap_pools: uniswap_pools_for_agents,
-            agent_id: node_config.node_id,
-            rpc_address: addr,
-            current_block: block_number,
+            uniswap_pools:  uniswap_pools_for_agents,
+            agent_id:       node_config.node_id,
+            rpc_address:    addr,
+            current_block:  block_number,
             state_provider: state_provider.state_provider()
         };
         futures::stream::iter(agents.into_iter())
@@ -278,7 +283,8 @@ where
         let provider_for_submit = state_provider.rpc_provider();
         let angstrom_addr = inital_angstrom_state.angstrom_addr;
         let signer = node_config.angstrom_signer();
-        let pool_registry = UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store);
+        let pool_registry =
+            UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store);
         let submission = SubmissionHandler::new(
             provider_for_submit.clone().into(),
             &[],

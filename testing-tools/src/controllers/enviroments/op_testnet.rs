@@ -17,9 +17,9 @@ use crate::{
     controllers::strom::OpTestnetNode,
     providers::{AnvilInitializer, AnvilProvider, WalletProvider},
     types::{
+        WithWalletProvider,
         config::{OpTestnetConfig, TestingNodeConfig},
-        initial_state::PartialConfigPoolKey,
-        WithWalletProvider
+        initial_state::PartialConfigPoolKey
     }
 };
 
@@ -61,14 +61,7 @@ impl OpAngstromTestnet {
             Self::anvil_deployment(provider, pool_keys, ex.clone()).await?;
 
         // Create single testnet node
-        let node = OpTestnetNode::new(
-            node_config,
-            provider,
-            initial_state,
-            agents,
-            ex
-        )
-        .await?;
+        let node = OpTestnetNode::new(node_config, provider, initial_state, agents, ex).await?;
 
         Ok(Self { node, _anvil_instance: anvil_instance })
     }

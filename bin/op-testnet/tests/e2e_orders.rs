@@ -335,7 +335,7 @@ fn test_remove_add_pool() {
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
-        let _ = runner.run_command_until_exit(|ctx| async move {
+    let _ = runner.run_command_until_exit(|ctx| async move {
         let config = TestnetCli {
             eth_fork_url: "wss://ethereum-rpc.publicnode.com".to_string(),
             ..Default::default()

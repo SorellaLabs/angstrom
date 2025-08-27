@@ -33,19 +33,26 @@ const SUPPORTED_CHAINS: &[NamedChain] =
 #[derive(Debug, Clone, Parser)]
 pub struct OpAngstromArgs {
     #[command(flatten)]
-    pub rollup:          RollupArgs,
+    pub rollup:      RollupArgs,
     #[command(flatten)]
-    pub angstrom:        AngstromConfig,
-    /// Flashblocks WebSocket URL. Enables Flashblocks support.
-    #[arg(long, value_name = "WEBSOCKET_URL")]
-    pub flashblocks_url: Option<String>
+    pub angstrom:    AngstromConfig,
+    #[command(flatten)]
+    pub flashblocks: FlashblocksConfig
+}
+
+pub struct FlashblocksConfig {
+    /// Enable Flashblocks support.
+    #[arg(long = "flashblocks", default_value = "false")]
+    pub enabled: bool,
+
+    /// Flashblocks WebSocket URL.
+    #[arg(long = "flashblocks.ws", value_name = "WEBSOCKET_URL")]
+    pub url: Option<String>
 }
 
 impl OpAngstromArgs {
-    /// Flashblocks support is enabled if the Flashblocks WebSocket URL is
-    /// provided.
     fn flashblocks_enabled(&self) -> bool {
-        self.flashblocks_url.is_some()
+        self.flashblocks.enabled
     }
 }
 

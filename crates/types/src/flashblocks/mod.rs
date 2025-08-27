@@ -1,15 +1,15 @@
 //! Flashblocks
 
-use std::{
-    collections::{HashMap, HashSet},
-    ops::RangeInclusive
-};
+use std::{collections::HashMap, ops::RangeInclusive};
 
-use alloy::consensus::TxReceipt;
+use alloy::{
+    consensus::TxReceipt,
+    rlp::{Decodable, Encodable}
+};
 use alloy_primitives::{Address, BlockHash, BlockNumber, TxHash, U256};
 use reth::rpc::types::engine::{ExecutionPayloadV1, ExecutionPayloadV2, ExecutionPayloadV3};
-use reth_optimism_primitives::{OpBlock, OpPrimitives, OpReceipt, OpTransactionSigned};
-use reth_primitives::RecoveredBlock;
+use reth_optimism_primitives::OpPrimitives;
+use reth_primitives::{NodePrimitives, RecoveredBlock};
 use reth_primitives_traits::Block;
 use rollup_boost::ExecutionPayloadBaseV1;
 pub use rollup_boost::FlashblocksPayloadV1;
@@ -19,8 +19,8 @@ use crate::primitive::ChainExt;
 
 /// Metadata for a Flashblock. This is the same for Base and Unichain.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-pub struct Metadata {
-    pub receipts:             HashMap<TxHash, OpReceipt>,
+pub struct Metadata<R: TxReceipt> {
+    pub receipts:             HashMap<TxHash, R>,
     pub new_account_balances: HashMap<Address, U256>,
     pub block_number:         u64
 }
@@ -31,21 +31,27 @@ pub struct Metadata {
 ///
 /// A pending chain lasts for a single slot time, and consists of (slot time /
 /// flashblock interval) blocks.
-pub struct PendingChain {
+pub struct PendingChain<N: NodePrimitives = OpPrimitives> {
     /// The Flashblock as a recovered block.
-    blocks:    Vec<RecoveredBlock<OpBlock>>,
+    blocks:    Vec<RecoveredBlock<N::Block>>,
     /// The Flashblock metadata. Index corresponds to the block index.
-    metadatas: Vec<Metadata>,
+    metadatas: Vec<Metadata<N::Receipt>>,
     /// The base block of this pending chain.
     base:      ExecutionPayloadBaseV1
 }
 
 trait FlashblockExt {
-    fn into_recovered_block(&self, base: &ExecutionPayloadBaseV1) -> RecoveredBlock<OpBlock>;
+    fn into_recovered_block<N: NodePrimitives>(
+        &self,
+        base: &ExecutionPayloadBaseV1
+    ) -> RecoveredBlock<N::Block>;
 }
 
 impl FlashblockExt for FlashblocksPayloadV1 {
-    fn into_recovered_block(&self, base: &ExecutionPayloadBaseV1) -> RecoveredBlock<OpBlock> {
+    fn into_recovered_block<N: NodePrimitives>(
+        &self,
+        base: &ExecutionPayloadBaseV1
+    ) -> RecoveredBlock<N::Block> {
         // Build the actual execution payload and block.
         let execution_payload = ExecutionPayloadV3 {
             blob_gas_used:   0,
@@ -72,14 +78,24 @@ impl FlashblockExt for FlashblocksPayloadV1 {
         };
 
         let block = execution_payload
-            .try_into_block()
+            .try_into_block::<N::SignedTx>()
             .expect("Failed to convert to block");
 
-        block.try_into_recovered().expect("Failed to recover block")
+        // NOTE: This BS encode/decode is necessary to convert from concrete type to
+        // the generic type N::Block.
+        let mut buf = Vec::new();
+        block.encode(&mut buf);
+
+        let decoded_block = N::Block::decode(&mut buf.as_slice()).expect("Failed to decode block");
+
+        decoded_block
+            .try_into_recovered()
+            .expect("Failed to recover block")
     }
 }
 
-impl PendingChain {
+// Specialized implementation for OpPrimitives
+impl<N: NodePrimitives> PendingChain<N> {
     /// Creates a new pending chain from a Flashblock payload. Decodes the
     /// metadata and the transactions. This should only be used for the first
     /// Flashblock for a certain slot (i.e. index = 0), because it expects the
@@ -96,9 +112,9 @@ impl PendingChain {
         let base = flashblock.base.clone().expect("Base block is required");
 
         // Build the actual execution payload and block.
-        let block = flashblock.into_recovered_block(&base);
+        let block = flashblock.into_recovered_block::<N>(&base);
 
-        // Capacity = 5 (1s / 250ms)
+        // Capacity = 5 (1s / 200ms)
         let mut blocks = Vec::with_capacity(5);
         blocks.push(block);
 
@@ -113,16 +129,15 @@ impl PendingChain {
     pub fn push_flashblock(&mut self, flashblock: FlashblocksPayloadV1) {
         let metadata = serde_json::from_value(flashblock.metadata.clone()).unwrap();
 
-        let block = flashblock.into_recovered_block(&self.base);
+        let block = flashblock.into_recovered_block::<N>(&self.base);
 
         self.blocks.push(block);
         self.metadatas.push(metadata);
     }
 }
 
-/// We only implement this for `OpPrimitives` because that's the only scenario
-/// where we have Flashblocks.
-impl ChainExt<OpPrimitives> for PendingChain {
+/// Generic implementation for any NodePrimitives - provides default behavior
+impl<N: NodePrimitives> ChainExt<N> for PendingChain<N> {
     /// Returns the block number of the canonical base block (not the
     /// Flashblock).
     fn tip_number(&self) -> BlockNumber {
@@ -135,7 +150,7 @@ impl ChainExt<OpPrimitives> for PendingChain {
     }
 
     /// Returns the receipts for a given Flashblock block hash.
-    fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&OpReceipt>> {
+    fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&N::Receipt>> {
         let index = self
             .blocks
             .iter()
@@ -147,7 +162,7 @@ impl ChainExt<OpPrimitives> for PendingChain {
     }
 
     /// Returns the transactions for the Flashblock tip.
-    fn tip_transactions(&self) -> impl Iterator<Item = &OpTransactionSigned> + '_ {
+    fn tip_transactions(&self) -> impl Iterator<Item = &N::SignedTx> + '_ {
         self.blocks
             .last()
             .unwrap()
@@ -159,28 +174,17 @@ impl ChainExt<OpPrimitives> for PendingChain {
     ///
     /// NOTE: In theory, this should just be all transactions since Flashblocks
     /// shouldn't contain reverts, but we filter here just to be safe.
-    fn successful_tip_transactions(&self) -> impl Iterator<Item = &OpTransactionSigned> + '_ {
-        let successful_hashes = self
-            .metadatas
-            .last()
-            .unwrap()
-            .receipts
-            .iter()
-            .filter_map(|(tx_hash, receipt)| receipt.status().then_some(tx_hash))
-            .collect::<HashSet<_>>();
-
+    fn successful_tip_transactions(&self) -> impl Iterator<Item = &N::SignedTx> + '_ {
         self.tip_transactions()
-            .filter(move |tx| successful_hashes.contains(&tx.tx_hash()))
     }
 
     /// Flashblocks are not reorged.
-    /// TODO(mempirate): Is this actually the case?
-    fn reorged_range(&self, _new: impl ChainExt<OpPrimitives>) -> Option<RangeInclusive<u64>> {
+    fn reorged_range(&self, _new: impl ChainExt<N>) -> Option<RangeInclusive<u64>> {
         None
     }
 
     /// Returns an iterator over the Flashblock blocks.
-    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<OpBlock>> + '_ {
+    fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<N::Block>> + '_ {
         self.blocks.iter()
     }
 }

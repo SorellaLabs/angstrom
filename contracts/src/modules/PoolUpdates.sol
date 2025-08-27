@@ -215,12 +215,4 @@ abstract contract PoolUpdates is
 
         return reader;
     }
-
-    function _toId(PoolKey calldata poolKey) internal pure returns (PoolId id) {
-        assembly ("memory-safe") {
-            let ptr := mload(0x40)
-            calldatacopy(ptr, poolKey, mul(32, 5))
-            id := keccak256(ptr, mul(32, 5))
-        }
-    }
 }

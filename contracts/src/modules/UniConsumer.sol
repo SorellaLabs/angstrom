@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 import {IPoolManager} from "../interfaces/IUniV4.sol";
 import {Hooks, IHooks} from "v4-core/src/libraries/Hooks.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {PoolId} from "v4-core/src/types/PoolId.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 
@@ -40,6 +42,14 @@ abstract contract UniConsumer {
 
     function _addr(Currency c) internal pure returns (address) {
         return Currency.unwrap(c);
+    }
+
+    function _toId(PoolKey calldata poolKey) internal pure returns (PoolId id) {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            calldatacopy(ptr, poolKey, mul(32, 5))
+            id := keccak256(ptr, mul(32, 5))
+        }
     }
 }
 

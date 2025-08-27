@@ -6,7 +6,7 @@ use alloy::{
     providers::{WalletProvider as _, ext::AnvilApi},
     signers::local::PrivateKeySigner
 };
-use angstrom_types::{block_sync::GlobalBlockSync, primitive::AngstromSigner, testnet::InitialTestnetState};
+use angstrom_types::{primitive::AngstromSigner, testnet::InitialTestnetState};
 use futures::{Future, FutureExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
@@ -14,37 +14,35 @@ use reth_tasks::TaskExecutor;
 
 use crate::{
     agents::AgentConfig,
-    controllers::strom::TestnetNode,
+    controllers::strom::OpTestnetNode,
     providers::{AnvilInitializer, AnvilProvider, WalletProvider},
     types::{
-        WithWalletProvider,
         config::{OpTestnetConfig, TestingNodeConfig},
-        initial_state::PartialConfigPoolKey
+        initial_state::PartialConfigPoolKey,
+        WithWalletProvider
     }
 };
 
-pub struct OpAngstromTestnet<C: Unpin> {
-    pub node:            TestnetNode<C, WalletProvider, OpTestnetConfig>,
+pub struct OpAngstromTestnet {
+    pub node:            OpTestnetNode<WalletProvider, OpTestnetConfig>,
     pub _anvil_instance: AnvilInstance
 }
 
-impl<C> OpAngstromTestnet<C>
-where
-    C: BlockReader<Block = reth_primitives::Block>
-        + ReceiptProvider<Receipt = reth_primitives::Receipt>
-        + HeaderProvider<Header = reth_primitives::Header>
-        + ChainSpecProvider<ChainSpec: Hardforks>
-        + Unpin
-        + Clone
-        + 'static
-{
-    pub async fn spawn_testnet<F>(
-        c: C,
+impl OpAngstromTestnet {
+    pub async fn spawn_testnet<C, F>(
+        _c: C,
         config: OpTestnetConfig,
         agents: Vec<F>,
         ex: TaskExecutor
     ) -> eyre::Result<Self>
     where
+        C: BlockReader<Block = reth_primitives::Block>
+            + ReceiptProvider<Receipt = reth_primitives::Receipt>
+            + HeaderProvider<Header = reth_primitives::Header>
+            + ChainSpecProvider<ChainSpec: Hardforks>
+            + Unpin
+            + Clone
+            + 'static,
         F: for<'a> Fn(
             &'a InitialTestnetState,
             AgentConfig
@@ -55,7 +53,6 @@ where
 
         let node_config = TestingNodeConfig::new(0, config, 100);
         let node_addresses = vec![node_config.angstrom_signer().address()];
-        let initial_validators = vec![node_config.angstrom_validator()];
         let pool_keys = node_config.pool_keys();
 
         // Initialize provider and deploy contracts
@@ -64,18 +61,12 @@ where
             Self::anvil_deployment(provider, pool_keys, ex.clone()).await?;
 
         // Create single testnet node
-        let block_sync = GlobalBlockSync::new(0);
-        let node = TestnetNode::new(
-            c,
+        let node = OpTestnetNode::new(
             node_config,
             provider,
-            initial_validators,
             initial_state,
             agents,
-            block_sync,
-            ex,
-            None,
-            None
+            ex
         )
         .await?;
 

@@ -15,10 +15,12 @@ impl OpTestnetConfig {
         angstrom_base_rpc_port: Option<u16>,
         initial_state_config: InitialStateConfig
     ) -> Self {
+        let base_port = angstrom_base_rpc_port.unwrap_or_else(rand::random);
+        tracing::info!("OpTestnetConfig: using RPC base port {}", base_port);
         Self {
             eth_ws_url: eth_ws_url.to_string(),
             seed: rand::random(),
-            angstrom_base_rpc_port: angstrom_base_rpc_port.unwrap_or_else(rand::random),
+            angstrom_base_rpc_port: base_port,
             initial_state_config
         }
     }

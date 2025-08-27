@@ -52,6 +52,8 @@ fn testnet_bundle_unlock() {
     runner.run_command_until_exit(|ctx| async move {
         let config = TestnetCli {
             eth_fork_url: "wss://ethereum-rpc.publicnode.com".to_string(),
+            // Use None to let the config generate a random port to avoid conflicts
+            angstrom_base_rpc_port: None,
             ..Default::default()
         };
 

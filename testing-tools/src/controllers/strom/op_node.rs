@@ -1,4 +1,4 @@
-use std::{pin::Pin, sync::{Arc, atomic::AtomicUsize}, time::Duration};
+use std::{pin::Pin, sync::Arc, time::Duration};
 
 use alloy::signers::local::PrivateKeySigner;
 use alloy_rpc_types::BlockId;
@@ -9,9 +9,8 @@ use angstrom_types::{
     block_sync::GlobalBlockSync,
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
-    primitive::{AngstromSigner, PoolId, UniswapPoolRegistry},
-    sol_bindings::testnet::TestnetHub,
-    submission::{ChainSubmitterHolder, SubmissionHandler},
+    primitive::{AngstromSigner, UniswapPoolRegistry},
+    submission::SubmissionHandler,
     testnet::InitialTestnetState
 };
 use matching_engine::MatchingEngineHandle;
@@ -22,7 +21,6 @@ use order_pool::{PoolConfig, order_storage::OrderStorage};
 use pool_manager::rollup::RollupPoolManager;
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
-use reth_metrics::common::mpsc::metered_unbounded_channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{Instrument, span};
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager};
@@ -43,7 +41,7 @@ use crate::{
 /// Minimal OP testnet node: no custom networking or consensus.
 pub struct OpTestnetNode<P, G> {
     state_provider: AnvilProvider<P>,
-    init_state:     InitialTestnetState,
+    _init_state:    InitialTestnetState,
     config:         TestingNodeConfig<G>
 }
 
@@ -67,7 +65,7 @@ where
             + Clone
     {
         // Bootstrap minimal single-node pipeline mirroring Angstrom testnet
-        let start_block = state_provider
+        let _start_block = state_provider
             .rpc_provider()
             .get_block_number()
             .await
@@ -233,15 +231,17 @@ where
             validation_client.clone(),
             amm_quoter
         );
-        executor.spawn_critical(
-            "rpc",
-            Box::pin(async move {
-                let rpcs = order_api.into_rpc();
-                let server_handle = server.start(rpcs);
-                tracing::info!("rpc server started on: {}", addr);
-                let _ = server_handle.stopped().await;
-            })
-        );
+        executor.spawn_critical_with_graceful_shutdown_signal("rpc", move |grace| async move {
+            let rpcs = order_api.into_rpc();
+            let server_handle = server.start(rpcs);
+            tracing::info!("rpc server started on: {}", addr);
+            tokio::select! {
+                _ = server_handle.clone().stopped() => {}
+                _ = grace => {
+                    let _ = server_handle.stop();
+                }
+            }
+        });
 
         // AMM quoting service (rollup)
         let amm = RollupQuoterManager::new(
@@ -288,11 +288,17 @@ where
         let uniswap_pools_clone = uniswap_pools.clone();
         let order_storage_clone = order_storage.clone();
 
-        executor.spawn_critical(
+        executor.spawn_critical_with_graceful_shutdown_signal(
             "op-rollup-driver",
-            Box::pin(async move {
+            move |grace| async move {
                 let mut canon = eth_handle.subscribe_cannon_state_notifications().await;
-                while canon.recv().await.is_ok() {
+                loop {
+                    tokio::select! {
+                        res = canon.recv() => {
+                            if res.is_err() { break }
+                        }
+                        _ = &mut grace.clone() => break,
+                    }
                     // Build pool snapshots
                     let pool_snapshots = uniswap_pools_clone
                         .iter()
@@ -326,10 +332,10 @@ where
                         }
                     }
                 }
-            })
+            }
         );
 
-        Ok(Self { state_provider, init_state: inital_angstrom_state, config: node_config })
+        Ok(Self { state_provider, _init_state: inital_angstrom_state, config: node_config })
     }
 
     pub fn state_provider(&self) -> &AnvilProvider<P> {

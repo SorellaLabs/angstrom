@@ -22,7 +22,7 @@ fn testnet_deploy() {
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
 
     let runner = reth::CliRunner::try_default_runtime().unwrap();
-    runner.run_command_until_exit(|ctx| async move {
+    let _ = runner.run_command_until_exit(|ctx| async move {
         let cli = TestnetCli {
             eth_fork_url: "wss://ethereum-rpc.publicnode.com".to_string(),
             ..Default::default()
@@ -49,7 +49,7 @@ fn testnet_bundle_unlock() {
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
-    runner.run_command_until_exit(|ctx| async move {
+    let _ = runner.run_command_until_exit(|ctx| async move {
         let config = TestnetCli {
             eth_fork_url: "wss://ethereum-rpc.publicnode.com".to_string(),
             // Use None to let the config generate a random port to avoid conflicts

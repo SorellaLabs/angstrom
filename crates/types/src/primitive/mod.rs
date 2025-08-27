@@ -6,6 +6,7 @@ mod pool_state;
 mod recovered_bundle;
 mod rpcs;
 mod signer;
+mod state;
 mod validation;
 
 pub use chain_config::*;
@@ -16,4 +17,5 @@ pub use pool_state::*;
 pub use recovered_bundle::*;
 pub use rpcs::*;
 pub use signer::*;
+pub use state::*;
 pub use validation::*;

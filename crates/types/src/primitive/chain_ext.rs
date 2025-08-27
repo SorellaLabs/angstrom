@@ -13,6 +13,7 @@ pub const MAX_REORG_DEPTH: u64 = 150;
 #[auto_impl::auto_impl(&, Arc)]
 pub trait ChainExt<N: NodePrimitives = EthPrimitives> {
     fn tip_number(&self) -> BlockNumber;
+    fn flashblock_index(&self) -> Option<u64>;
     fn tip_hash(&self) -> BlockHash;
     fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&N::Receipt>>;
     fn tip_transactions(&self) -> impl Iterator<Item = &N::SignedTx> + '_;
@@ -24,6 +25,10 @@ pub trait ChainExt<N: NodePrimitives = EthPrimitives> {
 impl<N: NodePrimitives> ChainExt<N> for Chain<N> {
     fn tip_number(&self) -> BlockNumber {
         self.tip().number()
+    }
+
+    fn flashblock_index(&self) -> Option<u64> {
+        None
     }
 
     fn tip_hash(&self) -> BlockHash {

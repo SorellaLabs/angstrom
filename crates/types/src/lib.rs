@@ -5,6 +5,7 @@ pub mod block_sync;
 pub mod consensus;
 pub mod contract_bindings;
 pub mod contract_payloads;
+pub mod flashblocks;
 pub mod matching;
 pub mod network;
 pub mod orders;

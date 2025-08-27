@@ -36,7 +36,11 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
     tracing::info!("e2e testnet is alive");
 
     executor
-        .spawn_critical_blocking("testnet", testnet.run_to_completion(executor.clone()))
+        .spawn_critical_blocking("testnet", async move {
+            if let Err(e) = testnet.run_to_completion().await {
+                tracing::error!("testnet failed: {:?}", e);
+            }
+        })
         .await?;
     Ok(())
 }

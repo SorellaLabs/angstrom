@@ -5,8 +5,8 @@ use futures::Future;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TaskExecutor;
 use testing_tools::{
-    agents::AgentConfig, controllers::enviroments::OpAngstromTestnet, types::config::OpTestnetConfig,
-    utils::noop_agent
+    agents::AgentConfig, controllers::enviroments::OpAngstromTestnet,
+    types::config::OpTestnetConfig, utils::noop_agent
 };
 
 use crate::cli::{init_tracing, testnet::TestnetCli};
@@ -22,6 +22,6 @@ pub(crate) async fn run_testnet(executor: TaskExecutor, cli: TestnetCli) -> eyre
     )
     .await?;
 
-    testnet.run_to_completion(executor).await;
+    testnet.run_to_completion().await;
     Ok(())
 }

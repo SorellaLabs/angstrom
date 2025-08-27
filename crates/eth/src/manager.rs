@@ -17,7 +17,8 @@ use angstrom_types::{
         controller_v_1::ControllerV1::{NodeAdded, NodeRemoved, PoolConfigured, PoolRemoved}
     },
     contract_payloads::angstrom::{AngPoolConfigEntry, AngstromBundle, AngstromPoolConfigStore},
-    primitive::ChainExt
+    flashblocks::{FlashblocksPayloadV1, PendingChain},
+    primitive::{ChainExt, StateNotification}
 };
 use futures::Future;
 use futures_util::{FutureExt, StreamExt};
@@ -43,23 +44,25 @@ alloy::sol!(
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
 pub struct EthDataCleanser<Sync, N: NodePrimitives = EthPrimitives> {
-    pub(crate) angstrom_address:  Address,
-    pub(crate) periphery_address: Address,
+    pub(crate) angstrom_address:   Address,
+    pub(crate) periphery_address:  Address,
     /// our command receiver
-    pub(crate) commander:         ReceiverStream<EthCommand<N>>,
+    pub(crate) commander:          ReceiverStream<EthCommand<N>>,
     /// people listening to events
-    pub(crate) event_listeners:   Vec<UnboundedSender<EthEvent>>,
+    pub(crate) event_listeners:    Vec<UnboundedSender<EthEvent>>,
     /// for rebroadcasting
-    pub(crate) cannon_sender:     tokio::sync::broadcast::Sender<CanonStateNotification<N>>,
+    pub(crate) cannon_sender:      tokio::sync::broadcast::Sender<StateNotification<N>>,
     /// Notifications for Canonical Block updates
-    pub(crate) canonical_updates: BroadcastStream<CanonStateNotification<N>>,
-    pub(crate) angstrom_tokens:   HashMap<Address, usize>,
+    pub(crate) canonical_updates:  BroadcastStream<CanonStateNotification<N>>,
+    /// Notifications for Flashblocks.
+    pub(crate) flashblock_updates: BroadcastStream<FlashblocksPayloadV1>,
+    pub(crate) angstrom_tokens:    HashMap<Address, usize>,
     /// handles syncing of blocks.
-    block_sync:                   Sync,
+    block_sync:                    Sync,
     /// updated by periphery contract.
-    pub(crate) pool_store:        Arc<AngstromPoolConfigStore>,
+    pub(crate) pool_store:         Arc<AngstromPoolConfigStore>,
     /// the set of currently active nodes.
-    pub(crate) node_set:          HashSet<Address>
+    pub(crate) node_set:           HashSet<Address>
 }
 
 impl<Sync, N> EthDataCleanser<Sync, N>
@@ -71,6 +74,7 @@ where
         angstrom_address: Address,
         periphery_address: Address,
         canonical_updates: CanonStateNotifications<N>,
+        flashblock_updates: BroadcastStream<FlashblocksPayloadV1>,
         tp: TP,
         tx: Sender<EthCommand<N>>,
         rx: Receiver<EthCommand<N>>,
@@ -87,6 +91,7 @@ where
             angstrom_address,
             periphery_address,
             canonical_updates: BroadcastStream::new(canonical_updates),
+            flashblock_updates,
             commander: stream,
             angstrom_tokens,
             cannon_sender: cannon_tx,
@@ -109,9 +114,9 @@ where
         Ok(handle)
     }
 
-    fn subscribe_cannon_notifications(
+    fn subscribe_canon_notifications(
         &self
-    ) -> tokio::sync::broadcast::Receiver<CanonStateNotification<N>> {
+    ) -> tokio::sync::broadcast::Receiver<StateNotification<N>> {
         self.cannon_sender.subscribe()
     }
 
@@ -124,7 +129,7 @@ where
         match command {
             EthCommand::SubscribeEthNetworkEvents(tx) => self.event_listeners.push(tx),
             EthCommand::SubscribeCannon(tx) => {
-                let _ = tx.send(self.subscribe_cannon_notifications());
+                let _ = tx.send(self.subscribe_canon_notifications());
             }
         }
     }
@@ -136,11 +141,29 @@ where
             canonical_updates.clone()
         )));
 
-        match canonical_updates.clone() {
-            CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new),
-            CanonStateNotification::Commit { new } => self.handle_commit(new)
-        }
-        let _ = self.cannon_sender.send(canonical_updates);
+        let update = match canonical_updates {
+            CanonStateNotification::Reorg { old, new } => {
+                self.handle_reorg(old.clone(), new.clone());
+                StateNotification::Reorg { old, new }
+            }
+            CanonStateNotification::Commit { new } => {
+                self.handle_commit(new.clone());
+                StateNotification::Commit { new }
+            }
+        };
+
+        let _ = self.cannon_sender.send(update);
+    }
+
+    fn on_flashblock_update(&mut self, pending: Arc<PendingChain<N>>) {
+        tracing::debug!(
+            hash = ?pending.tip_hash(),
+            index = pending.tip_index(),
+            number = pending.tip_number(),
+            "New Flashblock received"
+        );
+
+        self.handle_commit(pending.clone());
     }
 
     fn handle_reorg(&mut self, old: Arc<impl ChainExt<N>>, new: Arc<impl ChainExt<N>>) {
@@ -414,6 +437,10 @@ pub mod test {
     impl ChainExt for MockChain<'_> {
         fn tip_number(&self) -> BlockNumber {
             self.number
+        }
+
+        fn flashblock_index(&self) -> Option<u64> {
+            None
         }
 
         fn successful_tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {

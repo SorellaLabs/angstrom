@@ -1138,6 +1138,7 @@ dependencies = [
  "clap",
  "consensus",
  "eyre",
+ "flashblocks",
  "futures",
  "hsm-signer",
  "matching-engine",
@@ -4506,6 +4507,17 @@ dependencies = [
  "rand 0.8.5",
  "rustc-hex",
  "static_assertions",
+]
+
+[[package]]
+name = "flashblocks"
+version = "0.1.0"
+dependencies = [
+ "angstrom-types",
+ "reth-optimism-primitives 1.6.0",
+ "reth-primitives-traits 1.6.0",
+ "tokio",
+ "url",
 ]
 
 [[package]]

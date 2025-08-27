@@ -159,15 +159,34 @@ async fn run_with_signer<S: AngstromMetaSigner>(
 
     let op_node = OpNode::new(args.rollup);
 
+    // TODO: Not a great pattern
+    let (writer, reader) = flashblocks::state::initialize();
+
     let node_handle = builder
         .with_types::<OpNode>()
         .with_components(op_node.components_builder())
         .with_add_ons(op_node.add_ons())
         .install_exex_if(args.flashblocks_enabled(), "flashblocks", {
-            // TODO: Install Flashblocks ExEx here
-            todo!();
+            // This ExEx is used to notify the Flashblocks state writer of new canonical
+            // blocks, so it can clean up the pending state.
+            move |mut ctx| async move {
+                Ok(async move {
+                    while let Some(note) = ctx.notifications.try_next().await? {
+                        if let Some(committed) = note.committed_chain() {
+                            for b in committed.blocks_iter() {
+                                writer.on_canonical_block(&b);
+                            }
+                            let _ = ctx
+                                .events
+                                .send(ExExEvent::FinishedHeight(committed.tip().num_hash()));
+                        }
+                    }
+                    Ok(())
+                })
+            }
         })
         .extend_rpc_modules(move |rpc_context| {
+            // TODO(mempirate): Potentially add Flashblocks RPC overrides here.
             let order_api = OrderApi::new(
                 pool.clone(),
                 executor_clone.clone(),

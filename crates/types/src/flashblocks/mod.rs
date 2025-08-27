@@ -134,6 +134,11 @@ impl<N: NodePrimitives> PendingChain<N> {
         self.blocks.push(block);
         self.metadatas.push(metadata);
     }
+
+    /// Returns the index of the tip block (last Flashblock).
+    pub fn tip_index(&self) -> usize {
+        self.blocks.len() - 1
+    }
 }
 
 /// Generic implementation for any NodePrimitives - provides default behavior

@@ -1,0 +1,18 @@
+[package]
+name = "flashblocks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+tokio.workspace = true
+url.workspace = true
+
+reth-optimism-primitives.workspace = true
+reth-primitives-traits.workspace = true
+
+angstrom-types.workspace = true

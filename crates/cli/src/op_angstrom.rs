@@ -1,5 +1,5 @@
 //! Optimism Angstrom binary executable.
-use std::sync::Arc;
+use std::{cell::OnceCell, sync::Arc};
 
 use alloy_chains::NamedChain;
 use angstrom_amm_quoter::QuoterHandle;
@@ -159,8 +159,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
 
     let op_node = OpNode::new(args.rollup);
 
-    // TODO: Not a great pattern
-    let (writer, reader) = flashblocks::state::initialize();
+    let mut writer = None;
 
     let node_handle = builder
         .with_types::<OpNode>()
@@ -170,11 +169,14 @@ async fn run_with_signer<S: AngstromMetaSigner>(
             // This ExEx is used to notify the Flashblocks state writer of new canonical
             // blocks, so it can clean up the pending state.
             move |mut ctx| async move {
+                let w = flashblocks::state::PendingStateWriter::new(ctx.provider.clone());
+                writer = Some(w.clone());
+
                 Ok(async move {
                     while let Some(note) = ctx.notifications.try_next().await? {
                         if let Some(committed) = note.committed_chain() {
                             for b in committed.blocks_iter() {
-                                writer.on_canonical_block(&b);
+                                w.on_canonical_block(&b);
                             }
                             let _ = ctx
                                 .events
@@ -200,13 +202,20 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         .launch()
         .await?;
 
-    AngstromLauncher::<_, _, RollupMode, _>::new(
+    let launcher = AngstromLauncher::<_, _, RollupMode, _>::new(
         args.angstrom,
         executor,
         node_handle,
         secret_key,
         channels
-    )
-    .launch()
-    .await
+    );
+
+    // Set up Flashblocks if enabled.
+    let launcher = if let Some(writer) = writer {
+        launcher.with_flashblocks(writer, args.flashblocks.url.unwrap())
+    } else {
+        launcher
+    };
+
+    launcher.launch().await
 }

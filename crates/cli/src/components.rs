@@ -107,10 +107,12 @@ where
     signer:           AngstromSigner<S>,
     handles:          StromHandles<M>,
 
-    // Optional fields (non-rollup mode)
-    consensus_client: Option<ConsensusHandler>,
-    network_builder:  Option<StromNetworkBuilder<N::Network, S>>,
-    node_set:         Option<HashSet<Address>>
+    // Optional fields
+    consensus_client:   Option<ConsensusHandler>,
+    network_builder:    Option<StromNetworkBuilder<N::Network, S>>,
+    node_set:           Option<HashSet<Address>>,
+    flashblocks_writer: Option<PendingStateWriter>,
+    flashblocks_ws:     Option<Url>
 }
 
 impl<N, AO, M, S> AngstromLauncher<N, AO, M, S>
@@ -143,8 +145,14 @@ where
             handles,
             network_builder: None,
             consensus_client: None,
-            node_set: None
+            node_set: None,
+            flashblocks_writer: None,
+            flashblocks_ws: None
         }
+    }
+
+    pub fn with_flashblocks(self, writer: PendingStateWriter<N::Provider>, ws: Url) -> Self {
+        Self { flashblocks_writer: Some(writer), flashblocks_ws: Some(ws), ..self }
     }
 }
 
@@ -292,6 +300,8 @@ where
         tracing::info!(?block_id, "starting up with block");
         let eth_data_sub = node.provider.subscribe_to_canonical_state();
 
+        // TODO(mempirate): Initialize Flashblocks here.
+
         let global_block_sync = GlobalBlockSync::new(block_id);
 
         // this right here problem
@@ -305,6 +315,7 @@ where
             angstrom_address,
             controller,
             eth_data_sub,
+            None,
             executor.clone(),
             handles.eth_tx,
             handles.eth_rx,

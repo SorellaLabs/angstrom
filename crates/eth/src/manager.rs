@@ -55,7 +55,7 @@ pub struct EthDataCleanser<Sync, N: NodePrimitives = EthPrimitives> {
     /// Notifications for Canonical Block updates
     pub(crate) canonical_updates:  BroadcastStream<CanonStateNotification<N>>,
     /// Notifications for Flashblocks.
-    pub(crate) flashblock_updates: BroadcastStream<FlashblocksPayloadV1>,
+    pub(crate) flashblock_updates: Option<BroadcastStream<FlashblocksPayloadV1>>,
     pub(crate) angstrom_tokens:    HashMap<Address, usize>,
     /// handles syncing of blocks.
     block_sync:                    Sync,
@@ -74,7 +74,7 @@ where
         angstrom_address: Address,
         periphery_address: Address,
         canonical_updates: CanonStateNotifications<N>,
-        flashblock_updates: BroadcastStream<FlashblocksPayloadV1>,
+        flashblock_updates: Option<BroadcastStream<FlashblocksPayloadV1>>,
         tp: TP,
         tx: Sender<EthCommand<N>>,
         rx: Receiver<EthCommand<N>>,

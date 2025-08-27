@@ -4513,10 +4513,20 @@ dependencies = [
 name = "flashblocks"
 version = "0.1.0"
 dependencies = [
+ "alloy",
  "angstrom-types",
+ "brotli",
+ "eyre",
+ "futures",
+ "reth",
+ "reth-optimism-chainspec 1.6.0",
  "reth-optimism-primitives 1.6.0",
  "reth-primitives-traits 1.6.0",
+ "serde_json",
  "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tracing",
  "url",
 ]
 

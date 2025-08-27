@@ -28,13 +28,16 @@ pub struct Metadata {
 /// A chain that is "pending", as in built from Flashblocks. Based on
 /// [`Chain`](reth_provider::Chain) and implements
 /// [`ChainExt`](crate::primitive::ChainExt).
+///
+/// A pending chain lasts for a single slot time, and consists of (slot time /
+/// flashblock interval) blocks.
 pub struct PendingChain {
     /// The Flashblock as a recovered block.
     blocks:    Vec<RecoveredBlock<OpBlock>>,
-    /// The base block of this pending chain.
-    base:      ExecutionPayloadBaseV1,
     /// The Flashblock metadata. Index corresponds to the block index.
-    metadatas: Vec<Metadata>
+    metadatas: Vec<Metadata>,
+    /// The base block of this pending chain.
+    base:      ExecutionPayloadBaseV1
 }
 
 trait FlashblockExt {
@@ -81,6 +84,12 @@ impl PendingChain {
     /// metadata and the transactions. This should only be used for the first
     /// Flashblock for a certain slot (i.e. index = 0), because it expects the
     /// base to be present.
+    ///
+    /// If you want to add a Flashblock to an existing pending chain, use
+    /// [`Self::push_flashblock`] instead.
+    ///
+    /// # Panics
+    /// Panics if the base block is not present.
     pub fn new(flashblock: FlashblocksPayloadV1) -> Self {
         let metadata = serde_json::from_value(flashblock.metadata.clone()).unwrap();
 
@@ -125,7 +134,7 @@ impl ChainExt<OpPrimitives> for PendingChain {
         self.blocks.last().unwrap().hash()
     }
 
-    /// Returns the receipts for a given block hash.
+    /// Returns the receipts for a given Flashblock block hash.
     fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&OpReceipt>> {
         let index = self
             .blocks
@@ -137,6 +146,7 @@ impl ChainExt<OpPrimitives> for PendingChain {
         Some(metadata.receipts.values().collect())
     }
 
+    /// Returns the transactions for the Flashblock tip.
     fn tip_transactions(&self) -> impl Iterator<Item = &OpTransactionSigned> + '_ {
         self.blocks
             .last()
@@ -145,6 +155,10 @@ impl ChainExt<OpPrimitives> for PendingChain {
             .map(|(_, tx)| tx)
     }
 
+    /// Returns the successful transactions for the Flashblock tip.
+    ///
+    /// NOTE: In theory, this should just be all transactions since Flashblocks
+    /// shouldn't contain reverts, but we filter here just to be safe.
     fn successful_tip_transactions(&self) -> impl Iterator<Item = &OpTransactionSigned> + '_ {
         let successful_hashes = self
             .metadatas
@@ -165,6 +179,7 @@ impl ChainExt<OpPrimitives> for PendingChain {
         None
     }
 
+    /// Returns an iterator over the Flashblock blocks.
     fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<OpBlock>> + '_ {
         self.blocks.iter()
     }

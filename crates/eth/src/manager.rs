@@ -17,7 +17,7 @@ use angstrom_types::{
         controller_v_1::ControllerV1::{NodeAdded, NodeRemoved, PoolConfigured, PoolRemoved}
     },
     contract_payloads::angstrom::{AngPoolConfigEntry, AngstromBundle, AngstromPoolConfigStore},
-    flashblocks::{FlashblocksPayloadV1, PendingChain},
+    flashblocks::PendingChain,
     primitive::{ChainExt, StateNotification}
 };
 use futures::Future;
@@ -55,7 +55,7 @@ pub struct EthDataCleanser<Sync, N: NodePrimitives = EthPrimitives> {
     /// Notifications for Canonical Block updates
     pub(crate) canonical_updates:  BroadcastStream<CanonStateNotification<N>>,
     /// Notifications for Flashblocks.
-    pub(crate) flashblock_updates: Option<BroadcastStream<FlashblocksPayloadV1>>,
+    pub(crate) flashblock_updates: Option<BroadcastStream<Arc<PendingChain<N>>>>,
     pub(crate) angstrom_tokens:    HashMap<Address, usize>,
     /// handles syncing of blocks.
     block_sync:                    Sync,
@@ -74,7 +74,7 @@ where
         angstrom_address: Address,
         periphery_address: Address,
         canonical_updates: CanonStateNotifications<N>,
-        flashblock_updates: Option<BroadcastStream<FlashblocksPayloadV1>>,
+        flashblock_updates: Option<BroadcastStream<Arc<PendingChain<N>>>>,
         tp: TP,
         tx: Sender<EthCommand<N>>,
         rx: Receiver<EthCommand<N>>,
@@ -439,10 +439,6 @@ pub mod test {
             self.number
         }
 
-        fn flashblock_index(&self) -> Option<u64> {
-            None
-        }
-
         fn successful_tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_ {
             self.tip_transactions()
         }
@@ -475,16 +471,17 @@ pub mod test {
         let (_cannon_tx, cannon_rx) = tokio::sync::broadcast::channel(3);
         let (tx, _) = tokio::sync::broadcast::channel(3);
         EthDataCleanser {
-            commander:         ReceiverStream::new(command_rx),
-            event_listeners:   vec![],
-            angstrom_tokens:   HashMap::default(),
-            node_set:          HashSet::default(),
-            angstrom_address:  angstrom_address.unwrap_or_default(),
-            periphery_address: Address::default(),
-            canonical_updates: BroadcastStream::new(cannon_rx),
-            block_sync:        GlobalBlockSync::new(1),
-            cannon_sender:     tx,
-            pool_store:        Default::default()
+            commander:          ReceiverStream::new(command_rx),
+            event_listeners:    vec![],
+            angstrom_tokens:    HashMap::default(),
+            node_set:           HashSet::default(),
+            angstrom_address:   angstrom_address.unwrap_or_default(),
+            periphery_address:  Address::default(),
+            canonical_updates:  BroadcastStream::new(cannon_rx),
+            flashblock_updates: None,
+            block_sync:         GlobalBlockSync::new(1),
+            cannon_sender:      tx,
+            pool_store:         Default::default()
         }
     }
 

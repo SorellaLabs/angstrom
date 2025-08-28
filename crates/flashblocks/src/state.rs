@@ -27,6 +27,7 @@ use reth_optimism_evm::{OpEvmConfig, OpNextBlockEnvAttributes};
 use reth_optimism_primitives::OpBlock;
 use reth_primitives_traits::{AlloyBlockHeader, Header, RecoveredBlock};
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 #[derive(Debug, Clone)]
 pub struct PendingStateWriter<P: Clone> {
@@ -262,7 +263,7 @@ pub struct PendingStateReader {
 
 impl PendingStateReader {
     /// Subscribe to [`PendingChain`] updates.
-    pub fn subscribe(&self) -> broadcast::Receiver<Arc<PendingChain>> {
-        self.pending.read().sender.subscribe()
+    pub fn subscribe(&self) -> BroadcastStream<Arc<PendingChain>> {
+        BroadcastStream::new(self.pending.read().sender.subscribe())
     }
 }

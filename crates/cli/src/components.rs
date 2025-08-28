@@ -591,6 +591,8 @@ where
             executor.spawn_critical("flashblocks subscriber", subscriber.start());
         }
 
+        let flashblock_updates = self.flashblocks_writer.map(|w| w.reader().subscribe());
+
         let global_block_sync = GlobalBlockSync::new(block_id);
 
         // this right here problem
@@ -602,7 +604,7 @@ where
             angstrom_address,
             controller,
             eth_data_sub,
-            None,
+            flashblock_updates,
             executor.clone(),
             handles.eth_tx,
             handles.eth_rx,
@@ -739,6 +741,7 @@ where
     }
 }
 
+// TODO(mempirate): This isn't correct in rollup mode.
 async fn handle_init_block_spam<N: NodePrimitives>(
     canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification<N>>
 ) {

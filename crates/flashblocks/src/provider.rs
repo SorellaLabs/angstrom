@@ -39,13 +39,14 @@ impl<P: Provider + Clone + 'static> Provider for PendingStateReader<P> {
                 if let Some(overrides) = pending.state_overrides()
                     && block_id.is_pending()
                 {
-                    let diff = overrides
+                    // Return either the override nonce or the base nonce if it doesn't exist.
+                    let nonce = overrides
                         .get(&address)
                         .map(|acc| acc.nonce)
                         .flatten()
-                        .unwrap_or_default();
+                        .unwrap_or(base);
 
-                    Ok(base + diff)
+                    Ok(nonce)
                 } else {
                     Ok(base)
                 }

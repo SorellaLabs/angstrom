@@ -64,6 +64,6 @@ impl GlobalTestingConfig for OpTestnetConfig {
     }
 
     fn leader_eth_rpc_port(&self) -> u16 {
-        self.base_angstrom_rpc_port()
+        self.base_angstrom_rpc_port() + 1
     }
 }

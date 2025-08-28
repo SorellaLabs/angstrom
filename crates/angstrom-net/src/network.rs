@@ -1,8 +1,6 @@
 use std::sync::{Arc, atomic::AtomicUsize};
 
-use angstrom_types::{
-    orders::CancelOrderRequest, primitive::PeerId, sol_bindings::grouped_orders::AllOrders
-};
+use angstrom_types::{network::ReputationChangeKind, primitive::PeerId};
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::DisconnectReason;
 use tokio::sync::{
@@ -11,7 +9,7 @@ use tokio::sync::{
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::{ReputationChangeKind, StromMessage, StromNetworkEvent};
+use crate::{StromMessage, StromNetworkEvent};
 
 //TODO:
 // 1) Implement the order pool manager
@@ -54,7 +52,7 @@ impl StromNetworkHandle {
         let (tx, rx) = unbounded_channel();
         self.send_to_network_manager(StromNetworkHandleMsg::SubscribeEvents(tx));
 
-        UnboundedReceiverStream::from(rx)
+        UnboundedReceiverStream::new(rx)
     }
 
     /// Send message to gracefully shutdown node.
@@ -86,13 +84,6 @@ struct StromNetworkInner {
     num_active_peers: Arc<AtomicUsize>,
 
     to_manager_tx: UnboundedMeteredSender<StromNetworkHandleMsg>
-}
-
-/// All events related to orders emitted by the network.
-#[derive(Debug, Clone, PartialEq)]
-pub enum NetworkOrderEvent {
-    IncomingOrders { peer_id: PeerId, orders: Vec<AllOrders> },
-    CancelOrder { peer_id: PeerId, request: CancelOrderRequest }
 }
 
 #[derive(Debug)]

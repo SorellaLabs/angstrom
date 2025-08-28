@@ -8,10 +8,9 @@ use std::{
 
 use alloy::signers::local::PrivateKeySigner;
 use alloy_primitives::Address;
-use angstrom::components::initialize_strom_handles;
+use angstrom_cli::handles::ConsensusHandles;
 use angstrom_network::{
-    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager,
-    pool_manager::PoolHandle
+    NetworkOrderEvent, StromNetworkEvent, StromNetworkHandle, StromNetworkManager
 };
 use angstrom_types::{
     block_sync::GlobalBlockSync,
@@ -25,6 +24,7 @@ use consensus::{AngstromValidator, ConsensusManager};
 use futures::Future;
 use matching_engine::manager::MatcherHandle;
 use parking_lot::RwLock;
+use pool_manager::PoolHandle;
 use reth_chainspec::Hardforks;
 use reth_metrics::common::mpsc::UnboundedMeteredSender;
 use reth_network::{
@@ -93,12 +93,12 @@ where
         F: Clone
     {
         tracing::info!("spawning node");
-        let strom_handles = initialize_strom_handles();
+        let strom_handles = ConsensusHandles::new();
         let (strom_network, eth_peer, strom_network_manager) = TestnetNodeNetwork::new(
             c,
             &node_config,
             Some(strom_handles.pool_tx.clone()),
-            Some(strom_handles.consensus_tx_op.clone())
+            Some(strom_handles.mode.consensus_tx_op.clone())
         )
         .await;
 

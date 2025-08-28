@@ -6,7 +6,7 @@ use std::{
 };
 
 use alloy::{
-    consensus::Transaction,
+    consensus::{Transaction, TxReceipt},
     primitives::{Address, B256, aliases::I24},
     sol_types::{SolCall, SolEvent}
 };
@@ -23,8 +23,10 @@ use futures::Future;
 use futures_util::{FutureExt, StreamExt};
 use itertools::Itertools;
 use pade::PadeDecode;
+use reth_primitives::{EthPrimitives, NodePrimitives};
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
 use reth_tasks::TaskSpawner;
+use serde::Serialize;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
@@ -40,17 +42,17 @@ alloy::sol!(
 
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
-pub struct EthDataCleanser<Sync> {
+pub struct EthDataCleanser<Sync, N: NodePrimitives = EthPrimitives> {
     pub(crate) angstrom_address:  Address,
     pub(crate) periphery_address: Address,
     /// our command receiver
-    pub(crate) commander:         ReceiverStream<EthCommand>,
+    pub(crate) commander:         ReceiverStream<EthCommand<N>>,
     /// people listening to events
     pub(crate) event_listeners:   Vec<UnboundedSender<EthEvent>>,
     /// for rebroadcasting
-    pub(crate) cannon_sender:     tokio::sync::broadcast::Sender<CanonStateNotification>,
+    pub(crate) cannon_sender:     tokio::sync::broadcast::Sender<CanonStateNotification<N>>,
     /// Notifications for Canonical Block updates
-    pub(crate) canonical_updates: BroadcastStream<CanonStateNotification>,
+    pub(crate) canonical_updates: BroadcastStream<CanonStateNotification<N>>,
     pub(crate) angstrom_tokens:   HashMap<Address, usize>,
     /// handles syncing of blocks.
     block_sync:                   Sync,
@@ -60,23 +62,24 @@ pub struct EthDataCleanser<Sync> {
     pub(crate) node_set:          HashSet<Address>
 }
 
-impl<Sync> EthDataCleanser<Sync>
+impl<Sync, N> EthDataCleanser<Sync, N>
 where
-    Sync: BlockSyncProducer
+    Sync: BlockSyncProducer,
+    N: NodePrimitives + Serialize
 {
     pub fn spawn<TP: TaskSpawner>(
         angstrom_address: Address,
         periphery_address: Address,
-        canonical_updates: CanonStateNotifications,
+        canonical_updates: CanonStateNotifications<N>,
         tp: TP,
-        tx: Sender<EthCommand>,
-        rx: Receiver<EthCommand>,
+        tx: Sender<EthCommand<N>>,
+        rx: Receiver<EthCommand<N>>,
         angstrom_tokens: HashMap<Address, usize>,
         pool_store: Arc<AngstromPoolConfigStore>,
         sync: Sync,
         node_set: HashSet<Address>,
         event_listeners: Vec<UnboundedSender<EthEvent>>
-    ) -> anyhow::Result<EthHandle> {
+    ) -> anyhow::Result<EthHandle<N>> {
         let stream = ReceiverStream::new(rx);
         let (cannon_tx, _) = tokio::sync::broadcast::channel(1000);
 
@@ -108,7 +111,7 @@ where
 
     fn subscribe_cannon_notifications(
         &self
-    ) -> tokio::sync::broadcast::Receiver<CanonStateNotification> {
+    ) -> tokio::sync::broadcast::Receiver<CanonStateNotification<N>> {
         self.cannon_sender.subscribe()
     }
 
@@ -117,7 +120,7 @@ where
             .retain(|e| e.send(event.clone()).is_ok());
     }
 
-    fn on_command(&mut self, command: EthCommand) {
+    fn on_command(&mut self, command: EthCommand<N>) {
         match command {
             EthCommand::SubscribeEthNetworkEvents(tx) => self.event_listeners.push(tx),
             EthCommand::SubscribeCannon(tx) => {
@@ -126,7 +129,7 @@ where
         }
     }
 
-    fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) {
+    fn on_canon_update(&mut self, canonical_updates: CanonStateNotification<N>) {
         tracing::info!("got new block update!!!!!");
         telemetry_recorder::telemetry_event!(EthUpdaterSnapshot::from((
             &*self,
@@ -140,7 +143,7 @@ where
         let _ = self.cannon_sender.send(canonical_updates);
     }
 
-    fn handle_reorg(&mut self, old: Arc<impl ChainExt>, new: Arc<impl ChainExt>) {
+    fn handle_reorg(&mut self, old: Arc<impl ChainExt<N>>, new: Arc<impl ChainExt<N>>) {
         self.apply_periphery_logs(&new);
         // notify producer of reorg if one happened. NOTE: reth also calls this
         // on reverts
@@ -161,7 +164,7 @@ where
         self.send_events(reorged_orders);
     }
 
-    fn handle_commit(&mut self, new: Arc<impl ChainExt>) {
+    fn handle_commit(&mut self, new: Arc<impl ChainExt<N>>) {
         // handle this first so the newest state is the first available
         self.apply_periphery_logs(&new);
 
@@ -184,15 +187,15 @@ where
 
     /// looks at all periphery contrct events updating the internal state +
     /// sending out info.
-    fn apply_periphery_logs(&mut self, chain: &impl ChainExt) {
+    fn apply_periphery_logs(&mut self, chain: &impl ChainExt<N>) {
         let periphery_address = self.periphery_address;
 
         chain
             .receipts_by_block_hash(chain.tip_hash())
             .unwrap_or_default()
             .into_iter()
-            .filter(|r| r.success)
-            .flat_map(|receipt| &receipt.logs)
+            .filter(|r| r.status())
+            .flat_map(|receipt| receipt.logs().iter())
             .filter(|log| log.address == periphery_address)
             .for_each(|log| {
                 if let Ok(remove_node) = NodeRemoved::decode_log(log) {
@@ -264,7 +267,7 @@ where
 
     fn fetch_filled_order<'a>(
         &'a self,
-        chain: &'a impl ChainExt
+        chain: &'a impl ChainExt<N>
     ) -> impl Iterator<Item = B256> + 'a {
         chain
             .successful_tip_transactions()
@@ -286,13 +289,13 @@ where
     }
 
     /// fetches all eoa addresses touched
-    fn get_eoa(&self, chain: Arc<impl ChainExt>) -> Vec<Address> {
+    fn get_eoa(&self, chain: Arc<impl ChainExt<N>>) -> Vec<Address> {
         chain
             .receipts_by_block_hash(chain.tip_hash())
             .unwrap_or_default()
             .into_iter()
-            .filter(|receipt| receipt.success)
-            .flat_map(|receipt| &receipt.logs)
+            .filter(|receipt| receipt.status())
+            .flat_map(|receipt| receipt.logs().iter())
             .filter(|log| self.angstrom_tokens.contains_key(&log.address))
             .flat_map(|log| {
                 Transfer::decode_log(log)
@@ -321,9 +324,10 @@ where
     }
 }
 
-impl<Sync> Future for EthDataCleanser<Sync>
+impl<Sync, N> Future for EthDataCleanser<Sync, N>
 where
-    Sync: BlockSyncProducer
+    Sync: BlockSyncProducer,
+    N: NodePrimitives + Serialize
 {
     type Output = ();
 

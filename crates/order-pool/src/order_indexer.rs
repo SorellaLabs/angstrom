@@ -7,7 +7,7 @@ use std::{
 use alloy::primitives::{Address, B256, BlockNumber, U256};
 use angstrom_types::{
     orders::{OrderId, OrderLocation, OrderOrigin, OrderSet, OrderStatus},
-    primitive::{NewInitializedPool, PeerId, PoolId},
+    primitive::{ChainConfig, NewInitializedPool, PeerId, PoolId},
     sol_bindings::{
         RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData},
@@ -47,7 +47,9 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     pub(crate) validator:     OrderValidator<V>,
     /// List of subscribers for order validation result
     /// order
-    pub(crate) subscribers:   OrderSubscriptionTracker
+    pub(crate) subscribers:   OrderSubscriptionTracker,
+    /// Chain configuration for timing parameters
+    pub(crate) chain_config:  ChainConfig
 }
 
 impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
@@ -55,14 +57,16 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         validator: V,
         order_storage: Arc<OrderStorage>,
         block_number: BlockNumber,
-        orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>
+        orders_subscriber_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
+        chain_config: ChainConfig
     ) -> Self {
         Self {
             order_storage,
             order_tracker: OrderTracker::default(),
             block_number,
             validator: OrderValidator::new(validator),
-            subscribers: OrderSubscriptionTracker::new(orders_subscriber_tx)
+            subscribers: OrderSubscriptionTracker::new(orders_subscriber_tx),
+            chain_config
         }
     }
 
@@ -133,7 +137,9 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         if let Some((is_tob, pool_id)) = self.order_tracker.cancel_order(
             request.user_address,
             request.order_id,
-            &self.order_storage
+            &self.order_storage,
+            self.chain_config.max_order_delay_propagation,
+            self.chain_config.block_time
         ) {
             // grab all parked orders and see if there valid now
             self.order_tracker
@@ -413,7 +419,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             self.order_tracker.insert_cancel_with_deadline(
                 order.from(),
                 &order.order_hash(),
-                order.deadline()
+                order.deadline(),
+                self.chain_config.block_time
             );
         }
 
@@ -421,7 +428,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             self.order_tracker.insert_cancel_with_deadline(
                 order.from(),
                 &order.order_hash(),
-                order.deadline()
+                order.deadline(),
+                self.chain_config.block_time
             );
         }
     }
@@ -440,9 +448,11 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.filled_orders(block_number, &completed_orders);
 
         self.purge_cancelled();
-        let expired_orders = self
-            .order_tracker
-            .remove_expired_orders(block_number, &self.order_storage);
+        let expired_orders = self.order_tracker.remove_expired_orders(
+            block_number,
+            &self.order_storage,
+            self.chain_config.block_time
+        );
         self.subscribers.notify_expired_orders(&expired_orders);
 
         // deal with changed orders
@@ -519,7 +529,7 @@ mod tests {
     use std::{
         collections::HashSet,
         sync::Arc,
-        time::{SystemTime, UNIX_EPOCH}
+        time::{Duration, SystemTime, UNIX_EPOCH}
     };
 
     use alloy::{primitives::U256, signers::local::PrivateKeySigner};
@@ -546,7 +556,13 @@ mod tests {
         let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
         let validator = MockValidator::default();
 
-        OrderIndexer::new(validator, order_storage, 1, tx)
+        OrderIndexer::new(
+            validator,
+            order_storage,
+            1,
+            tx,
+            ChainConfig::ethereum(Duration::from_secs(12))
+        )
     }
 
     fn setup_test_indexer_with_fn(
@@ -558,7 +574,13 @@ mod tests {
         let mut validator = MockValidator::default();
         f(&mut validator);
 
-        OrderIndexer::new(validator, order_storage, 1, tx)
+        OrderIndexer::new(
+            validator,
+            order_storage,
+            1,
+            tx,
+            ChainConfig::ethereum(Duration::from_secs(12))
+        )
     }
 
     /// Initialize the tracing subscriber for tests
@@ -687,7 +709,7 @@ mod tests {
         // Simulate block transition
         let expired_hashes = indexer
             .order_tracker
-            .remove_expired_orders(2, &indexer.order_storage)
+            .remove_expired_orders(2, &indexer.order_storage, std::time::Duration::from_secs(12))
             .into_iter()
             .map(|o| o.order_id.hash)
             .collect::<Vec<_>>();

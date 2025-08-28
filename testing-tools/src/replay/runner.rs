@@ -9,13 +9,12 @@ use alloy::{
 use alloy_primitives::aliases::I24;
 use alloy_rpc_types::{BlockId, BlockNumberOrTag, Filter};
 use alloy_sol_types::SolEvent;
-use angstrom::components::initialize_strom_handles;
-use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
+use angstrom_amm_quoter::{ConsensusQuoterManager, QuoterHandle};
+use angstrom_cli::handles::ConsensusHandles;
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
 };
-use angstrom_network::{PoolManagerBuilder, pool_manager::PoolHandle};
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}
@@ -39,6 +38,7 @@ use futures::{Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
 use order_pool::{OrderPoolHandle, PoolConfig};
+use pool_manager::{ConsensusPoolManager, PoolHandle};
 use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
@@ -205,7 +205,7 @@ impl ReplayRunner {
         let gas_token = *GAS_TOKEN_ADDRESS.get().unwrap();
         let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
 
-        let mut strom_handles = initialize_strom_handles();
+        let mut strom_handles = ConsensusHandles::new();
 
         // for rpc
         let pool = strom_handles.get_pool_handle();
@@ -221,7 +221,7 @@ impl ReplayRunner {
 
         let validation_client = ValidationClient(strom_handles.validator_tx);
         let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
-        let consensus_client = ConsensusHandler(strom_handles.consensus_tx_rpc.clone());
+        let consensus_client = ConsensusHandler(strom_handles.mode.consensus_tx_rpc.clone());
 
         let consensus_api = ConsensusApi::new(consensus_client.clone(), executor.clone());
 
@@ -280,7 +280,7 @@ impl ReplayRunner {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, 50>(
+        let uniswap_pool_manager = configure_uniswap_manager::<_, _, 50>(
             rpc.clone().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry.clone(),
@@ -358,19 +358,21 @@ impl ReplayRunner {
 
         let fake_network = FakeNetwork::new(
             Some(strom_handles.pool_tx),
-            Some(strom_handles.consensus_tx_op),
+            Some(strom_handles.mode.consensus_tx_op),
             strom_handles.eth_handle_rx.take().unwrap()
         );
 
         let network_handle = fake_network.handle.clone();
 
-        let pool_handle = PoolManagerBuilder::new(
+        let pool_handle = ConsensusPoolManager::new(
             validation_client.clone(),
             Some(order_storage.clone()),
             network_handle.clone(),
             eth_handle.subscribe_network(),
             strom_handles.pool_rx,
-            global_block_sync.clone()
+            global_block_sync.clone(),
+            network_handle.subscribe_network_events(),
+            std::time::Duration::from_secs(12)
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -427,7 +429,7 @@ impl ReplayRunner {
             ManagerNetworkDeps::new(
                 network_handle.clone(),
                 eth_handle.subscribe_cannon_state_notifications().await,
-                strom_handles.consensus_rx_op
+                strom_handles.mode.consensus_rx_op
             ),
             angstrom_signer,
             validators,
@@ -439,17 +441,17 @@ impl ReplayRunner {
             mev_boost_provider,
             matching_handle,
             global_block_sync.clone(),
-            strom_handles.consensus_rx_rpc,
+            strom_handles.mode.consensus_rx_rpc,
             None,
             ConsensusTimingConfig::default()
         );
         executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
             consensus.run_till_shutdown(grace)
         });
-        let consensus_client = ConsensusHandler(strom_handles.consensus_tx_rpc.clone());
+        let consensus_client = ConsensusHandler(strom_handles.mode.consensus_tx_rpc.clone());
 
         // spin up amm quoter
-        let amm = QuoterManager::new(
+        let amm = ConsensusQuoterManager::new(
             global_block_sync.clone(),
             order_storage.clone(),
             strom_handles.quoter_rx,

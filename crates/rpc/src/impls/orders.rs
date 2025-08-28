@@ -289,7 +289,6 @@ mod tests {
 
     use alloy_primitives::{Address, B256, FixedBytes, U256};
     use angstrom_amm_quoter::QuoterHandle;
-    use angstrom_network::pool_manager::OrderCommand;
     use angstrom_types::{
         orders::{OrderOrigin, OrderStatus},
         primitive::OrderValidationError,
@@ -297,6 +296,7 @@ mod tests {
     };
     use futures::FutureExt;
     use order_pool::PoolManagerUpdate;
+    use pool_manager::OrderCommand;
     use reth_tasks::TokioTaskExecutor;
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
     use tokio_stream::wrappers::BroadcastStream;

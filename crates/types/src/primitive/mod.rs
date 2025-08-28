@@ -1,3 +1,4 @@
+mod chain_config;
 mod chain_ext;
 mod contract;
 mod peers;
@@ -7,6 +8,7 @@ mod rpcs;
 mod signer;
 mod validation;
 
+pub use chain_config::*;
 pub use chain_ext::*;
 pub use contract::*;
 pub use peers::*;

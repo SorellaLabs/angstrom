@@ -141,8 +141,6 @@ where
     pub fn new<S: AngstromMetaSigner + 'static>(
         node_provider: Arc<P>,
         mempool: &[Url],
-        angstrom: &[Url],
-        mev_boost: &[Url],
         angstom_address: Address,
         signer: AngstromSigner<S>
     ) -> Self {
@@ -150,16 +148,37 @@ where
             MempoolSubmitter::new(mempool, angstom_address),
             signer.clone()
         )) as Box<dyn ChainSubmitterWrapper>;
+
+        Self { node_provider, submitters: vec![mempool] }
+    }
+
+    pub fn with_angstrom<S: AngstromMetaSigner + 'static>(
+        mut self,
+        angstrom: &[Url],
+        angstom_address: Address,
+        signer: AngstromSigner<S>
+    ) -> Self {
         let angstrom = Box::new(ChainSubmitterHolder::new(
             AngstromSubmitter::new(angstrom, angstom_address),
-            signer.clone()
+            signer
         )) as Box<dyn ChainSubmitterWrapper>;
+
+        self.submitters.push(angstrom);
+        self
+    }
+
+    pub fn with_mev_boost<S: AngstromMetaSigner + 'static>(
+        mut self,
+        mev_boost: &[Url],
+        signer: AngstromSigner<S>
+    ) -> Self {
         let mev_boost = Box::new(ChainSubmitterHolder::new(
             MevBoostSubmitter::new(mev_boost, signer.clone()),
             signer
         )) as Box<dyn ChainSubmitterWrapper>;
 
-        Self { node_provider, submitters: vec![mempool, angstrom, mev_boost] }
+        self.submitters.push(mev_boost);
+        self
     }
 
     pub async fn submit_tx<S: AngstromMetaSigner>(

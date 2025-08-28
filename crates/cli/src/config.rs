@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
 use alloy::signers::local::PrivateKeySigner;
-use angstrom_metrics::initialize_prometheus_metrics;
 use angstrom_types::primitive::{
     AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC
 };
 use consensus::ConsensusTimingConfig;
 use hsm_signer::{Pkcs11Signer, Pkcs11SignerConfig};
+use url::Url;
 
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
@@ -23,12 +23,16 @@ pub struct AngstromConfig {
     /// starting the internal reth node
     #[clap(short, long, default_value = "https://eth.drpc.org")]
     pub boot_node:                 String,
-    #[clap(short, long, num_args(0..=5), require_equals = true, default_values = ETH_DEFAULT_RPC)]
-    pub normal_nodes:              Vec<String>,
+    #[clap(short, long, num_args(1..=5), require_equals = true)]
+    pub normal_nodes:              Option<Vec<String>>,
     #[clap(short, long, num_args(0..=10), require_equals = true, default_values = ETH_ANGSTROM_RPC)]
     pub angstrom_submission_nodes: Vec<String>,
     #[clap(flatten)]
     pub key_config:                KeyConfig,
+    /// The expected block time in milliseconds. Used to coordinate auction
+    /// timing.
+    #[clap(long, default_value_t = 12000, global = true, alias = "block-time")]
+    pub block_time_ms:             u64,
     #[clap(flatten)]
     pub consensus_timing:          ConsensusTimingConfig
 }
@@ -65,12 +69,19 @@ impl AngstromConfig {
             })
             .transpose()?)
     }
-}
 
-pub async fn init_metrics(metrics_port: u16) {
-    let _ = initialize_prometheus_metrics(metrics_port)
-        .await
-        .inspect_err(|e| eprintln!("failed to start metrics endpoint - {e:?}"));
+    /// Get normal nodes from config or default to ETH_DEFAULT_RPC
+    pub fn get_normal_nodes(&self) -> Vec<Url> {
+        self.normal_nodes
+            .as_ref()
+            .map(|v| v.iter().map(|s| Url::parse(s).unwrap()).collect())
+            .unwrap_or_else(|| {
+                ETH_DEFAULT_RPC
+                    .iter()
+                    .map(|s| Url::parse(s).unwrap())
+                    .collect()
+            })
+    }
 }
 
 #[derive(Debug, Clone, Default, clap::Args)]

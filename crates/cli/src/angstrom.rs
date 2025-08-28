@@ -1,7 +1,4 @@
 //! Angstrom binary executable.
-//!
-//! ## Feature Flags
-
 use std::{collections::HashSet, sync::Arc};
 
 use alloy::providers::{ProviderBuilder, network::Ethereum};
@@ -9,7 +6,7 @@ use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
-use angstrom_network::{AngstromNetworkBuilder, pool_manager::PoolHandle};
+use angstrom_network::AngstromNetworkBuilder;
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
     api::{ConsensusApiServer, OrderApiServer}
@@ -22,25 +19,25 @@ use angstrom_types::{
     }
 };
 use clap::Parser;
-use cli::AngstromConfig;
 use consensus::ConsensusHandler;
 use parking_lot::RwLock;
+use pool_manager::PoolHandle;
 use reth::{
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
     cli::Cli,
     tasks::TaskExecutor
 };
 use reth_db::DatabaseEnv;
-use reth_node_builder::{Node, NodeBuilder, NodeHandle, WithLaunchContext};
-use reth_node_ethereum::node::{EthereumAddOns, EthereumNode};
+use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
+use reth_node_ethereum::{EthereumAddOns, EthereumNode};
 use validation::validator::ValidationClient;
 
-use crate::components::{
-    StromHandles, init_network_builder, initialize_strom_components, initialize_strom_handles
+use crate::{
+    components::{AngstromLauncher, init_network_builder},
+    config::AngstromConfig,
+    handles::{ConsensusHandles, ConsensusMode},
+    metrics::init_metrics
 };
-
-pub mod cli;
-pub mod components;
 
 /// Convenience function for parsing CLI options, set up logging and run the
 /// chosen command.
@@ -61,7 +58,7 @@ pub fn run() -> eyre::Result<()> {
         }
 
         if args.metrics_enabled {
-            executor.spawn_critical("metrics", crate::cli::init_metrics(args.metrics_port));
+            executor.spawn_critical("metrics", init_metrics(args.metrics_port));
             METRICS_ENABLED.set(true).unwrap();
         } else {
             METRICS_ENABLED.set(false).unwrap();
@@ -69,14 +66,14 @@ pub fn run() -> eyre::Result<()> {
 
         tracing::info!(domain=?ANGSTROM_DOMAIN);
 
-        let channels = initialize_strom_handles();
+        let channels = ConsensusHandles::new();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());
 
         // for rpc
         let pool = channels.get_pool_handle();
         let executor_clone = executor.clone();
         let validation_client = ValidationClient(channels.validator_tx.clone());
-        let consensus_client = ConsensusHandler(channels.consensus_tx_rpc.clone());
+        let consensus_client = ConsensusHandler(channels.mode.consensus_tx_rpc.clone());
 
         // get provider and node set for startup, we need this so when reth startup
         // happens, we directly can connect to the nodes.
@@ -140,7 +137,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     consensus_client: ConsensusHandler,
     secret_key: AngstromSigner<S>,
     args: AngstromConfig,
-    mut channels: StromHandles,
+    mut channels: ConsensusHandles,
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, ChainSpec>>
 ) -> eyre::Result<()> {
     let mut network = init_network_builder(
@@ -152,7 +149,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     let protocol_handle = network.build_protocol_handler();
     let cloned_consensus_client = consensus_client.clone();
     let executor_clone = executor.clone();
-    let NodeHandle { node, node_exit_future } = builder
+    let node_handle = builder
         .with_types::<EthereumNode>()
         .with_components(
             EthereumNode::default()
@@ -175,18 +172,19 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         })
         .launch()
         .await?;
-    network = network.with_reth(node.network.clone());
 
-    initialize_strom_components(
+    AngstromLauncher::<_, _, ConsensusMode, _>::new(
         args,
-        secret_key,
-        channels,
-        network,
-        &node,
         executor,
-        node_exit_future,
-        node_set,
-        consensus_client
+        node_handle,
+        secret_key,
+        channels
     )
-    .await
+    .with_network(network)
+    .with_consensus_client(consensus_client)
+    .with_node_set(node_set)
+    .launch()
+    .await?;
+
+    Ok(())
 }

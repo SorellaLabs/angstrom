@@ -185,6 +185,9 @@ where
             .await
             .expect("failed to start op-testnet");
 
+    // capture shutdown handle before moving testnet into task
+    let shutdown = testnet.shutdown_sender();
+
     // grab provider so we can query from the chain later.
     let provider = testnet.state_provider().rpc_provider();
 
@@ -203,7 +206,12 @@ where
             .await
             .is_ok()
     );
+    // Request graceful shutdown, then abort the long-running testnet future and give spawned tasks a brief
+    // moment to wind down to avoid shutdown panics in background tasks.
+    let _ = shutdown.send(true);
+    tokio::time::sleep(Duration::from_millis(150)).await;
     task.abort();
+    tokio::time::sleep(Duration::from_millis(150)).await;
     Ok(())
 }
 
@@ -359,6 +367,9 @@ fn test_remove_add_pool() {
         // grab provider so we can query from the chain later.
         let provider = testnet.state_provider().rpc_provider();
 
+        // capture shutdown handle before moving testnet into task
+        let shutdown = testnet.shutdown_sender();
+
         let testnet_task = ctx.task_executor.spawn_critical(
             "testnet",
             Box::pin(async move {
@@ -382,7 +393,12 @@ fn test_remove_add_pool() {
             "failed to properly run the test"
         );
 
+        // Request graceful shutdown, then abort the long-running testnet future and give spawned tasks a brief
+        // moment to wind down to avoid shutdown panics in background tasks.
+        let _ = shutdown.send(true);
+        tokio::time::sleep(Duration::from_millis(150)).await;
         testnet_task.abort();
+        tokio::time::sleep(Duration::from_millis(150)).await;
         eyre::Ok(())
     });
 }

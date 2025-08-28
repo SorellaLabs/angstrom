@@ -80,6 +80,17 @@ impl OpAngstromTestnet {
         self.node.get_sk()
     }
 
+    /// Signal the node to shutdown gracefully.
+    pub fn shutdown(&self) {
+        self.node.shutdown();
+    }
+
+    /// Cloneable shutdown sender for use in tests/tasks to request shutdown
+    /// without needing ownership of the whole struct.
+    pub fn shutdown_sender(&self) -> tokio::sync::watch::Sender<bool> {
+        self.node.shutdown_sender()
+    }
+
     async fn spawn_provider(
         node_config: TestingNodeConfig<OpTestnetConfig>,
         node_addresses: Vec<Address>

@@ -71,6 +71,9 @@ fn testnet_bundle_unlock() {
         .await
         .unwrap_or_else(|e| panic!("failed to start angstrom testnet: {e:?}"));
 
+        // capture shutdown handle before moving testnet into task
+        let shutdown = testnet.shutdown_sender();
+
         // Get validator provider (first node)
         let validator_provider = testnet.node.state_provider();
         let provider = validator_provider.rpc_provider();
@@ -139,7 +142,11 @@ fn testnet_bundle_unlock() {
         // Verify transaction was successful
         assert!(receipt.status(), "unlock transaction should succeed");
 
+        // Request graceful shutdown, then abort and let tasks wind down
+        let _ = shutdown.send(true);
+        tokio::time::sleep(Duration::from_millis(150)).await;
         testnet_task.abort();
+        tokio::time::sleep(Duration::from_millis(150)).await;
         eyre::Ok(())
     });
 }

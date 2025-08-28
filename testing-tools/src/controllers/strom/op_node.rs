@@ -41,7 +41,9 @@ use crate::{
 pub struct OpTestnetNode<P, G> {
     state_provider: AnvilProvider<P>,
     _init_state:    InitialTestnetState,
-    config:         TestingNodeConfig<G>
+    config:         TestingNodeConfig<G>,
+    /// Internal shutdown signal used to gracefully stop background tasks
+    shutdown_tx:    tokio::sync::watch::Sender<bool>
 }
 
 impl<P, G> OpTestnetNode<P, G>
@@ -76,6 +78,8 @@ where
         let (orderpool_tx, orderpool_rx) = tokio::sync::mpsc::unbounded_channel();
         let (validator_tx, validator_rx) = tokio::sync::mpsc::unbounded_channel();
         let (quoter_tx, quoter_rx) = tokio::sync::mpsc::channel(1000);
+        // Shutdown signal for graceful task termination
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
         let validation_client = ValidationClient(validator_tx.clone());
         let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
@@ -148,14 +152,25 @@ where
         )
         .await;
         let uniswap_pools = uniswap_pool_manager.pools();
-        executor.spawn_critical(
-            "uniswap",
-            Box::pin(uniswap_pool_manager.instrument(span!(
+        {
+            let mut shutdown_rx_uniswap = shutdown_rx.clone();
+            let fut = uniswap_pool_manager.instrument(span!(
                 tracing::Level::ERROR,
                 "pool manager",
                 node_config.node_id
-            )))
-        );
+            ));
+            executor.spawn_critical_with_graceful_shutdown_signal(
+                "uniswap",
+                move |grace| async move {
+                    tokio::pin!(fut);
+                    tokio::select! {
+                        _ = &mut fut => {}
+                        _ = grace => {}
+                        _ = shutdown_rx_uniswap.changed() => {}
+                    }
+                }
+            );
+        }
 
         // Token conversion and price updates
         let token_conversion = TokenPriceGenerator::new(
@@ -195,8 +210,21 @@ where
         .await?;
 
         // Spawn validation task so it consumes requests until graceful shutdown
-        let validator_task = validator;
-        executor.spawn_critical("validator", Box::pin(validator_task));
+        {
+            let mut shutdown_rx_validator = shutdown_rx.clone();
+            let validator_task = validator;
+            executor.spawn_critical_with_graceful_shutdown_signal(
+                "validator",
+                move |grace| async move {
+                    tokio::pin!(validator_task);
+                    tokio::select! {
+                        _ = &mut validator_task => {}
+                        _ = grace => {}
+                        _ = shutdown_rx_validator.changed() => {}
+                    }
+                }
+            );
+        }
 
         // Pool manager and storage
         let pool_config = PoolConfig {
@@ -236,6 +264,7 @@ where
             validation_client.clone(),
             amm_quoter
         );
+        let mut shutdown_rx_rpc = shutdown_rx.clone();
         executor.spawn_critical_with_graceful_shutdown_signal("rpc", move |grace| async move {
             let rpcs = order_api.into_rpc();
             let server_handle = server.start(rpcs);
@@ -243,6 +272,9 @@ where
             tokio::select! {
                 _ = server_handle.clone().stopped() => {}
                 _ = grace => {
+                    let _ = server_handle.stop();
+                }
+                _ = shutdown_rx_rpc.changed() => {
                     let _ = server_handle.stop();
                 }
             }
@@ -260,7 +292,20 @@ where
                 .expect("failed to build rayon thread pool"),
             Duration::from_millis(100)
         );
-        executor.spawn_critical("amm quoting service", amm);
+        {
+            let mut shutdown_rx_amm = shutdown_rx.clone();
+            executor.spawn_critical_with_graceful_shutdown_signal(
+                "amm quoting service",
+                move |grace| async move {
+                    tokio::pin!(amm);
+                    tokio::select! {
+                        _ = &mut amm => {}
+                        _ = grace => {}
+                        _ = shutdown_rx_amm.changed() => {}
+                    }
+                }
+            );
+        }
 
         // Agents
         let uniswap_pools_for_agents = uniswap_pools.clone();
@@ -294,6 +339,7 @@ where
         let uniswap_pools_clone = uniswap_pools.clone();
         let order_storage_clone = order_storage.clone();
 
+        let mut shutdown_rx_driver = shutdown_rx.clone();
         executor.spawn_critical_with_graceful_shutdown_signal(
             "op-rollup-driver",
             move |grace| async move {
@@ -304,6 +350,7 @@ where
                             if res.is_err() { break }
                         }
                         _ = &mut grace.clone() => break,
+                        _ = shutdown_rx_driver.changed() => break,
                     }
                     // Build pool snapshots
                     let pool_snapshots = uniswap_pools_clone
@@ -341,7 +388,7 @@ where
             }
         );
 
-        Ok(Self { state_provider, _init_state: inital_angstrom_state, config: node_config })
+        Ok(Self { state_provider, _init_state: inital_angstrom_state, config: node_config, shutdown_tx })
     }
 
     pub fn state_provider(&self) -> &AnvilProvider<P> {
@@ -355,6 +402,16 @@ where
     pub async fn testnet_future(self) {
         // Keep the node alive (no networking/consensus to drive here)
         futures::future::pending::<()>().await;
+    }
+
+    /// Signal all internal tasks to shut down gracefully.
+    pub fn shutdown(&self) {
+        let _ = self.shutdown_tx.send(true);
+    }
+
+    /// Cloneable sender to trigger shutdown from external code.
+    pub fn shutdown_sender(&self) -> tokio::sync::watch::Sender<bool> {
+        self.shutdown_tx.clone()
     }
 }
 

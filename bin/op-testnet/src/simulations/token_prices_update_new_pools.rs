@@ -6,7 +6,7 @@ use itertools::Itertools;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TaskExecutor;
 use testing_tools::{
-    controllers::enviroments::AngstromTestnet,
+    controllers::enviroments::OpAngstromTestnet,
     types::{
         GlobalTestingConfig,
         actions::WithAction,
@@ -26,7 +26,7 @@ pub(crate) async fn run_devnet(executor: TaskExecutor, cli: DevnetCli) -> eyre::
     let initial_state = config.initial_state_config();
 
     let mut testnet =
-        AngstromTestnet::spawn_devnet(NoopProvider::default(), config, executor.clone())
+        OpAngstromTestnet::spawn_devnet(NoopProvider::default(), config, executor.clone())
             .await?
             .as_state_machine();
 

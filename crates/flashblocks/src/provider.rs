@@ -4,7 +4,7 @@ use alloy::{
     providers::{Provider, ProviderCall, RootProvider, RpcWithBlock},
     rpc::client::NoParams
 };
-use alloy_primitives::{Address, Bytes, StorageValue, U64, U256};
+use alloy_primitives::{Address, Bytes, StorageKey, StorageValue, U64, U256};
 
 use crate::PendingStateReader;
 
@@ -31,25 +31,23 @@ impl<P: Provider + Clone + 'static> Provider for PendingStateReader<P> {
             // If the tag is pending, we use the pending state.
             ProviderCall::BoxedFuture(Box::pin(async move {
                 // The base state
-                let base = call.await?;
+                let mut nonce = call.await?;
 
                 let pending = pending.read();
 
-                // If there are overrides, add them to the base nonce.
                 if let Some(overrides) = pending.state_overrides()
                     && block_id.is_pending()
                 {
+                    // If an override exists, return the override nonce.
                     // Return either the override nonce or the base nonce if it doesn't exist.
-                    let nonce = overrides
+                    nonce = overrides
                         .get(&address)
                         .map(|acc| acc.nonce)
                         .flatten()
-                        .unwrap_or(base);
-
-                    Ok(nonce)
-                } else {
-                    Ok(base)
+                        .unwrap_or(nonce);
                 }
+
+                Ok(nonce)
             }))
         })
     }
@@ -59,10 +57,69 @@ impl<P: Provider + Clone + 'static> Provider for PendingStateReader<P> {
         address: Address,
         key: U256
     ) -> RpcWithBlock<(Address, U256), StorageValue> {
-        todo!()
+        tracing::debug!(%address, %key, "get_storage_at");
+        let pending = self.pending.clone();
+        let provider = self.provider.clone();
+
+        RpcWithBlock::new_provider(move |block_id| {
+            let call = provider.get_storage_at(address, key).block_id(block_id);
+            let pending = pending.clone();
+
+            // If the tag is pending, we use the pending state.
+            ProviderCall::BoxedFuture(Box::pin(async move {
+                let mut value: StorageValue = call.await?;
+
+                let pending = pending.read();
+
+                if let Some(overrides) = pending.state_overrides()
+                    && block_id.is_pending()
+                {
+                    let key: StorageKey = key.into();
+                    // Return either the override nonce or the base nonce if it doesn't exist.
+                    value = overrides
+                        .get(&address)
+                        .map(|acc| {
+                            acc.state_diff
+                                .as_ref()
+                                .map(|diff| diff.get(&key).cloned())
+                                .flatten()
+                        })
+                        .flatten()
+                        .unwrap_or(value.into())
+                        .into();
+                }
+
+                Ok(value)
+            }))
+        })
     }
 
     fn get_code_at(&self, address: Address) -> RpcWithBlock<Address, Bytes> {
-        todo!()
+        tracing::debug!(%address, "get_code_at");
+        let pending = self.pending.clone();
+        let provider = self.provider.clone();
+
+        RpcWithBlock::new_provider(move |block_id| {
+            let call = provider.get_code_at(address).block_id(block_id);
+            let pending = pending.clone();
+
+            ProviderCall::BoxedFuture(Box::pin(async move {
+                let mut code = call.await?;
+
+                let pending = pending.read();
+
+                if let Some(overrides) = pending.state_overrides()
+                    && block_id.is_pending()
+                {
+                    code = overrides
+                        .get(&address)
+                        .map(|acc| acc.code.clone())
+                        .flatten()
+                        .unwrap_or(code);
+                }
+
+                Ok(code)
+            }))
+        })
     }
 }

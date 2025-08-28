@@ -31,6 +31,7 @@ pub struct Metadata<R: TxReceipt> {
 ///
 /// A pending chain lasts for a single slot time, and consists of (slot time /
 /// flashblock interval) blocks.
+#[derive(Debug)]
 pub struct PendingChain<N: NodePrimitives = OpPrimitives> {
     /// The Flashblock as a recovered block.
     blocks:    Vec<RecoveredBlock<N::Block>>,

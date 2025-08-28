@@ -4518,6 +4518,7 @@ dependencies = [
  "brotli",
  "eyre",
  "futures",
+ "parking_lot",
  "reth",
  "reth-optimism-chainspec 1.6.0",
  "reth-optimism-primitives 1.6.0",

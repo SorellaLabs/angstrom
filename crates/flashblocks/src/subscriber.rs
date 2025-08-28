@@ -17,11 +17,12 @@ use url::Url;
 
 use crate::state::PendingStateWriter;
 
+/// Subscribes to a Flashblocks websocket stream and notifies the state writer
+/// of new flashblocks.
 pub struct FlashblocksSubscriber<P: Clone> {
     ws:      Url,
     /// The current pending chain.
     pending: Option<PendingChain>,
-    sender:  broadcast::Sender<Arc<PendingChain>>,
     writer:  PendingStateWriter<P>
 }
 
@@ -34,12 +35,7 @@ where
         + 'static
 {
     pub fn new(ws: Url, writer: PendingStateWriter<P>) -> Self {
-        Self { ws, pending: None, sender: broadcast::channel(100).0, writer }
-    }
-
-    /// Subscribe to the pending chain.
-    pub fn subscribe_pending(&mut self) -> broadcast::Receiver<Arc<PendingChain>> {
-        self.sender.subscribe()
+        Self { ws, pending: None, writer }
     }
 
     /// Spawns the subscriber.
@@ -63,8 +59,7 @@ where
                             match msg {
                                 Ok(Message::Binary(bytes)) => match try_decode_message(&bytes) {
                                     Ok(payload) => {
-                                        let pending_chain = self.writer.on_flashblock(payload);
-                                        let _ = self.sender.send(Arc::new(pending_chain));
+                                        self.writer.on_flashblock(payload);
                                     }
                                     Err(e) => {
                                         tracing::error!(

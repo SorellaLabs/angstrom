@@ -71,10 +71,11 @@ impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync, RollupMod
             self.handle_new_subscription(pools, subscriber);
         }
 
-        // Drain all ready tasks, forwarding successes and discarding errors.
+        // Drain all ready tasks, forwarding successes and logging errors.
         while let Poll::Ready(Some(result)) = self.pending_tasks.poll_next_unpin(cx) {
-            if let Ok(slot_update) = result {
-                self.send_out_result(slot_update);
+            match result {
+                Ok(slot_update) => self.send_out_result(slot_update),
+                Err(e) => tracing::error!("task failed: {}", e)
             }
         }
 

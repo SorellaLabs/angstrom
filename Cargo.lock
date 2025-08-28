@@ -1082,6 +1082,7 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-stream",
+ "tracing",
  "uniswap-v4",
 ]
 

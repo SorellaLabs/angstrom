@@ -109,6 +109,33 @@ jobs:
       - name: Run integration tests
         run: cargo nextest run --package testnet --retries 1 --no-tests=warn --cargo-profile debug-fast
 
+  cargo-test-op-testnet:
+    name: cargo test (op-testnet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check-Out
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+          cache: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cargo-test-op-testnet-${{ runner.os }}
+          cache-on-failure: true
+          save-if: true
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: Run op-testnet integration tests
+        run: cargo nextest run --package op-testnet --retries 1 --no-tests=warn --cargo-profile debug-fast
+
   contracts:
     name: forge fmt && forge test
     runs-on: ubuntu-latest

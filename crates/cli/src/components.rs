@@ -8,7 +8,7 @@ use std::{
 
 use alloy::{
     self,
-    consensus::BlockHeader,
+    consensus::{BlockHeader, Header},
     eips::{BlockId, BlockNumberOrTag},
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
@@ -33,6 +33,7 @@ use angstrom_types::{
     submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
+use flashblocks::{FlashblocksSubscriber, PendingStateWriter};
 use futures::Stream;
 use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
@@ -41,6 +42,7 @@ use pool_manager::{consensus::ConsensusPoolManagerBuilder, rollup::RollupPoolMan
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
+    chainspec::EthChainSpec,
     core::exit::NodeExitFuture,
     primitives::EthPrimitives,
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
@@ -50,9 +52,11 @@ use reth_network::NetworkHandle;
 use reth_node_builder::{
     FullNode, NodeHandle, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
 };
+use reth_optimism_chainspec::{OpChainSpec, OpHardforks};
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{
-    BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
+    BlockReader, BlockReaderIdExt, ChainSpecProvider, DatabaseProviderFactory, ReceiptProvider,
+    StateProviderFactory, TryIntoHistoricalStateProvider
 };
 use serde::Serialize;
 use telemetry::init_telemetry;
@@ -111,7 +115,7 @@ where
     consensus_client:   Option<ConsensusHandler>,
     network_builder:    Option<StromNetworkBuilder<N::Network, S>>,
     node_set:           Option<HashSet<Address>>,
-    flashblocks_writer: Option<PendingStateWriter>,
+    flashblocks_writer: Option<PendingStateWriter<N::Provider>>,
     flashblocks_ws:     Option<Url>
 }
 
@@ -300,8 +304,6 @@ where
         tracing::info!(?block_id, "starting up with block");
         let eth_data_sub = node.provider.subscribe_to_canonical_state();
 
-        // TODO(mempirate): Initialize Flashblocks here.
-
         let global_block_sync = GlobalBlockSync::new(block_id);
 
         // this right here problem
@@ -479,7 +481,10 @@ where
             Block = <OpPrimitives as NodePrimitives>::Block,
             Receipt = <OpPrimitives as NodePrimitives>::Receipt,
             Header = <OpPrimitives as NodePrimitives>::BlockHeader
-        > + DatabaseProviderFactory,
+        > + DatabaseProviderFactory
+        + StateProviderFactory
+        + ChainSpecProvider<ChainSpec: EthChainSpec<Header = Header> + OpHardforks>
+        + BlockReaderIdExt<Header = Header>,
     AO: NodeAddOns<N> + RethRpcAddOns<N>,
     <<N as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
         TryIntoHistoricalStateProvider + BlockNumReader + ReceiptProvider,
@@ -579,6 +584,13 @@ where
         tracing::info!(?block_id, "starting up with block");
         let eth_data_sub = node.provider.subscribe_to_canonical_state();
 
+        // TODO(mempirate): Initialize Flashblocks here.
+        if let Some(ws) = self.flashblocks_ws {
+            let subscriber = FlashblocksSubscriber::new(ws, self.flashblocks_writer.unwrap());
+
+            executor.spawn_critical("flashblocks subscriber", subscriber.start());
+        }
+
         let global_block_sync = GlobalBlockSync::new(block_id);
 
         // this right here problem
@@ -590,6 +602,7 @@ where
             angstrom_address,
             controller,
             eth_data_sub,
+            None,
             executor.clone(),
             handles.eth_tx,
             handles.eth_rx,

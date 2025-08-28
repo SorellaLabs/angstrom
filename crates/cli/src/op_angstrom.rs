@@ -1,5 +1,5 @@
 //! Optimism Angstrom binary executable.
-use std::{cell::OnceCell, sync::Arc};
+use std::sync::{Arc, OnceLock};
 
 use alloy_chains::NamedChain;
 use angstrom_amm_quoter::QuoterHandle;
@@ -12,10 +12,12 @@ use clap::Parser;
 use pool_manager::PoolHandle;
 use reth::{chainspec::EthChainSpec, tasks::TaskExecutor};
 use reth_db::DatabaseEnv;
+use reth_exex::ExExEvent;
 use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
-use reth_optimism_node::{OpAddOns, OpNode, args::RollupArgs};
+use reth_optimism_node::{OpNode, args::RollupArgs};
+use tokio_stream::StreamExt;
 use url::Url;
 use validation::validator::ValidationClient;
 
@@ -40,6 +42,7 @@ pub struct OpAngstromArgs {
     pub flashblocks: FlashblocksConfig
 }
 
+#[derive(Debug, Clone, Parser)]
 pub struct FlashblocksConfig {
     /// Enable Flashblocks support.
     #[arg(long = "flashblocks", default_value = "false")]
@@ -157,20 +160,22 @@ async fn run_with_signer<S: AngstromMetaSigner>(
 ) -> eyre::Result<()> {
     let executor_clone = executor.clone();
 
-    let op_node = OpNode::new(args.rollup);
+    let op_node = OpNode::new(args.rollup.clone());
 
-    let mut writer = None;
+    let writer: Arc<OnceLock<flashblocks::PendingStateWriter<_>>> = Arc::new(OnceLock::new());
 
     let node_handle = builder
         .with_types::<OpNode>()
         .with_components(op_node.components_builder())
         .with_add_ons(op_node.add_ons())
         .install_exex_if(args.flashblocks_enabled(), "flashblocks", {
+            let writer = writer.clone();
             // This ExEx is used to notify the Flashblocks state writer of new canonical
             // blocks, so it can clean up the pending state.
             move |mut ctx| async move {
-                let w = flashblocks::state::PendingStateWriter::new(ctx.provider.clone());
-                writer = Some(w.clone());
+                let w = writer
+                    .get_or_init(|| flashblocks::PendingStateWriter::new(ctx.provider().clone()))
+                    .clone();
 
                 Ok(async move {
                     while let Some(note) = ctx.notifications.try_next().await? {
@@ -211,8 +216,9 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     );
 
     // Set up Flashblocks if enabled.
-    let launcher = if let Some(writer) = writer {
-        launcher.with_flashblocks(writer, args.flashblocks.url.unwrap())
+    let launcher = if let Some(writer) = writer.get() {
+        let url = args.flashblocks.url.unwrap();
+        launcher.with_flashblocks(writer.clone(), Url::parse(&url).unwrap())
     } else {
         launcher
     };

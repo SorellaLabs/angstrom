@@ -1148,6 +1148,7 @@ dependencies = [
  "rayon",
  "reth",
  "reth-db",
+ "reth-exex",
  "reth-metrics 1.6.0",
  "reth-network",
  "reth-node-builder",

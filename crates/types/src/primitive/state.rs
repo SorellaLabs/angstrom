@@ -8,6 +8,7 @@ use crate::flashblocks::PendingChain;
 /// A canonical chain state notification. This is extended from
 /// [CanonStateNotification](reth_provider::CanonStateNotification) to include
 /// Flashblocks support.
+#[derive(Clone, Debug)]
 pub enum StateNotification<N: NodePrimitives = EthPrimitives> {
     /// The canonical chain was extended.
     Commit {

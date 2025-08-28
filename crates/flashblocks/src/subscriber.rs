@@ -39,72 +39,73 @@ where
     }
 
     /// Spawns the subscriber.
-    pub async fn spawn(self) {
+    pub async fn start(self) {
         tracing::info!(ws = %self.ws, "Subscribing to Flashblocks ⚡");
 
         let ws = self.ws.clone();
 
-        tokio::spawn(async move {
-            let mut backoff = std::time::Duration::from_secs(1);
-            const MAX_BACKOFF: std::time::Duration = std::time::Duration::from_secs(10);
+        let mut backoff = std::time::Duration::from_secs(1);
+        const MAX_BACKOFF: std::time::Duration = std::time::Duration::from_secs(10);
 
-            loop {
-                match connect_async(ws.as_str()).await {
-                    Ok((ws_stream, _)) => {
-                        tracing::info!("WebSocket connection established");
+        loop {
+            match connect_async(ws.as_str()).await {
+                Ok((ws_stream, _)) => {
+                    tracing::info!("WebSocket connection established");
 
-                        let (_, mut read) = ws_stream.split();
+                    let (_, mut read) = ws_stream.split();
 
-                        while let Some(msg) = read.next().await {
-                            match msg {
-                                Ok(Message::Binary(bytes)) => match try_decode_message(&bytes) {
-                                    Ok(payload) => {
-                                        self.writer.on_flashblock(payload);
-                                    }
-                                    Err(e) => {
+                    while let Some(msg) = read.next().await {
+                        match msg {
+                            Ok(Message::Binary(bytes)) => match try_decode_message(&bytes) {
+                                Ok(payload) => {
+                                    if let Err(e) = self.writer.on_flashblock(payload) {
                                         tracing::error!(
-                                            message = "error decoding flashblock message",
-                                            error = %e
+                                            error = %e,
+                                            "Error handling Flashblock"
                                         );
                                     }
-                                },
-                                Ok(Message::Text(_)) => {
-                                    tracing::error!(
-                                        "Received flashblock as plaintext, only compressed \
-                                         flashblocks supported. Set up websocket-proxy to use \
-                                         compressed flashblocks."
-                                    );
-                                }
-                                Ok(Message::Close(_)) => {
-                                    tracing::info!(
-                                        message = "WebSocket connection closed by upstream"
-                                    );
-                                    break;
                                 }
                                 Err(e) => {
                                     tracing::error!(
-                                        message = "error receiving message",
+                                        message = "error decoding flashblock message",
                                         error = %e
                                     );
-                                    break;
                                 }
-                                _ => {}
+                            },
+                            Ok(Message::Text(_)) => {
+                                tracing::error!(
+                                    "Received flashblock as plaintext, only compressed \
+                                     flashblocks supported. Set up websocket-proxy to use \
+                                     compressed flashblocks."
+                                );
                             }
+                            Ok(Message::Close(_)) => {
+                                tracing::info!(message = "WebSocket connection closed by upstream");
+                                break;
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    message = "error receiving message",
+                                    error = %e
+                                );
+                                break;
+                            }
+                            _ => {}
                         }
                     }
-                    Err(e) => {
-                        tracing::error!(
-                            message = "WebSocket connection error, retrying",
-                            backoff_duration = ?backoff,
-                            error = %e
-                        );
-                        tokio::time::sleep(backoff).await;
-                        backoff = std::cmp::min(backoff * 2, MAX_BACKOFF);
-                        continue;
-                    }
+                }
+                Err(e) => {
+                    tracing::error!(
+                        message = "WebSocket connection error, retrying",
+                        backoff_duration = ?backoff,
+                        error = %e
+                    );
+                    tokio::time::sleep(backoff).await;
+                    backoff = std::cmp::min(backoff * 2, MAX_BACKOFF);
+                    continue;
                 }
             }
-        });
+        }
     }
 }
 

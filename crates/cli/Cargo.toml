@@ -30,6 +30,7 @@ pool-manager.workspace = true
 rayon.workspace = true
 reth.workspace = true
 reth-db.workspace = true
+reth-exex = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0" }
 reth-metrics.workspace = true
 reth-network.workspace = true
 reth-node-builder.workspace = true

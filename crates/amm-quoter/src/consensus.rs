@@ -106,8 +106,11 @@ impl<BlockSync: BlockSyncConsumer> Future for QuoterManager<BlockSync, Consensus
             self.update_consensus_state(consensus_update);
         }
 
-        while let Poll::Ready(Some(Ok(slot_update))) = self.pending_tasks.poll_next_unpin(cx) {
-            self.send_out_result(slot_update);
+        // Drain all ready tasks, forwarding successes and discarding errors.
+        while let Poll::Ready(Some(result)) = self.pending_tasks.poll_next_unpin(cx) {
+            if let Ok(slot_update) = result {
+                self.send_out_result(slot_update);
+            }
         }
 
         while self.execution_interval.poll_tick(cx).is_ready() {

@@ -14,7 +14,7 @@ use crate::cli::{init_tracing, testnet::TestnetCli};
 pub(crate) async fn run_testnet(executor: TaskExecutor, cli: TestnetCli) -> eyre::Result<()> {
     let config = cli.make_config()?;
 
-    let testnet: AngstromTestnet<_, TestnetConfig, _> = AngstromTestnet::spawn_testnet(
+    let testnet = AngstromTestnet::spawn_testnet(
         NoopProvider::default(),
         config,
         vec![noop_agent],

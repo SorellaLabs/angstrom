@@ -7,6 +7,7 @@ use reth_tasks::TaskExecutor;
 
 use crate::{
     agents::AgentConfig,
+    controllers::strom::OpNodeInternals,
     providers::{AnvilProvider, WalletProvider},
     types::{GlobalTestingConfig, WithWalletProvider, config::TestingNodeConfig}
 };

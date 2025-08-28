@@ -1,20 +1,18 @@
-pub mod devnet;
 pub mod e2e_orders;
 pub mod testnet;
 use angstrom_metrics::{METRICS_ENABLED, initialize_prometheus_metrics};
 use angstrom_types::primitive::AngstromAddressConfig;
 use clap::{ArgAction, Parser, Subcommand};
-use devnet::DevnetCli;
 use e2e_orders::End2EndOrdersCli;
 use reth_tasks::TaskExecutor;
-use testing_tools::types::config::{DevnetConfig, OpTestnetConfig};
+use testing_tools::types::config::OpTestnetConfig;
 use testnet::TestnetCli;
 use tracing::Level;
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, filter, layer::SubscriberExt, util::SubscriberInitExt
 };
 
-use crate::{run_devnet, run_testnet, simulations::e2e_orders::run_e2e_orders};
+use crate::{run_testnet, simulations::e2e_orders::run_e2e_orders};
 
 #[derive(Parser)]
 pub struct OpAngstromTestnetCli {
@@ -71,8 +69,6 @@ impl OpAngstromTestnetCli {
 pub enum TestnetSubcommmand {
     #[command(name = "testnet")]
     Testnet(TestnetCli),
-    #[command(name = "devnet")]
-    Devnet(DevnetCli),
     #[command(name = "e2e")]
     End2EndOrders(End2EndOrdersCli)
 }
@@ -81,7 +77,6 @@ impl TestnetSubcommmand {
     async fn run_command(self, executor: TaskExecutor) -> eyre::Result<()> {
         match self {
             TestnetSubcommmand::Testnet(testnet_cli) => run_testnet(executor, testnet_cli).await,
-            TestnetSubcommmand::Devnet(devnet_cli) => run_devnet(executor, devnet_cli).await,
             TestnetSubcommmand::End2EndOrders(e2e_cli) => run_e2e_orders(executor, e2e_cli).await
         }
     }

@@ -388,7 +388,12 @@ where
             }
         );
 
-        Ok(Self { state_provider, _init_state: inital_angstrom_state, config: node_config, shutdown_tx })
+        Ok(Self {
+            state_provider,
+            _init_state: inital_angstrom_state,
+            config: node_config,
+            shutdown_tx
+        })
     }
 
     pub fn state_provider(&self) -> &AnvilProvider<P> {

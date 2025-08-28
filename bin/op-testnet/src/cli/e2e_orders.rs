@@ -1,7 +1,6 @@
 use std::ops::Range;
 
 use clap::Parser;
-use testing_tools::types::config::DevnetConfig;
 
 use super::testnet::TestnetCli;
 

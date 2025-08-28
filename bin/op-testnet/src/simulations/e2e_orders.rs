@@ -14,10 +14,7 @@ use testing_tools::{
     agents::AgentConfig,
     controllers::enviroments::OpAngstromTestnet,
     order_generator::{GeneratedPoolOrders, InternalBalanceMode, OrderGenerator},
-    types::{
-        actions::WithAction, checked_actions::WithCheckedAction, checks::WithCheck,
-        config::DevnetConfig
-    }
+    types::{actions::WithAction, checked_actions::WithCheckedAction, checks::WithCheck}
 };
 use tracing::{Instrument, Level, debug, info, span};
 

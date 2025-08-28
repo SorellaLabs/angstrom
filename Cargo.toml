@@ -2,6 +2,10 @@
 members = ["bin/*", "crates/*", "testing-tools"]
 resolver = "2"
 
+# Optimize for rust-analyzer performance
+[workspace.metadata.rust-analyzer]
+rustc_source = "discover"
+
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
@@ -11,7 +15,7 @@ homepage = "https://github.com/SorellaLabs/angstrom"
 repository = "https://github.com/SorellaLabs/angstrom"
 exclude = [".github/"]
 
-# Speed up tests.
+# Speed up tests and rust-analyzer.
 [profile.dev.package]
 angstrom-network.opt-level = 3
 consensus.opt-level = 3
@@ -20,12 +24,19 @@ validation.opt-level = 3
 testing-tools.opt-level = 3
 angstrom-types.opt-level = 3
 tokio.opt-level = 3
+serde.opt-level = 3
+alloy.opt-level = 3
+alloy-primitives.opt-level = 3
+reth.opt-level = 3
+reth-primitives.opt-level = 3
 
 [profile.debug-fast]
 inherits = "dev"
 lto = false
 opt-level = 3
 codegen-units = 15
+incremental = true
+split-debuginfo = "unpacked"
 
 [profile.release]
 lto = "fat"

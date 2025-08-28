@@ -11,8 +11,7 @@ use reth::rpc::types::engine::{ExecutionPayloadV1, ExecutionPayloadV2, Execution
 use reth_optimism_primitives::OpPrimitives;
 use reth_primitives::{NodePrimitives, RecoveredBlock};
 use reth_primitives_traits::Block;
-use rollup_boost::ExecutionPayloadBaseV1;
-pub use rollup_boost::FlashblocksPayloadV1;
+pub use rollup_boost::{ExecutionPayloadBaseV1, FlashblocksPayloadV1};
 use serde::{Deserialize, Serialize};
 
 use crate::primitive::ChainExt;
@@ -139,6 +138,17 @@ impl<N: NodePrimitives> PendingChain<N> {
     /// Returns the index of the tip block (last Flashblock).
     pub fn tip_index(&self) -> usize {
         self.blocks.len() - 1
+    }
+
+    /// Returns the tip block (last Flashblock).
+    pub fn tip(&self) -> &RecoveredBlock<N::Block> {
+        // SAFETY: There's always a block in the pending chain.
+        self.blocks.last().unwrap()
+    }
+
+    /// Returns the base block of this pending chain.
+    pub fn base(&self) -> &ExecutionPayloadBaseV1 {
+        &self.base
     }
 }
 

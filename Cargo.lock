@@ -4514,6 +4514,8 @@ name = "flashblocks"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-evm 0.15.0",
+ "alloy-primitives",
  "angstrom-types",
  "brotli",
  "eyre",
@@ -4521,6 +4523,7 @@ dependencies = [
  "parking_lot",
  "reth",
  "reth-optimism-chainspec 1.6.0",
+ "reth-optimism-evm 1.6.0",
  "reth-optimism-primitives 1.6.0",
  "reth-primitives-traits 1.6.0",
  "serde_json",

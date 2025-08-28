@@ -59,8 +59,8 @@ where
     }
 
     /// Get a reader for the pending state.
-    pub fn reader(&self) -> PendingStateReader {
-        PendingStateReader { pending: self.pending.clone() }
+    pub fn reader(&self) -> PendingStateReader<P> {
+        PendingStateReader { pending: self.pending.clone(), provider: self.provider.clone() }
     }
 
     /// Handles a new canonical block.
@@ -257,11 +257,12 @@ impl PendingState {
 /// Take a look at reth_db_provider.rs
 /// Read only access.
 #[derive(Debug, Clone)]
-pub struct PendingStateReader {
-    pending: Arc<RwLock<PendingState>>
+pub struct PendingStateReader<P> {
+    pub(crate) pending:  Arc<RwLock<PendingState>>,
+    pub(crate) provider: P
 }
 
-impl PendingStateReader {
+impl<P> PendingStateReader<P> {
     /// Subscribe to [`PendingChain`] updates.
     pub fn subscribe(&self) -> BroadcastStream<Arc<PendingChain>> {
         BroadcastStream::new(self.pending.read().sender.subscribe())

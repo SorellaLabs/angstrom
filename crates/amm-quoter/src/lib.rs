@@ -171,7 +171,8 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
                     tick
                 };
 
-                tx.send(update).unwrap()
+                // The receiver may be dropped if the task was cancelled; that's not fatal.
+                let _ = tx.send(update);
             });
 
             self.pending_tasks.push(rx.map_err(Into::into).boxed())

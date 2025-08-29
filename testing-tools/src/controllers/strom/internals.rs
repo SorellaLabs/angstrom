@@ -280,8 +280,9 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         );
 
         let rpc_port = node_config.strom_rpc_port();
+        tracing::info!("Attempting to bind gRPC server to port {}", rpc_port);
         let server = ServerBuilder::default()
-            .build(format!("0.0.0.0:{rpc_port}"))
+            .build(format!("127.0.0.1:{rpc_port}"))
             .await?;
 
         let addr = server.local_addr()?;

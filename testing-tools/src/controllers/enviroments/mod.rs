@@ -1,7 +1,9 @@
 mod devnet;
+mod op_testnet;
 pub mod replay;
 mod state_machine;
 mod testnet;
+
 use std::{
     collections::{HashMap, HashSet},
     future::Future
@@ -14,6 +16,7 @@ use angstrom_types::{
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::TryFutureExt;
+pub use op_testnet::OpAngstromTestnet;
 use rand::Rng;
 use reth_chainspec::Hardforks;
 use reth_metrics::common::mpsc::{

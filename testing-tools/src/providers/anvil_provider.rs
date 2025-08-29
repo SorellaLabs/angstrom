@@ -11,56 +11,44 @@ use alloy_primitives::Bytes;
 use alloy_rpc_types::{Header, Transaction};
 use angstrom_types::primitive::CHAIN_ID;
 use futures::{Stream, StreamExt, stream::FuturesOrdered};
+use reth_node_types::NodePrimitives;
+use reth_primitives::EthPrimitives;
 
-use super::{AnvilStateProvider, WalletProvider};
+use super::{
+    AnvilStateProvider, WalletProvider,
+    compat::{rpc_block_to_pr_block, rpc_receipts_to_pr_receipts}
+};
 use crate::{
     contracts::anvil::WalletProviderRpc,
+    providers::StartMonitor,
     types::{WithWalletProvider, initial_state::DeployedAddresses}
 };
 
 #[derive(Debug)]
-pub struct AnvilProvider<P> {
-    provider:           AnvilStateProvider<P>,
+pub struct AnvilProvider<P, PR: NodePrimitives = EthPrimitives> {
+    provider:           AnvilStateProvider<P, PR>,
     deployed_addresses: Option<DeployedAddresses>,
     pub _instance:      Option<AnvilInstance>
 }
-impl<P> AnvilProvider<P>
+
+impl<P, PR> AnvilProvider<P, PR>
 where
+    PR: NodePrimitives,
     P: WithWalletProvider
 {
     pub fn new(
-        provider: AnvilStateProvider<P>,
+        provider: AnvilStateProvider<P, PR>,
         anvil: Option<AnvilInstance>,
         deployed_addresses: Option<DeployedAddresses>
     ) -> Self {
         Self { provider, _instance: anvil, deployed_addresses }
     }
 
-    pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
-    where
-        F: Future<Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>>
-    {
-        let (provider, anvil, deployed_addresses) = fut.await?;
-        let this = Self {
-            provider: AnvilStateProvider::new(provider),
-            _instance: anvil,
-            deployed_addresses
-        };
-        if testnet {
-            tracing::debug!("Starting up block monitoring task");
-            let sp = this.provider.as_wallet_state_provider();
-            // Attach to the current Tokio runtime; this task is cancelled cleanly
-            // when the runtime shuts down, avoiding shutdown panics.
-            tokio::spawn(sp.listen_to_new_blocks());
-        }
-        Ok(this)
-    }
-
     pub fn deployed_addresses(&self) -> Option<DeployedAddresses> {
         self.deployed_addresses
     }
 
-    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider> {
+    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider, PR> {
         AnvilProvider {
             provider:           self.provider.as_wallet_state_provider(),
             deployed_addresses: self.deployed_addresses,
@@ -68,7 +56,7 @@ where
         }
     }
 
-    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider> {
+    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider, PR> {
         self.provider.as_wallet_state_provider()
     }
 
@@ -80,15 +68,22 @@ where
         self.provider.provider().rpc_provider()
     }
 
-    pub fn provider(&self) -> &AnvilStateProvider<P> {
+    pub fn provider(&self) -> &AnvilStateProvider<P, PR> {
         &self.provider
     }
 
-    pub fn provider_mut(&mut self) -> &mut AnvilStateProvider<P> {
+    pub fn provider_mut(&mut self) -> &mut AnvilStateProvider<P, PR> {
         &mut self.provider
     }
 
-    pub async fn execute_and_return_state(&self) -> eyre::Result<(Bytes, Block)> {
+    pub async fn execute_and_return_state(&self) -> eyre::Result<(Bytes, Block)>
+    where
+        PR::Block: TryFrom<alloy_rpc_types::Block>,
+        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
+        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
+        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
+            std::fmt::Debug
+    {
         let block = self.mine_block().await?;
 
         Ok((
@@ -120,7 +115,14 @@ where
         Ok(())
     }
 
-    pub async fn mine_block(&self) -> eyre::Result<Block> {
+    pub async fn mine_block(&self) -> eyre::Result<Block>
+    where
+        PR::Block: TryFrom<alloy_rpc_types::Block>,
+        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
+        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
+        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
+            std::fmt::Debug
+    {
         let mined = self
             .provider
             .provider()
@@ -141,21 +143,24 @@ where
             .unwrap()
             .unwrap();
 
-        self.provider.update_canon_chain(&mined, recipts)?;
+        let pr_mined = rpc_block_to_pr_block::<PR>(&mined)?;
+        let pr_receipts = rpc_receipts_to_pr_receipts::<PR>(recipts)?;
+
+        self.provider.update_canon_chain(&pr_mined, pr_receipts)?;
 
         Ok(mined)
     }
 
     pub async fn subscribe_blocks(
         &self
-    ) -> eyre::Result<impl Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + use<P>> {
+    ) -> eyre::Result<impl Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + use<P, PR>> {
         let stream = self.rpc_provider().subscribe_blocks().await?.into_stream();
 
         Ok(StreamBlockProvider::new(self.rpc_provider(), stream))
     }
 }
 
-impl AnvilProvider<WalletProvider> {
+impl<PR: NodePrimitives> AnvilProvider<WalletProvider, PR> {
     pub async fn spawn_new_isolated() -> eyre::Result<Self> {
         let anvil = Anvil::new()
             .block_time(12)
@@ -183,6 +188,32 @@ impl AnvilProvider<WalletProvider> {
             _instance:          Some(anvil),
             deployed_addresses: None
         })
+    }
+}
+
+impl<P, PR> AnvilProvider<P, PR>
+where
+    PR: NodePrimitives,
+    P: WithWalletProvider,
+    AnvilStateProvider<WalletProvider, PR>: StartMonitor
+{
+    pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
+    where
+        F: std::future::Future<
+                Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>
+            >
+    {
+        let (provider, anvil, deployed_addresses) = fut.await?;
+        let this = Self {
+            provider: AnvilStateProvider::new(provider),
+            _instance: anvil,
+            deployed_addresses
+        };
+        if testnet {
+            let sp = this.provider.as_wallet_state_provider();
+            StartMonitor::spawn(sp);
+        }
+        Ok(this)
     }
 }
 

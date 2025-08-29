@@ -139,12 +139,15 @@ metrics = "0.21.1"
 num-bigfloat = "1"
 num-traits = "0"
 once_cell = "1"
+op-alloy-consensus = "0.19.1"
+op-alloy-network = "0.19.1"
+op-alloy-rpc-types = "0.19.1"
 order-pool = { path = "./crates/order-pool/" }
 pade = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
 pade-macro = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
-pool-manager = { path = "./crates/pool-manager/" }
 parking_lot = "0"
 pin-project = "1"
+pool-manager = { path = "./crates/pool-manager/" }
 pprof = "0"
 proc-macro2 = "1"
 proptest = "1"

@@ -2,12 +2,12 @@ use std::{cell::Cell, collections::HashSet, pin::Pin, rc::Rc};
 
 use alloy::{
     node_bindings::AnvilInstance,
-    primitives::Address,
     providers::{WalletProvider as _, ext::AnvilApi}
 };
 use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
 use futures::{Future, FutureExt, StreamExt};
 use reth_chainspec::Hardforks;
+use reth_primitives::EthPrimitives;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use reth_tasks::{TaskExecutor, TaskSpawner};
 
@@ -199,9 +199,9 @@ where
 
     async fn spawn_provider(
         node_config: TestingNodeConfig<TestnetConfig>,
-        node_addresses: Vec<Address>
-    ) -> eyre::Result<AnvilProvider<AnvilInitializer>> {
-        AnvilProvider::from_future(
+        node_addresses: Vec<alloy::primitives::Address>
+    ) -> eyre::Result<AnvilProvider<AnvilInitializer, EthPrimitives>> {
+        AnvilProvider::<AnvilInitializer, EthPrimitives>::from_future(
             AnvilInitializer::new(node_config.clone(), node_addresses)
                 .then(async |v| v.map(|i| (i.0, i.1, Some(i.2)))),
             true

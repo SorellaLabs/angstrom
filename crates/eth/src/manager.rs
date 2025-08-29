@@ -426,8 +426,9 @@ where
         let pending = Arc::new(pending);
         self.handle_commit(pending.clone());
 
-        self.cannon_sender
-            .send(StateNotification::FlashblockCommit { new: pending })
+        let _ = self
+            .cannon_sender
+            .send(StateNotification::FlashblockCommit { new: pending });
     }
 }
 

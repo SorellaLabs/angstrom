@@ -1,14 +1,23 @@
-//! A provider that uses the pending state.
-
+//! Provider for pending Flashblocks state.
 use alloy::{
     providers::{Provider, ProviderCall, RootProvider, RpcWithBlock},
     rpc::client::NoParams
 };
-use alloy_primitives::{Address, Bytes, StorageKey, StorageValue, U64, U256};
+use alloy_primitives::{Address, Bytes, StorageValue, U64, U256};
 
-use crate::PendingStateReader;
+use crate::flashblocks::FlashblocksRx;
 
-impl<P: Provider + Clone + 'static> Provider for PendingStateReader<P> {
+pub struct PendingStateProvider<P: Provider> {
+    provider: P,
+    pending:  FlashblocksRx
+}
+
+impl<P> PendingStateProvider<P> where P: Provider {}
+
+impl<P> Provider for PendingStateProvider<P>
+where
+    P: Provider + Clone + 'static
+{
     fn root(&self) -> &RootProvider {
         self.provider.root()
     }
@@ -30,24 +39,20 @@ impl<P: Provider + Clone + 'static> Provider for PendingStateReader<P> {
 
             // If the tag is pending, we use the pending state.
             ProviderCall::BoxedFuture(Box::pin(async move {
-                // The base state
-                let mut nonce = call.await?;
-
-                let pending = pending.read();
-
-                if let Some(overrides) = pending.state_overrides()
+                let nonce = if let Some(pending) = pending.borrow().as_ref()
                     && block_id.is_pending()
                 {
-                    // If an override exists, return the override nonce.
-                    // Return either the override nonce or the base nonce if it doesn't exist.
-                    nonce = overrides
-                        .get(&address)
-                        .map(|acc| acc.nonce)
+                    pending
+                        .executed_block
+                        .execution_outcome()
+                        .account(&address)
                         .flatten()
-                        .unwrap_or(nonce);
-                }
+                        .map(|a| a.nonce)
+                } else {
+                    None
+                };
 
-                Ok(nonce)
+                Ok(nonce.unwrap_or(call.await?))
             }))
         })
     }
@@ -67,29 +72,18 @@ impl<P: Provider + Clone + 'static> Provider for PendingStateReader<P> {
 
             // If the tag is pending, we use the pending state.
             ProviderCall::BoxedFuture(Box::pin(async move {
-                let mut value: StorageValue = call.await?;
-
-                let pending = pending.read();
-
-                if let Some(overrides) = pending.state_overrides()
+                let value = if let Some(pending) = pending.borrow().as_ref()
                     && block_id.is_pending()
                 {
-                    let key: StorageKey = key.into();
-                    // Return either the override nonce or the base nonce if it doesn't exist.
-                    value = overrides
-                        .get(&address)
-                        .map(|acc| {
-                            acc.state_diff
-                                .as_ref()
-                                .map(|diff| diff.get(&key).cloned())
-                                .flatten()
-                        })
-                        .flatten()
-                        .unwrap_or(value.into())
-                        .into();
-                }
+                    pending
+                        .executed_block
+                        .execution_outcome()
+                        .storage(&address, key)
+                } else {
+                    None
+                };
 
-                Ok(value)
+                Ok(value.unwrap_or(call.await?))
             }))
         })
     }
@@ -104,21 +98,27 @@ impl<P: Provider + Clone + 'static> Provider for PendingStateReader<P> {
             let pending = pending.clone();
 
             ProviderCall::BoxedFuture(Box::pin(async move {
-                let mut code = call.await?;
-
-                let pending = pending.read();
-
-                if let Some(overrides) = pending.state_overrides()
+                let code = if let Some(pending) = pending.borrow().as_ref()
                     && block_id.is_pending()
                 {
-                    code = overrides
-                        .get(&address)
-                        .map(|acc| acc.code.clone())
+                    // Abomination
+                    pending
+                        .executed_block
+                        .execution_outcome()
+                        .state()
+                        .account(&address)
+                        .map(|info| {
+                            info.info
+                                .as_ref()
+                                .map(|info| info.code.as_ref().map(|code| code.original_bytes()))
+                                .flatten()
+                        })
                         .flatten()
-                        .unwrap_or(code);
-                }
+                } else {
+                    None
+                };
 
-                Ok(code)
+                Ok(code.unwrap_or(call.await?))
             }))
         })
     }

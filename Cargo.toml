@@ -130,7 +130,6 @@ dashmap = { version = "6", features = ["serde"] }
 divan = "0"
 enr = { version = "0", default-features = false, features = ["k256"] }
 eyre = "0"
-flashblocks = { path = "./crates/flashblocks/" }
 futures = "0"
 futures-core = "0"
 futures-util = "0"

@@ -13,6 +13,9 @@ use tokio_stream::wrappers::WatchStream;
 
 use crate::primitive::ChainExt;
 
+mod db_wrapper;
+mod provider;
+
 /// A pending Flashblock.
 pub type PendingFlashblock = PendingBlock<OpPrimitives>;
 

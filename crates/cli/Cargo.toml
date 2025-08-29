@@ -46,7 +46,6 @@ url.workspace = true
 validation.workspace = true
 
 # OP-stack support
-flashblocks.workspace = true
 reth-optimism-chainspec.workspace = true
 reth-optimism-cli.workspace = true
 reth-optimism-node.workspace = true

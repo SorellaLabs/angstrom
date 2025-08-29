@@ -20,6 +20,7 @@ use super::{
 };
 use crate::{
     contracts::anvil::WalletProviderRpc,
+    providers::StartMonitor,
     types::{WithWalletProvider, initial_state::DeployedAddresses}
 };
 
@@ -41,31 +42,6 @@ where
         deployed_addresses: Option<DeployedAddresses>
     ) -> Self {
         Self { provider, _instance: anvil, deployed_addresses }
-    }
-
-    pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
-    where
-        F: Future<Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>>,
-        PR::Block: TryFrom<alloy_rpc_types::Block>,
-        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
-        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
-        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
-            std::fmt::Debug
-    {
-        let (provider, anvil, deployed_addresses) = fut.await?;
-        let this = Self {
-            provider: AnvilStateProvider::new(provider),
-            _instance: anvil,
-            deployed_addresses
-        };
-        if testnet {
-            tracing::debug!("Starting up block monitoring task");
-            let sp = this.provider.as_wallet_state_provider();
-            // Attach to the current Tokio runtime; this task is cancelled cleanly
-            // when the runtime shuts down, avoiding shutdown panics.
-            tokio::spawn(sp.listen_to_new_blocks());
-        }
-        Ok(this)
     }
 
     pub fn deployed_addresses(&self) -> Option<DeployedAddresses> {
@@ -212,6 +188,32 @@ impl<PR: NodePrimitives> AnvilProvider<WalletProvider, PR> {
             _instance:          Some(anvil),
             deployed_addresses: None
         })
+    }
+}
+
+impl<P, PR> AnvilProvider<P, PR>
+where
+    PR: NodePrimitives,
+    P: WithWalletProvider,
+    AnvilStateProvider<WalletProvider, PR>: StartMonitor
+{
+    pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
+    where
+        F: std::future::Future<
+                Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>
+            >
+    {
+        let (provider, anvil, deployed_addresses) = fut.await?;
+        let this = Self {
+            provider: AnvilStateProvider::new(provider),
+            _instance: anvil,
+            deployed_addresses
+        };
+        if testnet {
+            let sp = this.provider.as_wallet_state_provider();
+            StartMonitor::spawn(sp);
+        }
+        Ok(this)
     }
 }
 

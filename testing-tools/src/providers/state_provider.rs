@@ -2,42 +2,44 @@ use std::{future::IntoFuture, time::Duration};
 
 use alloy::providers::Provider;
 use alloy_primitives::{Address, B256, BlockNumber, U256};
-use alloy_rpc_types::BlockId;
+use alloy_rpc_types as eth_rpc;
 use angstrom_types::reth_db_wrapper::{DBError, SetBlock};
-use futures::stream::StreamExt;
+use futures::StreamExt;
+use op_alloy_network::Optimism;
 use reth_node_types::NodePrimitives;
+use reth_optimism_primitives::OpPrimitives;
 use reth_primitives::EthPrimitives;
 use reth_provider::{
     BlockHashReader, BlockNumReader, CanonStateNotification, CanonStateNotifications,
-    CanonStateSubscriptions, NodePrimitivesProvider, ProviderError, ProviderResult
+    CanonStateSubscriptions, NodePrimitivesProvider, ProviderError, ProviderResult,
 };
 use revm::{bytecode::Bytecode, state::AccountInfo};
 use tokio::sync::broadcast;
 use validation::common::db::BlockStateProviderFactory;
 
-use super::{RpcStateProvider, WalletProvider, compat::{rpc_block_to_pr_block, rpc_receipts_to_pr_receipts}};
+use super::{RpcStateProvider, WalletProvider};
 use crate::{
     mocks::canon_state::AnvilConsensusCanonStateNotification, providers::utils::async_to_sync,
-    types::WithWalletProvider
+    types::WithWalletProvider,
 };
 
 #[derive(Debug, Clone)]
 pub struct AnvilStateProvider<P, PR: NodePrimitives = EthPrimitives> {
-    provider:           P,
-    canon_state:        AnvilConsensusCanonStateNotification<PR>,
-    pub canon_state_tx: broadcast::Sender<CanonStateNotification<PR>>
+    provider: P,
+    canon_state: AnvilConsensusCanonStateNotification<PR>,
+    pub canon_state_tx: broadcast::Sender<CanonStateNotification<PR>>,
 }
 
 impl<P: WithWalletProvider, PR: NodePrimitives> SetBlock for AnvilStateProvider<P, PR> {
     fn set_block(&self, _: u64) {}
 }
 
-impl<P: WithWalletProvider, PR: NodePrimitives> AnvilStateProvider<P, PR> {
+impl<P: WithWalletProvider + Provider, PR: NodePrimitives> AnvilStateProvider<P, PR> {
     pub fn new(provider: P) -> Self {
         Self {
             provider,
             canon_state: AnvilConsensusCanonStateNotification::new(),
-            canon_state_tx: broadcast::channel(1000).0
+            canon_state_tx: broadcast::channel(1000).0,
         }
     }
 
@@ -48,7 +50,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> AnvilStateProvider<P, PR> {
     pub(crate) fn update_canon_chain(
         &self,
         new_block: &PR::Block,
-        receipts: Vec<PR::Receipt>
+        receipts: Vec<PR::Receipt>,
     ) -> eyre::Result<()> {
         let state = self.canon_state.new_block(new_block, receipts);
         if self.canon_state_tx.receiver_count() == 0 {
@@ -72,20 +74,16 @@ impl<P: WithWalletProvider, PR: NodePrimitives> AnvilStateProvider<P, PR> {
 
     pub fn as_wallet_state_provider(&self) -> AnvilStateProvider<WalletProvider, PR> {
         AnvilStateProvider {
-            provider:       self.provider.wallet_provider(),
-            canon_state:    self.canon_state.clone(),
-            canon_state_tx: self.canon_state_tx.clone()
+            provider: self.provider.wallet_provider(),
+            canon_state: self.canon_state.clone(),
+            canon_state_tx: self.canon_state_tx.clone(),
         }
     }
+}
 
-    /// used for testnet to make sure cannon notifications work
-    pub async fn listen_to_new_blocks(self)
-    where
-        PR::Block: TryFrom<alloy_rpc_types::Block>,
-        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
-        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
-        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error: std::fmt::Debug,
-    {
+/// used for testnet to make sure cannon notifications work
+impl<P: WithWalletProvider + Provider> AnvilStateProvider<P, reth_primitives::EthPrimitives> {
+    pub async fn listen_to_new_blocks_eth(self) {
         let mut new_blocks = self
             .provider()
             .rpc_provider()
@@ -95,39 +93,89 @@ impl<P: WithWalletProvider, PR: NodePrimitives> AnvilStateProvider<P, PR> {
             .with_poll_interval(Duration::from_millis(100))
             .into_stream();
 
-        while let Some(block_hash) = new_blocks.next().await {
-            if let Some(block_hash) = block_hash.first() {
-                tracing::info!("got new blockhash");
-                let block = self
+        while let Some(block_hashes) = new_blocks.next().await {
+            if let Some(block_hash) = block_hashes.first() {
+                let block: alloy_rpc_types::Block = self
                     .provider()
-                    .rpc_provider()
-                    .get_block(BlockId::Hash(alloy_rpc_types::RpcBlockHash {
-                        block_hash:        *block_hash,
-                        require_canonical: None
-                    }))
+                    .get_block(*block_hash.into())
                     .full()
                     .await
                     .unwrap()
                     .unwrap();
 
-                let recipts = self
+                let receipts = self
                     .provider()
-                    .rpc_provider()
-                    .get_block_receipts(BlockId::Hash(alloy_rpc_types::RpcBlockHash {
-                        block_hash:        *block_hash,
-                        require_canonical: None
-                    }))
+                    .get_block_receipts(*block_hash.into())
                     .await
                     .unwrap()
                     .unwrap();
-                tracing::info!("updating cannon chain");
 
-                let pr_block = rpc_block_to_pr_block::<PR>(&block).unwrap();
-                let pr_receipts = rpc_receipts_to_pr_receipts::<PR>(recipts).unwrap();
+                tracing::info!("updating cannon chain");
+                let pr_block =
+                    super::compat::rpc_block_to_pr_block::<reth_primitives::EthPrimitives>(&block)
+                        .unwrap();
+                let pr_receipts = super::compat::rpc_receipts_to_pr_receipts::<
+                    reth_primitives::EthPrimitives,
+                >(receipts)
+                .unwrap();
 
                 self.update_canon_chain(&pr_block, pr_receipts).unwrap();
             }
         }
+    }
+}
+
+impl<P: WithWalletProvider + Provider<Optimism>> AnvilStateProvider<P, OpPrimitives> {
+    pub async fn listen_to_new_blocks_op(self) {
+        let mut new_blocks = self
+            .provider()
+            .rpc_provider()
+            .watch_blocks()
+            .await
+            .unwrap()
+            .with_poll_interval(Duration::from_millis(100))
+            .into_stream();
+
+        while let Some(block_hashes) = new_blocks.next().await {
+            if let Some(block_hash) = block_hashes.first() {
+                let block = self
+                    .provider()
+                    .get_block_by_hash(*block_hash)
+                    .await
+                    .unwrap()
+                    .unwrap();
+
+                let receipts = self
+                    .provider()
+                    .get_block_receipts(*block_hash)
+                    .await
+                    .unwrap()
+                    .unwrap();
+
+                tracing::info!("updating cannon chain");
+
+                let pr_block = super::compat::rpc_block_to_op_block(&block).unwrap();
+                let pr_receipts = super::compat::rpc_receipts_to_op_receipts(receipts).unwrap();
+
+                self.update_canon_chain(&pr_block, pr_receipts).unwrap();
+            }
+        }
+    }
+}
+
+pub trait StartMonitor {
+    fn spawn(self);
+}
+
+impl StartMonitor for AnvilStateProvider<WalletProvider, EthPrimitives> {
+    fn spawn(self) {
+        tokio::spawn(self.listen_to_new_blocks_eth());
+    }
+}
+
+impl StartMonitor for AnvilStateProvider<WalletProvider, OpPrimitives> {
+    fn spawn(self) {
+        tokio::spawn(self.listen_to_new_blocks_op());
     }
 }
 
@@ -142,14 +190,14 @@ impl<P: WithWalletProvider, PR: NodePrimitives> reth_revm::DatabaseRef
                 .rpc_provider()
                 .get_account(address)
                 .latest()
-                .into_future()
+                .into_future(),
         )?;
         let code = async_to_sync(
             self.provider
                 .rpc_provider()
                 .get_code_at(address)
                 .latest()
-                .into_future()
+                .into_future(),
         )?;
         let code = Some(Bytecode::new_raw(code));
 
@@ -157,7 +205,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> reth_revm::DatabaseRef
             code_hash: acc.code_hash,
             balance: acc.balance,
             nonce: acc.nonce,
-            code
+            code,
         }))
     }
 
@@ -166,7 +214,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> reth_revm::DatabaseRef
             self.provider
                 .rpc_provider()
                 .get_storage_at(address, index)
-                .into_future()
+                .into_future(),
         )?;
         Ok(acc)
     }
@@ -176,7 +224,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> reth_revm::DatabaseRef
             self.provider
                 .rpc_provider()
                 .get_block_by_number(alloy_rpc_types::BlockNumberOrTag::Number(number))
-                .into_future()
+                .into_future(),
         )?;
 
         let Some(block) = acc else { return Err(DBError::String("no block".to_string())) };
@@ -198,7 +246,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> BlockNumReader for AnvilStatePro
 
     fn convert_number(
         &self,
-        _: alloy_rpc_types::BlockHashOrNumber
+        _: alloy_rpc_types::BlockHashOrNumber,
     ) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }
@@ -208,7 +256,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> BlockNumReader for AnvilStatePro
             self.provider
                 .rpc_provider()
                 .get_block_number()
-                .into_future()
+                .into_future(),
         )
         .unwrap())
     }
@@ -218,14 +266,14 @@ impl<P: WithWalletProvider, PR: NodePrimitives> BlockNumReader for AnvilStatePro
             self.provider
                 .rpc_provider()
                 .get_block_number()
-                .into_future()
+                .into_future(),
         )
         .unwrap())
     }
 
     fn convert_hash_or_number(
         &self,
-        _: alloy_rpc_types::BlockHashOrNumber
+        _: alloy_rpc_types::BlockHashOrNumber,
     ) -> ProviderResult<Option<BlockNumber>> {
         panic!("never used");
     }
@@ -237,7 +285,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> BlockHashReader for AnvilStatePr
 
     fn convert_block_hash(
         &self,
-        _: alloy_rpc_types::BlockHashOrNumber
+        _: alloy_rpc_types::BlockHashOrNumber,
     ) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }
@@ -245,7 +293,7 @@ impl<P: WithWalletProvider, PR: NodePrimitives> BlockHashReader for AnvilStatePr
     fn canonical_hashes_range(
         &self,
         _: BlockNumber,
-        _: BlockNumber
+        _: BlockNumber,
     ) -> ProviderResult<Vec<alloy_primitives::B256>> {
         panic!("never used");
     }

@@ -1,8 +1,8 @@
 use std::{pin::Pin, sync::Arc, time::Duration};
 
-use alloy::providers::Provider;
 use alloy_rpc_types::BlockId;
 use angstrom_amm_quoter::{QuoterHandle, RollupQuoterManager};
+use angstrom_cli::{handles::RollupHandles, manager::RollupManager};
 use angstrom_eth::{
     handle::Eth,
     manager::{EthDataCleanser, EthEvent}
@@ -18,11 +18,13 @@ use angstrom_types::{
 };
 use futures::{Future, Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
-use matching_engine::{MatchingEngineHandle, MatchingManager};
+use matching_engine::MatchingManager;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use pool_manager::rollup::RollupPoolManager;
+use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{BlockNumReader, CanonStateSubscriptions};
 use reth_tasks::TaskExecutor;
+use tokio_stream::wrappers::BroadcastStream;
 use tracing::{Instrument, span};
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager};
 use validation::{
@@ -49,6 +51,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
     pub async fn new<G, F>(
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
+        strom_handles: RollupHandles,
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
         executor: TaskExecutor,
@@ -62,15 +65,8 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>
             + Clone
     {
-        // Create local channels for subsystems
-        let (eth_tx, eth_rx) = tokio::sync::mpsc::channel(100);
-        let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
-        let (orderpool_tx, orderpool_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (validator_tx, validator_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (quoter_tx, quoter_rx) = tokio::sync::mpsc::channel(1000);
-
         // Matching engine + validation client
-        let validation_client = ValidationClient(validator_tx.clone());
+        let validation_client = ValidationClient(strom_handles.validator_tx.clone());
         let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
 
         // Load registry + pool config store at current canonical block
@@ -112,13 +108,13 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
 
         let node_set = std::iter::once(node_config.address()).collect();
         let block_sync = GlobalBlockSync::new(block_number);
-        let eth_handle = EthDataCleanser::spawn(
+        let eth_handle = EthDataCleanser::<_, OpPrimitives>::spawn(
             inital_angstrom_state.angstrom_addr,
             inital_angstrom_state.controller_addr,
             sub,
             executor.clone(),
-            eth_tx,
-            eth_rx,
+            strom_handles.eth_tx,
+            strom_handles.eth_rx,
             angstrom_tokens,
             pool_config_store.clone(),
             block_sync.clone(),
@@ -187,7 +183,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         let validator = TestOrderValidator::new(
             state_provider.state_provider(),
             validation_client.clone(),
-            validator_rx,
+            strom_handles.validator_rx,
             inital_angstrom_state.angstrom_addr,
             node_config.address(),
             uniswap_pools.clone(),
@@ -229,9 +225,9 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         .with_config(pool_config)
         .build_with_channels(
             executor.clone(),
-            orderpool_tx.clone(),
-            orderpool_rx,
-            pool_manager_tx.clone(),
+            strom_handles.orderpool_tx.clone(),
+            strom_handles.orderpool_rx,
+            strom_handles.pool_manager_tx.clone(),
             block_number,
             |_| {}
         );
@@ -239,7 +235,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         // RPC server binds to port 0 and announces chosen port
         let server = ServerBuilder::default().build("127.0.0.1:0").await?;
         let addr = server.local_addr()?;
-        let amm_quoter = QuoterHandle(quoter_tx.clone());
+        let amm_quoter = QuoterHandle(strom_handles.quoter_tx.clone());
         let order_api = OrderApi::new(
             pool_handle.clone(),
             executor.clone(),
@@ -266,7 +262,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             let quoter = RollupQuoterManager::new(
                 block_sync.clone(),
                 order_storage.clone(),
-                quoter_rx,
+                strom_handles.quoter_rx,
                 uniswap_pools.clone(),
                 rayon::ThreadPoolBuilder::default()
                     .num_threads(2)
@@ -303,63 +299,34 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Minimal rollup driver: builds and submits bundles on new blocks
-        let provider_for_submit = state_provider.rpc_provider();
-        let angstrom_addr = inital_angstrom_state.angstrom_addr;
+        // Use RollupManager to build/submit bundles
         let signer = node_config.angstrom_signer();
         let pool_registry =
             UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store);
-        let submission = SubmissionHandler::new(
-            provider_for_submit.clone().into(),
+        let submission_handler = SubmissionHandler::new(
+            state_provider.rpc_provider().into(),
             &[],
-            angstrom_addr,
+            inital_angstrom_state.angstrom_addr,
             signer.clone()
         );
-        let uniswap_pools_clone = uniswap_pools.clone();
-        let order_storage_clone = order_storage.clone();
-        let mut shutdown_rx_driver = shutdown_rx.clone();
-        executor.spawn_critical_with_graceful_shutdown_signal(
-            "op-rollup-driver",
-            move |grace| async move {
-                let mut canon = eth_handle.subscribe_cannon_state_notifications().await;
-                loop {
-                    tokio::select! {
-                        res = canon.recv() => { if res.is_err() { break } }
-                        _ = &mut grace.clone() => break,
-                        _ = shutdown_rx_driver.changed() => break,
-                    }
-                    let pool_snapshots = uniswap_pools_clone
-                        .iter()
-                        .filter_map(|item| {
-                            let key = item.key();
-                            let pool = item.value();
-                            let (token_a, token_b, snapshot) = pool.read().ok()?.fetch_pool_snapshot().ok()?;
-                            let entry = pool_registry.get_ang_entry(key)?;
-                            Some((*key, (token_a, token_b, snapshot, entry.store_index as u16)))
-                        })
-                        .collect::<std::collections::HashMap<_, _>>();
-
-                    let all_orders = order_storage_clone.get_all_orders_with_ingoing_cancellations();
-                    let limit = all_orders.limit.clone();
-                    let searcher = all_orders.searcher.clone();
-
-                    if let Ok((solutions, details)) = matching_handle
-                        .solve_pools(limit.clone(), searcher.clone(), pool_snapshots.clone())
-                        .await
-                    {
-                        if let Ok(bundle) = angstrom_types::contract_payloads::angstrom::AngstromBundle::from_pool_solutions(
-                            solutions,
-                            order_storage_clone.get_all_orders_with_ingoing_cancellations(),
-                            &pool_snapshots,
-                            details
-                        ) {
-                            let current_block = provider_for_submit.get_block_number().await.unwrap_or(0);
-                            let _ = submission.submit_tx(signer.clone(), Some(bundle), current_block + 1).await;
-                        }
-                    }
-                }
-            }
+        let block_time = Duration::from_secs(12);
+        let canon_stream =
+            BroadcastStream::new(eth_handle.subscribe_cannon_state_notifications().await);
+        let driver = RollupManager::new(
+            block_number,
+            block_time,
+            canon_stream,
+            block_sync.clone(),
+            order_storage.clone(),
+            pool_registry,
+            uniswap_pools.clone(),
+            Arc::new(submission_handler),
+            matching_handle.clone(),
+            signer
         );
+        executor.spawn_critical_with_graceful_shutdown_signal("rollup driver", move |grace| {
+            driver.run_till_shutdown(grace)
+        });
 
         Ok(Self { state_provider })
     }

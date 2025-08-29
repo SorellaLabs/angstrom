@@ -12723,6 +12723,7 @@ dependencies = [
  "reth-node-builder",
  "reth-node-ethereum",
  "reth-node-types",
+ "reth-optimism-primitives",
  "reth-primitives",
  "reth-provider",
  "reth-revm",

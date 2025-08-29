@@ -1,6 +1,7 @@
 use std::pin::Pin;
 
 use alloy::signers::local::PrivateKeySigner;
+use angstrom_cli::handles::RollupHandles;
 use angstrom_types::{primitive::AngstromSigner, testnet::InitialTestnetState};
 use futures::Future;
 use reth_tasks::TaskExecutor;
@@ -43,9 +44,12 @@ where
         // Create shutdown signal for graceful termination of spawned tasks
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
+        let handles = RollupHandles::new();
+
         let internals = OpNodeInternals::new(
             node_config.clone(),
             state_provider,
+            handles,
             inital_angstrom_state.clone(),
             agents,
             executor.clone(),

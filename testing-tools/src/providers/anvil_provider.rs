@@ -14,10 +14,7 @@ use futures::{Stream, StreamExt, stream::FuturesOrdered};
 use reth_node_types::NodePrimitives;
 use reth_primitives::EthPrimitives;
 
-use super::{
-    AnvilStateProvider, WalletProvider,
-    compat::{rpc_block_to_pr_block, rpc_receipts_to_pr_receipts}
-};
+use super::{AnvilStateProvider, WalletProvider};
 use crate::{
     contracts::anvil::WalletProviderRpc,
     types::{WithWalletProvider, initial_state::DeployedAddresses}
@@ -45,7 +42,9 @@ where
 
     pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
     where
-        F: Future<Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>>
+        F: Future<Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>>,
+        <PR as NodePrimitives>::Block: From<alloy_rpc_types::Block>,
+        <PR as NodePrimitives>::Receipt: From<alloy_rpc_types::TransactionReceipt>
     {
         let (provider, anvil, deployed_addresses) = fut.await?;
         let this = Self {
@@ -95,7 +94,11 @@ where
         &mut self.provider
     }
 
-    pub async fn execute_and_return_state(&self) -> eyre::Result<(Bytes, Block)> {
+    pub async fn execute_and_return_state(&self) -> eyre::Result<(Bytes, Block)>
+    where
+        <PR as NodePrimitives>::Block: From<alloy_rpc_types::Block>,
+        <PR as NodePrimitives>::Receipt: From<alloy_rpc_types::TransactionReceipt>
+    {
         let block = self.mine_block().await?;
 
         Ok((
@@ -127,7 +130,11 @@ where
         Ok(())
     }
 
-    pub async fn mine_block(&self) -> eyre::Result<Block> {
+    pub async fn mine_block(&self) -> eyre::Result<Block>
+    where
+        <PR as NodePrimitives>::Block: From<alloy_rpc_types::Block>,
+        <PR as NodePrimitives>::Receipt: From<alloy_rpc_types::TransactionReceipt>
+    {
         let mined = self
             .provider
             .provider()
@@ -148,7 +155,10 @@ where
             .unwrap()
             .unwrap();
 
-        self.provider.update_canon_chain(&mined, recipts)?;
+        let pr_mined = mined.clone().try_into().unwrap();
+        let pr_recipts = recipts.into_iter().map(|r| r.try_into().unwrap()).collect();
+
+        self.provider.update_canon_chain(&pr_mined, pr_recipts)?;
 
         Ok(mined)
     }

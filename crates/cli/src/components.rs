@@ -8,7 +8,7 @@ use std::{
 
 use alloy::{
     self,
-    consensus::BlockHeader,
+    consensus::{BlockHeader, Header},
     eips::{BlockId, BlockNumberOrTag},
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
@@ -23,6 +23,7 @@ use angstrom_network::{NetworkBuilder as StromNetworkBuilder, StatusState, Verif
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    flashblocks::{FlashblocksRx, FlashblocksStream},
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
@@ -41,6 +42,7 @@ use pool_manager::{consensus::ConsensusPoolManagerBuilder, rollup::RollupPoolMan
 use reth::{
     api::NodeAddOns,
     builder::FullNodeComponents,
+    chainspec::EthChainSpec,
     core::exit::NodeExitFuture,
     primitives::EthPrimitives,
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
@@ -50,14 +52,15 @@ use reth_network::NetworkHandle;
 use reth_node_builder::{
     FullNode, NodeHandle, NodePrimitives, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns
 };
+use reth_optimism_chainspec::{OpChainSpec, OpHardforks};
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{
-    BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
+    BlockReader, BlockReaderIdExt, ChainSpecProvider, DatabaseProviderFactory, ReceiptProvider,
+    StateProviderFactory, TryIntoHistoricalStateProvider
 };
 use serde::Serialize;
 use telemetry::init_telemetry;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio_stream::wrappers::BroadcastStream;
 use uniswap_v4::{DEFAULT_TICKS, configure_uniswap_manager, fetch_angstrom_pools};
 use url::Url;
 use validation::{common::TokenPriceGenerator, init_validation, validator::ValidationClient};
@@ -107,10 +110,11 @@ where
     signer:           AngstromSigner<S>,
     handles:          StromHandles<M>,
 
-    // Optional fields (non-rollup mode)
+    // Optional fields
     consensus_client: Option<ConsensusHandler>,
     network_builder:  Option<StromNetworkBuilder<N::Network, S>>,
-    node_set:         Option<HashSet<Address>>
+    node_set:         Option<HashSet<Address>>,
+    flashblocks:      Option<FlashblocksRx>
 }
 
 impl<N, AO, M, S> AngstromLauncher<N, AO, M, S>
@@ -143,8 +147,13 @@ where
             handles,
             network_builder: None,
             consensus_client: None,
-            node_set: None
+            node_set: None,
+            flashblocks: None
         }
+    }
+
+    pub fn with_flashblocks(self, rx: FlashblocksRx) -> Self {
+        Self { flashblocks: Some(rx), ..self }
     }
 }
 
@@ -301,7 +310,7 @@ where
 
         // Build our PoolManager using the PoolConfig and OrderStorage we've already
         // created
-        let eth_handle = EthDataCleanser::spawn(
+        let eth_handle = EthDataCleanser::<_, angstrom_eth::manager::ConsensusMode>::spawn(
             angstrom_address,
             controller,
             eth_data_sub,
@@ -326,7 +335,8 @@ where
 
         let uniswap_pool_manager = configure_uniswap_manager::<_, EthPrimitives, DEFAULT_TICKS>(
             querying_provider.clone(),
-            eth_handle.subscribe_cannon_state_notifications().await,
+            // eth_handle.subscribe_cannon_state_notifications().await,
+            todo!(),
             uniswap_registry,
             block_id,
             global_block_sync.clone(),
@@ -432,7 +442,8 @@ where
         let manager = ConsensusManager::new(
             ManagerNetworkDeps::new(
                 network_handle.clone(),
-                eth_handle.subscribe_cannon_state_notifications().await,
+                // eth_handle.subscribe_cannon_state_notifications().await,
+                todo!(),
                 handles.mode.consensus_rx_op
             ),
             signer,
@@ -468,7 +479,10 @@ where
             Block = <OpPrimitives as NodePrimitives>::Block,
             Receipt = <OpPrimitives as NodePrimitives>::Receipt,
             Header = <OpPrimitives as NodePrimitives>::BlockHeader
-        > + DatabaseProviderFactory,
+        > + DatabaseProviderFactory
+        + StateProviderFactory
+        + ChainSpecProvider<ChainSpec: EthChainSpec<Header = Header> + OpHardforks>
+        + BlockReaderIdExt<Header = Header>,
     AO: NodeAddOns<N> + RethRpcAddOns<N>,
     <<N as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
         TryIntoHistoricalStateProvider + BlockNumReader + ReceiptProvider,
@@ -575,10 +589,11 @@ where
         let uni_ang_registry =
             UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
 
-        let eth_handle = EthDataCleanser::spawn(
+        let eth_handle = EthDataCleanser::<_, angstrom_eth::manager::RollupMode>::spawn(
             angstrom_address,
             controller,
             eth_data_sub,
+            self.flashblocks.clone().map(FlashblocksStream::new),
             executor.clone(),
             handles.eth_tx,
             handles.eth_rx,
@@ -601,7 +616,8 @@ where
 
         let uniswap_pool_manager = configure_uniswap_manager::<_, OpPrimitives, DEFAULT_TICKS>(
             querying_provider.clone(),
-            eth_handle.subscribe_cannon_state_notifications().await,
+            // eth_handle.subscribe_cannon_state_notifications().await,
+            todo!(),
             uniswap_registry,
             block_id,
             global_block_sync.clone(),
@@ -694,7 +710,8 @@ where
         let driver = RollupManager::new(
             block_height,
             Duration::from_millis(config.block_time_ms),
-            BroadcastStream::new(eth_handle.subscribe_cannon_state_notifications().await),
+            // BroadcastStream::new(eth_handle.subscribe_cannon_state_notifications().await),
+            todo!(),
             global_block_sync.clone(),
             order_storage,
             uni_ang_registry,
@@ -715,6 +732,7 @@ where
     }
 }
 
+// TODO(mempirate): This isn't correct in rollup mode.
 async fn handle_init_block_spam<N: NodePrimitives>(
     canon: &mut tokio::sync::broadcast::Receiver<CanonStateNotification<N>>
 ) {

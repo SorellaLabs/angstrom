@@ -1,12 +1,13 @@
 //! Optimism Angstrom binary executable.
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use alloy_chains::NamedChain;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
-use angstrom_types::primitive::{
-    ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, init_with_chain_id
+use angstrom_types::{
+    flashblocks::FlashblocksRx,
+    primitive::{ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, init_with_chain_id}
 };
 use clap::Parser;
 use pool_manager::PoolHandle;
@@ -15,7 +16,7 @@ use reth_db::DatabaseEnv;
 use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
-use reth_optimism_node::{OpAddOns, OpNode, args::RollupArgs};
+use reth_optimism_node::{OpNode, args::RollupArgs, rpc::OpEthApi};
 use url::Url;
 use validation::validator::ValidationClient;
 
@@ -31,18 +32,24 @@ const SUPPORTED_CHAINS: &[NamedChain] =
     &[NamedChain::Base, NamedChain::BaseSepolia, NamedChain::Unichain, NamedChain::UnichainSepolia];
 
 #[derive(Debug, Clone, Parser)]
-pub struct CombinedArgs {
+pub struct OpAngstromArgs {
     #[command(flatten)]
     pub rollup:   RollupArgs,
     #[command(flatten)]
     pub angstrom: AngstromConfig
 }
 
+impl OpAngstromArgs {
+    fn flashblocks_enabled(&self) -> bool {
+        self.rollup.flashblocks_url.is_some()
+    }
+}
+
 /// Convenience function for parsing CLI options, set up logging and run the
 /// chosen command.
 #[inline]
 pub fn run() -> eyre::Result<()> {
-    OpCli::<OpChainSpecParser, CombinedArgs>::parse().run(|builder, mut args| async move {
+    OpCli::<OpChainSpecParser, OpAngstromArgs>::parse().run(|builder, mut args| async move {
         let executor = builder.task_executor().clone();
         let chain = builder.config().chain.chain().named().unwrap();
 
@@ -133,16 +140,35 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     validation_client: ValidationClient,
     quoter_handle: QuoterHandle,
     secret_key: AngstromSigner<S>,
-    args: CombinedArgs,
+    args: OpAngstromArgs,
     channels: RollupHandles,
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>
 ) -> eyre::Result<()> {
     let executor_clone = executor.clone();
+
+    let op_node = OpNode::new(args.rollup.clone());
+
+    let flashblocks_rx: Arc<OnceLock<FlashblocksRx>> = Arc::new(OnceLock::new());
+
     let node_handle = builder
         .with_types::<OpNode>()
-        .with_components(OpNode::new(args.rollup).components_builder())
-        .with_add_ons::<OpAddOns<_, _, _, _>>(Default::default())
+        .with_components(op_node.components_builder())
+        .with_add_ons(op_node.add_ons())
+        .on_rpc_started({
+            let flashblocks_rx = flashblocks_rx.clone();
+            move |ctx, _| {
+                let api: &OpEthApi<_, _> = ctx.registry.eth_api();
+
+                // If Flashblocks is enabled, set the receiver.
+                if let Some(rx) = api.flashblocks_rx() {
+                    let _ = flashblocks_rx.set(rx);
+                }
+
+                Ok(())
+            }
+        })
         .extend_rpc_modules(move |rpc_context| {
+            // TODO(mempirate): Potentially add Flashblocks RPC overrides here.
             let order_api = OrderApi::new(
                 pool.clone(),
                 executor_clone.clone(),
@@ -156,13 +182,20 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         .launch()
         .await?;
 
-    AngstromLauncher::<_, _, RollupMode, _>::new(
+    let launcher = AngstromLauncher::<_, _, RollupMode, _>::new(
         args.angstrom,
         executor,
         node_handle,
         secret_key,
         channels
-    )
-    .launch()
-    .await
+    );
+
+    // Set up Flashblocks if enabled.
+    let launcher = if let Some(rx) = flashblocks_rx.get().cloned() {
+        launcher.with_flashblocks(rx)
+    } else {
+        launcher
+    };
+
+    launcher.launch().await
 }

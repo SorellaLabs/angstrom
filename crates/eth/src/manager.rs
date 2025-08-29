@@ -6,7 +6,7 @@ use std::{
 };
 
 use alloy::{
-    consensus::{Transaction, TxReceipt},
+    consensus::{BlockHeader, Transaction, TxReceipt},
     primitives::{Address, B256, aliases::I24},
     sol_types::{SolCall, SolEvent}
 };
@@ -17,12 +17,14 @@ use angstrom_types::{
         controller_v_1::ControllerV1::{NodeAdded, NodeRemoved, PoolConfigured, PoolRemoved}
     },
     contract_payloads::angstrom::{AngPoolConfigEntry, AngstromBundle, AngstromPoolConfigStore},
-    primitive::ChainExt
+    flashblocks::{FlashblocksStream, PendingFlashblock},
+    primitive::{ChainExt, StateNotification}
 };
 use futures::Future;
 use futures_util::{FutureExt, StreamExt};
 use itertools::Itertools;
 use pade::PadeDecode;
+use reth_optimism_primitives::OpPrimitives;
 use reth_primitives::{EthPrimitives, NodePrimitives};
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
 use reth_tasks::TaskSpawner;
@@ -40,46 +42,65 @@ alloy::sol!(
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
 );
 
+pub struct RollupMode {
+    flashblocks: Option<FlashblocksStream>
+}
+
+pub struct ConsensusMode;
+
+pub trait DataCleanserMode {
+    type Primitives: NodePrimitives + Serialize;
+}
+
+impl DataCleanserMode for RollupMode {
+    type Primitives = OpPrimitives;
+}
+
+impl DataCleanserMode for ConsensusMode {
+    type Primitives = EthPrimitives;
+}
+
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
-pub struct EthDataCleanser<Sync, N: NodePrimitives = EthPrimitives> {
+pub struct EthDataCleanser<Sync, M: DataCleanserMode> {
     pub(crate) angstrom_address:  Address,
     pub(crate) periphery_address: Address,
     /// our command receiver
-    pub(crate) commander:         ReceiverStream<EthCommand<N>>,
+    pub(crate) commander:         ReceiverStream<EthCommand<M::Primitives>>,
     /// people listening to events
     pub(crate) event_listeners:   Vec<UnboundedSender<EthEvent>>,
     /// for rebroadcasting
-    pub(crate) cannon_sender:     tokio::sync::broadcast::Sender<CanonStateNotification<N>>,
+    pub(crate) cannon_sender:     tokio::sync::broadcast::Sender<StateNotification<M::Primitives>>,
     /// Notifications for Canonical Block updates
-    pub(crate) canonical_updates: BroadcastStream<CanonStateNotification<N>>,
+    pub(crate) canonical_updates: BroadcastStream<CanonStateNotification<M::Primitives>>,
     pub(crate) angstrom_tokens:   HashMap<Address, usize>,
     /// handles syncing of blocks.
     block_sync:                   Sync,
     /// updated by periphery contract.
     pub(crate) pool_store:        Arc<AngstromPoolConfigStore>,
     /// the set of currently active nodes.
-    pub(crate) node_set:          HashSet<Address>
+    pub(crate) node_set:          HashSet<Address>,
+    /// the mode of the data cleanser
+    pub(crate) mode:              M
 }
 
-impl<Sync, N> EthDataCleanser<Sync, N>
+impl<Sync> EthDataCleanser<Sync, ConsensusMode>
 where
-    Sync: BlockSyncProducer,
-    N: NodePrimitives + Serialize
+    Sync: BlockSyncProducer
 {
     pub fn spawn<TP: TaskSpawner>(
         angstrom_address: Address,
         periphery_address: Address,
-        canonical_updates: CanonStateNotifications<N>,
+        canonical_updates: CanonStateNotifications,
         tp: TP,
-        tx: Sender<EthCommand<N>>,
-        rx: Receiver<EthCommand<N>>,
+        tx: Sender<EthCommand>,
+        rx: Receiver<EthCommand>,
         angstrom_tokens: HashMap<Address, usize>,
         pool_store: Arc<AngstromPoolConfigStore>,
         sync: Sync,
         node_set: HashSet<Address>,
         event_listeners: Vec<UnboundedSender<EthEvent>>
-    ) -> anyhow::Result<EthHandle<N>> {
+    ) -> anyhow::Result<EthHandle> {
         let stream = ReceiverStream::new(rx);
         let (cannon_tx, _) = tokio::sync::broadcast::channel(1000);
 
@@ -93,7 +114,8 @@ where
             block_sync: sync,
             pool_store,
             node_set,
-            event_listeners
+            event_listeners,
+            mode: ConsensusMode
         };
         // ensure we broadcast node set. will allow for proper connections
         // on the network side
@@ -108,10 +130,65 @@ where
 
         Ok(handle)
     }
+}
 
-    fn subscribe_cannon_notifications(
+impl<Sync> EthDataCleanser<Sync, RollupMode>
+where
+    Sync: BlockSyncProducer
+{
+    pub fn spawn<TP: TaskSpawner>(
+        angstrom_address: Address,
+        periphery_address: Address,
+        canonical_updates: CanonStateNotifications<OpPrimitives>,
+        flashblocks: Option<FlashblocksStream>,
+        tp: TP,
+        tx: Sender<EthCommand<OpPrimitives>>,
+        rx: Receiver<EthCommand<OpPrimitives>>,
+        angstrom_tokens: HashMap<Address, usize>,
+        pool_store: Arc<AngstromPoolConfigStore>,
+        sync: Sync,
+        node_set: HashSet<Address>,
+        event_listeners: Vec<UnboundedSender<EthEvent>>
+    ) -> anyhow::Result<EthHandle<OpPrimitives>> {
+        let stream = ReceiverStream::new(rx);
+        let (cannon_tx, _) = tokio::sync::broadcast::channel(1000);
+
+        let mut this = Self {
+            angstrom_address,
+            periphery_address,
+            canonical_updates: BroadcastStream::new(canonical_updates),
+            commander: stream,
+            angstrom_tokens,
+            cannon_sender: cannon_tx,
+            block_sync: sync,
+            pool_store,
+            node_set,
+            event_listeners,
+            mode: RollupMode { flashblocks }
+        };
+        // ensure we broadcast node set. will allow for proper connections
+        // on the network side
+        for n in &this.node_set {
+            this.event_listeners
+                .retain(|e| e.send(EthEvent::AddedNode(*n)).is_ok());
+        }
+
+        tp.spawn_critical("eth handle", this.boxed());
+
+        let handle = EthHandle::new(tx);
+
+        Ok(handle)
+    }
+}
+
+impl<Sync, M> EthDataCleanser<Sync, M>
+where
+    Sync: BlockSyncProducer,
+    M: DataCleanserMode
+{
+    fn subscribe_canon_notifications(
         &self
-    ) -> tokio::sync::broadcast::Receiver<CanonStateNotification<N>> {
+    ) -> tokio::sync::broadcast::Receiver<StateNotification<M::Primitives>> {
         self.cannon_sender.subscribe()
     }
 
@@ -120,30 +197,41 @@ where
             .retain(|e| e.send(event.clone()).is_ok());
     }
 
-    fn on_command(&mut self, command: EthCommand<N>) {
+    fn on_command(&mut self, command: EthCommand<M::Primitives>) {
         match command {
             EthCommand::SubscribeEthNetworkEvents(tx) => self.event_listeners.push(tx),
             EthCommand::SubscribeCannon(tx) => {
-                let _ = tx.send(self.subscribe_cannon_notifications());
+                let _ = tx.send(self.subscribe_canon_notifications());
             }
         }
     }
 
-    fn on_canon_update(&mut self, canonical_updates: CanonStateNotification<N>) {
+    fn on_canon_update(&mut self, canonical_updates: CanonStateNotification<M::Primitives>) {
         tracing::info!("got new block update!!!!!");
         telemetry_recorder::telemetry_event!(EthUpdaterSnapshot::from((
             &*self,
             canonical_updates.clone()
         )));
 
-        match canonical_updates.clone() {
-            CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new),
-            CanonStateNotification::Commit { new } => self.handle_commit(new)
-        }
-        let _ = self.cannon_sender.send(canonical_updates);
+        let update = match canonical_updates {
+            CanonStateNotification::Reorg { old, new } => {
+                self.handle_reorg(old.clone(), new.clone());
+                StateNotification::Reorg { old, new }
+            }
+            CanonStateNotification::Commit { new } => {
+                self.handle_commit(new.clone());
+                StateNotification::Commit { new }
+            }
+        };
+
+        let _ = self.cannon_sender.send(update);
     }
 
-    fn handle_reorg(&mut self, old: Arc<impl ChainExt<N>>, new: Arc<impl ChainExt<N>>) {
+    fn handle_reorg(
+        &mut self,
+        old: Arc<impl ChainExt<M::Primitives>>,
+        new: Arc<impl ChainExt<M::Primitives>>
+    ) {
         self.apply_periphery_logs(&new);
         // notify producer of reorg if one happened. NOTE: reth also calls this
         // on reverts
@@ -164,7 +252,7 @@ where
         self.send_events(reorged_orders);
     }
 
-    fn handle_commit(&mut self, new: Arc<impl ChainExt<N>>) {
+    fn handle_commit(&mut self, new: Arc<impl ChainExt<M::Primitives>>) {
         // handle this first so the newest state is the first available
         self.apply_periphery_logs(&new);
 
@@ -187,7 +275,7 @@ where
 
     /// looks at all periphery contrct events updating the internal state +
     /// sending out info.
-    fn apply_periphery_logs(&mut self, chain: &impl ChainExt<N>) {
+    fn apply_periphery_logs(&mut self, chain: &impl ChainExt<M::Primitives>) {
         let periphery_address = self.periphery_address;
 
         chain
@@ -267,7 +355,7 @@ where
 
     fn fetch_filled_order<'a>(
         &'a self,
-        chain: &'a impl ChainExt<N>
+        chain: &'a impl ChainExt<M::Primitives>
     ) -> impl Iterator<Item = B256> + 'a {
         chain
             .successful_tip_transactions()
@@ -289,7 +377,7 @@ where
     }
 
     /// fetches all eoa addresses touched
-    fn get_eoa(&self, chain: Arc<impl ChainExt<N>>) -> Vec<Address> {
+    fn get_eoa(&self, chain: Arc<impl ChainExt<M::Primitives>>) -> Vec<Address> {
         chain
             .receipts_by_block_hash(chain.tip_hash())
             .unwrap_or_default()
@@ -324,20 +412,40 @@ where
     }
 }
 
-impl<Sync, N> Future for EthDataCleanser<Sync, N>
+impl<Sync> EthDataCleanser<Sync, RollupMode>
 where
-    Sync: BlockSyncProducer,
-    N: NodePrimitives + Serialize
+    Sync: BlockSyncProducer
+{
+    fn on_flashblock_update(&mut self, pending: PendingFlashblock) {
+        tracing::debug!(
+            hash = ?pending.block().hash(),
+            number = pending.block().header().number(),
+            "New Flashblock received"
+        );
+
+        let pending = Arc::new(pending);
+        self.handle_commit(pending.clone());
+
+        let _ = self
+            .cannon_sender
+            .send(StateNotification::FlashblockCommit { new: pending });
+    }
+}
+
+impl<Sync> Future for EthDataCleanser<Sync, RollupMode>
+where
+    Sync: BlockSyncProducer
 {
     type Output = ();
 
-    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
         // poll all canonical updates
-        while let Poll::Ready(is_some) = self.canonical_updates.poll_next_unpin(cx).map(|res| {
+        while let Poll::Ready(is_some) = this.canonical_updates.poll_next_unpin(cx).map(|res| {
             res.transpose()
                 .ok()
                 .flatten()
-                .map(|update| self.on_canon_update(update))
+                .map(|update| this.on_canon_update(update))
                 .is_some()
         }) {
             if !is_some {
@@ -345,8 +453,52 @@ where
             }
         }
 
-        while let Poll::Ready(Some(command)) = self.commander.poll_next_unpin(cx) {
-            self.on_command(command)
+        // Collect flashblocks first to avoid borrow checker issues
+        let mut flashblocks = Vec::new();
+        if let Some(flashblock_updates) = this.mode.flashblocks.as_mut() {
+            while let Poll::Ready(Some(flashblock)) = flashblock_updates.poll_next_unpin(cx) {
+                if let Some(flashblock) = flashblock {
+                    flashblocks.push(flashblock);
+                }
+            }
+        }
+
+        // Process collected flashblocks
+        for flashblock in flashblocks {
+            this.on_flashblock_update(flashblock);
+        }
+
+        while let Poll::Ready(Some(command)) = this.commander.poll_next_unpin(cx) {
+            this.on_command(command)
+        }
+
+        Poll::Pending
+    }
+}
+
+impl<Sync> Future for EthDataCleanser<Sync, ConsensusMode>
+where
+    Sync: BlockSyncProducer
+{
+    type Output = ();
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        // poll all canonical updates
+        while let Poll::Ready(is_some) = this.canonical_updates.poll_next_unpin(cx).map(|res| {
+            res.transpose()
+                .ok()
+                .flatten()
+                .map(|update| this.on_canon_update(update))
+                .is_some()
+        }) {
+            if !is_some {
+                return Poll::Ready(());
+            }
+        }
+
+        while let Poll::Ready(Some(command)) = this.commander.poll_next_unpin(cx) {
+            this.on_command(command)
         }
 
         Poll::Pending
@@ -457,7 +609,8 @@ pub mod test {
             canonical_updates: BroadcastStream::new(cannon_rx),
             block_sync:        GlobalBlockSync::new(1),
             cannon_sender:     tx,
-            pool_store:        Default::default()
+            pool_store:        Default::default(),
+            mode:              ConsensusMode
         }
     }
 

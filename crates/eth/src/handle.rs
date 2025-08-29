@@ -1,9 +1,9 @@
 use std::pin::Pin;
 
+use angstrom_types::primitive::StateNotification;
 use futures::Future;
 use futures_util::Stream;
 use reth_primitives::{EthPrimitives, NodePrimitives};
-use reth_provider::CanonStateNotification;
 use tokio::sync::mpsc::{Sender, UnboundedSender, unbounded_channel};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -17,13 +17,13 @@ pub trait Eth<N: NodePrimitives>: Clone + Send + Sync {
     fn subscribe_network(&self) -> UnboundedReceiverStream<EthEvent>;
     fn subscribe_cannon_state_notifications(
         &self
-    ) -> impl Future<Output = tokio::sync::broadcast::Receiver<CanonStateNotification<N>>> + Send;
+    ) -> impl Future<Output = tokio::sync::broadcast::Receiver<StateNotification<N>>> + Send;
 }
 
 pub enum EthCommand<N: NodePrimitives = EthPrimitives> {
     SubscribeEthNetworkEvents(UnboundedSender<EthEvent>),
     SubscribeCannon(
-        tokio::sync::oneshot::Sender<tokio::sync::broadcast::Receiver<CanonStateNotification<N>>>
+        tokio::sync::oneshot::Sender<tokio::sync::broadcast::Receiver<StateNotification<N>>>
     )
 }
 
@@ -41,7 +41,7 @@ impl<N: NodePrimitives> EthHandle<N> {
 impl<N: NodePrimitives> Eth<N> for EthHandle<N> {
     async fn subscribe_cannon_state_notifications(
         &self
-    ) -> tokio::sync::broadcast::Receiver<CanonStateNotification<N>> {
+    ) -> tokio::sync::broadcast::Receiver<StateNotification<N>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let _ = self.sender.send(EthCommand::<N>::SubscribeCannon(tx)).await;
         rx.await.unwrap()

@@ -14,7 +14,10 @@ use futures::{Stream, StreamExt, stream::FuturesOrdered};
 use reth_node_types::NodePrimitives;
 use reth_primitives::EthPrimitives;
 
-use super::{AnvilStateProvider, WalletProvider};
+use super::{
+    AnvilStateProvider, WalletProvider,
+    compat::{rpc_block_to_pr_block, rpc_receipts_to_pr_receipts}
+};
 use crate::{
     contracts::anvil::WalletProviderRpc,
     types::{WithWalletProvider, initial_state::DeployedAddresses}
@@ -43,8 +46,11 @@ where
     pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
     where
         F: Future<Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>>,
-        <PR as NodePrimitives>::Block: From<alloy_rpc_types::Block>,
-        <PR as NodePrimitives>::Receipt: From<alloy_rpc_types::TransactionReceipt>
+        PR::Block: TryFrom<alloy_rpc_types::Block>,
+        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
+        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
+        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
+            std::fmt::Debug
     {
         let (provider, anvil, deployed_addresses) = fut.await?;
         let this = Self {
@@ -96,8 +102,11 @@ where
 
     pub async fn execute_and_return_state(&self) -> eyre::Result<(Bytes, Block)>
     where
-        <PR as NodePrimitives>::Block: From<alloy_rpc_types::Block>,
-        <PR as NodePrimitives>::Receipt: From<alloy_rpc_types::TransactionReceipt>
+        PR::Block: TryFrom<alloy_rpc_types::Block>,
+        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
+        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
+        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
+            std::fmt::Debug
     {
         let block = self.mine_block().await?;
 
@@ -132,8 +141,11 @@ where
 
     pub async fn mine_block(&self) -> eyre::Result<Block>
     where
-        <PR as NodePrimitives>::Block: From<alloy_rpc_types::Block>,
-        <PR as NodePrimitives>::Receipt: From<alloy_rpc_types::TransactionReceipt>
+        PR::Block: TryFrom<alloy_rpc_types::Block>,
+        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
+        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
+        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
+            std::fmt::Debug
     {
         let mined = self
             .provider
@@ -155,10 +167,10 @@ where
             .unwrap()
             .unwrap();
 
-        let pr_mined = mined.clone().try_into().unwrap();
-        let pr_recipts = recipts.into_iter().map(|r| r.try_into().unwrap()).collect();
+        let pr_mined = rpc_block_to_pr_block::<PR>(&mined)?;
+        let pr_receipts = rpc_receipts_to_pr_receipts::<PR>(recipts)?;
 
-        self.provider.update_canon_chain(&pr_mined, pr_recipts)?;
+        self.provider.update_canon_chain(&pr_mined, pr_receipts)?;
 
         Ok(mined)
     }

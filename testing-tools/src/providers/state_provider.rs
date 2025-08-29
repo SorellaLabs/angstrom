@@ -15,7 +15,7 @@ use revm::{bytecode::Bytecode, state::AccountInfo};
 use tokio::sync::broadcast;
 use validation::common::db::BlockStateProviderFactory;
 
-use super::{RpcStateProvider, WalletProvider};
+use super::{RpcStateProvider, WalletProvider, compat::{rpc_block_to_pr_block, rpc_receipts_to_pr_receipts}};
 use crate::{
     mocks::canon_state::AnvilConsensusCanonStateNotification, providers::utils::async_to_sync,
     types::WithWalletProvider
@@ -81,8 +81,10 @@ impl<P: WithWalletProvider, PR: NodePrimitives> AnvilStateProvider<P, PR> {
     /// used for testnet to make sure cannon notifications work
     pub async fn listen_to_new_blocks(self)
     where
-        <PR as NodePrimitives>::Block: From<alloy_rpc_types::Block>,
-        <PR as NodePrimitives>::Receipt: From<alloy_rpc_types::TransactionReceipt>
+        PR::Block: TryFrom<alloy_rpc_types::Block>,
+        <PR::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
+        PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
+        <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error: std::fmt::Debug,
     {
         let mut new_blocks = self
             .provider()
@@ -120,8 +122,8 @@ impl<P: WithWalletProvider, PR: NodePrimitives> AnvilStateProvider<P, PR> {
                     .unwrap();
                 tracing::info!("updating cannon chain");
 
-                let pr_block = block.try_into().unwrap();
-                let pr_receipts = recipts.into_iter().map(|r| r.try_into().unwrap()).collect();
+                let pr_block = rpc_block_to_pr_block::<PR>(&block).unwrap();
+                let pr_receipts = rpc_receipts_to_pr_receipts::<PR>(recipts).unwrap();
 
                 self.update_canon_chain(&pr_block, pr_receipts).unwrap();
             }

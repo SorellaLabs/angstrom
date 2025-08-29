@@ -13,6 +13,7 @@ pub use block_provider::*;
 mod initializer;
 use alloy::{node_bindings::AnvilInstance, signers::local::PrivateKeySigner};
 pub use initializer::*;
+pub mod compat;
 
 use crate::{
     contracts::{anvil::WalletProviderRpc, environment::TestAnvilEnvironment},

@@ -96,7 +96,14 @@ impl OpAngstromTestnet {
     async fn spawn_provider<P: reth_node_types::NodePrimitives>(
         node_config: TestingNodeConfig<OpTestnetConfig>,
         node_addresses: Vec<Address>
-    ) -> eyre::Result<AnvilProvider<AnvilInitializer, P>> {
+    ) -> eyre::Result<AnvilProvider<AnvilInitializer, P>>
+    where
+        P::Block: TryFrom<alloy_rpc_types::Block>,
+        <P::Block as TryFrom<alloy_rpc_types::Block>>::Error: std::fmt::Debug,
+        P::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
+        <P::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
+            std::fmt::Debug
+    {
         AnvilProvider::from_future(
             AnvilInitializer::new(node_config.clone(), node_addresses)
                 .then(async |v| v.map(|i| (i.0, i.1, Some(i.2)))),

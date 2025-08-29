@@ -19,6 +19,7 @@ itertools.workspace = true
 pade.workspace = true
 reth-ethereum-primitives.workspace = true
 reth-execution-types.workspace = true
+reth-optimism-primitives.workspace = true
 reth-primitives.workspace = true
 reth-provider.workspace = true
 reth-tasks.workspace = true

@@ -10,7 +10,7 @@ exclude.workspace = true
 
 [dependencies]
 alloy.workspace = true
-alloy-evm = "0.15"
+alloy-evm = "0.20.1"
 alloy-primitives = { workspace = true, default-features = false, features = ["map-foldhash"] }
 brotli = "8.0.1"
 eyre.workspace = true
@@ -26,7 +26,8 @@ url.workspace = true
 # Reth
 reth.workspace = true
 reth-optimism-chainspec.workspace = true
-reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
+reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", rev = "21ba9c4" }
+reth-optimism-flashblocks = { git = "https://github.com/paradigmxyz/reth", rev = "21ba9c4" }
 reth-optimism-primitives.workspace = true
 reth-primitives-traits.workspace = true
 

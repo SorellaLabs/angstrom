@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use telemetry_recorder::OrderTelemetryExt;
 
-use crate::manager::EthDataCleanser;
+use crate::manager::{DataCleanserMode, EthDataCleanser};
 
 /// The state of our eth-updater, right before we go to the next block
 #[serde_as]
@@ -34,10 +34,13 @@ pub struct EthUpdaterSnapshot<N: NodePrimitives = EthPrimitives> {
     pub timestamp:  chrono::DateTime<Utc>
 }
 
-impl<Sync: BlockSyncProducer, N: NodePrimitives>
-    From<(&EthDataCleanser<Sync, N>, CanonStateNotification<N>)> for EthUpdaterSnapshot<N>
+impl<Sync: BlockSyncProducer, M: DataCleanserMode>
+    From<(&EthDataCleanser<Sync, M>, CanonStateNotification<M::Primitives>)>
+    for EthUpdaterSnapshot<M::Primitives>
 {
-    fn from((data, update): (&EthDataCleanser<Sync, N>, CanonStateNotification<N>)) -> Self {
+    fn from(
+        (data, update): (&EthDataCleanser<Sync, M>, CanonStateNotification<M::Primitives>)
+    ) -> Self {
         Self {
             angstrom_tokens:   data.angstrom_tokens.clone(),
             angstrom_address:  data.angstrom_address,

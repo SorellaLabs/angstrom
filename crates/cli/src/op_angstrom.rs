@@ -5,19 +5,18 @@ use alloy_chains::NamedChain;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::METRICS_ENABLED;
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
-use angstrom_types::primitive::{
-    ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, init_with_chain_id
+use angstrom_types::{
+    flashblocks::FlashblocksRx,
+    primitive::{ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, init_with_chain_id}
 };
 use clap::Parser;
 use pool_manager::PoolHandle;
 use reth::{chainspec::EthChainSpec, tasks::TaskExecutor};
 use reth_db::DatabaseEnv;
-use reth_exex::ExExEvent;
 use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
-use reth_optimism_node::{OpNode, args::RollupArgs};
-use tokio_stream::StreamExt;
+use reth_optimism_node::{OpNode, args::RollupArgs, rpc::OpEthApi};
 use url::Url;
 use validation::validator::ValidationClient;
 
@@ -35,27 +34,14 @@ const SUPPORTED_CHAINS: &[NamedChain] =
 #[derive(Debug, Clone, Parser)]
 pub struct OpAngstromArgs {
     #[command(flatten)]
-    pub rollup:      RollupArgs,
+    pub rollup:   RollupArgs,
     #[command(flatten)]
-    pub angstrom:    AngstromConfig,
-    #[command(flatten)]
-    pub flashblocks: FlashblocksConfig
-}
-
-#[derive(Debug, Clone, Parser)]
-pub struct FlashblocksConfig {
-    /// Enable Flashblocks support.
-    #[arg(long = "flashblocks", default_value = "false")]
-    pub enabled: bool,
-
-    /// Flashblocks WebSocket URL.
-    #[arg(long = "flashblocks.ws", value_name = "WEBSOCKET_URL")]
-    pub url: Option<String>
+    pub angstrom: AngstromConfig
 }
 
 impl OpAngstromArgs {
     fn flashblocks_enabled(&self) -> bool {
-        self.flashblocks.enabled
+        self.rollup.flashblocks_url.is_some()
     }
 }
 
@@ -162,34 +148,23 @@ async fn run_with_signer<S: AngstromMetaSigner>(
 
     let op_node = OpNode::new(args.rollup.clone());
 
-    let writer: Arc<OnceLock<flashblocks::PendingStateWriter<_>>> = Arc::new(OnceLock::new());
+    let flashblocks_rx: Arc<OnceLock<FlashblocksRx>> = Arc::new(OnceLock::new());
 
     let node_handle = builder
         .with_types::<OpNode>()
         .with_components(op_node.components_builder())
         .with_add_ons(op_node.add_ons())
-        .install_exex_if(args.flashblocks_enabled(), "flashblocks", {
-            let writer = writer.clone();
-            // This ExEx is used to notify the Flashblocks state writer of new canonical
-            // blocks, so it can clean up the pending state.
-            move |mut ctx| async move {
-                let w = writer
-                    .get_or_init(|| flashblocks::PendingStateWriter::new(ctx.provider().clone()))
-                    .clone();
+        .on_rpc_started({
+            let flashblocks_rx = flashblocks_rx.clone();
+            move |ctx, _| {
+                let api: &OpEthApi<_, _> = ctx.registry.eth_api();
 
-                Ok(async move {
-                    while let Some(note) = ctx.notifications.try_next().await? {
-                        if let Some(committed) = note.committed_chain() {
-                            for b in committed.blocks_iter() {
-                                w.on_canonical_block(&b);
-                            }
-                            let _ = ctx
-                                .events
-                                .send(ExExEvent::FinishedHeight(committed.tip().num_hash()));
-                        }
-                    }
-                    Ok(())
-                })
+                // If Flashblocks is enabled, set the receiver.
+                if let Some(rx) = api.flashblocks_rx() {
+                    let _ = flashblocks_rx.set(rx);
+                }
+
+                Ok(())
             }
         })
         .extend_rpc_modules(move |rpc_context| {
@@ -216,9 +191,8 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     );
 
     // Set up Flashblocks if enabled.
-    let launcher = if let Some(writer) = writer.get() {
-        let url = args.flashblocks.url.unwrap();
-        launcher.with_flashblocks(writer.clone(), Url::parse(&url).unwrap())
+    let launcher = if let Some(rx) = flashblocks_rx.get().cloned() {
+        launcher.with_flashblocks(rx)
     } else {
         launcher
     };

@@ -9,6 +9,7 @@ use alloy::{
 use angstrom_types::{primitive::AngstromSigner, testnet::InitialTestnetState};
 use futures::{Future, FutureExt};
 use reth_chainspec::Hardforks;
+use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 use reth_tasks::TaskExecutor;
 
@@ -56,9 +57,10 @@ impl OpAngstromTestnet {
         let pool_keys = node_config.pool_keys();
 
         // Initialize provider and deploy contracts
-        let provider = Self::spawn_provider(node_config.clone(), node_addresses).await?;
+        let provider =
+            Self::spawn_provider::<OpPrimitives>(node_config.clone(), node_addresses).await?;
         let (anvil_instance, provider, initial_state) =
-            Self::anvil_deployment(provider, pool_keys, ex.clone()).await?;
+            Self::anvil_deployment::<OpPrimitives>(provider, pool_keys, ex.clone()).await?;
 
         // Create single testnet node
         let node = OpTestnetNode::new(node_config, provider, initial_state, agents, ex).await?;
@@ -72,7 +74,7 @@ impl OpAngstromTestnet {
         Ok(())
     }
 
-    pub fn state_provider(&self) -> &AnvilProvider<WalletProvider> {
+    pub fn state_provider(&self) -> &AnvilProvider<WalletProvider, OpPrimitives> {
         self.node.state_provider()
     }
 
@@ -91,10 +93,10 @@ impl OpAngstromTestnet {
         self.node.shutdown_sender()
     }
 
-    async fn spawn_provider(
+    async fn spawn_provider<P: reth_node_types::NodePrimitives>(
         node_config: TestingNodeConfig<OpTestnetConfig>,
         node_addresses: Vec<Address>
-    ) -> eyre::Result<AnvilProvider<AnvilInitializer>> {
+    ) -> eyre::Result<AnvilProvider<AnvilInitializer, P>> {
         AnvilProvider::from_future(
             AnvilInitializer::new(node_config.clone(), node_addresses)
                 .then(async |v| v.map(|i| (i.0, i.1, Some(i.2)))),
@@ -103,11 +105,11 @@ impl OpAngstromTestnet {
         .await
     }
 
-    pub async fn anvil_deployment(
-        mut provider: AnvilProvider<AnvilInitializer>,
+    pub async fn anvil_deployment<P: reth_node_types::NodePrimitives>(
+        mut provider: AnvilProvider<AnvilInitializer, P>,
         pool_keys: Vec<PartialConfigPoolKey>,
         ex: TaskExecutor
-    ) -> eyre::Result<(AnvilInstance, AnvilProvider<WalletProvider>, InitialTestnetState)> {
+    ) -> eyre::Result<(AnvilInstance, AnvilProvider<WalletProvider, P>, InitialTestnetState)> {
         let instance = provider._instance.take().unwrap();
 
         tracing::debug!(leader_address = ?provider.rpc_provider().default_signer_address());

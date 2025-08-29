@@ -48,6 +48,7 @@ reth-node-ethereum.workspace = true
 reth-node-types.workspace = true
 reth-optimism-primitives.workspace = true
 reth-primitives = { workspace = true, features = ["test-utils"] }
+reth-primitives-traits = { workspace = true, features = ["op"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-revm.workspace = true
 reth-tasks.workspace = true

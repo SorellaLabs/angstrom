@@ -12725,6 +12725,7 @@ dependencies = [
  "reth-node-types",
  "reth-optimism-primitives",
  "reth-primitives",
+ "reth-primitives-traits",
  "reth-provider",
  "reth-revm",
  "reth-tasks",

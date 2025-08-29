@@ -11,6 +11,8 @@ use alloy_primitives::Bytes;
 use alloy_rpc_types::{Header, Transaction};
 use angstrom_types::primitive::CHAIN_ID;
 use futures::{Stream, StreamExt, stream::FuturesOrdered};
+use reth_node_types::NodePrimitives;
+use reth_primitives::EthPrimitives;
 
 use super::{AnvilStateProvider, WalletProvider};
 use crate::{
@@ -19,17 +21,19 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct AnvilProvider<P> {
-    provider:           AnvilStateProvider<P>,
+pub struct AnvilProvider<P, PR: NodePrimitives = EthPrimitives> {
+    provider:           AnvilStateProvider<P, PR>,
     deployed_addresses: Option<DeployedAddresses>,
     pub _instance:      Option<AnvilInstance>
 }
-impl<P> AnvilProvider<P>
+
+impl<P, PR> AnvilProvider<P, PR>
 where
+    PR: NodePrimitives,
     P: WithWalletProvider
 {
     pub fn new(
-        provider: AnvilStateProvider<P>,
+        provider: AnvilStateProvider<P, PR>,
         anvil: Option<AnvilInstance>,
         deployed_addresses: Option<DeployedAddresses>
     ) -> Self {
@@ -60,7 +64,7 @@ where
         self.deployed_addresses
     }
 
-    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider> {
+    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider, PR> {
         AnvilProvider {
             provider:           self.provider.as_wallet_state_provider(),
             deployed_addresses: self.deployed_addresses,
@@ -68,7 +72,7 @@ where
         }
     }
 
-    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider> {
+    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider, PR> {
         self.provider.as_wallet_state_provider()
     }
 
@@ -80,11 +84,11 @@ where
         self.provider.provider().rpc_provider()
     }
 
-    pub fn provider(&self) -> &AnvilStateProvider<P> {
+    pub fn provider(&self) -> &AnvilStateProvider<P, PR> {
         &self.provider
     }
 
-    pub fn provider_mut(&mut self) -> &mut AnvilStateProvider<P> {
+    pub fn provider_mut(&mut self) -> &mut AnvilStateProvider<P, PR> {
         &mut self.provider
     }
 
@@ -155,7 +159,7 @@ where
     }
 }
 
-impl AnvilProvider<WalletProvider> {
+impl<PR: NodePrimitives> AnvilProvider<WalletProvider, PR> {
     pub async fn spawn_new_isolated() -> eyre::Result<Self> {
         let anvil = Anvil::new()
             .block_time(12)

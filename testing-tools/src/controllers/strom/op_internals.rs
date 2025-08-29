@@ -44,13 +44,13 @@ use crate::{
 /// Spawns data cleanser, uniswap manager, pricing, validator, pool manager,
 /// RPC server, AMM quoter, agents, and the rollup driver.
 pub struct OpNodeInternals<P> {
-    pub state_provider: AnvilProvider<P>
+    pub state_provider: AnvilProvider<P, OpPrimitives>
 }
 
 impl<P: WithWalletProvider> OpNodeInternals<P> {
     pub async fn new<G, F>(
         node_config: TestingNodeConfig<G>,
-        state_provider: AnvilProvider<P>,
+        state_provider: AnvilProvider<P, OpPrimitives>,
         strom_handles: RollupHandles,
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
@@ -61,7 +61,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         G: GlobalTestingConfig,
         F: for<'a> Fn(
                 &'a InitialTestnetState,
-                AgentConfig
+                AgentConfig<OpPrimitives>
             ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>
             + Clone
     {
@@ -284,7 +284,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         }
 
         // init agents
-        let agent_config = AgentConfig {
+        let agent_config: AgentConfig<OpPrimitives> = AgentConfig {
             uniswap_pools:  uniswap_pools.clone(),
             agent_id:       node_config.node_id,
             rpc_address:    addr,

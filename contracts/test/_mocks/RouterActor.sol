@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IUniV4, IPoolManager} from "../../src/interfaces/IUniV4.sol";
-import {BalanceDelta, toBalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
+import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";

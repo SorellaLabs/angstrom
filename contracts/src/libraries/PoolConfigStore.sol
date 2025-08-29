@@ -1,16 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {
-    ConfigEntry,
-    ConfigEntryLib,
-    ENTRY_SIZE,
-    KEY_MASK,
-    TICK_SPACING_OFFSET,
-    TICK_SPACING_MASK,
-    FEE_OFFSET,
-    FEE_MASK
-} from "../types/ConfigEntry.sol";
+import {ConfigEntry, ENTRY_SIZE, KEY_MASK} from "../types/ConfigEntry.sol";
 import {StoreKey} from "../types/StoreKey.sol";
 import {ConfigBuffer} from "../types/ConfigBuffer.sol";
 

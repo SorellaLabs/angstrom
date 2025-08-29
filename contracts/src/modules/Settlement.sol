@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import {UniConsumer} from "./UniConsumer.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
 
 import {DeltaTracker} from "../types/DeltaTracker.sol";
 import {AssetArray, Asset, FEE_SUMMARY_ENTRY_SIZE} from "../types/Asset.sol";

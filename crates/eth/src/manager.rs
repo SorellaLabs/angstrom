@@ -423,7 +423,11 @@ where
             "New Flashblock received"
         );
 
-        self.handle_commit(Arc::new(pending));
+        let pending = Arc::new(pending);
+        self.handle_commit(pending.clone());
+
+        self.cannon_sender
+            .send(StateNotification::FlashblockCommit { new: pending })
     }
 }
 

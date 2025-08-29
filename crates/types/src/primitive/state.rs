@@ -3,7 +3,7 @@ use std::sync::Arc;
 use reth_primitives::{EthPrimitives, NodePrimitives};
 use reth_provider::Chain;
 
-use crate::flashblocks::PendingChain;
+use crate::flashblocks::PendingFlashblock;
 
 /// A canonical chain state notification. This is extended from
 /// [CanonStateNotification](reth_provider::CanonStateNotification) to include
@@ -18,7 +18,7 @@ pub enum StateNotification<N: NodePrimitives = EthPrimitives> {
     /// The flashblock was committed.
     FlashblockCommit {
         /// The newly committed flashblock.
-        new: Arc<PendingChain>
+        new: Arc<PendingFlashblock>
     },
     /// A chain segment was reverted or reorged.
     ///

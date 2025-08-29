@@ -7017,6 +7017,7 @@ dependencies = [
  "pade",
  "reth",
  "reth-network-peers",
+ "reth-optimism-primitives",
  "reth-provider",
  "reth-tasks",
  "secp256k1 0.30.0",

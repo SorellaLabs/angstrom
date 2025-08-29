@@ -8,6 +8,7 @@ use angstrom_types::{
 };
 use futures::{Future, StreamExt, stream::FuturesUnordered};
 use jsonrpsee::http_client::HttpClient;
+use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{CanonStateSubscriptions, test_utils::NoopProvider};
 use reth_tasks::TaskExecutor;
 use testing_tools::{
@@ -44,7 +45,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
 
 fn end_to_end_agent<'a>(
     t: &'a InitialTestnetState,
-    agent_config: AgentConfig
+    agent_config: AgentConfig<OpPrimitives>
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting e2e agent");

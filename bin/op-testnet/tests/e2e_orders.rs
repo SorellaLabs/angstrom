@@ -13,6 +13,7 @@ use futures::{Future, StreamExt, stream::FuturesUnordered};
 use jsonrpsee::http_client::HttpClient;
 use op_testnet::cli::{init_tracing, testnet::TestnetCli};
 use pade::PadeDecode;
+use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{CanonStateSubscriptions, test_utils::NoopProvider};
 use reth_tasks::TaskExecutor;
 use testing_tools::{
@@ -26,7 +27,7 @@ use tracing::{Instrument, Level, span};
 
 fn internal_balance_agent<'a>(
     _: &'a InitialTestnetState,
-    agent_config: AgentConfig
+    agent_config: AgentConfig<OpPrimitives>
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting internal balance agent");
@@ -407,7 +408,7 @@ fn test_remove_add_pool() {
 
 fn add_remove_agent<'a>(
     _init: &'a InitialTestnetState,
-    agent_config: AgentConfig
+    agent_config: AgentConfig<OpPrimitives>
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting add remove agent");

@@ -26,6 +26,7 @@ jsonrpsee.workspace = true
 pade.workspace = true
 reth.workspace = true
 reth-network-peers.workspace = true
+reth-optimism-primitives.workspace = true
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tasks.workspace = true
 secp256k1.workspace = true

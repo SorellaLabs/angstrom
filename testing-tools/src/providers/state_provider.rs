@@ -15,7 +15,10 @@ use revm::{bytecode::Bytecode, state::AccountInfo};
 use tokio::sync::broadcast;
 use validation::common::db::BlockStateProviderFactory;
 
-use super::{RpcStateProvider, WalletProvider};
+use super::{
+    RpcStateProvider, WalletProvider,
+    compat::{rpc_block_to_pr_block, rpc_receipts_to_pr_receipts}
+};
 use crate::{
     mocks::canon_state::AnvilConsensusCanonStateNotification, providers::utils::async_to_sync,
     types::WithWalletProvider

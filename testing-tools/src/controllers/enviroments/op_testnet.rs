@@ -46,7 +46,7 @@ impl OpAngstromTestnet {
             + 'static,
         F: for<'a> Fn(
             &'a InitialTestnetState,
-            AgentConfig
+            AgentConfig<OpPrimitives>
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
         F: Clone
     {

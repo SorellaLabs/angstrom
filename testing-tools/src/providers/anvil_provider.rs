@@ -14,7 +14,10 @@ use futures::{Stream, StreamExt, stream::FuturesOrdered};
 use reth_node_types::NodePrimitives;
 use reth_primitives::EthPrimitives;
 
-use super::{AnvilStateProvider, WalletProvider};
+use super::{
+    AnvilStateProvider, WalletProvider,
+    compat::{rpc_block_to_pr_block, rpc_receipts_to_pr_receipts}
+};
 use crate::{
     contracts::anvil::WalletProviderRpc,
     types::{WithWalletProvider, initial_state::DeployedAddresses}
@@ -152,7 +155,7 @@ where
 
     pub async fn subscribe_blocks(
         &self
-    ) -> eyre::Result<impl Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + use<P>> {
+    ) -> eyre::Result<impl Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + use<P, PR>> {
         let stream = self.rpc_provider().subscribe_blocks().await?.into_stream();
 
         Ok(StreamBlockProvider::new(self.rpc_provider(), stream))

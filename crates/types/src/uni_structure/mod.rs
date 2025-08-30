@@ -23,6 +23,10 @@ impl BaselinePoolState {
         Self { liquidity, fee, block }
     }
 
+    pub fn tick_spacing(&self) -> i32 {
+        self.liquidity.tick_spacing
+    }
+
     pub fn block_number(&self) -> u64 {
         self.block
     }

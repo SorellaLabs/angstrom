@@ -8,11 +8,10 @@ use std::{
 use alloy::{
     eips::BlockId,
     network::Network,
-    primitives::{Address, B256, FixedBytes, U256, keccak256},
+    primitives::{Address, B256, FixedBytes, I256, U256, keccak256},
     providers::Provider,
     sol_types::SolValue
 };
-use alloy_primitives::I256;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use dashmap::DashMap;
 use itertools::Itertools;
@@ -950,7 +949,7 @@ impl AngstromBundle {
         let mut asset_builder = AssetBuilder::new();
 
         let orders_by_pool: HashMap<
-            alloy_primitives::FixedBytes<32>,
+            alloy::primitives::FixedBytes<32>,
             HashSet<OrderWithStorageData<AllOrders>>
         > = limit.iter().fold(HashMap::new(), |mut acc, x| {
             acc.entry(x.pool_id).or_default().insert(x.clone());

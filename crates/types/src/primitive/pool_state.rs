@@ -1,8 +1,7 @@
 use alloy::{
-    primitives::{FixedBytes, Log},
+    primitives::{Address, FixedBytes, Log, keccak256},
     sol_types::SolValue
 };
-use alloy_primitives::{Address, keccak256};
 
 use crate::contract_bindings::{
     angstrom::Angstrom,

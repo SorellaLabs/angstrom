@@ -1,6 +1,6 @@
 #[cfg(feature = "anvil")]
 use {
-    alloy_primitives::{Address, FixedBytes, U256},
+    alloy::primitives::{Address, FixedBytes, U256},
     angstrom_types::{
         contract_bindings::{
             angstrom::Angstrom::AngstromInstance, mintable_mock_erc_20::MintableMockERC20,
@@ -365,7 +365,7 @@ async fn use_raw_bundle() {
 
     let _pool_gate = PoolGateInstance::new(env.pool_gate(), env.provider());
 
-    let encoded = alloy_primitives::Bytes::from(raw_bundle(currency0, currency1).pade_encode());
+    let encoded = alloy::primitives::Bytes::from(raw_bundle(currency0, currency1).pade_encode());
     ang_instance.execute(encoded).run_safe().await.unwrap();
 }
 

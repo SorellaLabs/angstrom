@@ -16,7 +16,6 @@ angstrom-types.workspace = true
 clap.workspace = true
 eyre.workspace = true
 futures.workspace = true
-itertools.workspace = true
 matching-engine.workspace = true
 order-pool.workspace = true
 rand.workspace = true

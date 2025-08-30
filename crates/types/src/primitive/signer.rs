@@ -3,10 +3,9 @@ use std::ops::{Deref, DerefMut};
 use alloy::{
     consensus::{SignableTransaction, TypedTransaction},
     network::{Ethereum, NetworkWallet},
-    primitives::Signature,
+    primitives::{Address, Signature},
     signers::{Signer, SignerSync, local::PrivateKeySigner}
 };
-use alloy_primitives::Address;
 use hsm_signer::Pkcs11Signer;
 use k256::{
     ecdsa::{SigningKey, VerifyingKey},

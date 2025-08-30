@@ -1,4 +1,4 @@
-use alloy_primitives::Bytes;
+use alloy::primitives::Bytes;
 use rand::Rng;
 
 use super::RandomizerSized;

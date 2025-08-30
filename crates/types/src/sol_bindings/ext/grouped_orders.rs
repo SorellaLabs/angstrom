@@ -1,10 +1,9 @@
 use std::{hash::Hash, ops::Deref};
 
 use alloy::{
-    primitives::{Address, FixedBytes, TxHash, U256},
+    primitives::{Address, B256, FixedBytes, TxHash, U256},
     signers::Signature
 };
-use alloy_primitives::B256;
 use pade::PadeDecode;
 use serde::{Deserialize, Serialize};
 

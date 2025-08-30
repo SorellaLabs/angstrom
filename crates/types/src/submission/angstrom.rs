@@ -3,11 +3,10 @@ use std::fmt::Debug;
 use alloy::{
     eips::Encodable2718,
     network::TransactionBuilder,
-    primitives::Bytes,
+    primitives::{Address, Bytes, TxHash},
     providers::{Provider, RootProvider},
     rpc::client::ClientBuilder
 };
-use alloy_primitives::{Address, TxHash};
 use futures::stream::{StreamExt, iter};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};

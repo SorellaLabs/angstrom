@@ -1,8 +1,8 @@
 use alloy::{
     eips::Encodable2718,
+    primitives::{Address, TxHash},
     providers::{Provider, ProviderBuilder, RootProvider}
 };
-use alloy_primitives::{Address, TxHash};
 use futures::stream::{StreamExt, iter};
 
 use super::{

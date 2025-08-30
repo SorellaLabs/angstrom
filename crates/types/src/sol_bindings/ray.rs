@@ -4,8 +4,7 @@ use std::{
     sync::OnceLock
 };
 
-use alloy::primitives::{U256, U512, Uint, aliases::U320};
-use alloy_primitives::U160;
+use alloy::primitives::{U160, U256, U512, Uint, aliases::U320};
 use malachite::{
     Natural, Rational,
     num::{

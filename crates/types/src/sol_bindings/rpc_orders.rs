@@ -1,11 +1,10 @@
 use std::borrow::Cow;
 
 use alloy::{
-    primitives::{Address, B256, Bytes, keccak256},
+    primitives::{Address, B256, Bytes, I256, Signature, keccak256},
     sol,
     sol_types::{Eip712Domain, SolStruct}
 };
-use alloy_primitives::{I256, Signature};
 use eyre::eyre;
 use serde::{Deserialize, Serialize};
 
@@ -268,7 +267,7 @@ pub trait OmitOrderMeta: SolStruct {
 
     /// See [EIP-712 `signTypedData`](https://eips.ethereum.org/EIPS/eip-712#specification-of-the-eth_signtypeddata-json-rpc).
     #[inline]
-    fn no_meta_eip712_signing_prehash(&self, domain: &Eip712Domain) -> alloy_primitives::Bytes {
+    fn no_meta_eip712_signing_prehash(&self, domain: &Eip712Domain) -> alloy::primitives::Bytes {
         let mut digest_input = [0u8; 2 + 32 + 32];
         digest_input[0] = 0x19;
         digest_input[1] = 0x01;
@@ -287,7 +286,7 @@ impl OmitOrderMeta for TopOfBlockOrder {}
 
 #[cfg(test)]
 pub mod test {
-    use alloy_primitives::fixed_bytes;
+    use alloy::primitives::fixed_bytes;
 
     use super::*;
 

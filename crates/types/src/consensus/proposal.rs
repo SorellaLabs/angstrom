@@ -1,8 +1,7 @@
 use alloy::{
-    primitives::{Address, BlockNumber, U256},
+    primitives::{Address, B256, BlockNumber, U256, keccak256},
     signers::Signature
 };
-use alloy_primitives::{B256, keccak256};
 use bytes::Bytes;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};

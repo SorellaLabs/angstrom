@@ -7,12 +7,11 @@ use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     eips::eip1559::Eip1559Estimation,
     network::TransactionBuilder,
-    primitives::Address,
+    primitives::{Address, TxHash},
     providers::Provider,
     rpc::types::TransactionRequest,
     sol_types::SolCall
 };
-use alloy_primitives::TxHash;
 use angstrom::AngstromSubmitter;
 use futures::StreamExt;
 use mempool::MempoolSubmitter;

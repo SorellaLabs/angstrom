@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-use alloy::sol_types::SolValue;
-use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
+use alloy::{
+    primitives::{Address, B256, Bytes, U256, keccak256},
+    sol_types::SolValue
+};
 use reth::tasks::TaskExecutor;
 
 use crate::contract_bindings::angstrom::Angstrom::PoolKey;

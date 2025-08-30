@@ -2,10 +2,9 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, sync::OnceLock};
 
 use alloy::{
     dyn_abi::Eip712Domain,
-    primitives::{Address, aliases::U24},
+    primitives::{Address, ChainId, address, aliases::U24},
     sol
 };
-use alloy_primitives::{ChainId, address};
 
 use crate::contract_bindings::angstrom::Angstrom::PoolKey;
 

@@ -3,8 +3,7 @@ use std::{
     ops::{Add, Sub}
 };
 
-use alloy::primitives::U256;
-use alloy_primitives::I256;
+use alloy::primitives::{I256, U256};
 use eyre::eyre;
 use malachite::rounding_modes::RoundingMode;
 use tracing::debug;
@@ -369,7 +368,7 @@ impl From<PoolPrice<'_>> for U256 {
 
 #[cfg(test)]
 mod test {
-    use alloy_primitives::U160;
+    use alloy::primitives::U160;
 
     use crate::matching::{
         SqrtPriceX96,

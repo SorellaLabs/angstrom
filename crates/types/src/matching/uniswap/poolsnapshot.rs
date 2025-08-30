@@ -1,6 +1,6 @@
 use std::{fmt::Debug, slice::Iter};
 
-use alloy_primitives::{U160, U256, aliases::I24, utils::keccak256};
+use alloy::primitives::{U160, U256, aliases::I24, utils::keccak256};
 use eyre::{Context, OptionExt, eyre};
 use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio;

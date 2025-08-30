@@ -7,7 +7,7 @@ use std::{
 use alloy::{
     eips::Encodable2718,
     hex,
-    primitives::keccak256,
+    primitives::{Address, TxHash, keccak256},
     providers::{Provider, RootProvider},
     rpc::{
         client::ClientBuilder,
@@ -16,7 +16,6 @@ use alloy::{
     signers::Signer,
     transports::{TransportError, TransportErrorKind, TransportFut}
 };
-use alloy_primitives::{Address, TxHash};
 use futures::stream::{StreamExt, iter};
 use itertools::Itertools;
 use reth::rpc::types::mev::{EthBundleHash, EthSendBundle};

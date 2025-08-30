@@ -1,8 +1,7 @@
 //! extension functionality to sol types
 use std::{cmp::Ordering, fmt};
 
-use alloy::primitives::{Address, FixedBytes, TxHash, U256};
-use alloy_primitives::Signature;
+use alloy::primitives::{Address, FixedBytes, Signature, TxHash, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::{orders::OrderLocation, sol_bindings::Ray};

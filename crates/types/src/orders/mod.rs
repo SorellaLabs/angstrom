@@ -3,7 +3,7 @@ mod origin;
 use alloy::primitives::{Address, B256, Signature};
 pub mod orderpool;
 
-use alloy_primitives::{Bytes, I256};
+use alloy::primitives::{Bytes, I256};
 pub use fillstate::*;
 pub use orderpool::*;
 pub use origin::*;

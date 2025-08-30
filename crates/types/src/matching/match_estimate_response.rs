@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alloy_primitives::{FixedBytes, U256};
+use alloy::primitives::{FixedBytes, U256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use alloy_primitives::B256;
+use alloy::primitives::B256;
 
 #[derive(Debug, Clone)]
 pub struct ConsensusRoundOrderHashes {

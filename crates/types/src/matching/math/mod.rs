@@ -353,7 +353,7 @@ pub fn max_t1_for_t0(t0: u128, direction: Direction, price: Ray) -> u128 {
 
 #[cfg(test)]
 mod tests {
-    use alloy_primitives::{I256, U256};
+    use alloy::primitives::{I256, U256};
     use uniswap_v3_math::{swap_math::compute_swap_step, tick_math::MAX_TICK};
 
     use super::*;

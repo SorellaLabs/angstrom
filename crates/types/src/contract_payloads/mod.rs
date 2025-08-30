@@ -1,8 +1,7 @@
 use alloy::{
-    primitives::{Address, Bytes, FixedBytes, U256},
+    primitives::{Address, B256, Bytes, FixedBytes, U256, normalize_v},
     sol
 };
-use alloy_primitives::{B256, normalize_v};
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 

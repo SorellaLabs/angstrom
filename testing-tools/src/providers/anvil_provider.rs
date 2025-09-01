@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin, task::Poll};
 use alloy::{
     network::{Ethereum, EthereumWallet},
     node_bindings::{Anvil, AnvilInstance},
-    providers::{Provider, builder, ext::AnvilApi},
+    providers::{Network, Provider, builder, ext::AnvilApi},
     rpc::types::{Block, anvil::MineOptions},
     signers::local::PrivateKeySigner
 };
@@ -25,19 +25,20 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct AnvilProvider<P, PR: NodePrimitives = EthPrimitives> {
-    provider:           AnvilStateProvider<P, PR>,
+pub struct AnvilProvider<P, N: Network = Ethereum, PR: NodePrimitives = EthPrimitives> {
+    provider:           AnvilStateProvider<P, N, PR>,
     deployed_addresses: Option<DeployedAddresses>,
     pub _instance:      Option<AnvilInstance>
 }
 
-impl<P, PR> AnvilProvider<P, PR>
+impl<P, N, PR> AnvilProvider<P, N, PR>
 where
-    PR: NodePrimitives,
-    P: WithWalletProvider
+    P: WithWalletProvider + Provider<N>,
+    N: Network,
+    PR: NodePrimitives
 {
     pub fn new(
-        provider: AnvilStateProvider<P, PR>,
+        provider: AnvilStateProvider<P, N, PR>,
         anvil: Option<AnvilInstance>,
         deployed_addresses: Option<DeployedAddresses>
     ) -> Self {
@@ -48,7 +49,7 @@ where
         self.deployed_addresses
     }
 
-    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider, PR> {
+    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider, N, PR> {
         AnvilProvider {
             provider:           self.provider.as_wallet_state_provider(),
             deployed_addresses: self.deployed_addresses,
@@ -56,7 +57,7 @@ where
         }
     }
 
-    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider, PR> {
+    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider, N, PR> {
         self.provider.as_wallet_state_provider()
     }
 
@@ -68,11 +69,11 @@ where
         self.provider.provider().rpc_provider()
     }
 
-    pub fn provider(&self) -> &AnvilStateProvider<P, PR> {
+    pub fn provider(&self) -> &AnvilStateProvider<P, N, PR> {
         &self.provider
     }
 
-    pub fn provider_mut(&mut self) -> &mut AnvilStateProvider<P, PR> {
+    pub fn provider_mut(&mut self) -> &mut AnvilStateProvider<P, N, PR> {
         &mut self.provider
     }
 

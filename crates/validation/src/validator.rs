@@ -24,6 +24,8 @@ use crate::{
     }
 };
 
+const MIN_BASE_GAS_GWEI: u128 = 1;
+
 pub enum ValidationRequest {
     Order(OrderValidationRequest),
     /// does two sims, One to fetch total gas used. Second is once
@@ -166,10 +168,15 @@ where
                     (false, false) => TOB_GAS
                 };
 
-                let Some(mut amount) = self
-                    .utils
-                    .token_pricing_ref()
-                    .get_eth_conversion_price(token_0, token_1, gas_in_wei)
+                let token_pricing = self.utils.token_pricing_ref();
+
+                if token_pricing.to_snapshot().1 > MIN_BASE_GAS_GWEI {
+                    let _ = sender.send(Err(eyre::eyre!("base gas wei too high")));
+                    return;
+                }
+
+                let Some(mut amount) =
+                    token_pricing.get_eth_conversion_price(token_0, token_1, gas_in_wei)
                 else {
                     let _ = sender.send(Err(eyre::eyre!("not valid token pair")));
                     return;

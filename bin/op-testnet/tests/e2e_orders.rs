@@ -408,7 +408,7 @@ fn test_remove_add_pool() {
 
 fn add_remove_agent<'a>(
     _init: &'a InitialTestnetState,
-    agent_config: AgentConfig<OpPrimitives>
+    agent_config: AgentConfig<Optimism, OpPrimitives>
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting add remove agent");

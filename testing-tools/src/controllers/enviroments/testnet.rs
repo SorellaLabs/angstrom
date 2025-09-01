@@ -1,6 +1,7 @@
 use std::{cell::Cell, collections::HashSet, pin::Pin, rc::Rc};
 
 use alloy::{
+    network::Ethereum,
     node_bindings::AnvilInstance,
     providers::{WalletProvider as _, ext::AnvilApi}
 };
@@ -200,8 +201,8 @@ where
     async fn spawn_provider(
         node_config: TestingNodeConfig<TestnetConfig>,
         node_addresses: Vec<alloy::primitives::Address>
-    ) -> eyre::Result<AnvilProvider<AnvilInitializer, EthPrimitives>> {
-        AnvilProvider::<AnvilInitializer, EthPrimitives>::from_future(
+    ) -> eyre::Result<AnvilProvider<AnvilInitializer, Ethereum, EthPrimitives>> {
+        AnvilProvider::<AnvilInitializer, Ethereum, EthPrimitives>::from_future(
             AnvilInitializer::new(node_config.clone(), node_addresses)
                 .then(async |v| v.map(|i| (i.0, i.1, Some(i.2)))),
             true

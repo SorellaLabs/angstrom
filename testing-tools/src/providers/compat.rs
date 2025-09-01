@@ -1,7 +1,5 @@
 use alloy_rpc_types::{Block, TransactionReceipt};
-use op_alloy_rpc_types::OpTransactionReceipt;
 use reth_node_types::NodePrimitives;
-use reth_optimism_primitives::OpPrimitives;
 use reth_primitives::EthPrimitives;
 
 /// Convert alloy RPC Block to generic NodePrimitives Block using try_into

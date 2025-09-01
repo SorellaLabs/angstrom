@@ -62,7 +62,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         G: GlobalTestingConfig,
         F: for<'a> Fn(
                 &'a InitialTestnetState,
-                AgentConfig<OpPrimitives>
+                AgentConfig<Optimism, OpPrimitives>
             ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>
             + Clone
     {

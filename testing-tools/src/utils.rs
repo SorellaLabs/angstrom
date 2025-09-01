@@ -1,5 +1,6 @@
 use std::{future::Future, path::Path, pin::Pin, sync::Arc};
 
+use alloy::providers::Network;
 use angstrom_types::testnet::InitialTestnetState;
 use reth_chainspec::MAINNET;
 use reth_db::DatabaseEnv;
@@ -33,9 +34,9 @@ pub fn workspace_dir() -> std::path::PathBuf {
     cargo_path.parent().unwrap().to_path_buf()
 }
 
-pub fn noop_agent<'a, P: NodePrimitives>(
+pub fn noop_agent<'a, N: Network, P: NodePrimitives>(
     _: &'a InitialTestnetState,
-    _: AgentConfig<P>
+    _: AgentConfig<N, P>
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async { eyre::Ok(()) })
 }

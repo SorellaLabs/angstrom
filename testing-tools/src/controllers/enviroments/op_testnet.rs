@@ -7,6 +7,7 @@ use alloy::{
 };
 use angstrom_types::{primitive::AngstromSigner, testnet::InitialTestnetState};
 use futures::{Future, FutureExt};
+use op_alloy_network::Optimism;
 use reth_chainspec::Hardforks;
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
@@ -45,7 +46,7 @@ impl OpAngstromTestnet {
             + 'static,
         F: for<'a> Fn(
             &'a InitialTestnetState,
-            AgentConfig<OpPrimitives>
+            AgentConfig<Optimism, OpPrimitives>
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
         F: Clone
     {

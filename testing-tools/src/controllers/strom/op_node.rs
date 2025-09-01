@@ -4,6 +4,7 @@ use alloy::signers::local::PrivateKeySigner;
 use angstrom_cli::handles::RollupHandles;
 use angstrom_types::{primitive::AngstromSigner, testnet::InitialTestnetState};
 use futures::Future;
+use op_alloy_network::Optimism;
 use reth_optimism_primitives::OpPrimitives;
 use reth_tasks::TaskExecutor;
 
@@ -16,7 +17,7 @@ use crate::{
 
 /// Minimal OP testnet node: no custom networking or consensus.
 pub struct OpTestnetNode<P, G> {
-    state_provider: AnvilProvider<P, OpPrimitives>,
+    state_provider: AnvilProvider<P, Optimism, OpPrimitives>,
     _init_state:    InitialTestnetState,
     config:         TestingNodeConfig<G>,
     /// Internal shutdown signal used to gracefully stop background tasks
@@ -30,7 +31,7 @@ where
 {
     pub async fn new<F>(
         node_config: TestingNodeConfig<G>,
-        state_provider: AnvilProvider<P, OpPrimitives>,
+        state_provider: AnvilProvider<P, Optimism, OpPrimitives>,
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
         executor: TaskExecutor
@@ -38,7 +39,7 @@ where
     where
         F: for<'a> Fn(
                 &'a InitialTestnetState,
-                AgentConfig<OpPrimitives>
+                AgentConfig<Optimism, OpPrimitives>
             ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>
             + Clone
     {
@@ -68,7 +69,7 @@ where
         })
     }
 
-    pub fn state_provider(&self) -> &AnvilProvider<P, OpPrimitives> {
+    pub fn state_provider(&self) -> &AnvilProvider<P, Optimism, OpPrimitives> {
         &self.state_provider
     }
 

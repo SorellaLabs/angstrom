@@ -27,7 +27,7 @@ use tracing::{Instrument, Level, span};
 
 fn internal_balance_agent<'a>(
     _: &'a InitialTestnetState,
-    agent_config: AgentConfig<OpPrimitives>
+    agent_config: AgentConfig<Optimism, OpPrimitives>
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting internal balance agent");

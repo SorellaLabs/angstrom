@@ -45,7 +45,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
 
 fn end_to_end_agent<'a>(
     t: &'a InitialTestnetState,
-    agent_config: AgentConfig<OpPrimitives>
+    agent_config: AgentConfig<Optimism, OpPrimitives>
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting e2e agent");

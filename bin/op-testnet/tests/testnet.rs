@@ -11,6 +11,7 @@ use angstrom_types::{
     primitive::{ANGSTROM_ADDRESS, AngstromAddressConfig, CHAIN_ID},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty
 };
+use op_alloy_network::Optimism;
 use op_testnet::cli::{init_tracing, testnet::TestnetCli};
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::test_utils::NoopProvider;
@@ -32,7 +33,7 @@ fn testnet_deploy() {
         let testnet = OpAngstromTestnet::spawn_testnet(
             NoopProvider::default(),
             cli.make_config().unwrap(),
-            vec![noop_agent::<OpPrimitives>],
+            vec![noop_agent::<Optimism, OpPrimitives>],
             ctx.task_executor
         )
         .await;

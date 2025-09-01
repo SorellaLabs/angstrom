@@ -2,6 +2,7 @@ use std::pin::Pin;
 
 use angstrom_types::testnet::InitialTestnetState;
 use futures::Future;
+use op_alloy_network::Optimism;
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TaskExecutor;
@@ -18,7 +19,7 @@ pub(crate) async fn run_testnet(executor: TaskExecutor, cli: TestnetCli) -> eyre
     let testnet = OpAngstromTestnet::spawn_testnet(
         NoopProvider::default(),
         config,
-        vec![noop_agent::<OpPrimitives>],
+        vec![noop_agent::<Optimism, OpPrimitives>],
         executor.clone()
     )
     .await?;

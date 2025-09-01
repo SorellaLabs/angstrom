@@ -19,6 +19,7 @@ use angstrom_types::{
 use futures::{Future, Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
+use op_alloy_network::Optimism;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use pool_manager::rollup::RollupPoolManager;
 use reth_optimism_primitives::OpPrimitives;
@@ -44,13 +45,13 @@ use crate::{
 /// Spawns data cleanser, uniswap manager, pricing, validator, pool manager,
 /// RPC server, AMM quoter, agents, and the rollup driver.
 pub struct OpNodeInternals<P> {
-    pub state_provider: AnvilProvider<P, OpPrimitives>
+    pub state_provider: AnvilProvider<P, Optimism, OpPrimitives>
 }
 
 impl<P: WithWalletProvider> OpNodeInternals<P> {
     pub async fn new<G, F>(
         node_config: TestingNodeConfig<G>,
-        state_provider: AnvilProvider<P, OpPrimitives>,
+        state_provider: AnvilProvider<P, Optimism, OpPrimitives>,
         strom_handles: RollupHandles,
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
@@ -284,7 +285,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         }
 
         // init agents
-        let agent_config: AgentConfig<OpPrimitives> = AgentConfig {
+        let agent_config: AgentConfig<Optimism, OpPrimitives> = AgentConfig {
             uniswap_pools:  uniswap_pools.clone(),
             agent_id:       node_config.node_id,
             rpc_address:    addr,

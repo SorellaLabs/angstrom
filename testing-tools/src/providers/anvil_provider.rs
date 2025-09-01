@@ -154,14 +154,14 @@ where
 
     pub async fn subscribe_blocks(
         &self
-    ) -> eyre::Result<impl Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + use<P, PR>> {
+    ) -> eyre::Result<impl Stream<Item = (u64, Vec<Transaction>)> + Unpin + Send + 'static> {
         let stream = self.rpc_provider().subscribe_blocks().await?.into_stream();
 
         Ok(StreamBlockProvider::new(self.rpc_provider(), stream))
     }
 }
 
-impl<PR: NodePrimitives> AnvilProvider<WalletProvider, PR> {
+impl AnvilProvider<WalletProvider, Ethereum, EthPrimitives> {
     pub async fn spawn_new_isolated() -> eyre::Result<Self> {
         let anvil = Anvil::new()
             .block_time(12)
@@ -192,11 +192,12 @@ impl<PR: NodePrimitives> AnvilProvider<WalletProvider, PR> {
     }
 }
 
-impl<P, PR> AnvilProvider<P, PR>
+impl<P, N, PR> AnvilProvider<P, N, PR>
 where
     PR: NodePrimitives,
-    P: WithWalletProvider,
-    AnvilStateProvider<WalletProvider, PR>: StartMonitor
+    N: Network,
+    P: WithWalletProvider + Provider<N>,
+    AnvilStateProvider<WalletProvider, N, PR>: StartMonitor
 {
     pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
     where

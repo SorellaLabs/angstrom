@@ -11,7 +11,11 @@ mod block_provider;
 pub mod utils;
 pub use block_provider::*;
 mod initializer;
-use alloy::{node_bindings::AnvilInstance, signers::local::PrivateKeySigner};
+use alloy::{
+    node_bindings::AnvilInstance,
+    providers::{Network, RootProvider},
+    signers::local::PrivateKeySigner
+};
 pub use initializer::*;
 pub mod compat;
 
@@ -68,5 +72,15 @@ impl WithWalletProvider for WalletProvider {
 
     fn rpc_provider(&self) -> WalletProviderRpc {
         self.provider.clone()
+    }
+}
+
+impl<N> alloy::providers::Provider<N> for WalletProvider
+where
+    N: Network,
+    WalletProviderRpc: alloy::providers::Provider<N>
+{
+    fn root(&self) -> &RootProvider<N> {
+        self.provider.root()
     }
 }

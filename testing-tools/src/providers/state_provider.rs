@@ -35,15 +35,13 @@ pub struct AnvilStateProvider<P, N: Network = Ethereum, PR: NodePrimitives = Eth
     _phantom:           PhantomData<N>
 }
 
-impl<P: WithWalletProvider + Provider<N>, N: Network, PR: NodePrimitives> SetBlock
+impl<P: WithWalletProvider, N: Network, PR: NodePrimitives> SetBlock
     for AnvilStateProvider<P, N, PR>
 {
     fn set_block(&self, _: u64) {}
 }
 
-impl<P: WithWalletProvider + Provider<N>, N: Network, PR: NodePrimitives>
-    AnvilStateProvider<P, N, PR>
-{
+impl<P: WithWalletProvider, N: Network, PR: NodePrimitives> AnvilStateProvider<P, N, PR> {
     pub fn new(provider: P) -> Self {
         Self {
             provider,

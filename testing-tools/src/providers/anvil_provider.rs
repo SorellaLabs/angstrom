@@ -33,7 +33,7 @@ pub struct AnvilProvider<P, N: Network = Ethereum, PR: NodePrimitives = EthPrimi
 
 impl<P, N, PR> AnvilProvider<P, N, PR>
 where
-    P: WithWalletProvider + Provider<N>,
+    P: WithWalletProvider,
     N: Network,
     PR: NodePrimitives
 {
@@ -196,7 +196,7 @@ impl<P, N, PR> AnvilProvider<P, N, PR>
 where
     PR: NodePrimitives,
     N: Network,
-    P: WithWalletProvider + Provider<N>,
+    P: WithWalletProvider,
     AnvilStateProvider<WalletProvider, N, PR>: StartMonitor
 {
     pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>

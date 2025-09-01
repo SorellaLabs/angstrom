@@ -28,7 +28,7 @@ futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
 matching-engine.workspace = true
-op-alloy-consensus.workspace = true
+op-alloy-consensus = { workspace = true, features = ["alloy-compat"] }
 op-alloy-network.workspace = true
 op-alloy-rpc-types.workspace = true
 order-pool.workspace = true

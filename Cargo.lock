@@ -315,7 +315,7 @@ dependencies = [
  "alloy-sol-types",
  "auto_impl",
  "derive_more",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "op-revm",
  "revm",
  "thiserror 2.0.16",
@@ -448,7 +448,7 @@ dependencies = [
  "alloy-op-hardforks",
  "alloy-primitives",
  "auto_impl",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "op-revm",
  "revm",
 ]
@@ -3346,7 +3346,7 @@ dependencies = [
  "cast",
  "ciborium",
  "clap",
- "criterion-plot 0.5.0",
+ "criterion-plot",
  "csv",
  "is-terminal",
  "itertools 0.10.5",
@@ -3364,29 +3364,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "criterion"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1c047a62b0cc3e145fa84415a3191f628e980b194c2755aa12300a4e6cbd928"
-dependencies = [
- "anes",
- "cast",
- "ciborium",
- "clap",
- "criterion-plot 0.6.0",
- "itertools 0.13.0",
- "num-traits",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde",
- "serde_json",
- "tinytemplate",
- "walkdir",
-]
-
-[[package]]
 name = "criterion-plot"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3394,16 +3371,6 @@ checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
  "itertools 0.10.5",
-]
-
-[[package]]
-name = "criterion-plot"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b1bcc0dc7dfae599d84ad0b1a55f80cde8af3725da8313b528da95ef783e338"
-dependencies = [
- "cast",
- "itertools 0.13.0",
 ]
 
 [[package]]
@@ -6368,8 +6335,7 @@ dependencies = [
  "alloy-primitives",
  "angstrom-types",
  "base64 0.22.1",
- "criterion 0.5.1",
- "criterion 0.7.0",
+ "criterion",
  "eyre",
  "futures",
  "futures-util",
@@ -7013,24 +6979,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "op-alloy-consensus"
-version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9ade20c592484ba1ea538006e0454284174447a3adf9bb59fa99ed512f95493"
-dependencies = [
- "alloy-consensus",
- "alloy-eips",
- "alloy-network",
- "alloy-primitives",
- "alloy-rlp",
- "alloy-rpc-types-eth",
- "alloy-serde",
- "derive_more",
- "serde",
- "thiserror 2.0.16",
-]
-
-[[package]]
 name = "op-alloy-flz"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7048,24 +6996,8 @@ dependencies = [
  "alloy-provider",
  "alloy-rpc-types-eth",
  "alloy-signer",
- "op-alloy-consensus 0.18.14",
- "op-alloy-rpc-types 0.18.14",
-]
-
-[[package]]
-name = "op-alloy-network"
-version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84741a798124ceb43979d70db654039937a00979b1341fa8bfdc48473bbd52bf"
-dependencies = [
- "alloy-consensus",
- "alloy-network",
- "alloy-primitives",
- "alloy-provider",
- "alloy-rpc-types-eth",
- "alloy-signer",
- "op-alloy-consensus 0.19.1",
- "op-alloy-rpc-types 0.19.1",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types",
 ]
 
 [[package]]
@@ -7091,26 +7023,7 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-serde",
  "derive_more",
- "op-alloy-consensus 0.18.14",
- "serde",
- "serde_json",
- "thiserror 2.0.16",
-]
-
-[[package]]
-name = "op-alloy-rpc-types"
-version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9076d4fcb8e260cec8ad01cd155200c0dbb562e62adb553af245914f30854e29"
-dependencies = [
- "alloy-consensus",
- "alloy-eips",
- "alloy-network-primitives",
- "alloy-primitives",
- "alloy-rpc-types-eth",
- "alloy-serde",
- "derive_more",
- "op-alloy-consensus 0.19.1",
+ "op-alloy-consensus",
  "serde",
  "serde_json",
  "thiserror 2.0.16",
@@ -7131,7 +7044,7 @@ dependencies = [
  "derive_more",
  "ethereum_ssz",
  "ethereum_ssz_derive",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "serde",
  "snap",
  "thiserror 2.0.16",
@@ -8653,7 +8566,7 @@ dependencies = [
  "arbitrary",
  "bytes",
  "modular-bitfield",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "reth-codecs-derive",
  "reth-zstd-compressors",
  "serde",
@@ -10022,8 +9935,8 @@ dependencies = [
  "alloy-primitives",
  "derive_more",
  "miniz_oxide",
- "op-alloy-consensus 0.18.14",
- "op-alloy-rpc-types 0.18.14",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types",
  "paste",
  "reth-chainspec",
  "reth-ethereum-forks",
@@ -10050,7 +9963,7 @@ dependencies = [
  "derive_more",
  "eyre",
  "futures-util",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "reth-chainspec",
  "reth-cli",
  "reth-cli-commands",
@@ -10119,7 +10032,7 @@ dependencies = [
  "alloy-evm",
  "alloy-op-evm",
  "alloy-primitives",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "op-revm",
  "reth-chainspec",
  "reth-evm",
@@ -10157,7 +10070,7 @@ dependencies = [
  "alloy-rpc-types-eth",
  "clap",
  "eyre",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "op-alloy-rpc-types-engine",
  "op-revm",
  "reth-chainspec",
@@ -10203,7 +10116,7 @@ dependencies = [
  "alloy-rpc-types-debug",
  "alloy-rpc-types-engine",
  "derive_more",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "op-alloy-rpc-types-engine",
  "reth-basic-payload-builder",
  "reth-chain-state",
@@ -10242,7 +10155,7 @@ dependencies = [
  "arbitrary",
  "bytes",
  "modular-bitfield",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "reth-codecs",
  "reth-primitives-traits",
  "reth-zstd-compressors",
@@ -10272,10 +10185,10 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "metrics 0.24.2",
- "op-alloy-consensus 0.18.14",
- "op-alloy-network 0.18.14",
+ "op-alloy-consensus",
+ "op-alloy-network",
  "op-alloy-rpc-jsonrpsee",
- "op-alloy-rpc-types 0.18.14",
+ "op-alloy-rpc-types",
  "op-alloy-rpc-types-engine",
  "op-revm",
  "reqwest",
@@ -10339,9 +10252,9 @@ dependencies = [
  "derive_more",
  "futures-util",
  "metrics 0.24.2",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "op-alloy-flz",
- "op-alloy-rpc-types 0.18.14",
+ "op-alloy-rpc-types",
  "op-revm",
  "parking_lot",
  "reth-chain-state",
@@ -10464,7 +10377,7 @@ dependencies = [
  "derive_more",
  "modular-bitfield",
  "once_cell",
- "op-alloy-consensus 0.18.14",
+ "op-alloy-consensus",
  "proptest",
  "proptest-arbitrary-interop",
  "rayon",
@@ -10777,9 +10690,9 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-signer",
  "jsonrpsee-types",
- "op-alloy-consensus 0.18.14",
- "op-alloy-network 0.18.14",
- "op-alloy-rpc-types 0.18.14",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "op-alloy-rpc-types",
  "op-revm",
  "reth-ethereum-primitives",
  "reth-evm",
@@ -12902,9 +12815,9 @@ dependencies = [
  "itertools 0.14.0",
  "jsonrpsee",
  "matching-engine",
- "op-alloy-consensus 0.19.1",
- "op-alloy-network 0.19.1",
- "op-alloy-rpc-types 0.19.1",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "op-alloy-rpc-types",
  "order-pool",
  "pade",
  "parking_lot",

@@ -1,4 +1,5 @@
 use alloy_rpc_types::{Block, TransactionReceipt};
+use op_alloy_rpc_types::OpTransactionReceipt;
 use reth_node_types::NodePrimitives;
 use reth_optimism_primitives::OpPrimitives;
 use reth_primitives::EthPrimitives;
@@ -7,7 +8,7 @@ use reth_primitives::EthPrimitives;
 pub fn rpc_block_to_pr_block<PR: NodePrimitives>(block: &Block) -> eyre::Result<PR::Block>
 where
     PR::Block: TryFrom<Block>,
-    <PR::Block as TryFrom<Block>>::Error: std::fmt::Debug,
+    <PR::Block as TryFrom<Block>>::Error: std::fmt::Debug
 {
     block
         .clone()
@@ -17,12 +18,12 @@ where
 
 /// Convert alloy RPC receipts to generic NodePrimitives receipts using try_into
 pub fn rpc_receipts_to_pr_receipts<PR: NodePrimitives>(
-    receipts: Vec<TransactionReceipt>,
+    receipts: Vec<TransactionReceipt>
 ) -> eyre::Result<Vec<PR::Receipt>>
 where
     PR::Receipt: TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>,
     <PR::Receipt as TryFrom<alloy_rpc_types::ReceiptEnvelope<alloy_rpc_types::Log>>>::Error:
-        std::fmt::Debug,
+        std::fmt::Debug
 {
     receipts
         .into_iter()
@@ -37,7 +38,7 @@ where
 
 /// Convert alloy RPC Block to EthPrimitives Block
 pub fn rpc_block_to_eth_block(
-    block: &Block,
+    block: &Block
 ) -> eyre::Result<<EthPrimitives as NodePrimitives>::Block> {
     block
         .clone()
@@ -47,7 +48,7 @@ pub fn rpc_block_to_eth_block(
 
 /// Convert alloy RPC receipts to EthPrimitives receipts
 pub fn rpc_receipts_to_eth_receipts(
-    receipts: Vec<TransactionReceipt>,
+    receipts: Vec<TransactionReceipt>
 ) -> eyre::Result<Vec<<EthPrimitives as NodePrimitives>::Receipt>> {
     receipts
         .into_iter()
@@ -62,9 +63,10 @@ pub fn rpc_receipts_to_eth_receipts(
         .collect()
 }
 
+/*
 /// Convert alloy RPC Block to EthPrimitives Block
 pub fn rpc_block_to_op_block(
-    block: &Block,
+    block: &Block
 ) -> eyre::Result<<OpPrimitives as NodePrimitives>::Block> {
     block
         .clone()
@@ -74,7 +76,7 @@ pub fn rpc_block_to_op_block(
 
 /// Convert alloy RPC receipts to EthPrimitives receipts
 pub fn rpc_receipts_to_op_receipts(
-    receipts: Vec<TransactionReceipt>,
+    receipts: Vec<OpTransactionReceipt>
 ) -> eyre::Result<Vec<<OpPrimitives as NodePrimitives>::Receipt>> {
     receipts
         .into_iter()
@@ -88,3 +90,5 @@ pub fn rpc_receipts_to_op_receipts(
         })
         .collect()
 }
+
+ */

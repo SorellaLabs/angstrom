@@ -15,6 +15,8 @@ use crate::{
     types::{GlobalTestingConfig, WithWalletProvider, config::TestingNodeConfig}
 };
 
+pub type OpWalletNode<G> = OpTestnetNode<WalletProvider<Optimism>, G>;
+
 /// Minimal OP testnet node: no custom networking or consensus.
 pub struct OpTestnetNode<P, G> {
     state_provider: AnvilProvider<P, Optimism, OpPrimitives>,
@@ -26,7 +28,7 @@ pub struct OpTestnetNode<P, G> {
 
 impl<P, G> OpTestnetNode<P, G>
 where
-    P: WithWalletProvider,
+    P: WithWalletProvider<Optimism>,
     G: GlobalTestingConfig
 {
     pub async fn new<F>(
@@ -92,6 +94,3 @@ where
         self.shutdown_tx.clone()
     }
 }
-
-// Convenience alias for OP Angstrom use-site
-pub type OpWalletNode<G> = OpTestnetNode<WalletProvider, G>;

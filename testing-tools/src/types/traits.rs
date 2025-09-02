@@ -1,12 +1,16 @@
 use std::fmt::Debug;
 
+use alloy::network::{Ethereum, EthereumWallet, Network, NetworkWallet};
+
 use super::{config::TestingConfigKind, initial_state::InitialStateConfig};
 use crate::{contracts::anvil::WalletProviderRpc, providers::WalletProvider};
 
-pub trait WithWalletProvider: Send + Sync + 'static {
-    fn wallet_provider(&self) -> WalletProvider;
+pub trait WithWalletProvider<N: Network = Ethereum, W: NetworkWallet<N> + Clone = EthereumWallet>:
+    Send + Sync + 'static
+{
+    fn wallet_provider(&self) -> WalletProvider<N, W>;
 
-    fn rpc_provider(&self) -> WalletProviderRpc;
+    fn rpc_provider(&self) -> WalletProviderRpc<N, W>;
 }
 
 pub trait GlobalTestingConfig: Debug + Clone + Send + Sync {

@@ -25,7 +25,7 @@ use crate::{
 };
 
 pub struct OpAngstromTestnet {
-    pub node:            OpTestnetNode<WalletProvider, OpTestnetConfig>,
+    pub node:            OpTestnetNode<WalletProvider<Optimism>, OpTestnetConfig>,
     pub _anvil_instance: AnvilInstance
 }
 
@@ -60,7 +60,7 @@ impl OpAngstromTestnet {
         let provider =
             Self::spawn_provider::<OpPrimitives>(node_config.clone(), node_addresses).await?;
         let (anvil_instance, provider, initial_state) =
-            Self::anvil_deployment::<OpPrimitives>(provider, pool_keys, ex.clone()).await?;
+            Self::anvil_deployment(provider, pool_keys, ex.clone()).await?;
 
         // Create single testnet node
         let node = OpTestnetNode::new(node_config, provider, initial_state, agents, ex).await?;
@@ -74,7 +74,9 @@ impl OpAngstromTestnet {
         Ok(())
     }
 
-    pub fn state_provider(&self) -> &AnvilProvider<WalletProvider, Optimism, OpPrimitives> {
+    pub fn state_provider(
+        &self
+    ) -> &AnvilProvider<WalletProvider<Optimism>, Optimism, OpPrimitives> {
         self.node.state_provider()
     }
 
@@ -96,22 +98,22 @@ impl OpAngstromTestnet {
     async fn spawn_provider<P: reth_node_types::NodePrimitives>(
         node_config: TestingNodeConfig<OpTestnetConfig>,
         node_addresses: Vec<alloy::primitives::Address>
-    ) -> eyre::Result<AnvilProvider<AnvilInitializer, Optimism, OpPrimitives>> {
-        AnvilProvider::<AnvilInitializer, Optimism, OpPrimitives>::from_future(
-            AnvilInitializer::new(node_config.clone(), node_addresses)
+    ) -> eyre::Result<AnvilProvider<AnvilInitializer<Optimism>, Optimism, OpPrimitives>> {
+        AnvilProvider::<AnvilInitializer<Optimism>, Optimism, OpPrimitives>::from_future(
+            AnvilInitializer::<Optimism>::new(node_config.clone(), node_addresses)
                 .then(async |v| v.map(|i| (i.0, i.1, Some(i.2)))),
             true
         )
         .await
     }
 
-    pub async fn anvil_deployment<P: reth_node_types::NodePrimitives>(
-        mut provider: AnvilProvider<AnvilInitializer, Optimism, P>,
+    pub async fn anvil_deployment(
+        mut provider: AnvilProvider<AnvilInitializer<Optimism>, Optimism, OpPrimitives>,
         pool_keys: Vec<PartialConfigPoolKey>,
         ex: TaskExecutor
     ) -> eyre::Result<(
         AnvilInstance,
-        AnvilProvider<WalletProvider, Optimism, P>,
+        AnvilProvider<WalletProvider<Optimism>, Optimism, OpPrimitives>,
         InitialTestnetState
     )> {
         let instance = provider._instance.take().unwrap();

@@ -1,4 +1,5 @@
 use alloy::{
+    network::{Ethereum, EthereumWallet, Network, NetworkWallet},
     node_bindings::AnvilInstance,
     primitives::{
         Address,
@@ -40,8 +41,8 @@ use crate::{
     }
 };
 
-pub struct AnvilInitializer {
-    provider:             WalletProvider,
+pub struct AnvilInitializer<N: Network = Ethereum, W: NetworkWallet<N> + Clone = EthereumWallet> {
+    provider:             WalletProvider<N, W>,
     angstrom_env:         AngstromEnv<UniswapEnv<WalletProvider>>,
     controller_v1:        ControllerV1Instance<WalletProviderRpc>,
     angstrom:             AngstromInstance<WalletProviderRpc>,
@@ -50,7 +51,7 @@ pub struct AnvilInitializer {
     initial_state_config: InitialStateConfig
 }
 
-impl AnvilInitializer {
+impl<N: Network> AnvilInitializer<N> {
     pub async fn new<G: GlobalTestingConfig>(
         config: TestingNodeConfig<G>,
         nodes: Vec<Address>
@@ -101,7 +102,7 @@ impl AnvilInitializer {
         Ok((this, anvil, deployed_addresses))
     }
 
-    pub fn new_existing<G: GlobalTestingConfig, P: WithWalletProvider>(
+    pub fn new_existing<G: GlobalTestingConfig, P: WithWalletProvider<N>>(
         provider: &AnvilProvider<P>,
         config: TestingNodeConfig<G>
     ) -> Self {
@@ -463,12 +464,12 @@ impl AnvilInitializer {
     }
 }
 
-impl WithWalletProvider for AnvilInitializer {
-    fn wallet_provider(&self) -> WalletProvider {
+impl<N: Network> WithWalletProvider<N> for AnvilInitializer<N> {
+    fn wallet_provider(&self) -> WalletProvider<N> {
         self.provider.clone()
     }
 
-    fn rpc_provider(&self) -> WalletProviderRpc {
+    fn rpc_provider(&self) -> WalletProviderRpc<N> {
         self.provider.provider.clone()
     }
 }

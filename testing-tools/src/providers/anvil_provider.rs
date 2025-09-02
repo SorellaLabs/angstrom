@@ -33,7 +33,7 @@ pub struct AnvilProvider<P, N: Network = Ethereum, PR: NodePrimitives = EthPrimi
 
 impl<P, N, PR> AnvilProvider<P, N, PR>
 where
-    P: WithWalletProvider,
+    P: WithWalletProvider<N>,
     N: Network,
     PR: NodePrimitives
 {
@@ -49,7 +49,7 @@ where
         self.deployed_addresses
     }
 
-    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider, N, PR> {
+    pub fn into_state_provider(&mut self) -> AnvilProvider<WalletProvider<N>, N, PR> {
         AnvilProvider {
             provider:           self.provider.as_wallet_state_provider(),
             deployed_addresses: self.deployed_addresses,
@@ -57,15 +57,15 @@ where
         }
     }
 
-    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider, N, PR> {
+    pub fn state_provider(&self) -> AnvilStateProvider<WalletProvider<N>, N, PR> {
         self.provider.as_wallet_state_provider()
     }
 
-    pub fn wallet_provider(&self) -> WalletProvider {
+    pub fn wallet_provider(&self) -> WalletProvider<N> {
         self.provider.provider().wallet_provider()
     }
 
-    pub fn rpc_provider(&self) -> WalletProviderRpc {
+    pub fn rpc_provider(&self) -> WalletProviderRpc<N> {
         self.provider.provider().rpc_provider()
     }
 
@@ -162,6 +162,7 @@ where
 }
 
 impl AnvilProvider<WalletProvider, Ethereum, EthPrimitives> {
+    /*
     pub async fn spawn_new_isolated() -> eyre::Result<Self> {
         let anvil = Anvil::new()
             .block_time(12)
@@ -190,20 +191,22 @@ impl AnvilProvider<WalletProvider, Ethereum, EthPrimitives> {
             deployed_addresses: None
         })
     }
+     */
 }
 
 impl<P, N, PR> AnvilProvider<P, N, PR>
 where
     PR: NodePrimitives,
     N: Network,
-    P: WithWalletProvider,
-    AnvilStateProvider<WalletProvider, N, PR>: StartMonitor
+    P: WithWalletProvider<N>,
+    AnvilStateProvider<WalletProvider<N>, N, PR>: StartMonitor
 {
     pub async fn from_future<F>(fut: F, testnet: bool) -> eyre::Result<Self>
     where
         F: std::future::Future<
                 Output = eyre::Result<(P, Option<AnvilInstance>, Option<DeployedAddresses>)>
-            >
+            >,
+        P: WithWalletProvider<N>
     {
         let (provider, anvil, deployed_addresses) = fut.await?;
         let this = Self {
@@ -219,15 +222,15 @@ where
     }
 }
 
-struct StreamBlockProvider {
-    provider:      WalletProviderRpc,
+struct StreamBlockProvider<N: Network> {
+    provider:      WalletProviderRpc<N>,
     header_stream: Pin<Box<dyn Stream<Item = Header> + Send>>,
     futs:          FuturesOrdered<Pin<Box<dyn Future<Output = (u64, Vec<Transaction>)> + Send>>>
 }
 
-impl StreamBlockProvider {
+impl<N: Network> StreamBlockProvider<N> {
     fn new(
-        provider: WalletProviderRpc,
+        provider: WalletProviderRpc<N>,
         header_stream: impl Stream<Item = Header> + Send + 'static
     ) -> Self {
         Self { provider, header_stream: Box::pin(header_stream), futs: FuturesOrdered::new() }
@@ -238,7 +241,7 @@ impl StreamBlockProvider {
             .push_back(Box::pin(Self::make_block(self.provider.clone(), header.number)));
     }
 
-    async fn make_block(provider: WalletProviderRpc, number: u64) -> (u64, Vec<Transaction>) {
+    async fn make_block(provider: WalletProviderRpc<N>, number: u64) -> (u64, Vec<Transaction>) {
         let block = provider
             .get_block(number.into())
             .full()
@@ -250,7 +253,7 @@ impl StreamBlockProvider {
     }
 }
 
-impl Stream for StreamBlockProvider {
+impl<N: Network> Stream for StreamBlockProvider<N> {
     type Item = (u64, Vec<Transaction>);
 
     fn poll_next(

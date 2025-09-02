@@ -48,7 +48,7 @@ pub struct OpNodeInternals<P> {
     pub state_provider: AnvilProvider<P, Optimism, OpPrimitives>
 }
 
-impl<P: WithWalletProvider> OpNodeInternals<P> {
+impl<P: WithWalletProvider<Optimism>> OpNodeInternals<P> {
     pub async fn new<G, F>(
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P, Optimism, OpPrimitives>,

@@ -1,29 +1,31 @@
-use std::future::IntoFuture;
+use std::{future::IntoFuture, marker::PhantomData};
 
 use alloy::{
+    network::{BlockResponse, Network},
     primitives::{Address, BlockNumber, StorageKey, StorageValue, keccak256},
     providers::Provider,
     transports::TransportResult
 };
 use alloy_rpc_types::BlockNumberOrTag;
 use angstrom_types::reth_db_wrapper::DBError;
+use op_alloy_network::primitives::HeaderResponse;
 use reth_primitives::Account;
 use reth_provider::{ProviderError, ProviderResult};
 use revm::bytecode::Bytecode;
 use validation::common::db::{BlockStateProvider, BlockStateProviderFactory};
 
 use super::utils::async_to_sync;
-use crate::contracts::anvil::WalletProviderRpc;
 
 #[derive(Clone, Debug)]
-pub struct RpcStateProvider {
+pub struct RpcStateProvider<N: Network, P: Provider<N>> {
     block:    u64,
-    provider: WalletProviderRpc
+    provider: P,
+    _phantom: PhantomData<N>
 }
 
-impl RpcStateProvider {
-    pub fn new(block: u64, provider: WalletProviderRpc) -> Self {
-        Self { block, provider }
+impl<N: Network, P: Provider<N>> RpcStateProvider<N, P> {
+    pub fn new(block: u64, provider: P) -> Self {
+        Self { block, provider, _phantom: PhantomData }
     }
 
     async fn get_account(&self, address: Address) -> TransportResult<Account> {
@@ -40,7 +42,7 @@ impl RpcStateProvider {
     }
 }
 
-impl BlockStateProvider for RpcStateProvider {
+impl<N: Network, P: Provider<N>> BlockStateProvider for RpcStateProvider<N, P> {
     fn get_storage(
         &self,
         address: Address,
@@ -71,17 +73,18 @@ impl BlockStateProvider for RpcStateProvider {
 }
 
 #[derive(Clone, Debug)]
-pub struct RpcStateProviderFactory {
-    pub provider: WalletProviderRpc
+pub struct RpcStateProviderFactory<N: Network, P: Provider<N>> {
+    provider: P,
+    _phantom: PhantomData<N>
 }
 
-impl RpcStateProviderFactory {
-    pub fn new(provider: WalletProviderRpc) -> eyre::Result<Self> {
-        Ok(Self { provider })
+impl<N: Network, P: Provider<N>> RpcStateProviderFactory<N, P> {
+    pub fn new(provider: P) -> eyre::Result<Self> {
+        Ok(Self { provider, _phantom: PhantomData })
     }
 }
 
-impl reth_revm::DatabaseRef for RpcStateProviderFactory {
+impl<N: Network, P: Provider<N>> reth_revm::DatabaseRef for RpcStateProviderFactory<N, P> {
     type Error = DBError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<revm::state::AccountInfo>, Self::Error> {
@@ -114,7 +117,7 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
         )?;
 
         let Some(block) = acc else { return Err(DBError::String("no block".to_string())) };
-        Ok(block.header.hash)
+        Ok(block.header().hash())
     }
 
     fn code_by_hash_ref(&self, _: alloy::primitives::B256) -> Result<Bytecode, Self::Error> {
@@ -122,11 +125,13 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
     }
 }
 
-impl BlockStateProviderFactory for RpcStateProviderFactory {
-    type Provider = RpcStateProvider;
+impl<N: Network, P: Provider<N> + Clone> BlockStateProviderFactory
+    for RpcStateProviderFactory<N, P>
+{
+    type Provider = RpcStateProvider<N, P>;
 
     fn state_by_block(&self, block: u64) -> ProviderResult<Self::Provider> {
-        Ok(RpcStateProvider { block, provider: self.provider.clone() })
+        Ok(RpcStateProvider { block, provider: self.provider.clone(), _phantom: PhantomData })
     }
 
     fn best_block_number(&self) -> ProviderResult<BlockNumber> {

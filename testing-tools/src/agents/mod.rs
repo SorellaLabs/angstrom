@@ -14,5 +14,5 @@ pub struct AgentConfig<N: Network = Ethereum, P: reth_node_types::NodePrimitives
     pub rpc_address:    SocketAddr,
     pub agent_id:       u64,
     pub current_block:  u64,
-    pub state_provider: AnvilStateProvider<WalletProvider, N, P>
+    pub state_provider: AnvilStateProvider<WalletProvider<N>, N, P>
 }

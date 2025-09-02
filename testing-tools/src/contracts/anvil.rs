@@ -2,22 +2,49 @@ use std::future::Future;
 
 use alloy::{
     contract::{RawCallBuilder, SolCallBuilder},
-    network::{Ethereum, EthereumWallet, Network},
-    node_bindings::{Anvil, AnvilInstance},
+    network::{Ethereum, EthereumWallet, Network, NetworkWallet},
     providers::{
-        Identity, PendingTransaction, Provider, RootProvider, builder,
+        Identity, PendingTransaction, Provider, RootProvider,
         fillers::{
             BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
             WalletFiller
         }
-    },
-    signers::local::PrivateKeySigner
+    }
 };
 use alloy_primitives::Address;
 use alloy_sol_types::SolCall;
-use angstrom_types::primitive::CHAIN_ID;
 
-pub type WalletProviderRpc = FillProvider<
+/// A wallet provider which doesn't support blob transactions.
+// pub type WalletProviderRpc = FillProvider<
+//     JoinFill<
+//         JoinFill<
+//             Identity,
+//             JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller,
+// ChainIdFiller>>>         >,
+//         WalletFiller<EthereumWallet>
+//     >,
+//     RootProvider,
+//     Ethereum
+// >;
+
+// Problem: this doesn't implement WalletProvider?
+
+// impl<F, P, N> WalletProvider<N> for FillProvider<F, P, N>
+// where
+//     F: TxFiller<N> + WalletProvider<N>,
+//     P: Provider<N>,
+//     N: Network,
+pub type WalletProviderRpc<N: Network = Ethereum, W: NetworkWallet<N> = EthereumWallet> =
+    FillProvider<
+        JoinFill<
+            JoinFill<Identity, JoinFill<GasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            WalletFiller<W>
+        >,
+        RootProvider<N>,
+        N
+    >;
+
+pub type LocalAnvilRpc = FillProvider<
     JoinFill<
         JoinFill<
             Identity,
@@ -29,27 +56,7 @@ pub type WalletProviderRpc = FillProvider<
     Ethereum
 >;
 
-pub type LocalAnvilRpc = alloy::providers::fillers::FillProvider<
-    alloy::providers::fillers::JoinFill<
-        alloy::providers::fillers::JoinFill<
-            alloy::providers::Identity,
-            alloy::providers::fillers::JoinFill<
-                alloy::providers::fillers::GasFiller,
-                alloy::providers::fillers::JoinFill<
-                    alloy::providers::fillers::BlobGasFiller,
-                    alloy::providers::fillers::JoinFill<
-                        alloy::providers::fillers::NonceFiller,
-                        alloy::providers::fillers::ChainIdFiller
-                    >
-                >
-            >
-        >,
-        alloy::providers::fillers::WalletFiller<EthereumWallet>
-    >,
-    RootProvider,
-    Ethereum
->;
-
+/*
 pub async fn spawn_anvil(anvil_key: usize) -> eyre::Result<(AnvilInstance, WalletProviderRpc)> {
     let anvil = Anvil::new()
         .chain_id(*CHAIN_ID.get().unwrap())
@@ -74,6 +81,7 @@ pub async fn spawn_anvil(anvil_key: usize) -> eyre::Result<(AnvilInstance, Walle
 
     Ok((anvil, rpc))
 }
+     */
 
 pub(crate) trait SafeDeployPending {
     fn deploy_pending(self) -> impl Future<Output = eyre::Result<PendingTransaction>> + Send;

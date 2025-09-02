@@ -2,7 +2,7 @@ pub mod angstrom;
 mod components;
 mod config;
 pub mod handles;
-mod manager;
+pub mod manager;
 mod metrics;
 pub mod op_angstrom;
 

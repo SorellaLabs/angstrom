@@ -4,21 +4,20 @@ use alloy::{
     network::EthereumWallet,
     node_bindings::AnvilInstance,
     primitives::Address,
-    providers::{Provider, ProviderBuilder, ext::AnvilApi},
+    providers::{Provider, ProviderBuilder, WalletProvider, ext::AnvilApi},
     signers::local::PrivateKeySigner
 };
 use futures::Future;
-use tracing::debug;
 
 use super::anvil::WalletProviderRpc;
-use crate::contracts::anvil::{LocalAnvilRpc, spawn_anvil};
+use crate::contracts::anvil::LocalAnvilRpc;
 
 pub mod angstrom;
 pub mod uniswap;
 
 #[allow(async_fn_in_trait)]
 pub trait TestAnvilEnvironment: Clone {
-    type P: alloy::providers::Provider + alloy::providers::WalletProvider;
+    type P: Provider + WalletProvider;
 
     fn provider(&self) -> &Self::P;
     fn controller(&self) -> Address;
@@ -64,6 +63,7 @@ pub struct SpawnedAnvil {
     controller: Address
 }
 
+/*
 impl SpawnedAnvil {
     pub async fn new() -> eyre::Result<Self> {
         debug!("Spawning Anvil...");
@@ -73,6 +73,7 @@ impl SpawnedAnvil {
         Ok(Self { anvil: anvil.into(), provider, controller })
     }
 }
+     */
 
 impl TestAnvilEnvironment for SpawnedAnvil {
     type P = WalletProviderRpc;

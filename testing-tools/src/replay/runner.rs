@@ -28,6 +28,7 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{AngstromSigner, UniswapPoolRegistry, try_init_with_chain_id, *},
+    provider::EthNetworkProvider,
     submission::{ChainSubmitterHolder, SubmissionHandler}
 };
 use consensus::{
@@ -280,7 +281,7 @@ impl ReplayRunner {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, _, 50>(
+        let uniswap_pool_manager = configure_uniswap_manager::<_, EthNetworkProvider, 50>(
             rpc.clone().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry.clone(),
@@ -415,7 +416,8 @@ impl ReplayRunner {
             submitters:    vec![Box::new(ChainSubmitterHolder::new(
                 anvil_sub,
                 angstrom_signer.clone()
-            ))]
+            ))],
+            _phantom:      PhantomData
         };
 
         tracing::debug!("created mev boost provider");

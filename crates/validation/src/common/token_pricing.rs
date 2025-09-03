@@ -9,7 +9,7 @@ use alloy::{
 };
 use angstrom_types::{
     matching::SqrtPriceX96, orders::UpdatedGas, pair_with_price::PairsWithPrice, primitive::PoolId,
-    sol_bindings::Ray
+    provider::NetworkProvider, sol_bindings::Ray
 };
 use futures::StreamExt;
 use tracing::warn;
@@ -87,7 +87,7 @@ impl TokenPriceGenerator {
 
     /// is a bit of a pain as we need todo a look-back in-order to grab last 5
     /// blocks.
-    pub async fn new<P: Provider>(
+    pub async fn new<P: Provider<N::Network>, N: NetworkProvider>(
         provider: Arc<P>,
         current_block: u64,
         uni: SyncedUniswapPools,
@@ -128,7 +128,7 @@ impl TokenPriceGenerator {
                     {
                         tracing::debug!(block_number, current_block, ?pool_key, "loading pool");
                         let pool_data = data_loader
-                            .load_pool_data(Some(block_number), provider.clone())
+                            .load_pool_data::<P, N>(Some(block_number), provider.clone())
                             .await
                             .expect("failed to load historical price for token price conversion");
                         tracing::debug!(?pool_data, "Loaded data");

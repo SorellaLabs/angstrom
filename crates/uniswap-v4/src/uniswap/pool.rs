@@ -10,6 +10,7 @@ use alloy::{
 use angstrom_types::{
     matching::uniswap::TickInfo,
     primitive::PoolId,
+    provider::NetworkProvider,
     uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity}
 };
 use itertools::Itertools;
@@ -86,13 +87,17 @@ where
         self.data_loader.clone()
     }
 
-    pub async fn pool_data_for_block<T: Transport + Clone>(
+    pub async fn pool_data_for_block<
+        T: Transport + Clone,
+        P: Provider<N::Network>,
+        N: NetworkProvider
+    >(
         &self,
         block_number: BlockNumber,
-        provider: Arc<impl Provider>
+        provider: Arc<P>
     ) -> Result<PoolData, PoolError> {
         self.data_loader
-            .load_pool_data(Some(block_number), provider)
+            .load_pool_data::<P, N>(Some(block_number), provider)
             .await
     }
 
@@ -131,26 +136,30 @@ where
         ))
     }
 
-    pub async fn initialize(
-        &mut self,
-        block_number: Option<BlockNumber>,
-        provider: Arc<impl Provider>
-    ) -> Result<(), PoolError> {
-        tracing::trace!(?block_number, "populating pool data");
-        self.populate_data(block_number, provider.clone()).await?;
-        tracing::trace!(?block_number, "populated pool data");
-        self.sync_ticks(block_number, provider.clone()).await?;
-        tracing::trace!(?block_number, "synced pool ticks");
-        Ok(())
-    }
-
-    pub async fn update_to_block<P: Provider>(
+    pub async fn initialize<P: Provider<N::Network>, N: NetworkProvider>(
         &mut self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
     ) -> Result<(), PoolError> {
-        self.populate_data(block_number, provider.clone()).await?;
-        self.sync_ticks(block_number, provider.clone()).await?;
+        tracing::trace!(?block_number, "populating pool data");
+        self.populate_data::<P, N>(block_number, provider.clone())
+            .await?;
+        tracing::trace!(?block_number, "populated pool data");
+        self.sync_ticks::<P, N>(block_number, provider.clone())
+            .await?;
+        tracing::trace!(?block_number, "synced pool ticks");
+        Ok(())
+    }
+
+    pub async fn update_to_block<P: Provider<N::Network>, N: NetworkProvider>(
+        &mut self,
+        block_number: Option<BlockNumber>,
+        provider: Arc<P>
+    ) -> Result<(), PoolError> {
+        self.populate_data::<P, N>(block_number, provider.clone())
+            .await?;
+        self.sync_ticks::<P, N>(block_number, provider.clone())
+            .await?;
         Ok(())
     }
 
@@ -166,7 +175,7 @@ where
         self.data_loader.private_address()
     }
 
-    async fn get_tick_data_batch_request<P: Provider>(
+    async fn get_tick_data_batch_request<P: Provider<N::Network>, N: NetworkProvider>(
         &self,
         tick_start: I24,
         zero_for_one: bool,
@@ -176,7 +185,7 @@ where
     ) -> Result<(Vec<TickData>, U256), PoolError> {
         let (tick_data, block_number) = self
             .data_loader
-            .load_tick_data(
+            .load_tick_data::<P, N>(
                 tick_start,
                 zero_for_one,
                 num_ticks,
@@ -214,14 +223,14 @@ where
             });
     }
 
-    pub async fn load_more_ticks<P: Provider>(
+    pub async fn load_more_ticks<P: Provider<N::Network>, N: NetworkProvider>(
         &mut self,
         tick_data: TickRangeToLoad,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
     ) -> Result<(), PoolError> {
         let ticks = self
-            .get_tick_data_batch_request(
+            .get_tick_data_batch_request::<P, N>(
                 i32_to_i24(tick_data.start_tick)?,
                 tick_data.zfo,
                 tick_data.tick_count,
@@ -237,7 +246,7 @@ where
         Ok(())
     }
 
-    async fn sync_ticks<P: Provider>(
+    async fn sync_ticks<P: Provider<N::Network>, N: NetworkProvider>(
         &mut self,
         block_number: Option<u64>,
         provider: Arc<P>
@@ -252,8 +261,8 @@ where
         tracing::info!(?self.token0, ?self.token1,?self.tick, ?self.tick_spacing, ?self.liquidity,?self.liquidity_net);
 
         let (asks, bids) = futures::join!(
-            self.load_ticks_in_direction(provider.clone(), block_number, true),
-            self.load_ticks_in_direction(provider.clone(), block_number, false),
+            self.load_ticks_in_direction::<P, N>(provider.clone(), block_number, true),
+            self.load_ticks_in_direction::<P, N>(provider.clone(), block_number, false),
         );
         let (_, _, asks) = asks?;
         self.apply_ticks(asks);
@@ -265,7 +274,7 @@ where
         Ok(())
     }
 
-    async fn load_ticks_in_direction<P: Provider>(
+    async fn load_ticks_in_direction<P: Provider<N::Network>, N: NetworkProvider>(
         &self,
         provider: Arc<P>,
         block_number: Option<u64>,
@@ -285,7 +294,7 @@ where
 
         for _ in 0..(self.initial_ticks_per_side.div_ceil(TICKS_PER_BATCH as u16)) {
             let batch_ticks = self
-                .get_tick_data_batch_request(
+                .get_tick_data_batch_request::<P, N>(
                     i32_to_i24(current_tick)?,
                     direction,
                     TICKS_PER_BATCH as u16,
@@ -511,14 +520,14 @@ where
         Ok((swap_result.amount0, swap_result.amount1))
     }
 
-    pub async fn populate_data<P: Provider>(
+    pub async fn populate_data<P: Provider<N::Network>, N: NetworkProvider>(
         &mut self,
         block_number: Option<u64>,
         provider: Arc<P>
     ) -> Result<(), PoolError> {
         let pool_data = self
             .data_loader
-            .load_pool_data(block_number, provider)
+            .load_pool_data::<P, N>(block_number, provider)
             .await?;
 
         self.token0 = pool_data.tokenA;

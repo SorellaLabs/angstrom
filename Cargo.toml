@@ -1,5 +1,5 @@
 [workspace]
-members = ["bin/*", "crates/*", "testing-tools"]
+members = ["bin/*", "crates/*", "testing-tools", "op-testing-tools"]
 resolver = "2"
 
 [workspace.package]
@@ -18,6 +18,7 @@ consensus.opt-level = 3
 matching-engine.opt-level = 3
 validation.opt-level = 3
 testing-tools.opt-level = 3
+op-testing-tools.opt-level = 3
 angstrom-types.opt-level = 3
 tokio.opt-level = 3
 
@@ -142,6 +143,7 @@ once_cell = "1"
 op-alloy-consensus = "0.18.12"
 op-alloy-network = "0.18.12"
 op-alloy-rpc-types = "0.18.12"
+op-testing-tools = { path = "./op-testing-tools/", default-features = false }
 order-pool = { path = "./crates/order-pool/" }
 pade = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }
 pade-macro = { git = "https://github.com/SorellaLabs/pade", version = "0.1.0" }

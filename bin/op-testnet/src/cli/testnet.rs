@@ -15,16 +15,16 @@ use angstrom_types::{contract_bindings::angstrom::Angstrom::PoolKey, matching::S
 use consensus::AngstromValidator;
 use enr::k256::ecdsa::SigningKey;
 use eyre::Context;
-use reth_network_peers::pk2id;
-use secp256k1::{Secp256k1, SecretKey};
-use serde::Deserialize;
-use testing_tools::{
+use op_testing_tools::{
     types::{
         config::OpTestnetConfig,
         initial_state::{Erc20ToDeploy, InitialStateConfig, PartialConfigPoolKey}
     },
     utils::workspace_dir
 };
+use reth_network_peers::pk2id;
+use secp256k1::{Secp256k1, SecretKey};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct TestnetCli {

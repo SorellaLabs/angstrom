@@ -28,6 +28,7 @@ use angstrom_types::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
         CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, UniswapPoolRegistry
     },
+    provider::{EthNetworkProvider, OpNetworkProvider},
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
     submission::SubmissionHandler
@@ -324,16 +325,17 @@ where
             init_telemetry(signer_addr, grace_shutdown)
         });
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, EthPrimitives, DEFAULT_TICKS>(
-            querying_provider.clone(),
-            eth_handle.subscribe_cannon_state_notifications().await,
-            uniswap_registry,
-            block_id,
-            global_block_sync.clone(),
-            pool_manager,
-            network_stream
-        )
-        .await;
+        let uniswap_pool_manager =
+            configure_uniswap_manager::<_, EthNetworkProvider, DEFAULT_TICKS>(
+                querying_provider.clone(),
+                eth_handle.subscribe_cannon_state_notifications().await,
+                uniswap_registry,
+                block_id,
+                global_block_sync.clone(),
+                pool_manager,
+                network_stream
+            )
+            .await;
 
         tracing::info!("uniswap manager start");
 
@@ -599,16 +601,17 @@ where
             init_telemetry(signer_addr, grace_shutdown)
         });
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, OpPrimitives, DEFAULT_TICKS>(
-            querying_provider.clone(),
-            eth_handle.subscribe_cannon_state_notifications().await,
-            uniswap_registry,
-            block_id,
-            global_block_sync.clone(),
-            pool_manager,
-            network_stream
-        )
-        .await;
+        let uniswap_pool_manager =
+            configure_uniswap_manager::<_, OpNetworkProvider, DEFAULT_TICKS>(
+                querying_provider.clone(),
+                eth_handle.subscribe_cannon_state_notifications().await,
+                uniswap_registry,
+                block_id,
+                global_block_sync.clone(),
+                pool_manager,
+                network_stream
+            )
+            .await;
 
         tracing::info!("uniswap manager start");
 

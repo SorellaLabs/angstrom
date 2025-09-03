@@ -21,6 +21,7 @@ use angstrom_types::{
         }
     },
     primitive::{AngstromSigner, UniswapPoolRegistry},
+    provider::EthNetworkProvider,
     submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
@@ -201,7 +202,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         Box::pin(eth_event_rx_stream) as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
     // Takes updates that are generally provided by EthDataCleanser
-    let uniswap_pool_manager = configure_uniswap_manager::<_, _, DEFAULT_TICKS>(
+    let uniswap_pool_manager = configure_uniswap_manager::<_, EthNetworkProvider, DEFAULT_TICKS>(
         provider.rpc_provider().into(),
         mock_canon.subscribe_to_canonical_state(),
         uniswap_registry,

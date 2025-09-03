@@ -12,10 +12,10 @@ use angstrom_types::{
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty
 };
 use op_alloy_network::Optimism;
+use op_testing_tools::{controllers::enviroments::OpAngstromTestnet, utils::noop_agent};
 use op_testnet::cli::{init_tracing, testnet::TestnetCli};
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::test_utils::NoopProvider;
-use testing_tools::{controllers::enviroments::OpAngstromTestnet, utils::noop_agent};
 
 #[test]
 #[serial_test::serial]
@@ -33,7 +33,7 @@ fn testnet_deploy() {
         let testnet = OpAngstromTestnet::spawn_testnet(
             NoopProvider::default(),
             cli.make_config().unwrap(),
-            vec![noop_agent::<Optimism, OpPrimitives>],
+            vec![noop_agent],
             ctx.task_executor
         )
         .await;

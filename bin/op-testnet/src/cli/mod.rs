@@ -1,3 +1,4 @@
+pub mod devnet;
 pub mod e2e_orders;
 pub mod testnet;
 use angstrom_metrics::{METRICS_ENABLED, initialize_prometheus_metrics};

@@ -27,7 +27,7 @@ use tracing::{Instrument, Level, span};
 
 fn internal_balance_agent<'a>(
     _: &'a InitialTestnetState,
-    agent_config: AgentConfig<Optimism, OpPrimitives>
+    agent_config: AgentConfig
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting internal balance agent");
@@ -181,10 +181,9 @@ where
     tracing::info!("spinning up e2e nodes for {}", test_name);
 
     // spawn testnet
-    let testnet =
-        OpAngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, ctx.clone())
-            .await
-            .expect("failed to start op-testnet");
+    let testnet = OpAngstromTestnet::spawn_testnet(config, agents, ctx.clone())
+        .await
+        .expect("failed to start op-testnet");
 
     // capture shutdown handle before moving testnet into task
     let shutdown = testnet.shutdown_sender();
@@ -357,14 +356,9 @@ fn test_remove_add_pool() {
         tracing::info!("spinning up e2e nodes for remove add pool test");
 
         // spawn testnet
-        let testnet = OpAngstromTestnet::spawn_testnet(
-            NoopProvider::default(),
-            config,
-            agents,
-            ctx.task_executor.clone()
-        )
-        .await
-        .expect("failed to start op-angstrom testnet");
+        let testnet = OpAngstromTestnet::spawn_testnet(config, agents, ctx.task_executor.clone())
+            .await
+            .expect("failed to start op-angstrom testnet");
 
         // grab provider so we can query from the chain later.
         let provider = testnet.state_provider().rpc_provider();
@@ -408,7 +402,7 @@ fn test_remove_add_pool() {
 
 fn add_remove_agent<'a>(
     _init: &'a InitialTestnetState,
-    agent_config: AgentConfig<Optimism, OpPrimitives>
+    agent_config: AgentConfig
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting add remove agent");

@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use clap::Parser;
 
-use super::testnet::TestnetCli;
+use super::{devnet::DevnetCli, testnet::TestnetCli};
 
 #[derive(Parser, Clone, Debug)]
 pub struct End2EndOrdersCli {

@@ -22,12 +22,10 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
     pub async fn spawn_devnet(config: DevnetConfig, ex: TaskExecutor) -> eyre::Result<Self> {
         let block_provider = TestnetBlockProvider::new();
         let mut this = Self {
-            peers: Default::default(),
-            block_syncs: vec![],
-            current_max_peer_id: 0,
             config: config.clone(),
             block_provider,
-            _anvil_instance: None
+            node: todo!(),
+            anvil:
         };
 
         tracing::info!("initializing devnet with {} nodes", config.node_count());
@@ -88,8 +86,7 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
         store_index: U256
     ) -> eyre::Result<()> {
         tracing::debug!("deploying new pool on state machine");
-        let node = self.get_peer_with(|n| n.state_provider().deployed_addresses().is_some());
-        let provider = node.state_provider();
+        let provider = self.node.state_provider();
         let config = node.testnet_node_config();
 
         let mut initializer = AnvilInitializer::new_existing(provider, config);

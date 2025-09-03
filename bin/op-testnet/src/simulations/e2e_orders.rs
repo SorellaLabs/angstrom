@@ -12,7 +12,7 @@ use op_testing_tools::{
     agents::AgentConfig,
     controllers::enviroments::OpAngstromTestnet,
     order_generator::{GeneratedPoolOrders, InternalBalanceMode, OrderGenerator},
-    types::{actions::WithAction, checked_actions::WithCheckedAction, checks::WithCheck}
+    types::{actions::WithAction, checks::WithCheck}
 };
 use reth_optimism_primitives::OpPrimitives;
 use reth_provider::{CanonStateSubscriptions, test_utils::NoopProvider};
@@ -28,9 +28,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
     tracing::info!(?ANGSTROM_DOMAIN, ?CHAIN_ID, "spinning up e2e nodes for angstrom");
 
     // spawn testnet
-    let testnet =
-        OpAngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, executor.clone())
-            .await?;
+    let testnet = OpAngstromTestnet::spawn_testnet(config, agents, executor.clone()).await?;
     tracing::info!("e2e testnet is alive");
 
     executor
@@ -45,7 +43,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
 
 fn end_to_end_agent<'a>(
     t: &'a InitialTestnetState,
-    agent_config: AgentConfig<Optimism, OpPrimitives>
+    agent_config: AgentConfig
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async move {
         tracing::info!("starting e2e agent");

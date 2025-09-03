@@ -12,8 +12,8 @@ use reth_tasks::TaskExecutor;
 
 use crate::{
     agents::AgentConfig,
-    controllers::strom::OpTestnetNode,
-    providers::{AnvilInitializer, AnvilProvider, WalletProvider},
+    controllers::{enviroments::OpAngstromTestnet, strom::OpTestnetNode},
+    providers::{AnvilInitializer, AnvilProvider, TestnetBlockProvider, WalletProvider},
     types::{
         WithWalletProvider,
         config::{OpTestnetConfig, TestingNodeConfig},
@@ -21,12 +21,7 @@ use crate::{
     }
 };
 
-pub struct OpAngstromTestnet {
-    pub node:            OpTestnetNode<WalletProvider, OpTestnetConfig>,
-    pub _anvil_instance: AnvilInstance
-}
-
-impl OpAngstromTestnet {
+impl OpAngstromTestnet<OpTestnetConfig, WalletProvider> {
     pub async fn spawn_testnet<F>(
         config: OpTestnetConfig,
         agents: Vec<F>,
@@ -41,7 +36,7 @@ impl OpAngstromTestnet {
     {
         tracing::info!("initializing op-testnet");
 
-        let node_config = TestingNodeConfig::new(0, config, 100);
+        let node_config = TestingNodeConfig::new(0, config.clone(), 100);
         let node_addresses = vec![node_config.angstrom_signer().address()];
         let pool_keys = node_config.pool_keys();
 
@@ -53,7 +48,12 @@ impl OpAngstromTestnet {
         // Create single testnet node
         let node = OpTestnetNode::new(node_config, provider, initial_state, agents, ex).await?;
 
-        Ok(Self { node, _anvil_instance: anvil_instance })
+        Ok(Self {
+            node,
+            block_provider: TestnetBlockProvider::new(),
+            config: config.clone(),
+            anvil: Some(anvil_instance)
+        })
     }
 
     pub async fn run_to_completion(self) -> eyre::Result<()> {

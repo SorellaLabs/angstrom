@@ -1,9 +1,10 @@
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
 use alloy::signers::local::PrivateKeySigner;
 use angstrom_cli::handles::RollupHandles;
 use angstrom_types::{primitive::AngstromSigner, testnet::InitialTestnetState};
 use futures::Future;
+use parking_lot::Mutex;
 use reth_tasks::TaskExecutor;
 
 use crate::{
@@ -20,7 +21,7 @@ pub struct OpTestnetNode<P, G> {
     state_provider:  AnvilProvider<P>,
     _init_state:     InitialTestnetState,
     config:          TestingNodeConfig<G>,
-    validation:      TestOrderValidator<AnvilStateProvider<WalletProvider>>,
+    validation:      Arc<Mutex<TestOrderValidator<AnvilStateProvider<WalletProvider>>>>,
     /// Internal shutdown signal used to gracefully stop background tasks
     shutdown_tx:     tokio::sync::watch::Sender<bool>
 }
@@ -67,7 +68,7 @@ where
             state_provider,
             _init_state: inital_angstrom_state,
             config: node_config,
-            validation: validator,
+            validation: Arc::new(Mutex::new(validator)),
             shutdown_tx
         })
     }
@@ -107,6 +108,6 @@ where
     where
         F: FnOnce(&TestOrderValidator<AnvilStateProvider<WalletProvider>>) -> R
     {
-        f(&self.validation)
+        f(&self.validation.lock())
     }
 }

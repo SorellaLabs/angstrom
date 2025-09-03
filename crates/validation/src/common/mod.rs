@@ -20,7 +20,7 @@ pub use token_pricing::*;
 pub struct SharedTools {
     pub token_pricing:   TokenPriceGenerator,
     token_price_updater:
-        Pin<Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + Sync + 'static>>,
+        Pin<Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>>,
     pub thread_pool:
         KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send + Sync>>, Handle>,
     pub metrics:         ValidationMetrics
@@ -30,7 +30,7 @@ impl SharedTools {
     pub fn new(
         token_pricing: TokenPriceGenerator,
         token_price_updater: Pin<
-            Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + Sync + 'static>
+            Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>
         >,
         thread_pool: KeySplitThreadpool<
             Address,

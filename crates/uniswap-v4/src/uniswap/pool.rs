@@ -773,7 +773,7 @@ mod tests {
     struct MockLoader;
 
     impl PoolDataLoader for MockLoader {
-        async fn load_tick_data<P: Provider>(
+        async fn load_tick_data<P: Provider<N::Network>, N: NetworkProvider>(
             &self,
             _: I24,
             _: bool,
@@ -785,7 +785,7 @@ mod tests {
             unimplemented!()
         }
 
-        async fn load_pool_data<P: Provider>(
+        async fn load_pool_data<P: Provider<N::Network>, N: NetworkProvider>(
             &self,
             _: Option<BlockNumber>,
             _: Arc<P>

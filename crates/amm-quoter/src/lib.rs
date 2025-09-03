@@ -171,7 +171,7 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
                     tick
                 };
 
-                // The receiver may be dropped if the task was cancelled; that's not fatal.
+                // Receiver may have been dropped during shutdown; ignore send errors.
                 let _ = tx.send(update);
             });
 

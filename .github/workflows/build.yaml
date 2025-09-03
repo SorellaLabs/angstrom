@@ -2,7 +2,7 @@ name: Check Rust
 on:
   pull_request:
 
-# stop in-progress on new push
+# Stop in-progress on new push
 concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
@@ -10,6 +10,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   FOUNDRY_PROFILE: ci
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-C debuginfo=0"
 
 jobs:
   cargo-fmt:
@@ -48,12 +50,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          key: cargo-clippy-${{ runner.os }}
           cache-on-failure: true
-          shared-key: "rust-cache-v1"
           save-if: true
 
       - name: Run Clippy
-        run: cargo clippy --workspace --all-features --profile debug-fast
+        run: cargo clippy --workspace --all-features --profile ci
 
   cargo-test-unit:
     name: cargo test (unit)
@@ -73,14 +75,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          key: cargo-test-unit-${{ runner.os }}
           cache-on-failure: true
-          shared-key: "rust-cache-v1"
           save-if: true
 
       - uses: taiki-e/install-action@nextest
 
       - name: Run unit tests
-        run: cargo nextest run --workspace --exclude testnet --retries 3 --no-tests=warn --cargo-profile debug-fast
+        run: cargo nextest run --workspace --exclude testnet --retries 3 --no-tests=warn --cargo-profile ci
 
   cargo-test-integration:
     name: cargo test (integration)
@@ -100,14 +102,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          key: cargo-test-integration-${{ runner.os }}
           cache-on-failure: true
-          shared-key: "rust-cache-v1"
           save-if: true
 
       - uses: taiki-e/install-action@nextest
 
       - name: Run integration tests
-        run: cargo nextest run --package testnet --retries 1 --no-tests=warn --cargo-profile debug-fast
+        run: cargo nextest run --package testnet --retries 1 --no-tests=warn --cargo-profile ci
 
   cargo-test-op-testnet:
     name: cargo test (op-testnet)

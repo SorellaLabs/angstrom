@@ -13,30 +13,37 @@ exclude = [".github/"]
 
 # Speed up tests.
 [profile.dev.package]
-angstrom-network.opt-level = 3
-consensus.opt-level = 3
-matching-engine.opt-level = 3
-validation.opt-level = 3
-testing-tools.opt-level = 3
-op-testing-tools.opt-level = 3
-angstrom-types.opt-level = 3
-tokio.opt-level = 3
+angstrom-network.opt-level = 2
+consensus.opt-level = 2
+matching-engine.opt-level = 2
+validation.opt-level = 2
+testing-tools.opt-level = 2
+angstrom-types.opt-level = 2
+tokio.opt-level = 2
 
 [profile.debug-fast]
 inherits = "dev"
 lto = false
-opt-level = 3
-codegen-units = 15
+opt-level = 0
+codegen-units = 16
+
+[profile.ci]
+inherits = "dev"
+lto = false
+opt-level = 0
+debug = 0
+incremental = false
+codegen-units = 256
 
 [profile.release]
 lto = "fat"
 opt-level = 3
-codegen-units = 15
+codegen-units = 16
 
 [profile.maxperf]
 inherits = "release"
 lto = "fat"
-codegen-units = 1
+codegen-units = 3
 incremental = false
 
 [workspace.dependencies]

@@ -11,59 +11,47 @@ mod block_provider;
 pub mod utils;
 pub use block_provider::*;
 mod initializer;
-
-use alloy::{
-    network::{Ethereum, EthereumWallet, NetworkWallet},
-    node_bindings::AnvilInstance,
-    providers::{Network, Provider, RootProvider},
-    signers::local::PrivateKeySigner
-};
+use alloy::{node_bindings::AnvilInstance, signers::local::PrivateKeySigner};
 pub use initializer::*;
-pub mod compat;
 
 use crate::{
     contracts::{anvil::WalletProviderRpc, environment::TestAnvilEnvironment},
     types::{GlobalTestingConfig, WithWalletProvider, config::TestingNodeConfig}
 };
 
-#[derive(Clone)]
-pub struct WalletProvider<N: Network = Ethereum, W = EthereumWallet>
-where
-    W: NetworkWallet<N> + Clone
-{
-    provider:                  WalletProviderRpc<N, W>,
+#[derive(Debug, Clone)]
+pub struct WalletProvider {
+    provider:                  WalletProviderRpc,
     pub controller_secret_key: PrivateKeySigner
 }
 
-impl WalletProvider<Ethereum> {
+impl WalletProvider {
     pub async fn new<G: GlobalTestingConfig>(
         config: TestingNodeConfig<G>
     ) -> eyre::Result<(Self, Option<AnvilInstance>)> {
         config.spawn_anvil_rpc().await
     }
-}
 
-impl<N: Network, W: NetworkWallet<N> + Clone> WalletProvider<N, W> {
     pub(crate) fn new_with_provider(
-        provider: WalletProviderRpc<N, W>,
+        provider: WalletProviderRpc,
         controller_secret_key: PrivateKeySigner
     ) -> Self {
         Self { provider, controller_secret_key }
     }
 
-    pub fn provider_ref(&self) -> &WalletProviderRpc<N, W> {
+    pub fn provider_ref(&self) -> &WalletProviderRpc {
         &self.provider
     }
 
-    pub fn provider(&self) -> WalletProviderRpc<N, W> {
+    pub fn provider(&self) -> WalletProviderRpc {
         self.provider.clone()
     }
 }
 
-impl<N: Network, W: NetworkWallet<N> + Clone> TestAnvilEnvironment for WalletProvider<N, W> {
-    type P = WalletProviderRpc<N, W>;
+impl TestAnvilEnvironment for WalletProvider {
+    type P = WalletProviderRpc;
 
-    fn provider(&self) -> &WalletProviderRpc<N, W> {
+    fn provider(&self) -> &WalletProviderRpc {
         &self.provider
     }
 
@@ -72,25 +60,12 @@ impl<N: Network, W: NetworkWallet<N> + Clone> TestAnvilEnvironment for WalletPro
     }
 }
 
-impl<N: Network, W: NetworkWallet<N> + Clone + 'static> WithWalletProvider<N, W>
-    for WalletProvider<N, W>
-{
-    fn wallet_provider(&self) -> WalletProvider<N, W> {
+impl WithWalletProvider for WalletProvider {
+    fn wallet_provider(&self) -> WalletProvider {
         self.clone()
     }
 
-    fn rpc_provider(&self) -> WalletProviderRpc<N, W> {
+    fn rpc_provider(&self) -> WalletProviderRpc {
         self.provider.clone()
-    }
-}
-
-impl<N: Network, W: NetworkWallet<N> + Clone> Provider<N> for WalletProvider<N, W>
-where
-    N: Network,
-    W: NetworkWallet<N>,
-    WalletProviderRpc<N, W>: Provider<N>
-{
-    fn root(&self) -> &RootProvider<N> {
-        self.provider.root()
     }
 }

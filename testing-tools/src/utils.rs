@@ -1,11 +1,10 @@
 use std::{future::Future, path::Path, pin::Pin, sync::Arc};
 
-use alloy::providers::Network;
 use angstrom_types::testnet::InitialTestnetState;
 use reth_chainspec::MAINNET;
 use reth_db::DatabaseEnv;
 use reth_node_ethereum::EthereumNode;
-use reth_node_types::{NodePrimitives, NodeTypesWithDBAdapter};
+use reth_node_types::NodeTypesWithDBAdapter;
 use reth_provider::providers::{BlockchainProvider, ReadOnlyConfig};
 use tracing::Level;
 use tracing_subscriber::{
@@ -34,9 +33,9 @@ pub fn workspace_dir() -> std::path::PathBuf {
     cargo_path.parent().unwrap().to_path_buf()
 }
 
-pub fn noop_agent<'a, N: Network, P: NodePrimitives>(
+pub fn noop_agent<'a>(
     _: &'a InitialTestnetState,
-    _: AgentConfig<N, P>
+    _: AgentConfig
 ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>> {
     Box::pin(async { eyre::Ok(()) })
 }

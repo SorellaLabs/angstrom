@@ -1,72 +1,72 @@
 use std::sync::Arc;
 
-use alloy::consensus::BlockHeader;
+use alloy_rpc_types::{Block, TransactionReceipt};
+use itertools::Itertools;
 use parking_lot::RwLock;
-use reth_node_types::{Block as _, NodePrimitives};
+use reth_primitives::{RecoveredBlock, TransactionSigned};
 use reth_provider::{Chain, ExecutionOutcome};
 
 #[derive(Clone, Debug)]
-pub struct AnvilConsensusCanonStateNotification<P: NodePrimitives> {
-    chain: Arc<RwLock<Chain<P>>>
+pub struct AnvilConsensusCanonStateNotification {
+    chain: Arc<RwLock<Chain>>
 }
-impl<P: NodePrimitives> Default for AnvilConsensusCanonStateNotification<P> {
+impl Default for AnvilConsensusCanonStateNotification {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P: NodePrimitives> AnvilConsensusCanonStateNotification<P> {
+impl AnvilConsensusCanonStateNotification {
     pub fn new() -> Self {
         Self { chain: Arc::new(RwLock::new(Chain::default())) }
     }
 
     pub fn current_block(&self) -> u64 {
         let chain = self.chain.read();
-        chain.tip().number()
+        chain.tip().number
     }
 
-    pub fn new_block(&self, block: &P::Block, receipts: Vec<P::Receipt>) -> Arc<Chain<P>> {
+    pub fn new_block(&self, block: &Block, receipts: Vec<TransactionReceipt>) -> Arc<Chain> {
         let mut chain = self.chain.write();
 
-        // TOOD(havard): If something doesn't work, this has been changed quyite a lot.
-        // Look at commented code. let b = block
-        //     .into_ethereum_block()
-        //     .map_transactions(|tx| tx.try_into_recovered().unwrap());
+        // the consensus only uses the block number so we can use default values for the
+        // rest of the block
+        let b = block
+            .clone()
+            .into_consensus()
+            .map_transactions(|tx| tx.into_recovered());
 
-        // let signers = b.body.transactions().map(|tx| tx.signer()).collect_vec();
+        let signers = b.body.transactions().map(|tx| tx.signer()).collect_vec();
+        let block = block.clone().into_consensus().map_transactions(|t| {
+            let signed = t.into_signed();
+            let sig = *signed.signature();
+            let raw_tx = signed.tx().clone();
+            TransactionSigned::new_unhashed(raw_tx.into(), sig)
+        });
 
-        let recovered = block.clone().try_into_recovered().unwrap();
-
-        // let block = b.map_transactions(|t| {
-        //     let signed = t.into_signed();
-        //     let sig = *signed.signature();
-        //     let raw_tx = signed.tx().clone();
-        //     P::SignedTx::new_unchecked(raw_tx.into(), sig)
-        // });
-
+        let recovered_block = RecoveredBlock::new_unhashed(block, signers);
         // recovered_block.
         // rec
 
-        // let mapped = receipts
-        //     .into_iter()
-        //     .map(|r| {
-        //         let r = r.into();
-        //         reth_primitives::Receipt {
-        //             tx_type: r.inner.tx_type(),
-        //             success: r.inner.status(),
-        //             cumulative_gas_used: r.inner.cumulative_gas_used(),
-        //             logs: r.logs().to_vec(),
-        //         }
-        //     })
-        //     .collect_vec();
-        let ex = ExecutionOutcome::<P::Receipt>::default().with_receipts(vec![receipts]);
+        let mapped = receipts
+            .into_iter()
+            .map(|r| {
+                let r = r.into_primitives_receipt();
+                reth_primitives::Receipt {
+                    tx_type:             r.inner.tx_type(),
+                    success:             r.inner.status(),
+                    cumulative_gas_used: r.inner.cumulative_gas_used(),
+                    logs:                r.logs().to_vec()
+                }
+            })
+            .collect_vec();
+        let ex = ExecutionOutcome::default().with_receipts(vec![mapped]);
         if chain.execution_outcome().first_block() == 0 {
             chain
                 .execution_outcome_mut()
-                .set_first_block(recovered.number());
+                .set_first_block(recovered_block.number);
         }
-
-        chain.append_block(recovered, ex);
+        chain.append_block(recovered_block, ex);
 
         Arc::new(chain.clone())
     }

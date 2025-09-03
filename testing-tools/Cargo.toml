@@ -28,9 +28,6 @@ futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
 matching-engine.workspace = true
-op-alloy-consensus = { workspace = true, features = ["alloy-compat"] }
-op-alloy-network.workspace = true
-op-alloy-rpc-types.workspace = true
 order-pool.workspace = true
 pade.workspace = true
 parking_lot.workspace = true
@@ -49,9 +46,7 @@ reth-network-peers = { workspace = true, features = ["secp256k1"] }
 reth-node-builder.workspace = true
 reth-node-ethereum.workspace = true
 reth-node-types.workspace = true
-reth-optimism-primitives.workspace = true
 reth-primitives = { workspace = true, features = ["test-utils"] }
-reth-primitives-traits = { workspace = true, features = ["op"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-revm.workspace = true
 reth-tasks.workspace = true

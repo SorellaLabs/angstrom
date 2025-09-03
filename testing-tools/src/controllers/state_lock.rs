@@ -8,7 +8,7 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy::{network::Ethereum, providers::Provider, signers::local::PrivateKeySigner};
+use alloy::{providers::Provider, signers::local::PrivateKeySigner};
 use angstrom_network::StromNetworkManager;
 use angstrom_types::block_sync::GlobalBlockSync;
 use consensus::ConsensusManager;
@@ -36,7 +36,7 @@ pub(crate) struct TestnetStateFutureLock<
     strom_network_manager: StateLockInner<StromNetworkManager<C, P>>,
     strom_consensus:
         StateLockInner<ConsensusManager<T, MatcherHandle, GlobalBlockSync, PrivateKeySigner>>,
-    validation: StateLockInner<TestOrderValidator<AnvilStateProvider<WalletProvider<Ethereum>>>>
+    validation:            StateLockInner<TestOrderValidator<AnvilStateProvider<WalletProvider>>>
 }
 
 impl<C, T, P> TestnetStateFutureLock<C, T, P>
@@ -55,7 +55,7 @@ where
         eth_peer: Peer<C>,
         strom_network_manager: StromNetworkManager<C, P>,
         consensus: ConsensusManager<T, MatcherHandle, GlobalBlockSync, PrivateKeySigner>,
-        validation: TestOrderValidator<AnvilStateProvider<WalletProvider<Ethereum>>>,
+        validation: TestOrderValidator<AnvilStateProvider<WalletProvider>>,
         ex: TaskExecutor
     ) -> Self {
         let validation = StateLockInner::new(node_id, validation, ex.clone());
@@ -113,14 +113,14 @@ where
 
     pub(crate) fn strom_validation<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&TestOrderValidator<AnvilStateProvider<WalletProvider<Ethereum>>>) -> R
+        F: FnOnce(&TestOrderValidator<AnvilStateProvider<WalletProvider>>) -> R
     {
         self.validation.on_inner(f)
     }
 
     pub(crate) fn strom_validation_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&mut TestOrderValidator<AnvilStateProvider<WalletProvider<Ethereum>>>) -> R
+        F: FnOnce(&mut TestOrderValidator<AnvilStateProvider<WalletProvider>>) -> R
     {
         self.validation.on_inner_mut(f)
     }

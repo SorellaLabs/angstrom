@@ -1,17 +1,10 @@
-use std::{future::IntoFuture, marker::PhantomData, time::Duration};
+use std::{future::IntoFuture, time::Duration};
 
-use alloy::{
-    network::{Ethereum, Network},
-    providers::Provider
-};
+use alloy::{providers::Provider, rpc::types::Block};
 use alloy_primitives::{Address, B256, BlockNumber, U256};
-use alloy_rpc_types::BlockId;
+use alloy_rpc_types::{BlockId, TransactionReceipt};
 use angstrom_types::reth_db_wrapper::{DBError, SetBlock};
-use futures::StreamExt;
-use op_alloy_consensus::{OpBlock, OpReceiptEnvelope};
-use op_alloy_network::Optimism;
-use reth_node_types::NodePrimitives;
-use reth_optimism_primitives::{OpPrimitives, OpReceipt};
+use futures::stream::StreamExt;
 use reth_primitives::EthPrimitives;
 use reth_provider::{
     BlockHashReader, BlockNumReader, CanonStateNotification, CanonStateNotifications,
@@ -28,24 +21,22 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct AnvilStateProvider<P, N: Network = Ethereum, PR: NodePrimitives = EthPrimitives> {
+pub struct AnvilStateProvider<P> {
     provider:           P,
-    canon_state:        AnvilConsensusCanonStateNotification<PR>,
-    pub canon_state_tx: broadcast::Sender<CanonStateNotification<PR>>,
-    _phantom:           PhantomData<N>
+    canon_state:        AnvilConsensusCanonStateNotification,
+    pub canon_state_tx: broadcast::Sender<CanonStateNotification>
 }
 
-impl<P: Provider<N>, N: Network, PR: NodePrimitives> SetBlock for AnvilStateProvider<P, N, PR> {
+impl<P: WithWalletProvider> SetBlock for AnvilStateProvider<P> {
     fn set_block(&self, _: u64) {}
 }
 
-impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> AnvilStateProvider<P, N, PR> {
+impl<P: WithWalletProvider> AnvilStateProvider<P> {
     pub fn new(provider: P) -> Self {
         Self {
             provider,
             canon_state: AnvilConsensusCanonStateNotification::new(),
-            canon_state_tx: broadcast::channel(1000).0,
-            _phantom: PhantomData
+            canon_state_tx: broadcast::channel(1000).0
         }
     }
 
@@ -55,8 +46,8 @@ impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> AnvilStateProvide
 
     pub(crate) fn update_canon_chain(
         &self,
-        new_block: &PR::Block,
-        receipts: Vec<PR::Receipt>
+        new_block: &Block,
+        receipts: Vec<TransactionReceipt>
     ) -> eyre::Result<()> {
         let state = self.canon_state.new_block(new_block, receipts);
         if self.canon_state_tx.receiver_count() == 0 {
@@ -78,21 +69,16 @@ impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> AnvilStateProvide
         &mut self.provider
     }
 
-    pub fn as_wallet_state_provider(&self) -> AnvilStateProvider<WalletProvider<N>, N, PR> {
+    pub fn as_wallet_state_provider(&self) -> AnvilStateProvider<WalletProvider> {
         AnvilStateProvider {
             provider:       self.provider.wallet_provider(),
             canon_state:    self.canon_state.clone(),
-            canon_state_tx: self.canon_state_tx.clone(),
-            _phantom:       PhantomData
+            canon_state_tx: self.canon_state_tx.clone()
         }
     }
-}
 
-/// used for testnet to make sure cannon notifications work
-impl<P: WithWalletProvider<Ethereum> + Provider<Ethereum>>
-    AnvilStateProvider<P, Ethereum, reth_primitives::EthPrimitives>
-{
-    pub async fn listen_to_new_blocks_eth(self) {
+    /// used for testnet to make sure cannon notifications work
+    pub async fn listen_to_new_blocks(self) {
         let mut new_blocks = self
             .provider()
             .rpc_provider()
@@ -102,107 +88,40 @@ impl<P: WithWalletProvider<Ethereum> + Provider<Ethereum>>
             .with_poll_interval(Duration::from_millis(100))
             .into_stream();
 
-        while let Some(block_hashes) = new_blocks.next().await {
-            if let Some(block_hash) = block_hashes.first() {
+        while let Some(block_hash) = new_blocks.next().await {
+            if let Some(block_hash) = block_hash.first() {
+                tracing::info!("got new blockhash");
                 let block = self
                     .provider()
-                    .get_block(BlockId::hash(*block_hash))
+                    .rpc_provider()
+                    .get_block(BlockId::Hash(alloy_rpc_types::RpcBlockHash {
+                        block_hash:        *block_hash,
+                        require_canonical: None
+                    }))
                     .full()
                     .await
                     .unwrap()
                     .unwrap();
 
-                let receipts = self
+                let recipts = self
                     .provider()
-                    .get_block_receipts(BlockId::hash(*block_hash))
+                    .rpc_provider()
+                    .get_block_receipts(BlockId::Hash(alloy_rpc_types::RpcBlockHash {
+                        block_hash:        *block_hash,
+                        require_canonical: None
+                    }))
                     .await
                     .unwrap()
                     .unwrap();
-
                 tracing::info!("updating cannon chain");
-                let pr_block =
-                    super::compat::rpc_block_to_pr_block::<reth_primitives::EthPrimitives>(&block)
-                        .unwrap();
-                let pr_receipts = super::compat::rpc_receipts_to_pr_receipts::<
-                    reth_primitives::EthPrimitives
-                >(receipts)
-                .unwrap();
 
-                self.update_canon_chain(&pr_block, pr_receipts).unwrap();
+                self.update_canon_chain(&block, recipts).unwrap();
             }
         }
     }
 }
 
-impl<P: WithWalletProvider<Optimism> + Provider<Optimism>>
-    AnvilStateProvider<P, Optimism, OpPrimitives>
-{
-    pub async fn listen_to_new_blocks_op(self) {
-        let mut new_blocks = self
-            .provider
-            .rpc_provider()
-            .watch_blocks()
-            .await
-            .unwrap()
-            .with_poll_interval(Duration::from_millis(100))
-            .into_stream();
-
-        while let Some(block_hashes) = new_blocks.next().await {
-            if let Some(block_hash) = block_hashes.first() {
-                let block = self
-                    .provider
-                    .get_block_by_hash(*block_hash)
-                    // NOTE: We may need this?? Not sure yet.
-                    .full()
-                    .await
-                    .unwrap()
-                    .unwrap();
-
-                let receipts: Vec<OpReceipt> = self
-                    .provider
-                    .get_block_receipts(BlockId::hash(*block_hash))
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .into_iter()
-                    .map(|r| OpReceiptEnvelope::from(r).into())
-                    .collect();
-
-                tracing::info!("updating cannon chain");
-
-                let block: OpBlock = block
-                    .map_transactions(|tx| tx.as_recovered().inner().clone().clone())
-                    .into_consensus();
-
-                self.update_canon_chain(&block, receipts).unwrap();
-            }
-        }
-    }
-}
-
-pub trait StartMonitor {
-    fn spawn(self);
-}
-
-impl<P: WithWalletProvider<Ethereum> + Provider<Ethereum>> StartMonitor
-    for AnvilStateProvider<P, Ethereum, EthPrimitives>
-{
-    fn spawn(self) {
-        tokio::spawn(self.listen_to_new_blocks_eth());
-    }
-}
-
-impl<P: WithWalletProvider<Optimism> + Provider<Optimism>> StartMonitor
-    for AnvilStateProvider<P, Optimism, OpPrimitives>
-{
-    fn spawn(self) {
-        tokio::spawn(self.listen_to_new_blocks_op());
-    }
-}
-
-impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> reth_revm::DatabaseRef
-    for AnvilStateProvider<P, N, PR>
-{
+impl<P: WithWalletProvider> reth_revm::DatabaseRef for AnvilStateProvider<P> {
     type Error = DBError;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -256,9 +175,7 @@ impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> reth_revm::Databa
         panic!("This should not be called, as the code is already loaded");
     }
 }
-impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> BlockNumReader
-    for AnvilStateProvider<P, N, PR>
-{
+impl<P: WithWalletProvider> BlockNumReader for AnvilStateProvider<P> {
     fn chain_info(&self) -> ProviderResult<reth_chainspec::ChainInfo> {
         panic!("never used");
     }
@@ -301,9 +218,7 @@ impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> BlockNumReader
         panic!("never used");
     }
 }
-impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> BlockHashReader
-    for AnvilStateProvider<P, N, PR>
-{
+impl<P: WithWalletProvider> BlockHashReader for AnvilStateProvider<P> {
     fn block_hash(&self, _: BlockNumber) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");
     }
@@ -324,13 +239,11 @@ impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> BlockHashReader
     }
 }
 
-impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> BlockStateProviderFactory
-    for AnvilStateProvider<P, N, PR>
-{
-    type Provider = RpcStateProvider<N>;
+impl<P: WithWalletProvider> BlockStateProviderFactory for AnvilStateProvider<P> {
+    type Provider = RpcStateProvider;
 
     fn state_by_block(&self, block: u64) -> ProviderResult<Self::Provider> {
-        Ok(RpcStateProvider::<N>::new(block, self.provider.rpc_provider()))
+        Ok(RpcStateProvider::new(block, self.provider.rpc_provider()))
     }
 
     fn best_block_number(&self) -> ProviderResult<BlockNumber> {
@@ -339,16 +252,12 @@ impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> BlockStateProvide
     }
 }
 
-impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> CanonStateSubscriptions
-    for AnvilStateProvider<P, N, PR>
-{
-    fn subscribe_to_canonical_state(&self) -> CanonStateNotifications<PR> {
+impl<P: WithWalletProvider> CanonStateSubscriptions for AnvilStateProvider<P> {
+    fn subscribe_to_canonical_state(&self) -> CanonStateNotifications<Self::Primitives> {
         self.canon_state_tx.subscribe()
     }
 }
 
-impl<P: WithWalletProvider<N>, N: Network, PR: NodePrimitives> NodePrimitivesProvider
-    for AnvilStateProvider<P, N, PR>
-{
-    type Primitives = PR;
+impl<P: WithWalletProvider> NodePrimitivesProvider for AnvilStateProvider<P> {
+    type Primitives = EthPrimitives;
 }

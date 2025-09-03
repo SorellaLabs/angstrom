@@ -23,7 +23,6 @@ use angstrom_types::{
 use consensus::{AngstromValidator, ConsensusManager};
 use futures::Future;
 use matching_engine::manager::MatcherHandle;
-use op_alloy_network::Ethereum;
 use parking_lot::RwLock;
 use pool_manager::PoolHandle;
 use reth_chainspec::Hardforks;
@@ -246,14 +245,14 @@ where
 
     pub fn strom_validation<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&TestOrderValidator<AnvilStateProvider<WalletProvider<Ethereum>>>) -> R
+        F: FnOnce(&TestOrderValidator<AnvilStateProvider<WalletProvider>>) -> R
     {
         self.state_lock.strom_validation(f)
     }
 
     pub fn strom_validation_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&mut TestOrderValidator<AnvilStateProvider<WalletProvider<Ethereum>>>) -> R
+        F: FnOnce(&mut TestOrderValidator<AnvilStateProvider<WalletProvider>>) -> R
     {
         self.state_lock.strom_validation_mut(f)
     }

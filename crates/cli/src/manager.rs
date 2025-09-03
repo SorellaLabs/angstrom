@@ -13,11 +13,13 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails, UniswapAngstromRegistry},
     orders::{PoolSolution, unique_searcher_orders_per_pool},
     primitive::{AngstromMetaSigner, AngstromSigner, ChainExt, PoolId},
+    provider::OpNetworkProvider,
     submission::SubmissionHandler,
     uni_structure::{BaselinePoolState, PoolSnapshots}
 };
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use matching_engine::MatchingEngineHandle;
+use op_alloy_network::Optimism;
 use order_pool::order_storage::OrderStorage;
 use reth::tasks::shutdown::GracefulShutdown;
 use reth_optimism_primitives::OpPrimitives;
@@ -38,7 +40,7 @@ const BID_AGGREGATION_DEADLINE_FACTOR: f64 = 0.8;
 /// machine without consensus or networking.
 pub struct RollupManager<P, M, BS, S>
 where
-    P: Provider + Unpin + 'static,
+    P: Provider<Optimism> + Unpin + 'static,
     S: AngstromMetaSigner
 {
     current_height:         BlockNumber,
@@ -49,7 +51,7 @@ where
     order_storage:          Arc<OrderStorage>,
     pool_registry:          UniswapAngstromRegistry,
     uniswap_pools:          SyncedUniswapPools,
-    provider:               Arc<SubmissionHandler<P>>,
+    provider:               Arc<SubmissionHandler<P, OpNetworkProvider>>,
     matching_engine:        M,
     signer:                 AngstromSigner<S>,
 
@@ -120,7 +122,7 @@ impl DriverState {
 
 impl<P, M, BS, S> RollupManager<P, M, BS, S>
 where
-    P: Provider + Unpin + 'static,
+    P: Provider<Optimism> + Unpin + 'static,
     M: MatchingEngineHandle,
     BS: BlockSyncConsumer,
     S: AngstromMetaSigner
@@ -134,7 +136,7 @@ where
         order_storage: Arc<OrderStorage>,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: Arc<SubmissionHandler<P>>,
+        provider: Arc<SubmissionHandler<P, OpNetworkProvider>>,
         matching_engine: M,
         signer: AngstromSigner<S>
     ) -> Self {
@@ -326,7 +328,7 @@ where
 
 impl<P, M, BS, S> Future for RollupManager<P, M, BS, S>
 where
-    P: Provider + Unpin + 'static,
+    P: Provider<Optimism> + Unpin + 'static,
     M: MatchingEngineHandle,
     BS: BlockSyncConsumer,
     S: AngstromMetaSigner

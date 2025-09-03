@@ -4,7 +4,7 @@ use alloy::{
     contract::CallBuilder,
     primitives::{Address, U256, address},
     providers::{
-        WalletProvider,
+        Provider, WalletProvider,
         ext::{AnvilApi, DebugApi}
     },
     rpc::types::trace::geth::{
@@ -17,6 +17,7 @@ use angstrom_types::sol_bindings::testnet::{MockERC20, PoolManagerDeployer, Test
 use anvil::WalletProviderRpc;
 use eyre::eyre;
 use futures::Future;
+use op_alloy_network::Optimism;
 
 pub mod anvil;
 pub mod deploy;
@@ -31,16 +32,16 @@ pub trait DebugTransaction {
     async fn run_with_results_safe(self) -> eyre::Result<TxHash>;
 }
 
-impl<P, D> DebugTransaction for CallBuilder<P, D>
+impl<P, D> DebugTransaction for CallBuilder<P, D, Optimism>
 where
-    P: alloy::providers::Provider + Clone,
+    P: Provider<Optimism> + Clone,
     D: alloy::contract::CallDecoder
 {
     async fn run_safe(self) -> eyre::Result<TxHash> {
         let provider = self.provider.clone();
         let receipt = self.gas(50_000_000_u64).send().await?.get_receipt().await?;
-        if receipt.inner.status() {
-            Ok(receipt.transaction_hash)
+        if receipt.inner.inner.status() {
+            Ok(receipt.inner.transaction_hash)
         } else {
             let default_options = GethDebugTracingOptions::default();
             let _call_options = GethDebugTracingOptions {
@@ -57,12 +58,12 @@ where
                 ..Default::default()
             };
             let result = provider
-                .debug_trace_transaction(receipt.transaction_hash, default_options)
+                .debug_trace_transaction(receipt.inner.transaction_hash, default_options)
                 .await?;
 
             println!("TRACE: {result:?}");
             // We can make this do a cool backtrace later
-            Err(eyre!("Transaction with hash {} failed", receipt.transaction_hash))
+            Err(eyre!("Transaction with hash {} failed", receipt.inner.transaction_hash))
         }
     }
 
@@ -84,15 +85,15 @@ where
             ..Default::default()
         };
         let result = provider
-            .debug_trace_transaction(receipt.transaction_hash, default_options)
+            .debug_trace_transaction(receipt.inner.transaction_hash, default_options)
             .await?;
 
         println!("TRACE: {result:?}");
         // We can make this do a cool backtrace later
-        if receipt.inner.status() {
-            Ok(receipt.transaction_hash)
+        if receipt.inner.inner.status() {
+            Ok(receipt.inner.transaction_hash)
         } else {
-            Err(eyre!("Transaction with hash {} failed", receipt.transaction_hash))
+            Err(eyre!("Transaction with hash {} failed", receipt.inner.transaction_hash))
         }
     }
 }

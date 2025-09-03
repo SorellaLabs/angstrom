@@ -3,13 +3,13 @@ use std::{fmt::Debug, sync::Arc};
 use alloy::{consensus::Transaction, primitives::Address, providers::Provider, sol_types::SolCall};
 use futures::{Stream, StreamExt};
 use pade::PadeDecode;
-use reth_primitives::NodePrimitives;
 use reth_provider::CanonStateNotificationStream;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     contract_bindings::angstrom::Angstrom::executeCall,
-    contract_payloads::angstrom::AngstromBundle, primitive::ChainExt, sol_bindings::Ray
+    contract_payloads::angstrom::AngstromBundle, primitive::ChainExt, provider::NetworkProvider,
+    sol_bindings::Ray
 };
 
 /// represents the price settled on angstrom between two tokens
@@ -36,9 +36,12 @@ impl PairsWithPrice {
             .collect::<Vec<_>>()
     }
 
-    pub fn into_price_update_stream<P: Provider + 'static, N: NodePrimitives>(
+    pub fn into_price_update_stream<
+        P: Provider<N::Network> + 'static,
+        N: NetworkProvider + 'static
+    >(
         angstrom_address: Address,
-        stream: CanonStateNotificationStream<N>,
+        stream: CanonStateNotificationStream<N::Primitives>,
         provider: Arc<P>
     ) -> impl Stream<Item = (u64, u128, Vec<Self>)> + Send {
         stream.then(move |notification| {

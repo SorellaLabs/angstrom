@@ -36,6 +36,7 @@ use angstrom_types::{
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
 use matching_engine::MatchingManager;
+use op_alloy_network::Optimism;
 use order_pool::{PoolConfig, order_storage::OrderStorage};
 use parking_lot::RwLock;
 use pool_manager::{consensus::ConsensusPoolManagerBuilder, rollup::RollupPoolManagerBuilder};
@@ -326,7 +327,7 @@ where
         });
 
         let uniswap_pool_manager =
-            configure_uniswap_manager::<_, EthNetworkProvider, DEFAULT_TICKS>(
+            configure_uniswap_manager::<_, _, EthNetworkProvider, DEFAULT_TICKS>(
                 querying_provider.clone(),
                 eth_handle.subscribe_cannon_state_notifications().await,
                 uniswap_registry,
@@ -343,7 +344,7 @@ where
         let pool_ids = uniswap_pool_manager.pool_addresses().collect::<Vec<_>>();
 
         executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
-        let price_generator = TokenPriceGenerator::new(
+        let price_generator = TokenPriceGenerator::new::<_, EthNetworkProvider>(
             querying_provider.clone(),
             block_id,
             uniswap_pools.clone(),
@@ -353,11 +354,12 @@ where
         .await
         .expect("failed to start token price generator");
 
-        let update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
-            angstrom_address,
-            node.provider.canonical_state_stream(),
-            querying_provider.clone()
-        ));
+        let update_stream =
+            Box::pin(PairsWithPrice::into_price_update_stream::<_, EthNetworkProvider>(
+                angstrom_address,
+                node.provider.canonical_state_stream(),
+                querying_provider.clone()
+            ));
 
         let block_height = node.provider.best_block_number().unwrap();
 
@@ -493,7 +495,7 @@ where
         // so it will be quicker than rpc + won't be bounded by the rpc threadpool.
         let url = node.rpc_server_handle().ipc_endpoint().unwrap();
         tracing::info!(?url, ?config.mev_boost_endpoints, "backup to database is");
-        let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
+        let querying_provider: Arc<_> = ProviderBuilder::<_, _, Optimism>::default()
             .with_recommended_fillers()
             .layer(RethDbLayer::new(node.provider().clone()))
             // backup
@@ -510,7 +512,7 @@ where
 
         let normal_nodes = config.get_normal_nodes();
 
-        let submission_handler = SubmissionHandler::new(
+        let submission_handler = SubmissionHandler::<_, OpNetworkProvider>::new(
             querying_provider.clone(),
             &normal_nodes,
             angstrom_address,
@@ -602,7 +604,7 @@ where
         });
 
         let uniswap_pool_manager =
-            configure_uniswap_manager::<_, OpNetworkProvider, DEFAULT_TICKS>(
+            configure_uniswap_manager::<_, _, OpNetworkProvider, DEFAULT_TICKS>(
                 querying_provider.clone(),
                 eth_handle.subscribe_cannon_state_notifications().await,
                 uniswap_registry,
@@ -619,7 +621,7 @@ where
         let pool_ids = uniswap_pool_manager.pool_addresses().collect::<Vec<_>>();
 
         executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
-        let price_generator = TokenPriceGenerator::new(
+        let price_generator = TokenPriceGenerator::new::<_, OpNetworkProvider>(
             querying_provider.clone(),
             block_id,
             uniswap_pools.clone(),
@@ -629,11 +631,12 @@ where
         .await
         .expect("failed to start token price generator");
 
-        let update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
-            angstrom_address,
-            node.provider.canonical_state_stream(),
-            querying_provider.clone()
-        ));
+        let update_stream =
+            Box::pin(PairsWithPrice::into_price_update_stream::<_, OpNetworkProvider>(
+                angstrom_address,
+                node.provider.canonical_state_stream(),
+                querying_provider.clone()
+            ));
 
         let block_height = node.provider.best_block_number().unwrap();
 

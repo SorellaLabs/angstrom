@@ -1,12 +1,16 @@
-use alloy::{contract::RawCallBuilder, primitives::Address, sol_types::SolValue};
+use alloy::{
+    contract::RawCallBuilder,
+    primitives::Address,
+    providers::{Provider, WalletProvider},
+    sol_types::SolValue
+};
 use alloy_sol_types::SolCall;
 use angstrom_types::contract_bindings::angstrom::Angstrom;
+use op_alloy_network::Optimism;
 
 use super::{SUB_ZERO_FACTORY, mine_create3_address, mine_create3_address_uni};
 
-pub async fn deploy_angstrom_create3<
-    P: alloy::contract::private::Provider + alloy::providers::WalletProvider
->(
+pub async fn deploy_angstrom_create3<P: Provider<Optimism> + WalletProvider<Optimism>>(
     provider: &P,
     pool_manager: Address,
     controller: Address
@@ -53,9 +57,7 @@ mod _private {
     }
 }
 
-pub async fn deploy_uni_create3<
-    P: alloy::contract::private::Provider + alloy::providers::WalletProvider
->(
+pub async fn deploy_uni_create3<P: Provider<Optimism> + WalletProvider<Optimism>>(
     provider: &P,
     controller: Address
 ) -> Address {

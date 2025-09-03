@@ -1,4 +1,4 @@
-use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::HashSet, marker::PhantomData, pin::Pin, sync::Arc, time::Duration};
 
 use alloy::{
     network::{Ethereum, EthereumWallet},
@@ -281,7 +281,7 @@ impl ReplayRunner {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, EthNetworkProvider, 50>(
+        let uniswap_pool_manager = configure_uniswap_manager::<_, _, EthNetworkProvider, 50>(
             rpc.clone().into(),
             eth_handle.subscribe_cannon_state_notifications().await,
             uniswap_registry.clone(),
@@ -311,7 +311,7 @@ impl ReplayRunner {
                     *base_wei
                 )
             } else {
-                TokenPriceGenerator::new(
+                TokenPriceGenerator::new::<_, EthNetworkProvider>(
                     Arc::new(anvil_provider.rpc_provider()),
                     block_number,
                     uniswap_pools.clone(),
@@ -323,11 +323,12 @@ impl ReplayRunner {
             };
 
         let token_price_update_stream = anvil_provider.state_provider().canonical_state_stream();
-        let token_price_update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
-            angstrom_address,
-            token_price_update_stream,
-            Arc::new(anvil_provider.rpc_provider())
-        ));
+        let token_price_update_stream =
+            Box::pin(PairsWithPrice::into_price_update_stream::<_, EthNetworkProvider>(
+                angstrom_address,
+                token_price_update_stream,
+                Arc::new(anvil_provider.rpc_provider())
+            ));
 
         let user_account = block_log
             .validation_snapshot

@@ -2,12 +2,13 @@ use std::pin::Pin;
 
 use alloy::{
     eips::eip2718::Encodable2718,
-    primitives::{Address, TxHash},
+    primitives::{Address, TxHash, keccak256},
     providers::Provider
 };
 use angstrom_types::{
     contract_payloads::angstrom::AngstromBundle,
     primitive::{AngstromMetaSigner, AngstromSigner},
+    provider::NetworkProvider,
     submission::{ChainSubmitter, TxFeatureInfo}
 };
 use futures::Future;
@@ -23,11 +24,11 @@ impl ChainSubmitter for AnvilSubmissionProvider {
         self.angstrom_address
     }
 
-    fn submit<'a, S: AngstromMetaSigner>(
+    fn submit<'a, S: AngstromMetaSigner, N: NetworkProvider>(
         &'a self,
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
-        tx_features: &'a TxFeatureInfo
+        tx_features: &'a TxFeatureInfo<N>
     ) -> Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
         Box::pin(async move {
             let Some(bundle) = bundle else { return Ok(None) };
@@ -63,8 +64,8 @@ impl ChainSubmitter for AnvilSubmissionProvider {
             let tx = self
                 .build_and_sign_tx_with_gas(signer, bundle, tx_features)
                 .await;
-            let hash = *tx.tx_hash();
             let encoded = tx.encoded_2718();
+            let hash = keccak256(&encoded);
 
             self.provider
                 .send_raw_transaction(&encoded)

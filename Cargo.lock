@@ -1111,6 +1111,7 @@ dependencies = [
  "futures",
  "hsm-signer",
  "matching-engine",
+ "op-alloy-network",
  "order-pool",
  "parking_lot",
  "pool-manager",
@@ -4698,9 +4699,9 @@ dependencies = [
 
 [[package]]
 name = "gmp-mpfr-sys"
-version = "1.6.7"
+version = "1.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a636fb6a653382a379ee1e5593dacdc628667994167024c143214cafd40c1a86"
+checksum = "60f8970a75c006bb2f8ae79c6768a116dd215fa8346a87aed99bf9d82ca43394"
 dependencies = [
  "libc",
  "windows-sys 0.60.2",

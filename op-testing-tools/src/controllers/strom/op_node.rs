@@ -76,6 +76,10 @@ where
         self.testnet_node_id
     }
 
+    pub fn testnet_node_config(&self) -> TestingNodeConfig<G> {
+        self.config.clone()
+    }
+
     pub fn state_provider(&self) -> &AnvilProvider<P> {
         &self.state_provider
     }

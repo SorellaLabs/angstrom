@@ -42,6 +42,7 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
     }
 
     async fn spawn_new_devnet_nodes(&mut self, ex: TaskExecutor) -> eyre::Result<()> {
+        #[allow(unused_assignments)]
         let mut initial_angstrom_state = None;
 
         let config = TestingNodeConfig::new(0, self.config.clone(), 100);
@@ -62,10 +63,10 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
             tracing::info!(?initial_angstrom_state, "initialized angstrom state");
 
             initializer.rpc_provider().anvil_mine(Some(5), None).await?;
-            initializer.into_state_provider();
+            initializer.into_state_provider()
         };
 
-        let node = OpTestnetNode::new(
+        let _node = OpTestnetNode::new(
             config,
             provider,
             initial_angstrom_state.clone().unwrap(),
@@ -88,7 +89,6 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
     ) -> eyre::Result<()> {
         tracing::debug!("deploying new pool on state machine");
         let node = self.get_peer_with(|n| n.state_provider().deployed_addresses().is_some());
-        node.start_network_and_consensus_and_validation();
         let provider = node.state_provider();
         let config = node.testnet_node_config();
 
@@ -96,8 +96,6 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
         initializer
             .deploy_extra_pool_full(pool_key, token0, token1, store_index)
             .await?;
-
-        node.stop_network_and_consensus_and_validation();
 
         Ok(())
     }

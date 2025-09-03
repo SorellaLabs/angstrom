@@ -1,11 +1,10 @@
-use std::{future::Future, path::Path, pin::Pin, sync::Arc};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use angstrom_types::testnet::InitialTestnetState;
-use reth_chainspec::MAINNET;
 use reth_db::DatabaseEnv;
 use reth_node_ethereum::EthereumNode;
 use reth_node_types::NodeTypesWithDBAdapter;
-use reth_provider::providers::{BlockchainProvider, ReadOnlyConfig};
+use reth_provider::providers::BlockchainProvider;
 use tracing::Level;
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, layer::SubscriberExt, util::SubscriberInitExt

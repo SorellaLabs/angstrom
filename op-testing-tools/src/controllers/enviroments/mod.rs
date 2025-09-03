@@ -58,6 +58,16 @@ where
             .unwrap_or_else(|| panic!("peer {id} not found"))
     }
 
+    pub fn get_peer_with<F: Fn(&OpTestnetNode<P, G>) -> bool + Send>(
+        &self,
+        f: F
+    ) -> &OpTestnetNode<P, G> {
+        self.peers
+            .iter()
+            .find_map(|(_, n)| f(n).then_some(n))
+            .expect("condition not met")
+    }
+
     /// updates the anvil state of all the peers from a given peer
     pub(crate) async fn all_peers_update_state(&self, id: u64) -> eyre::Result<()> {
         let peer = self.get_peer(id);

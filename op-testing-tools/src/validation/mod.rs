@@ -66,7 +66,7 @@ where
         uniswap_pools: SyncedUniswapPools,
         token_conversion: TokenPriceGenerator,
         token_updates: Pin<
-            Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>
+            Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + Sync + 'static>
         >,
         pool_storage: AngstromPoolsTracker,
         node_id: u64

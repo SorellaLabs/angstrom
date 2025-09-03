@@ -187,7 +187,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
         let uniswap_pool_manager =
-            configure_uniswap_manager::<_, EthNetworkProvider, DEFAULT_TICKS>(
+            configure_uniswap_manager::<_, _, EthNetworkProvider, DEFAULT_TICKS>(
                 state_provider.rpc_provider().into(),
                 eth_handle.subscribe_cannon_state_notifications().await,
                 uniswap_registry.clone(),
@@ -218,7 +218,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 base_wei
             )
         } else {
-            TokenPriceGenerator::new(
+            TokenPriceGenerator::new::<_, EthNetworkProvider>(
                 Arc::new(state_provider.rpc_provider()),
                 block_number,
                 uniswap_pools.clone(),
@@ -231,11 +231,12 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         println!("{token_conversion:#?}");
 
         let token_price_update_stream = state_provider.state_provider().canonical_state_stream();
-        let token_price_update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
-            inital_angstrom_state.angstrom_addr,
-            token_price_update_stream,
-            Arc::new(state_provider.rpc_provider())
-        ));
+        let token_price_update_stream =
+            Box::pin(PairsWithPrice::into_price_update_stream::<_, EthNetworkProvider>(
+                inital_angstrom_state.angstrom_addr,
+                token_price_update_stream,
+                Arc::new(state_provider.rpc_provider())
+            ));
 
         let pool_storage = AngstromPoolsTracker::new(
             inital_angstrom_state.angstrom_addr,

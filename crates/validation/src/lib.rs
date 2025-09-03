@@ -52,7 +52,9 @@ pub fn init_validation<
     current_block: u64,
     angstrom_address: Address,
     node_address: Address,
-    update_stream: Pin<Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>>,
+    update_stream: Pin<
+        Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + Sync + 'static>
+    >,
     uniswap_pools: SyncedUniswapPools,
     price_generator: TokenPriceGenerator,
     pool_store: Arc<AngstromPoolConfigStore>,
@@ -89,7 +91,9 @@ pub fn init_validation_replay<
     current_block: u64,
     angstrom_address: Address,
     node_address: Address,
-    update_stream: Pin<Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>>,
+    update_stream: Pin<
+        Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + Sync + 'static>
+    >,
     uniswap_pools: SyncedUniswapPools,
     price_generator: TokenPriceGenerator,
     pool_store: Arc<AngstromPoolConfigStore>,

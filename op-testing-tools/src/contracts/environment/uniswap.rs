@@ -5,6 +5,7 @@ use angstrom_types::contract_bindings::{
     pool_gate::PoolGate::{self, PoolGateInstance},
     position_manager::PositionManager
 };
+use op_alloy_network::Optimism;
 use tracing::debug;
 use validation::common::WETH_ADDRESS;
 
@@ -103,7 +104,7 @@ where
         Ok(position_manager_addr)
     }
 
-    pub fn pool_gate(&self) -> PoolGateInstance<&E::P> {
+    pub fn pool_gate(&self) -> PoolGateInstance<&E::P, Optimism> {
         PoolGateInstance::new(self.pool_gate, self.provider())
     }
 }

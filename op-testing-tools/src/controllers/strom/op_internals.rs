@@ -128,7 +128,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
         let uniswap_pool_manager =
-            configure_uniswap_manager::<_, OpNetworkProvider, DEFAULT_TICKS>(
+            configure_uniswap_manager::<_, _, OpNetworkProvider, DEFAULT_TICKS>(
                 state_provider.rpc_provider().into(),
                 eth_handle.subscribe_cannon_state_notifications().await,
                 uniswap_registry.clone(),
@@ -160,7 +160,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         }
 
         // Token conversion and price updates
-        let token_conversion = TokenPriceGenerator::new(
+        let token_conversion = TokenPriceGenerator::new::<_, OpNetworkProvider>(
             Arc::new(state_provider.rpc_provider()),
             block_number,
             uniswap_pools.clone(),
@@ -171,7 +171,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         .expect("failed to start price generator");
         let token_price_update_stream = state_provider.state_provider().canonical_state_stream();
         let token_price_update_stream =
-            Box::pin(PairsWithPrice::into_price_update_stream::<_, OpPrimitives>(
+            Box::pin(PairsWithPrice::into_price_update_stream::<_, OpNetworkProvider>(
                 inital_angstrom_state.angstrom_addr,
                 token_price_update_stream,
                 Arc::new(state_provider.rpc_provider())
@@ -196,21 +196,6 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             node_config.node_id
         )
         .await?;
-        {
-            let mut shutdown_rx_validator = shutdown_rx.clone();
-            let validator_task = validator;
-            executor.spawn_critical_with_graceful_shutdown_signal(
-                "validator",
-                move |grace| async move {
-                    tokio::pin!(validator_task);
-                    tokio::select! {
-                        _ = &mut validator_task => {}
-                        _ = grace => {}
-                        _ = shutdown_rx_validator.changed() => {}
-                    }
-                }
-            );
-        }
 
         // Pool manager and storage
         let pool_config = PoolConfig {

@@ -19,8 +19,7 @@ use op_testing_tools::{
 };
 use op_testnet::cli::{init_tracing, testnet::TestnetCli};
 use pade::PadeDecode;
-use reth_optimism_primitives::OpPrimitives;
-use reth_provider::{CanonStateSubscriptions, test_utils::NoopProvider};
+use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TaskExecutor;
 use tokio::time::timeout;
 use tracing::{Instrument, Level, span};

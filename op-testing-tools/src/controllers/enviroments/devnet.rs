@@ -21,12 +21,7 @@ use crate::{
 impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
     pub async fn spawn_devnet(config: DevnetConfig, ex: TaskExecutor) -> eyre::Result<Self> {
         let block_provider = TestnetBlockProvider::new();
-        let mut this = Self {
-            config: config.clone(),
-            block_provider,
-            node: todo!(),
-            anvil:
-        };
+        let mut this = Self { config: config.clone(), block_provider, node: todo!(), anvil: None };
 
         tracing::info!("initializing devnet with {} nodes", config.node_count());
         this.spawn_new_devnet_nodes(ex).await?;
@@ -87,7 +82,7 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
     ) -> eyre::Result<()> {
         tracing::debug!("deploying new pool on state machine");
         let provider = self.node.state_provider();
-        let config = node.testnet_node_config();
+        let config = self.node.testnet_node_config();
 
         let mut initializer = AnvilInitializer::new_existing(provider, config);
         initializer

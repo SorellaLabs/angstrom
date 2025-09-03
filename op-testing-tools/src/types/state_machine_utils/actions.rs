@@ -31,7 +31,7 @@ impl<'a> WithAction<'a> for DevnetStateMachine<'a> {
 
     fn advance_block(&mut self) {
         let f = |testnet: &'a mut OpAngstromTestnet<DevnetConfig, WalletProvider>| {
-            pin_action(testnet.all_peers_update_state(0))
+            pin_action(testnet.update_state())
         };
         self.add_action("advance block", f);
     }

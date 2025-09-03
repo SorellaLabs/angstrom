@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use testing_tools::types::config::DevnetConfig;
+use op_testing_tools::types::config::DevnetConfig;
 
 use super::testnet::AllPoolKeyInners;
 

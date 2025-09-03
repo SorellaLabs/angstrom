@@ -11,11 +11,8 @@ use angstrom_types::{
     primitive::{ANGSTROM_ADDRESS, AngstromAddressConfig, CHAIN_ID},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty
 };
-use op_alloy_network::Optimism;
 use op_testing_tools::{controllers::enviroments::OpAngstromTestnet, utils::noop_agent};
 use op_testnet::cli::{init_tracing, testnet::TestnetCli};
-use reth_optimism_primitives::OpPrimitives;
-use reth_provider::test_utils::NoopProvider;
 
 #[test]
 #[serial_test::serial]
@@ -31,7 +28,6 @@ fn testnet_deploy() {
         };
 
         let testnet = OpAngstromTestnet::spawn_testnet(
-            NoopProvider::default(),
             cli.make_config().unwrap(),
             vec![noop_agent],
             ctx.task_executor
@@ -64,24 +60,19 @@ fn testnet_bundle_unlock() {
         tracing::info!("spinning up testnet for unlock attestation test");
 
         // spawn testnet
-        let testnet = OpAngstromTestnet::spawn_testnet(
-            NoopProvider::default(),
-            config,
-            agents,
-            ctx.task_executor.clone()
-        )
-        .await
-        .unwrap_or_else(|e| panic!("failed to start angstrom testnet: {e:?}"));
+        let testnet = OpAngstromTestnet::spawn_testnet(config, agents, ctx.task_executor.clone())
+            .await
+            .unwrap_or_else(|e| panic!("failed to start angstrom testnet: {e:?}"));
 
         // capture shutdown handle before moving testnet into task
         let shutdown = testnet.shutdown_sender();
 
         // Get validator provider (first node)
-        let validator_provider = testnet.node.state_provider();
+        let validator_provider = testnet.node().state_provider();
         let provider = validator_provider.rpc_provider();
 
         // Get initial state for addresses
-        let signer = testnet.node.get_sk();
+        let signer = testnet.node().get_sk();
 
         let testnet_task = ctx.task_executor.spawn_critical(
             "testnet",
@@ -137,12 +128,12 @@ fn testnet_bundle_unlock() {
             .expect("transaction receipt not found");
 
         tracing::info!("transaction receipt: {:?}", receipt);
-        let bn = receipt.block_number;
+        let bn = receipt.inner.block_number;
 
         tracing::info!("attestation unlock included for block {bn:?}");
 
         // Verify transaction was successful
-        assert!(receipt.status(), "unlock transaction should succeed");
+        assert!(receipt.inner.inner.status(), "unlock transaction should succeed");
 
         // Request graceful shutdown, then abort and let tasks wind down
         let _ = shutdown.send(true);

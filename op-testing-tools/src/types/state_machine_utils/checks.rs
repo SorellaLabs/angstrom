@@ -38,7 +38,7 @@ impl WithCheck for DevnetStateMachine<'_> {
     ) {
         let f = move |testnet: &mut OpAngstromTestnet<DevnetConfig, WalletProvider>| {
             let token_gen = testnet
-                .random_peer()
+                .node()
                 .strom_validation(|v| v.underlying.token_price_generator());
 
             let pairs_to_pools = token_gen.pairs_to_pools();

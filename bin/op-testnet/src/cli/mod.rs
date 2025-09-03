@@ -13,7 +13,9 @@ use tracing_subscriber::{
     EnvFilter, Layer, Registry, filter, layer::SubscriberExt, util::SubscriberInitExt
 };
 
-use crate::{run_testnet, simulations::e2e_orders::run_e2e_orders};
+use crate::{
+    cli::devnet::DevnetCli, run_devnet, run_testnet, simulations::e2e_orders::run_e2e_orders
+};
 
 #[derive(Parser)]
 pub struct OpAngstromTestnetCli {

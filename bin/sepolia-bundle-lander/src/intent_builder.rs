@@ -17,6 +17,7 @@ use angstrom_rpc::api::OrderApiClient;
 use angstrom_types::{
     matching::{Ray, SqrtPriceX96},
     primitive::{ANGSTROM_DOMAIN, AngstromSigner},
+    provider::EthNetworkProvider,
     sol_bindings::{grouped_orders::AllOrders, rpc_orders::OmitOrderMeta}
 };
 use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
@@ -55,7 +56,7 @@ where
         self.block_number = block_number;
         tracing::debug!("loading new pools");
         self.pool
-            .update_to_block(Some(block_number), self.provider.clone())
+            .update_to_block::<_, EthNetworkProvider>(Some(block_number), self.provider.clone())
             .await
             .map_err(Into::into)
     }

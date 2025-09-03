@@ -3,6 +3,7 @@ use std::time::Duration;
 use alloy::{
     eips::{Encodable2718, eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M},
     network::TransactionBuilder,
+    primitives::keccak256,
     providers::Provider,
     sol_types::SolCall
 };
@@ -114,11 +115,13 @@ fn testnet_bundle_unlock() {
             .await
             .unwrap();
 
-        let hash = *tx.tx_hash();
         let encoded = tx.encoded_2718();
+        tracing::info!("Hash: {}", keccak256(&encoded));
 
         let a = provider.send_raw_transaction(&encoded).await.unwrap();
-        a.watch().await.unwrap();
+        let hash = a.watch().await.unwrap();
+
+        tracing::info!(?hash, "Transaction confirmed");
 
         // Wait for transaction to be mined
         let receipt = provider

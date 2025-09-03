@@ -91,6 +91,7 @@ where
 
     pub async fn testnet_future(self) {
         // Keep the node alive (no networking/consensus to drive here)
+        // TODO(mempirate): poll the validation future to completion I guess?
         futures::future::pending::<()>().await;
     }
 

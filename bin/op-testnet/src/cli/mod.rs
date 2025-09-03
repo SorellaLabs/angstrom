@@ -110,9 +110,11 @@ pub fn init_tracing(verbosity: u8) {
     } else {
         let filter = filter::Targets::new()
             .with_target("testnet", level)
+            .with_target("op_testnet", level)
             .with_target("devnet", level)
             .with_target("angstrom_rpc", level)
             .with_target("angstrom", level)
+            .with_target("op_angstrom", level)
             .with_target("op_testing_tools", level)
             .with_target("angstrom_eth", level)
             .with_target("matching_engine", level)

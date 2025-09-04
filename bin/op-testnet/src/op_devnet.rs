@@ -17,7 +17,7 @@ pub(crate) async fn run_devnet(executor: TaskExecutor, cli: DevnetCli) -> eyre::
 async fn basic_example(executor: TaskExecutor, cli: DevnetCli) -> eyre::Result<()> {
     let config = cli.make_config()?;
 
-    AngstromAddressConfig::INTERNAL_TESTNET.init();
+    AngstromAddressConfig::BASE_TESTNET.init();
     let mut testnet = OpAngstromTestnet::spawn_devnet(config, executor.clone())
         .await?
         .as_state_machine();

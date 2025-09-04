@@ -219,7 +219,7 @@ where
 #[serial_test::serial]
 fn test_internal_balances_land() {
     init_tracing(3);
-    AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+    AngstromAddressConfig::BASE_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
     let _ = runner.run_command_until_exit(|ctx| async move {
@@ -237,7 +237,7 @@ fn test_internal_balances_land() {
 #[serial_test::serial]
 fn testnet_lands_block() {
     init_tracing(3);
-    AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+    AngstromAddressConfig::BASE_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
     let _ = runner.run_command_until_exit(|ctx| async move {
@@ -340,7 +340,7 @@ static WORKED: AtomicBool = AtomicBool::new(false);
 #[serial_test::serial]
 fn test_remove_add_pool() {
     init_tracing(3);
-    AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+    AngstromAddressConfig::BASE_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
     let _ = runner.run_command_until_exit(|ctx| async move {

@@ -93,7 +93,7 @@ pub struct AngstromAddressConfig {
 }
 
 impl AngstromAddressConfig {
-    pub const INTERNAL_TESTNET: Self = Self {
+    pub const BASE_TESTNET: Self = Self {
         angstrom_address:         address!("0xc856DdFC924E9AeEaaFfB1905544b36470AC3ad4"),
         position_manager_address: address!("0xF967Ede45ED04ec89EcA04a4c7175b6E0106e3A8"),
         controller_v1_address:    address!("0xEd421745765bc1938848cAaB502ffF53c653ff13"),
@@ -102,6 +102,16 @@ impl AngstromAddressConfig {
 
         angstrom_deploy_block: 0,
         chain_id:              1
+    };
+    pub const INTERNAL_TESTNET: Self = Self {
+        angstrom_address:         address!("0xc856DdFC924E9AeEaaFfB1905544b36470AC3ad4"),
+        position_manager_address: address!("0xF967Ede45ED04ec89EcA04a4c7175b6E0106e3A8"),
+        controller_v1_address:    address!("0xEd421745765bc1938848cAaB502ffF53c653ff13"),
+        pool_manager_address:     address!("0x48bC5A530873DcF0b890aD50120e7ee5283E0112"),
+        gas_token_address:        address!("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
+
+        angstrom_deploy_block: 0,
+        chain_id:              8453
     };
 
     /// Will panic if config has already been set

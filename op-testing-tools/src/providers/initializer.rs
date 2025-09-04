@@ -56,7 +56,7 @@ impl AnvilInitializer {
         config: TestingNodeConfig<G>,
         nodes: Vec<Address>
     ) -> eyre::Result<(Self, Option<AnvilInstance>, DeployedAddresses)> {
-        let (provider, anvil) = config.spawn_anvil_rpc().await?;
+        let (provider, anvil) = config.spawn_anvil_rpc(2).await?;
 
         tracing::debug!("deploying UniV4 enviroment");
         let uniswap_env = UniswapEnv::new(provider.clone()).await?;

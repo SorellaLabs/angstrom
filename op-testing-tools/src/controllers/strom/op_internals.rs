@@ -1,4 +1,10 @@
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{
+    cmp::max,
+    collections::{HashMap, VecDeque},
+    pin::Pin,
+    sync::Arc,
+    time::Duration
+};
 
 use alloy_rpc_types::BlockId;
 use angstrom_amm_quoter::{QuoterHandle, RollupQuoterManager};
@@ -9,10 +15,10 @@ use angstrom_eth::{
 };
 use angstrom_rpc::{OrderApi, api::OrderApiServer};
 use angstrom_types::{
-    block_sync::GlobalBlockSync,
+    block_sync::{BlockSyncProducer, GlobalBlockSync},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
-    primitive::UniswapPoolRegistry,
+    primitive::{PoolId, UniswapPoolRegistry},
     provider::OpNetworkProvider,
     submission::SubmissionHandler,
     testnet::InitialTestnetState
@@ -56,8 +62,9 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         inital_angstrom_state: InitialTestnetState,
         agents: Vec<F>,
         executor: TaskExecutor,
-        shutdown_rx: tokio::sync::watch::Receiver<bool>
-    ) -> eyre::Result<(Self, TestOrderValidator<AnvilStateProvider<WalletProvider>>)>
+        shutdown_rx: tokio::sync::watch::Receiver<bool>,
+        token_price_snapshot: Option<(HashMap<PoolId, VecDeque<PairsWithPrice>>, u128)>
+    ) -> eyre::Result<(Self, TestOrderValidator<AnvilStateProvider<WalletProvider>>, GlobalBlockSync)>
     where
         G: GlobalTestingConfig,
         F: for<'a> Fn(
@@ -83,16 +90,19 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             .map_err(|e| eyre::eyre!("{e}"))?
         );
 
-        // Wait for first canonical state update
-        let _ = state_provider
-            .state_provider()
-            .subscribe_to_canonical_state()
-            .recv()
-            .await;
+        let sp = state_provider.state_provider();
 
-        let sub = state_provider
-            .state_provider()
-            .subscribe_to_canonical_state();
+        // Wait for first canonical state update
+        let state_update = sp.subscribe_to_canonical_state().recv().await?;
+
+        tracing::debug!("Got first canonical state update: {:?}", state_update);
+
+        let block_number = max(block_number, state_update.tip().number);
+
+        tracing::debug!("Spawning block sync at: {}", block_number);
+        let block_sync = GlobalBlockSync::new(block_number);
+
+        let sub = sp.subscribe_to_canonical_state();
 
         // Spawn chain data cleanser
         let angstrom_tokens = uniswap_registry
@@ -108,7 +118,6 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             );
 
         let node_set = std::iter::once(node_config.address()).collect();
-        let block_sync = GlobalBlockSync::new(block_number);
         let eth_handle = EthDataCleanser::<_, OpPrimitives>::spawn(
             inital_angstrom_state.angstrom_addr,
             inital_angstrom_state.controller_addr,
@@ -123,6 +132,9 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             vec![]
         )
         .unwrap();
+
+        tracing::debug!("Spawned data cleanser");
+        block_sync.clear();
 
         // Uniswap pool manager
         let network_stream = Box::pin(eth_handle.subscribe_network())
@@ -160,15 +172,27 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         }
 
         // Token conversion and price updates
-        let token_conversion = TokenPriceGenerator::new::<_, OpNetworkProvider>(
-            Arc::new(state_provider.rpc_provider()),
-            block_number,
-            uniswap_pools.clone(),
-            WETH_ADDRESS,
-            Some(1)
-        )
-        .await
-        .expect("failed to start price generator");
+        let token_conversion = if let Some((prev_prices, base_wei)) = token_price_snapshot {
+            println!("Using snapshot");
+            TokenPriceGenerator::from_snapshot(
+                uniswap_pools.clone(),
+                prev_prices,
+                WETH_ADDRESS,
+                base_wei
+            )
+        } else {
+            TokenPriceGenerator::new::<_, OpNetworkProvider>(
+                Arc::new(state_provider.rpc_provider()),
+                block_number,
+                uniswap_pools.clone(),
+                WETH_ADDRESS,
+                Some(1)
+            )
+            .await
+            .expect("failed to start price generator")
+        };
+        println!("{token_conversion:#?}");
+
         let token_price_update_stream = state_provider.state_provider().canonical_state_stream();
         let token_price_update_stream =
             Box::pin(PairsWithPrice::into_price_update_stream::<_, OpNetworkProvider>(
@@ -204,11 +228,11 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
         };
         let order_storage = Arc::new(OrderStorage::new(&pool_config));
         let pool_handle = RollupPoolManager::new(
-            validation_client.clone(),
+            validator.client.clone(),
             Some(order_storage.clone()),
             eth_handle.subscribe_network(),
             block_sync.clone(),
-            Duration::from_secs(12)
+            Duration::from_secs(2)
         )
         .with_config(pool_config)
         .build_with_channels(
@@ -279,6 +303,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             current_block:  block_number,
             state_provider: state_provider.state_provider()
         };
+
         futures::stream::iter(agents.into_iter())
             .map(|agent| (agent)(&inital_angstrom_state, agent_config.clone()))
             .buffer_unordered(4)
@@ -297,7 +322,7 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             inital_angstrom_state.angstrom_addr,
             signer.clone()
         );
-        let block_time = Duration::from_secs(12);
+        let block_time = Duration::from_secs(2);
         let canon_stream =
             BroadcastStream::new(eth_handle.subscribe_cannon_state_notifications().await);
         let driver = RollupManager::new(
@@ -316,6 +341,8 @@ impl<P: WithWalletProvider> OpNodeInternals<P> {
             driver.run_till_shutdown(grace)
         });
 
-        Ok((Self { state_provider }, validator))
+        block_sync.finalize_modules();
+
+        Ok((Self { state_provider }, validator, block_sync))
     }
 }

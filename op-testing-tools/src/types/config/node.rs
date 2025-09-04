@@ -117,7 +117,7 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
         anvil_builder
     }
 
-    fn configure_testnet_leader_anvil(&self) -> Anvil {
+    fn configure_testnet_leader_anvil(&self, block_time: u64) -> Anvil {
         if !self.global_config.is_leader(self.node_id) {
             panic!("only the leader can call this!")
         }
@@ -133,10 +133,10 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             .arg("--code-size-limit")
             .arg("393216")
             .arg("--disable-block-gas-limit")
-            .block_time(12)
+            .block_time(block_time)
     }
 
-    fn configure_devnet_anvil(&self) -> Anvil {
+    fn configure_devnet_anvil(&self, block_time: u64) -> Anvil {
         let mut anvil_builder = Anvil::new()
             .chain_id(*CHAIN_ID.get().unwrap())
             .arg("--host")
@@ -146,7 +146,8 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             .arg(self.global_config.anvil_rpc_endpoint(self.node_id))
             .arg("--code-size-limit")
             .arg("393216")
-            .arg("--disable-block-gas-limit");
+            .arg("--disable-block-gas-limit")
+            .block_time(block_time);
 
         if let Some((fork_block_number, fork_url)) = self.global_config.fork_config() {
             anvil_builder = anvil_builder
@@ -157,23 +158,29 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
         anvil_builder
     }
 
-    pub async fn spawn_anvil_rpc(&self) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
+    pub async fn spawn_anvil_rpc(
+        &self,
+        block_time: u64
+    ) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
         match self.global_config.config_type() {
             TestingConfigKind::Testnet | TestingConfigKind::Replay => {
-                self.spawn_testnet_anvil_rpc().await
+                self.spawn_testnet_anvil_rpc(block_time).await
             }
-            TestingConfigKind::Devnet => self.spawn_devnet_anvil_rpc().await
+            TestingConfigKind::Devnet => self.spawn_devnet_anvil_rpc(block_time).await
         }
     }
 
     async fn spawn_testnet_anvil_rpc(
-        &self
+        &self,
+        block_time: u64
     ) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
         let anvil = self
             .global_config
             .is_leader(self.node_id)
             .then(|| match self.global_config.config_type() {
-                TestingConfigKind::Testnet => self.configure_testnet_leader_anvil().try_spawn(),
+                TestingConfigKind::Testnet => {
+                    self.configure_testnet_leader_anvil(block_time).try_spawn()
+                }
                 TestingConfigKind::Replay => self.configure_replay_leader_anvil().try_spawn(),
                 TestingConfigKind::Devnet => unreachable!("This should never happen")
             })
@@ -211,9 +218,10 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
     }
 
     async fn spawn_devnet_anvil_rpc(
-        &self
+        &self,
+        block_time: u64
     ) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
-        let anvil = self.configure_devnet_anvil().try_spawn()?;
+        let anvil = self.configure_devnet_anvil(block_time).try_spawn()?;
 
         let sk = self.signing_key();
         let wallet = EthereumWallet::new(sk.clone());

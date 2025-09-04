@@ -27,6 +27,7 @@ async fn basic_example(executor: TaskExecutor, cli: DevnetCli) -> eyre::Result<(
     testnet.check_block(15);
     testnet.advance_block();
     testnet.check_block(16);
+    // TODO(mempirate): Add orders
     debug!("added pooled orders to state machine");
 
     testnet.run().await;

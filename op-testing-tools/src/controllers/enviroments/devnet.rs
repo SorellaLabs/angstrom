@@ -21,6 +21,7 @@ use crate::{
 impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
     pub async fn spawn_devnet(config: DevnetConfig, ex: TaskExecutor) -> eyre::Result<Self> {
         let block_provider = TestnetBlockProvider::new();
+        // TODO(mempirate): implement devnet node. What's the difference with testnet?
         let mut this = Self { config: config.clone(), block_provider, node: todo!(), anvil: None };
 
         tracing::info!("initializing devnet with {} nodes", config.node_count());
@@ -63,6 +64,8 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
             config,
             provider,
             initial_angstrom_state.clone().unwrap(),
+            // TODO(mempirate): Double check
+            None,
             vec![a],
             ex.clone()
         )

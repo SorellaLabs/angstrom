@@ -46,7 +46,8 @@ impl OpAngstromTestnet<OpTestnetConfig, WalletProvider> {
             Self::anvil_deployment(provider, pool_keys, ex.clone()).await?;
 
         // Create single testnet node
-        let node = OpTestnetNode::new(node_config, provider, initial_state, agents, ex).await?;
+        let node =
+            OpTestnetNode::new(node_config, provider, initial_state, None, agents, ex).await?;
 
         Ok(Self {
             node,

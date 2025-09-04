@@ -1,8 +1,18 @@
-use std::{pin::Pin, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    pin::Pin,
+    sync::Arc,
+    time::Duration
+};
 
 use alloy::signers::local::PrivateKeySigner;
 use angstrom_cli::handles::RollupHandles;
-use angstrom_types::{primitive::AngstromSigner, testnet::InitialTestnetState};
+use angstrom_types::{
+    block_sync::GlobalBlockSync,
+    pair_with_price::PairsWithPrice,
+    primitive::{AngstromSigner, PoolId},
+    testnet::InitialTestnetState
+};
 use futures::Future;
 use parking_lot::Mutex;
 use reth_tasks::TaskExecutor;
@@ -23,7 +33,8 @@ pub struct OpTestnetNode<P, G> {
     config:          TestingNodeConfig<G>,
     validation:      Arc<Mutex<TestOrderValidator<AnvilStateProvider<WalletProvider>>>>,
     /// Internal shutdown signal used to gracefully stop background tasks
-    shutdown_tx:     tokio::sync::watch::Sender<bool>
+    shutdown_tx:     tokio::sync::watch::Sender<bool>,
+    block_sync:      GlobalBlockSync
 }
 
 impl<P, G> OpTestnetNode<P, G>
@@ -35,6 +46,7 @@ where
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
         inital_angstrom_state: InitialTestnetState,
+        token_price_snapshot: Option<(HashMap<PoolId, VecDeque<PairsWithPrice>>, u128)>,
         agents: Vec<F>,
         executor: TaskExecutor
     ) -> eyre::Result<Self>
@@ -50,14 +62,15 @@ where
 
         let handles = RollupHandles::new();
 
-        let (internals, validator) = OpNodeInternals::new(
+        let (internals, validator, block_sync) = OpNodeInternals::new(
             node_config.clone(),
             state_provider,
             handles,
             inital_angstrom_state.clone(),
             agents,
             executor.clone(),
-            shutdown_rx.clone()
+            shutdown_rx.clone(),
+            token_price_snapshot
         )
         .await?;
 
@@ -69,7 +82,8 @@ where
             _init_state: inital_angstrom_state,
             config: node_config,
             validation: Arc::new(Mutex::new(validator)),
-            shutdown_tx
+            shutdown_tx,
+            block_sync
         })
     }
 
@@ -90,9 +104,11 @@ where
     }
 
     pub async fn testnet_future(self) {
-        // Keep the node alive (no networking/consensus to drive here)
-        // TODO(mempirate): poll the validation future to completion I guess?
-        futures::future::pending::<()>().await;
+        self.block_sync.clear();
+
+        let mut validation = self.validation.lock();
+
+        validation.poll_for(Duration::from_secs(1000)).await;
     }
 
     /// Signal all internal tasks to shut down gracefully.

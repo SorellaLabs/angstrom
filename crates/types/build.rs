@@ -30,16 +30,25 @@ fn main() {
     let mut contract_dir = base_dir.clone();
     contract_dir.push(CONTRACT_LOCATION);
 
-    // Only rerun if our contracts have actually changed
     let mut src_dir = base_dir.clone();
     src_dir.push(SRC_DIRECTORY);
     if let Some(src_dir_str) = src_dir.to_str() {
-        println!("cargo::rerun-if-changed={src_dir_str}");
+        println!("cargo:rerun-if-changed={src_dir_str}"); // ✅ Single colon
     }
-    println!("cargo::rerun-if-changed={OUT_DIRECTORY}");
 
     let mut out_dir = base_dir.clone();
     out_dir.push(OUT_DIRECTORY);
+    if let Some(out_dir_str) = out_dir.to_str() {
+        println!("cargo:rerun-if-changed={out_dir_str}"); // ✅ Single colon
+    }
+
+    // ✅ Fix 2: Check if we actually need to rebuild
+    let bindings_file_path = format!("{this_dir}/crates/types{BINDINGS_PATH}");
+
+    // Check if output is newer than inputs
+    if is_output_up_to_date(&src_dir, &bindings_file_path) {
+        return; // Skip rebuild if nothing changed
+    }
 
     let Ok(mut res) = Command::new("forge")
         .arg("bind")
@@ -126,4 +135,27 @@ pub fn workspace_dir() -> std::path::PathBuf {
         .stdout;
     let cargo_path = std::path::Path::new(std::str::from_utf8(&output).unwrap().trim());
     cargo_path.parent().unwrap().to_path_buf()
+}
+
+fn is_output_up_to_date(src_dir: &std::path::Path, output_file: &str) -> bool {
+    let Ok(output_metadata) = std::fs::metadata(output_file) else {
+        return false; // Output doesn't exist, need to build
+    };
+
+    let output_modified = output_metadata.modified().unwrap();
+
+    // Check if any source file is newer than output
+    if let Ok(entries) = std::fs::read_dir(src_dir) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified) = metadata.modified() {
+                    if modified > output_modified {
+                        return false; // Source is newer, need rebuild
+                    }
+                }
+            }
+        }
+    }
+
+    true // Output is up to date
 }

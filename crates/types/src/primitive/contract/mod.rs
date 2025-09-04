@@ -111,7 +111,8 @@ impl AngstromAddressConfig {
         gas_token_address:        address!("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
 
         angstrom_deploy_block: 0,
-        chain_id:              8453
+        // TODO(mempirate): Change to 8453?
+        chain_id:              1
     };
 
     /// Will panic if config has already been set

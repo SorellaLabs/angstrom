@@ -3,7 +3,6 @@ use crate::types::{GlobalTestingConfig, initial_state::InitialStateConfig};
 
 #[derive(Debug, Clone)]
 pub struct DevnetConfig {
-    pub intial_node_count:    u64,
     pub initial_rpc_port:     u16,
     pub fork_block_number:    Option<u64>,
     pub fork_url:             Option<String>,
@@ -12,19 +11,12 @@ pub struct DevnetConfig {
 
 impl DevnetConfig {
     pub fn new(
-        intial_node_count: u64,
         initial_rpc_port: u16,
         fork_block_number: Option<u64>,
         fork_url: Option<String>,
         initial_state_config: InitialStateConfig
     ) -> Self {
-        Self {
-            intial_node_count,
-            initial_rpc_port,
-            fork_block_number,
-            fork_url,
-            initial_state_config
-        }
+        Self { initial_rpc_port, fork_block_number, fork_url, initial_state_config }
     }
 
     pub fn rpc_port_with_node_id(&self, node_id: Option<u64>) -> u64 {
@@ -35,18 +27,6 @@ impl DevnetConfig {
         }
     }
 }
-
-// impl Default for DevnetConfig {
-//     fn default() -> Self {
-//         Self {
-//             intial_node_count: 5,
-//             initial_rpc_port:  4200,
-//             fork_block_number: None,
-//             fork_url:          None,
-//             initial_state_config: InitialStateConfig::default()
-//         }
-//     }
-// }
 
 impl GlobalTestingConfig for DevnetConfig {
     fn eth_ws_url(&self) -> String {
@@ -74,7 +54,7 @@ impl GlobalTestingConfig for DevnetConfig {
     }
 
     fn node_count(&self) -> u64 {
-        self.intial_node_count
+        1
     }
 
     fn leader_eth_rpc_port(&self) -> u16 {

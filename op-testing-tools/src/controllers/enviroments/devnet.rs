@@ -20,26 +20,11 @@ use crate::{
 
 impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
     pub async fn spawn_devnet(config: DevnetConfig, ex: TaskExecutor) -> eyre::Result<Self> {
-        let block_provider = TestnetBlockProvider::new();
-        // TODO(mempirate): implement devnet node. What's the difference with testnet?
-        let mut this = Self { config: config.clone(), block_provider, node: todo!(), anvil: None };
+        tracing::info!("initializing devnet");
 
-        tracing::info!("initializing devnet with {} nodes", config.node_count());
-        this.spawn_new_devnet_nodes(ex).await?;
-        tracing::info!("initialization devnet with {} nodes", config.node_count());
-
-        Ok(this)
-    }
-
-    pub fn as_state_machine<'a>(self) -> DevnetStateMachine<'a> {
-        DevnetStateMachine::new(self)
-    }
-
-    async fn spawn_new_devnet_nodes(&mut self, ex: TaskExecutor) -> eyre::Result<()> {
-        #[allow(unused_assignments)]
         let mut initial_angstrom_state = None;
 
-        let config = TestingNodeConfig::new(0, self.config.clone(), 100);
+        let config = TestingNodeConfig::new(0, config.clone(), 100);
         let node_address = config.angstrom_signer().address();
         let node_id = config.node_id;
 
@@ -54,17 +39,15 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
             let provider = initializer.provider_mut().provider_mut();
 
             initial_angstrom_state = Some(provider.initialize_state(ex.clone()).await?);
-            tracing::info!(?initial_angstrom_state, "initialized angstrom state");
 
             initializer.rpc_provider().anvil_mine(Some(5), None).await?;
             initializer.into_state_provider()
         };
 
-        let _node = OpTestnetNode::new(
-            config,
+        let node = OpTestnetNode::new(
+            config.clone(),
             provider,
             initial_angstrom_state.clone().unwrap(),
-            // TODO(mempirate): Double check
             None,
             vec![a],
             ex.clone()
@@ -72,7 +55,16 @@ impl OpAngstromTestnet<DevnetConfig, WalletProvider> {
         .await?;
         tracing::info!(node_id, "made angstrom node");
 
-        Ok(())
+        Ok(Self {
+            node,
+            block_provider: TestnetBlockProvider::new(),
+            config: config.global_config,
+            anvil: None
+        })
+    }
+
+    pub fn as_state_machine<'a>(self) -> DevnetStateMachine<'a> {
+        DevnetStateMachine::new(self)
     }
 
     /// deploys a new pool

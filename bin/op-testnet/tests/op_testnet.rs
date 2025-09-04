@@ -24,7 +24,7 @@ fn testnet_deploy() {
     let runner = reth::CliRunner::try_default_runtime().unwrap();
     let _ = runner.run_command_until_exit(|ctx| async move {
         let cli = TestnetCli {
-            eth_fork_url: "wss://optimism-rpc.publicnode.com".to_string(),
+            eth_fork_url: "wss://base-rpc.publicnode.com".to_string(),
             ..Default::default()
         };
 
@@ -50,7 +50,7 @@ fn testnet_bundle_unlock() {
 
     let _ = runner.run_command_until_exit(|ctx| async move {
         let config = TestnetCli {
-            eth_fork_url: "wss://optimism-rpc.publicnode.com".to_string(),
+            eth_fork_url: "wss://base-rpc.publicnode.com".to_string(),
             // Use None to let the config generate a random port to avoid conflicts
             angstrom_base_rpc_port: None,
             ..Default::default()

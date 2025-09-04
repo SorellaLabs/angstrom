@@ -170,7 +170,7 @@ where
     V: Fn(WalletProviderRpc) -> Pin<Box<dyn Future<Output = ()> + Send>>
 {
     let config = TestnetCli {
-        eth_fork_url: "wss://optimism-rpc.publicnode.com".to_string(),
+        eth_fork_url: "wss://base-rpc.publicnode.com".to_string(),
         ..Default::default()
     };
 
@@ -345,7 +345,7 @@ fn test_remove_add_pool() {
 
     let _ = runner.run_command_until_exit(|ctx| async move {
         let config = TestnetCli {
-            eth_fork_url: "wss://optimism-rpc.publicnode.com".to_string(),
+            eth_fork_url: "wss://base-rpc.publicnode.com".to_string(),
             ..Default::default()
         };
 

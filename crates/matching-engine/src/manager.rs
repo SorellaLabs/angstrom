@@ -207,6 +207,8 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 MatchingEngineError::SimulationFailed(e)
             })?;
 
+        tracing::debug!("Gas response: {:?}", gas_response);
+
         Ok((solutions, gas_response))
     }
 

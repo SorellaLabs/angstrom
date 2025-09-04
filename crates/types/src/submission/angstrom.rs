@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use alloy::{
     eips::Encodable2718,
     network::TransactionBuilder,
-    primitives::Bytes,
+    primitives::{Bytes, keccak256},
     providers::{Provider, RootProvider},
     rpc::client::ClientBuilder
 };
@@ -16,7 +16,10 @@ use super::{
     AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
     EXTRA_GAS_LIMIT, TxFeatureInfo, Url
 };
-use crate::{primitive::AngstromMetaSigner, sol_bindings::rpc_orders::AttestAngstromBlockEmpty};
+use crate::{
+    primitive::AngstromMetaSigner, provider::NetworkProvider,
+    sol_bindings::rpc_orders::AttestAngstromBlockEmpty
+};
 
 pub struct AngstromSubmitter {
     clients:          Vec<(RootProvider, Url)>,
@@ -39,11 +42,11 @@ impl ChainSubmitter for AngstromSubmitter {
         self.angstrom_address
     }
 
-    fn submit<'a, S: AngstromMetaSigner>(
+    fn submit<'a, S: AngstromMetaSigner, N: NetworkProvider>(
         &'a self,
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
-        tx_features: &'a TxFeatureInfo
+        tx_features: &'a TxFeatureInfo<N>
     ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
         Box::pin(async move {
             let mut tx_hash = None;
@@ -54,13 +57,13 @@ impl ChainSubmitter for AngstromSubmitter {
                 // Angstrom integrators have max priority gas set to 0.
                 tx.set_max_priority_fee_per_gas(0);
 
-                let gas = tx.max_priority_fee_per_gas.unwrap();
+                let gas = tx.max_priority_fee_per_gas().unwrap();
                 // TODO: manipulate gas before signing based of off defined rebate spec.
                 // This is pending with talks with titan so leaving it for now
 
                 let signed_tx = tx.build(signer).await.unwrap();
-                tx_hash = Some(*signed_tx.hash());
                 let tx_payload = Bytes::from(signed_tx.encoded_2718());
+                tx_hash = Some(keccak256(&tx_payload));
 
                 AngstromIntegrationSubmission {
                     tx: tx_payload,

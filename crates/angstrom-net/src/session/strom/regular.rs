@@ -42,7 +42,8 @@ impl RegularProcessing {
             let Some(next) = self.manager_buffer.pop_front() else {
                 return;
             };
-            self.to_session_manager.send_item(next).unwrap()
+            // If the manager is dropped (e.g., during shutdown), ignore send errors.
+            let _ = self.to_session_manager.send_item(next);
         }
     }
 }

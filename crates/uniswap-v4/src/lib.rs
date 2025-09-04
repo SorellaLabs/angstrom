@@ -13,11 +13,11 @@ use angstrom_types::{
         angstrom::Angstrom::PoolKey,
         controller_v_1::ControllerV1::{PoolConfigured, PoolRemoved}
     },
-    primitive::UniswapPoolRegistry
+    primitive::UniswapPoolRegistry,
+    provider::NetworkProvider
 };
 use futures::Stream;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use reth_node_builder::NodePrimitives;
 use reth_provider::{
     CanonStateNotifications, DatabaseProviderFactory, ReceiptProvider, StateProvider,
     TryIntoHistoricalStateProvider
@@ -122,23 +122,19 @@ where
 
 pub async fn configure_uniswap_manager<
     BlockSync: BlockSyncConsumer,
-    N: NodePrimitives,
+    P: Provider<N::Network> + 'static,
+    N: NetworkProvider + 'static,
     const TICKS: u16
 >(
-    provider: Arc<impl Provider + 'static>,
-    state_notification: CanonStateNotifications<N>,
+    provider: Arc<P>,
+    state_notification: CanonStateNotifications<N::Primitives>,
     uniswap_pool_registry: UniswapPoolRegistry,
     current_block: BlockNumber,
     block_sync: BlockSync,
     pool_manager_address: Address,
     update_stream: Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>
-) -> UniswapPoolManager<
-    CanonicalStateAdapter<impl Provider + 'static, N>,
-    impl Provider + 'static,
-    BlockSync,
-    TICKS
-> {
-    let factory = V4PoolFactory::<_, TICKS>::new(
+) -> UniswapPoolManager<CanonicalStateAdapter<P, N>, P, N, BlockSync, TICKS> {
+    let factory = V4PoolFactory::<_, N, TICKS>::new(
         provider.clone(),
         uniswap_pool_registry,
         pool_manager_address

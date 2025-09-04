@@ -20,7 +20,8 @@ use angstrom_types::{
     primitive::{
         ANGSTROM_DEPLOYED_BLOCK, AngstromSigner, CONTROLLER_V1_ADDRESS, UniswapPoolRegistry,
         init_with_chain_id
-    }
+    },
+    provider::EthNetworkProvider
 };
 use futures::{StreamExt, stream::FuturesUnordered};
 use itertools::Itertools;
@@ -86,8 +87,11 @@ impl BundleWashTraderEnv {
                 cli.pool_manager_address
             );
             let mut pool = EnhancedUniswapPool::new(data_loader, INITIAL_TICKS_PER_SIDE);
-            pool.initialize(Some(provider.get_block_number().await?), provider.root().into())
-                .await?;
+            pool.initialize::<_, EthNetworkProvider>(
+                Some(provider.get_block_number().await?),
+                provider.root().into()
+            )
+            .await?;
             tracing::info!("{:#?}", pool);
             ang_pools.push(pool);
         }

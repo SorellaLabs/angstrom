@@ -19,6 +19,7 @@ use angstrom_types::{
     block_sync::BlockSyncConsumer,
     contract_payloads::angstrom::TopOfBlockOrder as PayloadTopOfBlockOrder,
     primitive::PoolId,
+    provider::NetworkProvider,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
     uni_structure::BaselinePoolState
 };
@@ -168,13 +169,14 @@ where
     }
 }
 
-pub struct UniswapPoolManager<P, PP, BlockSync, const TICKS: u16>
+pub struct UniswapPoolManager<P, PP, N, BlockSync, const TICKS: u16>
 where
     DataLoader: PoolDataLoader,
-    PP: Provider + 'static
+    PP: Provider<N::Network> + 'static,
+    N: NetworkProvider
 {
     /// the poolId with the fee to the dynamic fee poolId
-    factory:             V4PoolFactory<PP, TICKS>,
+    factory:             V4PoolFactory<PP, N, TICKS>,
     pools:               SyncedUniswapPools,
     latest_synced_block: u64,
     _state_change_cache: Arc<RwLock<StateChangeCache>>,
@@ -185,15 +187,16 @@ where
     rx:                  tokio::sync::mpsc::Receiver<(TickRangeToLoad, Arc<Notify>)>
 }
 
-impl<P, PP, BlockSync, const TICKS: u16> UniswapPoolManager<P, PP, BlockSync, TICKS>
+impl<P, PP, N, BlockSync, const TICKS: u16> UniswapPoolManager<P, PP, N, BlockSync, TICKS>
 where
-    PP: Provider + 'static,
+    PP: Provider<N::Network> + 'static,
+    N: NetworkProvider,
     DataLoader: PoolDataLoader + Default + Clone + Send + Sync + Unpin + 'static,
     BlockSync: BlockSyncConsumer,
-    P: PoolManagerProvider + Send + Sync + 'static
+    P: PoolManagerProvider<PP, N> + Send + Sync + 'static
 {
     pub async fn new(
-        factory: V4PoolFactory<PP, TICKS>,
+        factory: V4PoolFactory<PP, N, TICKS>,
         latest_synced_block: BlockNumber,
         provider: Arc<P>,
         block_sync: BlockSync,
@@ -300,7 +303,8 @@ where
         for pool in pools.pools.iter() {
             let pool = pool.value();
             let mut l = pool.write().expect("failed to write to pool");
-            async_to_sync(l.update_to_block(Some(block_number), provider.provider())).unwrap();
+            async_to_sync(l.update_to_block::<PP, N>(Some(block_number), provider.provider()))
+                .unwrap();
         }
         tracing::info!("finished");
     }
@@ -316,19 +320,21 @@ where
         let mut pool = binding.write().unwrap();
 
         // given we force this to resolve, should'nt be problematic
-        async_to_sync(pool.load_more_ticks(tick_req, None, node_provider)).unwrap();
+        async_to_sync(pool.load_more_ticks::<PP, N>(tick_req, None, node_provider)).unwrap();
 
         // notify we have updated the liquidity
         notifier.notify_one();
     }
 }
 
-impl<P, PP, BlockSync, const TICKS: u16> Future for UniswapPoolManager<P, PP, BlockSync, TICKS>
+impl<P, PP, BlockSync, N, const TICKS: u16> Future
+    for UniswapPoolManager<P, PP, N, BlockSync, TICKS>
 where
     DataLoader: PoolDataLoader + Default + Clone + Send + Sync + Unpin + 'static,
     BlockSync: BlockSyncConsumer,
-    P: PoolManagerProvider + Send + Sync + 'static,
-    PP: Provider + 'static
+    P: PoolManagerProvider<PP, N> + Send + Sync + 'static,
+    PP: Provider<N::Network> + 'static,
+    N: NetworkProvider
 {
     type Output = ();
 

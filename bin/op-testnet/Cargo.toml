@@ -1,0 +1,56 @@
+[package]
+name = "op-testnet"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+alloy.workspace = true
+alloy-primitives.workspace = true
+alloy-rpc-types.workspace = true
+alloy-signer-local.workspace = true
+angstrom-metrics.workspace = true
+angstrom-rpc.workspace = true
+angstrom-types = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+consensus.workspace = true
+enr = { workspace = true, features = ["serde", "k256"] }
+eyre.workspace = true
+futures.workspace = true
+itertools.workspace = true
+jsonrpsee.workspace = true
+op-alloy-network.workspace = true
+op-testing-tools.workspace = true
+pade.workspace = true
+reth.workspace = true
+reth-network-peers.workspace = true
+reth-optimism-primitives.workspace = true
+reth-provider = { workspace = true, features = ["test-utils"] }
+reth-tasks.workspace = true
+secp256k1.workspace = true
+serde.workspace = true
+serial_test.workspace = true
+testing-tools = { workspace = true }
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+validation = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+tikv-jemallocator = { version = "0", optional = true }
+
+[[bin]]
+name = "op-testnet"
+path = "src/main.rs"
+
+[features]
+default = ["jemalloc", "ipc"]
+ws = []
+ipc = []
+jemalloc = ["dep:tikv-jemallocator"]
+jemalloc-prof = ["jemalloc", "tikv-jemallocator?/profiling"]

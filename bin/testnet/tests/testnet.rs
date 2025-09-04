@@ -22,7 +22,7 @@ fn testnet_deploy() {
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
 
     let runner = reth::CliRunner::try_default_runtime().unwrap();
-    runner.run_command_until_exit(|ctx| async move {
+    let _ = runner.run_command_until_exit(|ctx| async move {
         let cli = TestnetCli {
             eth_fork_url: "wss://ethereum-rpc.publicnode.com".to_string(),
             ..Default::default()
@@ -49,7 +49,7 @@ fn testnet_bundle_unlock() {
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
-    runner.run_command_until_exit(|ctx| async move {
+    let _ = runner.run_command_until_exit(|ctx| async move {
         let config = TestnetCli {
             eth_fork_url: "wss://ethereum-rpc.publicnode.com".to_string(),
             ..Default::default()
@@ -117,11 +117,10 @@ fn testnet_bundle_unlock() {
             .await
             .unwrap();
 
-        let hash = *tx.tx_hash();
         let encoded = tx.encoded_2718();
 
         let a = provider.send_raw_transaction(&encoded).await.unwrap();
-        a.watch().await.unwrap();
+        let hash = a.watch().await.unwrap();
 
         // Wait for transaction to be mined
         let receipt = provider

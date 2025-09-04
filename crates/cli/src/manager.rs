@@ -13,11 +13,13 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails, UniswapAngstromRegistry},
     orders::{PoolSolution, unique_searcher_orders_per_pool},
     primitive::{AngstromMetaSigner, AngstromSigner, ChainExt, PoolId},
+    provider::OpNetworkProvider,
     submission::SubmissionHandler,
     uni_structure::{BaselinePoolState, PoolSnapshots}
 };
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use matching_engine::MatchingEngineHandle;
+use op_alloy_network::Optimism;
 use order_pool::order_storage::OrderStorage;
 use reth::tasks::shutdown::GracefulShutdown;
 use reth_optimism_primitives::OpPrimitives;
@@ -38,7 +40,7 @@ const BID_AGGREGATION_DEADLINE_FACTOR: f64 = 0.8;
 /// machine without consensus or networking.
 pub struct RollupManager<P, M, BS, S>
 where
-    P: Provider + Unpin + 'static,
+    P: Provider<Optimism> + Unpin + 'static,
     S: AngstromMetaSigner
 {
     current_height:         BlockNumber,
@@ -49,7 +51,7 @@ where
     order_storage:          Arc<OrderStorage>,
     pool_registry:          UniswapAngstromRegistry,
     uniswap_pools:          SyncedUniswapPools,
-    provider:               Arc<SubmissionHandler<P>>,
+    provider:               Arc<SubmissionHandler<P, OpNetworkProvider>>,
     matching_engine:        M,
     signer:                 AngstromSigner<S>,
 
@@ -76,6 +78,16 @@ enum DriverState {
     }
 }
 
+impl std::fmt::Display for DriverState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DriverState::Waiting => write!(f, "DriverState::Waiting"),
+            DriverState::BidAggregation { .. } => write!(f, "DriverState::BidAggregation"),
+            DriverState::Solving { .. } => write!(f, "DriverState::Solving")
+        }
+    }
+}
+
 impl DriverState {
     /// Poll the sleep future if in the [`DriverState::BidAggregation`] state.
     /// Returns `Poll::Ready` when the sleep is complete,
@@ -94,7 +106,10 @@ impl DriverState {
         cx: &mut Context<'_>
     ) -> Poll<eyre::Result<(PoolSnapshots, Vec<PoolSolution>, BundleGasDetails)>> {
         match self {
-            DriverState::Solving { future } => future.poll_unpin(cx),
+            DriverState::Solving { future } => {
+                tracing::debug!("Polling solving future");
+                future.poll_unpin(cx)
+            }
             _ => Poll::Pending
         }
     }
@@ -120,7 +135,7 @@ impl DriverState {
 
 impl<P, M, BS, S> RollupManager<P, M, BS, S>
 where
-    P: Provider + Unpin + 'static,
+    P: Provider<Optimism> + Unpin + 'static,
     M: MatchingEngineHandle,
     BS: BlockSyncConsumer,
     S: AngstromMetaSigner
@@ -134,11 +149,15 @@ where
         order_storage: Arc<OrderStorage>,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
-        provider: Arc<SubmissionHandler<P>>,
+        provider: Arc<SubmissionHandler<P, OpNetworkProvider>>,
         matching_engine: M,
         signer: AngstromSigner<S>
     ) -> Self {
         block_sync.register("RollupManager");
+
+        let state = DriverState::Waiting;
+
+        tracing::info!(current_height, %state, "Initializing RollupManager");
 
         Self {
             current_height,
@@ -151,7 +170,7 @@ where
             provider,
             matching_engine,
             signer,
-            state: DriverState::Waiting
+            state
         }
     }
 
@@ -192,6 +211,11 @@ where
     /// Handles the bid aggregation deadline: starts the solving process.
     fn on_aggregation_deadline(&mut self) {
         let orders = self.order_storage.get_all_orders();
+        tracing::debug!(
+            height = self.current_height,
+            total_orders = orders.total_orders(),
+            "Bid aggregation deadline passed, proceeding to solving..."
+        );
 
         let (limit, searcher) = orders.into_all_book_and_searcher();
 
@@ -204,6 +228,8 @@ where
             let (solutions, details) = matcher
                 .solve_pools(limit, searcher, pool_snapshots.clone())
                 .await?;
+
+            tracing::debug!("Solving future completed");
 
             Ok((pool_snapshots, solutions, details))
         }
@@ -219,6 +245,26 @@ where
         mut pool_solutions: Vec<PoolSolution>,
         details: BundleGasDetails
     ) {
+        tracing::debug!(
+            height = self.current_height,
+            solutions = pool_solutions.len(),
+            "Solving result received, building bundle..."
+        );
+
+        // Reset the state to waiting. State transition cycle is now complete, ready for
+        // the next block to start the next cycle.
+        self.state = DriverState::Waiting;
+        tracing::debug!(height = self.current_height, "Resetting state to waiting");
+
+        if pool_solutions.is_empty() {
+            tracing::debug!(
+                height = self.current_height,
+                "No pool solutions found, no bundle will be submitted"
+            );
+
+            return;
+        }
+
         // Sort the pool solutions by pool id (expected in some of the calls below).
         pool_solutions.sort();
 
@@ -244,10 +290,6 @@ where
                 return;
             }
         };
-
-        // Reset the state to waiting. State transition cycle is now complete, ready for
-        // the next block to start the next cycle.
-        self.state = DriverState::Waiting;
 
         let target_block = self.current_height + 1;
         let provider = self.provider.clone();
@@ -326,13 +368,14 @@ where
 
 impl<P, M, BS, S> Future for RollupManager<P, M, BS, S>
 where
-    P: Provider + Unpin + 'static,
+    P: Provider<Optimism> + Unpin + 'static,
     M: MatchingEngineHandle,
     BS: BlockSyncConsumer,
     S: AngstromMetaSigner
 {
     type Output = ();
 
+    #[tracing::instrument(skip(self, cx), fields(current_height = self.current_height, module = "RollupManager"))]
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
@@ -341,6 +384,7 @@ where
             // the next stage.
             if let Poll::Ready(()) = this.state.poll_sleep(cx) {
                 this.on_aggregation_deadline();
+                continue;
             }
 
             if let Poll::Ready(result) = this.state.poll_solver(cx) {
@@ -356,6 +400,8 @@ where
                         );
                     }
                 }
+
+                continue;
             }
 
             match this.canonical_block_stream.poll_next_unpin(cx) {
@@ -366,10 +412,14 @@ where
                 }
                 Poll::Ready(Some(Err(e))) => {
                     tracing::error!(?e, "Stream lagging behind");
+
+                    continue;
                 }
                 Poll::Ready(None) => {
                     // We exit the rollup driver when we receive no more chain notifications.
-                    tracing::warn!("No more chain state notifications");
+                    tracing::warn!(
+                        "No more chain state notifications, shutting down RollupManager..."
+                    );
                     return Poll::Ready(());
                 }
                 Poll::Pending => {}

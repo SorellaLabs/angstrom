@@ -22,8 +22,8 @@ use itertools::Itertools;
 use reth::rpc::types::mev::{EthBundleHash, EthSendBundle};
 
 use super::{
-    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY, TxFeatureInfo,
-    Url
+    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
+    NetworkProvider, TxFeatureInfo, Url
 };
 use crate::primitive::AngstromMetaSigner;
 
@@ -53,11 +53,11 @@ impl ChainSubmitter for MevBoostSubmitter {
         self.angstrom_address
     }
 
-    fn submit<'a, S: AngstromMetaSigner>(
+    fn submit<'a, S: AngstromMetaSigner, N: NetworkProvider>(
         &'a self,
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
-        tx_features: &'a TxFeatureInfo
+        tx_features: &'a TxFeatureInfo<N>
     ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
         Box::pin(async move {
             let bundle = bundle.ok_or_else(|| eyre::eyre!("no bundle was past in"))?;
@@ -66,10 +66,12 @@ impl ChainSubmitter for MevBoostSubmitter {
                 .build_and_sign_tx_with_gas(signer, bundle, tx_features)
                 .await;
 
-            let hash = *tx.tx_hash();
+            let encoded = tx.encoded_2718().into();
+
+            let hash = keccak256(&encoded);
 
             let bundle = EthSendBundle {
-                txs: vec![tx.encoded_2718().into()],
+                txs: vec![encoded],
                 block_number: tx_features.target_block,
                 ..Default::default()
             };

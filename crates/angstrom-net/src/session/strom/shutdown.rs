@@ -39,10 +39,11 @@ impl Shutdown {
 impl<S: AngstromMetaSigner> StromSession<S> for Shutdown {
     fn poll_outbound_msg(&mut self, cx: &mut Context<'_>) -> Poll<Option<BytesMut>> {
         if let Some(mut inner) = self.to_session_manager.take() {
-            if inner.poll_reserve(cx).is_ready() {
-                inner
-                    .send_item(StromSessionMessage::Disconnected { peer_id: self.remote_peer_id })
-                    .unwrap();
+            // Only proceed if we successfully reserved capacity.
+            if matches!(inner.poll_reserve(cx), Poll::Ready(Ok(()))) {
+                // Session manager may already be dropped during shutdown; ignore send errors.
+                let _ = inner
+                    .send_item(StromSessionMessage::Disconnected { peer_id: self.remote_peer_id });
                 cx.waker().wake_by_ref();
             } else {
                 self.to_session_manager = Some(inner);

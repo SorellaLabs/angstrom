@@ -1,8 +1,8 @@
 use std::ops::{Deref, DerefMut};
 
 use alloy::{
-    consensus::{SignableTransaction, TypedTransaction},
-    network::{Ethereum, NetworkWallet},
+    consensus::{SignableTransaction, Signed},
+    network::{Network, NetworkWallet},
     primitives::Signature,
     signers::{Signer, SignerSync, local::PrivateKeySigner}
 };
@@ -38,13 +38,15 @@ impl<S: AngstromMetaSigner> AngstromSigner<S> {
         self.id
     }
 
-    fn sign_transaction_inner(
+    fn sign_transaction_inner<T: SignableTransaction<Signature>>(
         &self,
-        tx: &mut dyn SignableTransaction<Signature>
-    ) -> alloy::signers::Result<Signature> {
+        tx: T
+    ) -> alloy::signers::Result<Signed<T>> {
         let hash = tx.signature_hash();
 
-        self.signer.sign_hash_sync(&hash)
+        let sig = self.signer.sign_hash_sync(&hash)?;
+
+        Ok(Signed::new_unchecked(tx, sig, hash))
     }
 }
 
@@ -88,7 +90,11 @@ impl<S: AngstromMetaSigner> DerefMut for AngstromSigner<S> {
     }
 }
 
-impl<S: AngstromMetaSigner> NetworkWallet<Ethereum> for AngstromSigner<S> {
+impl<S: AngstromMetaSigner, N: Network> NetworkWallet<N> for AngstromSigner<S>
+where
+    N::UnsignedTx: SignableTransaction<Signature>,
+    N::TxEnvelope: From<Signed<N::UnsignedTx>>
+{
     fn default_signer_address(&self) -> Address {
         self.address()
     }
@@ -106,32 +112,99 @@ impl<S: AngstromMetaSigner> NetworkWallet<Ethereum> for AngstromSigner<S> {
     async fn sign_transaction_from(
         &self,
         _: Address,
-        tx: TypedTransaction
-    ) -> alloy::signers::Result<alloy::consensus::TxEnvelope> {
-        match tx {
-            TypedTransaction::Legacy(mut t) => {
-                let sig = self.sign_transaction_inner(&mut t)?;
-                Ok(t.into_signed(sig).into())
-            }
-            TypedTransaction::Eip2930(mut t) => {
-                let sig = self.sign_transaction_inner(&mut t)?;
-                Ok(t.into_signed(sig).into())
-            }
-            TypedTransaction::Eip1559(mut t) => {
-                let sig = self.sign_transaction_inner(&mut t)?;
-                Ok(t.into_signed(sig).into())
-            }
-            TypedTransaction::Eip4844(mut t) => {
-                let sig = self.sign_transaction_inner(&mut t)?;
-                Ok(t.into_signed(sig).into())
-            }
-            TypedTransaction::Eip7702(mut t) => {
-                let sig = self.sign_transaction_inner(&mut t)?;
-                Ok(t.into_signed(sig).into())
-            }
-        }
+        tx: N::UnsignedTx
+    ) -> alloy::signers::Result<N::TxEnvelope> {
+        self.sign_transaction_inner(tx).map(|signed| signed.into())
     }
 }
+
+// impl<S: AngstromMetaSigner> NetworkWallet<Ethereum> for AngstromSigner<S> {
+//     fn default_signer_address(&self) -> Address {
+//         self.address()
+//     }
+
+//     /// Return true if the signer contains a credential for the given
+// address.     fn has_signer_for(&self, address: &Address) -> bool {
+//         address == &self.address()
+//     }
+
+//     /// Return an iterator of all signer addresses.
+//     fn signer_addresses(&self) -> impl Iterator<Item = Address> {
+//         vec![self.address()].into_iter()
+//     }
+
+//     async fn sign_transaction_from(
+//         &self,
+//         _: Address,
+//         tx: TypedTransaction
+//     ) -> alloy::signers::Result<alloy::consensus::TxEnvelope> {
+//         match tx {
+//             TypedTransaction::Legacy(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             TypedTransaction::Eip2930(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             TypedTransaction::Eip1559(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             TypedTransaction::Eip4844(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             TypedTransaction::Eip7702(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//         }
+//     }
+// }
+
+// impl<S: AngstromMetaSigner> NetworkWallet<Optimism> for AngstromSigner<S> {
+//     fn default_signer_address(&self) -> Address {
+//         self.address()
+//     }
+
+//     /// Return true if the signer contains a credential for the given
+// address.     fn has_signer_for(&self, address: &Address) -> bool {
+//         address == &self.address()
+//     }
+
+//     /// Return an iterator of all signer addresses.
+//     fn signer_addresses(&self) -> impl Iterator<Item = Address> {
+//         vec![self.address()].into_iter()
+//     }
+
+//     async fn sign_transaction_from(
+//         &self,
+//         _: Address,
+//         tx: OpTypedTransaction
+//     ) -> alloy::signers::Result<op_alloy_consensus::OpTxEnvelope> {
+//         match tx {
+//             OpTypedTransaction::Legacy(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             OpTypedTransaction::Eip2930(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             OpTypedTransaction::Eip1559(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             OpTypedTransaction::Eip7702(mut t) => {
+//                 let sig = self.sign_transaction_inner(&mut t)?;
+//                 Ok(t.into_signed(sig).into())
+//             }
+//             // Deposit
+//             _ => unreachable!("Makes no sense")
+//         }
+//     }
+// }
 
 pub trait AngstromMetaSigner:
     SignerSync + Signer + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static

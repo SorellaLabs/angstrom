@@ -10,6 +10,7 @@ pub mod network;
 pub mod orders;
 pub mod pair_with_price;
 pub mod primitive;
+pub mod provider;
 pub mod reth_db_provider;
 pub mod reth_db_wrapper;
 pub mod sol_bindings;

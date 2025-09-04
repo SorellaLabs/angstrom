@@ -1,34 +1,39 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use alloy::{consensus::BlockHeader, providers::Provider, rpc::types::Filter};
 use alloy_primitives::Log;
+use angstrom_types::provider::NetworkProvider;
 use futures_util::{FutureExt, StreamExt};
 
 use super::PoolMangerBlocks;
 use crate::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 
 #[derive(Clone)]
-pub struct ProviderAdapter<P>
+pub struct ProviderAdapter<P, N>
 where
-    P: Provider + Send + Sync
+    P: Provider<N::Network> + Send + Sync,
+    N: NetworkProvider
 {
-    inner: Arc<P>
+    inner:    Arc<P>,
+    _phantom: PhantomData<N>
 }
 
-impl<P> ProviderAdapter<P>
+impl<P, N> ProviderAdapter<P, N>
 where
-    P: Provider + Send + Sync
+    P: Provider<N::Network> + Send + Sync + Clone + 'static,
+    N: NetworkProvider
 {
     pub fn new(inner: Arc<P>) -> Self {
-        Self { inner }
+        Self { inner, _phantom: PhantomData }
     }
 }
 
-impl<P> PoolManagerProvider for ProviderAdapter<P>
+impl<P, N> PoolManagerProvider<P, N> for ProviderAdapter<P, N>
 where
-    P: Provider + Send + Sync + Clone + 'static
+    P: Provider<N::Network> + Send + Sync + Clone + 'static,
+    N: NetworkProvider
 {
-    fn provider(&self) -> Arc<impl Provider> {
+    fn provider(&self) -> Arc<P> {
         self.inner.clone()
     }
 

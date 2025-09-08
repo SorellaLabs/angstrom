@@ -1,5 +1,4 @@
 [profile.default]
-solc = "0.8.26"
 bytecode_hash = "none"
 viaIR = false
 optimizer_runs = 21_000
@@ -23,6 +22,15 @@ remappings = [
   "forge-std/=lib/forge-std/src",
   "solmate/=lib/solmate/",
   "core/src/=src/",
+]
+
+[lint]
+exclude_lints = [
+  "asm-keccak256",
+  "mixed-case-variable",
+  "mixed-case-function",
+  "incorrect-shift",
+  "screaming-snake-case-immutable",
 ]
 
 [profile.default.fmt]

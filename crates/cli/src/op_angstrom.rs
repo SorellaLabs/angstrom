@@ -16,7 +16,6 @@ use reth_node_builder::{Node, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{Cli as OpCli, chainspec::OpChainSpecParser};
 use reth_optimism_node::{OpAddOns, OpNode, args::RollupArgs};
-use url::Url;
 use validation::validator::ValidationClient;
 
 use crate::{
@@ -70,24 +69,7 @@ pub fn run() -> eyre::Result<()> {
         let Some(sequencer) = args.rollup.sequencer.as_ref() else {
             return Err(eyre::eyre!("Missing required flag --rollup.sequencer"));
         };
-
-        if let Ok(url) = Url::parse(sequencer) {
-            if matches!(url.scheme(), "ws" | "wss") {
-                return Err(eyre::eyre!("Sequencer URL must be HTTP, not WS"));
-            }
-        }
-
-        let l2_url = sequencer.clone();
-
-        // Add sequencer to normal nodes
-        if let Some(ref mut nodes) = args.angstrom.normal_nodes {
-            // Don't add the the endpoint if it's already in the list
-            if !nodes.contains(&l2_url) {
-                nodes.push(l2_url);
-            }
-        } else {
-            args.angstrom.normal_nodes = Some(vec![l2_url]);
-        }
+        args.angstrom.add_validated_sequencer(sequencer)?;
 
         let channels = RollupHandles::new();
         let quoter_handle = QuoterHandle(channels.quoter_tx.clone());

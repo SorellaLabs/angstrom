@@ -48,6 +48,8 @@ jobs:
           version: stable
           cache: true
 
+      - uses: rui314/setup-mold@v1
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: cargo-clippy-${{ runner.os }}
@@ -72,6 +74,8 @@ jobs:
         with:
           version: stable
           cache: true
+
+      - uses: rui314/setup-mold@v1
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -99,6 +103,8 @@ jobs:
         with:
           version: stable
           cache: true
+
+      - uses: rui314/setup-mold@v1
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -142,6 +148,8 @@ jobs:
 
       - name: Show Forge version
         run: forge --version
+
+      - uses: rui314/setup-mold@v1
 
       - name: Utilize Shared Rust Cache
         uses: Swatinem/rust-cache@v2

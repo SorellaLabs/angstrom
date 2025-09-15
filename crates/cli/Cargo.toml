@@ -49,3 +49,10 @@ reth-optimism-chainspec.workspace = true
 reth-optimism-cli.workspace = true
 reth-optimism-node.workspace = true
 reth-optimism-primitives.workspace = true
+
+[dev-dependencies]
+tempfile = "3.8"
+mockall = "0.12"
+serial_test = "3.0"
+testing-tools = { path = "../../testing-tools" }
+tokio-test = "0.4"

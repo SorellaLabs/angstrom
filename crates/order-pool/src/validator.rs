@@ -87,6 +87,7 @@ where
         completed_orders: Vec<B256>,
         revalidation_addresses: Vec<Address>
     ) {
+        tracing::debug!(number = block_number, "On new block");
         assert!(
             !self.is_transitioning(),
             "already clearing for new block. if this gets triggered, means we have a big runtime \
@@ -134,6 +135,7 @@ where
     }
 
     pub fn validate_order(&mut self, origin: OrderOrigin, order: AllOrders) {
+        tracing::debug!("validate order");
         match self {
             Self::RegularProcessing { remaining_futures, validator } => {
                 let val = validator.clone();
@@ -162,7 +164,9 @@ where
         future: &mut ValidationFuture,
         cx: &mut Context<'_>
     ) -> Option<Self> {
+        tracing::debug!("handling inform");
         if future.poll_unpin(cx).is_ready() {
+            tracing::debug!("Validation future completed");
             // lfg we have finished validating.
             let validator_clone = validator.clone();
             let mut this = Self::RegularProcessing {
@@ -175,6 +179,8 @@ where
 
             return Some(this);
         }
+
+        tracing::debug!("Validation future pending");
 
         None
     }
@@ -205,6 +211,9 @@ where
                 }
 
                 info!(
+                    ?waiting_for_new_block,
+                    remaining_futures = remaining_futures.len(),
+                    block_number,
                     "clearing for new block done. triggering clearing and starting to validate \
                      state for current block"
                 );

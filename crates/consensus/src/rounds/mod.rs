@@ -545,8 +545,11 @@ pub mod tests {
             .unwrap()
             .into();
 
-        let provider =
-            SubmissionHandler { node_provider: querying_provider, submitters: vec![] };
+        let provider = SubmissionHandler {
+            node_provider: querying_provider,
+            submitters:    vec![],
+            _phantom:      std::marker::PhantomData
+        };
 
         let shared_state = SharedRoundState::new(
             1, // block height

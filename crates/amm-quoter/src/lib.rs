@@ -171,7 +171,8 @@ impl<BlockSync: BlockSyncConsumer, M> QuoterManager<BlockSync, M> {
                     tick
                 };
 
-                tx.send(update).unwrap()
+                // Receiver may have been dropped during shutdown; ignore send errors.
+                let _ = tx.send(update);
             });
 
             self.pending_tasks.push(rx.map_err(Into::into).boxed())

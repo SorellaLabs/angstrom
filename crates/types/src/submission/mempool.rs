@@ -2,12 +2,12 @@ use alloy::{
     eips::Encodable2718,
     providers::{Provider, ProviderBuilder, RootProvider}
 };
-use alloy_primitives::{Address, TxHash};
+use alloy_primitives::{Address, TxHash, keccak256};
 use futures::stream::{StreamExt, iter};
 
 use super::{
-    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY, TxFeatureInfo,
-    Url
+    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
+    NetworkProvider, TxFeatureInfo, Url
 };
 use crate::primitive::AngstromMetaSigner;
 
@@ -34,11 +34,11 @@ impl ChainSubmitter for MempoolSubmitter {
         self.angstrom_address
     }
 
-    fn submit<'a, S: AngstromMetaSigner>(
+    fn submit<'a, S: AngstromMetaSigner, N: NetworkProvider>(
         &'a self,
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
-        tx_features: &'a TxFeatureInfo
+        tx_features: &'a TxFeatureInfo<N>
     ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
         Box::pin(async move {
             let bundle = bundle.ok_or_else(|| eyre::eyre!("no bundle was past in"))?;
@@ -48,7 +48,8 @@ impl ChainSubmitter for MempoolSubmitter {
                 .await;
 
             let encoded_tx = tx.encoded_2718();
-            let tx_hash = *tx.tx_hash();
+            // TODO(mempirate): MAY BE WRONG
+            let tx_hash = keccak256(&encoded_tx);
 
             // Clone here is fine as its in a Arc
             let _: Vec<_> = iter(self.clients.clone())

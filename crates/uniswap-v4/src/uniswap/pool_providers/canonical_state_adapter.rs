@@ -10,21 +10,20 @@ use alloy::{
     providers::Provider,
     rpc::types::{Filter, FilterBlockOption}
 };
+use angstrom_types::provider::{EthNetworkProvider, NetworkProvider};
 use futures_util::StreamExt;
-use reth_node_builder::NodePrimitives;
-use reth_primitives::EthPrimitives;
 use reth_provider::CanonStateNotification;
 use tokio::sync::broadcast;
 
 use super::PoolMangerBlocks;
 use crate::uniswap::{pool_manager::PoolManagerError, pool_providers::PoolManagerProvider};
 
-pub struct CanonicalStateAdapter<P, N = EthPrimitives>
+pub struct CanonicalStateAdapter<P, N = EthNetworkProvider>
 where
-    P: Provider + 'static,
-    N: NodePrimitives
+    P: Provider<N::Network> + 'static,
+    N: NetworkProvider
 {
-    canon_state_notifications: broadcast::Receiver<CanonStateNotification<N>>,
+    canon_state_notifications: broadcast::Receiver<CanonStateNotification<N::Primitives>>,
     last_logs:                 Arc<RwLock<Vec<Log>>>,
     last_block_number:         Arc<AtomicU64>,
     node_provider:             Arc<P>
@@ -32,8 +31,8 @@ where
 
 impl<P, N> Clone for CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static,
-    N: NodePrimitives
+    P: Provider<N::Network> + 'static,
+    N: NetworkProvider
 {
     fn clone(&self) -> Self {
         Self {
@@ -47,11 +46,11 @@ where
 
 impl<P, N> CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static,
-    N: NodePrimitives
+    P: Provider<N::Network> + 'static,
+    N: NetworkProvider
 {
     pub fn new(
-        canon_state_notifications: broadcast::Receiver<CanonStateNotification<N>>,
+        canon_state_notifications: broadcast::Receiver<CanonStateNotification<N::Primitives>>,
         node_provider: Arc<P>,
         block_number: u64
     ) -> Self {
@@ -64,12 +63,12 @@ where
     }
 }
 
-impl<P, N> PoolManagerProvider for CanonicalStateAdapter<P, N>
+impl<P, N> PoolManagerProvider<P, N> for CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static,
-    N: NodePrimitives
+    P: Provider<N::Network> + 'static,
+    N: NetworkProvider + 'static
 {
-    fn provider(&self) -> Arc<impl Provider> {
+    fn provider(&self) -> Arc<P> {
         self.node_provider.clone()
     }
 
@@ -162,8 +161,8 @@ where
 
 impl<P, N> CanonicalStateAdapter<P, N>
 where
-    P: Provider + 'static,
-    N: NodePrimitives
+    P: Provider<N::Network> + 'static,
+    N: NetworkProvider
 {
     fn validate_filter(&self, filter: &Filter) -> Result<(), PoolManagerError> {
         let last_block = self.last_block_number.load(Ordering::SeqCst);

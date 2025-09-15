@@ -69,9 +69,10 @@ impl<S: AngstromMetaSigner> StromStartup<S> {
         match self.to_session_manager.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let handle = self.handle.take().unwrap();
-                self.to_session_manager
-                    .send_item(StromSessionMessage::Established { handle })
-                    .unwrap();
+                // Manager may be dropped during shutdown; ignore send errors.
+                let _ = self
+                    .to_session_manager
+                    .send_item(StromSessionMessage::Established { handle });
                 return true;
             }
             Poll::Ready(Err(_)) => {

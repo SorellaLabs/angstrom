@@ -1,0 +1,73 @@
+[package]
+name = "op-testing-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+alloy = { workspace = true, features = ["rpc-types-anvil"] }
+alloy-chains.workspace = true
+alloy-primitives.workspace = true
+alloy-rpc-types.workspace = true
+alloy-sol-types.workspace = true
+angstrom-amm-quoter.workspace = true
+angstrom-cli.workspace = true
+angstrom-eth.workspace = true
+angstrom-network.workspace = true
+angstrom-rpc.workspace = true
+angstrom-types.workspace = true
+consensus.workspace = true
+dashmap.workspace = true
+enr = { workspace = true, features = ["serde", "k256"] }
+eyre.workspace = true
+futures.workspace = true
+itertools.workspace = true
+jsonrpsee.workspace = true
+matching-engine.workspace = true
+op-alloy-consensus.workspace = true
+op-alloy-network.workspace = true
+op-alloy-rpc-types.workspace = true
+order-pool.workspace = true
+pade.workspace = true
+parking_lot.workspace = true
+pool-manager.workspace = true
+rand.workspace = true
+rand_chacha = "0.3"
+rand_distr.workspace = true
+rayon = "1"
+reth.workspace = true
+reth-chainspec.workspace = true
+reth-db.workspace = true
+reth-metrics.workspace = true
+reth-network = { workspace = true, features = ["test-utils"] }
+reth-network-api.workspace = true
+reth-network-peers = { workspace = true, features = ["secp256k1"] }
+reth-node-builder.workspace = true
+reth-node-ethereum.workspace = true
+reth-node-types.workspace = true
+reth-optimism-primitives.workspace = true
+reth-primitives = { workspace = true, features = ["test-utils"] }
+reth-provider = { workspace = true, features = ["test-utils"] }
+reth-revm.workspace = true
+reth-tasks.workspace = true
+reth-transaction-pool = { workspace = true, features = ["test-utils"] }
+revm.workspace = true
+secp256k1.workspace = true
+telemetry.workspace = true
+telemetry-recorder.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uniswap-v4.workspace = true
+uniswap_v3_math.workspace = true
+validation.workspace = true
+
+[features]
+default = []
+reth-db-dep-tests = []

@@ -1,6 +1,7 @@
 use std::{
     cmp::max,
     collections::{HashMap, VecDeque},
+    marker::PhantomData,
     pin::Pin,
     sync::Arc,
     time::Duration
@@ -25,6 +26,7 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{PoolId, UniswapPoolRegistry},
+    provider::EthNetworkProvider,
     sol_bindings::testnet::TestnetHub,
     submission::{ChainSubmitterHolder, SubmissionHandler},
     testnet::InitialTestnetState
@@ -184,16 +186,17 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;
 
-        let uniswap_pool_manager = configure_uniswap_manager::<_, _, DEFAULT_TICKS>(
-            state_provider.rpc_provider().into(),
-            eth_handle.subscribe_cannon_state_notifications().await,
-            uniswap_registry.clone(),
-            block_number,
-            block_sync.clone(),
-            inital_angstrom_state.pool_manager_addr,
-            network_stream
-        )
-        .await;
+        let uniswap_pool_manager =
+            configure_uniswap_manager::<_, _, EthNetworkProvider, DEFAULT_TICKS>(
+                state_provider.rpc_provider().into(),
+                eth_handle.subscribe_cannon_state_notifications().await,
+                uniswap_registry.clone(),
+                block_number,
+                block_sync.clone(),
+                inital_angstrom_state.pool_manager_addr,
+                network_stream
+            )
+            .await;
         tracing::debug!("uniswap configured");
 
         let uniswap_pools = uniswap_pool_manager.pools();
@@ -215,7 +218,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 base_wei
             )
         } else {
-            TokenPriceGenerator::new(
+            TokenPriceGenerator::new::<_, EthNetworkProvider>(
                 Arc::new(state_provider.rpc_provider()),
                 block_number,
                 uniswap_pools.clone(),
@@ -228,11 +231,12 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         println!("{token_conversion:#?}");
 
         let token_price_update_stream = state_provider.state_provider().canonical_state_stream();
-        let token_price_update_stream = Box::pin(PairsWithPrice::into_price_update_stream(
-            inital_angstrom_state.angstrom_addr,
-            token_price_update_stream,
-            Arc::new(state_provider.rpc_provider())
-        ));
+        let token_price_update_stream =
+            Box::pin(PairsWithPrice::into_price_update_stream::<_, EthNetworkProvider>(
+                inital_angstrom_state.angstrom_addr,
+                token_price_update_stream,
+                Arc::new(state_provider.rpc_provider())
+            ));
 
         let pool_storage = AngstromPoolsTracker::new(
             inital_angstrom_state.angstrom_addr,
@@ -315,7 +319,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             submitters:    vec![Box::new(ChainSubmitterHolder::new(
                 anvil,
                 node_config.angstrom_signer()
-            ))]
+            ))],
+            _phantom:      PhantomData
         };
 
         tracing::debug!("created mev boost provider");

@@ -83,6 +83,7 @@ impl MatchingEngineHandle for MatcherHandle {
         Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>
     > {
         Box::pin(async move {
+            tracing::debug!("Cmd to solve pools");
             let (tx, rx) = oneshot::channel();
             self.send_request(rx, MatcherCommand::BuildProposal(limit, searcher, pools, tx))
                 .await
@@ -140,6 +141,11 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         // them.  This is ugly and inefficient right now
         let books = Self::build_non_proposal_books(limit.clone(), &pool_snapshots);
 
+        if limit.is_empty() && searcher.is_empty() {
+            tracing::debug!("Building proposal with empty limit and searcher");
+            return Ok((Vec::new(), BundleGasDetails::default()));
+        }
+
         let searcher_orders: HashMap<PoolId, OrderWithStorageData<TopOfBlockOrder>> = searcher
             .clone()
             .into_iter()
@@ -154,6 +160,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         let mut solution_set = JoinSet::new();
 
         if books.is_empty() {
+            tracing::debug!("Building proposal with empty books");
             for searcher in searcher_orders.values().cloned() {
                 let mut book = OrderBook::default();
                 book.id = searcher.pool_id;
@@ -171,12 +178,16 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 solution_set.spawn_blocking(move || Some(BinarySearchStrategy::run(&b, searcher)));
             });
         }
+
+        tracing::debug!("Spawning {} tasks, waiting for results...", solution_set.len());
         let mut solutions = Vec::new();
         while let Some(res) = solution_set.join_next().await {
             if let Ok(Some(r)) = res {
                 solutions.push(r);
             }
         }
+
+        tracing::debug!("Received {} solutions", solutions.len());
 
         // generate bundle without final gas known.
         trace!("Building bundle for gas finalization");
@@ -195,6 +206,8 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
                 tracing::error!(bad_bundle=%hex);
                 MatchingEngineError::SimulationFailed(e)
             })?;
+
+        tracing::debug!("Gas response: {:?}", gas_response);
 
         Ok((solutions, gas_response))
     }
@@ -218,6 +231,7 @@ pub async fn manager_thread<TP: TaskSpawner + 'static, V: BundleValidatorHandle>
     while let Some(c) = input.recv().await {
         match c {
             MatcherCommand::BuildProposal(limit, searcher, snapshot, r) => {
+                tracing::debug!("Building proposal");
                 let r = r.send(manager.build_proposal(limit, searcher, snapshot).await);
                 if r.is_err() {
                     tracing::error!("failed to send built proposal back to caller");

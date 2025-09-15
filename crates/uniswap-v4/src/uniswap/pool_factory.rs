@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use alloy::{
     primitives::{Address, aliases::U24},
@@ -6,7 +6,8 @@ use alloy::{
 };
 use angstrom_types::{
     contract_bindings::angstrom::Angstrom::PoolKey,
-    primitive::{PoolId, UniswapPoolRegistry}
+    primitive::{PoolId, UniswapPoolRegistry},
+    provider::{EthNetworkProvider, NetworkProvider}
 };
 use futures::future::join_all;
 
@@ -16,17 +17,21 @@ use crate::DataLoader;
 pub const INITIAL_TICKS_PER_SIDE: u16 = 400;
 
 #[derive(Clone)]
-pub struct V4PoolFactory<P, const TICKS: u16 = INITIAL_TICKS_PER_SIDE> {
+pub struct V4PoolFactory<P, N = EthNetworkProvider, const TICKS: u16 = INITIAL_TICKS_PER_SIDE> {
     provider:     Arc<P>,
     registry:     UniswapPoolRegistry,
-    pool_manager: Address
+    pool_manager: Address,
+
+    _phantom: PhantomData<N>
 }
-impl<P: Provider + 'static, const TICKS: u16> V4PoolFactory<P, TICKS>
+impl<P, N, const TICKS: u16> V4PoolFactory<P, N, TICKS>
 where
+    P: Provider<N::Network> + 'static,
+    N: NetworkProvider,
     DataLoader: PoolDataLoader
 {
     pub fn new(provider: Arc<P>, registry: UniswapPoolRegistry, pool_manager: Address) -> Self {
-        Self { provider, registry, pool_manager }
+        Self { provider, registry, pool_manager, _phantom: PhantomData }
     }
 
     /// inits all uniswap pools found in [`UniswapPoolRegistry`]
@@ -47,7 +52,7 @@ where
                 ),
                 TICKS
             );
-            pool.initialize(Some(block), self.provider.clone())
+            pool.initialize::<P, N>(Some(block), self.provider.clone())
                 .await
                 .expect("failed to init pool");
             pool
@@ -105,7 +110,7 @@ where
             ),
             TICKS
         );
-        pool.initialize(Some(block), self.provider.clone())
+        pool.initialize::<P, N>(Some(block), self.provider.clone())
             .await
             .expect("failed to init pool");
 

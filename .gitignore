@@ -13,9 +13,11 @@ target/
 
 # Added by cargo
 
+.cargo/
 /target
 
 *.env
+*.log
 
 .DS_Store
 
@@ -27,3 +29,4 @@ verify-contract.sh
 
 # Claude
 .claude/
+

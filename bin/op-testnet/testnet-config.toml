@@ -1,0 +1,29 @@
+addresses_with_tokens = [
+  "0x796fB50EAe1456A523F869f6135dd557eeaEE226",
+  "0xa7f1Aeb6e43443c683865Fdb9E15Dd01386C955b",
+  "0x9fa51eF64fDdF1A1f7Cd7Bb4475B277a2E7EAfE4",
+  "0xCFbd49F7AC68EC52bE08C6a87d771e7d612b43e0",
+  "0x7d976F625f0F5b11688599871C06dB20EBB0e6C5",
+  "0x201f23a6197c396Acf7D6981287B18eba6A5078b",
+]
+
+[[pool_keys]]
+fee = 100
+tick_spacing = 60
+liquidity = "340282366924534345"
+tick = 0
+
+[[tokens_to_deploy]]
+name = "Wrapped Bitcoin"
+symbol = "WBTC"
+address = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+
+[[tokens_to_deploy]]
+name = "Wrapped Ethereum"
+symbol = "WETH"
+address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+
+[[tokens_to_deploy]]
+name = "USDC"
+symbol = "USDC"
+address = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"

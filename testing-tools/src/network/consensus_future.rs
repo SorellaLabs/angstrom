@@ -3,8 +3,8 @@ use std::{
     ops::Drop,
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc
+        Arc,
+        atomic::{AtomicBool, Ordering}
     },
     task::{Context, Poll}
 };
@@ -15,7 +15,7 @@ use futures::FutureExt;
 use matching_engine::MatchingEngineHandle;
 use parking_lot::Mutex;
 use tokio::task::JoinHandle;
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 use crate::types::MockBlockSync;
 

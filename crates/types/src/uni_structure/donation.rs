@@ -8,7 +8,7 @@ use crate::contract_payloads::rewards::RewardsUpdate;
 #[derive(Clone, Debug)]
 pub enum DonationType {
     Below { high_tick: i32, donation: u128, liquidity: u128 },
-    Above { low_tick: i32, donation: u128, liquidity: u128 },
+    Above { low_tick: i32, donation: u128, liquidity: u128, tick_spacing: i32 },
     Current { final_tick: i32, donation: u128, liquidity: u128 }
 }
 
@@ -21,8 +21,8 @@ impl DonationType {
         Self::Below { high_tick, donation, liquidity }
     }
 
-    pub fn above(low_tick: i32, donation: u128, liquidity: u128) -> Self {
-        Self::Above { low_tick, donation, liquidity }
+    pub fn above(low_tick: i32, donation: u128, liquidity: u128, tick_spacing: i32) -> Self {
+        Self::Above { low_tick, donation, liquidity, tick_spacing }
     }
 
     pub fn donation(&self) -> u128 {
@@ -58,8 +58,8 @@ impl Add<u128> for &DonationType {
             DonationType::Below { donation: d, high_tick, liquidity } => {
                 DonationType::below(*high_tick, d + rhs, *liquidity)
             }
-            DonationType::Above { donation: d, low_tick, liquidity } => {
-                DonationType::above(*low_tick, d + rhs, *liquidity)
+            DonationType::Above { donation: d, low_tick, liquidity, tick_spacing } => {
+                DonationType::above(*low_tick, d + rhs, *liquidity, *tick_spacing)
             }
             DonationType::Current { final_tick, donation: d, liquidity } => {
                 DonationType::current(*final_tick, d + rhs, *liquidity)
@@ -91,18 +91,20 @@ pub struct DonationCalculation {
 
     /// Hash of target donation ticks to (quantity, liquidity)
     // pub rest:          HashMap<i32, (u128, u128)>,
-    pub total_donated: u128
+    pub total_donated: u128,
+    pub tick_spacing:  i32
 }
 
 impl DonationCalculation {
-    pub fn from_vec(vec: &[DonationType]) -> eyre::Result<Self> {
+    pub fn from_vec(vec: &[DonationType], tick_spacing: i32) -> eyre::Result<Self> {
         // If we're coming from an empty vec, return an empty DonationCalculation
         if vec.is_empty() {
             return Ok(Self {
-                donations:     VecDeque::new(),
-                current_tick:  0,
-                break_idx:     0,
-                total_donated: 0
+                donations: VecDeque::new(),
+                current_tick: 0,
+                break_idx: 0,
+                total_donated: 0,
+                tick_spacing
             });
         }
         assert!(
@@ -127,7 +129,7 @@ impl DonationCalculation {
         };
         // If the first element in our vec is an Above, we need to reverse the vec
         let total_donated = vec.iter().fold(0_u128, |acc, e| acc + e.donation());
-        Ok(Self { donations, break_idx, current_tick, total_donated })
+        Ok(Self { donations, break_idx, current_tick, total_donated, tick_spacing })
     }
 
     fn checksum_iter<'a, T: Clone + Iterator<Item = &'a DonationType>>(
@@ -160,12 +162,18 @@ impl DonationCalculation {
             }
             (0, len) => {
                 // If the break_idx is 0, the entire donation vec is one side - above
-                let (start_tick, start_liquidity) = (
+                let (mut start_tick, start_liquidity) = (
                     I24::unchecked_from(self.donations[len - 1].tick()),
                     self.donations[len - 1].liquidity()
                 );
                 let quantities = self.donations.iter().rev().map(|d| d.donation()).collect();
                 let reward_checksum = Self::checksum_iter(self.donations.iter().rev(), len);
+
+                // for rewarding above, make sure the start tick lies on the upper bound of the
+                // tick spacing
+                while start_tick % I24::unchecked_from(self.tick_spacing) != I24::ZERO {
+                    start_tick += I24::ONE;
+                }
                 (
                     RewardsUpdate::MultiTick {
                         start_tick,
@@ -200,13 +208,19 @@ impl DonationCalculation {
 
                 // Self_and_above
                 let saa_last = self_and_above.len() - 1;
-                let (start_tick, start_liquidity) = (
+                let (mut start_tick, start_liquidity) = (
                     I24::unchecked_from(self_and_above[saa_last].tick()),
                     self_and_above[saa_last].liquidity()
                 );
                 let quantities = self_and_above.iter().rev().map(|d| d.donation()).collect();
                 let reward_checksum =
                     Self::checksum_iter(self_and_above.iter(), self_and_above.len());
+
+                // for rewarding above, make sure the start tick lies on the upper bound of the
+                // tick spacing
+                while start_tick % I24::unchecked_from(self.tick_spacing) != I24::ZERO {
+                    start_tick += I24::ONE;
+                }
 
                 // Below
                 let (below_start_tick, below_start_liquidity) =
@@ -291,7 +305,13 @@ impl Add<&[DonationType]> for &DonationCalculation {
         // We use saturating_sub because if our rel_idx is 0, that's where it should
         // stay
         let break_idx = rel_idx.saturating_sub(1);
-        DonationCalculation { donations, total_donated, break_idx, current_tick }
+        DonationCalculation {
+            donations,
+            total_donated,
+            break_idx,
+            current_tick,
+            tick_spacing: self.tick_spacing
+        }
     }
 }
 
@@ -301,7 +321,7 @@ mod tests {
 
     #[test]
     pub fn constructs_from_empty_vec() {
-        let donation = DonationCalculation::from_vec(&[]).unwrap();
+        let donation = DonationCalculation::from_vec(&[], 10).unwrap();
         let res = donation.into_reward_updates();
         if let (r, None) = res {
             println!("{r:?}");
@@ -324,7 +344,7 @@ mod tests {
             DonationType::Below { donation: 100, high_tick: 0, liquidity: 100 },
             DonationType::Current { donation: 100, final_tick: 78, liquidity: 100 },
         ];
-        let donation = DonationCalculation::from_vec(&don_vec).unwrap();
+        let donation = DonationCalculation::from_vec(&don_vec, 10).unwrap();
         let extended = &donation + &second_vec;
         let _ = extended.into_reward_updates();
     }

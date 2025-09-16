@@ -633,20 +633,24 @@ impl AngstromBundle {
 
         // We need to do our donations in the right order - first the ToB and then the
         // book.  So let's do that
-        let book_donation_vec = book_swap_vec
-            .as_ref()
-            .map(|bsv| bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate));
+        let book_donation_vec = book_swap_vec.as_ref().map(|bsv| {
+            bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate, snapshot.tick_spacing())
+        });
 
         let tob_donation_vec = tob_swap_info
             .as_ref()
-            .map(|(tob_vec, tob_d)| tob_vec.t0_donation_vec(*tob_d));
+            .map(|(tob_vec, tob_d)| tob_vec.t0_donation_vec(*tob_d, snapshot.tick_spacing()));
 
         let donation = match (book_donation_vec, tob_donation_vec) {
-            (Some(bsv), Some(tob)) => {
-                Some(&(DonationCalculation::from_vec(&tob))? + bsv.as_slice())
+            (Some(bsv), Some(tob)) => Some(
+                &(DonationCalculation::from_vec(&tob, snapshot.tick_spacing()))? + bsv.as_slice()
+            ),
+            (Some(bsv), None) => {
+                Some(DonationCalculation::from_vec(&bsv, snapshot.tick_spacing())?)
             }
-            (Some(bsv), None) => Some(DonationCalculation::from_vec(&bsv)?),
-            (None, Some(tob)) => Some(DonationCalculation::from_vec(&tob)?),
+            (None, Some(tob)) => {
+                Some(DonationCalculation::from_vec(&tob, snapshot.tick_spacing())?)
+            }
             (None, None) => None
         };
         let total_donation = donation

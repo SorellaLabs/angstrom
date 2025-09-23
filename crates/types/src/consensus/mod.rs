@@ -8,6 +8,8 @@ use alloy::primitives::{Address, BlockNumber, Bytes};
 pub use evidence::*;
 pub use pre_prepose::*;
 pub use pre_propose_agg::*;
+pub mod validator;
+pub use validator::*;
 pub mod slot_clock;
 pub use proposal::*;
 pub use round_data::*;
@@ -64,4 +66,10 @@ impl StromConsensusEvent {
             StromConsensusEvent::BundleUnlockAttestation(_, block, _) => *block
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ConsensusDataWithBlock<T> {
+    pub data:  T,
+    pub block: u64
 }

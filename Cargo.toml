@@ -102,6 +102,7 @@ angstrom-metrics = { path = "./crates/metrics/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-types = { path = "./crates/types/" }
+angstrom-types-constants = { path = "./crates/types/constants" }
 angstrom-utils = { path = "./crates/utils/" }
 anyhow = "1"
 aquamarine = "0"

@@ -1,29 +1,13 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use alloy::primitives::{Address, BlockNumber};
+use angstrom_types::consensus::AngstromValidator;
 
 // https://github.com/tendermint/tendermint/pull/2785#discussion_r235038971
 // 1.125
 const PENALTY_FACTOR: u64 = 1125;
 /// do the math with fixed here to avoid floats
 const ONE_E3: u64 = 1000;
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct AngstromValidator {
-    pub peer_id:  Address,
-    voting_power: u64,
-    priority:     i64
-}
-
-impl AngstromValidator {
-    pub fn new(name: Address, voting_power: u64) -> Self {
-        AngstromValidator {
-            peer_id:      name,
-            voting_power: voting_power * ONE_E3,
-            priority:     0
-        }
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct WeightedRoundRobin {
@@ -48,14 +32,14 @@ impl WeightedRoundRobin {
     }
 
     fn proposer_selection(&mut self) -> Address {
-        let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power).sum();
+        let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power()).sum();
 
         //  apply all priorities.
         self.validators = self
             .validators
             .drain()
             .map(|mut validator| {
-                validator.priority += validator.voting_power as i64;
+                validator.set_priority(validator.priority() + validator.voting_power() as i64);
                 validator
             })
             .collect();
@@ -67,7 +51,7 @@ impl WeightedRoundRobin {
             .max_by(Self::priority)
             .unwrap()
             .clone();
-        proposer.priority -= total_voting_power as i64;
+        proposer.set_priority(proposer.priority() - total_voting_power as i64);
         let proposer_name = proposer.peer_id;
 
         self.validators.replace(proposer);
@@ -76,7 +60,7 @@ impl WeightedRoundRobin {
     }
 
     fn priority(a: &&AngstromValidator, b: &&AngstromValidator) -> Ordering {
-        let out = a.priority.partial_cmp(&b.priority);
+        let out = a.priority().partial_cmp(&b.priority());
         if out == Some(Ordering::Equal) {
             // TODO: not the best because it encourages mining lower peer ids
             // however we need a way for this to be uniform across nodes and
@@ -87,14 +71,14 @@ impl WeightedRoundRobin {
     }
 
     fn center_priorities(&mut self) {
-        let avg_priority =
-            self.validators.iter().map(|v| v.priority).sum::<i64>() / self.validators.len() as i64;
+        let avg_priority = self.validators.iter().map(|v| v.priority()).sum::<i64>()
+            / self.validators.len() as i64;
 
         self.validators = self
             .validators
             .drain()
             .map(|mut validator| {
-                validator.priority -= avg_priority;
+                validator.set_priority(validator.priority() - avg_priority);
                 validator
             })
             .collect();
@@ -104,15 +88,15 @@ impl WeightedRoundRobin {
         let max_priority = self
             .validators
             .iter()
-            .map(|v| v.priority)
+            .map(|v| v.priority())
             .fold(i64::MIN, i64::max);
         let min_priority = self
             .validators
             .iter()
-            .map(|v| v.priority)
+            .map(|v| v.priority())
             .fold(i64::MAX, i64::min);
 
-        let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power).sum();
+        let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power()).sum();
         let diff = max_priority - min_priority;
         let threshold = 2 * total_voting_power as i64;
 
@@ -123,8 +107,8 @@ impl WeightedRoundRobin {
                 .validators
                 .drain()
                 .map(|mut validator| {
-                    let new_pri = validator.priority * ONE_E3 as i64;
-                    validator.priority = new_pri / scale;
+                    let new_pri = validator.priority() * ONE_E3 as i64;
+                    validator.set_priority(new_pri / scale);
                     validator
                 })
                 .collect();
@@ -166,24 +150,12 @@ impl WeightedRoundRobin {
     #[allow(dead_code)]
     fn add_validator(&mut self, peer_id: Address, voting_power: u64) {
         let mut new_validator = AngstromValidator::new(peer_id, voting_power);
-        let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power).sum();
-        new_validator.priority -=
-            ((self.new_joiner_penalty_factor * total_voting_power) / ONE_E3) as i64;
+        let total_voting_power: u64 = self.validators.iter().map(|v| v.voting_power()).sum();
+        new_validator.set_priority(
+            new_validator.priority()
+                - ((self.new_joiner_penalty_factor * total_voting_power) / ONE_E3) as i64
+        );
         self.validators.insert(new_validator);
-    }
-}
-
-impl PartialEq for AngstromValidator {
-    fn eq(&self, other: &Self) -> bool {
-        self.peer_id == other.peer_id
-    }
-}
-
-impl Eq for AngstromValidator {}
-
-impl std::hash::Hash for AngstromValidator {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.peer_id.hash(state);
     }
 }
 
@@ -242,7 +214,7 @@ mod tests {
             .iter()
             .find(|v| v.peer_id == new_peer)
             .unwrap();
-        assert!(new_validator.priority < 0, "New validator should have negative priority");
+        assert!(new_validator.priority() < 0, "New validator should have negative priority");
 
         // Test removing validator
         algo.remove_validator(&new_peer);
@@ -255,14 +227,14 @@ mod tests {
         let peer1 = Address::random();
         let peer2 = Address::random();
 
-        let v1 =
-            AngstromValidator { peer_id: peer1, voting_power: 100 * ONE_E3, priority: 10 };
+        let mut v1 = AngstromValidator::new(peer1, 100 * ONE_E3);
+        v1.set_priority(10);
 
-        let v2 =
-            AngstromValidator { peer_id: peer2, voting_power: 100 * ONE_E3, priority: 10 };
+        let mut v2 = AngstromValidator::new(peer2, 100 * ONE_E3);
+        v2.set_priority(10);
 
-        let v3 =
-            AngstromValidator { peer_id: peer2, voting_power: 100 * ONE_E3, priority: 20 };
+        let mut v3 = AngstromValidator::new(peer2, 100 * ONE_E3);
+        v3.set_priority(20);
 
         // Test equal priorities
         assert_eq!(
@@ -301,7 +273,11 @@ mod tests {
     fn test_voting_power_scaling() {
         let peer_id = Address::random();
         let validator = AngstromValidator::new(peer_id, 100);
-        assert_eq!(validator.voting_power, 100 * ONE_E3, "Voting power should be scaled by ONE_E3");
+        assert_eq!(
+            validator.voting_power(),
+            100 * ONE_E3,
+            "Voting power should be scaled by ONE_E3"
+        );
     }
 
     fn create_test_validators() -> (HashMap<String, Address>, Vec<AngstromValidator>) {
@@ -324,11 +300,11 @@ mod tests {
         let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
         // Get initial priorities
-        let initial_priorities: Vec<i64> = algo.validators.iter().map(|v| v.priority).collect();
+        let initial_priorities: Vec<i64> = algo.validators.iter().map(|v| v.priority()).collect();
         assert!(initial_priorities.iter().all(|&p| p == 0), "Initial priorities should be 0");
 
         // Record initial voting powers
-        let initial_powers: Vec<u64> = algo.validators.iter().map(|v| v.voting_power).collect();
+        let initial_powers: Vec<u64> = algo.validators.iter().map(|v| v.voting_power()).collect();
 
         // Test single round of priority updates
         algo.proposer_selection();
@@ -340,17 +316,19 @@ mod tests {
         let total_power: u64 = initial_powers.iter().sum();
 
         for validator in algo.validators.iter() {
-            if validator.priority < 0 {
+            if validator.priority() < 0 {
                 // This was the selected validator
-                let expected_priority = validator.voting_power as i64 - total_power as i64;
+                let expected_priority = validator.voting_power() as i64 - total_power as i64;
                 assert_eq!(
-                    validator.priority, expected_priority,
+                    validator.priority(),
+                    expected_priority(),
                     "Selected validator should have priority = (own_power - total_power)"
                 );
             } else {
                 // Non-selected validators just got their voting power added
                 assert_eq!(
-                    validator.priority, validator.voting_power as i64,
+                    validator.priority(),
+                    validator.voting_power() as i64,
                     "Non-selected validator should have priority = own_power"
                 );
             }
@@ -369,7 +347,7 @@ mod tests {
             .drain()
             .map(|mut v| {
                 // Use unscaled value to avoid massive numbers
-                v.priority = (v.voting_power / ONE_E3) as i64;
+                v.set_priority((v.voting_power() / ONE_E3) as i64);
                 v
             })
             .collect();
@@ -379,7 +357,7 @@ mod tests {
 
         // After centering:
         // 1. Sum should be close to zero (within rounding error)
-        let sum_priorities: i64 = algo.validators.iter().map(|v| v.priority).sum();
+        let sum_priorities: i64 = algo.validators.iter().map(|v| v.priority()).sum();
 
         assert!(
             sum_priorities.abs() <= algo.validators.len() as i64,
@@ -389,14 +367,14 @@ mod tests {
         // 2. Each priority should be within reasonable bounds
         for validator in algo.validators.iter() {
             assert!(
-                validator.priority.abs() <= max_power,
+                validator.priority().abs() <= max_power,
                 "Individual priority ({}) should be within reasonable bounds",
-                validator.priority
+                validator.priority()
             );
         }
 
         // 3. Verify relative differences are maintained
-        let priorities: Vec<i64> = algo.validators.iter().map(|v| v.priority).collect();
+        let priorities: Vec<i64> = algo.validators.iter().map(|v| v.priority()).collect();
         let max_priority = priorities.iter().max().unwrap();
         let min_priority = priorities.iter().min().unwrap();
         assert!((max_priority - min_priority) <= max_power, "Priority spread should be reasonable");
@@ -408,13 +386,13 @@ mod tests {
         let mut algo = WeightedRoundRobin::new(validators, BlockNumber::default());
 
         // Set extreme priorities to trigger scaling
-        let total_power: u64 = algo.validators.iter().map(|v| v.voting_power).sum();
+        let total_power: u64 = algo.validators.iter().map(|v| v.voting_power()).sum();
         algo.validators = algo
             .validators
             .drain()
             .enumerate()
             .map(|(i, mut v)| {
-                v.priority = (i as i64) * (total_power as i64) * 3; // Create large differences
+                v.set_priority((i as i64) * (total_power as i64) * 3); // Create large differences
                 v
             })
             .collect();
@@ -423,8 +401,8 @@ mod tests {
         algo.scale_priorities();
 
         // Verify scaling reduced the difference
-        let max_priority = algo.validators.iter().map(|v| v.priority).max().unwrap();
-        let min_priority = algo.validators.iter().map(|v| v.priority).min().unwrap();
+        let max_priority = algo.validators.iter().map(|v| v.priority()).max().unwrap();
+        let min_priority = algo.validators.iter().map(|v| v.priority()).min().unwrap();
 
         assert!(
             (max_priority - min_priority) <= 2 * (total_power as i64),

@@ -1258,6 +1258,7 @@ dependencies = [
  "alloy",
  "alloy-primitives",
  "angstrom-types",
+ "angstrom-types-constants",
  "auto_impl",
  "base64 0.22.1",
  "bincode",
@@ -1299,6 +1300,16 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.20",
  "uniswap_v3_math",
+]
+
+[[package]]
+name = "angstrom-types-constants"
+version = "0.1.0"
+dependencies = [
+ "alloy-dyn-abi",
+ "alloy-primitives",
+ "alloy-sol-types",
+ "eyre",
 ]
 
 [[package]]

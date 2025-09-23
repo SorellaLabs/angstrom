@@ -50,12 +50,6 @@ impl ConsensusTimingConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ConsensusDataWithBlock<T> {
-    pub data:  T,
-    pub block: u64
-}
-
 pub trait ConsensusHandle: Send + Sync + Clone + Unpin + 'static {
     fn subscribe_empty_block_attestations(
         &self

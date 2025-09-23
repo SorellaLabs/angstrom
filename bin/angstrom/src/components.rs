@@ -26,7 +26,7 @@ use angstrom_network::{
 };
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
-    consensus::{SlotClock, StromConsensusEvent, SystemTimeSlotClock},
+    consensus::{AngstromValidator, SlotClock, StromConsensusEvent, SystemTimeSlotClock},
     contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
     pair_with_price::PairsWithPrice,
     primitive::{
@@ -38,7 +38,7 @@ use angstrom_types::{
     reth_db_wrapper::RethDbWrapper,
     submission::SubmissionHandler
 };
-use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
+use consensus::{ConsensusHandler, ConsensusManager, ManagerNetworkDeps};
 use futures::Stream;
 use matching_engine::{MatchingManager, manager::MatcherCommand};
 use order_pool::{PoolConfig, PoolManagerUpdate, order_storage::OrderStorage};

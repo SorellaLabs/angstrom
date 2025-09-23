@@ -16,7 +16,8 @@ use angstrom_network::{StromMessage, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     consensus::{
-        ConsensusRoundName, ConsensusRoundOrderHashes, StromConsensusEvent, SystemTimeSlotClock
+        AngstromValidator, ConsensusDataWithBlock, ConsensusRoundName, ConsensusRoundOrderHashes,
+        ConsensusTimingConfig, StromConsensusEvent, SystemTimeSlotClock
     },
     contract_payloads::angstrom::UniswapAngstromRegistry,
     primitive::{AngstromMetaSigner, AngstromSigner, ChainExt},
@@ -35,8 +36,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{
-    AngstromValidator, ConsensusDataWithBlock, ConsensusRequest, ConsensusSubscriptionData,
-    ConsensusSubscriptionRequestKind, ConsensusTimingConfig,
+    ConsensusRequest, ConsensusSubscriptionData, ConsensusSubscriptionRequestKind,
     leader_selection::WeightedRoundRobin,
     rounds::{ConsensusMessage, RoundStateMachine, SharedRoundState}
 };

@@ -13,8 +13,9 @@ use alloy::{
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_types::{
     consensus::{
-        ConsensusRoundEvent, ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal,
-        SlotClock, StromConsensusEvent, SystemTimeSlotClock
+        AngstromValidator, ConsensusRoundEvent, ConsensusRoundName, ConsensusTimingConfig,
+        PreProposal, PreProposalAggregation, Proposal, SlotClock, StromConsensusEvent,
+        SystemTimeSlotClock
     },
     contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
     orders::PoolSolution,
@@ -28,8 +29,6 @@ use matching_engine::{MatchingEngineHandle, manager::MatchingEngineError};
 use order_pool::order_storage::OrderStorage;
 use preproposal_wait_trigger::{LastRoundInfo, PreProposalWaitTrigger};
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
-
-use crate::{AngstromValidator, ConsensusTimingConfig};
 
 mod bid_aggregation;
 mod finalization;

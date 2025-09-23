@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
 use alloy_primitives::Address;
-use consensus::{
-    AngstromValidator, ConsensusDataWithBlock, ConsensusHandle, ConsensusTimingConfig
-};
+use angstrom_types::consensus::{AngstromValidator, ConsensusDataWithBlock, ConsensusTimingConfig};
+use consensus::ConsensusHandle;
 use futures::StreamExt;
 use jsonrpsee::{
     PendingSubscriptionSink, SubscriptionMessage,

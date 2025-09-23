@@ -1,14 +1,11 @@
 [package]
-name = "angstrom-types"
-version.workspace = true
-edition.workspace = true
+name = "angstrom-types-matching"
+version = "0.1.0"
+edition = "2024"
 
 [dependencies]
-alloy = { workspace = true, features = ["rpc-types-mev"] }
 alloy-primitives = { workspace = true, features = ["rand"] }
 angstrom-types-constants.workspace = true
-angstrom-types-matching.workspace = true
-angstrom-types-orders.workspace = true
 angstrom-types-primitives.workspace = true
 auto_impl.workspace = true
 base64.workspace = true

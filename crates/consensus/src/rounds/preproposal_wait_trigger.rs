@@ -5,10 +5,11 @@ use std::{
     time::{Duration, Instant}
 };
 
+use angstrom_types::consensus::ConsensusTimingConfig;
 use rand::Rng;
 use tokio::time::{Interval, interval};
 
-use crate::{ConsensusTimingConfig, rounds::OrderStorage};
+use crate::rounds::OrderStorage;
 
 /// The frequency we adjust our duration estimate. we have it super frequent
 /// because its very low overhead to check

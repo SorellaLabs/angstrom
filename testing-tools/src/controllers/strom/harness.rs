@@ -307,7 +307,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         global_block_sync.clone(),
         handles.consensus_rx_rpc,
         Some(state_tx),
-        consensus::ConsensusTimingConfig::default(),
+        angstrom_types::consensus::ConsensusTimingConfig::default(),
         SystemTimeSlotClock::new_default().unwrap()
     );
 

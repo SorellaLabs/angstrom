@@ -2,10 +2,10 @@ use std::path::PathBuf;
 
 use alloy::signers::local::PrivateKeySigner;
 use angstrom_metrics::initialize_prometheus_metrics;
-use angstrom_types::primitive::{
-    AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC
+use angstrom_types::{
+    consensus::ConsensusTimingConfig,
+    primitive::{AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC}
 };
-use consensus::ConsensusTimingConfig;
 use hsm_signer::{Pkcs11Signer, Pkcs11SignerConfig};
 
 #[derive(Debug, Clone, Default, clap::Args)]

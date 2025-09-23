@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use alloy::primitives::{Address, BlockNumber};
-use angstrom_types::consensus::AngstromValidator;
+use angstrom_types::consensus::validator::AngstromValidator;
 
 // https://github.com/tendermint/tendermint/pull/2785#discussion_r235038971
 // 1.125

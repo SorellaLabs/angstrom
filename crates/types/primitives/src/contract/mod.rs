@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{collections::HashMap, fmt::Debug};
 
 use alloy_primitives::aliases::U24;
 use alloy_sol_macro::sol;
@@ -7,12 +7,12 @@ use angstrom_types_contracts::angstrom::Angstrom::PoolKey;
 sol! {
 #![sol(all_derives = true)]
 ERC20,
-"src/primitive/contract/ERC20.json"}
+"src/contract/ERC20.json"}
 
 pub use ERC20::*;
 pub use angstrom_types_constants::*;
 
-use crate::primitive::PoolId;
+use crate::PoolId;
 
 #[derive(Debug, Default, Clone)]
 pub struct UniswapPoolRegistry {

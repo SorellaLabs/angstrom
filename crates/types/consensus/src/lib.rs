@@ -6,7 +6,7 @@ pub mod round_data;
 
 use std::time::Duration;
 
-use alloy::primitives::{Address, BlockNumber, Bytes};
+use alloy_primitives::{Address, BlockNumber, Bytes};
 pub use evidence::*;
 pub use pre_prepose::*;
 pub use pre_propose_agg::*;

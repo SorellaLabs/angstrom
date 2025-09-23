@@ -5,7 +5,12 @@ edition = "2024"
 
 [dependencies]
 alloy-consensus.workspace = true
+alloy-network.workspace = true
 alloy-primitives = { workspace = true, features = ["rand"] }
+alloy-signer.workspace = true
+alloy-signer-local.workspace = true
+alloy-sol-macro.workspace = true
+alloy-sol-types.workspace = true
 angstrom-types-constants.workspace = true
 angstrom-types-contracts.workspace = true
 auto_impl.workspace = true

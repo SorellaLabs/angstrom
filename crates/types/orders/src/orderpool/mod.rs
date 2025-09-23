@@ -1,16 +1,14 @@
 use std::fmt::Debug;
 
-use alloy::primitives::{Address, B256, U256};
+use alloy_primitives::{Address, B256, U256};
+use angstrom_types_primitives::{PoolId, UserAccountVerificationError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 mod updated_gas;
 pub use updated_gas::*;
 
-use crate::{
-    primitive::{PoolId, UserAccountVerificationError},
-    sol_bindings::{RawPoolOrder, ext::RespendAvoidanceMethod}
-};
+use crate::{RawPoolOrder, ext::RespendAvoidanceMethod};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OrderStatus {

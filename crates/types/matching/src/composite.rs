@@ -1,12 +1,11 @@
 use tracing::debug;
 
 use super::{
-    Ray,
     debt::Debt,
     math::amm_debt_same_move_solve,
     uniswap::{Direction, PoolPrice, PoolPriceVec, Quantity}
 };
-
+use crate::Ray;
 #[derive(Clone, Debug, Default)]
 pub struct CompositeOrder<'a> {
     debt:        Option<Debt>,

@@ -5,7 +5,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
-use crate::primitive::CHAIN_ID;
+use angstrom_types_constants::CHAIN_ID;
 
 pub const INTERVALS_PER_SLOT: u64 = 3;
 

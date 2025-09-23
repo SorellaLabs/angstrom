@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+alloy-contract.workspace = true
 alloy-primitives = { workspace = true, features = ["rand"] }
+alloy-sol-macro.workspace = true
+alloy-sol-types.workspace = true
 angstrom-types-constants.workspace = true
+angstrom-types-contracts.workspace = true
 angstrom-types-primitives.workspace = true
 auto_impl.workspace = true
 base64.workspace = true

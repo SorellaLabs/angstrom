@@ -103,13 +103,14 @@ angstrom-metrics = { path = "./crates/metrics/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 angstrom-rpc = { path = "./crates/rpc/" }
 angstrom-types = { path = "./crates/types/" }
+angstrom-types-bundle = { path = "./crates/types/bundle" }
 angstrom-types-consensus = { path = "./crates/types/consensus" }
 angstrom-types-constants = { path = "./crates/types/constants" }
 angstrom-types-contracts = { path = "./crates/types/contracts" }
 angstrom-types-matching = { path = "./crates/types/matching" }
 angstrom-types-orders = { path = "./crates/types/orders" }
-angstrom-types-payloads = { path = "./crates/types/payloads" }
 angstrom-types-primitives = { path = "./crates/types/primitives" }
+angstrom-types-reth-db = { path = "./crates/types/reth-db" }
 angstrom-utils = { path = "./crates/utils/" }
 anyhow = "1"
 aquamarine = "0"

@@ -1,15 +1,14 @@
-use alloy::{
-    primitives::{Address, B256, BlockNumber, keccak256},
-    signers::Signature
+use alloy_primitives::{Address, B256, BlockNumber, U256, keccak256};
+use alloy_signer::Signature;
+use angstrom_types_primitives::{
+    AngstromMetaSigner, AngstromSigner, PeerId, public_key_to_peer_id
 };
-use alloy_primitives::U256;
 use bytes::Bytes;
 use reth_network_peers::PeerId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     orders::OrderSet,
-    primitive::{AngstromMetaSigner, AngstromSigner, public_key_to_peer_id},
     sol_bindings::{ext::RawPoolOrder, grouped_orders::AllOrders, rpc_orders::TopOfBlockOrder}
 };
 

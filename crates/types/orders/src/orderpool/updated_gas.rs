@@ -1,4 +1,4 @@
-use crate::primitive::PoolId;
+use angstrom_types_primitives::PoolId;
 
 /// given the block, returns the updated
 /// gas

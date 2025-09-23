@@ -2,7 +2,7 @@ use std::ops::{Add, Deref, Sub};
 
 use alloy_primitives::U256;
 
-use super::Ray;
+use crate::Ray;
 
 #[derive(Copy, Clone)]
 pub enum TokenQuantity {

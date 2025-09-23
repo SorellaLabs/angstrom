@@ -4,6 +4,7 @@ use std::{
 };
 
 use alloy_primitives::U256;
+pub mod ray;
 
 mod composite;
 pub use composite::CompositeOrder;
@@ -19,10 +20,9 @@ use malachite::{
     Natural,
     num::{arithmetic::traits::PowerOf2, conversion::traits::FromSciString}
 };
+pub use ray::Ray;
 pub use sqrtprice::SqrtPriceX96;
 pub use tokens::TokenQuantity;
-
-pub use super::sol_bindings::Ray;
 
 pub fn const_1e27() -> &'static Natural {
     static TWENTYSEVEN: OnceLock<Natural> = OnceLock::new();

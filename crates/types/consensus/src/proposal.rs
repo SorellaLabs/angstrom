@@ -1,8 +1,5 @@
-use alloy::{
-    primitives::{Address, BlockNumber, U256},
-    signers::Signature
-};
-use alloy_primitives::{B256, keccak256};
+use alloy_primitives::{Address, B256, BlockNumber, U256, keccak256};
+use alloy_signer::Signature;
 use bytes::Bytes;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -10,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use super::{PreProposal, PreProposalAggregation};
 use crate::{
     orders::PoolSolution,
-    primitive::{AngstromMetaSigner, AngstromSigner, PeerId, public_key_to_peer_id}
 };
+
+use angstrom_types_primitives::{AngstromMetaSigner, AngstromSigner, PeerId, public_key_to_peer_id};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Proposal {

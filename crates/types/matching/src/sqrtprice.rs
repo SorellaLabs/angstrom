@@ -11,7 +11,8 @@ use malachite::{
 use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::{get_sqrt_ratio_at_tick, get_tick_at_sqrt_ratio};
 
-use super::{Ray, const_1e27, const_2_192};
+use super::{const_1e27, const_2_192};
+use crate::Ray;
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct SqrtPriceX96(U160);

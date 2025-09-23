@@ -10,8 +10,8 @@ use malachite::{
 };
 use tracing::debug;
 
-use super::{Ray, math::low_to_high, uniswap::PoolPrice};
-use crate::const_2_192;
+use super::{math::low_to_high, uniswap::PoolPrice};
+use crate::{Ray, const_2_192};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DebtType {

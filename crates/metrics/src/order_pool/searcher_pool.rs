@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use angstrom_types::primitive::PoolId;
+use angstrom_types_primitives::PoolId;
 use prometheus::{IntGauge, IntGaugeVec};
 
 use crate::METRICS_ENABLED;

@@ -11,7 +11,8 @@ use malachite::{
 };
 use tracing::debug;
 
-use super::{Ray, SqrtPriceX96, const_1e6, const_1e27, uniswap::Direction};
+use super::{ SqrtPriceX96, const_1e6, const_1e27, uniswap::Direction};
+use crate::Ray;
 
 /// Given an AMM with a constant liquidity, a debt, and a quantity of T0 will
 /// find the amount of T0 to feed into both the AMM and the debt to ensure that

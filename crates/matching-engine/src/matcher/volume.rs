@@ -10,7 +10,10 @@ use angstrom_types::{
         uniswap::{Direction, PoolPrice, PoolPriceVec}
     },
     orders::{NetAmmOrder, OrderFillState, OrderOutcome, PoolSolution},
-    sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    sol_bindings::{
+        grouped_orders::{AllOrdersBasic, OrderWithStorageData},
+        rpc_orders::TopOfBlockOrder
+    }
 };
 use base64::Engine;
 use eyre::eyre;

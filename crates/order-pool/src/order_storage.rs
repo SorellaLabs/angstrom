@@ -12,7 +12,7 @@ use angstrom_types::{
     orders::{OrderId, OrderLocation, OrderSet, OrderStatus, UpdatedGas},
     primitive::{NewInitializedPool, PoolId},
     sol_bindings::{
-        grouped_orders::{AllOrders, OrderWithStorageData},
+        grouped_orders::{AllOrders, AllOrdersBasic, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
     }
 };

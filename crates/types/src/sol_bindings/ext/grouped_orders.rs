@@ -5,6 +5,8 @@ use alloy::{
     signers::Signature
 };
 use alloy_primitives::B256;
+pub use angstrom_types_sol_bindings::grouped_orders::AllOrders;
+use angstrom_types_sol_bindings::rpc_orders::*;
 use pade::PadeDecode;
 use serde::{Deserialize, Serialize};
 
@@ -13,48 +15,8 @@ use crate::{
     matching::Ray,
     orders::{OrderId, OrderLocation, OrderPriorityData},
     primitive::{ANGSTROM_DOMAIN, PoolId, UserAccountVerificationError},
-    sol_bindings::rpc_orders::{
-        ExactFlashOrder, ExactStandingOrder, OmitOrderMeta, PartialFlashOrder,
-        PartialStandingOrder, TopOfBlockOrder
-    }
+    sol_bindings::rpc_orders::OmitOrderMeta
 };
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub enum AllOrders {
-    ExactStanding(ExactStandingOrder),
-    PartialStanding(PartialStandingOrder),
-    ExactFlash(ExactFlashOrder),
-    PartialFlash(PartialFlashOrder),
-    TOB(TopOfBlockOrder)
-}
-
-impl From<TopOfBlockOrder> for AllOrders {
-    fn from(value: TopOfBlockOrder) -> Self {
-        Self::TOB(value)
-    }
-}
-
-impl AllOrders {
-    pub fn order_hash(&self) -> FixedBytes<32> {
-        match self {
-            Self::ExactStanding(p) => p.unique_order_hash(p.from()),
-            Self::PartialStanding(p) => p.unique_order_hash(p.from()),
-            Self::ExactFlash(p) => p.unique_order_hash(p.from()),
-            Self::PartialFlash(p) => p.unique_order_hash(p.from()),
-            Self::TOB(t) => t.unique_order_hash(t.from())
-        }
-    }
-
-    pub fn is_vanilla(&self) -> bool {
-        !match self {
-            Self::ExactStanding(p) => p.has_hook(),
-            Self::PartialStanding(p) => p.has_hook(),
-            Self::ExactFlash(p) => p.has_hook(),
-            Self::PartialFlash(p) => p.has_hook(),
-            Self::TOB(_) => false
-        }
-    }
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderWithStorageData<Order> {
@@ -174,18 +136,16 @@ impl OrderWithStorageData<AllOrders> {
     }
 }
 
-impl AllOrders {
-    pub fn hash(&self) -> FixedBytes<32> {
-        self.order_hash()
+pub trait AllOrdersBasic {
+    fn hash(&self) -> FixedBytes<32> {
+        AllOrdersBasic::order_hash(self)
     }
 
     /// Primarily used for debugging to work with price as an f64
-    pub fn float_price(&self) -> f64 {
-        Ray::from(self.limit_price()).as_f64()
-    }
+    fn float_price(&self) -> f64;
 
     /// Bid orders need to invert their price
-    pub fn bid_price(&self) -> Ray {
+    fn bid_price(&self) -> Ray {
         self.price().inv_ray_round(true)
     }
 
@@ -194,33 +154,69 @@ impl AllOrders {
     ///
     /// TODO:  Deprecate this and replace with `price_t1_over_t0()` since that
     /// performs this function more elegantly
-    pub fn price_for_book_side(&self, is_bid: bool) -> Ray {
+    fn price_for_book_side(&self, is_bid: bool) -> Ray {
         if is_bid { self.bid_price() } else { self.price() }
     }
 
     /// Provides the LITERAL price as specified in the order.  Note that for
     /// bids this can be inverse
-    pub fn price(&self) -> Ray {
-        self.limit_price().into()
-    }
+    fn price(&self) -> Ray;
 
     /// Provides the price in T1/T0 format.  For "ask" orders this means just
     /// providing the literal price.  For "Bid" orders this means inverting the
     /// price to be in T1/T0 format since we store those prices as T0/T1
-    pub fn price_t1_over_t0(&self) -> Ray {
+    fn price_t1_over_t0(&self) -> Ray;
+
+    fn pre_fee_and_gas_price(&self, fee: u128, gas_t0: u128) -> Ray;
+
+    /// Provides the fee-adjusted price to be used for accounting.  Note that
+    /// for bids this can be inverse
+    fn fee_adj_price(&self, fee: u128) -> Ray {
+        self.price().scale_to_fee(fee)
+    }
+
+    fn order_hash(&self) -> FixedBytes<32>;
+
+    fn is_vanilla(&self) -> bool;
+}
+
+impl AllOrdersBasic for AllOrders {
+    fn float_price(&self) -> f64 {
+        Ray::from(self.limit_price()).as_f64()
+    }
+
+    fn price(&self) -> Ray {
+        self.limit_price().into()
+    }
+
+    fn price_t1_over_t0(&self) -> Ray {
         if self.is_bid() { self.price().inv_ray_round(true) } else { self.price() }
     }
 
-    pub fn pre_fee_and_gas_price(&self, fee: u128, gas_t0: u128) -> Ray {
+    fn pre_fee_and_gas_price(&self, fee: u128, gas_t0: u128) -> Ray {
         let price = self.price().unscale_to_fee(fee);
 
         self.unscale_by_gas_fee(price, gas_t0)
     }
 
-    /// Provides the fee-adjusted price to be used for accounting.  Note that
-    /// for bids this can be inverse
-    pub fn fee_adj_price(&self, fee: u128) -> Ray {
-        self.price().scale_to_fee(fee)
+    fn order_hash(&self) -> FixedBytes<32> {
+        match self {
+            Self::ExactStanding(p) => p.unique_order_hash(p.from()),
+            Self::PartialStanding(p) => p.unique_order_hash(p.from()),
+            Self::ExactFlash(p) => p.unique_order_hash(p.from()),
+            Self::PartialFlash(p) => p.unique_order_hash(p.from()),
+            Self::TOB(t) => t.unique_order_hash(t.from())
+        }
+    }
+
+    fn is_vanilla(&self) -> bool {
+        !match self {
+            Self::ExactStanding(p) => p.has_hook(),
+            Self::PartialStanding(p) => p.has_hook(),
+            Self::ExactFlash(p) => p.has_hook(),
+            Self::PartialFlash(p) => p.has_hook(),
+            Self::TOB(_) => false
+        }
     }
 }
 

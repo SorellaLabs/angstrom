@@ -66,6 +66,7 @@ alloy = { version = "1.0.35", features = [
 ] }
 alloy-chains = { version = "0.2.5", default-features = false }
 alloy-consensus = { version = "1.0.35", default-features = false }
+alloy-contract = { version = "1.0.35", default-features = false }
 alloy-dyn-abi = "1.3.0"
 alloy-eips = { version = "1.0.35", default-features = false }
 alloy-genesis = { version = "1.0.35", default-features = false }
@@ -101,7 +102,12 @@ angstrom-eth = { path = "./crates/eth/" }
 angstrom-metrics = { path = "./crates/metrics/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 angstrom-rpc = { path = "./crates/rpc/" }
+angstrom-rpc-consensus = { path = "./crates/rpc/consensus" }
+angstrom-rpc-orders = { path = "./crates/rpc/orders" }
+angstrom-rpc-quoting = { path = "./crates/rpc/quoting" }
 angstrom-types = { path = "./crates/types/" }
+angstrom-types-constants = { path = "./crates/types/constants" }
+angstrom-types-sol-bindings = { path = "./crates/types/sol-bindings" }
 angstrom-utils = { path = "./crates/utils/" }
 anyhow = "1"
 aquamarine = "0"

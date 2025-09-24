@@ -7,6 +7,7 @@ mod rpcs;
 mod signer;
 mod validation;
 
+pub use angstrom_types_constants::*;
 pub use chain_ext::*;
 pub use contract::*;
 pub use peers::*;

@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use alloy::primitives::FixedBytes;
-use angstrom_types::sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData};
+use angstrom_types::sol_bindings::grouped_orders::{
+    AllOrders, AllOrdersBasic, OrderWithStorageData
+};
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 

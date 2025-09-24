@@ -2,12 +2,11 @@ use std::borrow::Cow;
 
 use alloy::{
     primitives::{Address, B256, Bytes, keccak256},
-    sol,
     sol_types::{Eip712Domain, SolStruct}
 };
 use alloy_primitives::{I256, Signature};
+pub use angstrom_types_sol_bindings::rpc_orders::*;
 use eyre::eyre;
-use serde::{Deserialize, Serialize};
 
 use super::RawPoolOrder;
 use crate::{
@@ -15,103 +14,13 @@ use crate::{
     uni_structure::BaselinePoolState
 };
 
-sol! {
-
-    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
-    struct OrderMeta {
-        bool isEcdsa;
-        address from;
-        bytes signature;
-    }
-
-    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    struct PartialStandingOrder {
-        uint32 ref_id;
-        uint128 min_amount_in;
-        uint128 max_amount_in;
-        uint128 max_extra_fee_asset0;
-        uint256 min_price;
-        bool use_internal;
-        address asset_in;
-        address asset_out;
-        address recipient;
-        bytes hook_data;
-        uint64 nonce;
-        uint40 deadline;
-        OrderMeta meta;
-    }
-
-    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    struct ExactStandingOrder {
-        uint32 ref_id;
-        bool exact_in;
-        uint128 amount;
-        uint128 max_extra_fee_asset0;
-        uint256 min_price;
-        bool use_internal;
-        address asset_in;
-        address asset_out;
-        address recipient;
-        bytes hook_data;
-        uint64 nonce;
-        uint40 deadline;
-        OrderMeta meta;
-    }
-
-    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    struct PartialFlashOrder {
-        uint32 ref_id;
-        uint128 min_amount_in;
-        uint128 max_amount_in;
-        uint128 max_extra_fee_asset0;
-        uint256 min_price;
-        bool use_internal;
-        address asset_in;
-        address asset_out;
-        address recipient;
-        bytes hook_data;
-        uint64 valid_for_block;
-        OrderMeta meta;
-    }
-
-    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    struct ExactFlashOrder {
-        uint32 ref_id;
-        bool exact_in;
-        uint128 amount;
-        uint128 max_extra_fee_asset0;
-        uint256 min_price;
-        bool use_internal;
-        address asset_in;
-        address asset_out;
-        address recipient;
-        bytes hook_data;
-        uint64 valid_for_block;
-        OrderMeta meta;
-    }
-
-    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
-    struct TopOfBlockOrder {
-        uint128 quantity_in;
-        uint128 quantity_out;
-        uint128 max_gas_asset0;
-        bool use_internal;
-        address asset_in;
-        address asset_out;
-        address recipient;
-        uint64 valid_for_block;
-        OrderMeta meta;
-    }
-
-    #[derive(Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    struct AttestAngstromBlockEmpty {
-        uint64 block_number;
-    }
+pub trait TopOfBlockOrderBasic {
+    /// returns the amount in t0 that this order is bidding in the auction.
+    fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128>;
 }
 
-impl TopOfBlockOrder {
-    /// returns the amount in t0 that this order is bidding in the auction.
-    pub fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128> {
+impl TopOfBlockOrderBasic for TopOfBlockOrder {
+    fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128> {
         // Cefi Sell
         if self.is_bid() {
             let res =
@@ -133,16 +42,27 @@ impl TopOfBlockOrder {
     }
 }
 
-impl AttestAngstromBlockEmpty {
+pub trait AttestAngstromBlockEmptyBasic {
     /// Returns a pade encoded signature.
-    pub fn sign<S: AngstromMetaSigner>(target_block: u64, signer: &AngstromSigner<S>) -> Vec<u8> {
+    fn sign<S: AngstromMetaSigner>(target_block: u64, signer: &AngstromSigner<S>) -> Vec<u8>;
+
+    fn sign_and_encode<S: AngstromMetaSigner>(
+        target_block: u64,
+        signer: &AngstromSigner<S>
+    ) -> Bytes;
+
+    fn is_valid_attestation(target_block: u64, bytes: &Bytes) -> bool;
+}
+
+impl AttestAngstromBlockEmptyBasic for AttestAngstromBlockEmpty {
+    fn sign<S: AngstromMetaSigner>(target_block: u64, signer: &AngstromSigner<S>) -> Vec<u8> {
         let attestation = AttestAngstromBlockEmpty { block_number: target_block };
         let hash = attestation.eip712_signing_hash(ANGSTROM_DOMAIN.get().unwrap());
 
         signer.sign_hash_sync(&hash).unwrap().as_bytes().to_vec()
     }
 
-    pub fn sign_and_encode<S: AngstromMetaSigner>(
+    fn sign_and_encode<S: AngstromMetaSigner>(
         target_block: u64,
         signer: &AngstromSigner<S>
     ) -> Bytes {
@@ -155,7 +75,7 @@ impl AttestAngstromBlockEmpty {
         Bytes::from_iter([signer.to_vec(), sig.to_vec()].concat())
     }
 
-    pub fn is_valid_attestation(target_block: u64, bytes: &Bytes) -> bool {
+    fn is_valid_attestation(target_block: u64, bytes: &Bytes) -> bool {
         // size needs to be 65 + 20
         if bytes.len() != 85 {
             return false;
@@ -171,7 +91,6 @@ impl AttestAngstromBlockEmpty {
         node_address == recovered_addr
     }
 }
-
 pub trait OmitOrderMeta: SolStruct {
     /// Returns component EIP-712 types. These types are used to construct
     /// the `encodeType` string. These are the types of the struct's fields,

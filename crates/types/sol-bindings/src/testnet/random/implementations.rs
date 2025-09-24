@@ -1,6 +1,6 @@
 use rand::{Rng, distr::StandardUniform, prelude::Distribution};
 
-use crate::sol_bindings::{
+use crate::{
     grouped_orders::AllOrders,
     rpc_orders::{
         ExactFlashOrder, ExactStandingOrder, OrderMeta, PartialFlashOrder, PartialStandingOrder,

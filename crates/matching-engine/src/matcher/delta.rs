@@ -13,7 +13,7 @@ use angstrom_types::{
     orders::{NetAmmOrder, OrderFillState, OrderId, OrderOutcome, PoolSolution},
     sol_bindings::{
         RawPoolOrder, Ray,
-        grouped_orders::{AllOrders, OrderWithStorageData},
+        grouped_orders::{AllOrders, AllOrdersBasic, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
     },
     uni_structure::pool_swap::PoolSwapResult

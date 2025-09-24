@@ -1,5 +1,11 @@
-pub mod api;
-pub mod impls;
-pub mod types;
+pub mod consensus {
+    pub use angstrom_rpc_consensus::*;
+}
 
-pub use impls::*;
+pub mod orders {
+    pub use angstrom_rpc_orders::*;
+}
+
+pub mod quoting {
+    pub use angstrom_rpc_quoting::*;
+}

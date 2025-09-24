@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use alloy::primitives::FixedBytes;
 use angstrom_metrics::FinalizationOrderPoolMetricsWrapper;
-use angstrom_types::sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData};
+use angstrom_types::sol_bindings::grouped_orders::{
+    AllOrders, AllOrdersBasic, OrderWithStorageData
+};
 use angstrom_utils::map::OwnedMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};

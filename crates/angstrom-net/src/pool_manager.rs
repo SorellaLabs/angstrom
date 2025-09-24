@@ -12,7 +12,7 @@ use angstrom_types::{
     block_sync::BlockSyncConsumer,
     orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
     primitive::{NewInitializedPool, OrderValidationError, PeerId, PoolId},
-    sol_bindings::grouped_orders::AllOrders
+    sol_bindings::grouped_orders::{AllOrders, AllOrdersBasic}
 };
 use futures::{Future, FutureExt, StreamExt};
 use order_pool::{

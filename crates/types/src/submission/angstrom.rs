@@ -16,7 +16,10 @@ use super::{
     AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
     EXTRA_GAS_LIMIT, TxFeatureInfo, Url
 };
-use crate::{primitive::AngstromMetaSigner, sol_bindings::rpc_orders::AttestAngstromBlockEmpty};
+use crate::{
+    primitive::AngstromMetaSigner,
+    sol_bindings::rpc_orders::{AttestAngstromBlockEmpty, AttestAngstromBlockEmptyBasic}
+};
 
 pub struct AngstromSubmitter {
     clients:          Vec<(RootProvider, Url)>,

@@ -10,7 +10,7 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::PoolSolution,
     primitive::AngstromMetaSigner,
-    sol_bindings::rpc_orders::AttestAngstromBlockEmpty
+    sol_bindings::rpc_orders::{AttestAngstromBlockEmpty, AttestAngstromBlockEmptyBasic}
 };
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use matching_engine::{MatchingEngineHandle, manager::MatchingEngineError};

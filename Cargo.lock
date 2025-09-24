@@ -1231,6 +1231,15 @@ dependencies = [
 name = "angstrom-rpc"
 version = "0.1.0"
 dependencies = [
+ "angstrom-rpc-consensus",
+ "angstrom-rpc-orders",
+ "angstrom-rpc-quoting",
+]
+
+[[package]]
+name = "angstrom-rpc-consensus"
+version = "0.1.0"
+dependencies = [
  "alloy-primitives",
  "angstrom-amm-quoter",
  "angstrom-network",
@@ -1240,7 +1249,56 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "order-pool",
- "rand 0.9.1",
+ "rand 0.8.5",
+ "reth-tasks",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "validation",
+]
+
+[[package]]
+name = "angstrom-rpc-orders"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "angstrom-amm-quoter",
+ "angstrom-network",
+ "angstrom-types",
+ "async-trait",
+ "futures",
+ "jsonrpsee",
+ "order-pool",
+ "rand 0.8.5",
+ "reth-tasks",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "validation",
+]
+
+[[package]]
+name = "angstrom-rpc-quoting"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "angstrom-amm-quoter",
+ "angstrom-network",
+ "angstrom-types",
+ "async-trait",
+ "consensus",
+ "futures",
+ "jsonrpsee",
+ "order-pool",
+ "rand 0.8.5",
  "reth-tasks",
  "serde",
  "serde_json",
@@ -1259,6 +1317,8 @@ dependencies = [
  "alloy",
  "alloy-primitives",
  "angstrom-types",
+ "angstrom-types-constants",
+ "angstrom-types-sol-bindings",
  "auto_impl",
  "base64 0.22.1",
  "bincode",
@@ -1269,6 +1329,70 @@ dependencies = [
  "futures",
  "hsm-signer",
  "itertools 0.14.0",
+ "k256",
+ "malachite",
+ "pade",
+ "pade-macro",
+ "rand 0.9.1",
+ "reqwest",
+ "reth",
+ "reth-chainspec 1.8.1",
+ "reth-ethereum-primitives 1.8.1",
+ "reth-execution-types 1.8.1",
+ "reth-network-peers 1.8.1",
+ "reth-primitives",
+ "reth-primitives-traits 1.8.1",
+ "reth-provider",
+ "reth-storage-api",
+ "reth-trie",
+ "revm 27.0.3",
+ "revm-bytecode",
+ "revm-database",
+ "revm-primitives",
+ "secp256k1 0.30.0",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "testing-tools",
+ "thiserror 1.0.69",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber 0.3.20",
+ "uniswap_v3_math",
+]
+
+[[package]]
+name = "angstrom-types-constants"
+version = "0.1.0"
+dependencies = [
+ "alloy-dyn-abi",
+ "alloy-primitives",
+ "alloy-sol-types",
+ "eyre",
+]
+
+[[package]]
+name = "angstrom-types-sol-bindings"
+version = "0.1.0"
+dependencies = [
+ "alloy-contract",
+ "alloy-primitives",
+ "alloy-sol-macro",
+ "alloy-sol-types",
+ "angstrom-types",
+ "angstrom-types-constants",
+ "auto_impl",
+ "base64 0.22.1",
+ "bincode",
+ "bytes",
+ "clap",
+ "convert_case 0.7.1",
+ "dashmap 6.1.0",
+ "eyre",
+ "futures",
+ "hsm-signer",
+ "itertools 0.10.5",
  "k256",
  "malachite",
  "pade",

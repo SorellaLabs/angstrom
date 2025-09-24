@@ -20,7 +20,7 @@ use angstrom_types::{
     },
     contract_payloads::angstrom::UniswapAngstromRegistry,
     primitive::{AngstromMetaSigner, AngstromSigner, ChainExt},
-    sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
+    sol_bindings::rpc_orders::{AttestAngstromBlockEmpty, AttestAngstromBlockEmptyBasic},
     submission::SubmissionHandler
 };
 use futures::StreamExt;

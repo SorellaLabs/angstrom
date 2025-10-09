@@ -1,6 +1,9 @@
 name: Check Rust
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 # Stop in-progress on new push
 concurrency:

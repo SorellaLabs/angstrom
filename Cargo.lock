@@ -6742,6 +6742,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-update-cli"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-primitives",
+ "alloy-rpc-types",
+ "angstrom-rpc",
+ "angstrom-types",
+ "clap",
+ "eyre",
+ "futures",
+ "itertools 0.10.5",
+ "jsonrpsee",
+ "reth",
+ "serde",
+ "serde_json",
+ "testing-tools",
+ "tikv-jemallocator",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.20",
+ "uniswap-v4",
+ "uniswap_v3_math",
+ "url",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

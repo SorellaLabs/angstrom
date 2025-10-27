@@ -4215,6 +4215,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "exe-runners"
+version = "0.1.0"
+source = "git+https://github.com/jnoorchashm37/exe-runners.git#09dc6c1f2d43a6f462bc1c009e470c50f7a5c962"
+dependencies = [
+ "auto_impl",
+ "dyn-clone",
+ "futures-util",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6751,6 +6765,7 @@ dependencies = [
  "angstrom-rpc",
  "angstrom-types",
  "clap",
+ "exe-runners",
  "eyre",
  "futures",
  "itertools 0.10.5",

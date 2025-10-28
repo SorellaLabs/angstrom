@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    path::PathBuf
+};
 
 use alloy::{
     consensus::{SignableTransaction, TypedTransaction},
@@ -149,4 +152,22 @@ impl AngstromMetaSigner for Pkcs11Signer {
     fn pubkey(&self) -> VerifyingKey {
         self.verifying_key()
     }
+}
+
+#[derive(Debug, Clone, Default, clap::Args)]
+pub struct KeyConfig {
+    #[clap(long, conflicts_with = "hsm_enabled")]
+    pub local_secret_key_location: Option<PathBuf>,
+    #[clap(long, conflicts_with = "local_secret_key_location")]
+    pub hsm_enabled:               bool,
+    #[clap(long, requires = "hsm_enabled")]
+    pub hsm_public_key_label:      Option<String>,
+    #[clap(long, requires = "hsm_enabled")]
+    pub hsm_private_key_label:     Option<String>,
+    #[clap(
+        long,
+        requires = "hsm_enabled",
+        default_value = "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so"
+    )]
+    pub pkcs11_lib_path:           String
 }

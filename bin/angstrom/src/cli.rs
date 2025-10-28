@@ -1,9 +1,7 @@
-use std::path::PathBuf;
-
 use alloy::signers::local::PrivateKeySigner;
 use angstrom_metrics::initialize_prometheus_metrics;
 use angstrom_types::primitive::{
-    AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC
+    AngstromSigner, CHAIN_ID, ETH_ANGSTROM_RPC, ETH_DEFAULT_RPC, ETH_MEV_RPC, KeyConfig
 };
 use consensus::ConsensusTimingConfig;
 use hsm_signer::{Pkcs11Signer, Pkcs11SignerConfig};
@@ -71,22 +69,4 @@ pub async fn init_metrics(metrics_port: u16) {
     let _ = initialize_prometheus_metrics(metrics_port)
         .await
         .inspect_err(|e| eprintln!("failed to start metrics endpoint - {e:?}"));
-}
-
-#[derive(Debug, Clone, Default, clap::Args)]
-pub struct KeyConfig {
-    #[clap(long, conflicts_with = "hsm_enabled")]
-    pub local_secret_key_location: Option<PathBuf>,
-    #[clap(long, conflicts_with = "local_secret_key_location")]
-    pub hsm_enabled:               bool,
-    #[clap(long, requires = "hsm_enabled")]
-    pub hsm_public_key_label:      Option<String>,
-    #[clap(long, requires = "hsm_enabled")]
-    pub hsm_private_key_label:     Option<String>,
-    #[clap(
-        long,
-        requires = "hsm_enabled",
-        default_value = "/opt/cloudhsm/lib/libcloudhsm_pkcs11.so"
-    )]
-    pub pkcs11_lib_path:           String
 }

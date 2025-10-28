@@ -10,26 +10,41 @@ exclude.workspace = true
 
 [dependencies]
 alloy.workspace = true
+alloy-chains.workspace = true
 alloy-primitives.workspace = true
-alloy-rpc-types.workspace = true
+angstrom-amm-quoter.workspace = true
+angstrom-eth.workspace = true
+angstrom-metrics.workspace = true
+angstrom-network.workspace = true
 angstrom-rpc.workspace = true
 angstrom-types.workspace = true
 clap.workspace = true
+consensus.workspace = true
 exe-runners = { git = "https://github.com/jnoorchashm37/exe-runners.git" }
 eyre.workspace = true
 futures.workspace = true
-itertools.workspace = true
-jsonrpsee.workspace = true
+hsm-signer.workspace = true
+matching-engine.workspace = true
+order-pool.workspace = true
+parking_lot.workspace = true
+rayon = "1"
 reth.workspace = true
+reth-db.workspace = true
+reth-metrics.workspace = true
+reth-network.workspace = true
+reth-node-builder.workspace = true
+reth-node-ethereum.workspace = true
+reth-node-metrics.workspace = true
+reth-provider.workspace = true
 serde.workspace = true
-serde_json.workspace = true
-testing-tools = { workspace = true }
+telemetry.workspace = true
 tokio.workspace = true
+toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uniswap-v4.workspace = true
-uniswap_v3_math.workspace = true
 url.workspace = true
+validation.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 tikv-jemallocator = { version = "0.6.0", optional = true }
@@ -39,5 +54,5 @@ default = ["jemalloc"]
 jemalloc = ["dep:tikv-jemallocator"]
 
 [[bin]]
-name = "bundle-lander"
+name = "node-update-cli"
 path = "src/main.rs"

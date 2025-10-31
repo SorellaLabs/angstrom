@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use alloy::sol_types::SolCall;
 use alloy_primitives::Address;
 use angstrom_types::{
     contract_bindings::controller_v_1::ControllerV1, primitive::CONTROLLER_V1_ADDRESS
@@ -27,7 +26,7 @@ pub struct CollectUnlockSwapFeesCommand {
 }
 
 impl CollectUnlockSwapFeesCommand {
-    pub fn run(self) -> eyre::Result<()> {
+    pub fn run(&self) -> eyre::Result<()> {
         let call = self.build_calldata();
 
         let calldata_str =
@@ -63,7 +62,8 @@ mod tests {
         eips::BlockId,
         node_bindings::Anvil,
         providers::{Provider, ProviderBuilder, WsConnect, ext::AnvilApi},
-        rpc::types::TransactionRequest
+        rpc::types::TransactionRequest,
+        sol_types::SolCall
     };
     use alloy_primitives::{U256, address, bytes};
     use angstrom_types::primitive::{CONTROLLER_V1_ADDRESS, ERC20, init_with_chain_id};

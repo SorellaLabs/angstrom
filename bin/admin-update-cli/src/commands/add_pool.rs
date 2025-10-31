@@ -140,17 +140,13 @@ impl AddPoolCommand {
 #[cfg(test)]
 mod tests {
     use alloy::{
-        alloy_sol_types::SolCall,
         eips::BlockId,
         node_bindings::Anvil,
-        providers::{
-            Provider, ProviderBuilder, WsConnect,
-            ext::{AnvilApi, DebugApi, TraceApi}
-        },
+        providers::{Provider, ProviderBuilder, WsConnect, ext::AnvilApi},
         rpc::types::TransactionRequest,
-        sol_types::SolValue
+        sol_types::{SolCall, SolValue}
     };
-    use alloy_primitives::{U160, U256, address, keccak256};
+    use alloy_primitives::{U160, U256, address, aliases::I24, keccak256};
     use angstrom_types::{
         contract_bindings::pool_manager::PoolManager::PoolKey,
         primitive::{CONTROLLER_V1_ADDRESS, POOL_MANAGER_ADDRESS, PoolId, init_with_chain_id}
@@ -299,7 +295,7 @@ mod tests {
             .from(fast_owner)
             .input(configure_pool_call.abi_encode().into());
 
-        let txs = provider
+        let _ = provider
             .send_transaction(configure_pool_tx)
             .await
             .unwrap()

@@ -27,17 +27,21 @@ impl NodeUpdaterCli {
         init_with_chain_id(self.chain as u64);
         init_tracing();
 
+        if let NodeUpdateCommand::CollectUnlockSwapFees(cmd) = &self.command {
+            cmd.run()?;
+            return Ok(());
+        }
+
         let provider = ProviderBuilder::new().connect(&self.node_endpoint).await?;
 
         match self.command {
             NodeUpdateCommand::ModifyFees(cmd) => {
                 cmd.run(provider).await?;
             }
-            NodeUpdateCommand::CollectUnlockSwapFees(cmd) => {
-                cmd.run()?;
-            }
-            NodeUpdateCommand::CollectGasFees(cmd) => todo!(),
-            NodeUpdateCommand::AddPool(cmd) => todo!()
+
+            NodeUpdateCommand::CollectGasFees(cmd) => cmd.run(provider).await?,
+            NodeUpdateCommand::AddPool(cmd) => cmd.run(provider).await?,
+            _ => unreachable!()
         };
 
         Ok(())

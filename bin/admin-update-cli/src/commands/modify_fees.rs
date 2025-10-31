@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use alloy::{
     eips::BlockId,
     providers::Provider,
-    sol_types::{SolCall, SolValue}
+    sol_types::{ SolValue}
 };
 use alloy_primitives::{
-    Address, Bytes, FixedBytes, U256,
+    Address, FixedBytes, U256,
     aliases::{I24, U24},
     keccak256, uint
 };

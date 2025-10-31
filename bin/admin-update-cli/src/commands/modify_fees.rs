@@ -3,11 +3,10 @@ use std::path::PathBuf;
 use alloy::{
     eips::BlockId,
     providers::Provider,
-    rpc::types::TransactionRequest,
     sol_types::{SolCall, SolValue}
 };
 use alloy_primitives::{
-    Address, Bytes, FixedBytes, TxKind, U256,
+    Address, Bytes, FixedBytes, U256,
     aliases::{I24, U24},
     keccak256, uint
 };
@@ -20,8 +19,11 @@ use angstrom_types::{
     primitive::{ANGSTROM_ADDRESS, CONTROLLER_V1_ADDRESS, PoolId}
 };
 use futures::FutureExt;
-use reth::rpc::types::TransactionInput;
 
+use crate::utils::view_call;
+
+/// generates the calldata for the `configurePool` call on the
+/// ControllerV1, specifically for modifying fees of an existing pool
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ModifyPoolFeesCommand {
     /// pool id to modify
@@ -178,6 +180,7 @@ async fn get_token_pairs<P: Provider>(
     let out = view_call(
         provider,
         *CONTROLLER_V1_ADDRESS.get().unwrap(),
+        BlockId::latest(),
         getPoolByKeyCall { key: FixedBytes::from(*pool_partial_key) }
     )
     .await?;
@@ -185,26 +188,12 @@ async fn get_token_pairs<P: Provider>(
     Ok((out.asset0, out.asset1))
 }
 
-async fn view_call<P, IC>(provider: &P, contract: Address, call: IC) -> eyre::Result<IC::Return>
-where
-    P: Provider,
-    IC: SolCall
-{
-    let tx = TransactionRequest {
-        to: Some(TxKind::Call(contract)),
-        input: TransactionInput::both(call.abi_encode().into()),
-        ..Default::default()
-    };
-
-    let data = provider.call(tx).block(BlockId::latest()).await?;
-    Ok(IC::abi_decode_returns(&data)?)
-}
-
 #[cfg(test)]
 mod tests {
     use alloy::{
         node_bindings::Anvil,
-        providers::{ProviderBuilder, WsConnect, ext::AnvilApi}
+        providers::{ProviderBuilder, WsConnect, ext::AnvilApi},
+        rpc::types::TransactionRequest
     };
     use alloy_primitives::{address, b256};
     use angstrom_types::primitive::init_with_chain_id;

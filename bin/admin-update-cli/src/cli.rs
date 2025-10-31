@@ -1,15 +1,14 @@
-use std::path::PathBuf;
-
-use alloy::providers::{Provider, ProviderBuilder};
-use angstrom_types::primitive::{AngstromSigner, CHAIN_ID, KeyConfig, init_with_chain_id};
+use alloy::providers::ProviderBuilder;
+use angstrom_types::primitive::init_with_chain_id;
 use clap::Parser;
-use exe_runners::TaskExecutor;
 use reth::chainspec::NamedChain;
 use tracing::Level;
 use tracing_subscriber::{filter, layer::SubscriberExt, util::SubscriberInitExt};
-use url::Url;
 
-use crate::commands::modify_fees::ModifyPoolFeesCommand;
+use crate::commands::{
+    add_pool::AddPoolCommand, collect_gas_fees::CollectGasFeesCommand,
+    collect_unlock_swap_fees::CollectUnlockSwapFeesCommand, modify_fees::ModifyPoolFeesCommand
+};
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct NodeUpdaterCli {
@@ -24,20 +23,22 @@ pub struct NodeUpdaterCli {
 }
 
 impl NodeUpdaterCli {
-    pub async fn run(self, task_executor: TaskExecutor) -> eyre::Result<()> {
-        let this = Self::parse();
-
-        assert!(this.chain == NamedChain::Mainnet || this.chain == NamedChain::Sepolia);
-        init_with_chain_id(this.chain as u64);
-
+    pub async fn run(self) -> eyre::Result<()> {
+        assert!(self.chain == NamedChain::Mainnet || self.chain == NamedChain::Sepolia);
+        init_with_chain_id(self.chain as u64);
         init_tracing();
 
         let provider = ProviderBuilder::new().connect(&self.node_endpoint).await?;
 
         match self.command {
-            NodeUpdateCommand::ModifyFees(modify_pool_fees_command) => {
-                modify_pool_fees_command.run(provider).await?
+            NodeUpdateCommand::ModifyFees(cmd) => {
+                cmd.run(provider).await?;
             }
+            NodeUpdateCommand::CollectUnlockSwapFees(cmd) => {
+                cmd.run()?;
+            }
+            NodeUpdateCommand::CollectGasFees(cmd) => todo!(),
+            NodeUpdateCommand::AddPool(cmd) => todo!()
         };
 
         Ok(())
@@ -47,7 +48,13 @@ impl NodeUpdaterCli {
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum NodeUpdateCommand {
     #[command(name = "modify-fees")]
-    ModifyFees(ModifyPoolFeesCommand)
+    ModifyFees(ModifyPoolFeesCommand),
+    #[command(name = "collect-unlock-swap-fees")]
+    CollectUnlockSwapFees(CollectUnlockSwapFeesCommand),
+    #[command(name = "collect-gas-fees")]
+    CollectGasFees(CollectGasFeesCommand),
+    #[command(name = "add-pool")]
+    AddPool(AddPoolCommand)
 }
 
 pub(crate) fn init_tracing() {

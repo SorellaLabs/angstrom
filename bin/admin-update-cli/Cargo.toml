@@ -1,5 +1,5 @@
 [package]
-name = "node-update-cli"
+name = "admin-update-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -20,7 +20,6 @@ angstrom-rpc.workspace = true
 angstrom-types.workspace = true
 clap.workspace = true
 consensus.workspace = true
-exe-runners = { git = "https://github.com/jnoorchashm37/exe-runners.git" }
 eyre.workspace = true
 futures.workspace = true
 hsm-signer.workspace = true
@@ -58,5 +57,5 @@ default = ["jemalloc"]
 jemalloc = ["dep:tikv-jemallocator"]
 
 [[bin]]
-name = "node-update-cli"
+name = "admin-update-cli"
 path = "src/main.rs"

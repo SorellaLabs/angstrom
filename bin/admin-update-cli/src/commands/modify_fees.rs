@@ -1,10 +1,6 @@
 use std::path::PathBuf;
 
-use alloy::{
-    eips::BlockId,
-    providers::Provider,
-    sol_types::{ SolValue}
-};
+use alloy::{eips::BlockId, providers::Provider, sol_types::SolValue};
 use alloy_primitives::{
     Address, FixedBytes, U256,
     aliases::{I24, U24},
@@ -190,7 +186,8 @@ mod tests {
     use alloy::{
         node_bindings::Anvil,
         providers::{ProviderBuilder, WsConnect, ext::AnvilApi},
-        rpc::types::TransactionRequest
+        rpc::types::TransactionRequest,
+        sol_types::SolCall
     };
     use alloy_primitives::{address, b256};
     use angstrom_types::primitive::init_with_chain_id;

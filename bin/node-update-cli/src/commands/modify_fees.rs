@@ -1,13 +1,19 @@
+use std::path::PathBuf;
+
 use alloy::{
-    eips::BlockId, providers::Provider, rpc::types::TransactionRequest, sol_types::SolCall
+    eips::BlockId,
+    providers::Provider,
+    rpc::types::TransactionRequest,
+    sol_types::{SolCall, SolValue}
 };
 use alloy_primitives::{
-    Address, FixedBytes, TxKind,
-    aliases::{I24, U24}
+    Address, Bytes, FixedBytes, TxKind, U256,
+    aliases::{I24, U24},
+    keccak256, uint
 };
 use angstrom_types::{
     contract_bindings::{
-        angstrom::Angstrom::PoolKey,
+        angstrom::Angstrom::{AngstromInstance, PoolKey},
         controller_v_1::ControllerV1::{self, getPoolByKeyCall}
     },
     contract_payloads::angstrom::{AngstromPoolConfigStore, AngstromPoolPartialKey},
@@ -23,29 +29,42 @@ pub struct ModifyPoolFeesCommand {
     pub pool_id: PoolId,
 
     /// the new bundle fee value denominated in 100ths of a bip
-    #[clap(long)]
+    #[clap(long = "bundle-fee")]
     pub bundle_fee_e6: Option<u64>,
 
     /// the new unlock fee value denominated in 100ths of a bip
-    #[clap(long)]
+    #[clap(long = "unlock-fee")]
     pub unlock_fee_e6: Option<u64>,
 
     /// the new protocol unlock fee value denominated in 100ths of a bip
-    #[clap(long)]
-    pub protocol_unlock_fee_e6: Option<u64>
+    #[clap(long = "protocol-unlock-fee")]
+    pub protocol_unlock_fee_e6: Option<u64>,
+
+    /// if set, will write the encoded hex to an outfile, otherwise will print
+    /// it in the cli
+    #[clap(short = 'o', long)]
+    pub encoded_data_out_file: Option<PathBuf>
 }
 
 impl ModifyPoolFeesCommand {
     pub async fn run<P: Provider>(self, provider: P) -> eyre::Result<()> {
-        let configure_call = self.get_initial_fees(&provider).await?;
+        let calldata = self.generate_calldata(provider).await?;
+        let calldata_str = format!("{calldata:?}");
 
-        let tx = TransactionRequest::default()
-            .input(configure_call.abi_encode().into())
-            .to(*CONTROLLER_V1_ADDRESS.get().unwrap());
-
-        let tx_hash = provider.send_transaction(tx).await?.watch().await?;
+        if let Some(path) = self.encoded_data_out_file {
+            std::fs::write(&path, calldata_str.as_bytes())?;
+            tracing::info!("wrote calldata bytes to {path:?}");
+        } else {
+            tracing::info!("displaying calldata");
+            println!("{calldata_str}")
+        }
 
         Ok(())
+    }
+
+    pub async fn generate_calldata<P: Provider>(&self, provider: P) -> eyre::Result<Bytes> {
+        let configure_call = self.get_initial_fees(&provider).await?;
+        Ok(configure_call.abi_encode().into())
     }
 
     async fn get_initial_fees<P: Provider>(
@@ -90,21 +109,12 @@ impl ModifyPoolFeesCommand {
             })
             .ok_or(eyre::eyre!("no pool config found for pool id {:?}", self.pool_id))?;
 
-        let unlocked_fees = view_call(
-            provider,
-            *CONTROLLER_V1_ADDRESS.get().unwrap(),
-            _private::unlockedFeeCall {
-                _0: *ANGSTROM_ADDRESS.get().unwrap(),
-                _1: FixedBytes::from(*store_key)
-            }
-        )
-        .await?;
+        let unlocked_fees = get_unlocked_fee(provider, store_key).await?;
 
-        let (mut bundle_fee, mut unlock_fee, mut protocol_unlock_fee) = (
-            U24::from(searched_pool_config_store.fee_in_e6),
-            unlocked_fees.fee,
-            unlocked_fees.protocolFee
-        );
+        let (mut bundle_fee, mut unlock_fee, mut protocol_unlock_fee) =
+            (U24::from(searched_pool_config_store.fee_in_e6), unlocked_fees.0, unlocked_fees.1);
+
+        tracing::info!(pool_id = ?self.pool_id, ?bundle_fee, ?unlock_fee, ?protocol_unlock_fee, "CURRENT fees set");
 
         if let Some(new_bundle_fee) = self.bundle_fee_e6.map(U24::from) {
             if bundle_fee == new_bundle_fee {
@@ -129,6 +139,8 @@ impl ModifyPoolFeesCommand {
             protocol_unlock_fee = new_protocol_unlock_fee;
         }
 
+        tracing::info!(pool_id = ?self.pool_id, ?bundle_fee, ?unlock_fee, ?protocol_unlock_fee, "NEW fees set");
+
         Ok(ControllerV1::configurePoolCall {
             asset0:              token0,
             asset1:              token1,
@@ -138,6 +150,25 @@ impl ModifyPoolFeesCommand {
             protocolUnlockedFee: protocol_unlock_fee
         })
     }
+}
+
+const UNLOCKED_FEE_PACKED_SET_SLOT: U256 = uint!(2_U256);
+
+async fn get_unlocked_fee<P: Provider>(
+    provider: &P,
+    store_key: AngstromPoolPartialKey
+) -> eyre::Result<(U24, U24)> {
+    let angstrom = AngstromInstance::new(*ANGSTROM_ADDRESS.get().unwrap(), provider);
+
+    let unlocked_fee_slot = keccak256((*store_key, UNLOCKED_FEE_PACKED_SET_SLOT).abi_encode());
+    let unlocked_packed_is_set_bytes = angstrom.extsload(unlocked_fee_slot.into()).call().await?;
+
+    let unlocked_fee = U24::from_be_slice(&unlocked_packed_is_set_bytes.to_be_bytes::<32>()[30..]);
+    let protocol_unlocked_fee = U24::from_be_slice(
+        &((unlocked_packed_is_set_bytes >> 24) as U256).to_be_bytes::<32>()[30..]
+    );
+
+    Ok((unlocked_fee, protocol_unlocked_fee))
 }
 
 async fn get_token_pairs<P: Provider>(
@@ -169,13 +200,113 @@ where
     Ok(IC::abi_decode_returns(&data)?)
 }
 
-mod _private {
-    use alloy::sol;
+#[cfg(test)]
+mod tests {
+    use alloy::{
+        node_bindings::Anvil,
+        providers::{ProviderBuilder, WsConnect, ext::AnvilApi}
+    };
+    use alloy_primitives::{address, b256};
+    use angstrom_types::primitive::init_with_chain_id;
 
-    sol! {
-        function unlockedFee(address, bytes27)
-            internal
-            view
-            returns (uint24 fee, uint24 protocolFee);
+    use super::*;
+    use crate::cli::init_tracing;
+
+    #[tracing_test::traced_test]
+    #[tokio::test]
+    async fn test_get_initial_fees() {
+        dotenv::dotenv().ok();
+        init_with_chain_id(1);
+        init_tracing();
+
+        let provider = ProviderBuilder::new()
+            .connect(&std::env::var("CI_ETH_WS_URL").expect("CI_ETH_WS_URL not found in .env"))
+            .await
+            .unwrap();
+
+        let cmd = ModifyPoolFeesCommand {
+            pool_id:                b256!(
+                "0x90078845bceb849b171873cfbc92db8540e9c803ff57d9d21b1215ec158e79b3"
+            ),
+            bundle_fee_e6:          Some(1),
+            unlock_fee_e6:          Some(2),
+            protocol_unlock_fee_e6: Some(3),
+            encoded_data_out_file:  None
+        };
+
+        let fees = cmd.get_initial_fees(&provider).await.unwrap();
+        assert_eq!(fees.bundleFee, U24::from(1u8));
+        assert_eq!(fees.unlockedFee, U24::from(2u8));
+        assert_eq!(fees.protocolUnlockedFee, U24::from(3u8));
+    }
+
+    #[tracing_test::traced_test]
+    #[tokio::test]
+    async fn test_change_fees() {
+        dotenv::dotenv().ok();
+        init_with_chain_id(1);
+        init_tracing();
+
+        let fork_url = std::env::var("CI_ETH_WS_URL").expect("CI_ETH_WS_URL not found in .env");
+
+        let anvil = Anvil::new()
+            .chain_id(1)
+            .arg("--host")
+            .arg("0.0.0.0")
+            .port(53241_u16)
+            .fork(fork_url)
+            .fork_block_number(23231623)
+            .arg("--code-size-limit")
+            .arg("393216")
+            .arg("--disable-block-gas-limit")
+            .block_time(2)
+            .try_spawn()
+            .unwrap();
+
+        let provider = ProviderBuilder::new()
+            .connect_ws(WsConnect::new(anvil.ws_endpoint_url()))
+            .await
+            .unwrap();
+
+        let fast_owner = address!("0xD31C82069da3013fdB16B731AD19076Af9b93105");
+
+        provider
+            .anvil_impersonate_account(fast_owner)
+            .await
+            .unwrap();
+
+        let mut cmd = ModifyPoolFeesCommand {
+            pool_id:                b256!(
+                "0x90078845bceb849b171873cfbc92db8540e9c803ff57d9d21b1215ec158e79b3"
+            ),
+            bundle_fee_e6:          Some(1),
+            unlock_fee_e6:          Some(2),
+            protocol_unlock_fee_e6: Some(3),
+            encoded_data_out_file:  None
+        };
+
+        let fees = cmd.get_initial_fees(&provider).await.unwrap();
+
+        let tx = TransactionRequest::default()
+            .to(*CONTROLLER_V1_ADDRESS.get().unwrap())
+            .from(fast_owner)
+            .input(fees.abi_encode().into());
+
+        let _ = provider
+            .send_transaction(tx)
+            .await
+            .unwrap()
+            .watch()
+            .await
+            .unwrap();
+
+        cmd.bundle_fee_e6 = Some(4);
+        cmd.bundle_fee_e6 = Some(5);
+        cmd.bundle_fee_e6 = Some(6);
+        let fees = cmd.get_initial_fees(&provider).await.unwrap();
+
+        assert_eq!(fees.bundleFee, U24::from(4u8));
+        assert_eq!(fees.unlockedFee, U24::from(5u8));
+        assert_eq!(fees.protocolUnlockedFee, U24::from(6u8));
     }
 }

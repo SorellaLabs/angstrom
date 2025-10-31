@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use alloy_primitives::Address;
-use angstrom_types::primitive::PoolId;
+use alloy_primitives::{Address, aliases::U24};
+use angstrom_types::{contract_payloads::angstrom::AngstromPoolPartialKey, primitive::PoolId};
 use itertools::Itertools;
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
 
 use crate::{
     controllers::enviroments::{AngstromTestnet, DevnetStateMachine},
-    providers::WalletProvider,
+    providers::{WalletProvider, utils::async_to_sync},
     types::{StateMachineCheckHookFn, config::DevnetConfig}
 };
 
@@ -30,6 +30,14 @@ where
     fn check_token_price_gen_has_pools(
         &mut self,
         checked_pair_to_pool: HashMap<(Address, Address), PoolId>
+    );
+
+    fn check_pool_fees(
+        &mut self,
+        store_key: AngstromPoolPartialKey,
+        bundle_fee: U24,
+        unlock_fee: U24,
+        protocol_unlock_fee: U24
     );
 }
 
@@ -72,5 +80,24 @@ where
         };
 
         self.add_check("check token price gen has pools", f);
+    }
+
+    fn check_pool_fees(
+        &mut self,
+        store_key: AngstromPoolPartialKey,
+        bundle_fee: U24,
+        unlock_fee: U24,
+        protocol_unlock_fee: U24
+    ) {
+        let f = move |testnet: &mut AngstromTestnet<C, DevnetConfig, WalletProvider>| {
+            let (c_bundle_fee, c_unlock_fee, c_protocol_unlocked_fee) =
+                async_to_sync(testnet.get_pool_fees(store_key))?;
+
+            Ok(c_bundle_fee == bundle_fee
+                && c_unlock_fee == unlock_fee
+                && c_protocol_unlocked_fee == protocol_unlock_fee)
+        };
+
+        self.add_check("check pool fees are expected", f);
     }
 }

@@ -39,6 +39,7 @@ where
     async fn run_safe(self) -> eyre::Result<TxHash> {
         let provider = self.provider.clone();
         let receipt = self.gas(50_000_000_u64).send().await?.get_receipt().await?;
+        tracing::error!("TRACE: {receipt:?}");
         if receipt.inner.status() {
             Ok(receipt.transaction_hash)
         } else {
@@ -61,6 +62,7 @@ where
                 .await?;
 
             println!("TRACE: {result:?}");
+
             // We can make this do a cool backtrace later
             Err(eyre!("Transaction with hash {} failed", receipt.transaction_hash))
         }
@@ -69,22 +71,19 @@ where
     async fn run_with_results_safe(self) -> eyre::Result<TxHash> {
         let provider = self.provider.clone();
         let receipt = self.gas(50_000_000_u64).send().await?.get_receipt().await?;
-        let default_options = GethDebugTracingOptions::default();
-        let _call_options = GethDebugTracingOptions {
-            config: GethDefaultTracingOptions {
-                disable_storage: Some(false),
-                disable_stack: Some(false),
-                enable_memory: Some(false),
-                debug: Some(true),
-                ..Default::default()
-            },
-            tracer: Some(GethDebugTracerType::BuiltInTracer(
-                GethDebugBuiltInTracerType::CallTracer
-            )),
+        let mut options = GethDebugTracingOptions::default();
+        options.tracer =
+            Some(GethDebugTracerType::BuiltInTracer(GethDebugBuiltInTracerType::CallTracer));
+        options.config = GethDefaultTracingOptions {
+            disable_storage: Some(false),
+            disable_stack: Some(false),
+            enable_memory: Some(false),
+            debug: Some(true),
             ..Default::default()
         };
+
         let result = provider
-            .debug_trace_transaction(receipt.transaction_hash, default_options)
+            .debug_trace_transaction(receipt.transaction_hash, options)
             .await?;
 
         println!("TRACE: {result:?}");

@@ -1,4 +1,5 @@
 use alloy_primitives::{Address, TxHash};
+use alloy_rpc_types::BlockId;
 use angstrom_types::contract_bindings::{
     angstrom::Angstrom::AngstromInstance, controller_v_1::ControllerV1,
     pool_gate::PoolGate::PoolGateInstance, position_fetcher::PositionFetcher

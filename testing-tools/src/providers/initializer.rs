@@ -304,6 +304,7 @@ impl AnvilInitializer {
             .nonce(nonce)
             .deploy_pending()
             .await?;
+
         tracing::debug!("success: controller_configure_pool");
         self.pending_state.add_pending_tx(controller_configure_pool);
 

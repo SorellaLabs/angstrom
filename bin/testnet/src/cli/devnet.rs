@@ -36,6 +36,7 @@ pub struct DevnetCli {
 impl DevnetCli {
     pub fn make_config(self) -> eyre::Result<DevnetConfig> {
         let initial_state_config = AllPoolKeyInners::load_toml_config(&self.pool_key_config)?;
+        tracing::info!(?initial_state_config, "loaded intial state config");
         Ok(DevnetConfig::new(
             self.nodes_in_network,
             self.starting_port,

@@ -1,8 +1,15 @@
 use std::{collections::HashSet, pin::Pin};
 
 use alloy::providers::ext::AnvilApi;
-use alloy_primitives::U256;
-use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
+use alloy_primitives::{U256, aliases::U24, keccak256};
+use alloy_rpc_types::BlockId;
+use alloy_sol_types::SolValue;
+use angstrom_types::{
+    block_sync::GlobalBlockSync,
+    contract_bindings::angstrom::Angstrom::AngstromInstance,
+    contract_payloads::angstrom::{AngstromPoolConfigStore, AngstromPoolPartialKey},
+    testnet::InitialTestnetState
+};
 use futures::{Future, FutureExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
@@ -156,6 +163,44 @@ where
         node.stop_network_and_consensus_and_validation();
 
         Ok(())
+    }
+
+    pub async fn get_pool_fees(
+        &self,
+        store_key: AngstromPoolPartialKey
+    ) -> eyre::Result<(U24, U24, U24)> {
+        let node = self.get_peer_with(|n| n.state_provider().deployed_addresses().is_some());
+
+        let angstrom_addr = node.get_init_state().angstrom_addr;
+
+        let rpc_provider = node.state_provider().rpc_provider();
+        let config_store = AngstromPoolConfigStore::load_from_chain(
+            angstrom_addr,
+            BlockId::latest(),
+            &rpc_provider
+        )
+        .await
+        .map_err(|e| eyre::eyre!("{e:?}"))?;
+
+        let bundle_fee = config_store
+            .all_entries()
+            .iter()
+            .find_map(|entry| (*entry.key() == store_key).then_some(entry.fee_in_e6))
+            .unwrap();
+
+        let angstrom = AngstromInstance::new(angstrom_addr, rpc_provider);
+
+        let unlocked_fee_slot = keccak256((*store_key, U256::from(2u8)).abi_encode());
+        let unlocked_packed_is_set_bytes =
+            angstrom.extsload(unlocked_fee_slot.into()).call().await?;
+
+        let unlocked_fee =
+            U24::from_be_slice(&unlocked_packed_is_set_bytes.to_be_bytes::<32>()[30..]);
+        let protocol_unlocked_fee = U24::from_be_slice(
+            &((unlocked_packed_is_set_bytes >> 24) as U256).to_be_bytes::<32>()[30..]
+        );
+
+        Ok((U24::from(bundle_fee), unlocked_fee, protocol_unlocked_fee))
     }
 }
 

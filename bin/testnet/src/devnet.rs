@@ -10,10 +10,14 @@ use testing_tools::{
 };
 use tracing::{debug, info};
 
-use crate::{cli::devnet::DevnetCli, simulations::token_prices_update_new_pools};
+use crate::{
+    cli::devnet::DevnetCli,
+    simulations::{modify_pool_fees, token_prices_update_new_pools}
+};
 
 pub(crate) async fn run_devnet(executor: TaskExecutor, cli: DevnetCli) -> eyre::Result<()> {
     token_prices_update_new_pools::run_devnet(executor, cli).await?;
+    // modify_pool_fees::run_devnet(executor, cli).await?;
 
     Ok(())
 }

@@ -130,7 +130,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let pool_config_store = Arc::new(
             AngstromPoolConfigStore::load_from_chain(
                 inital_angstrom_state.angstrom_addr,
-                BlockId::number(block_number),
+                BlockId::number(block_number - 1),
                 &state_provider.rpc_provider()
             )
             .await
@@ -140,25 +140,20 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         let node_set = initial_validators.iter().map(|v| v.peer_id).collect();
 
+        let mut state_sub = state_provider
+            .state_provider()
+            .subscribe_to_canonical_state();
+
         if node_config.is_devnet() {
             state_provider.mine_block().await?;
         }
-        let b = state_provider
-            .state_provider()
-            .subscribe_to_canonical_state()
-            .recv()
-            .await
-            .expect("startup sequence failed");
+        let b = state_sub.recv().await.expect("startup sequence failed");
         tracing::debug!("got next block");
-
-        let sub = state_provider
-            .state_provider()
-            .subscribe_to_canonical_state();
 
         let eth_handle = EthDataCleanser::spawn(
             inital_angstrom_state.angstrom_addr,
             inital_angstrom_state.controller_addr,
-            sub,
+            state_sub,
             executor.clone(),
             strom_handles.eth_tx,
             strom_handles.eth_rx,
@@ -178,7 +173,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         block_sync.clear();
         block_sync.set_block(block_number);
 
-        tracing::debug!(node_id = node_config.node_id, block_number, "creating strom internals");
+        tracing::debug!(node_id = node_config.node_id, block_number, "finalizing strom internals");
 
         let network_stream = Box::pin(eth_handle.subscribe_network())
             as Pin<Box<dyn Stream<Item = EthEvent> + Send + Sync>>;

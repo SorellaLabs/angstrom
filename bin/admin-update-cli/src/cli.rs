@@ -1,6 +1,5 @@
 use alloy::providers::ProviderBuilder;
 use angstrom_types::primitive::init_with_chain_id;
-use clap::Parser;
 use reth::chainspec::NamedChain;
 use tracing::Level;
 use tracing_subscriber::{filter, layer::SubscriberExt, util::SubscriberInitExt};

@@ -2,8 +2,11 @@ use std::path::PathBuf;
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::Address;
-use angstrom_types::contract_bindings::controller_v_1::ControllerV1;
-use futures::FutureExt;
+use angstrom_types::{
+    contract_bindings::controller_v_1::ControllerV1, primitive::CONTROLLER_V1_ADDRESS
+};
+
+use crate::utils::format_call;
 
 /// generates the calldata for the `collect_unlock_swap_fees` call on the
 /// ControllerV1
@@ -26,9 +29,9 @@ pub struct CollectUnlockSwapFeesCommand {
 impl CollectUnlockSwapFeesCommand {
     pub fn run(self) -> eyre::Result<()> {
         let call = self.build_calldata();
-        let calldata = call.abi_encode();
 
-        let calldata_str = format!("Call:\n{call:?}\n\nCalldata:\n{calldata:?}");
+        let calldata_str =
+            format!("{}", format_call(0, *CONTROLLER_V1_ADDRESS.get().unwrap(), call));
 
         if let Some(path) = self.encoded_data_out_file {
             std::fs::write(&path, calldata_str.as_bytes())?;
@@ -62,7 +65,7 @@ mod tests {
         providers::{Provider, ProviderBuilder, WsConnect, ext::AnvilApi},
         rpc::types::TransactionRequest
     };
-    use alloy_primitives::{U160, U256, address, b256, bytes};
+    use alloy_primitives::{U256, address, bytes};
     use angstrom_types::primitive::{CONTROLLER_V1_ADDRESS, ERC20, init_with_chain_id};
 
     use super::*;
@@ -80,6 +83,7 @@ mod tests {
     }
 
     #[tracing_test::traced_test]
+    #[test]
     fn test_build_calldata() {
         let withdraw_to = address!("0x1746484ea5e11c75e009252c102c8c33e0315fd4");
 
@@ -114,7 +118,7 @@ mod tests {
             .chain_id(1)
             .arg("--host")
             .arg("0.0.0.0")
-            .port(53241_u16)
+            .port(rand::random::<u16>())
             .fork(fork_url)
             .fork_block_number(block_number)
             .arg("--code-size-limit")

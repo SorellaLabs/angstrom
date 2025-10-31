@@ -47,6 +47,7 @@ validation.workspace = true
 
 [dev-dependencies]
 dotenv = "0"
+rand.workspace = true
 tracing-test = "0"
 
 [target.'cfg(unix)'.dependencies]

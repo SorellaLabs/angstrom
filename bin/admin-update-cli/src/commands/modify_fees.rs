@@ -20,7 +20,7 @@ use angstrom_types::{
 };
 use futures::FutureExt;
 
-use crate::utils::view_call;
+use crate::utils::{format_call, view_call};
 
 /// generates the calldata for the `configurePool` call on the
 /// ControllerV1, specifically for modifying fees of an existing pool
@@ -50,8 +50,10 @@ pub struct ModifyPoolFeesCommand {
 
 impl ModifyPoolFeesCommand {
     pub async fn run<P: Provider>(self, provider: P) -> eyre::Result<()> {
-        let calldata = self.generate_calldata(provider).await?;
-        let calldata_str = format!("{calldata:?}");
+        let call = self.get_initial_fees(&provider).await?;
+
+        let calldata_str =
+            format!("{}", format_call(0, *CONTROLLER_V1_ADDRESS.get().unwrap(), call));
 
         if let Some(path) = self.encoded_data_out_file {
             std::fs::write(&path, calldata_str.as_bytes())?;
@@ -62,11 +64,6 @@ impl ModifyPoolFeesCommand {
         }
 
         Ok(())
-    }
-
-    pub async fn generate_calldata<P: Provider>(&self, provider: P) -> eyre::Result<Bytes> {
-        let configure_call = self.get_initial_fees(&provider).await?;
-        Ok(configure_call.abi_encode().into())
     }
 
     async fn get_initial_fees<P: Provider>(
@@ -242,7 +239,7 @@ mod tests {
             .chain_id(1)
             .arg("--host")
             .arg("0.0.0.0")
-            .port(53241_u16)
+            .port(rand::random::<u16>())
             .fork(fork_url)
             .fork_block_number(23231623)
             .arg("--code-size-limit")

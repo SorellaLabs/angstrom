@@ -39,6 +39,7 @@ dependencies = [
  "matching-engine",
  "order-pool",
  "parking_lot",
+ "rand 0.9.1",
  "rayon",
  "reth",
  "reth-db",

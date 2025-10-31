@@ -1,3 +1,4 @@
-mod cli;
-pub mod commands;
+pub mod cli;
+pub use commands::*;
+mod commands;
 pub mod utils;

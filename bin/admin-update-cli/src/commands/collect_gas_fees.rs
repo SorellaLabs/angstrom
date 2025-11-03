@@ -1,12 +1,14 @@
 use std::path::PathBuf;
 
-use alloy::{eips::BlockId, providers::Provider};
-use alloy_primitives::{Address, FixedBytes, U160, U256, aliases::U24};
+use alloy::{consensus::Transaction, eips::BlockId, providers::Provider, sol_types::SolCall};
+use alloy_primitives::{Address, FixedBytes, TxHash, U160, U256, aliases::U24};
 use angstrom_types::{
     contract_bindings::{angstrom::Angstrom, controller_v_1::ControllerV1},
     contract_payloads::angstrom::AngstromPoolConfigStore,
-    primitive::{ANGSTROM_ADDRESS, CONTROLLER_V1_ADDRESS}
+    primitive::{ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, CONTROLLER_V1_ADDRESS}
 };
+use futures::StreamExt;
+use reth::rpc::types::Block;
 
 use crate::utils::{format_call, view_call};
 
@@ -54,22 +56,15 @@ impl CollectGasFeesCommand {
             eyre::bail!("token0 cannot be greater than or equal to token 1");
         }
 
-        if self.check_key_exists(&provider, BlockId::latest()).await? {
-            eyre::bail!("key already exists for tokens: {:?} - {:?}", self.token0, self.token1);
-        }
-
+        /*
         let current_store_index = self
             .get_next_store_index(&provider, BlockId::latest())
             .await?;
 
-        let call0 = self.build_configure_pool_calldata();
-        let call1 = self.build_initialize_pool_calldata(current_store_index);
+        let call = self.build_configure_pool_calldata();
 
-        let calldata_str = format!(
-            "{}{}",
-            format_call(0, *CONTROLLER_V1_ADDRESS.get().unwrap(), call0),
-            format_call(1, *ANGSTROM_ADDRESS.get().unwrap(), call1)
-        );
+        let calldata_str =
+            format!("{}", format_call(0, *CONTROLLER_V1_ADDRESS.get().unwrap(), call));
 
         if let Some(path) = self.encoded_data_out_file {
             std::fs::write(&path, calldata_str.as_bytes())?;
@@ -78,63 +73,83 @@ impl CollectGasFeesCommand {
             tracing::info!("displaying calldata");
             println!("{calldata_str}")
         }
+        */
 
         Ok(())
     }
 
-    async fn get_next_store_index<P: Provider>(
-        &self,
-        provider: &P,
-        block: BlockId
-    ) -> eyre::Result<U256> {
-        let pool_index = view_call(
-            provider,
-            *CONTROLLER_V1_ADDRESS.get().unwrap(),
-            block,
-            ControllerV1::totalPoolsCall {}
-        )
-        .await?;
+    async fn get_last_fees_pulled_block<P: Provider>(&self, provider: &P) -> eyre::Result<u64> {
+        let start_block = *ANGSTROM_DEPLOYED_BLOCK.get().unwrap();
+        let current_block = provider.get_block_number().await?;
 
-        Ok(pool_index)
-    }
+        let total_blocks = current_block - start_block + 1;
+        let mut best_block = start_block;
 
-    async fn check_key_exists<P: Provider>(
-        &self,
-        provider: &P,
-        block: BlockId
-    ) -> eyre::Result<bool> {
-        let key = *AngstromPoolConfigStore::derive_store_key(self.token0, self.token1);
+        let mut stream = futures::stream::iter(start_block..=current_block)
+            .map(async |block_number| {
+                let blocks = provider
+                    .get_block_by_number(block_number.into())
+                    .full()
+                    .await?
+                    .map(find_controller_call)
+                    .unwrap_or_default();
 
-        let exists = view_call(
-            provider,
-            *CONTROLLER_V1_ADDRESS.get().unwrap(),
-            block,
-            ControllerV1::keyExistsCall { key: FixedBytes::new(key) }
-        )
-        .await?;
+                for tx_hash in blocks {
+                    let tx_res = provider.get_transaction_receipt(tx_hash).await?.unwrap();
+                    if tx_res.status() {
+                        return eyre::Ok(Some(block_number));
+                    }
+                }
+                Ok(None)
+            })
+            .buffer_unordered(1000);
 
-        Ok(exists)
-    }
+        let mut i = 0;
+        while let Some(blocks_res) = stream.next().await {
+            i += 1;
 
-    fn build_configure_pool_calldata(&self) -> ControllerV1::configurePoolCall {
-        ControllerV1::configurePoolCall {
-            asset0:              self.token0,
-            asset1:              self.token1,
-            tickSpacing:         self.tick_spacing as u16,
-            bundleFee:           U24::from(self.bundle_fee_e6),
-            unlockedFee:         U24::from(self.unlock_fee_e6),
-            protocolUnlockedFee: U24::from(self.protocol_unlock_fee_e6)
+            if i % 1000 == 0 {
+                let progress = i as f64 / total_blocks as f64;
+                tracing::info!(
+                    best_block,
+                    searched_blocks = i,
+                    total_blocks,
+                    progress,
+                    "checking blocks for latest fee pull"
+                );
+            }
+            if let Some(block) = blocks_res? {
+                best_block = std::cmp::max(best_block, block);
+            }
         }
-    }
 
-    fn build_initialize_pool_calldata(&self, store_index: U256) -> Angstrom::initializePoolCall {
-        Angstrom::initializePoolCall {
-            assetA:       self.token0,
-            assetB:       self.token1,
-            storeIndex:   store_index,
-            sqrtPriceX96: self.sqrt_price
-        }
+        Ok(best_block)
     }
+}
+
+fn find_controller_call(block: Block) -> Vec<(TxHash, bool)> {
+    block
+        .transactions
+        .into_transactions()
+        .filter_map(|txn| {
+            let to = txn.inner.to();
+            let tx_fn = txn.function_selector();
+
+            let is_distribute_fees = to == Some(*CONTROLLER_V1_ADDRESS.get().unwrap())
+                && tx_fn
+                    .map(|v| v.0 == ControllerV1::distributeFeesCall::SELECTOR)
+                    .unwrap_or_default();
+
+            let is_bundle = to == Some(*ANGSTROM_ADDRESS.get().unwrap())
+                && tx_fn
+                    .map(|v| v.0 == Angstrom::executeCall::SELECTOR)
+                    .unwrap_or_default();
+
+            (is_distribute_fees || is_bundle)
+                .then_some((*txn.inner.tx_hash(), is_distribute_fees))
+                .then_some(*txn.inner.tx_hash())
+        })
+        .collect()
 }
 
 #[cfg(test)]

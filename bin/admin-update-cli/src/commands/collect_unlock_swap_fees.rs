@@ -32,7 +32,7 @@ impl CollectUnlockSwapFeesCommand {
         let calldata_str =
             format!("{}", format_call(0, *CONTROLLER_V1_ADDRESS.get().unwrap(), call));
 
-        if let Some(path) = self.encoded_data_out_file {
+        if let Some(path) = self.encoded_data_out_file.as_ref() {
             std::fs::write(&path, calldata_str.as_bytes())?;
             tracing::info!("wrote calldata bytes to {path:?}");
         } else {

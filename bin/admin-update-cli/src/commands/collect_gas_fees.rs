@@ -94,7 +94,7 @@ impl CollectGasFeesCommand {
                     .map(find_controller_call)
                     .unwrap_or_default();
 
-                for tx_hash in blocks {
+                for (tx_hash, is_distribute_fees) in blocks {
                     let tx_res = provider.get_transaction_receipt(tx_hash).await?.unwrap();
                     if tx_res.status() {
                         return eyre::Ok(Some(block_number));
@@ -119,7 +119,9 @@ impl CollectGasFeesCommand {
                 );
             }
             if let Some(block) = blocks_res? {
-                best_block = std::cmp::max(best_block, block);
+                if block > best_block {
+                    best_block = block;
+                }
             }
         }
 
@@ -145,9 +147,7 @@ fn find_controller_call(block: Block) -> Vec<(TxHash, bool)> {
                     .map(|v| v.0 == Angstrom::executeCall::SELECTOR)
                     .unwrap_or_default();
 
-            (is_distribute_fees || is_bundle)
-                .then_some((*txn.inner.tx_hash(), is_distribute_fees))
-                .then_some(*txn.inner.tx_hash())
+            (is_distribute_fees || is_bundle).then_some((*txn.inner.tx_hash(), is_distribute_fees))
         })
         .collect()
 }

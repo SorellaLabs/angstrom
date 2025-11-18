@@ -18,7 +18,7 @@ pub struct PoolSwap<'a> {
     pub(super) target_amount: I256,
     /// zfo = true
     pub(super) direction:     bool,
-    // the fee of the pool.
+    /// the fee of the pool.
     pub(super) fee:           u32
 }
 
@@ -234,7 +234,7 @@ impl<'a> PoolSwapResult<'a> {
             .collect::<Vec<_>>()
     }
 
-    pub fn t0_donation_vec(&self, total_donation: u128) -> Vec<DonationType> {
+    pub fn t0_donation_vec(&self, total_donation: u128, tick_spacing: i32) -> Vec<DonationType> {
         // Return nothing if we have no steps in this
         if self.steps.is_empty() {
             return vec![];
@@ -339,7 +339,7 @@ impl<'a> PoolSwapResult<'a> {
                     DonationType::current(final_tick, donation, r.liquidity)
                 } else if direction {
                     let low_tick = r.lower_tick.unwrap();
-                    DonationType::above(low_tick, donation, r.liquidity)
+                    DonationType::above(low_tick, donation, r.liquidity, tick_spacing)
                 } else {
                     let high_tick = r.upper_tick.unwrap();
                     DonationType::below(high_tick, donation, r.liquidity)

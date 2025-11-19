@@ -544,7 +544,7 @@ pub mod fuzz_uniswap {
     }
 
     /// initializes the new uniswap pools on most recent sepolia block
-    async fn init_uniswap_pools<P: Provider, DB: DatabaseRef>(
+    async fn init_uniswap_pools<P: Provider<N>, N: alloy::network::Network, DB: DatabaseRef>(
         provider: &P,
         db: &mut CacheDB<Arc<DB>>
     ) -> (u64, Vec<EnhancedUniswapPool>) {

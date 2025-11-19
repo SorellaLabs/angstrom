@@ -3,6 +3,7 @@ use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Rem, sync::Arc};
 // use std::iter::
 use alloy::{
     hex,
+    network::Network,
     primitives::{Address, B256, BlockNumber, I256, U256, aliases::I24},
     providers::Provider,
     transports::Transport
@@ -131,10 +132,10 @@ where
         ))
     }
 
-    pub async fn initialize(
+    pub async fn initialize<P: Provider<N>, N: Network>(
         &mut self,
         block_number: Option<BlockNumber>,
-        provider: Arc<impl Provider>
+        provider: Arc<P>
     ) -> Result<(), PoolError> {
         tracing::trace!(?block_number, "populating pool data");
         self.populate_data(block_number, provider.clone()).await?;
@@ -144,7 +145,7 @@ where
         Ok(())
     }
 
-    pub async fn update_to_block<P: Provider>(
+    pub async fn update_to_block<P: Provider<N>, N: Network>(
         &mut self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
@@ -166,7 +167,7 @@ where
         self.data_loader.private_address()
     }
 
-    async fn get_tick_data_batch_request<P: Provider>(
+    async fn get_tick_data_batch_request<P: Provider<N>, N: Network>(
         &self,
         tick_start: I24,
         zero_for_one: bool,
@@ -214,7 +215,7 @@ where
             });
     }
 
-    pub async fn load_more_ticks<P: Provider>(
+    pub async fn load_more_ticks<P: Provider<N>, N: alloy::network::Network>(
         &mut self,
         tick_data: TickRangeToLoad,
         block_number: Option<BlockNumber>,
@@ -237,7 +238,7 @@ where
         Ok(())
     }
 
-    async fn sync_ticks<P: Provider>(
+    async fn sync_ticks<P: Provider<N>, N: alloy::network::Network>(
         &mut self,
         block_number: Option<u64>,
         provider: Arc<P>
@@ -265,7 +266,7 @@ where
         Ok(())
     }
 
-    async fn load_ticks_in_direction<P: Provider>(
+    async fn load_ticks_in_direction<P: Provider<N>, N: alloy::network::Network>(
         &self,
         provider: Arc<P>,
         block_number: Option<u64>,
@@ -511,7 +512,7 @@ where
         Ok((swap_result.amount0, swap_result.amount1))
     }
 
-    pub async fn populate_data<P: Provider>(
+    pub async fn populate_data<P: Provider<N>, N: alloy::network::Network>(
         &mut self,
         block_number: Option<u64>,
         provider: Arc<P>
@@ -764,7 +765,7 @@ mod tests {
     struct MockLoader;
 
     impl PoolDataLoader for MockLoader {
-        async fn load_tick_data<P: Provider>(
+        async fn load_tick_data<P: Provider<N>, N: alloy::network::Network>(
             &self,
             _: I24,
             _: bool,
@@ -776,7 +777,7 @@ mod tests {
             unimplemented!()
         }
 
-        async fn load_pool_data<P: Provider>(
+        async fn load_pool_data<P: Provider<N>, N: alloy::network::Network>(
             &self,
             _: Option<BlockNumber>,
             _: Arc<P>

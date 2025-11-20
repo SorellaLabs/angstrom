@@ -130,7 +130,7 @@ impl DataLoader {
 }
 
 pub trait PoolDataLoader: Clone {
-    fn load_tick_data<P: Provider>(
+    fn load_tick_data<P: Provider<N>, N: alloy::network::Network>(
         &self,
         current_tick: I24,
         zero_for_one: bool,
@@ -140,7 +140,7 @@ pub trait PoolDataLoader: Clone {
         provider: Arc<P>
     ) -> impl Future<Output = Result<(Vec<TickData>, U256), PoolError>> + Send;
 
-    fn load_pool_data<P: Provider>(
+    fn load_pool_data<P: Provider<N>, N: alloy::network::Network>(
         &self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
@@ -187,7 +187,7 @@ impl PoolDataLoader for DataLoader {
         pool_key.fee.to()
     }
 
-    async fn load_pool_data<P: Provider>(
+    async fn load_pool_data<P: Provider<N>, N: alloy::network::Network>(
         &self,
         block_number: Option<BlockNumber>,
         provider: Arc<P>
@@ -227,7 +227,7 @@ impl PoolDataLoader for DataLoader {
         })
     }
 
-    async fn load_tick_data<P: Provider>(
+    async fn load_tick_data<P: Provider<N>, N: alloy::network::Network>(
         &self,
         current_tick: I24,
         zero_for_one: bool,

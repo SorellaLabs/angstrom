@@ -1,5 +1,8 @@
+use std::marker::PhantomData;
+
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
+    network::Network,
     primitives::{Address, Bytes, FixedBytes, StorageValue, U64, U256},
     providers::{Provider, ProviderCall, ProviderLayer, RootProvider, RpcWithBlock},
     rpc::client::NoParams,
@@ -11,19 +14,22 @@ use reth_provider::{
     TryIntoHistoricalStateProvider
 };
 
-pub struct RethDbLayer<DB>
+pub struct RethDbLayer<DB, N>
 where
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
+    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone,
+    N: Network
 {
-    db: DB
+    db:       DB,
+    _phantom: PhantomData<N>
 }
 
-impl<DB> RethDbLayer<DB>
+impl<DB, N> RethDbLayer<DB, N>
 where
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
+    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone,
+    N: Network
 {
     pub const fn new(db: DB) -> Self {
-        Self { db }
+        Self { db, _phantom: PhantomData }
     }
 
     pub(crate) fn db(&self) -> DB {
@@ -31,14 +37,15 @@ where
     }
 }
 
-impl<P, DB> ProviderLayer<P> for RethDbLayer<DB>
+impl<P, N, DB> ProviderLayer<P, N> for RethDbLayer<DB, N>
 where
-    P: Provider,
+    P: Provider<N>,
+    N: Network,
     DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader>
         + Clone
         + 'static
 {
-    type Provider = RethDbProvider<P, DB>;
+    type Provider = RethDbProvider<P, N, DB>;
 
     fn layer(&self, inner: P) -> Self::Provider {
         RethDbProvider::new(inner, self.db())
@@ -51,18 +58,21 @@ where
 /// It holds the `reth_provider::ProviderFactory` that enables read-only access
 /// to the database tables and static files.
 #[derive(Clone)]
-pub struct RethDbProvider<P, DB>
+pub struct RethDbProvider<P, N, DB>
 where
-    P: Provider,
+    P: Provider<N>,
+    N: Network,
     DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
 {
     inner:            P,
-    provider_factory: DbAccessor<DB>
+    provider_factory: DbAccessor<DB>,
+    _phantom:         PhantomData<N>
 }
 
-impl<P, DB> RethDbProvider<P, DB>
+impl<P, N, DB> RethDbProvider<P, N, DB>
 where
-    P: Provider,
+    P: Provider<N>,
+    N: Network,
     DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
 {
     /// Create a new `RethDbProvider` instance.
@@ -71,7 +81,7 @@ where
         DB: DatabaseProviderFactory
     {
         let db_accessor: DbAccessor<DB> = DbAccessor::new(db);
-        Self { inner, provider_factory: db_accessor }
+        Self { inner, provider_factory: db_accessor, _phantom: PhantomData }
     }
 
     const fn factory(&self) -> &DbAccessor<DB> {
@@ -82,14 +92,15 @@ where
 /// Implement the `Provider` trait for the `RethDbProvider` struct.
 ///
 /// This is where we override specific RPC methods to fetch from the reth-db.
-impl<P, DB> Provider for RethDbProvider<P, DB>
+impl<P, N, DB> Provider<N> for RethDbProvider<P, N, DB>
 where
-    P: Provider,
+    P: Provider<N>,
+    N: Network,
     DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader>
         + Clone
         + 'static
 {
-    fn root(&self) -> &RootProvider {
+    fn root(&self) -> &RootProvider<N> {
         self.inner.root()
     }
 

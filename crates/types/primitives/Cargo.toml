@@ -20,6 +20,7 @@ bincode.workspace = true
 bytes.workspace = true
 clap.workspace = true
 dashmap.workspace = true
+enr.workspace = true
 eyre.workspace = true
 hsm-signer.workspace = true
 itertools.workspace = true

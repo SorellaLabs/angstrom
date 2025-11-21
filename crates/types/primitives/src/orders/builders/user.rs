@@ -1,11 +1,11 @@
-use alloy::{
-    primitives::{Address, U256},
-    signers::{SignerSync, local::PrivateKeySigner}
-};
-use alloy_primitives::aliases::U40;
-use angstrom_types::{
-    matching::Ray,
-    primitive::{ANGSTROM_DOMAIN, AngstromSigner},
+use alloy_primitives::{Address, U256, aliases::U40};
+use alloy_signer::SignerSync;
+use alloy_signer_local::PrivateKeySigner;
+use pade::PadeEncode;
+
+use super::{StoredOrderBuilder, default_high_addr, default_low_addr};
+use crate::{
+    primitive::{ANGSTROM_DOMAIN, AngstromSigner, Ray},
     sol_bindings::{
         grouped_orders::AllOrders,
         rpc_orders::{
@@ -14,9 +14,6 @@ use angstrom_types::{
         }
     }
 };
-use pade::PadeEncode;
-
-use super::{StoredOrderBuilder, default_high_addr, default_low_addr};
 
 #[derive(Clone, Debug, Default)]
 pub struct UserOrderBuilder {

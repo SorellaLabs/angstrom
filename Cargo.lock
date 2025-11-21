@@ -1352,6 +1352,7 @@ dependencies = [
  "clap",
  "convert_case 0.8.0",
  "dashmap 6.1.0",
+ "enr",
  "eyre",
  "hsm-signer",
  "itertools 0.11.0",

@@ -1141,6 +1141,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "angstrom-constants"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "eyre",
+]
+
+[[package]]
 name = "angstrom-eth"
 version = "0.1.0"
 dependencies = [
@@ -1268,6 +1276,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "alloy-primitives",
+ "angstrom-constants",
  "angstrom-types",
  "auto_impl",
  "base64 0.22.1",

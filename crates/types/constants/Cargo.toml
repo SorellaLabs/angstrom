@@ -1,0 +1,8 @@
+[package]
+name = "angstrom-constants"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+alloy.workspace = true
+eyre.workspace = true

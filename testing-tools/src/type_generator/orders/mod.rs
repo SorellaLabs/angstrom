@@ -6,8 +6,8 @@ use alloy::{
     sol_types::Eip712Domain
 };
 use angstrom_types::{
-    orders::{OrderId, OrderPriorityData},
-    primitive::PoolId,
+    orders::OrderId,
+    primitive::{OrderPriorityData, PoolId},
     sol_bindings::{
         ext::RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData},

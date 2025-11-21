@@ -6,9 +6,8 @@ use std::{
 use alloy::primitives::U256;
 use alloy_primitives::Address;
 use angstrom_types::{
-    matching::uniswap::TickInfo,
-    orders::{OrderId, OrderPriorityData},
-    primitive::PoolId,
+    orders::OrderId,
+    primitive::{OrderPriorityData, PoolId, TickInfo},
     sol_bindings::{
         ext::{RawPoolOrder, grouped_orders::OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
@@ -154,7 +153,7 @@ fn setup_inputs(
                 address: Default::default(),
                 deadline: None,
                 pool_id,
-                location: angstrom_types::orders::OrderLocation::Limit
+                location: angstrom_types::primitive::OrderLocation::Limit
             },
             pool_id,
             valid_block: 0,
@@ -184,7 +183,7 @@ fn setup_inputs(
                 address: Default::default(),
                 deadline: None,
                 pool_id,
-                location: angstrom_types::orders::OrderLocation::Limit
+                location: angstrom_types::primitive::OrderLocation::Limit
             },
             pool_id,
             valid_block: 0,
@@ -212,7 +211,7 @@ fn setup_inputs(
             address: Default::default(),
             deadline: None,
             pool_id,
-            location: angstrom_types::orders::OrderLocation::Limit
+            location: angstrom_types::primitive::OrderLocation::Limit
         },
         pool_id,
         valid_block: 0,

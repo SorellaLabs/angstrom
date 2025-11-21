@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use alloy_primitives::{Address, U256};
-use angstrom_types::{matching::SqrtPriceX96, primitive::PoolId};
+use angstrom_types::primitive::{PoolId, SqrtPriceX96};
 use itertools::Itertools;
 use reth_provider::test_utils::NoopProvider;
 use reth_tasks::TaskExecutor;

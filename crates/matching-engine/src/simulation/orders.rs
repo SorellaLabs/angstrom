@@ -1,7 +1,8 @@
 use alloy::primitives::{FixedBytes, U256};
 use angstrom_types::{
     matching::Ray,
-    orders::{OrderId, OrderPriorityData},
+    orders::OrderId,
+    primitive::OrderPriorityData,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::ExactFlashOrder}
 };
 use rand_distr::{Distribution, SkewNormal};
@@ -56,7 +57,7 @@ pub fn order_distribution(
                     address:         Default::default(),
                     deadline:        None,
                     pool_id:         FixedBytes::default(),
-                    location:        angstrom_types::orders::OrderLocation::Limit
+                    location:        angstrom_types::primitive::OrderLocation::Limit
                 },
                 pool_id: FixedBytes::default(),
                 valid_block: 0,

@@ -1,0 +1,22 @@
+[package]
+name = "angstrom-rpc-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+exclude.workspace = true
+
+[dependencies]
+alloy-primitives = { workspace = true, features = ["serde"] }
+angstrom-rpc-types.workspace = true
+angstrom-types-primitives.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+jsonrpsee = { workspace = true, features = ["server", "macros", "ws-client"] }
+serde.workspace = true
+
+[features]
+default = ["client"]
+client = []

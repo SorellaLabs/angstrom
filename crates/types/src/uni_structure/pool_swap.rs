@@ -1,11 +1,11 @@
 use std::ops::Neg;
 
 use alloy::primitives::{I256, U256};
+use angstrom_types_primitives::primitive::{Ray, SqrtPriceX96};
 use itertools::Itertools;
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 
 use super::{donation::DonationType, liquidity_base::LiquidityAtPoint};
-use crate::{matching::SqrtPriceX96, sol_bindings::Ray};
 
 const U256_1: U256 = U256::from_limbs([1, 0, 0, 0]);
 

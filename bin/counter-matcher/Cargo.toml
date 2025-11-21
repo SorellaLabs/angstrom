@@ -19,7 +19,6 @@ eyre.workspace = true
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
-pade.workspace = true
 reth.workspace = true
 secp256k1 = { workspace = true, features = ["serde"] }
 sepolia-bundle-lander = { path = "../sepolia-bundle-lander" }

@@ -4,9 +4,8 @@ use account::UserAccountProcessor;
 use alloy::primitives::{Address, B256};
 use angstrom_metrics::validation::ValidationMetrics;
 use angstrom_types::{
-    primitive::{OrderValidationError, UserAccountVerificationError, UserOrderPoolInfo},
+    primitive::{OrderValidationError, Ray, UserAccountVerificationError, UserOrderPoolInfo},
     sol_bindings::{
-        Ray,
         ext::RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder

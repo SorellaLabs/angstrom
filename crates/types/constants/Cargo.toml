@@ -1,0 +1,10 @@
+[package]
+name = "angstrom-types-constants"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+alloy-dyn-abi.workspace = true
+alloy-primitives.workspace = true
+alloy-sol-types.workspace = true
+eyre.workspace = true

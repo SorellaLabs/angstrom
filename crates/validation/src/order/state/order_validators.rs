@@ -86,7 +86,7 @@ impl OrderValidation for OrderValidator {
 #[cfg(test)]
 pub fn make_base_order() -> angstrom_types::sol_bindings::grouped_orders::AllOrders {
     use alloy::primitives::U256;
-    use angstrom_types::sol_bindings::{Ray, grouped_orders::AllOrders};
+    use angstrom_types::{primitive::Ray, sol_bindings::grouped_orders::AllOrders};
     use testing_tools::type_generator::orders::UserOrderBuilder;
 
     let mut order = match UserOrderBuilder::new()

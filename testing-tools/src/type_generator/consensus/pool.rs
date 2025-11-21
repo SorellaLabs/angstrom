@@ -4,11 +4,8 @@ use alloy_primitives::{
 };
 use angstrom_types::{
     contract_bindings::angstrom::Angstrom::PoolKey,
-    matching::{
-        SqrtPriceX96,
-        uniswap::{LiqRange, PoolPrice, PoolSnapshot}
-    },
-    primitive::PoolId,
+    matching::uniswap::{LiqRange, PoolPrice, PoolSnapshot},
+    primitive::{PoolId, SqrtPriceX96},
     sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 

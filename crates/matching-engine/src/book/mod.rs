@@ -2,10 +2,9 @@
 use std::{iter::Chain, slice::Iter};
 
 use angstrom_types::{
-    matching::SqrtPriceX96,
-    primitive::PoolId,
+    primitive::{PoolId, Ray, SqrtPriceX96},
     sol_bindings::{
-        RawPoolOrder, Ray,
+        RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData}
     },
     uni_structure::BaselinePoolState

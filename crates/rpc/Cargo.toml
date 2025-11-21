@@ -12,6 +12,8 @@ exclude.workspace = true
 alloy-primitives = { workspace = true, features = ["serde"] }
 angstrom-amm-quoter.workspace = true
 angstrom-network.workspace = true
+angstrom-rpc-api.workspace = true
+angstrom-rpc-types.workspace = true
 angstrom-types.workspace = true
 async-trait.workspace = true
 consensus.workspace = true
@@ -19,9 +21,6 @@ futures.workspace = true
 jsonrpsee = { workspace = true, features = ["server", "macros", "ws-client"] }
 order-pool.workspace = true
 reth-tasks.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-strum = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
@@ -33,4 +32,4 @@ tokio = { workspace = true, features = ["full", "tracing"] }
 
 [features]
 default = ["client"]
-client = []
+client = ["angstrom-rpc-api/client"]

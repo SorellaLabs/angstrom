@@ -9,8 +9,8 @@ use std::{
 use alloy::primitives::{B256, BlockNumber, FixedBytes};
 use angstrom_metrics::OrderStorageMetricsWrapper;
 use angstrom_types::{
-    orders::{OrderId, OrderLocation, OrderSet, OrderStatus, UpdatedGas},
-    primitive::{NewInitializedPool, PoolId},
+    orders::{OrderId, OrderSet, UpdatedGas},
+    primitive::{NewInitializedPool, OrderLocation, OrderStatus, PoolId},
     sol_bindings::{
         grouped_orders::{AllOrders, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
@@ -209,12 +209,12 @@ impl OrderStorage {
         }
 
         match order_id.location {
-            angstrom_types::orders::OrderLocation::Limit => self
+            angstrom_types::primitive::OrderLocation::Limit => self
                 .limit_orders
                 .lock()
                 .expect("lock poisoned")
                 .cancel_order(order_id),
-            angstrom_types::orders::OrderLocation::Searcher => self
+            angstrom_types::primitive::OrderLocation::Searcher => self
                 .searcher_orders
                 .lock()
                 .expect("lock poisoned")
@@ -229,10 +229,10 @@ impl OrderStorage {
         order_info
             .into_iter()
             .for_each(|order| match order.location {
-                angstrom_types::orders::OrderLocation::Limit => {
+                angstrom_types::primitive::OrderLocation::Limit => {
                     limit_lock.park_order(order);
                 }
-                angstrom_types::orders::OrderLocation::Searcher => {
+                angstrom_types::primitive::OrderLocation::Searcher => {
                     tracing::debug!("tried to park searcher order. this is not supported");
                 }
             });

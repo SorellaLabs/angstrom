@@ -60,6 +60,10 @@ pub fn init_tracing(verbosity: u8) {
         layer_builder(format!("consensus={level}")),
         layer_builder(format!("validation={level}")),
         layer_builder(format!("order_pool={level}")),
+        layer_builder(format!("angstrom_types_primitives={level}")),
+        layer_builder(format!("angstrom_types_constants={level}")),
+        layer_builder(format!("angstrom_rpc_api={level}")),
+        layer_builder(format!("angstrom_rpc_types={level}")),
     ];
 
     tracing_subscriber::registry().with(layers).init();

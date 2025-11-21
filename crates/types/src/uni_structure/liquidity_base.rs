@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use alloy::primitives::U256;
+use angstrom_types_primitives::primitive::{SqrtPriceX96, TickInfo};
 use itertools::Itertools;
 use malachite::num::conversion::traits::SaturatingInto;
 use serde::{Deserialize, Serialize};
@@ -11,8 +12,6 @@ use uniswap_v3_math::{
     tick_bitmap::next_initialized_tick_within_one_word,
     tick_math::{MAX_TICK, MIN_TICK, get_tick_at_sqrt_ratio}
 };
-
-use crate::matching::{SqrtPriceX96, uniswap::TickInfo};
 
 /// baseline holder for
 #[derive(Debug, Clone, Serialize, Deserialize)]

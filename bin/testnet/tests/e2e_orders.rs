@@ -5,9 +5,10 @@ use alloy_rpc_types::TransactionTrait;
 use angstrom_rpc::api::OrderApiClient;
 use angstrom_types::{
     contract_payloads::angstrom::AngstromBundle,
-    primitive::{ANGSTROM_ADDRESS, AngstromAddressConfig, ChainExt},
+    primitive::{ANGSTROM_ADDRESS, AngstromAddressConfig},
     sol_bindings::grouped_orders::AllOrders,
-    testnet::InitialTestnetState
+    testnet::InitialTestnetState,
+    traits::ChainExt
 };
 use futures::{Future, FutureExt, StreamExt, stream::FuturesUnordered};
 use jsonrpsee::http_client::HttpClient;

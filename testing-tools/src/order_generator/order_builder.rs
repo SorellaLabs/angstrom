@@ -6,8 +6,7 @@ use alloy::{
 };
 use alloy_primitives::Address;
 use angstrom_types::{
-    matching::{Ray, SqrtPriceX96},
-    primitive::AngstromSigner,
+    primitive::{AngstromSigner, Ray, SqrtPriceX96},
     sol_bindings::{grouped_orders::AllOrders, rpc_orders::TopOfBlockOrder}
 };
 use rand::Rng;

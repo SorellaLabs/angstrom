@@ -5,6 +5,7 @@ mod solutionlib;
 use angstrom_types::{
     contract_payloads::{angstrom::AngstromBundle, asset::builder::AssetBuilder},
     orders::PoolSolution,
+    traits::BundleProcessing,
     uni_structure::BaselinePoolState
 };
 use base64::Engine;

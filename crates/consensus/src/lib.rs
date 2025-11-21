@@ -1,60 +1,21 @@
 mod leader_selection;
 mod manager;
-
 use angstrom_types::consensus::ConsensusRoundOrderHashes;
+pub use angstrom_types::consensus::{
+    AngstromValidator, ConsensusDataWithBlock, ConsensusTimingConfig
+};
 pub use manager::*;
+
 pub mod rounds;
-use std::{collections::HashSet, pin::Pin, time::Duration};
+use std::{collections::HashSet, pin::Pin};
 
 use alloy::primitives::{Address, Bytes};
 use futures::{Stream, StreamExt};
-pub use leader_selection::AngstromValidator;
-use serde::{Deserialize, Serialize};
 use tokio::sync::{
     mpsc::{self, channel},
     oneshot
 };
 use tokio_stream::wrappers::ReceiverStream;
-
-#[derive(Debug, Clone, Copy, clap::Args, Serialize, Deserialize)]
-pub struct ConsensusTimingConfig {
-    #[clap(long, default_value_t = 8_000)]
-    pub min_wait_duration_ms: u64,
-    #[clap(long, default_value_t = 9_000)]
-    pub max_wait_duration_ms: u64
-}
-
-impl Default for ConsensusTimingConfig {
-    fn default() -> Self {
-        Self { min_wait_duration_ms: 8_000, max_wait_duration_ms: 9_000 }
-    }
-}
-
-impl ConsensusTimingConfig {
-    pub fn is_valid(&self) -> bool {
-        self.min_wait_duration_ms < self.max_wait_duration_ms
-    }
-
-    pub const fn min_wait_time_ms(&self) -> Duration {
-        Duration::from_millis(self.min_wait_duration_ms)
-    }
-
-    pub const fn max_wait_time_ms(&self) -> Duration {
-        Duration::from_millis(self.max_wait_duration_ms)
-    }
-
-    pub fn default_duration(&self) -> Duration {
-        Duration::from_secs_f64(
-            (self.max_wait_time_ms() + self.min_wait_time_ms()).as_secs_f64() / 2.0
-        )
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ConsensusDataWithBlock<T> {
-    pub data:  T,
-    pub block: u64
-}
 
 pub trait ConsensusHandle: Send + Sync + Clone + Unpin + 'static {
     fn subscribe_empty_block_attestations(

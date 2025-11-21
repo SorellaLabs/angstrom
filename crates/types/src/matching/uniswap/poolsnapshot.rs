@@ -1,19 +1,16 @@
 use std::{fmt::Debug, slice::Iter};
 
 use alloy_primitives::{U160, U256, aliases::I24, utils::keccak256};
+use angstrom_types_primitives::primitive::{Ray, SqrtPriceX96, Tick};
 use eyre::{Context, OptionExt, eyre};
 use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::get_tick_at_sqrt_ratio;
 
 use super::{
-    Tick,
     liqrange::{LiqRange, LiqRangeRef},
     poolprice::PoolPrice
 };
-use crate::{
-    matching::{SqrtPriceX96, math::low_to_high},
-    sol_bindings::Ray
-};
+use crate::matching::math::low_to_high;
 
 /// Snapshot of a particular Uniswap pool and a map of its liquidity.
 #[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

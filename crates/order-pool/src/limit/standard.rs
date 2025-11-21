@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use alloy::primitives::{B256, U256};
 use angstrom_metrics::VanillaLimitOrderPoolMetricsWrapper;
 use angstrom_types::{
-    orders::{OrderId, OrderStatus, UpdatedGas},
-    primitive::{NewInitializedPool, PoolId, UserAccountVerificationError},
+    orders::{OrderId, UpdatedGas},
+    primitive::{NewInitializedPool, OrderStatus, PoolId, UserAccountVerificationError},
     sol_bindings::{
         RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData}

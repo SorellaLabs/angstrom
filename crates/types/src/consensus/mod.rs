@@ -1,15 +1,10 @@
 pub mod evidence;
-pub mod pre_prepose;
-pub mod pre_propose_agg;
-pub mod proposal;
 pub mod round_data;
 
 use alloy::primitives::{Address, BlockNumber, Bytes};
+pub use angstrom_types_primitives::consensus::*;
 pub use evidence::*;
-pub use pre_prepose::*;
-pub use pre_propose_agg::*;
 pub mod slot_clock;
-pub use proposal::*;
 pub use round_data::*;
 use serde::{Deserialize, Serialize};
 pub use slot_clock::*;

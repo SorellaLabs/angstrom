@@ -1,29 +1,13 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use alloy::primitives::{Address, BlockNumber};
+use angstrom_types::consensus::AngstromValidator;
 
 // https://github.com/tendermint/tendermint/pull/2785#discussion_r235038971
 // 1.125
 const PENALTY_FACTOR: u64 = 1125;
-/// do the math with fixed here to avoid floats
-const ONE_E3: u64 = 1000;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct AngstromValidator {
-    pub peer_id:  Address,
-    voting_power: u64,
-    priority:     i64
-}
-
-impl AngstromValidator {
-    pub fn new(name: Address, voting_power: u64) -> Self {
-        AngstromValidator {
-            peer_id:      name,
-            voting_power: voting_power * ONE_E3,
-            priority:     0
-        }
-    }
-}
+pub use angstrom_types::consensus::ONE_E3;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct WeightedRoundRobin {
@@ -170,20 +154,6 @@ impl WeightedRoundRobin {
         new_validator.priority -=
             ((self.new_joiner_penalty_factor * total_voting_power) / ONE_E3) as i64;
         self.validators.insert(new_validator);
-    }
-}
-
-impl PartialEq for AngstromValidator {
-    fn eq(&self, other: &Self) -> bool {
-        self.peer_id == other.peer_id
-    }
-}
-
-impl Eq for AngstromValidator {}
-
-impl std::hash::Hash for AngstromValidator {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.peer_id.hash(state);
     }
 }
 

@@ -7,7 +7,8 @@ use alloy::{
 use angstrom_metrics::validation::ValidationMetrics;
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
-    primitive::CHAIN_ID
+    primitive::CHAIN_ID,
+    traits::BundleProcessing
 };
 use eyre::eyre;
 use futures::Future;

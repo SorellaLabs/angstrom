@@ -1,6 +1,7 @@
 use std::{fmt::Debug, sync::Arc};
 
 use alloy::{consensus::Transaction, primitives::Address, providers::Provider, sol_types::SolCall};
+use angstrom_types_primitives::primitive::Ray;
 use futures::{Stream, StreamExt};
 use pade::PadeDecode;
 use reth_provider::CanonStateNotificationStream;
@@ -8,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     contract_bindings::angstrom::Angstrom::executeCall,
-    contract_payloads::angstrom::AngstromBundle, primitive::ChainExt, sol_bindings::Ray
+    contract_payloads::angstrom::AngstromBundle, traits::ChainExt
 };
 
 /// represents the price settled on angstrom between two tokens

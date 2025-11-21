@@ -5,6 +5,7 @@ use std::{
 
 use alloy::primitives::U256;
 use alloy_primitives::I256;
+use angstrom_types_primitives::primitive::{Direction, Quantity, Ray, SqrtPriceX96, Tick};
 use eyre::eyre;
 use malachite::rounding_modes::RoundingMode;
 use tracing::debug;
@@ -13,11 +14,8 @@ use uniswap_v3_math::{
     tick_math::{get_sqrt_ratio_at_tick, get_tick_at_sqrt_ratio}
 };
 
-use super::{
-    Direction, PoolSnapshot, Quantity, Tick, liqrange::LiqRangeRef, poolpricevec::PoolPriceVec
-};
+use super::{PoolSnapshot, liqrange::LiqRangeRef, poolpricevec::PoolPriceVec};
 use crate::matching::{
-    Ray, SqrtPriceX96,
     debt::Debt,
     math::{price_intersect_solve, resolve_precision}
 };
@@ -61,6 +59,12 @@ impl PartialOrd for PoolPrice<'_> {
 impl Ord for PoolPrice<'_> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.price.cmp(&other.price)
+    }
+}
+
+impl From<PoolPrice<'_>> for Ray {
+    fn from(value: PoolPrice) -> Self {
+        Ray::from(value.price)
     }
 }
 
@@ -371,9 +375,9 @@ impl From<PoolPrice<'_>> for U256 {
 mod test {
     use alloy_primitives::U160;
 
-    use crate::matching::{
-        SqrtPriceX96,
-        uniswap::{Direction, LiqRange, PoolSnapshot}
+    use crate::{
+        matching::uniswap::{LiqRange, PoolSnapshot},
+        primitive::{Direction, SqrtPriceX96}
     };
 
     #[test]

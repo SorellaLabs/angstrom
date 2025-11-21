@@ -15,8 +15,8 @@ use std::future::Future;
 
 use alloy::primitives::{Address, B256, FixedBytes};
 use angstrom_types::{
-    orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
-    primitive::OrderValidationError,
+    orders::{CancelOrderRequest, OrderOrigin},
+    primitive::{OrderLocation, OrderStatus, OrderValidationError},
     sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 pub use angstrom_utils::*;

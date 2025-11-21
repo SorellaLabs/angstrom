@@ -9,8 +9,7 @@ use alloy::{
     transports::Transport
 };
 use angstrom_types::{
-    matching::uniswap::TickInfo,
-    primitive::PoolId,
+    primitive::{PoolId, TickInfo},
     uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity}
 };
 use itertools::Itertools;
@@ -755,6 +754,8 @@ mod tests {
                     EnvFilter::from_default_env()
                         .add_directive("uniswap_v4=debug".parse().unwrap())
                         .add_directive("angstrom_types=debug".parse().unwrap())
+                        .add_directive("angstrom_types_primitives=debug".parse().unwrap())
+                        .add_directive("angstrom_types_constants=debug".parse().unwrap())
                         .add_directive("test=debug".parse().unwrap())
                 )
                 .try_init();

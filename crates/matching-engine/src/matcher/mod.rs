@@ -1,8 +1,8 @@
 pub mod delta;
 mod volume;
 use angstrom_types::{
-    matching::SqrtPriceX96,
-    orders::{OrderPrice, OrderVolume}
+    orders::{OrderPrice, OrderVolume},
+    primitive::SqrtPriceX96
 };
 pub use volume::VolumeFillMatcher;
 

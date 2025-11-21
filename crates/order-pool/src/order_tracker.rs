@@ -5,8 +5,8 @@ use std::{
 
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
-    orders::{OrderId, OrderLocation},
-    primitive::{PeerId, PoolId},
+    orders::OrderId,
+    primitive::{OrderLocation, PeerId, PoolId},
     sol_bindings::{ext::grouped_orders::AllOrders, grouped_orders::OrderWithStorageData}
 };
 use serde_with::{DisplayFromStr, serde_as};

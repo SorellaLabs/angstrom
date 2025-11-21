@@ -17,7 +17,7 @@ use angstrom_types::{
         controller_v_1::ControllerV1::{NodeAdded, NodeRemoved, PoolConfigured, PoolRemoved}
     },
     contract_payloads::angstrom::{AngPoolConfigEntry, AngstromBundle, AngstromPoolConfigStore},
-    primitive::ChainExt
+    traits::ChainExt
 };
 use futures::Future;
 use futures_util::{FutureExt, StreamExt};
@@ -389,8 +389,9 @@ pub mod test {
             angstrom::{TopOfBlockOrder, UserOrder}
         },
         orders::OrderOutcome,
-        primitive::{AngstromAddressConfig, AngstromSigner, ChainExt},
-        sol_bindings::grouped_orders::OrderWithStorageData
+        primitive::{AngstromAddressConfig, AngstromSigner},
+        sol_bindings::grouped_orders::OrderWithStorageData,
+        traits::{ChainExt, UserOrderFromInternal}
     };
     use pade::PadeEncode;
     use reth_ethereum_primitives::Receipt;

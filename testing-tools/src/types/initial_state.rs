@@ -5,9 +5,9 @@ use alloy_primitives::{
 };
 use angstrom_types::{
     contract_bindings::{angstrom::Angstrom::PoolKey, mintable_mock_erc_20::MintableMockERC20},
-    matching::SqrtPriceX96,
     primitive::{
-        ANGSTROM_ADDRESS, CONTROLLER_V1_ADDRESS, POOL_MANAGER_ADDRESS, POSITION_MANAGER_ADDRESS
+        ANGSTROM_ADDRESS, CONTROLLER_V1_ADDRESS, POOL_MANAGER_ADDRESS, POSITION_MANAGER_ADDRESS,
+        SqrtPriceX96
     }
 };
 

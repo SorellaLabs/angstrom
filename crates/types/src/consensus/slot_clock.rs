@@ -193,7 +193,7 @@ impl Clone for ManualSlotClock {
         ManualSlotClock {
             genesis_slot:     self.genesis_slot,
             genesis_duration: self.genesis_duration,
-            current_time:     self.current_time.clone(),
+            current_time:     self.current_time,
             slot_duration:    self.slot_duration
         }
     }

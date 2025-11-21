@@ -8,7 +8,8 @@ use alloy::{
 use angstrom_types::{
     contract_payloads::angstrom::AngstromBundle,
     primitive::{AngstromMetaSigner, AngstromSigner},
-    submission::{ChainSubmitter, TxFeatureInfo}
+    submission::{ChainSubmitter, TxFeatureInfo},
+    traits::BundleProcessing
 };
 use futures::Future;
 

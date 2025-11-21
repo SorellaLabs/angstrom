@@ -6,8 +6,8 @@ use alloy_primitives::{
 use angstrom_types::{
     consensus::PreProposalAggregation,
     contract_bindings::angstrom::Angstrom::PoolKey,
-    matching::{SqrtPriceX96, uniswap::LiqRange},
-    primitive::AngstromSigner
+    matching::uniswap::LiqRange,
+    primitive::{AngstromSigner, SqrtPriceX96}
 };
 
 use super::pool::Pool;

@@ -1,10 +1,11 @@
+use angstrom_types_primitives::primitive::{Direction, Quantity};
 use tracing::debug;
 
 use super::{
     Ray,
     debt::Debt,
     math::amm_debt_same_move_solve,
-    uniswap::{Direction, PoolPrice, PoolPriceVec, Quantity}
+    uniswap::{PoolPrice, PoolPriceVec}
 };
 
 #[derive(Clone, Debug, Default)]

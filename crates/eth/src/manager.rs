@@ -391,7 +391,7 @@ pub mod test {
         orders::OrderOutcome,
         primitive::{AngstromAddressConfig, AngstromSigner},
         sol_bindings::grouped_orders::OrderWithStorageData,
-        traits::{BundleProcessing, ChainExt}
+        traits::{ChainExt, UserOrderFromInternal}
     };
     use pade::PadeEncode;
     use reth_ethereum_primitives::Receipt;

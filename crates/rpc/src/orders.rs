@@ -288,8 +288,8 @@ mod tests {
     use angstrom_amm_quoter::QuoterHandle;
     use angstrom_network::pool_manager::OrderCommand;
     use angstrom_types::{
-        orders::{OrderOrigin, OrderStatus},
-        primitive::OrderValidationError,
+        orders::OrderOrigin,
+        primitive::{OrderStatus, OrderValidationError},
         sol_bindings::grouped_orders::AllOrders
     };
     use futures::FutureExt;

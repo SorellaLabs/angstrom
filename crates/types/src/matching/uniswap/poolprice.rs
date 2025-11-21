@@ -375,9 +375,9 @@ impl From<PoolPrice<'_>> for U256 {
 mod test {
     use alloy_primitives::U160;
 
-    use crate::matching::{
-        SqrtPriceX96,
-        uniswap::{Direction, LiqRange, PoolSnapshot}
+    use crate::{
+        matching::uniswap::{LiqRange, PoolSnapshot},
+        primitive::{Direction, SqrtPriceX96}
     };
 
     #[test]

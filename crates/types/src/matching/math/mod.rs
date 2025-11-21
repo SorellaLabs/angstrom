@@ -356,7 +356,7 @@ mod tests {
     use uniswap_v3_math::{swap_math::compute_swap_step, tick_math::MAX_TICK};
 
     use super::*;
-    use crate::matching::SqrtPriceX96;
+    use crate::primitive::SqrtPriceX96;
 
     #[test]
     fn quadratic_solve_test() {

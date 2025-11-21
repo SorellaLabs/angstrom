@@ -110,7 +110,7 @@ pub mod {mod_name} {{
         .write(true)
         .truncate(true)
         .open(&out_path)
-        .expect(&format!("path not found: '{out_path}'"));
+        .unwrap_or_else(|_| panic!("path not found: '{out_path}'"));
 
     for contract_build in sol_macro_invocation {
         write!(&mut f, "{contract_build}").expect("failed to write sol macro to contract");

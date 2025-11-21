@@ -1,11 +1,11 @@
 use std::{fmt::Debug, ops::Deref};
 
+use angstrom_types_primitives::primitive::{Direction, SqrtPriceX96, Tick};
 use eyre::eyre;
 use serde::{Deserialize, Serialize};
 use uniswap_v3_math::tick_math::{MAX_TICK, MIN_TICK};
 
-use super::{Direction, PoolPrice, PoolSnapshot, Tick};
-use crate::matching::SqrtPriceX96;
+use super::{PoolPrice, PoolSnapshot};
 
 /// A LiqRange describes the liquidity conditions within a specific range of
 /// ticks.  A LiqRange covers ticks [lower_tick, upper_tick)

@@ -4,19 +4,19 @@ use alloy::primitives::{Address, B256, Signature};
 pub mod orderpool;
 
 use alloy_primitives::{Bytes, I256};
+use angstrom_types_primitives::primitive::{Direction, MatchingPrice, Ray};
 pub use fillstate::*;
 pub use orderpool::*;
 pub use origin::*;
 use pade::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
-
 pub type BookID = u128;
 pub type OrderID = u128;
 pub type OrderVolume = u128;
 pub type OrderPrice = MatchingPrice;
+use angstrom_types_primitives::primitive::OrderId;
 
 use crate::{
-    matching::{MatchingPrice, Ray, uniswap::Direction},
     primitive::{AngstromMetaSigner, AngstromSigner, PoolId},
     sol_bindings::{
         grouped_orders::{AllOrders, OrderWithStorageData},

@@ -1,5 +1,6 @@
 use std::ops::Neg;
 
+use angstrom_types_primitives::primitive::{Direction, Ray, SqrtPriceX96, const_1e6, const_1e27};
 use malachite::{
     Integer, Natural, Rational,
     num::{
@@ -10,8 +11,6 @@ use malachite::{
     rounding_modes::RoundingMode
 };
 use tracing::debug;
-
-use super::{Ray, SqrtPriceX96, const_1e6, const_1e27, uniswap::Direction};
 
 /// Given an AMM with a constant liquidity, a debt, and a quantity of T0 will
 /// find the amount of T0 to feed into both the AMM and the debt to ensure that

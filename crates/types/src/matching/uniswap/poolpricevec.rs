@@ -4,16 +4,15 @@ use std::{
 };
 
 use alloy::primitives::{I256, U256, Uint};
+use angstrom_types_primitives::primitive::{Direction, Quantity, Ray, SqrtPriceX96, Tick};
 use eyre::{Context, eyre};
 use uniswap_v3_math::{
     sqrt_price_math::{_get_amount_0_delta, _get_amount_1_delta},
     swap_math::compute_swap_step
 };
 
-use super::{
-    Direction, DonationResult, LiqRangeRef, PoolSnapshot, Quantity, Tick, poolprice::PoolPrice
-};
-use crate::matching::{Ray, SqrtPriceX96, math::low_to_high};
+use super::{DonationResult, LiqRangeRef, PoolSnapshot, poolprice::PoolPrice};
+use crate::matching::math::low_to_high;
 
 #[derive(Clone, Debug)]
 pub struct SwapStep<'a> {

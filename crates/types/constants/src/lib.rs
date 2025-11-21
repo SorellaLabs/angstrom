@@ -1,10 +1,8 @@
 use std::{fmt::Debug, hash::Hash, sync::OnceLock};
 
-use alloy::{
-    dyn_abi::Eip712Domain,
-    primitives::{Address, ChainId, FixedBytes, address},
-    sol
-};
+use alloy_dyn_abi::Eip712Domain;
+use alloy_primitives::{Address, ChainId, FixedBytes, address};
+use alloy_sol_types::sol;
 
 sol! {
     #![sol(all_derives = true)]
@@ -118,7 +116,7 @@ impl AngstromAddressConfig {
         CHAIN_ID.set(self.chain_id).unwrap();
         GAS_TOKEN_ADDRESS.set(self.gas_token_address).unwrap();
         ANGSTROM_DOMAIN
-            .set(alloy::sol_types::eip712_domain!(
+            .set(alloy_sol_types::eip712_domain!(
                 name: "Angstrom",
                 version: "v1",
                 chain_id: self.chain_id,
@@ -155,7 +153,7 @@ impl AngstromAddressConfig {
         }
 
         if self.chain_id != 0 && self.angstrom_address != Address::ZERO {
-            let _ = ANGSTROM_DOMAIN.set(alloy::sol_types::eip712_domain!(
+            let _ = ANGSTROM_DOMAIN.set(alloy_sol_types::eip712_domain!(
                 name: "Angstrom",
                 version: "v1",
                 chain_id: self.chain_id,
@@ -193,7 +191,7 @@ pub fn try_init_with_chain_id(chain_id: ChainId) -> eyre::Result<()> {
                 .set(address!("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"))
                 .is_err();
             err |= ANGSTROM_DOMAIN
-                .set(alloy::sol_types::eip712_domain!(
+                .set(alloy_sol_types::eip712_domain!(
                     name: "Angstrom",
                     version: "v1",
                     chain_id: 1,
@@ -221,7 +219,7 @@ pub fn try_init_with_chain_id(chain_id: ChainId) -> eyre::Result<()> {
                 .set(address!("0xfff9976782d46cc05630d1f6ebab18b2324d6b14"))
                 .is_err();
             err |= ANGSTROM_DOMAIN
-                .set(alloy::sol_types::eip712_domain!(
+                .set(alloy_sol_types::eip712_domain!(
                     name: "Angstrom",
                     version: "v1",
                     chain_id: 11155111,
@@ -239,7 +237,7 @@ pub fn try_init_with_chain_id(chain_id: ChainId) -> eyre::Result<()> {
             err |= ANGSTROM_DEPLOYED_BLOCK.set(0).is_err();
             err |= GAS_TOKEN_ADDRESS.set(Address::ZERO).is_err();
             err |= ANGSTROM_DOMAIN
-                .set(alloy::sol_types::eip712_domain!(
+                .set(alloy_sol_types::eip712_domain!(
                     name: "Angstrom",
                     version: "v1",
                     chain_id: 130,
@@ -257,7 +255,7 @@ pub fn try_init_with_chain_id(chain_id: ChainId) -> eyre::Result<()> {
             err |= ANGSTROM_DEPLOYED_BLOCK.set(0).is_err();
             err |= GAS_TOKEN_ADDRESS.set(Address::ZERO).is_err();
             err |= ANGSTROM_DOMAIN
-                .set(alloy::sol_types::eip712_domain!(
+                .set(alloy_sol_types::eip712_domain!(
                     name: "Angstrom",
                     version: "v1",
                     chain_id: 1301,
@@ -275,7 +273,7 @@ pub fn try_init_with_chain_id(chain_id: ChainId) -> eyre::Result<()> {
             err |= ANGSTROM_DEPLOYED_BLOCK.set(0).is_err();
             err |= GAS_TOKEN_ADDRESS.set(Address::ZERO).is_err();
             err |= ANGSTROM_DOMAIN
-                .set(alloy::sol_types::eip712_domain!(
+                .set(alloy_sol_types::eip712_domain!(
                     name: "Angstrom",
                     version: "v1",
                     chain_id: 8453,
@@ -293,7 +291,7 @@ pub fn try_init_with_chain_id(chain_id: ChainId) -> eyre::Result<()> {
             err |= ANGSTROM_DEPLOYED_BLOCK.set(0).is_err();
             err |= GAS_TOKEN_ADDRESS.set(Address::ZERO).is_err();
             err |= ANGSTROM_DOMAIN
-                .set(alloy::sol_types::eip712_domain!(
+                .set(alloy_sol_types::eip712_domain!(
                     name: "Angstrom",
                     version: "v1",
                     chain_id: 84532,

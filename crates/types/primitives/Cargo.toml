@@ -1,13 +1,17 @@
 [package]
-name = "angstrom-types"
+name = "angstrom-types-primitives"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 alloy = { workspace = true, features = ["rpc-types-mev"] }
-alloy-primitives = { workspace = true, features = ["rand"] }
+alloy-consensus.workspace = true
+alloy-contract.workspace = true
+alloy-primitives.workspace = true
+alloy-signer.workspace = true
+alloy-sol-types.workspace = true
 angstrom-types-constants.workspace = true
-angstrom-types-primitives.workspace = true
+
 auto_impl.workspace = true
 base64.workspace = true
 bincode = { workspace = true }
@@ -49,6 +53,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 uniswap_v3_math.workspace = true
 
+[build-dependencies]
+convert_case.workspace = true
+itertools.workspace = true
+
 [dev-dependencies]
 angstrom-types.workspace = true
 rand.workspace = true
@@ -57,4 +65,4 @@ tokio.workspace = true
 
 [features]
 default = []
-anvil = ["angstrom-types-primitives/anvil"]
+anvil = []

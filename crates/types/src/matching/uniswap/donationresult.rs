@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
+use angstrom_types_primitives::primitive::{SqrtPriceX96, Tick};
 use eyre::eyre;
 
-use super::{PoolPriceVec, Tick};
-use crate::matching::{SqrtPriceX96, math::low_to_high};
+use super::PoolPriceVec;
+use crate::matching::math::low_to_high;
 
 #[derive(Debug)]
 pub struct DonationResult {

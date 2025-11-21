@@ -1,5 +1,5 @@
 use alloy_primitives::U160;
-use angstrom_constants::PoolId;
+use angstrom_types_constants::PoolId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]

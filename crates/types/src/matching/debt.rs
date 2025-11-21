@@ -1,5 +1,6 @@
 use std::ops::{Add, AddAssign, Sub};
 
+use angstrom_types_primitives::primitive::const_2_192;
 use malachite::{
     Natural,
     num::{
@@ -11,7 +12,6 @@ use malachite::{
 use tracing::debug;
 
 use super::{Ray, math::low_to_high, uniswap::PoolPrice};
-use crate::matching::const_2_192;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DebtType {

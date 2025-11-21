@@ -1,11 +1,10 @@
 use std::ops::{Add, Sub};
 
 use alloy::primitives::I256;
+use angstrom_types_primitives::primitive::{Quantity, SqrtPriceX96};
 use liquidity_base::BaselineLiquidity;
 use pool_swap::{PoolSwap, PoolSwapResult};
 use serde::{Deserialize, Serialize};
-
-use crate::matching::{SqrtPriceX96, uniswap::Quantity};
 
 pub mod donation;
 pub mod liquidity_base;

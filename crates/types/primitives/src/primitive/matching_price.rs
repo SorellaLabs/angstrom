@@ -85,7 +85,7 @@ impl From<U256> for MatchingPrice {
 
 #[cfg(test)]
 mod tests {
-    use alloy::primitives::{U160, U256};
+    use alloy_primitives::{U160, U256};
     use rand::{Rng, rng};
 
     use super::{MatchingPrice, Ray};

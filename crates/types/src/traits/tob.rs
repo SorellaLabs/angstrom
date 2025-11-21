@@ -1,22 +1,14 @@
-use std::hash::Hash;
-
 use alloy_primitives::I256;
 use angstrom_types_primitives::{
-    contract_payloads::{Asset, Pair, Signature, angstrom::TopOfBlockOrder},
-    primitive::ANGSTROM_DOMAIN,
+    contract_payloads::angstrom::TopOfBlockOrder,
     sol_bindings::{
-        RawPoolOrder,
-        grouped_orders::OrderWithStorageData,
-        rpc_orders::{OmitOrderMeta, TopOfBlockOrder as RpcTopOfBlockOrder}
+        RawPoolOrder, grouped_orders::OrderWithStorageData,
+        rpc_orders::TopOfBlockOrder as RpcTopOfBlockOrder
     }
 };
 use eyre::eyre;
-use pade::PadeDecode;
 
-use crate::{
-    traits::tob::TopOfBlockOrderRewardCalc,
-    uni_structure::{BaselinePoolState, pool_swap::PoolSwapResult}
-};
+use crate::uni_structure::{BaselinePoolState, pool_swap::PoolSwapResult};
 pub trait TopOfBlockOrderRewardCalc: Sized {
     fn calc_vec_and_reward<'a>(
         tob: &OrderWithStorageData<RpcTopOfBlockOrder>,
@@ -24,8 +16,6 @@ pub trait TopOfBlockOrderRewardCalc: Sized {
     ) -> eyre::Result<(PoolSwapResult<'a>, u128)>;
 
     fn calc_reward(&self, snapshot: BaselinePoolState) -> eyre::Result<u128>;
-
-    fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128>;
 }
 
 impl TopOfBlockOrderRewardCalc for TopOfBlockOrder {
@@ -89,7 +79,13 @@ impl TopOfBlockOrderRewardCalc for TopOfBlockOrder {
                 .ok_or_else(|| eyre!("Not enough input to cover the transaction"))
         }
     }
+}
 
+pub trait RpcTopOfBlockOrderBidCalc {
+    fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128>;
+}
+
+impl RpcTopOfBlockOrderBidCalc for RpcTopOfBlockOrder {
     /// returns the amount in t0 that this order is bidding in the auction.
     fn get_auction_bid(&self, snapshot: &BaselinePoolState) -> eyre::Result<u128> {
         // Cefi Sell

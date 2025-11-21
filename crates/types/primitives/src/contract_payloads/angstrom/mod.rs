@@ -1,13 +1,10 @@
 use std::{collections::HashMap, hash::Hash, ops::Deref, sync::Arc};
 
-use alloy::{
-    eips::BlockId,
-    network::Network,
-    primitives::{Address, B256, U256, keccak256},
-    providers::Provider,
-    sol_types::SolValue
-};
-use alloy_primitives::I256;
+use alloy_eips::BlockId;
+use alloy_network::Network;
+use alloy_primitives::{Address, B256, I256, U256, keccak256};
+use alloy_provider::Provider;
+use alloy_sol_types::SolValue;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use dashmap::DashMap;
 use itertools::Itertools;

@@ -197,7 +197,7 @@ pub trait OmitOrderMeta: SolStruct {
 
     #[inline]
     fn eip712_hash_struct(&self) -> B256 {
-        let mut hasher = alloy::primitives::Keccak256::new();
+        let mut hasher = alloy_primitives::Keccak256::new();
         hasher.update(<Self as OmitOrderMeta>::eip712_type_hash(self));
         hasher.update(<Self as OmitOrderMeta>::eip712_encode_data(self));
         hasher.finalize()
@@ -214,7 +214,7 @@ pub trait OmitOrderMeta: SolStruct {
     /// pending data in the order indexer will be overridden.
     #[inline]
     fn unique_order_hash(&self, user_address: Address) -> B256 {
-        let mut hasher = alloy::primitives::Keccak256::new();
+        let mut hasher = alloy_primitives::Keccak256::new();
         hasher.update(<Self as OmitOrderMeta>::eip712_type_hash(self));
         hasher.update(<Self as OmitOrderMeta>::eip712_encode_data(self));
         hasher.update(user_address);
@@ -258,13 +258,13 @@ pub mod test {
 
     use super::*;
 
-    const TEST_DOMAIN: Eip712Domain = alloy::sol_types::eip712_domain! {
+    const TEST_DOMAIN: Eip712Domain = alloy_sol_types::eip712_domain! {
         name: "Angstrom",
         version: "0.61.0",
     };
 
     mod a {
-        alloy::sol! {
+        alloy_sol_types::sol! {
             #[derive(Default)]
             struct PartialStandingOrder {
                 uint32 ref_id;

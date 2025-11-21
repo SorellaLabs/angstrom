@@ -1,19 +1,18 @@
 use std::ops::{Deref, DerefMut};
 
-use alloy::{
-    consensus::{SignableTransaction, TypedTransaction},
-    network::{Ethereum, NetworkWallet},
-    primitives::Signature,
-    signers::{Signer, SignerSync, local::PrivateKeySigner}
-};
-use alloy_primitives::Address;
+use alloy_consensus::{SignableTransaction, TypedTransaction};
+use alloy_network::{Ethereum, NetworkWallet};
+use alloy_primitives::{Address, FixedBytes, Signature};
+use alloy_signer::{Signer, SignerSync};
+use alloy_signer_local::PrivateKeySigner;
 use hsm_signer::Pkcs11Signer;
 use k256::{
     ecdsa::{SigningKey, VerifyingKey},
     elliptic_curve::sec1::ToEncodedPoint
 };
-use reth_network_peers::PeerId;
 use secp256k1::rand::rngs::OsRng;
+
+type PeerId = FixedBytes<64>;
 
 /// Wrapper around key and signing to allow for a uniform type across codebase
 #[derive(Debug, Clone)]
@@ -41,7 +40,7 @@ impl<S: AngstromMetaSigner> AngstromSigner<S> {
     fn sign_transaction_inner(
         &self,
         tx: &mut dyn SignableTransaction<Signature>
-    ) -> alloy::signers::Result<Signature> {
+    ) -> alloy_signer::Result<Signature> {
         let hash = tx.signature_hash();
 
         self.signer.sign_hash_sync(&hash)
@@ -107,7 +106,7 @@ impl<S: AngstromMetaSigner> NetworkWallet<Ethereum> for AngstromSigner<S> {
         &self,
         _: Address,
         tx: TypedTransaction
-    ) -> alloy::signers::Result<alloy::consensus::TxEnvelope> {
+    ) -> alloy_signer::Result<alloy_consensus::TxEnvelope> {
         match tx {
             TypedTransaction::Legacy(mut t) => {
                 let sig = self.sign_transaction_inner(&mut t)?;

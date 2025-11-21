@@ -5,8 +5,8 @@ use angstrom_rpc_types::{
     CallResult, OrderSubscriptionFilter, OrderSubscriptionKind, PendingOrder
 };
 use angstrom_types::{
-    orders::{CancelOrderRequest, OrderLocation},
-    primitive::PoolId,
+    orders::CancelOrderRequest,
+    primitive::{OrderLocation, PoolId},
     slot0::Slot0Update,
     sol_bindings::grouped_orders::AllOrders
 };

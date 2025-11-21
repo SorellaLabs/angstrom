@@ -9,8 +9,7 @@ use alloy::{
     transports::Transport
 };
 use angstrom_types::{
-    matching::uniswap::TickInfo,
-    primitive::PoolId,
+    primitive::{PoolId, TickInfo},
     uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity}
 };
 use itertools::Itertools;

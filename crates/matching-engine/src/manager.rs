@@ -12,6 +12,7 @@ use angstrom_types::{
     orders::PoolSolution,
     primitive::PoolId,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
+    traits::BundleProcessing,
     uni_structure::BaselinePoolState
 };
 use futures::{Future, stream::FuturesUnordered};

@@ -2,8 +2,8 @@ use std::{collections::HashSet, fmt::Debug};
 
 use alloy::primitives::{B256, FixedBytes};
 use angstrom_types::{
-    orders::{OrderId, OrderStatus, UpdatedGas},
-    primitive::{NewInitializedPool, PoolId},
+    orders::{OrderId, UpdatedGas},
+    primitive::{NewInitializedPool, OrderStatus, PoolId},
     sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 

@@ -2,14 +2,12 @@
 
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
-    orders::OrderId,
-    primitive::{UserAccountVerificationError, UserOrderPoolInfo},
+    primitive::{OrderId, OrderPriorityData, UserAccountVerificationError, UserOrderPoolInfo},
     sol_bindings::{ext::RawPoolOrder, grouped_orders::OrderWithStorageData}
 };
 use user::UserAccounts;
 
 use super::db_state_utils::StateFetchUtils;
-
 pub mod user;
 
 #[cfg(test)]
@@ -190,7 +188,7 @@ pub trait StorageWithData: RawPoolOrder {
         tob_reward: U256
     ) -> OrderWithStorageData<Self> {
         OrderWithStorageData {
-            priority_data: angstrom_types::orders::OrderPriorityData {
+            priority_data: OrderPriorityData {
                 price:     self.limit_price(),
                 // this is always amount as order are collected as
                 // bid and ask, thus when compairing, these will all be

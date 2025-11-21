@@ -7,9 +7,10 @@ use alloy::primitives::U256;
 use angstrom_types::{
     matching::{
         CompositeOrder, Debt, Ray,
-        uniswap::{Direction, PoolPrice, PoolPriceVec}
+        uniswap::{PoolPrice, PoolPriceVec}
     },
     orders::{NetAmmOrder, OrderFillState, OrderOutcome, PoolSolution},
+    primitive::Direction,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 use base64::Engine;

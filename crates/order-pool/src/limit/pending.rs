@@ -6,7 +6,7 @@ use std::{
 
 use alloy::primitives::{B256, FixedBytes};
 use angstrom_types::{
-    orders::OrderPriorityData, sol_bindings::grouped_orders::OrderWithStorageData
+    primitive::OrderPriorityData, sol_bindings::grouped_orders::OrderWithStorageData
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};

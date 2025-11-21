@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use alloy::{primitives::Log, sol_types::SolValue};
-use alloy_primitives::{Address, aliases::U24, keccak256};
+use alloy_primitives::{Address, Log, aliases::U24, keccak256};
+use alloy_sol_types::SolValue;
 use angstrom_types_constants::PoolId;
 
 use crate::contract_bindings::{

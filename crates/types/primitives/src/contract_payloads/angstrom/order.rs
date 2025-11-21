@@ -1,4 +1,4 @@
-use alloy::primitives::{Address, B256, Bytes, U256, aliases::U40};
+use alloy_primitives::{Address, B256, Bytes, U256, aliases::U40};
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 

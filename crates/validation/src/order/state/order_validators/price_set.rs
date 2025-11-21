@@ -1,6 +1,6 @@
 use angstrom_types::{
-    primitive::OrderValidationError,
-    sol_bindings::{RawPoolOrder, Ray}
+    primitive::{OrderValidationError, Ray},
+    sol_bindings::RawPoolOrder
 };
 
 use super::{OrderValidation, OrderValidationState};

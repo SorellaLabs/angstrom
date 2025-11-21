@@ -1,23 +1,16 @@
-use alloy::primitives::{Address, B256, Bytes, U256, aliases::U40};
+use alloy_primitives::U256;
 use angstrom_types_primitives::{
     contract_payloads::{
-        Asset, Pair, Signature,
+        Signature,
         angstrom::{OrderQuantities, StandingValidation, UserOrder}
     },
-    primitive::ANGSTROM_DOMAIN,
     sol_bindings::{
         RawPoolOrder,
-        grouped_orders::{AllOrders, OrderWithStorageData},
-        rpc_orders::{
-            ExactFlashOrder, ExactStandingOrder, OmitOrderMeta, OrderMeta, PartialFlashOrder,
-            PartialStandingOrder
-        }
+        grouped_orders::{AllOrders, OrderWithStorageData}
     }
 };
-use pade_macro::{PadeDecode, PadeEncode};
-use serde::{Deserialize, Serialize};
 
-use crate::{contract_payloads::rewards::RewardsUpdate, orders::OrderOutcome};
+use crate::orders::OrderOutcome;
 
 pub trait UserOrderFromInternal: Sized {
     fn from_internal_order(

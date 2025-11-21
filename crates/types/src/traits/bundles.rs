@@ -1,13 +1,11 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash
-};
+use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::{Address, FixedBytes, I256, U256};
 use angstrom_types_primitives::{
     contract_payloads::{
         Pair,
-        angstrom::{BundleGasDetails, TopOfBlockOrder, UserOrder},
+        angstrom::{AngstromBundle, BundleGasDetails, TopOfBlockOrder, UserOrder},
+        asset::builder::*,
         rewards::{PoolUpdate, RewardsUpdate}
     },
     primitive::{OrderId, PoolId, Ray, SqrtPriceX96},
@@ -24,9 +22,10 @@ use tracing::{Level, debug, error, trace, warn};
 use crate::{
     consensus::{PreProposal, Proposal},
     contract_payloads::angstrom::LP_DONATION_SPLIT,
+    matching::get_quantities_at_price,
     orders::{OrderFillState, OrderOutcome, OrderSet, PoolSolution},
     testnet::TestnetStateOverrides,
-    traits::user_orders::UserOrderFromInternal,
+    traits::{tob::TopOfBlockOrderRewardCalc, user_orders::UserOrderFromInternal},
     uni_structure::{BaselinePoolState, donation::DonationCalculation}
 };
 

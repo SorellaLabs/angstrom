@@ -10,8 +10,10 @@ use alloy::primitives::{Address, B256, FixedBytes};
 use angstrom_eth::manager::EthEvent;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
-    orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
-    primitive::{NewInitializedPool, OrderValidationError, PeerId, PoolId},
+    orders::{CancelOrderRequest, OrderOrigin},
+    primitive::{
+        NewInitializedPool, OrderLocation, OrderStatus, OrderValidationError, PeerId, PoolId
+    },
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::{Future, FutureExt, StreamExt};

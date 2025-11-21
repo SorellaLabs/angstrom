@@ -8,8 +8,8 @@ use angstrom_rpc_types::{
     PendingOrder
 };
 use angstrom_types::{
-    orders::{CancelOrderRequest, OrderLocation, OrderOrigin, OrderStatus},
-    primitive::PoolId,
+    orders::{CancelOrderRequest, OrderOrigin},
+    primitive::{OrderLocation, OrderStatus, PoolId},
     sol_bindings::{RawPoolOrder, grouped_orders::AllOrders}
 };
 use futures::StreamExt;

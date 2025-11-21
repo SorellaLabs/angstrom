@@ -1,6 +1,7 @@
 use angstrom_types::{
-    matching::{CompositeOrder, Debt, Ray, uniswap::Direction},
+    matching::{CompositeOrder, Debt, Ray},
     orders::{OrderFillState, OrderId, OrderPrice, OrderVolume},
+    primitive::Direction,
     sol_bindings::RawPoolOrder
 };
 use eyre::{OptionExt, eyre};

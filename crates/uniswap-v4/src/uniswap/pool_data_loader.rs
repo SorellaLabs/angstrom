@@ -7,10 +7,7 @@ use alloy::{
     sol_types::{SolEvent, SolType}
 };
 use alloy_primitives::{B256, I256, Log};
-use angstrom_types::{
-    matching::{Ray, SqrtPriceX96},
-    primitive::{PoolId as AngstromPoolId, UniswapPoolRegistry}
-};
+use angstrom_types::primitive::{PoolId as AngstromPoolId, Ray, SqrtPriceX96, UniswapPoolRegistry};
 use itertools::Itertools;
 use uniswap_v3_math::tick_math::{MAX_TICK, MIN_TICK};
 

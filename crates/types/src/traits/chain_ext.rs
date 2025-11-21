@@ -1,6 +1,6 @@
 use std::ops::RangeInclusive;
 
-use alloy_consensus::BlockHeader;
+use alloy::consensus::BlockHeader;
 use alloy_primitives::{BlockHash, BlockNumber};
 use reth_ethereum_primitives::{Block, Receipt, TransactionSigned};
 use reth_primitives_traits::RecoveredBlock;

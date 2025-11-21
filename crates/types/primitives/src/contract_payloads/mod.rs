@@ -1,8 +1,5 @@
-use alloy::{
-    primitives::{Address, Bytes, FixedBytes, U256},
-    sol
-};
-use alloy_primitives::{B256, normalize_v};
+use alloy_primitives::{Address, B256, Bytes, FixedBytes, U256, normalize_v};
+use alloy_sol_types::sol;
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
 
@@ -54,7 +51,7 @@ impl Signature {
         match self {
             Self::Contract { from, .. } => *from,
             Self::Ecdsa { v, r, s } => {
-                let sig = alloy::primitives::Signature::new(
+                let sig = alloy_primitives::Signature::new(
                     U256::from_be_slice(&**r),
                     U256::from_be_slice(&**s),
                     normalize_v(*v as u64).unwrap()
@@ -71,8 +68,8 @@ impl Default for Signature {
     }
 }
 
-impl From<alloy::primitives::Signature> for Signature {
-    fn from(value: alloy::primitives::Signature) -> Self {
+impl From<alloy_primitives::Signature> for Signature {
+    fn from(value: alloy_primitives::Signature) -> Self {
         let v = 27 + value.v() as u8;
         let r: FixedBytes<32> = value.r().into();
         let s: FixedBytes<32> = value.s().into();

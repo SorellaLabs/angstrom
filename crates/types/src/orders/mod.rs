@@ -14,7 +14,7 @@ pub type BookID = u128;
 pub type OrderID = u128;
 pub type OrderVolume = u128;
 pub type OrderPrice = MatchingPrice;
-use angstrom_types_primitives::primitive::OrderId;
+pub use angstrom_types_primitives::primitive::OrderId;
 
 use crate::{
     primitive::{AngstromMetaSigner, AngstromSigner, PoolId},

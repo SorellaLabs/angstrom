@@ -20,6 +20,7 @@ use angstrom_types::{
     contract_payloads::angstrom::TopOfBlockOrder as PayloadTopOfBlockOrder,
     primitive::PoolId,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
+    traits::TopOfBlockOrderRewardCalc,
     uni_structure::BaselinePoolState
 };
 use arraydeque::ArrayDeque;

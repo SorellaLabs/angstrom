@@ -6,16 +6,15 @@ use std::{
 use alloy_primitives::{I256, Sign, U256};
 use angstrom_types::{
     contract_payloads::angstrom::TopOfBlockOrder as ContractTopOfBlockOrder,
-    matching::{
-        SqrtPriceX96, get_quantities_at_price,
-        uniswap::{Direction, Quantity}
-    },
+    matching::get_quantities_at_price,
     orders::{NetAmmOrder, OrderFillState, OrderId, OrderOutcome, PoolSolution},
+    primitive::{Direction, Quantity, Ray, SqrtPriceX96},
     sol_bindings::{
-        RawPoolOrder, Ray,
+        RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData},
         rpc_orders::TopOfBlockOrder
     },
+    traits::TopOfBlockOrderRewardCalc,
     uni_structure::pool_swap::PoolSwapResult
 };
 use base64::Engine;

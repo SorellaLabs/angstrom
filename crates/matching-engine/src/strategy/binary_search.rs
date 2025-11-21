@@ -1,7 +1,7 @@
 use alloy::primitives::{I256, U160};
 use angstrom_types::{
-    matching::SqrtPriceX96,
     orders::PoolSolution,
+    primitive::SqrtPriceX96,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 

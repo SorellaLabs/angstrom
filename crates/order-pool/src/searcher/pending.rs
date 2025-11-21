@@ -5,7 +5,7 @@ use std::{
 
 use alloy::primitives::{B256, FixedBytes};
 use angstrom_types::{
-    orders::OrderPriorityData,
+    primitive::OrderPriorityData,
     sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
 };
 use serde::{Deserialize, Serialize};

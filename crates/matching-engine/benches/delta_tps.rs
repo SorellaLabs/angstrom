@@ -154,7 +154,7 @@ fn setup_inputs(
                 address: Default::default(),
                 deadline: None,
                 pool_id,
-                location: angstrom_types::orders::OrderLocation::Limit
+                location: angstrom_types::primitive::OrderLocation::Limit
             },
             pool_id,
             valid_block: 0,
@@ -184,7 +184,7 @@ fn setup_inputs(
                 address: Default::default(),
                 deadline: None,
                 pool_id,
-                location: angstrom_types::orders::OrderLocation::Limit
+                location: angstrom_types::primitive::OrderLocation::Limit
             },
             pool_id,
             valid_block: 0,
@@ -212,7 +212,7 @@ fn setup_inputs(
             address: Default::default(),
             deadline: None,
             pool_id,
-            location: angstrom_types::orders::OrderLocation::Limit
+            location: angstrom_types::primitive::OrderLocation::Limit
         },
         pool_id,
         valid_block: 0,

@@ -1,6 +1,6 @@
 #[rustfmt::skip]
 pub mod angstrom {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -10,7 +10,7 @@ pub mod angstrom {
 }
 #[rustfmt::skip]
 pub mod controller_v_1 {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -20,7 +20,7 @@ pub mod controller_v_1 {
 }
 #[rustfmt::skip]
 pub mod i_position_descriptor {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -30,7 +30,7 @@ pub mod i_position_descriptor {
 }
 #[rustfmt::skip]
 pub mod mintable_mock_erc_20 {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -40,7 +40,7 @@ pub mod mintable_mock_erc_20 {
 }
 #[rustfmt::skip]
 pub mod mock_rewards_manager {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -50,7 +50,7 @@ pub mod mock_rewards_manager {
 }
 #[rustfmt::skip]
 pub mod pool_gate {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -60,7 +60,7 @@ pub mod pool_gate {
 }
 #[rustfmt::skip]
 pub mod pool_manager {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -70,7 +70,7 @@ pub mod pool_manager {
 }
 #[rustfmt::skip]
 pub mod position_fetcher {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
@@ -80,7 +80,7 @@ pub mod position_fetcher {
 }
 #[rustfmt::skip]
 pub mod position_manager {
-    alloy::sol!(
+    alloy_sol_types::sol!(
         #[allow(missing_docs)]
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]

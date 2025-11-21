@@ -9,3 +9,6 @@ pub use tob::*;
 
 mod rewards_update;
 pub use rewards_update::*;
+
+mod chain_ext;
+pub use chain_ext::*;

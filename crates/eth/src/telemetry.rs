@@ -6,7 +6,7 @@ use std::{
 use alloy::primitives::Address;
 use angstrom_types::{
     block_sync::BlockSyncProducer, contract_payloads::angstrom::AngstromPoolConfigStore,
-    primitive::ChainExt
+    traits::ChainExt
 };
 use chrono::Utc;
 use reth_execution_types::Chain;

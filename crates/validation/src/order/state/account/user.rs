@@ -7,8 +7,8 @@ use std::{
 
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
-    primitive::{UserAccountVerificationError, UserOrderPoolInfo},
-    sol_bindings::{OrderValidationPriority, Ray, RespendAvoidanceMethod, ext::RawPoolOrder}
+    primitive::{Ray, UserAccountVerificationError, UserOrderPoolInfo},
+    sol_bindings::{OrderValidationPriority, RespendAvoidanceMethod, ext::RawPoolOrder}
 };
 use angstrom_utils::FnResultOption;
 use dashmap::DashMap;

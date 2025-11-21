@@ -167,7 +167,7 @@ impl OrderValidationPriority {
 
 #[cfg(test)]
 mod order_validation_priority_tests {
-    use alloy::primitives::B256;
+    use alloy_primitives::B256;
 
     use super::*;
 

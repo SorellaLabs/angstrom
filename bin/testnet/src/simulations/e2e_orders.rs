@@ -2,9 +2,10 @@ use std::{pin::Pin, sync::Arc};
 
 use angstrom_rpc::{OrderApi, api::OrderApiClient};
 use angstrom_types::{
-    primitive::{ANGSTROM_DOMAIN, CHAIN_ID, ChainExt},
+    primitive::{ANGSTROM_DOMAIN, CHAIN_ID},
     sol_bindings::{RawPoolOrder, grouped_orders::AllOrders},
-    testnet::InitialTestnetState
+    testnet::InitialTestnetState,
+    traits::ChainExt
 };
 use futures::{Future, StreamExt, stream::FuturesUnordered};
 use jsonrpsee::http_client::HttpClient;

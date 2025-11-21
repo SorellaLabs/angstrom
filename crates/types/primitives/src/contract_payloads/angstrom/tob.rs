@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use alloy::primitives::{Address, B256, U256};
+use alloy_primitives::{Address, B256, U256};
 use pade::PadeDecode;
 use pade_macro::{PadeDecode, PadeEncode};
 use serde::{Deserialize, Serialize};
@@ -133,7 +133,7 @@ impl TopOfBlockOrder {
         let zero_for_1 = !internal.is_bid;
         let sig_bytes = internal.meta.signature.to_vec();
         let decoded_signature =
-            alloy::primitives::Signature::pade_decode(&mut sig_bytes.as_slice(), None).unwrap();
+            alloy_primitives::Signature::pade_decode(&mut sig_bytes.as_slice(), None).unwrap();
         let signature = Signature::from(decoded_signature);
         Self {
             use_internal: internal.use_internal,
@@ -161,7 +161,7 @@ impl TopOfBlockOrder {
         let zero_for_1 = !internal.is_bid;
         let sig_bytes = internal.meta.signature.to_vec();
         let decoded_signature =
-            alloy::primitives::Signature::pade_decode(&mut sig_bytes.as_slice(), None).unwrap();
+            alloy_primitives::Signature::pade_decode(&mut sig_bytes.as_slice(), None).unwrap();
         let signature = Signature::from(decoded_signature);
         let used_gas: u128 = (internal.priority_data.gas).saturating_to();
 

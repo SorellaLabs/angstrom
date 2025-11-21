@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alloy::primitives::Address;
+use alloy_primitives::Address;
 
 /// Tracks the state of our borrowing from Uniswap for a particular phase of
 /// contract execution.

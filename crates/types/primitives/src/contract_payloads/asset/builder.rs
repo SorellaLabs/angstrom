@@ -1,4 +1,4 @@
-use alloy::primitives::Address;
+use alloy_primitives::Address;
 use tracing::{Level, event_enabled, trace};
 
 use super::{AssetArray, state::StageTracker};

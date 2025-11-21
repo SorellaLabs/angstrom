@@ -19,9 +19,10 @@ use angstrom_types::{
         ConsensusRoundName, ConsensusRoundOrderHashes, StromConsensusEvent, SystemTimeSlotClock
     },
     contract_payloads::angstrom::UniswapAngstromRegistry,
-    primitive::{AngstromMetaSigner, AngstromSigner, ChainExt},
+    primitive::{AngstromMetaSigner, AngstromSigner},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
-    submission::SubmissionHandler
+    submission::SubmissionHandler,
+    traits::ChainExt
 };
 use futures::StreamExt;
 use matching_engine::MatchingEngineHandle;

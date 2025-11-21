@@ -6,8 +6,8 @@ use std::{
 
 use alloy::primitives::{Address, B256, BlockNumber, U256};
 use angstrom_types::{
-    orders::{OrderId, OrderLocation, OrderOrigin, OrderSet, OrderStatus},
-    primitive::{NewInitializedPool, PeerId, PoolId},
+    orders::{OrderId, OrderOrigin, OrderSet},
+    primitive::{NewInitializedPool, OrderLocation, OrderStatus, PeerId, PoolId},
     sol_bindings::{
         RawPoolOrder,
         grouped_orders::{AllOrders, OrderWithStorageData},
@@ -359,7 +359,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     fn insert_order(&mut self, res: OrderWithStorageData<AllOrders>) -> eyre::Result<()> {
         match res.order_id.location {
-            angstrom_types::orders::OrderLocation::Searcher => self
+            angstrom_types::primitive::OrderLocation::Searcher => self
                 .order_storage
                 .add_new_searcher_order(
                     res.try_map_inner(|inner| {
@@ -369,7 +369,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                     .expect("should be unreachable")
                 )
                 .map_err(|e| eyre::anyhow!("{:?}", e)),
-            angstrom_types::orders::OrderLocation::Limit => self
+            angstrom_types::primitive::OrderLocation::Limit => self
                 .order_storage
                 .add_new_limit_order(res)
                 .map_err(|e| eyre::anyhow!("{:?}", e))

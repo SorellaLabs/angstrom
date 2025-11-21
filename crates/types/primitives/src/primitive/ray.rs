@@ -479,7 +479,7 @@ impl Ray {
 
 #[cfg(test)]
 mod tests {
-    use alloy::primitives::U160;
+    use alloy_primitives::U160;
     use rand::{Rng, rng};
 
     use super::*;

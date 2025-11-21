@@ -1,4 +1,4 @@
-use alloy::primitives::{U160, aliases::I24};
+use alloy_primitives::aliases::I24;
 use angstrom_types_primitives::contract_payloads::rewards::RewardsUpdate;
 use itertools::Itertools;
 

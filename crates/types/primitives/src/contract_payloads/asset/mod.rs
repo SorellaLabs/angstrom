@@ -3,7 +3,7 @@ pub mod state;
 
 use std::collections::HashMap;
 
-use alloy::primitives::Address;
+use alloy_primitives::Address;
 
 use super::Asset;
 

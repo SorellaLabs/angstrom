@@ -8,8 +8,9 @@ use alloy::{
     providers::Provider
 };
 use angstrom_types::{
-    matching::SqrtPriceX96, orders::UpdatedGas, pair_with_price::PairsWithPrice, primitive::PoolId,
-    sol_bindings::Ray
+    orders::UpdatedGas,
+    pair_with_price::PairsWithPrice,
+    primitive::{PoolId, Ray, SqrtPriceX96}
 };
 use futures::StreamExt;
 use tracing::warn;

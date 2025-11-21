@@ -1,7 +1,7 @@
 use alloy::primitives::{FixedBytes, U256};
 use angstrom_types::{
     orders::OrderPriorityData,
-    sol_bindings::{grouped_orders::OrderWithStorageData, RawPoolOrder}
+    sol_bindings::{RawPoolOrder, grouped_orders::OrderWithStorageData}
 };
 
 use super::{OrderIdBuilder, UserOrderBuilder};

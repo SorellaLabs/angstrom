@@ -1,12 +1,12 @@
-use alloy::{
-    primitives::Address,
-    signers::{SignerSync, local::PrivateKeySigner}
-};
-use angstrom_types::{
+use alloy_primitives::Address;
+use alloy_signer::SignerSync;
+use alloy_signer_local::PrivateKeySigner;
+use pade::PadeEncode;
+
+use crate::{
     primitive::{ANGSTROM_DOMAIN, AngstromSigner},
     sol_bindings::rpc_orders::{OmitOrderMeta, OrderMeta, TopOfBlockOrder}
 };
-use pade::PadeEncode;
 
 #[derive(Default, Debug)]
 pub struct ToBOrderBuilder {

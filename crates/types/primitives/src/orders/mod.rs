@@ -8,6 +8,8 @@ pub use net_amm_order::*;
 mod order_set;
 pub use order_set::*;
 
+pub mod builders;
+
 mod cancel_order_request;
 pub use cancel_order_request::*;
 

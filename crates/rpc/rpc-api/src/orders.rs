@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 
 use alloy_primitives::{Address, B256, U256};
-use angstrom_amm_quoter::Slot0Update;
+use angstrom_rpc_types::{
+    CallResult, OrderSubscriptionFilter, OrderSubscriptionKind, PendingOrder
+};
 use angstrom_types::{
     orders::{CancelOrderRequest, OrderLocation},
     primitive::PoolId,
+    slot0::Slot0Update,
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;
@@ -13,8 +16,6 @@ use jsonrpsee::{
     proc_macros::rpc
 };
 use serde::Deserialize;
-
-use crate::types::{CallResult, OrderSubscriptionFilter, OrderSubscriptionKind, PendingOrder};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct GasEstimateResponse {
@@ -68,7 +69,7 @@ pub trait OrderApi {
     #[subscription(
         name = "subscribeOrders",
         unsubscribe = "unsubscribeOrders",
-        item = crate::types::subscriptions::OrderSubscriptionResult
+        item = angstrom_rpc_types::subscriptions::OrderSubscriptionResult
     )]
     async fn subscribe_orders(
         &self,

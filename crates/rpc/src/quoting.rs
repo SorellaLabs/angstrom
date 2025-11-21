@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
+use angstrom_rpc_api::QuotingApiServer;
+use angstrom_rpc_types::GasEstimateFilter;
 use jsonrpsee::PendingSubscriptionSink;
 use reth_tasks::TaskSpawner;
-
-use crate::{api::QuotingApiServer, types::GasEstimateFilter};
 
 pub struct QuotesApi<OrderPool, Spawner> {
     _pool:         OrderPool,

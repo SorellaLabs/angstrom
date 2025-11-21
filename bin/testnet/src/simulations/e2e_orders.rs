@@ -1,6 +1,6 @@
 use std::{pin::Pin, sync::Arc};
 
-use angstrom_rpc::{api::OrderApiClient, impls::OrderApi};
+use angstrom_rpc::{OrderApi, api::OrderApiClient};
 use angstrom_types::{
     primitive::{ANGSTROM_DOMAIN, CHAIN_ID, ChainExt},
     sol_bindings::{RawPoolOrder, grouped_orders::AllOrders},

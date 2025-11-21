@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use alloy_primitives::Address;
-use consensus::{AngstromValidator, ConsensusDataWithBlock, ConsensusTimingConfig};
+use angstrom_types::consensus::{AngstromValidator, ConsensusDataWithBlock, ConsensusTimingConfig};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "consensus"))]

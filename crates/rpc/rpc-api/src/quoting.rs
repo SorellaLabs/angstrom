@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
+use angstrom_rpc_types::{GasEstimateFilter, GasEstimateUpdate};
 use jsonrpsee::proc_macros::rpc;
-
-use crate::types::GasEstimateFilter;
 
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "quoting"))]
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "quoting"))]
@@ -11,7 +10,7 @@ pub trait QuotingApi {
     #[subscription(
         name = "subscribe_gas_estimates", 
         unsubscribe = "unsubscribe_gas_estimates",
-        item = crate::types::quoting::GasEstimateUpdate
+        item = GasEstimateUpdate
     )]
     async fn subscribe_gas_estimates(
         &self,

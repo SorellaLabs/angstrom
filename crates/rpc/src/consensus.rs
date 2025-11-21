@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use alloy_primitives::Address;
+use angstrom_rpc_api::ConsensusApiServer;
 use consensus::{
     AngstromValidator, ConsensusDataWithBlock, ConsensusHandle, ConsensusTimingConfig
 };
@@ -11,8 +12,6 @@ use jsonrpsee::{
     types::{ErrorCode, ErrorObjectOwned}
 };
 use reth_tasks::TaskSpawner;
-
-use crate::api::ConsensusApiServer;
 
 pub struct ConsensusApi<Consensus, Spawner> {
     consensus:    Consensus,

@@ -110,6 +110,8 @@ angstrom-eth = { path = "./crates/eth/" }
 angstrom-metrics = { path = "./crates/metrics/" }
 angstrom-network = { path = "./crates/angstrom-net/" }
 angstrom-rpc = { path = "./crates/rpc/" }
+angstrom-rpc-api = { path = "./crates/rpc/rpc-api/" }
+angstrom-rpc-types = { path = "./crates/rpc/rpc-types/" }
 angstrom-types = { path = "./crates/types/" }
 angstrom-utils = { path = "./crates/utils/" }
 anyhow = "1"

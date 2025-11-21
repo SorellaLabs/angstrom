@@ -1252,6 +1252,8 @@ dependencies = [
  "alloy-primitives",
  "angstrom-amm-quoter",
  "angstrom-network",
+ "angstrom-rpc-api",
+ "angstrom-rpc-types",
  "angstrom-types",
  "async-trait",
  "consensus",
@@ -1271,6 +1273,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "angstrom-rpc-api"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "angstrom-network",
+ "angstrom-rpc-types",
+ "angstrom-types",
+ "async-trait",
+ "futures",
+ "jsonrpsee",
+ "rand 0.8.5",
+ "reth-tasks",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
+name = "angstrom-rpc-types"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "angstrom-network",
+ "angstrom-types",
+ "async-trait",
+ "futures",
+ "jsonrpsee",
+ "rand 0.8.5",
+ "reth-tasks",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "angstrom-types"
 version = "0.1.0"
 dependencies = [
@@ -1282,6 +1327,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bytes",
+ "clap",
  "convert_case 0.8.0",
  "dashmap 6.1.0",
  "eyre",

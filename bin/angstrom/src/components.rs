@@ -14,7 +14,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
 use alloy_chains::Chain;
-use angstrom_amm_quoter::{QuoterManager, Slot0Update};
+use angstrom_amm_quoter::QuoterManager;
 use angstrom_eth::{
     handle::{Eth, EthCommand},
     manager::{EthDataCleanser, EthEvent}
@@ -36,6 +36,7 @@ use angstrom_types::{
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
+    slot0::Slot0Update,
     submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusHandler, ConsensusManager, ManagerNetworkDeps};

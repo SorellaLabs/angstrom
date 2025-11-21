@@ -11,6 +11,7 @@ pub mod pair_with_price;
 pub mod primitive;
 pub mod reth_db_provider;
 pub mod reth_db_wrapper;
+pub mod slot0;
 pub mod sol_bindings;
 pub mod submission;
 pub mod testnet;

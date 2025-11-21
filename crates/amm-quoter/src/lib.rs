@@ -1,18 +1,17 @@
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
-    fmt::Debug,
     pin::Pin,
     sync::Arc,
     task::Poll,
     time::Duration
 };
 
-use alloy::primitives::U160;
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     consensus::{ConsensusRoundEvent, ConsensusRoundOrderHashes},
     orders::OrderSet,
     primitive::PoolId,
+    slot0::Slot0Update,
     sol_bindings::{grouped_orders::AllOrders, rpc_orders::TopOfBlockOrder},
     uni_structure::BaselinePoolState
 };
@@ -26,27 +25,12 @@ use matching_engine::{
 };
 use order_pool::order_storage::OrderStorage;
 use rayon::ThreadPool;
-use serde::{Deserialize, Serialize};
 use tokio::{
     sync::{mpsc, oneshot},
     time::{Interval, interval}
 };
 use tokio_stream::wrappers::ReceiverStream;
 use uniswap_v4::uniswap::{pool_data_loader::PoolDataLoader, pool_manager::SyncedUniswapPools};
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-pub struct Slot0Update {
-    /// there will be 120 updates per block or per 100ms
-    pub seq_id:           u16,
-    /// in case of block lag on node
-    pub current_block:    u64,
-    pub angstrom_pool_id: PoolId,
-    pub uni_pool_id:      PoolId,
-
-    pub sqrt_price_x96: U160,
-    pub liquidity:      u128,
-    pub tick:           i32
-}
 
 pub trait AngstromBookQuoter: Send + Sync + Unpin + 'static {
     /// will configure this stream to receieve updates of the given pool

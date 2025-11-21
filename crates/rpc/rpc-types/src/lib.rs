@@ -1,7 +1,9 @@
 pub mod quoting;
 pub mod subscriptions;
 use alloy_primitives::FixedBytes;
-use angstrom_types::{primitive::OrderValidationError, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types_primitives::{
+    primitive::OrderValidationError, sol_bindings::grouped_orders::AllOrders
+};
 pub use quoting::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

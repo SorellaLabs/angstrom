@@ -11,7 +11,7 @@ use alloy_primitives::{
 };
 use alloy_signer_local::LocalSigner;
 use angstrom_metrics::{METRICS_ENABLED, initialize_prometheus_metrics};
-use angstrom_types::{contract_bindings::angstrom::Angstrom::PoolKey, matching::SqrtPriceX96};
+use angstrom_types::{contract_bindings::angstrom::Angstrom::PoolKey, primitive::SqrtPriceX96};
 use consensus::AngstromValidator;
 use enr::k256::ecdsa::SigningKey;
 use eyre::Context;

@@ -13,7 +13,7 @@ use angstrom_types::{
         controller_v_1::ControllerV1::ControllerV1Instance,
         pool_gate::PoolGate::PoolGateInstance
     },
-    matching::SqrtPriceX96,
+    primitive::SqrtPriceX96,
     testnet::InitialTestnetState
 };
 use itertools::Itertools;

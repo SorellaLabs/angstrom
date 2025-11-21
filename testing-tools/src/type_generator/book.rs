@@ -1,6 +1,6 @@
 use angstrom_types::{
-    matching::{SqrtPriceX96, uniswap::PoolSnapshot},
-    primitive::PoolId,
+    matching::uniswap::PoolSnapshot,
+    primitive::{PoolId, SqrtPriceX96},
     sol_bindings::grouped_orders::{AllOrders, OrderWithStorageData}
 };
 use matching_engine::book::{OrderBook, sort::SortStrategy};

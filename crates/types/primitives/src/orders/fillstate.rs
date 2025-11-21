@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::OrderVolume;
+use crate::orders::OrderVolume;
 
 #[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderFillState {

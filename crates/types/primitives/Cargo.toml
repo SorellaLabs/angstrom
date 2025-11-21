@@ -16,7 +16,9 @@ alloy-sol-types.workspace = true
 angstrom-types-constants.workspace = true
 
 base64.workspace = true
+bincode.workspace = true
 bytes.workspace = true
+clap.workspace = true
 dashmap.workspace = true
 eyre.workspace = true
 hsm-signer.workspace = true

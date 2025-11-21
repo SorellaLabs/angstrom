@@ -4,10 +4,9 @@ use alloy_primitives::{Address, B256, U256};
 use angstrom_rpc_types::{
     CallResult, OrderSubscriptionFilter, OrderSubscriptionKind, PendingOrder
 };
-use angstrom_types::{
+use angstrom_types_primitives::{
     orders::CancelOrderRequest,
-    primitive::{OrderLocation, PoolId},
-    slot0::Slot0Update,
+    primitive::{OrderLocation, PoolId, Slot0Update},
     sol_bindings::grouped_orders::AllOrders
 };
 use futures::StreamExt;

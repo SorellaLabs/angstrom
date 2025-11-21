@@ -152,6 +152,10 @@ pub fn init_tracing() {
             .with_target("matching_engine", level)
             .with_target("uniswap_v4", level)
             .with_target("consensus", level)
+            .with_target("angstrom_types_primitives", level)
+            .with_target("angstrom_types_constants", level)
+            .with_target("angstrom_rpc_api", level)
+            .with_target("angstrom_rpc_types", level)
             .with_target("validation", level)
             .with_target("order_pool", level);
         let _ = tracing_subscriber::registry()

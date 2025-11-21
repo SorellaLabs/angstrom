@@ -17,10 +17,6 @@ futures.workspace = true
 jsonrpsee = { workspace = true, features = ["server", "macros", "ws-client"] }
 serde.workspace = true
 
-[dev-dependencies]
-rand = "0"
-tokio = { workspace = true, features = ["full", "tracing"] }
-
 [features]
 default = ["client"]
 client = []

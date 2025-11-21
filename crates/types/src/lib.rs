@@ -9,7 +9,6 @@ pub mod pair_with_price;
 
 pub mod reth_db_provider;
 pub mod reth_db_wrapper;
-pub mod slot0;
 pub mod submission;
 pub mod testnet;
 pub mod uni_structure;

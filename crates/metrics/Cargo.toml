@@ -16,7 +16,6 @@ jsonrpsee-server = "0.25.1"
 metrics.workspace = true
 metrics-exporter-prometheus = "0.16.2"
 metrics-process = "1"
-metrics-util = "0.20.0"
 prometheus = "0"
 reth-node-metrics.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }

@@ -1,6 +1,6 @@
-use angstrom_types::matching::{
-    SqrtPriceX96,
-    uniswap::{LiqRange, PoolSnapshot}
+use angstrom_types::{
+    matching::uniswap::{LiqRange, PoolSnapshot},
+    primitive::SqrtPriceX96
 };
 use eyre::{Context, Error, eyre};
 use rand_distr::{Distribution, SkewNormal};

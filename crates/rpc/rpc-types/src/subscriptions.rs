@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use alloy_primitives::{Address, B256, FixedBytes};
-use angstrom_types::{consensus::*, sol_bindings::grouped_orders::AllOrders};
+use angstrom_types_primitives::{
+    consensus::{PreProposal, Proposal},
+    sol_bindings::grouped_orders::AllOrders
+};
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoEnumIterator};
 

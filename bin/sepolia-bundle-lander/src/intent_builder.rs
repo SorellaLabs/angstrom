@@ -15,8 +15,7 @@ use alloy_primitives::TxKind;
 use alloy_rpc_types::TransactionRequest;
 use angstrom_rpc::api::OrderApiClient;
 use angstrom_types::{
-    matching::{Ray, SqrtPriceX96},
-    primitive::{ANGSTROM_DOMAIN, AngstromSigner},
+    primitive::{ANGSTROM_DOMAIN, AngstromSigner, Ray, SqrtPriceX96},
     sol_bindings::{grouped_orders::AllOrders, rpc_orders::OmitOrderMeta}
 };
 use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};

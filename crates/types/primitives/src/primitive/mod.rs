@@ -26,3 +26,5 @@ pub use quantity::*;
 
 pub mod ray;
 pub use ray::*;
+pub mod slot0;
+pub use slot0::*;

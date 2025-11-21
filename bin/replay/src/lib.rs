@@ -2,7 +2,7 @@ use std::{path::PathBuf, str::FromStr};
 
 use alloy_primitives::Address;
 use alloy_provider::ext::AnvilApi;
-use angstrom_types::{matching::SqrtPriceX96, testnet::InitialTestnetState};
+use angstrom_types::{primitive::SqrtPriceX96, testnet::InitialTestnetState};
 use eyre::Context;
 use reth::tasks::TaskExecutor;
 use reth_provider::BlockNumReader;
@@ -202,6 +202,10 @@ pub fn init_tracing(verbosity: u8) {
             .with_target("angstrom_eth", level)
             .with_target("matching_engine", level)
             .with_target("uniswap_v4", level)
+            .with_target("angstrom_types_primitives", level)
+            .with_target("angstrom_types_constants", level)
+            .with_target("angstrom_rpc_api", level)
+            .with_target("angstrom_rpc_types", level)
             .with_target("consensus", level)
             .with_target("validation", level)
             .with_target("order_pool", level)

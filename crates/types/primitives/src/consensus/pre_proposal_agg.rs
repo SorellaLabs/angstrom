@@ -1,15 +1,11 @@
-use alloy::{
-    primitives::{Address, BlockNumber, U256, keccak256},
-    signers::Signature
-};
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256, BlockNumber, U256, keccak256};
+use alloy_signer::Signature;
 use bytes::Bytes;
-use reth_network_peers::PeerId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     consensus::PreProposal,
-    primitive::{AngstromMetaSigner, AngstromSigner, public_key_to_peer_id}
+    primitive::{AngstromMetaSigner, AngstromSigner, PeerId, public_key_to_peer_id}
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

@@ -10,8 +10,7 @@ use angstrom_types::{
     block_sync::BlockSyncConsumer,
     consensus::{ConsensusRoundEvent, ConsensusRoundOrderHashes},
     orders::OrderSet,
-    primitive::PoolId,
-    slot0::Slot0Update,
+    primitive::{PoolId, Slot0Update},
     sol_bindings::{grouped_orders::AllOrders, rpc_orders::TopOfBlockOrder},
     uni_structure::BaselinePoolState
 };

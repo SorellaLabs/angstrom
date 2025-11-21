@@ -89,7 +89,7 @@ mod tests {
     use rand::{Rng, rng};
 
     use super::{MatchingPrice, Ray};
-    use crate::matching::SqrtPriceX96;
+    use crate::primitive::SqrtPriceX96;
 
     #[test]
     fn can_construct_matchingprice() {

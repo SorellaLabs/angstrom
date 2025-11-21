@@ -506,7 +506,7 @@ pub mod test {
         node_bindings::WEI_IN_ETHER,
         primitives::{Address, FixedBytes, U256}
     };
-    use angstrom_types::{pair_with_price::PairsWithPrice, sol_bindings::Ray};
+    use angstrom_types::{pair_with_price::PairsWithPrice, primitive::Ray};
     use revm::primitives::address;
     use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 

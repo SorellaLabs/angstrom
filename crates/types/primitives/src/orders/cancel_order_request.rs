@@ -66,10 +66,10 @@ mod test {
 
     #[test]
     fn test_for_frontend() {
-        let order_id = alloy::primitives::b256!(
+        let order_id = alloy_primitives::b256!(
             "0xbfef52d152545f5576f577dfe6f42984658c60ee39bdbbfa7d075d96d40a26c7"
         );
-        let address = alloy::primitives::address!("0xcc0bff7564a892045667a68673220116ece65d6f");
+        let address = alloy_primitives::address!("0xcc0bff7564a892045667a68673220116ece65d6f");
         let bytes:Bytes = hex!("0x1c92d4a408d7ba4e41d0d454826f9e981eafe07308af502f62981683ea8bf052a24ca3a7846222225dc2526616440129f1023e4b1ae27f8089c8cab1bd60297ea7").into();
 
         let cancel = CancelOrderRequest { signature: bytes, user_address: address, order_id };
@@ -80,7 +80,7 @@ mod test {
     #[test]
     fn test_new_funcion() {
         let wallet = AngstromSigner::random();
-        let order_id = alloy::primitives::b256!(
+        let order_id = alloy_primitives::b256!(
             "0xbfef52d152545f5576f577dfe6f42984658c60ee39bdbbfa7d075d96d40a26c7"
         );
         let request = CancelOrderRequest::new(wallet.address(), order_id, &wallet);

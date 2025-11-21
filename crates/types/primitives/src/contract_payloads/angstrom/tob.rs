@@ -186,9 +186,9 @@ impl TopOfBlockOrder {
 
 #[cfg(test)]
 mod test {
-    use angstrom_types::matching::{
-        SqrtPriceX96,
-        uniswap::{LiqRange, PoolSnapshot}
+    use angstrom_types::{
+        matching::uniswap::{LiqRange, PoolSnapshot},
+        primitive::SqrtPriceX96
     };
     use uniswap_v3_math::tick_math::get_sqrt_ratio_at_tick;
 

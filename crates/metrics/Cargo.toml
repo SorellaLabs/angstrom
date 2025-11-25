@@ -12,7 +12,7 @@ exclude.workspace = true
 angstrom-types.workspace = true
 eyre.workspace = true
 hyper = { version = "1.6.0", features = ["server"] }
-jsonrpsee-server = "0.25.1"
+jsonrpsee-server = "0.26.0"
 metrics.workspace = true
 metrics-exporter-prometheus = "0.16.2"
 metrics-process = "1"

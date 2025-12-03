@@ -1,3 +1,4 @@
+pub mod matching_math;
 mod peers;
 mod pool_state;
 mod recovered_bundle;
@@ -6,6 +7,7 @@ mod signer;
 mod validation;
 
 pub use angstrom_types_constants::*;
+pub use matching_math::*;
 pub use peers::*;
 pub use pool_state::*;
 pub use recovered_bundle::*;

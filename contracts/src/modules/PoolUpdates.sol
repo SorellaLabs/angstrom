@@ -199,8 +199,9 @@ abstract contract PoolUpdates is
 
             currentTick = UNI_V4.getSlot0(id).tick();
 
-            poolRewards[id]
-            .updateAfterTickMove(id, UNI_V4, tickBefore, currentTick, swapCall.tickSpacing);
+            poolRewards[id].updateAfterTickMove(
+                id, UNI_V4, tickBefore, currentTick, swapCall.tickSpacing
+            );
         } else {
             currentTick = UNI_V4.getSlot0(id).tick();
         }

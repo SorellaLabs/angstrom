@@ -129,8 +129,9 @@ contract OpenAngstrom is Angstrom {
             positions.get(args.id, args.owner, args.lowerTick, args.upperTick, args.salt);
         uint128 liquidity = UNI_V4.getPositionLiquidity(args.id, positionKey);
         unchecked {
-            uint256 growthInside = poolRewards[args.id]
-            .getGrowthInside(UNI_V4.getSlot0(args.id).tick(), args.lowerTick, args.upperTick);
+            uint256 growthInside = poolRewards[args.id].getGrowthInside(
+                UNI_V4.getSlot0(args.id).tick(), args.lowerTick, args.upperTick
+            );
             uint256 netGrowthInside = growthInside - position.lastGrowthInside;
             return X128MathLib.fullMulX128(netGrowthInside, liquidity);
         }
@@ -149,8 +150,9 @@ contract OpenAngstrom is Angstrom {
         (Position storage position,) =
             positions.get(args.id, args.owner, args.lowerTick, args.upperTick, args.salt);
         unchecked {
-            uint256 growthInside = poolRewards[args.id]
-            .getGrowthInside(UNI_V4.getSlot0(args.id).tick(), args.lowerTick, args.upperTick);
+            uint256 growthInside = poolRewards[args.id].getGrowthInside(
+                UNI_V4.getSlot0(args.id).tick(), args.lowerTick, args.upperTick
+            );
             uint256 netGrowthInside = growthInside - position.lastGrowthInside;
             return X128MathLib.fullMulX128(netGrowthInside, liquidity);
         }

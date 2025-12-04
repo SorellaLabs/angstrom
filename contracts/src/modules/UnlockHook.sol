@@ -101,8 +101,7 @@ abstract contract UnlockHook is
 
         PoolId id = _toId(key);
         int24 currentTick = UNI_V4.getSlot0(id).tick();
-        poolRewards[id]
-        .updateAfterTickMove(
+        poolRewards[id].updateAfterTickMove(
             id, UNI_V4, int24(currentTickBeforeSwap.get()), currentTick, key.tickSpacing
         );
 

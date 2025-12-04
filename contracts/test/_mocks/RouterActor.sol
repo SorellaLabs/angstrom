@@ -114,11 +114,10 @@ contract RouterActor is IUnlockCallback {
         asset.safeTransfer(to, amount);
     }
 
-    function _swap(
-        PoolKey memory key,
-        IPoolManager.SwapParams memory params,
-        bytes memory hookData
-    ) internal returns (bytes memory) {
+    function _swap(PoolKey memory key, IPoolManager.SwapParams memory params, bytes memory hookData)
+        internal
+        returns (bytes memory)
+    {
         BalanceDelta delta = uniV4.swap(key, params, hookData);
         _settle(key, delta);
         return abi.encode(delta);

@@ -1,9 +1,12 @@
-use std::{collections::HashSet, pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 pub const DEFAULT_TICKS: u16 = 400;
 
 use alloy::{
-    consensus::TxReceipt, primitives::aliases::I24, providers::Provider, sol_types::SolEvent
+    consensus::TxReceipt,
+    primitives::aliases::{I24, U24},
+    providers::Provider,
+    sol_types::SolEvent
 };
 use alloy_primitives::{Address, BlockNumber, FixedBytes};
 use angstrom_eth::manager::EthEvent;
@@ -81,7 +84,7 @@ where
         .collect::<Vec<_>>();
 
     logs.into_iter()
-        .fold(HashSet::new(), |mut set, log| {
+        .fold(HashMap::new(), |mut set, log| {
             if let Ok(pool) = PoolConfigured::decode_log(&log) {
                 let pool_key = PoolKey {
                     currency0:   pool.asset0,
@@ -96,8 +99,10 @@ where
                     .unwrap(),
                     hooks:       angstrom_address
                 };
+                let mut copy = pool_key.clone();
+                copy.tickSpacing = I24::ZERO;
 
-                set.insert(pool_key);
+                set.insert(copy, pool_key);
                 return set;
             }
 
@@ -105,7 +110,7 @@ where
                 let pool_key = PoolKey {
                     currency0:   pool.asset0,
                     currency1:   pool.asset1,
-                    fee:         pool.feeInE6,
+                    fee:         U24::ZERO,
                     tickSpacing: pool.tickSpacing,
                     hooks:       angstrom_address
                 };
@@ -116,6 +121,7 @@ where
             set
         })
         .into_iter()
+        .map(|(_, real_key)| real_key)
         .collect::<Vec<_>>()
 }
 

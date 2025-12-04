@@ -69,11 +69,11 @@ pub trait StromSession<S: AngstromMetaSigner>: Send + 'static {
 pub struct DummyState;
 impl<S: AngstromMetaSigner> StromSession<S> for DummyState {
     fn poll_outbound_msg(&mut self, _: &mut Context<'_>) -> Poll<Option<BytesMut>> {
-        todo!()
+        Poll::Ready(None)
     }
 
     fn poll_next_state(self, _: &mut Context<'_>) -> Option<StromSessionStates<S>> {
-        todo!()
+        None
     }
 }
 

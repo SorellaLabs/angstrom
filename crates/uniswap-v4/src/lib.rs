@@ -100,7 +100,7 @@ where
                     hooks:       angstrom_address
                 };
                 let mut copy = pool_key.clone();
-                copy.tickSpacing = I24::ZERO;
+                copy.fee = U24::ZERO;
 
                 set.insert(copy, pool_key);
                 return set;

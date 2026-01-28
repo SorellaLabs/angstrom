@@ -13118,6 +13118,7 @@ dependencies = [
  "reth-revm",
  "reth-tasks",
  "reth-transaction-pool",
+ "reth-trie-common 1.10.2",
  "revm 34.0.0",
  "secp256k1 0.30.0",
  "telemetry",

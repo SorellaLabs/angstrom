@@ -49,6 +49,7 @@ reth-provider = { workspace = true, features = ["test-utils"] }
 reth-revm.workspace = true
 reth-tasks.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
+reth-trie-common.workspace = true
 revm.workspace = true
 secp256k1.workspace = true
 telemetry.workspace = true

@@ -90,6 +90,7 @@ impl reth_revm::DatabaseRef for RpcStateProviderFactory {
         let code = Some(Bytecode::new_raw(code));
 
         Ok(Some(revm::state::AccountInfo {
+            account_id: None,
             code_hash: acc.code_hash,
             balance: acc.balance,
             nonce: acc.nonce,

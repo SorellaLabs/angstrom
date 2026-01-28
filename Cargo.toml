@@ -208,6 +208,7 @@ reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.10
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", version = "1.10.2", tag = "v1.10.2" }
 reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", version = "1.10.2", tag = "v1.10.2" }
 reth-trie = { git = "https://github.com/paradigmxyz/reth", version = "1.10.2", tag = "v1.10.2" }
+reth-trie-common = { git = "https://github.com/paradigmxyz/reth", version = "1.10.2", tag = "v1.10.2" }
 revm = { version = "34.0.0", features = [
   "std",
   "secp256k1",

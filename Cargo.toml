@@ -142,6 +142,7 @@ futures-util = "0"
 hex-literal = "0"
 homedir = "0"
 hsm-signer = { git = "https://github.com/SorellaLabs/hsm-signer" }
+hyper = "1.6.0"
 itertools = "0"
 jsonrpsee = "0.26.0"
 jsonrpsee-core = "0.26.0"
@@ -203,17 +204,17 @@ reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.10
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", version = "1.10.2", tag = "v1.10.2" }
 reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", version = "1.10.2", tag = "v1.10.2" }
 reth-trie = { git = "https://github.com/paradigmxyz/reth", version = "1.10.2", tag = "v1.10.2" }
-revm = { version = "33.1.0", features = [
+revm = { version = "34.0.0", features = [
   "std",
   "secp256k1",
   "optional_balance_check",
   "optional_block_gas_limit",
 ], default-features = false }
-revm-bytecode = { version = "7.1.1", default-features = false }
-revm-database = { version = "9.0.5", default-features = false }
-revm-interpreter = { version = "31.1.0", default-features = false }
-revm-primitives = { version = "21.0.2", default-features = false }
-revm-state = { version = "8.1.1", default-features = false }
+revm-bytecode = { version = "8.0.0", default-features = false }
+revm-database = { version = "10.0.0", default-features = false }
+revm-interpreter = { version = "32.0.0", default-features = false }
+revm-primitives = { version = "22.0.0", default-features = false }
+revm-state = { version = "9.0.0", default-features = false }
 ring = "=0.17.12"
 secp256k1 = { version = "0.30", default-features = false, features = ["global-context", "rand", "recovery"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
@@ -237,3 +238,9 @@ uniswap-v4 = { path = "./crates/uniswap-v4/" }
 uniswap_v3_math = { git = "https://github.com/SorellaLabs/v3-math", branch = "main" }
 url = "2"
 validation = { path = "./crates/validation/" }
+
+jsonrpsee-server = "0.26.0"
+metrics-exporter-prometheus = "0.18.0"
+metrics-process = "2.1"
+prometheus = "0"
+tower = "0.5.2"

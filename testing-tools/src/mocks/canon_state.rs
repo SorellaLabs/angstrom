@@ -46,8 +46,6 @@ impl AnvilConsensusCanonStateNotification {
         });
 
         let recovered_block = RecoveredBlock::new_unhashed(block, signers);
-        // recovered_block.
-        // rec
 
         let mapped = receipts
             .into_iter()

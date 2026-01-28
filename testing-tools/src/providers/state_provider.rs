@@ -142,6 +142,7 @@ impl<P: WithWalletProvider> reth_revm::DatabaseRef for AnvilStateProvider<P> {
         let code = Some(Bytecode::new_raw(code));
 
         Ok(Some(AccountInfo {
+            account_id: None,
             code_hash: acc.code_hash,
             balance: acc.balance,
             nonce: acc.nonce,

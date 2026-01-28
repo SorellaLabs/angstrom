@@ -5,6 +5,7 @@ use itertools::Itertools;
 use parking_lot::RwLock;
 use reth_primitives::{RecoveredBlock, TransactionSigned};
 use reth_provider::{Chain, ExecutionOutcome};
+use reth_trie_common::{LazyTrieData, SortedTrieData};
 
 #[derive(Clone, Debug)]
 pub struct AnvilConsensusCanonStateNotification {
@@ -45,8 +46,6 @@ impl AnvilConsensusCanonStateNotification {
         });
 
         let recovered_block = RecoveredBlock::new_unhashed(block, signers);
-        // recovered_block.
-        // rec
 
         let mapped = receipts
             .into_iter()
@@ -61,12 +60,18 @@ impl AnvilConsensusCanonStateNotification {
             })
             .collect_vec();
         let ex = ExecutionOutcome::default().with_receipts(vec![mapped]);
+
         if chain.execution_outcome().first_block() == 0 {
             chain
                 .execution_outcome_mut()
                 .set_first_block(recovered_block.number);
         }
-        chain.append_block(recovered_block, ex);
+
+        chain.append_block(
+            recovered_block,
+            ex,
+            LazyTrieData::from_sorted(SortedTrieData::default())
+        );
 
         Arc::new(chain.clone())
     }

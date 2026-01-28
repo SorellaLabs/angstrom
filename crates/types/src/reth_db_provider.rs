@@ -10,7 +10,7 @@ use alloy::{
 };
 use eyre::Result;
 use reth_provider::{
-    BlockNumReader, DatabaseProviderFactory, ProviderError, StateProvider,
+    BlockNumReader, DatabaseProviderFactory, ProviderError, StateProvider, StateProviderBox,
     TryIntoHistoricalStateProvider
 };
 
@@ -207,7 +207,7 @@ where
         self.inner.database_provider_ro()
     }
 
-    fn provider_at(&self, block_id: BlockId) -> Result<Box<dyn StateProvider>, ProviderError> {
+    fn provider_at(&self, block_id: BlockId) -> Result<StateProviderBox, ProviderError> {
         let provider = self.inner.database_provider_ro()?;
 
         let block_number = match block_id {

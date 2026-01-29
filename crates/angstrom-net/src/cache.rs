@@ -29,7 +29,7 @@ impl<T: Hash + Eq> LruCache<T> {
     /// If the set did have this value present, false is returned.
     pub fn insert(&mut self, entry: T) -> bool {
         if self.inner.insert(entry) {
-            if self.limit.get() == self.inner.len() {
+            if self.inner.len() > self.limit.get() {
                 // remove the oldest element in the set
                 self.remove_lru();
             }
@@ -105,6 +105,7 @@ mod test {
         cache.insert(new_entry);
         assert!(cache.contains(new_entry));
         assert!(!cache.contains(old_entry));
+        assert!(cache.contains("entry"));
     }
 
     #[test]

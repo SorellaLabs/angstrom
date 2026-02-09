@@ -11,6 +11,7 @@ use alloy_primitives::{Address, TxHash};
 use futures::stream::{StreamExt, iter};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::{
     AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
@@ -83,11 +84,13 @@ impl ChainSubmitter for AngstromSubmitter {
             Ok(iter(self.clients.clone())
                 .map(async |(client, url)| {
                     client
-                        .raw_request::<(&AngstromIntegrationSubmission,), String>(
+                        .raw_request::<(&AngstromIntegrationSubmission,), Value>(
                             "angstrom_submitBundle".into(),
                             (&payload,)
                         )
-                        .await.inspect_err(|e| {
+                        .await
+                        .map(|v| (url.clone(), AngstromSubmissionResponse::from_value(v)))
+                        .inspect_err(|e| {
                             tracing::info!(url=%url.as_str(), err=%e, "failed to send angstrom integration message to url");
                         })
                 })
@@ -96,7 +99,18 @@ impl ChainSubmitter for AngstromSubmitter {
                 .await
                 .into_iter()
                 .flatten()
-                .next()
+                .inspect(|(url, resp)| match resp {
+                    AngstromSubmissionResponse::Success { message, bundle_hash } => {
+                        tracing::info!(url=%url.as_str(), ?message, ?bundle_hash, "angstrom bundle submitted");
+                    }
+                    AngstromSubmissionResponse::Error { message } => {
+                        tracing::warn!(url=%url.as_str(), %message, "angstrom submission error");
+                    }
+                    AngstromSubmissionResponse::Unknown { raw } => {
+                        tracing::warn!(url=%url.as_str(), %raw, "angstrom submission unknown response format");
+                    }
+                })
+                .find(|(_, resp)| resp.is_success())
                 .map(|_| tx_hash)
                 .unwrap_or_default())
         })
@@ -109,4 +123,82 @@ pub struct AngstromIntegrationSubmission {
     pub tx: Bytes,
     pub unlock_data: Bytes,
     pub max_priority_fee_per_gas: u128
+}
+
+/// Response from angstrom integration endpoints.
+/// Each endpoint returns a different format - we handle the known formats
+/// explicitly.
+#[derive(Debug, Clone)]
+pub enum AngstromSubmissionResponse {
+    Success { message: Option<String>, bundle_hash: Option<String> },
+    Error { message: String },
+    Unknown { raw: String }
+}
+
+impl AngstromSubmissionResponse {
+    pub fn from_value(value: Value) -> Self {
+        let message_field = || {
+            value
+                .get("message")
+                .and_then(Value::as_str)
+                .map(String::from)
+        };
+
+        // Format 1: {"success": bool, "message": "..."}
+        match value.get("success").and_then(Value::as_bool) {
+            Some(true) => return Self::Success { message: message_field(), bundle_hash: None },
+            Some(false) => {
+                return Self::Error {
+                    message: message_field().unwrap_or_else(|| "Request failed".to_string())
+                }
+            }
+            None => {}
+        }
+
+        // Format 2: {"jsonrpc": "2.0", "result": "...", "error": ...}
+        match value.get("jsonrpc") {
+            Some(_) => {
+                return match value.get("error").filter(|e| !e.is_null()) {
+                    Some(err) => Self::Error {
+                        message: err
+                            .get("message")
+                            .and_then(Value::as_str)
+                            .or_else(|| err.as_str())
+                            .unwrap_or("Unknown error")
+                            .to_string()
+                    },
+                    None => Self::Success {
+                        message:     value
+                            .get("result")
+                            .and_then(Value::as_str)
+                            .map(String::from),
+                        bundle_hash: None
+                    }
+                }
+            }
+            None => {}
+        }
+
+        // Format 3: integer status code (e.g., 200)
+        match value.as_u64() {
+            Some(n @ 200..300) => {
+                return Self::Success {
+                    message:     Some(format!("Status: {n}")),
+                    bundle_hash: None
+                }
+            }
+            Some(n) => return Self::Error { message: format!("Error status: {n}") },
+            None => {}
+        }
+
+        // Format 4: {"bundleHash": "0x..."}
+        match value.get("bundleHash").and_then(Value::as_str) {
+            Some(hash) => Self::Success { message: None, bundle_hash: Some(hash.to_string()) },
+            None => Self::Unknown { raw: value.to_string() }
+        }
+    }
+
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success { .. })
+    }
 }

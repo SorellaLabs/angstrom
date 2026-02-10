@@ -190,7 +190,8 @@ pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching, S: Angstrom
     uniswap_pools:    SyncedUniswapPools,
     provider:         Arc<SubmissionHandler<P>>,
     messages:         VecDeque<ConsensusMessage>,
-    consensus_config: ConsensusTimingConfig
+    consensus_config: ConsensusTimingConfig,
+    slot_clock:       SystemTimeSlotClock
 }
 
 // contains shared impls
@@ -212,7 +213,8 @@ where
         uniswap_pools: SyncedUniswapPools,
         provider: SubmissionHandler<P>,
         matching_engine: Matching,
-        consensus_config: ConsensusTimingConfig
+        consensus_config: ConsensusTimingConfig,
+        slot_clock: SystemTimeSlotClock
     ) -> Self {
         Self {
             block_height,
@@ -226,8 +228,20 @@ where
             matching_engine,
             messages: VecDeque::new(),
             provider: Arc::new(provider),
-            consensus_config
+            consensus_config,
+            slot_clock
         }
+    }
+
+    /// Get the current slot offset in milliseconds
+    pub fn slot_offset_ms(&self) -> u64 {
+        let slot_duration = self.slot_clock.slot_duration();
+        let next_slot_duration = self
+            .slot_clock
+            .duration_to_next_slot()
+            .unwrap_or(slot_duration);
+        let elapsed = slot_duration.saturating_sub(next_slot_duration);
+        elapsed.as_millis() as u64
     }
 
     fn propagate_message(&mut self, message: ConsensusMessage) {
@@ -587,6 +601,7 @@ pub mod tests {
         let provider =
             SubmissionHandler { node_provider: querying_provider, submitters: vec![] };
 
+        let slot_clock = SystemTimeSlotClock::new_with_chain_id(1).unwrap();
         let shared_state = SharedRoundState::new(
             1, // block height
             order_storage,
@@ -598,9 +613,10 @@ pub mod tests {
             uniswap_pools,
             provider,
             MockMatchingEngine {},
-            ConsensusTimingConfig::default()
+            ConsensusTimingConfig::default(),
+            slot_clock.clone()
         );
-        RoundStateMachine::new(shared_state, SystemTimeSlotClock::new_with_chain_id(1).unwrap())
+        RoundStateMachine::new(shared_state, slot_clock)
     }
 
     #[tokio::test]

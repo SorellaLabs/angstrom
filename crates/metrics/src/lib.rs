@@ -13,4 +13,7 @@ pub use order_pool::*;
 mod consensus;
 pub use consensus::*;
 
+mod block_metrics;
+pub use block_metrics::*;
+
 pub static METRICS_ENABLED: OnceLock<bool> = OnceLock::new();

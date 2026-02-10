@@ -5,10 +5,11 @@ use std::{
 };
 
 use alloy::providers::Provider;
+use angstrom_metrics::BlockMetricsWrapper;
 use angstrom_types::{
     consensus::{ConsensusRoundName, PreProposalAggregation, Proposal, StromConsensusEvent},
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
-    orders::PoolSolution,
+    orders::{OrderFillState, PoolSolution},
     primitive::AngstromMetaSigner,
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
     traits::BundleProcessing
@@ -35,7 +36,8 @@ pub struct ProposalState {
     pre_proposal_aggs:      Vec<PreProposalAggregation>,
     proposal:               Option<Proposal>,
     last_round_info:        Option<LastRoundInfo>,
-    trigger_time:           Instant
+    trigger_time:           Instant,
+    block_height:           u64
 }
 
 impl ProposalState {
@@ -49,6 +51,32 @@ impl ProposalState {
         P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
+        // Record state transition metrics
+        let slot_offset_ms = handles.slot_offset_ms();
+        let orders = handles.order_storage.get_all_orders();
+        let limit_count = orders.limit.len();
+        let searcher_count = orders.searcher.len();
+
+        let metrics = BlockMetricsWrapper::new();
+        metrics.record_state_transition(
+            handles.block_height,
+            "Proposal",
+            slot_offset_ms,
+            limit_count,
+            searcher_count
+        );
+
+        // Count matching input orders from preproposal aggregations
+        let mut matching_limit = 0usize;
+        let mut matching_searcher = 0usize;
+        for agg in &pre_proposal_aggregation {
+            for pre in &agg.pre_proposals {
+                matching_limit += pre.limit.len();
+                matching_searcher += pre.searcher.len();
+            }
+        }
+        metrics.record_matching_input(handles.block_height, matching_limit, matching_searcher);
+
         // queue building future
         waker.wake_by_ref();
         tracing::info!("proposal");
@@ -61,7 +89,8 @@ impl ProposalState {
             pre_proposal_aggs: pre_proposal_aggregation.into_iter().collect::<Vec<_>>(),
             submission_future: None,
             proposal: None,
-            trigger_time
+            trigger_time,
+            block_height: handles.block_height
         }
     }
 
@@ -85,33 +114,70 @@ impl ProposalState {
 
         tracing::debug!("starting to build proposal");
 
-        let Ok(possible_bundle) = result.inspect_err(|e| {
-            tracing::info!(err=%e,
-                "Failed to properly build proposal, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
-            )})
+        let Ok(possible_bundle) = result
+            .inspect_err(|e| {
+                tracing::info!(err=%e,
+                    "Failed to properly build proposal, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
+                )
+            })
             .map(|(pool_solution, gas_info)| {
+                // Record matching results metrics
+                let metrics = BlockMetricsWrapper::new();
+                let pools_solved = pool_solution.len();
+
+                let mut filled = 0usize;
+                let mut partial = 0usize;
+                let mut unfilled = 0usize;
+                let mut killed = 0usize;
+
+                for solution in &pool_solution {
+                    for outcome in &solution.limit {
+                        match outcome.outcome {
+                            OrderFillState::CompleteFill => filled += 1,
+                            OrderFillState::PartialFill(_) => partial += 1,
+                            OrderFillState::Unfilled => unfilled += 1,
+                            OrderFillState::Killed => killed += 1
+                        }
+                    }
+                }
 
                 let proposal = Proposal::generate_proposal(
                     handles.block_height,
                     &handles.signer,
                     self.pre_proposal_aggs.clone(),
-                    pool_solution,
+                    pool_solution
                 );
 
                 self.proposal = Some(proposal.clone());
                 let snapshot = handles.fetch_pool_snapshot();
                 let all_orders = handles.order_storage.get_all_orders();
 
-                     AngstromBundle::from_proposal(&proposal,all_orders, gas_info, &snapshot).inspect_err(|e| {
-                        tracing::info!(err=%e,
-                            "failed to encode angstrom bundle, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
-                        );
-                    }).ok()
+                let bundle = AngstromBundle::from_proposal(
+                    &proposal, all_orders, gas_info, &snapshot
+                )
+                .inspect_err(|e| {
+                    tracing::info!(err=%e,
+                        "failed to encode angstrom bundle, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
+                    );
+                })
+                .ok();
 
+                // Record whether bundle was generated
+                metrics.record_matching_results(
+                    self.block_height,
+                    pools_solved,
+                    filled,
+                    partial,
+                    unfilled,
+                    killed,
+                    bundle.is_some()
+                );
 
-            }) else {
-                return false;
-            };
+                bundle
+            })
+        else {
+            return false;
+        };
 
         let attestation = if possible_bundle.is_none() {
             AttestAngstromBlockEmpty::sign_and_encode(target_block, &signer)

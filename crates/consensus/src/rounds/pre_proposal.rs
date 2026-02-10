@@ -5,6 +5,7 @@ use std::{
 };
 
 use alloy::{primitives::BlockNumber, providers::Provider};
+use angstrom_metrics::BlockMetricsWrapper;
 use angstrom_types::{
     consensus::{
         ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
@@ -47,9 +48,24 @@ impl PreProposalState {
         P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
+        // Record metrics for PreProposal state entry
+        let orders = handles.order_storage.get_all_orders();
+        let limit_count = orders.limit.len();
+        let searcher_count = orders.searcher.len();
+        let slot_offset_ms = handles.slot_offset_ms();
+
+        let metrics = BlockMetricsWrapper::new();
+        metrics.record_preproposal_orders(block_height, limit_count, searcher_count);
+        metrics.record_state_transition(
+            block_height,
+            "PreProposal",
+            slot_offset_ms,
+            limit_count,
+            searcher_count
+        );
+
         // generate my pre_proposal
-        let my_preproposal =
-            PreProposal::new(block_height, &handles.signer, handles.order_storage.get_all_orders());
+        let my_preproposal = PreProposal::new(block_height, &handles.signer, orders);
 
         // propagate my pre_proposal
         handles.propagate_message(ConsensusMessage::PropagatePreProposal(my_preproposal.clone()));

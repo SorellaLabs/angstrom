@@ -5,6 +5,7 @@ use std::{
 };
 
 use alloy::providers::Provider;
+use angstrom_metrics::BlockMetricsWrapper;
 use angstrom_types::{
     consensus::{
         ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
@@ -45,6 +46,22 @@ impl PreProposalAggregationState {
         P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
+        // Record metrics for PreProposalAggregation state entry
+        let slot_offset_ms = handles.slot_offset_ms();
+        let orders = handles.order_storage.get_all_orders();
+        let limit_count = orders.limit.len();
+        let searcher_count = orders.searcher.len();
+
+        let metrics = BlockMetricsWrapper::new();
+        metrics.record_preproposals_collected(handles.block_height, pre_proposals.len());
+        metrics.record_state_transition(
+            handles.block_height,
+            "PreProposalAggregation",
+            slot_offset_ms,
+            limit_count,
+            searcher_count
+        );
+
         // generate my pre_proposal aggregation
         let my_preproposal_aggregation = PreProposalAggregation::new(
             handles.block_height,
@@ -115,6 +132,9 @@ where
 
         // if  we are the leader, then we will transition
         if cur_preproposals_aggs >= twthr && handles.i_am_leader() {
+            // Record that we are the leader for this block
+            BlockMetricsWrapper::new().record_is_leader(handles.block_height, true);
+
             tracing::info!(
                 ?cur_preproposals_aggs,
                 ?twthr,

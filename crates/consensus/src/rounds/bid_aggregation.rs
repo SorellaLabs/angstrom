@@ -5,6 +5,7 @@ use std::{
 };
 
 use alloy::providers::Provider;
+use angstrom_metrics::BlockMetricsWrapper;
 use angstrom_types::{
     consensus::{
         ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal, StromConsensusEvent
@@ -100,6 +101,20 @@ where
 
         if self.transition_timeout.poll_unpin(cx).is_ready() {
             tracing::info!("transitioning out of order aggregation");
+
+            // Record BidAggregation state metrics before transitioning
+            let slot_offset_ms = handles.slot_offset_ms();
+            let orders = handles.order_storage.get_all_orders();
+            let limit_count = orders.limit.len();
+            let searcher_count = orders.searcher.len();
+            BlockMetricsWrapper::new().record_state_transition(
+                handles.block_height,
+                "BidAggregation",
+                slot_offset_ms,
+                limit_count,
+                searcher_count
+            );
+
             // create the transition
             let pre_proposal = PreProposalState::new(
                 handles.block_height,

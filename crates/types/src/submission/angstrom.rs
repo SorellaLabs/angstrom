@@ -7,7 +7,7 @@ use alloy::{
     providers::{Provider, RootProvider},
     rpc::client::ClientBuilder
 };
-use alloy_primitives::{Address, TxHash};
+use alloy_primitives::Address;
 use futures::stream::{StreamExt, iter};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::{
     AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
-    EXTRA_GAS_LIMIT, TxFeatureInfo, Url
+    EXTRA_GAS_LIMIT, SubmissionResult, TxFeatureInfo, Url
 };
 use crate::{primitive::AngstromMetaSigner, sol_bindings::rpc_orders::AttestAngstromBlockEmpty};
 
@@ -40,13 +40,19 @@ impl ChainSubmitter for AngstromSubmitter {
         self.angstrom_address
     }
 
+    fn submitter_type(&self) -> &'static str {
+        "angstrom"
+    }
+
     fn submit<'a, S: AngstromMetaSigner>(
         &'a self,
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>>
+    {
         Box::pin(async move {
+            let start = std::time::Instant::now();
             let mut tx_hash = None;
             let payload = if let Some(bundle) = bundle {
                 let mut tx = self.build_tx(signer, bundle, tx_features);
@@ -81,7 +87,7 @@ impl ChainSubmitter for AngstromSubmitter {
                 AngstromIntegrationSubmission { tx: tx_payload, unlock_data, ..Default::default() }
             };
 
-            Ok(iter(self.clients.clone())
+            let results: Vec<_> = iter(self.clients.clone())
                 .map(async |(client, url)| {
                     client
                         .raw_request::<(&AngstromIntegrationSubmission,), Value>(
@@ -96,7 +102,11 @@ impl ChainSubmitter for AngstromSubmitter {
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)
                 .collect::<Vec<_>>()
-                .await
+                .await;
+
+            let latency_ms = start.elapsed().as_millis() as u64;
+
+            let successful_submission = results
                 .into_iter()
                 .flatten()
                 .inspect(|(url, resp)| match resp {
@@ -111,8 +121,17 @@ impl ChainSubmitter for AngstromSubmitter {
                     }
                 })
                 .find(|(_, resp)| resp.is_success())
-                .map(|_| tx_hash)
-                .unwrap_or_default())
+                .map(|(url, _)| url);
+
+            match successful_submission {
+                Some(endpoint) => Ok(Some(SubmissionResult {
+                    tx_hash,
+                    submitter_type: "angstrom".to_string(),
+                    endpoint: endpoint.to_string(),
+                    latency_ms
+                })),
+                None => Ok(None)
+            }
         })
     }
 }

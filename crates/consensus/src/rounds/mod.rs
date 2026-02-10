@@ -10,7 +10,7 @@ use alloy::{
     primitives::{Address, B256, BlockNumber, Bytes, FixedBytes},
     providers::Provider
 };
-use angstrom_metrics::ConsensusMetricsWrapper;
+use angstrom_metrics::{BlockMetricsWrapper, ConsensusMetricsWrapper};
 use angstrom_types::{
     consensus::{
         ConsensusRoundEvent, ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal,
@@ -292,6 +292,14 @@ where
 
         let valid_limit = self.filter_quorum_orders(limit);
         let valid_searcher = self.filter_quorum_orders(searcher);
+
+        // Record post-quorum order counts
+        BlockMetricsWrapper::new().record_matching_input_post_quorum(
+            self.block_height,
+            valid_limit.len(),
+            valid_searcher.len()
+        );
+
         let orders = self
             .order_storage
             .get_all_orders_with_ingoing_cancellations();

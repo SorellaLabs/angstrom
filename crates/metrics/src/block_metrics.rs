@@ -20,9 +20,13 @@ struct BlockMetricsInner {
     preproposals_collected: IntGaugeVec,
     is_leader:              IntGaugeVec,
 
-    // Matching engine input
-    matching_input_limit:    IntGaugeVec,
-    matching_input_searcher: IntGaugeVec,
+    // Matching engine input (pre-quorum - from preproposals before filtering)
+    matching_input_limit_pre_quorum:    IntGaugeVec,
+    matching_input_searcher_pre_quorum: IntGaugeVec,
+
+    // Matching engine input (post-quorum - after quorum filtering)
+    matching_input_limit_post_quorum:    IntGaugeVec,
+    matching_input_searcher_post_quorum: IntGaugeVec,
 
     // Matching engine results
     matching_pools_solved:    IntGaugeVec,
@@ -36,7 +40,11 @@ struct BlockMetricsInner {
     submission_started_slot_offset_ms:   IntGaugeVec,
     submission_completed_slot_offset_ms: IntGaugeVec,
     submission_latency_ms:               IntGaugeVec,
-    submission_success:                  IntGaugeVec
+    submission_success:                  IntGaugeVec,
+
+    // Per-endpoint submission metrics
+    submission_endpoint_success:    IntGaugeVec,
+    submission_endpoint_latency_ms: IntGaugeVec
 }
 
 impl Default for BlockMetricsInner {
@@ -90,16 +98,30 @@ impl Default for BlockMetricsInner {
         )
         .unwrap();
 
-        let matching_input_limit = prometheus::register_int_gauge_vec!(
-            "ang_block_matching_input_limit",
-            "Limit orders after quorum",
+        let matching_input_limit_pre_quorum = prometheus::register_int_gauge_vec!(
+            "ang_block_matching_input_limit_pre_quorum",
+            "Limit orders from preproposals (before quorum filtering)",
             &["block_number"]
         )
         .unwrap();
 
-        let matching_input_searcher = prometheus::register_int_gauge_vec!(
-            "ang_block_matching_input_searcher",
-            "Searcher orders after quorum",
+        let matching_input_searcher_pre_quorum = prometheus::register_int_gauge_vec!(
+            "ang_block_matching_input_searcher_pre_quorum",
+            "Searcher orders from preproposals (before quorum filtering)",
+            &["block_number"]
+        )
+        .unwrap();
+
+        let matching_input_limit_post_quorum = prometheus::register_int_gauge_vec!(
+            "ang_block_matching_input_limit_post_quorum",
+            "Limit orders after quorum filtering",
+            &["block_number"]
+        )
+        .unwrap();
+
+        let matching_input_searcher_post_quorum = prometheus::register_int_gauge_vec!(
+            "ang_block_matching_input_searcher_post_quorum",
+            "Searcher orders after quorum filtering",
             &["block_number"]
         )
         .unwrap();
@@ -174,6 +196,20 @@ impl Default for BlockMetricsInner {
         )
         .unwrap();
 
+        let submission_endpoint_success = prometheus::register_int_gauge_vec!(
+            "ang_block_submission_endpoint_success",
+            "1=success, 0=failed for specific endpoint",
+            &["block_number", "submitter_type", "endpoint"]
+        )
+        .unwrap();
+
+        let submission_endpoint_latency_ms = prometheus::register_int_gauge_vec!(
+            "ang_block_submission_endpoint_latency_ms",
+            "Submission latency in ms for specific endpoint",
+            &["block_number", "submitter_type", "endpoint"]
+        )
+        .unwrap();
+
         Self {
             preproposal_limit_orders,
             preproposal_searcher_orders,
@@ -182,8 +218,10 @@ impl Default for BlockMetricsInner {
             state_searcher_orders,
             preproposals_collected,
             is_leader,
-            matching_input_limit,
-            matching_input_searcher,
+            matching_input_limit_pre_quorum,
+            matching_input_searcher_pre_quorum,
+            matching_input_limit_post_quorum,
+            matching_input_searcher_post_quorum,
             matching_pools_solved,
             matching_orders_filled,
             matching_orders_partial,
@@ -193,7 +231,9 @@ impl Default for BlockMetricsInner {
             submission_started_slot_offset_ms,
             submission_completed_slot_offset_ms,
             submission_latency_ms,
-            submission_success
+            submission_success,
+            submission_endpoint_success,
+            submission_endpoint_latency_ms
         }
     }
 }
@@ -297,17 +337,35 @@ impl BlockMetricsWrapper {
         }
     }
 
-    /// Record matching engine input order counts
-    pub fn record_matching_input(&self, block: u64, limit: usize, searcher: usize) {
+    /// Record matching engine input order counts (pre-quorum, from
+    /// preproposals)
+    pub fn record_matching_input_pre_quorum(&self, block: u64, limit: usize, searcher: usize) {
         if let Some(inner) = &self.0 {
             let block_str = block.to_string();
             inner
-                .matching_input_limit
+                .matching_input_limit_pre_quorum
                 .get_metric_with_label_values(&[&block_str])
                 .unwrap()
                 .set(limit as i64);
             inner
-                .matching_input_searcher
+                .matching_input_searcher_pre_quorum
+                .get_metric_with_label_values(&[&block_str])
+                .unwrap()
+                .set(searcher as i64);
+        }
+    }
+
+    /// Record matching engine input order counts (post-quorum, after filtering)
+    pub fn record_matching_input_post_quorum(&self, block: u64, limit: usize, searcher: usize) {
+        if let Some(inner) = &self.0 {
+            let block_str = block.to_string();
+            inner
+                .matching_input_limit_post_quorum
+                .get_metric_with_label_values(&[&block_str])
+                .unwrap()
+                .set(limit as i64);
+            inner
+                .matching_input_searcher_post_quorum
                 .get_metric_with_label_values(&[&block_str])
                 .unwrap()
                 .set(searcher as i64);
@@ -396,6 +454,32 @@ impl BlockMetricsWrapper {
                 .get_metric_with_label_values(&[&block_str])
                 .unwrap()
                 .set(if success { 1 } else { 0 });
+        }
+    }
+
+    /// Record per-endpoint submission result
+    pub fn record_submission_endpoint(
+        &self,
+        block: u64,
+        submitter_type: &str,
+        endpoint: &str,
+        success: bool,
+        latency_ms: u64
+    ) {
+        if let Some(inner) = &self.0 {
+            let block_str = block.to_string();
+            let submitter_type_str = submitter_type.to_string();
+            let endpoint_str = endpoint.to_string();
+            inner
+                .submission_endpoint_success
+                .get_metric_with_label_values(&[&block_str, &submitter_type_str, &endpoint_str])
+                .unwrap()
+                .set(if success { 1 } else { 0 });
+            inner
+                .submission_endpoint_latency_ms
+                .get_metric_with_label_values(&[&block_str, &submitter_type_str, &endpoint_str])
+                .unwrap()
+                .set(latency_ms as i64);
         }
     }
 }

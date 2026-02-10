@@ -7,7 +7,9 @@ use std::{
 use alloy::providers::Provider;
 use angstrom_metrics::BlockMetricsWrapper;
 use angstrom_types::{
-    consensus::{ConsensusRoundName, PreProposalAggregation, Proposal, StromConsensusEvent},
+    consensus::{
+        ConsensusRoundName, PreProposalAggregation, Proposal, SlotClock, StromConsensusEvent
+    },
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::{OrderFillState, PoolSolution},
     primitive::AngstromMetaSigner,
@@ -66,7 +68,7 @@ impl ProposalState {
             searcher_count
         );
 
-        // Count matching input orders from preproposal aggregations
+        // Count matching input orders from preproposal aggregations (pre-quorum)
         let mut matching_limit = 0usize;
         let mut matching_searcher = 0usize;
         for agg in &pre_proposal_aggregation {
@@ -75,7 +77,11 @@ impl ProposalState {
                 matching_searcher += pre.searcher.len();
             }
         }
-        metrics.record_matching_input(handles.block_height, matching_limit, matching_searcher);
+        metrics.record_matching_input_pre_quorum(
+            handles.block_height,
+            matching_limit,
+            matching_searcher
+        );
 
         // queue building future
         waker.wake_by_ref();
@@ -186,21 +192,82 @@ impl ProposalState {
         };
         handles.propagate_message(ConsensusMessage::PropagateEmptyBlockAttestation(attestation));
 
+        // Capture slot clock for metrics timing
+        let slot_clock = handles.slot_clock.clone();
+        let block_height = handles.block_height;
+
         let submission_future = Box::pin(async move {
-            let Ok(tx_hash) = provider
+            // Record submission start
+            let slot_duration = slot_clock.slot_duration();
+            let next_slot = slot_clock.duration_to_next_slot().unwrap_or(slot_duration);
+            let start_offset_ms = slot_duration.saturating_sub(next_slot).as_millis() as u64;
+            let start_time = std::time::Instant::now();
+
+            let metrics = BlockMetricsWrapper::new();
+            metrics.record_submission_started(block_height, start_offset_ms);
+
+            let result = provider
                 .submit_tx(signer, possible_bundle, target_block)
-                .await
-            else {
+                .await;
+
+            let latency_ms = start_time.elapsed().as_millis() as u64;
+            let end_offset_ms = start_offset_ms + latency_ms;
+
+            match &result {
+                Ok(Some(submission_result)) => {
+                    metrics.record_submission_completed(
+                        block_height,
+                        end_offset_ms,
+                        latency_ms,
+                        true
+                    );
+                    metrics.record_submission_endpoint(
+                        block_height,
+                        &submission_result.submitter_type,
+                        &submission_result.endpoint,
+                        true,
+                        submission_result.latency_ms
+                    );
+                }
+                Ok(None) => {
+                    // No submission result (no bundle or attestation-only)
+                    metrics.record_submission_completed(
+                        block_height,
+                        end_offset_ms,
+                        latency_ms,
+                        true
+                    );
+                }
+                Err(_) => {
+                    metrics.record_submission_completed(
+                        block_height,
+                        end_offset_ms,
+                        latency_ms,
+                        false
+                    );
+                }
+            }
+
+            let Ok(submission_result) = result else {
                 tracing::error!("submission failed");
                 return false;
             };
 
-            let Some(tx_hash) = tx_hash else {
+            let Some(submission_result) = submission_result else {
                 tracing::info!("submitted unlock attestation");
                 return true;
             };
 
-            tracing::info!("submitted bundle");
+            let Some(tx_hash) = submission_result.tx_hash else {
+                tracing::info!("submitted unlock attestation via {}", submission_result.endpoint);
+                return true;
+            };
+
+            tracing::info!(
+                endpoint=%submission_result.endpoint,
+                submitter=%submission_result.submitter_type,
+                "submitted bundle"
+            );
             provider
                 .watch_blocks()
                 .await

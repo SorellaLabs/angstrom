@@ -13,7 +13,7 @@ initialized separately once a new set of parameters is set.
 ## Pool Config Store
 
 To minimize the gas cost of looking up & validating these parameters when processing an Angstrom
-bundle they're stored in a "store contract", this is a conract that holds the data as its raw
+bundle they're stored in a "store contract", this is a contract that holds the data as its raw
 bytecode (padded with one leading `00` byte to prevent execution/destruction).
 
 The store's bytecode is structured as follows:

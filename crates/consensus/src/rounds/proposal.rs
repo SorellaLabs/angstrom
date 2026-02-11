@@ -16,7 +16,7 @@ use angstrom_types::{
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
     traits::BundleProcessing
 };
-use futures::{FutureExt, StreamExt, future::BoxFuture};
+use futures::{FutureExt, future::BoxFuture};
 use matching_engine::{MatchingEngineHandle, manager::MatchingEngineError};
 
 use super::{ConsensusState, SharedRoundState};
@@ -275,14 +275,22 @@ impl ProposalState {
                 submitter=%submission_result.submitter_type,
                 "submitted bundle"
             );
-            provider
-                .watch_blocks()
-                .await
-                .unwrap()
-                .with_poll_interval(Duration::from_millis(10))
-                .into_stream()
-                .next()
-                .await;
+
+            // Wait for the target block to be produced
+            // We poll until the block exists rather than using watch_blocks()
+            // which can return stale block hashes from its filter buffer
+            loop {
+                match provider.get_block_by_number(target_block.into()).await {
+                    Ok(Some(_)) => break,
+                    Ok(None) => {
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                    }
+                    Err(e) => {
+                        tracing::warn!(?e, "error polling for target block");
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                    }
+                }
+            }
 
             let included = provider
                 .get_transaction_by_hash(tx_hash)

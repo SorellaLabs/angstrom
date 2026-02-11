@@ -5,7 +5,7 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_metrics::BlockMetricsWrapper;
+use angstrom_metrics::{BlockMetricsWrapper, ConsensusMetricsWrapper};
 use angstrom_types::{
     consensus::{
         ConsensusRoundName, PreProposalAggregation, Proposal, SlotClock, StromConsensusEvent
@@ -110,9 +110,12 @@ impl ProposalState {
         P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
-        self.last_round_info = Some(LastRoundInfo {
-            time_to_complete: Instant::now().duration_since(self.trigger_time)
-        });
+        let build_duration = Instant::now().duration_since(self.trigger_time);
+        self.last_round_info = Some(LastRoundInfo { time_to_complete: build_duration });
+
+        // Record proposal build time metric
+        ConsensusMetricsWrapper::new()
+            .set_proposal_build_time(handles.block_height, build_duration.as_millis());
 
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();

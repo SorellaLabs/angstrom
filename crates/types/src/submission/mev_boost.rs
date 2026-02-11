@@ -16,19 +16,19 @@ use alloy::{
     signers::Signer,
     transports::{TransportError, TransportErrorKind, TransportFut}
 };
-use alloy_primitives::{Address, TxHash};
+use alloy_primitives::Address;
 use futures::stream::{StreamExt, iter};
 use itertools::Itertools;
 use reth::rpc::types::mev::{EthBundleHash, EthSendBundle};
 
 use super::{
-    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY, TxFeatureInfo,
-    Url
+    AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
+    SubmissionResult, TxFeatureInfo, Url
 };
 use crate::primitive::AngstromMetaSigner;
 
 pub struct MevBoostSubmitter {
-    clients:          Vec<RootProvider>,
+    clients:          Vec<(RootProvider, Url)>,
     angstrom_address: Address
 }
 
@@ -43,7 +43,7 @@ impl MevBoostSubmitter {
             .map(|url| {
                 let transport = MevHttp::new_flashbots(url.clone(), (*signer).clone());
                 let client = ClientBuilder::default().transport(transport, false);
-                RootProvider::new(client)
+                (RootProvider::new(client), url.clone())
             })
             .collect_vec();
 
@@ -56,13 +56,19 @@ impl ChainSubmitter for MevBoostSubmitter {
         self.angstrom_address
     }
 
+    fn submitter_type(&self) -> &'static str {
+        "mev_boost"
+    }
+
     fn submit<'a, S: AngstromMetaSigner>(
         &'a self,
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<TxHash>>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>>
+    {
         Box::pin(async move {
+            let start = std::time::Instant::now();
             let bundle = bundle.ok_or_else(|| eyre::eyre!("no bundle was past in"))?;
 
             let tx = self
@@ -78,23 +84,40 @@ impl ChainSubmitter for MevBoostSubmitter {
             };
 
             // Clone here is fine as its in a Arc
-            let _: Vec<_> = iter(self.clients.clone())
-                .map(async |client| {
-                    client
+            let results: Vec<_> = iter(self.clients.clone())
+                .map(async |(client, url)| {
+                    let result = client
                         .raw_request::<(&EthSendBundle,), EthBundleHash>(
                             "eth_sendBundle".into(),
                             (&bundle,)
                         )
                         .await
                         .inspect_err(|e| {
-                            tracing::warn!(err=%e, "failed to submit to mev-boost");
-                        })
+                            tracing::warn!(url=%url.as_str(), err=%e, "failed to submit to mev-boost");
+                        });
+                    (url, result)
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)
                 .collect::<Vec<_>>()
                 .await;
 
-            Ok(Some(hash))
+            let latency_ms = start.elapsed().as_millis() as u64;
+
+            // Find the first successful endpoint
+            let successful_endpoint = results
+                .into_iter()
+                .find(|(_, result)| result.is_ok())
+                .map(|(url, _)| url.to_string());
+
+            match successful_endpoint {
+                Some(endpoint) => Ok(Some(SubmissionResult {
+                    tx_hash: Some(hash),
+                    submitter_type: "mev_boost".to_string(),
+                    endpoint,
+                    latency_ms
+                })),
+                None => Ok(None)
+            }
         })
     }
 }

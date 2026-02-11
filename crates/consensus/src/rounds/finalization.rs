@@ -5,6 +5,7 @@ use std::{
 };
 
 use alloy::providers::Provider;
+use angstrom_metrics::BlockMetricsWrapper;
 use angstrom_types::{
     consensus::{ConsensusRoundName, Proposal, StromConsensusEvent},
     primitive::AngstromMetaSigner
@@ -36,6 +37,20 @@ impl FinalizationState {
         P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
+        // Record state transition metrics
+        let slot_offset_ms = handles.slot_offset_ms();
+        let orders = handles.order_storage.get_all_orders();
+        let limit_count = orders.limit.len();
+        let searcher_count = orders.searcher.len();
+
+        BlockMetricsWrapper::new().record_state_transition(
+            handles.block_height,
+            "Finalization",
+            slot_offset_ms,
+            limit_count,
+            searcher_count
+        );
+
         let preproposal = proposal
             .preproposals()
             .clone()

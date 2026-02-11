@@ -111,7 +111,8 @@ where
                     uniswap_pools,
                     provider,
                     matching_engine,
-                    timing_config
+                    timing_config,
+                    slot_clock.clone()
                 ),
                 slot_clock
             ),

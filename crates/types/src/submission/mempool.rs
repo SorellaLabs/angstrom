@@ -43,11 +43,13 @@ impl ChainSubmitter for MempoolSubmitter {
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>>
+    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Vec<SubmissionResult>>> + Send + 'a>>
     {
         Box::pin(async move {
-            let start = std::time::Instant::now();
-            let bundle = bundle.ok_or_else(|| eyre::eyre!("no bundle was past in"))?;
+            let bundle = match bundle {
+                Some(b) => b,
+                None => return Ok(Vec::new()) // No bundle means no mempool submission
+            };
 
             let tx = self
                 .build_and_sign_tx_with_gas(signer, bundle, tx_features)
@@ -56,38 +58,39 @@ impl ChainSubmitter for MempoolSubmitter {
             let encoded_tx = tx.encoded_2718();
             let tx_hash = *tx.tx_hash();
 
-            // Clone here is fine as its in a Arc
+            // Submit to all endpoints and collect per-endpoint timing
             let results: Vec<_> = iter(self.clients.clone())
                 .map(async |(client, url)| {
+                    let endpoint_start = std::time::Instant::now();
                     let result = client
                         .send_raw_transaction(&encoded_tx)
                         .await
                         .inspect_err(|e| {
                             tracing::info!(url=%url.as_str(), err=%e, "failed to send mempool tx");
                         });
-                    (url, result)
+                    let endpoint_latency = endpoint_start.elapsed().as_millis() as u64;
+                    (url, result, endpoint_latency)
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)
                 .collect::<Vec<_>>()
                 .await;
 
-            let latency_ms = start.elapsed().as_millis() as u64;
-
-            // Find the first successful endpoint
-            let successful_endpoint = results
+            // Convert all results to SubmissionResult
+            let submission_results: Vec<SubmissionResult> = results
                 .into_iter()
-                .find(|(_, result)| result.is_ok())
-                .map(|(url, _)| url.to_string());
+                .map(|(url, result, endpoint_latency)| {
+                    let success = result.is_ok();
+                    SubmissionResult {
+                        tx_hash: if success { Some(tx_hash) } else { None },
+                        submitter_type: "mempool".to_string(),
+                        endpoint: url.to_string(),
+                        success,
+                        latency_ms: endpoint_latency
+                    }
+                })
+                .collect();
 
-            match successful_endpoint {
-                Some(endpoint) => Ok(Some(SubmissionResult {
-                    tx_hash: Some(tx_hash),
-                    submitter_type: "mempool".to_string(),
-                    endpoint,
-                    latency_ms
-                })),
-                None => Ok(None)
-            }
+            Ok(submission_results)
         })
     }
 }

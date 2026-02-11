@@ -49,10 +49,9 @@ impl ChainSubmitter for AngstromSubmitter {
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>>
+    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Vec<SubmissionResult>>> + Send + 'a>>
     {
         Box::pin(async move {
-            let start = std::time::Instant::now();
             let mut tx_hash = None;
             let payload = if let Some(bundle) = bundle {
                 let mut tx = self.build_tx(signer, bundle, tx_features);
@@ -87,51 +86,60 @@ impl ChainSubmitter for AngstromSubmitter {
                 AngstromIntegrationSubmission { tx: tx_payload, unlock_data, ..Default::default() }
             };
 
+            // Submit to all endpoints and collect per-endpoint timing
             let results: Vec<_> = iter(self.clients.clone())
                 .map(async |(client, url)| {
-                    client
+                    let endpoint_start = std::time::Instant::now();
+                    let result = client
                         .raw_request::<(&AngstromIntegrationSubmission,), Value>(
                             "angstrom_submitBundle".into(),
                             (&payload,)
                         )
                         .await
-                        .map(|v| (url.clone(), AngstromSubmissionResponse::from_value(v)))
+                        .map(|v| AngstromSubmissionResponse::from_value(v))
                         .inspect_err(|e| {
                             tracing::info!(url=%url.as_str(), err=%e, "failed to send angstrom integration message to url");
-                        })
+                        });
+                    let endpoint_latency = endpoint_start.elapsed().as_millis() as u64;
+                    (url, result, endpoint_latency)
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)
                 .collect::<Vec<_>>()
                 .await;
 
-            let latency_ms = start.elapsed().as_millis() as u64;
-
-            let successful_submission = results
+            // Convert all results to SubmissionResult
+            let submission_results: Vec<SubmissionResult> = results
                 .into_iter()
-                .flatten()
-                .inspect(|(url, resp)| match resp {
-                    AngstromSubmissionResponse::Success { message, bundle_hash } => {
-                        tracing::info!(url=%url.as_str(), ?message, ?bundle_hash, "angstrom bundle submitted");
-                    }
-                    AngstromSubmissionResponse::Error { message } => {
-                        tracing::warn!(url=%url.as_str(), %message, "angstrom submission error");
-                    }
-                    AngstromSubmissionResponse::Unknown { raw } => {
-                        tracing::warn!(url=%url.as_str(), %raw, "angstrom submission unknown response format");
+                .map(|(url, result, endpoint_latency)| {
+                    let success = match result {
+                        Ok(resp) => {
+                            match &resp {
+                                AngstromSubmissionResponse::Success { message, bundle_hash } => {
+                                    tracing::info!(url=%url.as_str(), ?message, ?bundle_hash, "angstrom bundle submitted");
+                                }
+                                AngstromSubmissionResponse::Error { message } => {
+                                    tracing::warn!(url=%url.as_str(), %message, "angstrom submission error");
+                                }
+                                AngstromSubmissionResponse::Unknown { raw } => {
+                                    tracing::warn!(url=%url.as_str(), %raw, "angstrom submission unknown response format");
+                                }
+                            }
+                            resp.is_success()
+                        }
+                        Err(_) => false
+                    };
+
+                    SubmissionResult {
+                        tx_hash: if success { tx_hash } else { None },
+                        submitter_type: "angstrom".to_string(),
+                        endpoint: url.to_string(),
+                        success,
+                        latency_ms: endpoint_latency
                     }
                 })
-                .find(|(_, resp)| resp.is_success())
-                .map(|(url, _)| url);
+                .collect();
 
-            match successful_submission {
-                Some(endpoint) => Ok(Some(SubmissionResult {
-                    tx_hash,
-                    submitter_type: "angstrom".to_string(),
-                    endpoint: endpoint.to_string(),
-                    latency_ms
-                })),
-                None => Ok(None)
-            }
+            Ok(submission_results)
         })
     }
 }

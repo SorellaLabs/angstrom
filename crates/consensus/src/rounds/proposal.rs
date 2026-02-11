@@ -214,28 +214,25 @@ impl ProposalState {
             let end_offset_ms = start_offset_ms + latency_ms;
 
             match &result {
-                Ok(Some(submission_result)) => {
+                Ok(all_results) => {
+                    // Record metrics for EACH endpoint attempt
+                    for submission_result in all_results {
+                        metrics.record_submission_endpoint(
+                            block_height,
+                            &submission_result.submitter_type,
+                            &submission_result.endpoint,
+                            submission_result.success,
+                            submission_result.latency_ms
+                        );
+                    }
+
+                    // Check if any submission succeeded
+                    let any_success = all_results.iter().any(|r| r.success);
                     metrics.record_submission_completed(
                         block_height,
                         end_offset_ms,
                         latency_ms,
-                        true
-                    );
-                    metrics.record_submission_endpoint(
-                        block_height,
-                        &submission_result.submitter_type,
-                        &submission_result.endpoint,
-                        true,
-                        submission_result.latency_ms
-                    );
-                }
-                Ok(None) => {
-                    // No submission result (no bundle or attestation-only)
-                    metrics.record_submission_completed(
-                        block_height,
-                        end_offset_ms,
-                        latency_ms,
-                        true
+                        any_success
                     );
                 }
                 Err(_) => {
@@ -248,20 +245,27 @@ impl ProposalState {
                 }
             }
 
-            let Ok(submission_result) = result else {
+            let Ok(all_results) = result else {
                 tracing::error!("submission failed");
                 return false;
             };
 
-            let Some(submission_result) = submission_result else {
-                tracing::info!("submitted unlock attestation");
-                return true;
+            // Find first successful result with a tx_hash
+            let successful_with_hash = all_results
+                .iter()
+                .find(|r| r.success && r.tx_hash.is_some());
+
+            let Some(submission_result) = successful_with_hash else {
+                // Check if any succeeded (attestation-only case)
+                if all_results.iter().any(|r| r.success) {
+                    tracing::info!("submitted unlock attestation");
+                    return true;
+                }
+                tracing::error!("no successful submissions");
+                return false;
             };
 
-            let Some(tx_hash) = submission_result.tx_hash else {
-                tracing::info!("submitted unlock attestation via {}", submission_result.endpoint);
-                return true;
-            };
+            let tx_hash = submission_result.tx_hash.unwrap();
 
             tracing::info!(
                 endpoint=%submission_result.endpoint,

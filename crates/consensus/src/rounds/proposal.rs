@@ -5,7 +5,7 @@ use std::{
 };
 
 use alloy::providers::Provider;
-use angstrom_metrics::BlockMetricsWrapper;
+use angstrom_metrics::{BlockMetricsWrapper, ConsensusMetricsWrapper};
 use angstrom_types::{
     consensus::{
         ConsensusRoundName, PreProposalAggregation, Proposal, SlotClock, StromConsensusEvent
@@ -16,7 +16,7 @@ use angstrom_types::{
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
     traits::BundleProcessing
 };
-use futures::{FutureExt, StreamExt, future::BoxFuture};
+use futures::{FutureExt, future::BoxFuture};
 use matching_engine::{MatchingEngineHandle, manager::MatchingEngineError};
 
 use super::{ConsensusState, SharedRoundState};
@@ -110,9 +110,12 @@ impl ProposalState {
         P: Provider + Unpin + 'static,
         Matching: MatchingEngineHandle
     {
-        self.last_round_info = Some(LastRoundInfo {
-            time_to_complete: Instant::now().duration_since(self.trigger_time)
-        });
+        let build_duration = Instant::now().duration_since(self.trigger_time);
+        self.last_round_info = Some(LastRoundInfo { time_to_complete: build_duration });
+
+        // Record proposal build time metric
+        ConsensusMetricsWrapper::new()
+            .set_proposal_build_time(handles.block_height, build_duration.as_millis());
 
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();
@@ -272,20 +275,32 @@ impl ProposalState {
                 submitter=%submission_result.submitter_type,
                 "submitted bundle"
             );
-            provider
-                .watch_blocks()
-                .await
-                .unwrap()
-                .with_poll_interval(Duration::from_millis(10))
-                .into_stream()
-                .next()
-                .await;
+
+            // Wait for the target block to be produced
+            // We poll until the block exists rather than using watch_blocks()
+            // which can return stale block hashes from its filter buffer
+            loop {
+                match provider.get_block_by_number(target_block.into()).await {
+                    Ok(Some(_)) => break,
+                    Ok(None) => {
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                    }
+                    Err(e) => {
+                        tracing::warn!(?e, "error polling for target block");
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                    }
+                }
+            }
 
             let included = provider
                 .get_transaction_by_hash(tx_hash)
                 .await
                 .unwrap()
                 .is_some();
+
+            // Record bundle inclusion metric
+            metrics.record_bundle_included(block_height, included);
+
             tracing::info!(?included, "block tx result");
             included
         });

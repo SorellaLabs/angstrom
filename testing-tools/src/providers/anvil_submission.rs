@@ -29,10 +29,10 @@ impl ChainSubmitter for AnvilSubmissionProvider {
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = eyre::Result<Vec<SubmissionResult>>> + Send + 'a>> {
         Box::pin(async move {
             let start = std::time::Instant::now();
-            let Some(bundle) = bundle else { return Ok(None) };
+            let Some(bundle) = bundle else { return Ok(vec![]) };
 
             let pool_manager_addr = *angstrom_types::primitive::POOL_MANAGER_ADDRESS
                 .get()
@@ -74,12 +74,13 @@ impl ChainSubmitter for AnvilSubmissionProvider {
                 .send_raw_transaction(&encoded)
                 .await
                 .map(|_| {
-                    Some(SubmissionResult {
+                    vec![SubmissionResult {
                         tx_hash: Some(hash),
                         submitter_type: "anvil".to_string(),
                         endpoint: "anvil://local".to_string(),
+                        success: true,
                         latency_ms
-                    })
+                    }]
                 })
                 .map_err(Into::into)
         })

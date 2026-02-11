@@ -65,11 +65,13 @@ impl ChainSubmitter for MevBoostSubmitter {
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>>
+    ) -> std::pin::Pin<Box<dyn Future<Output = eyre::Result<Vec<SubmissionResult>>> + Send + 'a>>
     {
         Box::pin(async move {
-            let start = std::time::Instant::now();
-            let bundle = bundle.ok_or_else(|| eyre::eyre!("no bundle was past in"))?;
+            let bundle = match bundle {
+                Some(b) => b,
+                None => return Ok(Vec::new()) // No bundle means no MEV boost submission
+            };
 
             let tx = self
                 .build_and_sign_tx_with_gas(signer, bundle, tx_features)
@@ -77,47 +79,48 @@ impl ChainSubmitter for MevBoostSubmitter {
 
             let hash = *tx.tx_hash();
 
-            let bundle = EthSendBundle {
+            let eth_bundle = EthSendBundle {
                 txs: vec![tx.encoded_2718().into()],
                 block_number: tx_features.target_block,
                 ..Default::default()
             };
 
-            // Clone here is fine as its in a Arc
+            // Submit to all endpoints and collect per-endpoint timing
             let results: Vec<_> = iter(self.clients.clone())
                 .map(async |(client, url)| {
+                    let endpoint_start = std::time::Instant::now();
                     let result = client
                         .raw_request::<(&EthSendBundle,), EthBundleHash>(
                             "eth_sendBundle".into(),
-                            (&bundle,)
+                            (&eth_bundle,)
                         )
                         .await
                         .inspect_err(|e| {
                             tracing::warn!(url=%url.as_str(), err=%e, "failed to submit to mev-boost");
                         });
-                    (url, result)
+                    let endpoint_latency = endpoint_start.elapsed().as_millis() as u64;
+                    (url, result, endpoint_latency)
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)
                 .collect::<Vec<_>>()
                 .await;
 
-            let latency_ms = start.elapsed().as_millis() as u64;
-
-            // Find the first successful endpoint
-            let successful_endpoint = results
+            // Convert all results to SubmissionResult
+            let submission_results: Vec<SubmissionResult> = results
                 .into_iter()
-                .find(|(_, result)| result.is_ok())
-                .map(|(url, _)| url.to_string());
+                .map(|(url, result, endpoint_latency)| {
+                    let success = result.is_ok();
+                    SubmissionResult {
+                        tx_hash: if success { Some(hash) } else { None },
+                        submitter_type: "mev_boost".to_string(),
+                        endpoint: url.to_string(),
+                        success,
+                        latency_ms: endpoint_latency
+                    }
+                })
+                .collect();
 
-            match successful_endpoint {
-                Some(endpoint) => Ok(Some(SubmissionResult {
-                    tx_hash: Some(hash),
-                    submitter_type: "mev_boost".to_string(),
-                    endpoint,
-                    latency_ms
-                })),
-                None => Ok(None)
-            }
+            Ok(submission_results)
         })
     }
 }

@@ -31,15 +31,17 @@ const DEFAULT_SUBMISSION_CONCURRENCY: usize = 10;
 
 pub(super) const EXTRA_GAS_LIMIT: u64 = 100_000;
 
-/// Result of a successful submission, containing metadata for metrics
+/// Result of an individual endpoint submission attempt
 #[derive(Debug, Clone)]
 pub struct SubmissionResult {
-    /// The transaction hash if a bundle was submitted
+    /// The transaction hash if a bundle was submitted (only set on success)
     pub tx_hash:        Option<TxHash>,
     /// Type of submitter (e.g., "mempool", "angstrom", "mev_boost")
     pub submitter_type: String,
-    /// The endpoint URL that succeeded
+    /// The endpoint URL
     pub endpoint:       String,
+    /// Whether this endpoint succeeded
+    pub success:        bool,
     /// Time taken for the submission in milliseconds
     pub latency_ms:     u64
 }
@@ -61,12 +63,13 @@ pub trait ChainSubmitter: Send + Sync + Unpin + 'static {
     /// Returns the submitter type name for metrics
     fn submitter_type(&self) -> &'static str;
 
+    /// Submit to all endpoints and return results for each one
     fn submit<'a, S: AngstromMetaSigner>(
         &'a self,
         signer: &'a AngstromSigner<S>,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = eyre::Result<Vec<SubmissionResult>>> + Send + 'a>>;
 
     fn build_tx<S: AngstromMetaSigner>(
         &self,
@@ -178,12 +181,13 @@ where
         Self { node_provider, submitters: vec![mempool, angstrom, mev_boost] }
     }
 
+    /// Submit to all configured endpoints and return all results
     pub async fn submit_tx<S: AngstromMetaSigner>(
         &self,
         signer: AngstromSigner<S>,
         bundle: Option<AngstromBundle>,
         target_block: u64
-    ) -> eyre::Result<Option<SubmissionResult>> {
+    ) -> eyre::Result<Vec<SubmissionResult>> {
         let from = signer.address();
         let nonce = self
             .node_provider
@@ -214,15 +218,15 @@ where
         }
         let mut buffered_futs = futures::stream::iter(futs).buffer_unordered(10);
 
-        let mut submission_result = None;
-        // We log out errors at the lower level so no need to expand them here.
+        let mut all_results = Vec::new();
+        // Collect all results from all submitters
         while let Some(res) = buffered_futs.next().await {
-            if let Ok(Some(res)) = res {
-                submission_result = Some(res);
+            if let Ok(results) = res {
+                all_results.extend(results);
             }
         }
 
-        Ok(submission_result)
+        Ok(all_results)
     }
 }
 
@@ -241,7 +245,7 @@ pub trait ChainSubmitterWrapper: Send + Sync + Unpin + 'static {
         &'a self,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = eyre::Result<Vec<SubmissionResult>>> + Send + 'a>>;
 }
 
 impl<I: ChainSubmitter, S: AngstromMetaSigner + 'static> ChainSubmitterWrapper
@@ -255,7 +259,7 @@ impl<I: ChainSubmitter, S: AngstromMetaSigner + 'static> ChainSubmitterWrapper
         &'a self,
         bundle: Option<&'a AngstromBundle>,
         tx_features: &'a TxFeatureInfo
-    ) -> Pin<Box<dyn Future<Output = eyre::Result<Option<SubmissionResult>>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = eyre::Result<Vec<SubmissionResult>>> + Send + 'a>> {
         self.0.submit(&self.1, bundle, tx_features)
     }
 }

@@ -44,7 +44,10 @@ struct BlockMetricsInner {
 
     // Per-endpoint submission metrics
     submission_endpoint_success:    IntGaugeVec,
-    submission_endpoint_latency_ms: IntGaugeVec
+    submission_endpoint_latency_ms: IntGaugeVec,
+
+    // Bundle inclusion metric
+    bundle_included: IntGaugeVec
 }
 
 impl Default for BlockMetricsInner {
@@ -210,6 +213,13 @@ impl Default for BlockMetricsInner {
         )
         .unwrap();
 
+        let bundle_included = prometheus::register_int_gauge_vec!(
+            "ang_block_bundle_included",
+            "1=bundle tx included in block, 0=not included",
+            &["block_number"]
+        )
+        .unwrap();
+
         Self {
             preproposal_limit_orders,
             preproposal_searcher_orders,
@@ -233,7 +243,8 @@ impl Default for BlockMetricsInner {
             submission_latency_ms,
             submission_success,
             submission_endpoint_success,
-            submission_endpoint_latency_ms
+            submission_endpoint_latency_ms,
+            bundle_included
         }
     }
 }
@@ -480,6 +491,17 @@ impl BlockMetricsWrapper {
                 .get_metric_with_label_values(&[&block_str, &submitter_type_str, &endpoint_str])
                 .unwrap()
                 .set(latency_ms as i64);
+        }
+    }
+
+    /// Record whether the bundle transaction was included in the target block
+    pub fn record_bundle_included(&self, block: u64, included: bool) {
+        if let Some(inner) = &self.0 {
+            inner
+                .bundle_included
+                .get_metric_with_label_values(&[&block.to_string()])
+                .unwrap()
+                .set(if included { 1 } else { 0 });
         }
     }
 }

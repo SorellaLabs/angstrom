@@ -286,6 +286,10 @@ impl ProposalState {
                 .await
                 .unwrap()
                 .is_some();
+
+            // Record bundle inclusion metric
+            metrics.record_bundle_included(block_height, included);
+
             tracing::info!(?included, "block tx result");
             included
         });

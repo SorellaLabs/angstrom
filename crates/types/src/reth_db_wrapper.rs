@@ -247,6 +247,16 @@ where
             .state_by_block_id(self.block.load(std::sync::atomic::Ordering::Relaxed).into())?
             .account_balance(addr)
     }
+
+    fn storage_by_hashed_key(
+        &self,
+        address: Address,
+        hashed_storage_key: StorageKey
+    ) -> ProviderResult<Option<StorageValue>> {
+        self.db
+            .state_by_block_id(self.block.load(std::sync::atomic::Ordering::Relaxed).into())?
+            .storage_by_hashed_key(address, hashed_storage_key)
+    }
 }
 
 impl<DB> AccountReader for RethDbWrapper<DB>

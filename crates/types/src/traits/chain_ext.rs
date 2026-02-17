@@ -54,7 +54,7 @@ impl ChainExt for Chain {
             .blocks_iter()
             .filter(|b| b.number() >= start)
             .zip(new.blocks_iter().filter(|b| b.number() >= start))
-            .filter(|&(old, new)| (old.hash() != new.hash()))
+            .filter(|&(old, new)| old.hash() != new.hash())
             .map(|(_, new)| new.number())
             .collect::<Vec<_>>();
 

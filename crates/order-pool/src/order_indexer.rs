@@ -494,6 +494,7 @@ where
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum PoolInnerEvent {
     Propagation(AllOrders),
     BadOrderMessages(Vec<PeerId>),

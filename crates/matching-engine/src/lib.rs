@@ -29,7 +29,7 @@ pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
-    ) -> BoxFuture<Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>;
+    ) -> BoxFuture<'_, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>;
 }
 
 pub fn build_book(

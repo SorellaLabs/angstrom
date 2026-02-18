@@ -250,7 +250,7 @@ impl<'a> PoolPriceVec<'a> {
         self.start_bound.price > self.end_bound.price
     }
 
-    pub fn steps(&self) -> Option<&Vec<SwapStep>> {
+    pub fn steps(&self) -> Option<&Vec<SwapStep<'_>>> {
         self.steps.as_ref()
     }
 

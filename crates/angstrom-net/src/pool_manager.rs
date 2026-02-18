@@ -53,6 +53,7 @@ pub enum OrderCommand {
 }
 
 impl PoolHandle {
+    #[allow(clippy::result_large_err)]
     fn send(&self, cmd: OrderCommand) -> Result<(), SendError<OrderCommand>> {
         self.manager_tx.send(cmd)
     }
@@ -198,7 +199,7 @@ where
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
 
-        task_spawner.spawn_critical(
+        task_spawner.spawn_critical_task(
             "transaction manager",
             Box::pin(PoolManager {
                 eth_network_events:   self.eth_network_events,

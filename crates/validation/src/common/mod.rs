@@ -15,28 +15,24 @@ pub use db::*;
 pub mod token_pricing;
 pub use token_pricing::*;
 
+type TokenPriceUpdate = (u64, u128, Vec<PairsWithPrice>);
+type TokenPriceUpdateStream = Pin<Box<dyn Stream<Item = TokenPriceUpdate> + Send + 'static>>;
+type ThreadPoolTask = Pin<Box<dyn Future<Output = ()> + Send + Sync>>;
+
 /// Tools that are shared between both order and bundle validation. Also keeps
 /// it so all async future state is polled and up-kept in a single spot
 pub struct SharedTools {
     pub token_pricing:   TokenPriceGenerator,
-    token_price_updater:
-        Pin<Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>>,
-    pub thread_pool:
-        KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send + Sync>>, Handle>,
+    token_price_updater: TokenPriceUpdateStream,
+    pub thread_pool:     KeySplitThreadpool<Address, ThreadPoolTask, Handle>,
     pub metrics:         ValidationMetrics
 }
 
 impl SharedTools {
     pub fn new(
         token_pricing: TokenPriceGenerator,
-        token_price_updater: Pin<
-            Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>
-        >,
-        thread_pool: KeySplitThreadpool<
-            Address,
-            Pin<Box<dyn Future<Output = ()> + Send + Sync>>,
-            Handle
-        >
+        token_price_updater: TokenPriceUpdateStream,
+        thread_pool: KeySplitThreadpool<Address, ThreadPoolTask, Handle>
     ) -> Self {
         Self { token_price_updater, token_pricing, thread_pool, metrics: ValidationMetrics::new() }
     }
@@ -45,10 +41,7 @@ impl SharedTools {
         &self.token_pricing
     }
 
-    pub fn thread_pool_mut(
-        &mut self
-    ) -> &mut KeySplitThreadpool<Address, Pin<Box<dyn Future<Output = ()> + Send + Sync>>, Handle>
-    {
+    pub fn thread_pool_mut(&mut self) -> &mut KeySplitThreadpool<Address, ThreadPoolTask, Handle> {
         &mut self.thread_pool
     }
 

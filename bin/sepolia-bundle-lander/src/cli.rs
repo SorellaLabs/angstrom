@@ -43,7 +43,7 @@ impl BundleLander {
         tracing::info!("startup complete");
 
         executor
-            .spawn_critical("order placer", async move {
+            .spawn_critical_task("order placer", async move {
                 let BundleWashTraderEnv { keys, provider, pools } = env;
 
                 let subscription = provider

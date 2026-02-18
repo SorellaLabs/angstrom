@@ -31,6 +31,9 @@ const DEFAULT_SUBMISSION_CONCURRENCY: usize = 10;
 
 pub(super) const EXTRA_GAS_LIMIT: u64 = 100_000;
 
+type BundleGasFuture = Pin<Box<dyn Future<Output = u64> + Send>>;
+type BundleGasEstimator = dyn Fn(TransactionRequest) -> BundleGasFuture + Send + Sync;
+
 /// Result of an individual endpoint submission attempt
 #[derive(Debug, Clone)]
 pub struct SubmissionResult {
@@ -51,8 +54,7 @@ pub struct TxFeatureInfo {
     pub fees:            Eip1559Estimation,
     pub chain_id:        u64,
     pub target_block:    u64,
-    pub bundle_gas_used:
-        Box<dyn Fn(TransactionRequest) -> Pin<Box<dyn Future<Output = u64> + Send>> + Send + Sync>
+    pub bundle_gas_used: Box<BundleGasEstimator>
 }
 
 /// a chain submitter is a trait that deals with submitting a bundle to the

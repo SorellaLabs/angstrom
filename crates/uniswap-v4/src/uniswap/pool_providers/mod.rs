@@ -8,6 +8,7 @@ pub mod canonical_state_adapter;
 pub mod mock_block_stream;
 pub mod provider_adapter;
 
+#[allow(clippy::result_large_err)]
 pub trait PoolManagerProvider: Send + Sync + Clone + Unpin {
     fn subscribe_blocks(self) -> futures::stream::BoxStream<'static, Option<PoolMangerBlocks>>;
 

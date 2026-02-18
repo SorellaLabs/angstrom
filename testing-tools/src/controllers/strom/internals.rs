@@ -196,7 +196,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         tracing::debug!("uniswap configured");
 
         let uniswap_pools = uniswap_pool_manager.pools();
-        executor.spawn_critical(
+        executor.spawn_critical_task(
             "uniswap",
             Box::pin(uniswap_pool_manager.instrument(span!(
                 tracing::Level::ERROR,
@@ -283,7 +283,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         let addr = server.local_addr()?;
 
-        executor.spawn_critical(
+        executor.spawn_critical_task(
             "rpc",
             Box::pin(async move {
                 let mut rpcs = order_api.into_rpc();
@@ -353,7 +353,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             consensus_client.subscribe_consensus_round_event()
         );
 
-        executor.spawn_critical("amm quoting service", amm);
+        executor.spawn_critical_task("amm quoting service", amm);
 
         // init agents
         let agent_config = AgentConfig {

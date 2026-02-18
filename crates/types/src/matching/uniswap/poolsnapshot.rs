@@ -112,7 +112,7 @@ impl PoolSnapshot {
 
     /// Find the PoolRange in this market snapshot that the provided tick lies
     /// within, if any
-    pub fn get_range_for_tick(&self, tick: Tick, direction: bool) -> Option<LiqRangeRef> {
+    pub fn get_range_for_tick(&self, tick: Tick, direction: bool) -> Option<LiqRangeRef<'_>> {
         self.ranges
             .iter()
             .enumerate()
@@ -129,7 +129,7 @@ impl PoolSnapshot {
         &self,
         start_tick: Tick,
         end_tick: Tick
-    ) -> eyre::Result<Vec<LiqRangeRef>> {
+    ) -> eyre::Result<Vec<LiqRangeRef<'_>>> {
         let is_ask = start_tick >= end_tick;
 
         let (low, high) = low_to_high(&start_tick, &end_tick);
@@ -159,7 +159,7 @@ impl PoolSnapshot {
     /// given start tick to the snapshot's current tick.  The ranges returned
     /// will be ordered so that they start at the range associated with the
     /// start tick and end at the range of the snapshot's current tick
-    pub fn ranges_from_tick(&self, start_tick: i32) -> eyre::Result<Vec<LiqRangeRef>> {
+    pub fn ranges_from_tick(&self, start_tick: i32) -> eyre::Result<Vec<LiqRangeRef<'_>>> {
         self.ranges_for_ticks(start_tick, self.current_tick)
     }
 
@@ -193,11 +193,11 @@ impl PoolSnapshot {
     }
 
     /// Return a read-only iterator over the liquidity ranges in this snapshot
-    pub fn ranges(&self) -> Iter<LiqRange> {
+    pub fn ranges(&self) -> Iter<'_, LiqRange> {
         self.ranges.iter()
     }
 
-    pub fn current_price(&self, direction: bool) -> PoolPrice {
+    pub fn current_price(&self, direction: bool) -> PoolPrice<'_> {
         let index = if direction { self.cur_tick_idx_ask } else { self.cur_tick_idx_bid };
         let range = self
             .ranges
@@ -214,7 +214,7 @@ impl PoolSnapshot {
         }
     }
 
-    pub fn at_price(&self, price: SqrtPriceX96, direction: bool) -> eyre::Result<PoolPrice> {
+    pub fn at_price(&self, price: SqrtPriceX96, direction: bool) -> eyre::Result<PoolPrice<'_>> {
         let tick = price.to_tick()?;
         let range = self
             .get_range_for_tick(tick, direction)

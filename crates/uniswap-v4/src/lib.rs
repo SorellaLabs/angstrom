@@ -99,7 +99,7 @@ where
                     .unwrap(),
                     hooks:       angstrom_address
                 };
-                let mut copy = pool_key.clone();
+                let mut copy = pool_key;
                 copy.fee = U24::ZERO;
 
                 set.insert(copy, pool_key);
@@ -120,8 +120,7 @@ where
             }
             set
         })
-        .into_iter()
-        .map(|(_, real_key)| real_key)
+        .into_values()
         .collect::<Vec<_>>()
 }
 

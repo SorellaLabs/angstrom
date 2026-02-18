@@ -96,7 +96,7 @@ impl ChainSubmitter for AngstromSubmitter {
                             (&payload,)
                         )
                         .await
-                        .map(|v| AngstromSubmissionResponse::from_value(v))
+                        .map(AngstromSubmissionResponse::from_value)
                         .inspect_err(|e| {
                             tracing::info!(url=%url.as_str(), err=%e, "failed to send angstrom integration message to url");
                         });
@@ -177,33 +177,30 @@ impl AngstromSubmissionResponse {
             Some(false) => {
                 return Self::Error {
                     message: message_field().unwrap_or_else(|| "Request failed".to_string())
-                }
+                };
             }
             None => {}
         }
 
         // Format 2: {"jsonrpc": "2.0", "result": "...", "error": ...}
-        match value.get("jsonrpc") {
-            Some(_) => {
-                return match value.get("error").filter(|e| !e.is_null()) {
-                    Some(err) => Self::Error {
-                        message: err
-                            .get("message")
-                            .and_then(Value::as_str)
-                            .or_else(|| err.as_str())
-                            .unwrap_or("Unknown error")
-                            .to_string()
-                    },
-                    None => Self::Success {
-                        message:     value
-                            .get("result")
-                            .and_then(Value::as_str)
-                            .map(String::from),
-                        bundle_hash: None
-                    }
+        if value.get("jsonrpc").is_some() {
+            return match value.get("error").filter(|e| !e.is_null()) {
+                Some(err) => Self::Error {
+                    message: err
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .or_else(|| err.as_str())
+                        .unwrap_or("Unknown error")
+                        .to_string()
+                },
+                None => Self::Success {
+                    message:     value
+                        .get("result")
+                        .and_then(Value::as_str)
+                        .map(String::from),
+                    bundle_hash: None
                 }
-            }
-            None => {}
+            };
         }
 
         // Format 3: integer status code (e.g., 200)
@@ -212,7 +209,7 @@ impl AngstromSubmissionResponse {
                 return Self::Success {
                     message:     Some(format!("Status: {n}")),
                     bundle_hash: None
-                }
+                };
             }
             Some(n) => return Self::Error { message: format!("Error status: {n}") },
             None => {}

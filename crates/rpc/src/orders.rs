@@ -109,7 +109,7 @@ where
         let sink = pending.accept().await?;
         let mut subscription = self.amm_quoter.subscribe_to_updates(pools).await;
 
-        self.task_spawner.spawn(Box::pin(async move {
+        self.task_spawner.spawn_task(Box::pin(async move {
             while let Some(slot0) = subscription.next().await {
                 if sink.is_closed() {
                     break;
@@ -143,7 +143,7 @@ where
             .subscribe_orders()
             .map(move |update| update.map(|value| value.filter_out_order(&kind, &filter)));
 
-        self.task_spawner.spawn(Box::pin(async move {
+        self.task_spawner.spawn_task(Box::pin(async move {
             while let Some(Ok(order)) = subscription.next().await {
                 if sink.is_closed() {
                     break;

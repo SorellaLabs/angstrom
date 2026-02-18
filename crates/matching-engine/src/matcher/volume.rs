@@ -243,8 +243,8 @@ impl<'a> VolumeFillMatcher<'a> {
                 debug!("Composite is combination AMM and Debt");
                 // Move the AMM
                 let (amm_q, _) = ask.composite_quantities_to_price(next_ask.price());
-                if let Some(amm) = self.amm_price.as_mut() {
-                    if Self::fill_amm(
+                if let Some(amm) = self.amm_price.as_mut()
+                    && Self::fill_amm(
                         amm,
                         &mut self.results,
                         &mut self.amm_outcome,
@@ -252,9 +252,8 @@ impl<'a> VolumeFillMatcher<'a> {
                         Direction::BuyingT0
                     )
                     .is_err()
-                    {
-                        return Some(VolumeFillMatchEndReason::ErrorEncountered);
-                    }
+                {
+                    return Some(VolumeFillMatchEndReason::ErrorEncountered);
                 }
 
                 // Update the debt
@@ -320,20 +319,18 @@ impl<'a> VolumeFillMatcher<'a> {
             }
 
             // Move the AMM if we have matched against an AMM order
-            if ask.is_amm() || next_ask.is_amm() {
-                if let Some(amm) = self.amm_price.as_mut() {
-                    if Self::fill_amm(
-                        amm,
-                        &mut self.results,
-                        &mut self.amm_outcome,
-                        matched,
-                        Direction::BuyingT0
-                    )
-                    .is_err()
-                    {
-                        return Some(VolumeFillMatchEndReason::ErrorEncountered);
-                    }
-                }
+            if (ask.is_amm() || next_ask.is_amm())
+                && let Some(amm) = self.amm_price.as_mut()
+                && Self::fill_amm(
+                    amm,
+                    &mut self.results,
+                    &mut self.amm_outcome,
+                    matched,
+                    Direction::BuyingT0
+                )
+                .is_err()
+            {
+                return Some(VolumeFillMatchEndReason::ErrorEncountered);
             }
 
             match next_ask_q.cmp(&cur_ask_q) {
@@ -431,31 +428,25 @@ impl<'a> VolumeFillMatcher<'a> {
         };
 
         // Update our AMM from our AMM order if we have one
-        if let Some((a_o, direction)) = amm_order {
-            if let Some(amm) = self.amm_price.as_mut() {
-                // We shouldn't be in a t1 context unless a_o.is_debt() is true, but let's be
-                // explicit
-                let quantity = if t1_context && a_o.is_debt() {
-                    // Move the AMM by the amount of T0 "freed" from the debt
-                    self.debt.unwrap().freed_t0(matched)
-                } else {
-                    // Move the AMM by the portion of the matched T0
-                    // Can unwrap here as we've checked to be sure the order is valid
-                    let quantities = a_o.composite_t0_quantities(matched, direction);
-                    debug!(quantities = ?quantities, "Found mixed quantities");
-                    quantities.0.unwrap()
-                };
-                if Self::fill_amm(
-                    amm,
-                    &mut self.results,
-                    &mut self.amm_outcome,
-                    quantity,
-                    direction
-                )
+        if let Some((a_o, direction)) = amm_order
+            && let Some(amm) = self.amm_price.as_mut()
+        {
+            // We shouldn't be in a t1 context unless a_o.is_debt() is true, but let's be
+            // explicit
+            let quantity = if t1_context && a_o.is_debt() {
+                // Move the AMM by the amount of T0 "freed" from the debt
+                self.debt.unwrap().freed_t0(matched)
+            } else {
+                // Move the AMM by the portion of the matched T0
+                // Can unwrap here as we've checked to be sure the order is valid
+                let quantities = a_o.composite_t0_quantities(matched, direction);
+                debug!(quantities = ?quantities, "Found mixed quantities");
+                quantities.0.unwrap()
+            };
+            if Self::fill_amm(amm, &mut self.results, &mut self.amm_outcome, quantity, direction)
                 .is_err()
-                {
-                    return Some(VolumeFillMatchEndReason::ErrorEncountered);
-                }
+            {
+                return Some(VolumeFillMatchEndReason::ErrorEncountered);
             }
         }
 

@@ -395,6 +395,7 @@ where
 }
 
 #[derive(Error, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum PoolManagerError {
     #[error("Invalid block range")]
     InvalidBlockRange,

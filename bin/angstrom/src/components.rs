@@ -354,7 +354,7 @@ where
     let uniswap_pools = uniswap_pool_manager.pools();
     let pool_ids = uniswap_pool_manager.pool_addresses().collect::<Vec<_>>();
 
-    executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
+    executor.spawn_critical_task("uniswap pool manager", Box::pin(uniswap_pool_manager));
     let price_generator = TokenPriceGenerator::new(
         querying_provider.clone(),
         block_id,
@@ -439,7 +439,7 @@ where
         consensus_client.subscribe_consensus_round_event()
     );
 
-    executor.spawn_critical("amm quoting service", amm);
+    executor.spawn_critical_task("amm quoting service", amm);
 
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(

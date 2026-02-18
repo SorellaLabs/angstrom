@@ -45,10 +45,10 @@ impl Balances {
             })?
             .and_then(|slot| {
                 let slot_addr = slot.generate_slot(user).ok()?;
-                if let Some(address_slots) = overrides.get(&token) {
-                    if let Some(s_override) = address_slots.get(&slot_addr) {
-                        return Some(*s_override);
-                    }
+                if let Some(address_slots) = overrides.get(&token)
+                    && let Some(s_override) = address_slots.get(&slot_addr)
+                {
+                    return Some(*s_override);
                 }
                 db.storage_ref(token, slot_addr).ok()
             });

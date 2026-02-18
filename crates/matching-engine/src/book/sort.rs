@@ -5,16 +5,12 @@ use super::BookOrder;
 // There are lots of different ways we can sort the orders we get in, so let's
 // make this modular
 
+#[derive(Default)]
 pub enum SortStrategy {
+    #[default]
     Unsorted,
     ByPriceByVolume,
     PricePartialVolume
-}
-
-impl Default for SortStrategy {
-    fn default() -> Self {
-        Self::Unsorted
-    }
 }
 
 impl SortStrategy {

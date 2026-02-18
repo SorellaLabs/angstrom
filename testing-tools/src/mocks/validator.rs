@@ -49,7 +49,7 @@ impl OrderValidatorHandle for MockValidator {
         _: u64,
         _: Vec<alloy_primitives::B256>,
         _: Vec<Address>
-    ) -> validation::order::ValidationFuture {
+    ) -> validation::order::ValidationFuture<'_> {
         Box::pin(async move { OrderValidationResults::TransitionedToBlock(vec![]) })
     }
 
@@ -57,7 +57,7 @@ impl OrderValidatorHandle for MockValidator {
         &self,
         _origin: angstrom_types::orders::OrderOrigin,
         transaction: Self::Order
-    ) -> validation::order::ValidationFuture {
+    ) -> validation::order::ValidationFuture<'_> {
         println!("{transaction:?}");
         let address = transaction.from();
         let res = self
@@ -75,11 +75,11 @@ impl OrderValidatorHandle for MockValidator {
         _is_internal: bool,
         _token_0: Address,
         _token_1: Address
-    ) -> GasEstimationFuture {
+    ) -> GasEstimationFuture<'_> {
         Box::pin(future::ready(Ok((U256::from(250_000u64), 23423))))
     }
 
-    fn valid_nonce_for_user(&self, _: Address) -> validation::order::NonceFuture {
+    fn valid_nonce_for_user(&self, _: Address) -> validation::order::NonceFuture<'_> {
         Box::pin(async move { 10 })
     }
 }

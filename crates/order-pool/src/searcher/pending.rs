@@ -106,7 +106,7 @@ impl PendingPool {
     ) -> Vec<OrderWithStorageData<TopOfBlockOrder>> {
         self.orders
             .values()
-            .filter_map(|order| hashes.contains(&order.order_id.hash).then_some(order))
+            .filter(|order| hashes.contains(&order.order_id.hash))
             .cloned()
             .collect()
     }

@@ -97,7 +97,7 @@ where
                                     .blocks_iter()
                                     .filter(|b| b.number() >= start)
                                     .zip(new.blocks_iter().filter(|b| b.number() >= start))
-                                    .filter(|&(old, new)| (old.hash() != new.hash()))
+                                    .filter(|&(old, new)| old.hash() != new.hash())
                                     .map(|(_, new)| new.number())
                                     .collect::<Vec<_>>();
 
@@ -156,6 +156,7 @@ impl<P> CanonicalStateAdapter<P>
 where
     P: Provider + 'static
 {
+    #[allow(clippy::result_large_err)]
     fn validate_filter(&self, filter: &Filter) -> Result<(), PoolManagerError> {
         let last_block = self.last_block_number.load(Ordering::SeqCst);
         if let FilterBlockOption::Range { from_block, to_block } = &filter.block_option {

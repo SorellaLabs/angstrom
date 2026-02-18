@@ -61,7 +61,7 @@ pub fn run() -> eyre::Result<()> {
         }
 
         if args.metrics_enabled {
-            executor.spawn_critical("metrics", crate::cli::init_metrics(args.metrics_port));
+            executor.spawn_critical_task("metrics", crate::cli::init_metrics(args.metrics_port));
             METRICS_ENABLED.set(true).unwrap();
         } else {
             METRICS_ENABLED.set(false).unwrap();
@@ -141,7 +141,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     secret_key: AngstromSigner<S>,
     args: AngstromConfig,
     mut channels: StromHandles,
-    builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, ChainSpec>>
+    builder: WithLaunchContext<NodeBuilder<DatabaseEnv, ChainSpec>>
 ) -> eyre::Result<()> {
     let mut network = init_network_builder(
         secret_key.clone(),

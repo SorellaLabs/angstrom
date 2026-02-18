@@ -81,6 +81,7 @@ impl MatchingEngineHandle for MatcherHandle {
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
     ) -> futures_util::future::BoxFuture<
+        '_,
         Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>
     > {
         Box::pin(async move {
@@ -111,7 +112,7 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
         let tp = Arc::new(tp);
 
         let fut = manager_thread(rx, tp.clone(), validation).boxed();
-        tp.spawn_critical("matching_engine", fut);
+        tp.spawn_critical_task("matching_engine", fut);
 
         MatcherHandle { sender: tx }
     }

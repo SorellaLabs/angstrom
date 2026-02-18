@@ -70,7 +70,7 @@ where
     ) -> jsonrpsee::core::SubscriptionResult {
         let sink = pending.accept().await?;
         let mut subscription = self.consensus.subscribe_empty_block_attestations();
-        self.task_spawner.spawn(Box::pin(async move {
+        self.task_spawner.spawn_task(Box::pin(async move {
             while let Some(result) = subscription.next().await {
                 if sink.is_closed() {
                     break;

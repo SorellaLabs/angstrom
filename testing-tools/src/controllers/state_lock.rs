@@ -225,7 +225,7 @@ impl<T: Unpin + Future + Send + 'static> StateLockInner<T> {
         let inner = Arc::new(Mutex::new(inner_unarced));
         let inner_fut = StateLockFut::new(node_id, inner.clone(), lock.clone());
 
-        Self { node_id, inner, lock, fut: ex.spawn(inner_fut) }
+        Self { node_id, inner, lock, fut: ex.spawn_task(inner_fut) }
     }
 
     fn on_inner<F, R>(&self, f: F) -> R

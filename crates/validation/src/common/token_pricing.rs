@@ -472,8 +472,7 @@ impl TokenPriceGenerator {
             Some(first_hop_price.mul_ray(second_hop_price))
         } else {
             tracing::error!("found a token that doesn't have a 1 hop to WETH");
-
-            return None;
+            None
         }
     }
 

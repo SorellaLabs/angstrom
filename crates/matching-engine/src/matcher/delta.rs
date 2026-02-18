@@ -38,6 +38,7 @@ struct OrderLiquidity {
 /// Enum describing what kind of ToB order we want to use to set the initial AMM
 /// price for our DeltaMatcher
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum DeltaMatcherToB {
     /// No ToB Order at all, no price movement
     None,

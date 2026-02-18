@@ -55,6 +55,7 @@ pub enum ValidationMessage {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum OrderValidationResults {
     Valid(OrderWithStorageData<AllOrders>),
     // the raw hash to be removed
@@ -193,14 +194,18 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
     /// The order type of the limit order pool
     type Order: Send + Sync;
 
-    fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order) -> ValidationFuture;
+    fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order)
+    -> ValidationFuture<'_>;
 
     fn cancel_order(&self, user: Address, order_hash: B256);
 
     /// Validates a batch of orders.
     ///
     /// Must return all outcomes for the given orders in the same order.
-    fn validate_orders(&self, transactions: Vec<(OrderOrigin, Self::Order)>) -> ValidationsFuture {
+    fn validate_orders(
+        &self,
+        transactions: Vec<(OrderOrigin, Self::Order)>
+    ) -> ValidationsFuture<'_> {
         Box::pin(futures_util::future::join_all(
             transactions
                 .into_iter()
@@ -214,7 +219,7 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
         block_number: u64,
         completed_orders: Vec<B256>,
         addresses: Vec<Address>
-    ) -> ValidationFuture;
+    ) -> ValidationFuture<'_>;
 
     /// estimates gas usage for order
     fn estimate_gas(
@@ -223,9 +228,9 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
         is_internal: bool,
         token_0: Address,
         token_1: Address
-    ) -> GasEstimationFuture;
+    ) -> GasEstimationFuture<'_>;
 
-    fn valid_nonce_for_user(&self, address: Address) -> NonceFuture;
+    fn valid_nonce_for_user(&self, address: Address) -> NonceFuture<'_>;
 }
 
 impl OrderValidatorHandle for ValidationClient {
@@ -242,7 +247,7 @@ impl OrderValidatorHandle for ValidationClient {
         block_number: u64,
         orders: Vec<B256>,
         addresses: Vec<Address>
-    ) -> ValidationFuture {
+    ) -> ValidationFuture<'_> {
         Box::pin(async move {
             let (tx, rx) = channel();
             let _ = self.0.send(ValidationRequest::NewBlock {
@@ -256,7 +261,11 @@ impl OrderValidatorHandle for ValidationClient {
         })
     }
 
-    fn validate_order(&self, origin: OrderOrigin, transaction: Self::Order) -> ValidationFuture {
+    fn validate_order(
+        &self,
+        origin: OrderOrigin,
+        transaction: Self::Order
+    ) -> ValidationFuture<'_> {
         Box::pin(async move {
             let (tx, rx) = channel();
             let _ = self
@@ -277,7 +286,7 @@ impl OrderValidatorHandle for ValidationClient {
         is_internal: bool,
         token_0: Address,
         token_1: Address
-    ) -> GasEstimationFuture {
+    ) -> GasEstimationFuture<'_> {
         Box::pin(async move {
             let (sender, rx) = channel();
             let _ = self.0.send(ValidationRequest::GasEstimation {
@@ -292,7 +301,7 @@ impl OrderValidatorHandle for ValidationClient {
         })
     }
 
-    fn valid_nonce_for_user(&self, address: Address) -> NonceFuture {
+    fn valid_nonce_for_user(&self, address: Address) -> NonceFuture<'_> {
         Box::pin(async move {
             let (tx, rx) = channel();
             let _ = self

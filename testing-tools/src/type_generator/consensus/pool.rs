@@ -33,7 +33,7 @@ impl Pool {
         Self { key, snapshot, tob }
     }
 
-    pub fn price(&self) -> PoolPrice {
+    pub fn price(&self) -> PoolPrice<'_> {
         self.snapshot.current_price(true)
     }
 

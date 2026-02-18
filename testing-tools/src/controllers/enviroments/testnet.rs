@@ -72,7 +72,7 @@ where
         tracing::info!("cleared blocksyncs, run to cmp");
 
         let all_peers = std::mem::take(&mut self.peers).into_values().map(|peer| {
-            executor.spawn_critical(
+            executor.spawn_critical_task(
                 format!("testnet node {}", peer.testnet_node_id()).leak(),
                 Box::pin(peer.testnet_future())
             )

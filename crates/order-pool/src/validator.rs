@@ -245,6 +245,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum OrderValidatorRes {
     /// standard flow
     ValidatedOrder(OrderValidationResults),

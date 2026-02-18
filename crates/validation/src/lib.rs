@@ -36,6 +36,8 @@ use crate::{
 };
 
 const MAX_VALIDATION_PER_ADDR: usize = 3;
+type TokenPriceUpdate = (u64, u128, Vec<PairsWithPrice>);
+type TokenPriceUpdateStream = Pin<Box<dyn Stream<Item = TokenPriceUpdate> + Send + 'static>>;
 
 #[allow(clippy::too_many_arguments)]
 pub fn init_validation<
@@ -52,7 +54,7 @@ pub fn init_validation<
     current_block: u64,
     angstrom_address: Address,
     node_address: Address,
-    update_stream: Pin<Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>>,
+    update_stream: TokenPriceUpdateStream,
     uniswap_pools: SyncedUniswapPools,
     price_generator: TokenPriceGenerator,
     pool_store: Arc<AngstromPoolConfigStore>,
@@ -89,7 +91,7 @@ pub fn init_validation_replay<
     current_block: u64,
     angstrom_address: Address,
     node_address: Address,
-    update_stream: Pin<Box<dyn Stream<Item = (u64, u128, Vec<PairsWithPrice>)> + Send + 'static>>,
+    update_stream: TokenPriceUpdateStream,
     uniswap_pools: SyncedUniswapPools,
     price_generator: TokenPriceGenerator,
     pool_store: Arc<AngstromPoolConfigStore>,

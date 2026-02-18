@@ -59,7 +59,8 @@ impl OrderBook {
     /// Bids first, then asks.
     pub fn all_orders_iter(
         &self
-    ) -> Chain<Iter<OrderWithStorageData<AllOrders>>, Iter<OrderWithStorageData<AllOrders>>> {
+    ) -> Chain<Iter<'_, OrderWithStorageData<AllOrders>>, Iter<'_, OrderWithStorageData<AllOrders>>>
+    {
         self.bids.iter().chain(self.asks.iter())
     }
 

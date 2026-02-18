@@ -343,7 +343,6 @@ where
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos()
-            % 2
-            == 0
+            .is_multiple_of(2)
     }
 }

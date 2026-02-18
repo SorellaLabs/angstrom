@@ -218,7 +218,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let uniswap_pools = uniswap_pool_manager.pools();
     let pool_ids = uniswap_pool_manager.pool_addresses().collect::<Vec<_>>();
 
-    executor.spawn_critical("uniswap pool manager", Box::pin(uniswap_pool_manager));
+    executor.spawn_critical_task("uniswap pool manager", Box::pin(uniswap_pool_manager));
     // EXTERNAL DATA - reads the price history from the chain to establish the price
     // background. Can be snapshotted or re-read from the chain
     let price_generator = TokenPriceGenerator::new(

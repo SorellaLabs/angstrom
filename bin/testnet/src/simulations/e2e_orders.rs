@@ -37,7 +37,7 @@ pub async fn run_e2e_orders(executor: TaskExecutor, cli: End2EndOrdersCli) -> ey
     tracing::info!("e2e testnet is alive");
 
     executor
-        .spawn_critical_blocking("testnet", testnet.run_to_completion(executor.clone()))
+        .spawn_critical_blocking_task("testnet", testnet.run_to_completion(executor.clone()))
         .await?;
     Ok(())
 }
@@ -69,7 +69,7 @@ fn end_to_end_agent<'a>(
                     | reth_provider::CanonStateNotification::Reorg { new, .. } => new.tip_number()
                 });
 
-        t.ex.spawn(
+        t.ex.spawn_task(
             async move {
                 tracing::info!("waiting for new block");
                 let mut pending_orders = FuturesUnordered::new();

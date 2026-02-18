@@ -87,12 +87,13 @@ impl DonationResult {
         } else if all_ranges[0].0 <= start_tick && start_tick < all_ranges[0].1 {
             // If the first range is where we're at, the last range is our 'far' range
             return all_ranges.last().map(|r| r.0);
-        } else if let Some(last) = all_ranges.last() {
-            if last.0 <= start_tick && start_tick < last.1 {
-                // Otherwise, if the last range is where we're at, the first range is our 'far'
-                // range
-                return Some(all_ranges[0].0);
-            }
+        } else if let Some(last) = all_ranges.last()
+            && last.0 <= start_tick
+            && start_tick < last.1
+        {
+            // Otherwise, if the last range is where we're at, the first range is our 'far'
+            // range
+            return Some(all_ranges[0].0);
         }
         // Any other case and we are in some kinda bad way
         None

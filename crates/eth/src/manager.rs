@@ -99,7 +99,7 @@ where
                 .retain(|e| e.send(EthEvent::AddedNode(*n)).is_ok());
         }
 
-        tp.spawn_critical("eth handle", this.boxed());
+        tp.spawn_critical_task("eth handle", this.boxed());
 
         let handle = EthHandle::new(tx);
 

@@ -329,7 +329,10 @@ impl TryFrom<&[u8]> for AngstromPoolConfigStore {
         }
         tracing::info!(bytecode_len=?value.len());
         let adjusted_entries = &value[1..];
-        if adjusted_entries.len() % POOL_CONFIG_STORE_ENTRY_SIZE != 0 {
+        if !adjusted_entries
+            .len()
+            .is_multiple_of(POOL_CONFIG_STORE_ENTRY_SIZE)
+        {
             tracing::info!(bytecode_len=?adjusted_entries.len(), ?POOL_CONFIG_STORE_ENTRY_SIZE);
             return Err(
                 "Invalid encoded entries: incorrect length after removing safety byte".to_string()

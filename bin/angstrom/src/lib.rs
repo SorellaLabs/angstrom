@@ -8,7 +8,10 @@ use alloy::providers::{ProviderBuilder, network::Ethereum};
 use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
-use angstrom_metrics::METRICS_ENABLED;
+use angstrom_metrics::{
+    METRICS_ENABLED,
+    block_metrics_db::{BlockMetricsDbConfig, initialize_block_metrics_db}
+};
 use angstrom_network::{AngstromNetworkBuilder, pool_manager::PoolHandle};
 use angstrom_rpc::{
     ConsensusApi, OrderApi,
@@ -24,6 +27,7 @@ use angstrom_types::{
 use clap::Parser;
 use cli::AngstromConfig;
 use consensus::ConsensusHandler;
+use eyre::WrapErr;
 use parking_lot::RwLock;
 use reth::{
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
@@ -143,6 +147,23 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     mut channels: StromHandles,
     builder: WithLaunchContext<NodeBuilder<DatabaseEnv, ChainSpec>>
 ) -> eyre::Result<()> {
+    if args.metrics_enabled {
+        let db_url = args
+            .block_metrics_db_url
+            .clone()
+            .expect("validated: --block-metrics-db-url is required when metrics are enabled");
+        let db_config = BlockMetricsDbConfig {
+            db_url,
+            queue_capacity: args.block_metrics_db_queue_capacity,
+            batch_size: args.block_metrics_db_batch_size,
+            flush_interval_ms: args.block_metrics_db_flush_interval_ms,
+            retention_days: args.block_metrics_db_retention_days
+        };
+        let node_address = format!("{:#x}", secret_key.address());
+        initialize_block_metrics_db(db_config, node_address)
+            .wrap_err("failed to initialize block metrics db writer")?;
+    }
+
     let mut network = init_network_builder(
         secret_key.clone(),
         channels.eth_handle_rx.take().unwrap(),

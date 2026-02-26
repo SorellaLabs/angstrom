@@ -3,6 +3,8 @@ use std::sync::OnceLock;
 
 pub use exporter::*;
 
+pub mod block_metrics_db;
+
 mod bundle_building;
 
 pub mod validation;

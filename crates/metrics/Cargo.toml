@@ -19,6 +19,7 @@ metrics-process.workspace = true
 prometheus.workspace = true
 reth-node-metrics.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
+tokio-postgres = "0.7.15"
 tower.workspace = true
 tracing.workspace = true
 

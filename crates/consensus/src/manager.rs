@@ -95,6 +95,9 @@ where
         let leader = leader_selection.choose_proposer(current_height).unwrap();
         block_sync.register(MODULE_NAME);
 
+        let metrics = ConsensusMetricsWrapper::new();
+        metrics.set_block_height(current_height);
+
         Self {
             strom_consensus_event,
             current_height,
@@ -106,7 +109,7 @@ where
                     signer,
                     leader,
                     validators.clone(),
-                    ConsensusMetricsWrapper::new(),
+                    metrics,
                     pool_registry,
                     uniswap_pools,
                     provider,
@@ -131,6 +134,7 @@ where
         let new_block = notification.tip();
 
         self.current_height = new_block.number();
+        ConsensusMetricsWrapper::new().set_block_height(self.current_height);
         let round_leader = self
             .leader_selection
             .choose_proposer(self.current_height)

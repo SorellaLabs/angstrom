@@ -11,42 +11,26 @@ use hsm_signer::{Pkcs11Signer, Pkcs11SignerConfig};
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct AngstromConfig {
     /// enables the metrics
-    #[clap(long, default_value = "false", global = true, requires = "block_metrics_db_url")]
-    pub metrics_enabled: bool,
+    #[clap(long, default_value = "false", global = true)]
+    pub metrics_enabled:           bool,
     /// spawns the prometheus metrics exporter at the specified port
     /// Default: 6969
     #[clap(long, default_value = "6969", global = true)]
-    pub metrics_port: u16,
-    /// postgres connection string for per-block metrics persistence
-    /// required when `--metrics-enabled` is true
-    #[clap(long, global = true)]
-    pub block_metrics_db_url: Option<String>,
-    /// bounded in-process queue capacity for per-block metrics db writes
-    #[clap(long, default_value = "20000", global = true)]
-    pub block_metrics_db_queue_capacity: usize,
-    /// max events per db flush batch for per-block metrics
-    #[clap(long, default_value = "500", global = true)]
-    pub block_metrics_db_batch_size: usize,
-    /// flush interval in milliseconds for per-block metrics db writer
-    #[clap(long, default_value = "200", global = true)]
-    pub block_metrics_db_flush_interval_ms: u64,
-    /// retention window in days for per-block metrics db tables
-    #[clap(long, default_value = "90", global = true)]
-    pub block_metrics_db_retention_days: i64,
+    pub metrics_port:              u16,
     #[clap(short, long, num_args(0..=10), require_equals = true, default_values = ETH_MEV_RPC)]
-    pub mev_boost_endpoints: Vec<String>,
+    pub mev_boost_endpoints:       Vec<String>,
     /// needed to properly setup the node as we need some chain state before
     /// starting the internal reth node
     #[clap(short, long, default_value = "https://eth.drpc.org")]
-    pub boot_node: String,
+    pub boot_node:                 String,
     #[clap(short, long, num_args(0..=5), require_equals = true, default_values = ETH_DEFAULT_RPC)]
-    pub normal_nodes: Vec<String>,
+    pub normal_nodes:              Vec<String>,
     #[clap(short, long, num_args(0..=10), require_equals = true, default_values = ETH_ANGSTROM_RPC)]
     pub angstrom_submission_nodes: Vec<String>,
     #[clap(flatten)]
-    pub key_config: KeyConfig,
+    pub key_config:                KeyConfig,
     #[clap(flatten)]
-    pub consensus_timing: ConsensusTimingConfig
+    pub consensus_timing:          ConsensusTimingConfig
 }
 
 impl AngstromConfig {

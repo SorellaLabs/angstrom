@@ -1,11 +1,9 @@
 use std::sync::OnceLock;
 
+use angstrom_rpc_types::metrics::BlockMetricsEvent;
 use prometheus::IntGauge;
 
-use crate::{
-    METRICS_ENABLED,
-    block_metrics_db::{BlockMetricEvent, enqueue_block_metric_event}
-};
+use crate::{METRICS_ENABLED, block_metrics_stream::publish_block_metrics_event};
 
 #[derive(Clone)]
 struct ConsensusMetrics {
@@ -55,27 +53,27 @@ impl ConsensusMetricsWrapper {
 
     pub fn set_consensus_completion_time(&self, block_number: u64, time: u128) {
         if self.0.is_some() {
-            enqueue_block_metric_event(BlockMetricEvent::ConsensusCompletionTime {
+            publish_block_metrics_event(BlockMetricsEvent::ConsensusCompletionTime {
                 block:   block_number,
-                time_ms: time
+                time_ms: u64::try_from(time).unwrap_or(u64::MAX)
             });
         }
     }
 
     pub fn set_proposal_verification_time(&self, block_number: u64, time: u128) {
         if self.0.is_some() {
-            enqueue_block_metric_event(BlockMetricEvent::ProposalVerificationTime {
+            publish_block_metrics_event(BlockMetricsEvent::ProposalVerificationTime {
                 block:   block_number,
-                time_ms: time
+                time_ms: u64::try_from(time).unwrap_or(u64::MAX)
             });
         }
     }
 
     pub fn set_proposal_build_time(&self, block_number: u64, time: u128) {
         if self.0.is_some() {
-            enqueue_block_metric_event(BlockMetricEvent::ProposalBuildTime {
+            publish_block_metrics_event(BlockMetricsEvent::ProposalBuildTime {
                 block:   block_number,
-                time_ms: time
+                time_ms: u64::try_from(time).unwrap_or(u64::MAX)
             });
         }
     }

@@ -1,16 +1,19 @@
 use std::sync::OnceLock;
 
-use crate::{
-    METRICS_ENABLED,
-    block_metrics_db::{BlockMetricEvent, enqueue_block_metric_event}
-};
+use angstrom_rpc_types::metrics::BlockMetricsEvent;
+
+use crate::{METRICS_ENABLED, block_metrics_stream::publish_block_metrics_event};
 
 #[derive(Clone)]
 struct BlockMetrics;
 
 impl BlockMetrics {
     fn record_preproposal_orders(&self, block: u64, limit: usize, searcher: usize) {
-        enqueue_block_metric_event(BlockMetricEvent::PreproposalOrders { block, limit, searcher });
+        publish_block_metrics_event(BlockMetricsEvent::PreproposalOrders {
+            block,
+            limit,
+            searcher
+        });
     }
 
     fn record_state_transition(
@@ -21,7 +24,7 @@ impl BlockMetrics {
         limit: usize,
         searcher: usize
     ) {
-        enqueue_block_metric_event(BlockMetricEvent::StateTransition {
+        publish_block_metrics_event(BlockMetricsEvent::StateTransition {
             block,
             state: state.to_string(),
             slot_offset_ms,
@@ -31,15 +34,15 @@ impl BlockMetrics {
     }
 
     fn record_preproposals_collected(&self, block: u64, count: usize) {
-        enqueue_block_metric_event(BlockMetricEvent::PreproposalsCollected { block, count });
+        publish_block_metrics_event(BlockMetricsEvent::PreproposalsCollected { block, count });
     }
 
     fn record_is_leader(&self, block: u64, is_leader: bool) {
-        enqueue_block_metric_event(BlockMetricEvent::IsLeader { block, is_leader });
+        publish_block_metrics_event(BlockMetricsEvent::IsLeader { block, is_leader });
     }
 
     fn record_matching_input_pre_quorum(&self, block: u64, limit: usize, searcher: usize) {
-        enqueue_block_metric_event(BlockMetricEvent::MatchingInputPreQuorum {
+        publish_block_metrics_event(BlockMetricsEvent::MatchingInputPreQuorum {
             block,
             limit,
             searcher
@@ -47,7 +50,7 @@ impl BlockMetrics {
     }
 
     fn record_matching_input_post_quorum(&self, block: u64, limit: usize, searcher: usize) {
-        enqueue_block_metric_event(BlockMetricEvent::MatchingInputPostQuorum {
+        publish_block_metrics_event(BlockMetricsEvent::MatchingInputPostQuorum {
             block,
             limit,
             searcher
@@ -65,7 +68,7 @@ impl BlockMetrics {
         killed: usize,
         bundle_generated: bool
     ) {
-        enqueue_block_metric_event(BlockMetricEvent::MatchingResults {
+        publish_block_metrics_event(BlockMetricsEvent::MatchingResults {
             block,
             pools_solved,
             filled,
@@ -77,7 +80,7 @@ impl BlockMetrics {
     }
 
     fn record_submission_started(&self, block: u64, slot_offset_ms: u64) {
-        enqueue_block_metric_event(BlockMetricEvent::SubmissionStarted { block, slot_offset_ms });
+        publish_block_metrics_event(BlockMetricsEvent::SubmissionStarted { block, slot_offset_ms });
     }
 
     fn record_submission_completed(
@@ -87,7 +90,7 @@ impl BlockMetrics {
         latency_ms: u64,
         success: bool
     ) {
-        enqueue_block_metric_event(BlockMetricEvent::SubmissionCompleted {
+        publish_block_metrics_event(BlockMetricsEvent::SubmissionCompleted {
             block,
             slot_offset_ms,
             latency_ms,
@@ -103,7 +106,7 @@ impl BlockMetrics {
         success: bool,
         latency_ms: u64
     ) {
-        enqueue_block_metric_event(BlockMetricEvent::SubmissionEndpoint {
+        publish_block_metrics_event(BlockMetricsEvent::SubmissionEndpoint {
             block,
             submitter_type: submitter_type.to_string(),
             endpoint: endpoint.to_string(),
@@ -113,7 +116,7 @@ impl BlockMetrics {
     }
 
     fn record_bundle_included(&self, block: u64, included: bool) {
-        enqueue_block_metric_event(BlockMetricEvent::BundleIncluded { block, included });
+        publish_block_metrics_event(BlockMetricsEvent::BundleIncluded { block, included });
     }
 }
 

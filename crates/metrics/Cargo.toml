@@ -9,6 +9,7 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
+angstrom-rpc-types.workspace = true
 angstrom-types.workspace = true
 eyre.workspace = true
 hyper = { workspace = true, features = ["server"] }
@@ -19,7 +20,6 @@ metrics-process.workspace = true
 prometheus.workspace = true
 reth-node-metrics.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
-tokio-postgres = "0.7.15"
 tower.workspace = true
 tracing.workspace = true
 

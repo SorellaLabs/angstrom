@@ -1,5 +1,19 @@
-#[derive(Debug, Clone)]
-pub(crate) enum BlockMetricEvent {
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BlockMetricsEventEnvelope {
+    /// Hex signer address of the producing node.
+    pub node_address:        String,
+    /// Chain id associated with the node at event production time.
+    pub chain_id:            u64,
+    /// Producer-side event timestamp in unix milliseconds.
+    /// This avoids drift from downstream queueing/retry delays.
+    pub observed_at_unix_ms: u64,
+    pub event:               BlockMetricsEvent
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BlockMetricsEvent {
     PreproposalOrders {
         block:    u64,
         limit:    usize,
@@ -62,14 +76,14 @@ pub(crate) enum BlockMetricEvent {
     },
     ProposalBuildTime {
         block:   u64,
-        time_ms: u128
+        time_ms: u64
     },
     ProposalVerificationTime {
         block:   u64,
-        time_ms: u128
+        time_ms: u64
     },
     ConsensusCompletionTime {
         block:   u64,
-        time_ms: u128
+        time_ms: u64
     }
 }

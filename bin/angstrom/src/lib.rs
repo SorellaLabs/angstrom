@@ -8,14 +8,11 @@ use alloy::providers::{ProviderBuilder, network::Ethereum};
 use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
-use angstrom_metrics::{
-    METRICS_ENABLED,
-    block_metrics_db::{BlockMetricsDbConfig, initialize_block_metrics_db}
-};
+use angstrom_metrics::{METRICS_ENABLED, block_metrics_stream::initialize_stream_metadata};
 use angstrom_network::{AngstromNetworkBuilder, pool_manager::PoolHandle};
 use angstrom_rpc::{
-    ConsensusApi, OrderApi,
-    api::{ConsensusApiServer, OrderApiServer}
+    ConsensusApi, MetricsApi, OrderApi,
+    api::{ConsensusApiServer, MetricsApiServer, OrderApiServer}
 };
 use angstrom_types::{
     contract_bindings::controller_v_1::ControllerV1,
@@ -148,20 +145,10 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     builder: WithLaunchContext<NodeBuilder<DatabaseEnv, ChainSpec>>
 ) -> eyre::Result<()> {
     if args.metrics_enabled {
-        let db_url = args
-            .block_metrics_db_url
-            .clone()
-            .expect("validated: --block-metrics-db-url is required when metrics are enabled");
-        let db_config = BlockMetricsDbConfig {
-            db_url,
-            queue_capacity: args.block_metrics_db_queue_capacity,
-            batch_size: args.block_metrics_db_batch_size,
-            flush_interval_ms: args.block_metrics_db_flush_interval_ms,
-            retention_days: args.block_metrics_db_retention_days
-        };
+        let chain_id = *angstrom_types::primitive::CHAIN_ID.get().unwrap_or(&1);
         let node_address = format!("{:#x}", secret_key.address());
-        initialize_block_metrics_db(db_config, node_address)
-            .wrap_err("failed to initialize block metrics db writer")?;
+        initialize_stream_metadata(node_address, chain_id)
+            .wrap_err("failed to initialize block metrics stream metadata")?;
     }
 
     let mut network = init_network_builder(
@@ -169,6 +156,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         channels.eth_handle_rx.take().unwrap(),
         Arc::new(RwLock::new(node_set.clone()))
     )?;
+    let metrics_enabled = args.metrics_enabled;
 
     let protocol_handle = network.build_protocol_handler();
     let cloned_consensus_client = consensus_client.clone();
@@ -188,9 +176,16 @@ async fn run_with_signer<S: AngstromMetaSigner>(
                 validation_client,
                 quoter_handle
             );
-            let consensus = ConsensusApi::new(cloned_consensus_client, executor_clone);
+            let consensus = ConsensusApi::new(cloned_consensus_client, executor_clone.clone());
             rpc_context.modules.merge_configured(order_api.into_rpc())?;
             rpc_context.modules.merge_configured(consensus.into_rpc())?;
+            if metrics_enabled {
+                let metrics = MetricsApi::new(
+                    angstrom_metrics::block_metrics_stream::BlockMetricsStreamSource,
+                    executor_clone.clone()
+                );
+                rpc_context.modules.merge_configured(metrics.into_rpc())?;
+            }
 
             Ok(())
         })

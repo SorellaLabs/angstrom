@@ -183,7 +183,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
             rpc_context.modules.merge_configured(order_api.into_rpc())?;
             rpc_context.modules.merge_configured(consensus.into_rpc())?;
             if metrics_enabled {
-                let metrics = MetricsApi::new(BlockMetricsStreamSource, executor_clone.clone());
+                let metrics = MetricsApi::new(BlockMetricsStreamSource, executor_clone);
                 rpc_context.modules.merge_configured(metrics.into_rpc())?;
             }
 

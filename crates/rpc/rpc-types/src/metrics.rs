@@ -13,6 +13,18 @@ pub struct MetricsEventEnvelope {
     pub event:               MetricsEvent
 }
 
+impl MetricsEventEnvelope {
+    pub fn new(node_address: Address, chain_id: u64, event: impl Into<MetricsEvent>) -> Self {
+        MetricsEventEnvelope {
+            node_address,
+            chain_id,
+            // Capture producer-side timing before WS transport and downstream queueing.
+            observed_at_unix_ms: crate::utils::unix_ms_now(),
+            event: event.into()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MetricsEvent {
     BlockMetrics(BlockMetricsEvent),

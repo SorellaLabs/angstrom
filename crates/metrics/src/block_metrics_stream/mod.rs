@@ -1,4 +1,3 @@
-mod event;
 mod health;
 mod meta;
 mod publisher;

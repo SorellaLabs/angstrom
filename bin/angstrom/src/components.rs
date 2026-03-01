@@ -192,7 +192,10 @@ where
             Block = reth::primitives::Block,
             Receipt = reth::primitives::Receipt,
             Header = reth::primitives::Header
-        > + DatabaseProviderFactory + StateProviderFactory + BlockNumReader + Clone,
+        > + DatabaseProviderFactory
+        + StateProviderFactory
+        + BlockNumReader
+        + Clone,
     AddOns: NodeAddOns<Node> + RethRpcAddOns<Node>,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
         TryIntoHistoricalStateProvider + BlockNumReader,

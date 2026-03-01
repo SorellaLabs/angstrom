@@ -79,7 +79,7 @@ fn testnet_bundle_unlock() {
         let signer = testnet.get_random_peer(vec![]).get_sk();
 
         let executor = ctx.task_executor.clone();
-        let testnet_task = ctx.task_executor.spawn_critical(
+        let testnet_task = ctx.task_executor.spawn_critical_task(
             "testnet",
             Box::pin(async move {
                 testnet.run_to_completion(executor).await;

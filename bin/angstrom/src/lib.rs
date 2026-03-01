@@ -8,13 +8,16 @@ use alloy::providers::{ProviderBuilder, network::Ethereum};
 use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
-use angstrom_metrics::METRICS_ENABLED;
+use angstrom_metrics::{
+    BlockMetricsStreamSource, METRICS_ENABLED, block_metrics_stream::initialize_stream_metadata
+};
 use angstrom_network::{AngstromNetworkBuilder, pool_manager::PoolHandle};
 use angstrom_rpc::{
-    ConsensusApi, OrderApi,
-    api::{ConsensusApiServer, OrderApiServer}
+    ConsensusApi, MetricsApi, OrderApi,
+    api::{ConsensusApiServer, MetricsApiServer, OrderApiServer}
 };
 use angstrom_types::{
+    CHAIN_ID,
     contract_bindings::controller_v_1::ControllerV1,
     primitive::{
         ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, CONTROLLER_V1_ADDRESS,
@@ -24,6 +27,7 @@ use angstrom_types::{
 use clap::Parser;
 use cli::AngstromConfig;
 use consensus::ConsensusHandler;
+use eyre::WrapErr;
 use parking_lot::RwLock;
 use reth::{
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
@@ -143,6 +147,14 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     mut channels: StromHandles,
     builder: WithLaunchContext<NodeBuilder<DatabaseEnv, ChainSpec>>
 ) -> eyre::Result<()> {
+    let metrics_enabled = args.metrics_enabled;
+
+    if metrics_enabled {
+        let chain_id = *CHAIN_ID.get().unwrap();
+        initialize_stream_metadata(secret_key.address(), chain_id)
+            .wrap_err("failed to initialize block metrics stream metadata")?;
+    }
+
     let mut network = init_network_builder(
         secret_key.clone(),
         channels.eth_handle_rx.take().unwrap(),
@@ -167,9 +179,13 @@ async fn run_with_signer<S: AngstromMetaSigner>(
                 validation_client,
                 quoter_handle
             );
-            let consensus = ConsensusApi::new(cloned_consensus_client, executor_clone);
+            let consensus = ConsensusApi::new(cloned_consensus_client, executor_clone.clone());
             rpc_context.modules.merge_configured(order_api.into_rpc())?;
             rpc_context.modules.merge_configured(consensus.into_rpc())?;
+            if metrics_enabled {
+                let metrics = MetricsApi::new(BlockMetricsStreamSource, executor_clone);
+                rpc_context.modules.merge_configured(metrics.into_rpc())?;
+            }
 
             Ok(())
         })

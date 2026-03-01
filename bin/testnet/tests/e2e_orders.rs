@@ -190,7 +190,7 @@ where
     // grab provider so we can query from the chain later.
     let provider = testnet.node_provider(Some(1)).rpc_provider();
 
-    let task = ctx.spawn_critical("testnet", testnet.run_to_completion(ctx.clone()).boxed());
+    let task = ctx.spawn_critical_task("testnet", testnet.run_to_completion(ctx.clone()).boxed());
 
     tracing::info!("waiting for valid block in {}", test_name);
     assert!(
@@ -355,7 +355,7 @@ fn test_remove_add_pool() {
         // grab provider so we can query from the chain later.
         let provider = testnet.node_provider(Some(1)).rpc_provider();
 
-        let testnet_task = ctx.task_executor.spawn_critical(
+        let testnet_task = ctx.task_executor.spawn_critical_task(
             "testnet",
             testnet.run_to_completion(ctx.task_executor.clone()).boxed()
         );

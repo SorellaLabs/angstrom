@@ -1,9 +1,12 @@
+pub mod metrics;
 pub mod quoting;
 pub mod subscriptions;
+pub(crate) mod utils;
 use alloy_primitives::FixedBytes;
 use angstrom_types_primitives::{
     primitive::OrderValidationError, sol_bindings::grouped_orders::AllOrders
 };
+pub use metrics::*;
 pub use quoting::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

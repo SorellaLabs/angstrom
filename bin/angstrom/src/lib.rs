@@ -8,7 +8,9 @@ use alloy::providers::{ProviderBuilder, network::Ethereum};
 use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
-use angstrom_metrics::{METRICS_ENABLED, block_metrics_stream::initialize_stream_metadata};
+use angstrom_metrics::{
+    METRICS_ENABLED, MetricsStreamSource, block_metrics_stream::initialize_stream_metadata
+};
 use angstrom_network::{AngstromNetworkBuilder, pool_manager::PoolHandle};
 use angstrom_rpc::{
     ConsensusApi, MetricsApi, OrderApi,
@@ -181,10 +183,7 @@ async fn run_with_signer<S: AngstromMetaSigner>(
             rpc_context.modules.merge_configured(order_api.into_rpc())?;
             rpc_context.modules.merge_configured(consensus.into_rpc())?;
             if metrics_enabled {
-                let metrics = MetricsApi::new(
-                    angstrom_metrics::block_metrics_stream::BlockMetricsStreamSource,
-                    executor_clone.clone()
-                );
+                let metrics = MetricsApi::new(MetricsStreamSource, executor_clone.clone());
                 rpc_context.modules.merge_configured(metrics.into_rpc())?;
             }
 

@@ -1,27 +1,27 @@
 use std::sync::OnceLock;
 
-use angstrom_rpc_types::metrics::BlockMetricsEventEnvelope;
+use angstrom_rpc_types::metrics::MetricsEventEnvelope;
 use tokio::sync::broadcast;
 
 use super::health::increment_publish_no_subscribers;
 
 const STREAM_CAPACITY: usize = 20_000;
 
-static STREAM_SENDER: OnceLock<broadcast::Sender<BlockMetricsEventEnvelope>> = OnceLock::new();
+static STREAM_SENDER: OnceLock<broadcast::Sender<MetricsEventEnvelope>> = OnceLock::new();
 
-fn sender() -> &'static broadcast::Sender<BlockMetricsEventEnvelope> {
+fn sender() -> &'static broadcast::Sender<MetricsEventEnvelope> {
     STREAM_SENDER.get_or_init(|| {
         let (sender, _) = broadcast::channel(STREAM_CAPACITY);
         sender
     })
 }
 
-pub fn publish(envelope: BlockMetricsEventEnvelope) {
+pub fn publish(envelope: MetricsEventEnvelope) {
     if sender().send(envelope).is_err() {
         increment_publish_no_subscribers();
     }
 }
 
-pub fn subscribe() -> broadcast::Receiver<BlockMetricsEventEnvelope> {
+pub fn subscribe() -> broadcast::Receiver<MetricsEventEnvelope> {
     sender().subscribe()
 }

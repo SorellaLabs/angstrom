@@ -56,7 +56,7 @@ use reth_metrics::common::mpsc::{UnboundedMeteredReceiver, UnboundedMeteredSende
 use reth_network::{NetworkHandle, Peers};
 use reth_node_builder::{FullNode, NodeTypes, node::FullNodeTypes, rpc::RethRpcAddOns};
 use reth_provider::{
-    BlockReader, DatabaseProviderFactory, ReceiptProvider, TryIntoHistoricalStateProvider
+    BlockReader, DatabaseProviderFactory, StateProviderFactory, TryIntoHistoricalStateProvider
 };
 use telemetry::init_telemetry;
 use tokio::sync::{
@@ -192,11 +192,10 @@ where
             Block = reth::primitives::Block,
             Receipt = reth::primitives::Receipt,
             Header = reth::primitives::Header
-        > + DatabaseProviderFactory,
+        > + DatabaseProviderFactory + StateProviderFactory + BlockNumReader + Clone,
     AddOns: NodeAddOns<Node> + RethRpcAddOns<Node>,
     <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider:
-        TryIntoHistoricalStateProvider + ReceiptProvider,
-    <<Node as FullNodeTypes>::Provider as DatabaseProviderFactory>::Provider: BlockNumReader,
+        TryIntoHistoricalStateProvider + BlockNumReader,
     S: AngstromMetaSigner
 {
     // Check to assert that the timeing config is valid.

@@ -27,7 +27,7 @@ where
     StreamSource: MetricsStreamSource,
     Spawner: TaskSpawner + 'static
 {
-    async fn subscribe_block_events(
+    async fn subscribe_metric_events(
         &self,
         pending: PendingSubscriptionSink
     ) -> jsonrpsee::core::SubscriptionResult {

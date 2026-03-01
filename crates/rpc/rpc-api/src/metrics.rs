@@ -6,9 +6,9 @@ use jsonrpsee::proc_macros::rpc;
 #[async_trait::async_trait]
 pub trait MetricsApi {
     #[subscription(
-        name = "subscribeBlockEvents",
-        unsubscribe = "unsubscribeBlockEvents",
+        name = "subscribeMetricEvents",
+        unsubscribe = "unsubscribeMetricEvents",
         item = MetricsEventEnvelope
     )]
-    async fn subscribe_block_events(&self) -> jsonrpsee::core::SubscriptionResult;
+    async fn subscribe_metric_events(&self) -> jsonrpsee::core::SubscriptionResult;
 }

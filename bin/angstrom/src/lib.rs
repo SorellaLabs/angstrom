@@ -9,8 +9,7 @@ use alloy_chains::NamedChain;
 use alloy_primitives::Address;
 use angstrom_amm_quoter::QuoterHandle;
 use angstrom_metrics::{
-    BlockMetricsStreamSource, METRICS_ENABLED, MetricsStreamSource,
-    block_metrics_stream::initialize_stream_metadata
+    BlockMetricsStreamSource, METRICS_ENABLED, block_metrics_stream::initialize_stream_metadata
 };
 use angstrom_network::{AngstromNetworkBuilder, pool_manager::PoolHandle};
 use angstrom_rpc::{

@@ -15,6 +15,7 @@ use angstrom_rpc::{
     api::{ConsensusApiServer, MetricsApiServer, OrderApiServer}
 };
 use angstrom_types::{
+    CHAIN_ID,
     contract_bindings::controller_v_1::ControllerV1,
     primitive::{
         ANGSTROM_DOMAIN, AngstromMetaSigner, AngstromSigner, CONTROLLER_V1_ADDRESS,
@@ -144,10 +145,11 @@ async fn run_with_signer<S: AngstromMetaSigner>(
     mut channels: StromHandles,
     builder: WithLaunchContext<NodeBuilder<DatabaseEnv, ChainSpec>>
 ) -> eyre::Result<()> {
-    if args.metrics_enabled {
-        let chain_id = *angstrom_types::primitive::CHAIN_ID.get().unwrap_or(&1);
-        let node_address = format!("{:#x}", secret_key.address());
-        initialize_stream_metadata(node_address, chain_id)
+    let metrics_enabled = args.metrics_enabled;
+
+    if metrics_enabled {
+        let chain_id = *CHAIN_ID.get().unwrap();
+        initialize_stream_metadata(secret_key.address(), chain_id)
             .wrap_err("failed to initialize block metrics stream metadata")?;
     }
 
@@ -156,7 +158,6 @@ async fn run_with_signer<S: AngstromMetaSigner>(
         channels.eth_handle_rx.take().unwrap(),
         Arc::new(RwLock::new(node_set.clone()))
     )?;
-    let metrics_enabled = args.metrics_enabled;
 
     let protocol_handle = network.build_protocol_handler();
     let cloned_consensus_client = consensus_client.clone();

@@ -1,15 +1,22 @@
+use alloy_primitives::Address;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct BlockMetricsEventEnvelope {
+pub struct MetricsEventEnvelope {
     /// Hex signer address of the producing node.
-    pub node_address:        String,
+    pub node_address:        Address,
     /// Chain id associated with the node at event production time.
     pub chain_id:            u64,
     /// Producer-side event timestamp in unix milliseconds.
     /// This avoids drift from downstream queueing/retry delays.
     pub observed_at_unix_ms: u64,
-    pub event:               BlockMetricsEvent
+    pub event:               MetricsEvent
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MetricsEvent {
+    BlockMetrics(BlockMetricsEvent),
+    ConsensusMetrics(ConsensusMetricsEvent)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -73,17 +80,24 @@ pub enum BlockMetricsEvent {
     BundleIncluded {
         block:    u64,
         included: bool
-    },
-    ProposalBuildTime {
-        block:   u64,
-        time_ms: u64
-    },
-    ProposalVerificationTime {
-        block:   u64,
-        time_ms: u64
-    },
-    ConsensusCompletionTime {
-        block:   u64,
-        time_ms: u64
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ConsensusMetricsEvent {
+    ProposalBuildTime { block: u64, time_ms: u64 },
+    ProposalVerificationTime { block: u64, time_ms: u64 },
+    ConsensusCompletionTime { block: u64, time_ms: u64 }
+}
+
+impl From<BlockMetricsEvent> for MetricsEvent {
+    fn from(value: BlockMetricsEvent) -> Self {
+        Self::BlockMetrics(value)
+    }
+}
+
+impl From<ConsensusMetricsEvent> for MetricsEvent {
+    fn from(value: ConsensusMetricsEvent) -> Self {
+        Self::ConsensusMetrics(value)
     }
 }

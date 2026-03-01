@@ -1,23 +1,14 @@
-use angstrom_metrics::block_metrics_stream::{
-    BlockMetricsStreamSource, increment_lagged_events, increment_receiver_closed,
-    increment_serialize_failures
+use angstrom_metrics::{
+    MetricsStreamSource,
+    block_metrics_stream::{
+        increment_lagged_events, increment_receiver_closed, increment_serialize_failures
+    }
 };
 use angstrom_rpc_api::MetricsApiServer;
-use angstrom_rpc_types::metrics::BlockMetricsEventEnvelope;
 use futures::StreamExt;
 use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage};
 use reth_tasks::TaskSpawner;
-use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
-
-pub trait MetricsStreamSource: Clone + Send + Sync + 'static {
-    fn subscribe_block_events(&self) -> BroadcastStream<BlockMetricsEventEnvelope>;
-}
-
-impl MetricsStreamSource for BlockMetricsStreamSource {
-    fn subscribe_block_events(&self) -> BroadcastStream<BlockMetricsEventEnvelope> {
-        BroadcastStream::new(self.subscribe())
-    }
-}
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 pub struct MetricsApi<StreamSource, Spawner> {
     stream_source: StreamSource,
@@ -44,15 +35,10 @@ where
         let mut subscription = self.stream_source.subscribe_block_events();
 
         self.task_spawner.spawn_task(Box::pin(async move {
-            loop {
+            while let Some(result) = subscription.next().await {
                 if sink.is_closed() {
                     break;
                 }
-
-                let Some(result) = subscription.next().await else {
-                    increment_receiver_closed();
-                    break;
-                };
 
                 let event = match result {
                     Ok(event) => event,
@@ -74,6 +60,8 @@ where
                     }
                 }
             }
+
+            increment_receiver_closed();
         }));
 
         Ok(())

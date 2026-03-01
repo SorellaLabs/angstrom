@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use angstrom_rpc_types::metrics::BlockMetricsEvent;
+use angstrom_rpc_types::ConsensusMetricsEvent;
 use prometheus::IntGauge;
 
 use crate::{METRICS_ENABLED, block_metrics_stream::publish_block_metrics_event};
@@ -53,7 +53,7 @@ impl ConsensusMetricsWrapper {
 
     pub fn set_consensus_completion_time(&self, block_number: u64, time: u128) {
         if self.0.is_some() {
-            publish_block_metrics_event(BlockMetricsEvent::ConsensusCompletionTime {
+            publish_block_metrics_event(ConsensusMetricsEvent::ConsensusCompletionTime {
                 block:   block_number,
                 time_ms: u64::try_from(time).unwrap_or(u64::MAX)
             });
@@ -62,7 +62,7 @@ impl ConsensusMetricsWrapper {
 
     pub fn set_proposal_verification_time(&self, block_number: u64, time: u128) {
         if self.0.is_some() {
-            publish_block_metrics_event(BlockMetricsEvent::ProposalVerificationTime {
+            publish_block_metrics_event(ConsensusMetricsEvent::ProposalVerificationTime {
                 block:   block_number,
                 time_ms: u64::try_from(time).unwrap_or(u64::MAX)
             });
@@ -71,7 +71,7 @@ impl ConsensusMetricsWrapper {
 
     pub fn set_proposal_build_time(&self, block_number: u64, time: u128) {
         if self.0.is_some() {
-            publish_block_metrics_event(BlockMetricsEvent::ProposalBuildTime {
+            publish_block_metrics_event(ConsensusMetricsEvent::ProposalBuildTime {
                 block:   block_number,
                 time_ms: u64::try_from(time).unwrap_or(u64::MAX)
             });

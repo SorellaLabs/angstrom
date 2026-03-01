@@ -1173,6 +1173,7 @@ dependencies = [
 name = "angstrom-metrics"
 version = "0.1.0"
 dependencies = [
+ "alloy-primitives",
  "angstrom-rpc-types",
  "angstrom-types",
  "eyre",
@@ -1186,6 +1187,7 @@ dependencies = [
  "reth-node-metrics",
  "tikv-jemalloc-ctl",
  "tokio",
+ "tokio-stream",
  "tower",
  "tracing",
 ]

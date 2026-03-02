@@ -43,7 +43,7 @@ Types can be aliased or composed into larger product types aka "structs" e.g.
 struct Trade {
     asset_in: address,
     asset_out: address,
-    quanitity: uint64
+    quantity: uint64
 }
 
 struct Matched {
@@ -66,7 +66,7 @@ enum OrderInvalidation {
     },
     Standing {
         deadline: uint40,
-        nocne: uint64
+        nonce: uint64
     }
 }
 
@@ -81,7 +81,7 @@ Note that recursive type definitions are **disallowed** (reasoning: makes specif
 
 ### Builtins
 
-While these types are not first class citizens of the type system they are useful contructs that
+While these types are not first class citizens of the type system they are useful constructs that
 will later have to have some functions like the EIP712 struct hashing defined for them.
 
 ```rust
@@ -140,7 +140,7 @@ field / struct).
 LIST_MAX_LENGTH_BYTES = 3
 
 def pade_encode(x: PadeValue, T: PadeType) -> bytes:
-    if T.is_abi_primitve():
+    if T.is_abi_primitive():
         return x.abi_encode_packed()
     if T.is_enum():
         variant_size = full_bytes(bits(len(T.variants)))

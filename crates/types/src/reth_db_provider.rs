@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use alloy::{
-    eips::{BlockId, BlockNumberOrTag},
+    eips::BlockId,
     network::Network,
     primitives::{Address, Bytes, FixedBytes, StorageValue, U64, U256},
     providers::{Provider, ProviderCall, ProviderLayer, RootProvider, RpcWithBlock},
@@ -10,13 +10,12 @@ use alloy::{
 };
 use eyre::Result;
 use reth_provider::{
-    BlockNumReader, DatabaseProviderFactory, ProviderError, StateProvider, StateProviderBox,
-    TryIntoHistoricalStateProvider
+    BlockNumReader, ProviderError, StateProvider, StateProviderBox, StateProviderFactory
 };
 
 pub struct RethDbLayer<DB, N>
 where
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone,
+    DB: StateProviderFactory + BlockNumReader + Clone,
     N: Network
 {
     db:       DB,
@@ -25,7 +24,7 @@ where
 
 impl<DB, N> RethDbLayer<DB, N>
 where
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone,
+    DB: StateProviderFactory + BlockNumReader + Clone,
     N: Network
 {
     pub const fn new(db: DB) -> Self {
@@ -41,9 +40,7 @@ impl<P, N, DB> ProviderLayer<P, N> for RethDbLayer<DB, N>
 where
     P: Provider<N>,
     N: Network,
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader>
-        + Clone
-        + 'static
+    DB: StateProviderFactory + BlockNumReader + Clone + 'static
 {
     type Provider = RethDbProvider<P, N, DB>;
 
@@ -62,7 +59,7 @@ pub struct RethDbProvider<P, N, DB>
 where
     P: Provider<N>,
     N: Network,
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
+    DB: StateProviderFactory + BlockNumReader + Clone
 {
     inner:            P,
     provider_factory: DbAccessor<DB>,
@@ -73,13 +70,10 @@ impl<P, N, DB> RethDbProvider<P, N, DB>
 where
     P: Provider<N>,
     N: Network,
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
+    DB: StateProviderFactory + BlockNumReader + Clone
 {
     /// Create a new `RethDbProvider` instance.
-    pub fn new(inner: P, db: DB) -> Self
-    where
-        DB: DatabaseProviderFactory
-    {
+    pub fn new(inner: P, db: DB) -> Self {
         let db_accessor: DbAccessor<DB> = DbAccessor::new(db);
         Self { inner, provider_factory: db_accessor, _phantom: PhantomData }
     }
@@ -96,9 +90,7 @@ impl<P, N, DB> Provider<N> for RethDbProvider<P, N, DB>
 where
     P: Provider<N>,
     N: Network,
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader>
-        + Clone
-        + 'static
+    DB: StateProviderFactory + BlockNumReader + Clone + 'static
 {
     fn root(&self) -> &RootProvider<N> {
         self.inner.root()
@@ -107,13 +99,8 @@ where
     /// Override the `get_block_number` method to fetch the latest block number
     /// from the reth-db.
     fn get_block_number(&self) -> ProviderCall<NoParams, U64, u64> {
-        let provider = self
+        let best = self
             .factory()
-            .provider()
-            .map_err(TransportErrorKind::custom)
-            .unwrap();
-
-        let best = provider
             .best_block_number()
             .map_err(TransportErrorKind::custom);
 
@@ -190,38 +177,24 @@ where
 #[derive(Clone)]
 struct DbAccessor<DB>
 where
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
+    DB: StateProviderFactory + BlockNumReader + Clone
 {
     inner: DB
 }
 
 impl<DB> DbAccessor<DB>
 where
-    DB: DatabaseProviderFactory<Provider: TryIntoHistoricalStateProvider + BlockNumReader> + Clone
+    DB: StateProviderFactory + BlockNumReader + Clone
 {
     const fn new(inner: DB) -> Self {
         Self { inner }
     }
 
-    fn provider(&self) -> Result<DB::Provider, ProviderError> {
-        self.inner.database_provider_ro()
+    fn best_block_number(&self) -> Result<u64, ProviderError> {
+        self.inner.best_block_number()
     }
 
     fn provider_at(&self, block_id: BlockId) -> Result<StateProviderBox, ProviderError> {
-        let provider = self.inner.database_provider_ro()?;
-
-        let block_number = match block_id {
-            BlockId::Hash(hash) => {
-                if let Some(num) = provider.block_number(hash.into())? {
-                    num
-                } else {
-                    return Err(ProviderError::BlockHashNotFound(hash.into()));
-                }
-            }
-            BlockId::Number(BlockNumberOrTag::Number(num)) => num,
-            _ => provider.best_block_number()?
-        };
-
-        provider.try_into_history_at_block(block_number)
+        self.inner.state_by_block_id(block_id)
     }
 }

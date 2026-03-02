@@ -4,6 +4,7 @@ pub const DEFAULT_TICKS: u16 = 400;
 
 use alloy::{
     consensus::TxReceipt,
+    eips::{BlockId, BlockNumberOrTag},
     primitives::aliases::{I24, U24},
     providers::Provider,
     sol_types::SolEvent
@@ -21,8 +22,7 @@ use angstrom_types::{
 use futures::Stream;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use reth_provider::{
-    CanonStateNotifications, DatabaseProviderFactory, ReceiptProvider, StateProvider,
-    TryIntoHistoricalStateProvider
+    CanonStateNotifications, ReceiptProvider, StateProvider, StateProviderFactory
 };
 use uniswap::pool_factory::V4PoolFactory;
 
@@ -53,16 +53,13 @@ pub async fn fetch_angstrom_pools<DB>(
     db: &DB
 ) -> Vec<PoolKey>
 where
-    DB: DatabaseProviderFactory + ReceiptProvider,
-    <DB as DatabaseProviderFactory>::Provider: TryIntoHistoricalStateProvider
+    DB: StateProviderFactory + ReceiptProvider
 {
     let logs = (deploy_block..=end_block)
         .into_par_iter()
         .flat_map(|block| {
             let storage_provider = db
-                .database_provider_ro()
-                .unwrap()
-                .try_into_history_at_block(block as u64)
+                .state_by_block_id(BlockId::Number(BlockNumberOrTag::Number(block as u64)))
                 .unwrap();
 
             let controller_addr = Address::from_word(FixedBytes::new(

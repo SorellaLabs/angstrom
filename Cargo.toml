@@ -173,42 +173,42 @@ quote = "1"
 rand = "0.9.0"
 rand_distr = "0.5.1"
 rayon = "1"
-reth = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-cli-util = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-codecs = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-db = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-errors = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-execution-types = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0", features = [
+reth = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-codecs = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-errors = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3", features = [
   "serde",
 ] }
-reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-metrics = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-network = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-network-api = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-node-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-node-metrics = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-node-types = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-payload-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0", default-features = false }
-reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-provider = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-revm = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-rpc-types-compat = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-storage-api = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-tasks = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-tracing = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-trie = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
-reth-trie-common = { git = "https://github.com/paradigmxyz/reth", version = "1.11.0", tag = "v1.11.0" }
+reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-metrics = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-network = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-network-api = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-network-peers = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-node-metrics = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-node-types = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-payload-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3", default-features = false }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-revm = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-rpc-types-compat = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
+reth-trie-common = { git = "https://github.com/paradigmxyz/reth", version = "1.11.3", tag = "v1.11.3" }
 revm = { version = "34.0.0", features = [
   "std",
   "secp256k1",

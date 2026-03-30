@@ -262,7 +262,11 @@ impl ProposalState {
                 return false;
             };
 
-            let successful_tx_hashes = successful_submission_tx_hashes(&all_results);
+            let successful_tx_hashes = all_results
+        .iter()
+        .filter(|result| result.success)
+        .filter_map(|result| result.tx_hash)
+        .collect();
 
             if successful_tx_hashes.is_empty() {
                 // Check if any succeeded (attestation-only case)

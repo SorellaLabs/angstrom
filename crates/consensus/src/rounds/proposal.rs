@@ -253,7 +253,7 @@ impl ProposalState {
                 return false;
             };
 
-            let successful_tx_hashes: Vec<_> = all_results
+            let successful_tx_hashes: HashSet<_> = all_results
                 .iter()
                 .filter(|result| result.success)
                 .filter_map(|result| result.tx_hash)

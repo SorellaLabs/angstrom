@@ -13,8 +13,8 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     orders::{OrderFillState, PoolSolution},
     primitive::AngstromMetaSigner,
-    submission::SubmissionResult,
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
+    submission::SubmissionResult,
     traits::BundleProcessing
 };
 use futures::{FutureExt, future::BoxFuture};

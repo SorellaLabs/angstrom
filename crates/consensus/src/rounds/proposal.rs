@@ -253,12 +253,13 @@ impl ProposalState {
                 return false;
             };
 
-            // Find first successful result with a tx_hash
-            let successful_with_hash = all_results
+            let successful_tx_hashes: HashSet<_> = all_results
                 .iter()
-                .find(|r| r.success && r.tx_hash.is_some());
+                .filter(|result| result.success)
+                .filter_map(|result| result.tx_hash)
+                .collect();
 
-            let Some(submission_result) = successful_with_hash else {
+            if successful_tx_hashes.is_empty() {
                 // Check if any succeeded (attestation-only case)
                 if all_results.iter().any(|r| r.success) {
                     tracing::info!("submitted unlock attestation");
@@ -266,22 +267,19 @@ impl ProposalState {
                 }
                 tracing::error!("no successful submissions");
                 return false;
-            };
-
-            let tx_hash = submission_result.tx_hash.unwrap();
+            }
 
             tracing::info!(
-                endpoint=%submission_result.endpoint,
-                submitter=%submission_result.submitter_type,
+                candidate_submission_tx_hashes = successful_tx_hashes.len(),
                 "submitted bundle"
             );
 
             // Wait for the target block to be produced
             // We poll until the block exists rather than using watch_blocks()
             // which can return stale block hashes from its filter buffer
-            loop {
+            let target_block_body = loop {
                 match provider.get_block_by_number(target_block.into()).await {
-                    Ok(Some(_)) => break,
+                    Ok(Some(block)) => break block,
                     Ok(None) => {
                         tokio::time::sleep(Duration::from_millis(250)).await;
                     }
@@ -290,18 +288,25 @@ impl ProposalState {
                         tokio::time::sleep(Duration::from_millis(250)).await;
                     }
                 }
-            }
+            };
 
-            let included = provider
-                .get_transaction_by_hash(tx_hash)
-                .await
-                .unwrap()
-                .is_some();
+            let included_tx_hash = target_block_body
+                .transactions
+                .hashes()
+                .find(|block_tx_hash| successful_tx_hashes.contains(block_tx_hash));
+
+            let included = included_tx_hash.is_some();
 
             // Record bundle inclusion metric
             metrics.record_bundle_included(block_height, included);
 
-            tracing::info!(?included, "block tx result");
+            tracing::info!(
+                ?included,
+                target_block,
+                candidate_submission_tx_hashes = successful_tx_hashes.len(),
+                ?included_tx_hash,
+                "block tx result"
+            );
             included
         });
 

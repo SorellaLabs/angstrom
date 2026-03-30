@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant}
 };
 
-use alloy::{primitives::TxHash, providers::Provider};
+use alloy::providers::Provider;
 use angstrom_metrics::{BlockMetricsWrapper, ConsensusMetricsWrapper};
 use angstrom_types::{
     consensus::{
@@ -14,7 +14,6 @@ use angstrom_types::{
     orders::{OrderFillState, PoolSolution},
     primitive::AngstromMetaSigner,
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
-    submission::SubmissionResult,
     traits::BundleProcessing
 };
 use futures::{FutureExt, future::BoxFuture};
@@ -25,14 +24,6 @@ use crate::rounds::{ConsensusMessage, preproposal_wait_trigger::LastRoundInfo};
 
 type MatchingEngineFuture =
     BoxFuture<'static, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>;
-
-fn successful_submission_tx_hashes(results: &[SubmissionResult]) -> HashSet<TxHash> {
-    results
-        .iter()
-        .filter(|result| result.success)
-        .filter_map(|result| result.tx_hash)
-        .collect()
-}
 
 /// Proposal State.
 ///
@@ -262,11 +253,11 @@ impl ProposalState {
                 return false;
             };
 
-            let successful_tx_hashes = all_results
-        .iter()
-        .filter(|result| result.success)
-        .filter_map(|result| result.tx_hash)
-        .collect();
+            let successful_tx_hashes: Vec<_> = all_results
+                .iter()
+                .filter(|result| result.success)
+                .filter_map(|result| result.tx_hash)
+                .collect();
 
             if successful_tx_hashes.is_empty() {
                 // Check if any succeeded (attestation-only case)

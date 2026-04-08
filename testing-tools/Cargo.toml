@@ -44,7 +44,6 @@ reth-network-api.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
 reth-node-ethereum.workspace = true
 reth-node-types.workspace = true
-reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-revm.workspace = true
 reth-tasks.workspace = true

@@ -30,13 +30,13 @@ order-pool.workspace = true
 parking_lot.workspace = true
 reth.workspace = true
 reth-eth-wire.workspace = true
+reth-ethereum-primitives.workspace = true
 reth-metrics.workspace = true
 reth-net-banlist = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
 reth-network.workspace = true
 reth-network-p2p = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
 reth-network-peers.workspace = true
 reth-node-builder.workspace = true
-reth-primitives.workspace = true
 reth-tasks.workspace = true
 reth-transaction-pool.workspace = true
 secp256k1.workspace = true
@@ -54,9 +54,9 @@ validation.workspace = true
 angstrom-network.workspace = true
 rand.workspace = true
 reth-discv4 = { workspace = true, features = ["test-utils"] }
+reth-ethereum-primitives = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
 reth-network = { workspace = true, features = ["test-utils"] }
-reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }

@@ -20,7 +20,7 @@ futures-util.workspace = true
 pade.workspace = true
 parking_lot = "0.12.1"
 rand.workspace = true
-reth-primitives = { workspace = true, features = ["std"] }
+reth-ethereum-primitives = { workspace = true, features = ["std"] }
 reth-provider.workspace = true
 reth-revm.workspace = true
 revm.workspace = true
@@ -38,9 +38,9 @@ proptest.workspace = true
 proptest-derive.workspace = true
 rand.workspace = true
 reth-discv4 = { workspace = true, features = ["test-utils"] }
+reth-ethereum-primitives = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
 reth-network = { workspace = true, features = ["test-utils"] }
-reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }

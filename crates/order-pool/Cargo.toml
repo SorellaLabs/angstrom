@@ -33,9 +33,9 @@ futures.workspace = true
 pade.workspace = true
 rand.workspace = true
 reth-discv4 = { workspace = true, features = ["test-utils"] }
+reth-ethereum-primitives = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
 reth-network = { workspace = true, features = ["test-utils"] }
-reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }

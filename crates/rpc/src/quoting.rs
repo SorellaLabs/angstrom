@@ -3,18 +3,17 @@ use std::collections::HashSet;
 use angstrom_rpc_api::QuotingApiServer;
 use angstrom_rpc_types::GasEstimateFilter;
 use jsonrpsee::PendingSubscriptionSink;
-use reth_tasks::TaskSpawner;
+use reth_tasks::TaskExecutor;
 
-pub struct QuotesApi<OrderPool, Spawner> {
+pub struct QuotesApi<OrderPool> {
     _pool:         OrderPool,
-    _task_spawner: Spawner
+    _task_executor: TaskExecutor
 }
 
 #[async_trait::async_trait]
-impl<OrderPool, Spawner> QuotingApiServer for QuotesApi<OrderPool, Spawner>
+impl<OrderPool> QuotingApiServer for QuotesApi<OrderPool>
 where
-    OrderPool: Send + Sync + 'static,
-    Spawner: TaskSpawner + 'static
+    OrderPool: Send + Sync + 'static
 {
     async fn subscribe_gas_estimates(
         &self,

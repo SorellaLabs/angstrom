@@ -12,7 +12,7 @@ use angstrom_types::{
 use parking_lot::RwLock;
 use reth_metrics::common::mpsc::{MeteredPollSender, UnboundedMeteredSender};
 use reth_network::Peers;
-use reth_tasks::{TaskSpawner, TaskSpawnerExt};
+use reth_tasks::TaskExecutor;
 use tokio::sync::mpsc::{Receiver, UnboundedReceiver};
 use tokio_util::sync::PollSender;
 
@@ -88,9 +88,9 @@ impl<P: Peers + Unpin + 'static, S: AngstromMetaSigner> NetworkBuilder<P, S> {
     /// builds the network spawning it on its own thread, returning the
     /// communication channel along with returning the protocol it
     /// represents.
-    pub fn build_handle<TP: TaskSpawner + TaskSpawnerExt, DB: Send + Unpin + 'static>(
+    pub fn build_handle<DB: Send + Unpin + 'static>(
         mut self,
-        tp: TP,
+        executor: TaskExecutor,
         db: DB
     ) -> StromNetworkHandle {
         let state = StromState::new(db, self.validator_set.clone());
@@ -107,7 +107,7 @@ impl<P: Peers + Unpin + 'static, S: AngstromMetaSigner> NetworkBuilder<P, S> {
 
         let handle = network.get_handle();
 
-        tp.spawn_critical_with_graceful_shutdown_signal("network", async |shutdown| {
+        executor.spawn_critical_with_graceful_shutdown_signal("network", async |shutdown| {
             network.run_until_graceful_shutdown(shutdown).await
         });
 

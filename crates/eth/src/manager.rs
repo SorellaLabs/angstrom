@@ -24,7 +24,7 @@ use futures_util::{FutureExt, StreamExt};
 use itertools::Itertools;
 use pade::PadeDecode;
 use reth_provider::{CanonStateNotification, CanonStateNotifications};
-use reth_tasks::TaskSpawner;
+use reth_tasks::TaskExecutor;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
@@ -64,11 +64,11 @@ impl<Sync> EthDataCleanser<Sync>
 where
     Sync: BlockSyncProducer
 {
-    pub fn spawn<TP: TaskSpawner>(
+    pub fn spawn(
         angstrom_address: Address,
         periphery_address: Address,
         canonical_updates: CanonStateNotifications,
-        tp: TP,
+        executor: TaskExecutor,
         tx: Sender<EthCommand>,
         rx: Receiver<EthCommand>,
         angstrom_tokens: HashMap<Address, usize>,
@@ -99,7 +99,7 @@ where
                 .retain(|e| e.send(EthEvent::AddedNode(*n)).is_ok());
         }
 
-        tp.spawn_critical_task("eth handle", this.boxed());
+        executor.spawn_critical_task("eth handle", this.boxed());
 
         let handle = EthHandle::new(tx);
 

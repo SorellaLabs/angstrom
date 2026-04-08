@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    pin::Pin,
-    sync::Arc
+    pin::Pin
 };
 
 use alloy::hex;
@@ -17,7 +16,7 @@ use angstrom_types::{
 };
 use futures::{Future, stream::FuturesUnordered};
 use futures_util::FutureExt;
-use reth_tasks::TaskSpawner;
+use reth_tasks::TaskExecutor;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -92,27 +91,17 @@ impl MatchingEngineHandle for MatcherHandle {
     }
 }
 
-pub struct MatchingManager<TP: TaskSpawner, V> {
+pub struct MatchingManager<V> {
     _futures:          FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Sync + Send + 'static>>>,
-    validation_handle: V,
-    _tp:               Arc<TP>
+    validation_handle: V
 }
 
-impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V> {
-    pub fn new(tp: TP, validation: V) -> Self {
-        Self {
-            _futures:          FuturesUnordered::default(),
-            validation_handle: validation,
-            _tp:               tp.into()
-        }
-    }
-
-    pub fn spawn(tp: TP, validation: V) -> MatcherHandle {
+impl<V: BundleValidatorHandle> MatchingManager<V> {
+    pub fn spawn(executor: TaskExecutor, validation: V) -> MatcherHandle {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let tp = Arc::new(tp);
 
-        let fut = manager_thread(rx, tp.clone(), validation).boxed();
-        tp.spawn_critical_task("matching_engine", fut);
+        let fut = manager_thread(rx, validation).boxed();
+        executor.spawn_critical_task("matching_engine", fut);
 
         MatcherHandle { sender: tx }
     }
@@ -209,13 +198,11 @@ impl<TP: TaskSpawner + 'static, V: BundleValidatorHandle> MatchingManager<TP, V>
     }
 }
 
-pub async fn manager_thread<TP: TaskSpawner + 'static, V: BundleValidatorHandle>(
+pub async fn manager_thread<V: BundleValidatorHandle>(
     mut input: Receiver<MatcherCommand>,
-    tp: Arc<TP>,
     validation_handle: V
 ) {
-    let manager =
-        MatchingManager { _futures: FuturesUnordered::default(), _tp: tp, validation_handle };
+    let manager = MatchingManager { _futures: FuturesUnordered::default(), validation_handle };
 
     while let Some(c) = input.recv().await {
         match c {

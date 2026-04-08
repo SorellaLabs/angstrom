@@ -7,25 +7,24 @@ use angstrom_metrics::{
 use angstrom_rpc_api::MetricsApiServer;
 use futures::StreamExt;
 use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage};
-use reth_tasks::TaskSpawner;
+use reth_tasks::TaskExecutor;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
-pub struct MetricsApi<StreamSource, Spawner> {
+pub struct MetricsApi<StreamSource> {
     stream_source: StreamSource,
-    task_spawner:  Spawner
+    task_executor: TaskExecutor
 }
 
-impl<StreamSource, Spawner> MetricsApi<StreamSource, Spawner> {
-    pub fn new(stream_source: StreamSource, task_spawner: Spawner) -> Self {
-        Self { stream_source, task_spawner }
+impl<StreamSource> MetricsApi<StreamSource> {
+    pub fn new(stream_source: StreamSource, task_executor: TaskExecutor) -> Self {
+        Self { stream_source, task_executor }
     }
 }
 
 #[async_trait::async_trait]
-impl<StreamSource, Spawner> MetricsApiServer for MetricsApi<StreamSource, Spawner>
+impl<StreamSource> MetricsApiServer for MetricsApi<StreamSource>
 where
-    StreamSource: MetricsStreamSource,
-    Spawner: TaskSpawner + 'static
+    StreamSource: MetricsStreamSource
 {
     async fn subscribe_metric_events(
         &self,
@@ -34,7 +33,7 @@ where
         let sink = pending.accept().await?;
         let mut subscription = self.stream_source.subscribe_block_events();
 
-        self.task_spawner.spawn_task(Box::pin(async move {
+        self.task_executor.spawn_task(async move {
             while let Some(result) = subscription.next().await {
                 if sink.is_closed() {
                     break;
@@ -62,7 +61,7 @@ where
             }
 
             increment_receiver_closed();
-        }));
+        });
 
         Ok(())
     }

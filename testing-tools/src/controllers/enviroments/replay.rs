@@ -19,7 +19,7 @@ use futures::FutureExt;
 use order_pool::OrderPoolHandle;
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
-use reth_tasks::{TaskExecutor, TaskSpawner};
+use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
 use telemetry_recorder::TelemetryMessage;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -144,7 +144,7 @@ where
         Ok((this, state_rx))
     }
 
-    pub async fn run_to_completion<TP: TaskSpawner>(mut self, executor: TP) {
+    pub async fn run_to_completion(mut self, executor: TaskExecutor) {
         for s in self.block_syncs {
             s.clear();
         }

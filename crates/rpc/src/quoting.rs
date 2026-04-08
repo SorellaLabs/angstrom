@@ -6,7 +6,7 @@ use jsonrpsee::PendingSubscriptionSink;
 use reth_tasks::TaskExecutor;
 
 pub struct QuotesApi<OrderPool> {
-    _pool:         OrderPool,
+    _pool:          OrderPool,
     _task_executor: TaskExecutor
 }
 

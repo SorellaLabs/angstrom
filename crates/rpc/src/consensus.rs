@@ -14,7 +14,7 @@ use jsonrpsee::{
 use reth_tasks::TaskExecutor;
 
 pub struct ConsensusApi<Consensus> {
-    consensus:    Consensus,
+    consensus:     Consensus,
     task_executor: TaskExecutor
 }
 

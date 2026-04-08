@@ -394,8 +394,7 @@ pub mod test {
         traits::{ChainExt, UserOrderFromInternal}
     };
     use pade::PadeEncode;
-    use reth_ethereum_primitives::Receipt;
-    use reth_ethereum_primitives::{Block, LogData, TransactionSigned};
+    use reth_ethereum_primitives::{Block, LogData, Receipt, TransactionSigned};
     use reth_primitives_traits::RecoveredBlock;
     use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 

@@ -19,10 +19,10 @@ use reth_tasks::TaskExecutor;
 use validation::order::OrderValidatorHandle;
 
 pub struct OrderApi<OrderPool, Validator, Quoter> {
-    pool:         OrderPool,
+    pool:          OrderPool,
     task_executor: TaskExecutor,
-    validator:    Validator,
-    amm_quoter:   Quoter
+    validator:     Validator,
+    amm_quoter:    Quoter
 }
 
 impl<OrderPool, Validator, Quoter> OrderApi<OrderPool, Validator, Quoter> {
@@ -344,10 +344,8 @@ mod tests {
         );
     }
 
-    fn setup_order_api() -> (
-        OrderApiTestHandle,
-        OrderApi<MockOrderPoolHandle, MockValidator, QuoterHandle>
-    ) {
+    fn setup_order_api()
+    -> (OrderApiTestHandle, OrderApi<MockOrderPoolHandle, MockValidator, QuoterHandle>) {
         let (to_pool, pool_rx) = unbounded_channel();
         let pool_handle = MockOrderPoolHandle::new(to_pool);
         let task_executor = TaskExecutor::test();

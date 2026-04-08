@@ -22,7 +22,6 @@ angstrom-rpc.workspace = true
 angstrom-types.workspace = true
 consensus.workspace = true
 dashmap.workspace = true
-enr = { workspace = true, features = ["serde", "k256"] }
 eyre.workspace = true
 futures.workspace = true
 itertools.workspace = true

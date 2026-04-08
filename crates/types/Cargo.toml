@@ -39,7 +39,6 @@ uniswap_v3_math.workspace = true
 
 [dev-dependencies]
 angstrom-types.workspace = true
-rand.workspace = true
 testing-tools.workspace = true
 tokio.workspace = true
 

@@ -38,6 +38,4 @@ validation.workspace = true
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ['csv', 'csv_output'] }
 jsonrpsee.workspace = true
-pade.workspace = true
-pade-macro.workspace = true
 testing-tools.workspace = true

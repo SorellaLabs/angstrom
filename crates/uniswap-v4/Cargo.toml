@@ -33,20 +33,16 @@ tracing-subscriber.workspace = true
 uniswap_v3_math.workspace = true
 
 [dev-dependencies]
-divan.workspace = true
-pade.workspace = true
-pade-macro.workspace = true
 revm.workspace = true
 revm-bytecode.workspace = true
-revm-database.workspace = true
 revm-primitives.workspace = true
-revm-state.workspace = true
-testing-tools.workspace = true
-tokio-stream.workspace = true
 validation.workspace = true
 [build-dependencies]
 convert_case.workspace = true
 itertools.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["convert_case"]
 
 [features]
 default = []

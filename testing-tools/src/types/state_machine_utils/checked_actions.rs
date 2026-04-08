@@ -18,9 +18,9 @@ use crate::{
 
 pub trait WithCheckedAction<'a, C>
 where
-    C: BlockReader<Block = reth::primitives::block::Block>
-        + ReceiptProvider<Receipt = reth::primitives::receipt::Receipt>
-        + HeaderProvider<Header = reth::primitives::Header>
+    C: BlockReader<Block = reth::primitives::BlockTy<reth::primitives::EthPrimitives>>
+        + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
+        + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
@@ -37,9 +37,9 @@ where
 
 impl<'a, C> WithCheckedAction<'a, C> for DevnetStateMachine<'a, C>
 where
-    C: BlockReader<Block = reth::primitives::block::Block>
-        + ReceiptProvider<Receipt = reth::primitives::receipt::Receipt>
-        + HeaderProvider<Header = reth::primitives::Header>
+    C: BlockReader<Block = reth::primitives::BlockTy<reth::primitives::EthPrimitives>>
+        + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
+        + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>

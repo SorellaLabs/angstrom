@@ -51,7 +51,7 @@ impl AnvilConsensusCanonStateNotification {
             .into_iter()
             .map(|r| {
                 let r = r.into_primitives_receipt();
-                reth::primitives::receipt::Receipt {
+                reth::primitives::ReceiptTy::<reth::primitives::EthPrimitives> {
                     tx_type:             r.inner.tx_type(),
                     success:             r.inner.status(),
                     cumulative_gas_used: r.inner.cumulative_gas_used(),

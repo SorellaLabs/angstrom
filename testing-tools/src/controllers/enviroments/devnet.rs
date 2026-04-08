@@ -22,9 +22,9 @@ use crate::{
 
 impl<C> AngstromTestnet<C, DevnetConfig, WalletProvider>
 where
-    C: BlockReader<Block = reth_primitives::Block>
-        + ReceiptProvider<Receipt = reth_primitives::Receipt>
-        + HeaderProvider<Header = reth_primitives::Header>
+    C: BlockReader<Block = reth::primitives::block::Block>
+        + ReceiptProvider<Receipt = reth::primitives::receipt::Receipt>
+        + HeaderProvider<Header = reth::primitives::Header>
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>

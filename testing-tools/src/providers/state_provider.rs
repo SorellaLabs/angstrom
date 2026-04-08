@@ -5,7 +5,7 @@ use alloy_primitives::{Address, B256, BlockNumber, U256};
 use alloy_rpc_types::{BlockId, TransactionReceipt};
 use angstrom_types::reth_db_wrapper::{DBError, SetBlock};
 use futures::stream::StreamExt;
-use reth_primitives::EthPrimitives;
+use reth::primitives::EthPrimitives;
 use reth_provider::{
     BlockHashReader, BlockNumReader, CanonStateNotification, CanonStateNotifications,
     CanonStateSubscriptions, NodePrimitivesProvider, ProviderError, ProviderResult

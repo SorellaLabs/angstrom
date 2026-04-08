@@ -1,5 +1,5 @@
 //! Error handling for Strom protocol stream
-use reth_primitives::GotExpected;
+use reth::primitives::GotExpected;
 
 /// Errors when sending/receiving messages
 #[derive(thiserror::Error, Debug)]

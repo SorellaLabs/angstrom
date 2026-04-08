@@ -44,9 +44,9 @@ pub struct AngstromTestnet<C: Unpin, G, P> {
 
 impl<C, G, P> AngstromTestnet<C, G, P>
 where
-    C: BlockReader<Block = reth_primitives::Block>
-        + ReceiptProvider<Receipt = reth_primitives::Receipt>
-        + HeaderProvider<Header = reth_primitives::Header>
+    C: BlockReader<Block = reth::primitives::block::Block>
+        + ReceiptProvider<Receipt = reth::primitives::receipt::Receipt>
+        + HeaderProvider<Header = reth::primitives::Header>
         + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + Clone

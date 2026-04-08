@@ -48,7 +48,7 @@ use reth::{
     builder::FullNodeComponents,
     chainspec::ChainSpec,
     core::exit::NodeExitFuture,
-    primitives::EthPrimitives,
+    primitives::{BlockTy, EthPrimitives, HeaderTy, ReceiptTy},
     providers::{BlockNumReader, CanonStateNotification, CanonStateSubscriptions},
     tasks::TaskExecutor
 };
@@ -189,9 +189,9 @@ where
     Node: FullNodeComponents
         + FullNodeTypes<Types: NodeTypes<ChainSpec = ChainSpec, Primitives = EthPrimitives>>,
     Node::Provider: BlockReader<
-            Block = reth::primitives::Block,
-            Receipt = reth::primitives::Receipt,
-            Header = reth::primitives::Header
+            Block = BlockTy<EthPrimitives>,
+            Receipt = ReceiptTy<EthPrimitives>,
+            Header = HeaderTy<EthPrimitives>
         > + DatabaseProviderFactory
         + StateProviderFactory
         + BlockNumReader

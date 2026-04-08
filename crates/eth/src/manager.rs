@@ -395,7 +395,8 @@ pub mod test {
     };
     use pade::PadeEncode;
     use reth_ethereum_primitives::Receipt;
-    use reth_primitives::{Block, LogData, RecoveredBlock, TransactionSigned};
+    use reth_ethereum_primitives::{Block, LogData, TransactionSigned};
+    use reth_primitives_traits::RecoveredBlock;
     use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 
     use super::*;

@@ -6,7 +6,7 @@ use reth_network::{NetworkHandle, NetworkManager, PeersInfo, protocol::IntoRlpxS
 use reth_node_builder::{
     BuilderContext, NodeTypes, PrimitivesTy, TxTy, components::NetworkBuilder, node::FullNodeTypes
 };
-use reth_primitives::EthPrimitives;
+use reth::primitives::EthPrimitives;
 use reth_transaction_pool::{PoolPooledTx, PoolTransaction};
 
 /// A basic ethereum payload service.

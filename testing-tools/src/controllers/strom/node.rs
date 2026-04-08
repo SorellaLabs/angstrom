@@ -61,9 +61,9 @@ pub struct TestnetNode<C: Unpin, P, G> {
 
 impl<C, P, G> TestnetNode<C, P, G>
 where
-    C: BlockReader<Block = reth_primitives::Block>
-        + HeaderProvider<Header = reth_primitives::Header>
-        + ReceiptProvider<Receipt = reth_primitives::Receipt>
+    C: BlockReader<Block = reth::primitives::block::Block>
+        + HeaderProvider<Header = reth::primitives::Header>
+        + ReceiptProvider<Receipt = reth::primitives::receipt::Receipt>
         + ChainSpecProvider
         + Unpin
         + Clone

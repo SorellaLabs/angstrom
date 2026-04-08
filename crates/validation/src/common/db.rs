@@ -1,5 +1,5 @@
 use alloy::primitives::{Address, BlockNumber, StorageKey, StorageValue};
-use reth_primitives::Account;
+use reth_primitives_traits::Account;
 use reth_provider::{
     AccountReader, BlockNumReader, ProviderResult, StateProvider, StateProviderBox,
     StateProviderFactory

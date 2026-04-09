@@ -45,7 +45,7 @@ contract AngstromTest is BaseTest {
 
     RouterActor actor;
 
-    function setUp() public {
+    function setUp() public virtual {
         uni = new PoolManager(address(0));
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, controller));
         domainSeparator = computeDomainSeparator(address(angstrom));
@@ -262,7 +262,7 @@ contract AngstromTest is BaseTest {
         uint24 unlockedFee,
         uint248 startLiquidity,
         uint24 protocolUnlockedFee
-    ) internal returns (PoolKey memory pk) {
+    ) internal virtual returns (PoolKey memory pk) {
         vm.prank(controller);
         angstrom.configurePool(asset0, asset1, tickSpacing, 0, unlockedFee, protocolUnlockedFee);
         angstrom.initializePool(asset0, asset1, 0, TickMath.getSqrtPriceAtTick(0));

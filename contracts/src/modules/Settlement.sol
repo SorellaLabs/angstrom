@@ -14,6 +14,7 @@ import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 abstract contract Settlement is UniConsumer {
     using SafeTransferLib for address;
 
+    // known typo; cannot correct post-deployment
     error BundlDeltaUnresolved(address asset);
 
     DeltaTracker internal bundleDeltas;

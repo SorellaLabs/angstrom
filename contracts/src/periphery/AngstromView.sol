@@ -69,9 +69,13 @@ library AngstromView {
     }
 
     /// @notice Returns poolRewards[id].globalGrowth
-    function poolRewardsGlobalGrowth(IAngstromAuth self, PoolId id) internal view returns (uint256) {
-        uint256 rewardsMapSlot =
-            uint256(keccak256(abi.encode(id, POOL_REWARDS_SLOT))) + REWARD_GROWTH_SIZE;
+    function poolRewardsGlobalGrowth(IAngstromAuth self, PoolId id)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 rewardsMapSlot = uint256(keccak256(abi.encode(id, POOL_REWARDS_SLOT)))
+        + REWARD_GROWTH_SIZE;
         return self.extsload(rewardsMapSlot);
     }
 

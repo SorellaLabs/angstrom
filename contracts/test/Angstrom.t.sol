@@ -195,7 +195,12 @@ contract AngstromTest is BaseTest {
 
         uint248 liq = 100_000e21;
 
-        PoolKey memory pk = _createPool(60, unlockedFee, liq, 0);
+        PoolKey memory pk = _createPool({
+            tickSpacing: 60,
+            unlockedFee: unlockedFee,
+            startLiquidity: 100_000e21,
+            protocolUnlockedFee: 0
+        });
 
         vm.prank(node.addr);
         angstrom.execute("");

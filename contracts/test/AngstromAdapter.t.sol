@@ -731,18 +731,18 @@ contract AngstromAdapterTest is BaseTest {
     }
 
     function _prepareUsers(
-        address asset0,
-        Account memory user1,
-        Account memory user2,
+        address _asset0,
+        Account memory _user1,
+        Account memory _user2,
         uint128 amount
     ) internal {
-        MockERC20(asset0).mint(user1.addr, amount);
-        MockERC20(asset0).mint(user2.addr, amount);
+        MockERC20(_asset0).mint(_user1.addr, amount);
+        MockERC20(_asset0).mint(_user2.addr, amount);
 
-        vm.prank(user1.addr);
-        MockERC20(asset0).approve(address(adapter), type(uint256).max);
+        vm.prank(_user1.addr);
+        MockERC20(_asset0).approve(address(adapter), type(uint256).max);
 
-        vm.prank(user2.addr);
-        MockERC20(asset0).approve(address(actor), type(uint256).max);
+        vm.prank(_user2.addr);
+        MockERC20(_asset0).approve(address(actor), type(uint256).max);
     }
 }

@@ -193,8 +193,6 @@ contract AngstromTest is BaseTest {
         swapAmount1 = bound(swapAmount1, 1e8, 10e18);
         swapAmount2 = bound(swapAmount2, 1e8, 10e18);
 
-        uint248 liq = 100_000e21;
-
         PoolKey memory pk = _createPool({
             tickSpacing: 60,
             unlockedFee: unlockedFee,

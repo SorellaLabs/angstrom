@@ -24,11 +24,13 @@ import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 
 // to force compile
 import {IPositionDescriptor} from "v4-periphery/src/interfaces/IPositionDescriptor.sol";
+import {Actions} from "v4-periphery/src/libraries/Actions.sol";
 import {console} from "forge-std/console.sol";
 
 import {IUniV4} from "src/interfaces/IUniV4.sol";
 import {PoolUpdateLib, PoolUpdate, RewardsUpdate} from "test/_reference/PoolUpdate.sol";
 import {PoolConfigStore} from "src/libraries/PoolConfigStore.sol";
+import {Actions} from "v4-periphery/src/libraries/Actions.sol";
 
 contract MainnetForkTest is AngstromTest {
     using AngstromView for Angstrom;
@@ -57,7 +59,7 @@ contract MainnetForkTest is AngstromTest {
 
     function setUp() public override {
         // fork at specific block
-        uint256 forkId = vm.createSelectFork("mainnet", 24831188);
+        uint256 forkId = vm.createSelectFork("mainnet");
         assertEq(vm.activeFork(), forkId);
 
         uni = PoolManager(address(0x000000000004444c5dc75cB358380D2e3dE08A90));
@@ -91,9 +93,9 @@ contract MainnetForkTest is AngstromTest {
 
     function test_claimRewards() public {
         // emulate claim in https://etherscan.io/tx/0x3770e2e8caa1a106fd3e67b60a221815b30122d330e7663a17a09e18f001cef7
-        // // fork at specific block
-        // uint256 forkId = vm.createSelectFork("mainnet", 24831188);
-        // assertEq(vm.activeFork(), forkId);
+        // fork at specific block
+        uint256 forkId = vm.createSelectFork("mainnet", 24831188);
+        assertEq(vm.activeFork(), forkId);
 
         // vm.roll(block.number + 1);
         // emit log_named_uint("block.number", block.number);
@@ -114,56 +116,56 @@ contract MainnetForkTest is AngstromTest {
             uniV4: uni
         });
 
-        emit log_named_uint("pendingRewards", pendingRewards);
         // pending rewards should be 226319524 at this block
         assertGt(pendingRewards, 0, "pendingRewards should be nonzero");
 
         uint256 existingLiquidity = uni.getPoolLiquidity(pk.toId());
         uint256 asset0BalanceBefore = MockERC20(USDC).balanceOf(address(user));
+        uint256 asset1BalanceBefore = MockERC20(WETH).balanceOf(address(user));
 
-        uint256 deadline = 1775606188;
         bytes memory callData;
         {
-            bytes memory actions = abi.encodePacked(bytes1(uint8(0x01)));
-
-            // (uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData) =
-            //             parameters.decodeModifyLiquidityParams();
-            uint256 liquidity = 0;
-            uint128 amount0Min = 0;
-            uint128 amount1Min = 0;
+            bytes memory actions =
+                abi.encodePacked(bytes1(uint8(Actions.DECREASE_LIQUIDITY)), bytes1(uint8(Actions.TAKE_PAIR)));
             bytes memory hookData;
-            bytes[] memory parameters = new bytes[](1);
-            parameters[0] = abi.encode(tokenId, liquidity, amount0Min, amount1Min, hookData);
+            uint256 deadline = 1775606188;
+            bytes[] memory parameters = new bytes[](2);
+            // (uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData)
+            parameters[0] = abi.encode(tokenId, 0, 0, 0, hookData);
+            parameters[1] = abi.encode(pk.currency0, pk.currency1, user);
             // (bytes calldata actions, bytes[] calldata parameters) = data.decodeActionsRouterParams()
 
             bytes memory unlockData = abi.encode(actions, parameters);
             callData = abi.encodeWithSignature("modifyLiquidities(bytes,uint256)", unlockData, deadline);
         }
 
-        vm.prank(user);
-        (bool success, ) = address(uniPositionManager).call(callData);
-        require(success, "mocked call failed");
+        (uint256 rewardsCurrency0, uint256 rewardsCurrency1) = AngstromView.uniswapPendingRewards({
+            account: uniPositionManager,
+            key: pk,
+            tickLower: 199320,
+            tickUpper: 201320,
+            salt: bytes32(tokenId),
+            uniV4: uni
+        });
 
-/**
         vm.prank(user);
-        // bytes memory callData =
-        callData =
-        //     abi.encodeWithSignature("modifyLiquidities(bytes,uint256)", unlockData, deadline);
-            // unmodified
-            // "0xdd46508f00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000069d599ac0000000000000000000000000000000000000000000000000000000000000260000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000002011100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000002f0bf000000000000000000000000000000000000000000000000000ee04f601baa56000000000000000000000000000000000000000000000000000000045c14858e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000140000000aa232009084bd71a5797d089aa4edfad40000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000000000001";
-        //     // modified
-            "0xdd46508f00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000069d599ac0000000000000000000000000000000000000000000000000000000000000260000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000002011100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000002f0bf0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000045c14858e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000140000000aa232009084bd71a5797d089aa4edfad40000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000000000001";
-        (success, ) = uniPositionManager.call(callData);
-        require(success, "mocked call 2 failed");
-**/
+        {
+            (bool success, ) = address(uniPositionManager).call(callData);
+            require(success, "mocked call failed");
+        }
+
         assertEq(
             uni.getPoolLiquidity(pk.toId()), existingLiquidity, "call should not modify liquidity"
         );
-        uint256 asset0BalanceAfter = MockERC20(USDC).balanceOf(address(user));
         assertEq(
-            asset0BalanceAfter - asset0BalanceBefore,
-            pendingRewards,
-            "pendingRewards amount not equal to transfer amount"
+            MockERC20(USDC).balanceOf(address(user)) - asset0BalanceBefore,
+            pendingRewards + rewardsCurrency0,
+            "pendingRewards + rewardsCurrency0 amount not equal to transfer amount"
+        );
+        assertEq(
+            MockERC20(WETH).balanceOf(address(user)) - asset1BalanceBefore,
+            rewardsCurrency1,
+            "rewardsCurrency1 amount not equal to transfer amount"
         );
     }
 
@@ -368,18 +370,5 @@ contract MainnetForkTest is AngstromTest {
         }
 
         return pk;
-    }
-
-    function setAngstromLastBlockUpdated(uint64 blockNumber) public {
-        uint256 LAST_BLOCK_CONFIG_STORE_SLOT = 3;
-        uint256 LAST_BLOCK_BIT_OFFSET = 0;
-        uint256 STORE_BIT_OFFSET = 64;
-        address configStore = PoolConfigStore.unwrap(angstrom.configStore());
-        uint256 slotData = (uint256(blockNumber) << LAST_BLOCK_BIT_OFFSET) | (uint256(uint160(configStore)) << STORE_BIT_OFFSET);
-        vm.store(address(angstrom), bytes32(LAST_BLOCK_CONFIG_STORE_SLOT), bytes32(uint256(slotData)));
-        uint64 lastBlockUpdated = angstrom.lastBlockUpdated();
-        assertEq(blockNumber, lastBlockUpdated, "lastBlockUpdated not updated as expected");
-        address configStoreAfter = PoolConfigStore.unwrap(angstrom.configStore());
-        assertEq(configStore, configStoreAfter, "configStore should not have changed");
     }
 }

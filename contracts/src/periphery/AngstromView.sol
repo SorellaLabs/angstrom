@@ -4,18 +4,20 @@ pragma solidity ^0.8.0;
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 
-import {IPoolManager, IUniV4} from "../interfaces/IUniV4.sol";
+import {IPoolManager} from "../interfaces/IUniV4.sol";
 import {IAngstromAuth} from "../interfaces/IAngstromAuth.sol";
 import {PoolConfigStore} from "../libraries/PoolConfigStore.sol";
 import {StoreKey} from "../libraries/PoolConfigStore.sol";
 import {X128MathLib} from "../libraries/X128MathLib.sol";
 import {Positions, Position} from "../types/Positions.sol";
+import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 
-using IUniV4 for IPoolManager;
 using PoolIdLibrary for PoolId;
 
 /// @author philogy <https://github.com/philogy>
 library AngstromView {
+    using StateLibrary for IPoolManager;
+
     uint256 constant CONTROLLER_SLOT = 0;
 
     uint256 constant IS_NODE_SLOT = 1;
@@ -128,6 +130,7 @@ library AngstromView {
 
     /// @notice Returns the pending rewards held by the Angstrom hook for the position defined
     /// by the `(account, key, tickLower, tickUpper, salt)` tuple.
+    /// @dev Rewards from Angstrom are always in the Currency0 of the pair.
     function pendingRewards(
         IAngstromAuth self,
         address account,
@@ -141,7 +144,7 @@ library AngstromView {
             PoolId id = key.toId();
             bytes32 uniPositionKey =
                 keccak256(abi.encodePacked(account, tickLower, tickUpper, salt));
-            int24 currentTick = uniV4.getSlot0(id).tick();
+            (, int24 currentTick, , ) = uniV4.getSlot0(id);
             uint256 growthInside = getGrowthInside(self, id, currentTick, tickLower, tickUpper);
             uint256 lastGrowthInside = getLastGrowthInside(self, id, uniPositionKey);
             uint128 positionTotalLiquidity = uniV4.getPositionLiquidity(id, uniPositionKey);
@@ -149,6 +152,29 @@ library AngstromView {
                 X128MathLib.fullMulX128(growthInside - lastGrowthInside, positionTotalLiquidity);
 
             return rewards;
+        }
+    }
+
+    function uniswapPendingRewards(
+        address account,
+        PoolKey memory key,
+        int24 tickLower,
+        int24 tickUpper,
+        bytes32 salt,
+        IPoolManager uniV4
+    ) internal view returns (uint256, uint256) {
+        unchecked {
+            PoolId id = key.toId();
+            bytes32 uniPositionKey =
+                keccak256(abi.encodePacked(account, tickLower, tickUpper, salt));
+            (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = uniV4.getFeeGrowthInside({poolId: id, tickLower: tickLower, tickUpper: tickUpper});
+            (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128) = uniV4.getPositionInfo({poolId: id, positionId: uniPositionKey});
+            uint256 rewardsCurrency0 =
+                X128MathLib.fullMulX128(feeGrowthInside0X128 - feeGrowthInside0LastX128, liquidity);
+            uint256 rewardsCurrency1 =
+                X128MathLib.fullMulX128(feeGrowthInside1X128 - feeGrowthInside1LastX128, liquidity);
+
+            return (rewardsCurrency0, rewardsCurrency1);
         }
     }
 }

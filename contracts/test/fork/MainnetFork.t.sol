@@ -44,16 +44,6 @@ contract MainnetForkTest is AngstromTest {
     using IUniV4 for PoolManager;
     using PoolUpdateLib for PoolUpdate;
 
-    struct ModifyLiquidityParams {
-        // the lower and upper tick of the position
-        int24 tickLower;
-        int24 tickUpper;
-        // how to modify the liquidity
-        int256 liquidityDelta;
-        // a value to set if you want unique liquidity positions at the same range
-        bytes32 salt;
-    }
-
     address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
@@ -83,23 +73,19 @@ contract MainnetForkTest is AngstromTest {
     }
 
     // get the WETH/USDC pool global rewards growth and check that it is nonzero
-    function test_getGlobalRewardsGrowth() public {
+    function test_getGlobalRewardsGrowth() public view {
         PoolId id = PoolId.wrap(
             bytes32(0xe500210c7ea6bfd9f69dce044b09ef384ec2b34832f132baec3b418208e3a657)
         );
         uint256 poolRewardsGlobalGrowth = angstrom.poolRewardsGlobalGrowth({id: id});
-        emit log_named_uint("poolRewardsGlobalGrowth", poolRewardsGlobalGrowth);
+        assertGt(poolRewardsGlobalGrowth, 0, "poolRewardsGlobalGrowth should be nonzero");
     }
 
-    function test_claimRewards() public {
+    function test_claimRewards_existingRewards() public {
         // emulate claim in https://etherscan.io/tx/0x3770e2e8caa1a106fd3e67b60a221815b30122d330e7663a17a09e18f001cef7
         // fork at specific block
         uint256 forkId = vm.createSelectFork("mainnet", 24831188);
         assertEq(vm.activeFork(), forkId);
-
-        // vm.roll(block.number + 1);
-        // emit log_named_uint("block.number", block.number);
-        // setAngstromLastBlockUpdated(uint64(block.number));
 
         address user = 0x35b9571eF5eAA24EC626ACdDDE3B02B595A5eB0B;
         address uniPositionManager = 0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e;
@@ -125,18 +111,19 @@ contract MainnetForkTest is AngstromTest {
 
         bytes memory callData;
         {
-            bytes memory actions =
-                abi.encodePacked(bytes1(uint8(Actions.DECREASE_LIQUIDITY)), bytes1(uint8(Actions.TAKE_PAIR)));
+            bytes memory actions = abi.encodePacked(
+                bytes1(uint8(Actions.DECREASE_LIQUIDITY)), bytes1(uint8(Actions.TAKE_PAIR))
+            );
             bytes memory hookData;
             uint256 deadline = 1775606188;
             bytes[] memory parameters = new bytes[](2);
             // (uint256 tokenId, uint256 liquidity, uint128 amount0Min, uint128 amount1Min, bytes calldata hookData)
             parameters[0] = abi.encode(tokenId, 0, 0, 0, hookData);
             parameters[1] = abi.encode(pk.currency0, pk.currency1, user);
-            // (bytes calldata actions, bytes[] calldata parameters) = data.decodeActionsRouterParams()
 
             bytes memory unlockData = abi.encode(actions, parameters);
-            callData = abi.encodeWithSignature("modifyLiquidities(bytes,uint256)", unlockData, deadline);
+            callData =
+                abi.encodeWithSignature("modifyLiquidities(bytes,uint256)", unlockData, deadline);
         }
 
         (uint256 rewardsCurrency0, uint256 rewardsCurrency1) = AngstromView.uniswapPendingRewards({
@@ -150,7 +137,7 @@ contract MainnetForkTest is AngstromTest {
 
         vm.prank(user);
         {
-            (bool success, ) = address(uniPositionManager).call(callData);
+            (bool success,) = address(uniPositionManager).call(callData);
             require(success, "mocked call failed");
         }
 
@@ -169,7 +156,7 @@ contract MainnetForkTest is AngstromTest {
         );
     }
 
-    function test_rewardsClaiming() public {
+    function test_claimRewards_generatedRewards() public {
         uint248 liq = 100_000e21;
         uint248 startLiquidity = liq;
         uint256 bundleFee = 0.002e6;
@@ -256,7 +243,7 @@ contract MainnetForkTest is AngstromTest {
             onlyCurrent: true,
             onlyCurrentQuantity: 1e18,
             startTick: 0,
-            startLiquidity: 0,
+            startLiquidity: uint128(100_000e21),
             quantities: quantities,
             rewardChecksum: 0
         });
@@ -268,29 +255,13 @@ contract MainnetForkTest is AngstromTest {
         bundle.assets[1].settle += 10.0e18;
 
         bundle.assets[0].save -= bundle.poolUpdates[0].rewardUpdate.onlyCurrentQuantity;
-        // bundle.assets[0].take += bundle.poolUpdates[0].amountIn;
         uint256 existingLiquidity = uni.getPoolLiquidity(pk.toId());
-        emit log_named_uint("existingLiquidity", existingLiquidity);
-        // returns 100000000000000000000000000 (as expected)
-
-        emit log(bundle.poolUpdates[0].rewardUpdate.toStr());
-        // returns RewardsUpdate::CurrentOnly { amount: 1000000000000000000 } (as expected)
-
-        // manually write rewards slot
-        uint256 rewardsMapSlot =
-        // uint256(bytes32(keccak256(abi.encode(pk.toId(), POOL_REWARDS_SLOT)))) + REWARD_GROWTH_SIZE;
-         uint256(bytes32(keccak256(abi.encode(pk.toId(), 7)))) + 16777216;
-        vm.store(address(angstrom), bytes32(rewardsMapSlot), bytes32(uint256(1e30)));
 
         bytes memory payload = bundle.encode(rawGetConfigStore(address(angstrom)));
         vm.prank(node.addr);
         angstrom.execute(payload);
-        // test_userOrderWithFees();
 
-        // int24 tickLower = -1 * int24(uint24(60));
-        // int24 tickUpper = 1 * int24(uint24(60));
         uint256 poolRewardsGlobalGrowth = angstrom.poolRewardsGlobalGrowth({id: pk.toId()});
-        emit log_named_uint("poolRewardsGlobalGrowth", poolRewardsGlobalGrowth);
         assertGt(poolRewardsGlobalGrowth, 0, "poolRewardsGlobalGrowth should be nonzero");
         {
             uint256 lastGrowthInside = angstrom.getLastGrowthInside({
@@ -301,10 +272,9 @@ contract MainnetForkTest is AngstromTest {
                     )
                 )
             });
-            emit log_named_uint("lastGrowthInside", lastGrowthInside);
+            assertEq(lastGrowthInside, 0, "lastGrowthInside should be zero before call");
         }
 
-        // PoolKey memory pk = poolKey(angstrom, asset0, asset1, 60);
         uint256 pendingRewards = angstrom.pendingRewards({
             account: address(actor),
             key: pk,
@@ -315,7 +285,6 @@ contract MainnetForkTest is AngstromTest {
         });
         assertGt(pendingRewards, 0, "pendingRewards should be nonzero");
         uint256 asset0BalanceBefore = MockERC20(asset0).balanceOf(address(actor));
-        emit log_named_uint("pendingRewards", pendingRewards);
 
         actor.modifyLiquidity(
             pk, -1 * int24(uint24(60)), 1 * int24(uint24(60)), int256(uint256(0)), bytes32(0)
@@ -324,7 +293,7 @@ contract MainnetForkTest is AngstromTest {
         {
             uint256 asset0BalanceAfter = MockERC20(asset0).balanceOf(address(actor));
             assertEq(
-                asset0BalanceAfter, asset0BalanceBefore + pendingRewards, "pendingRewards incorrect"
+                asset0BalanceAfter - asset0BalanceBefore, pendingRewards, "pendingRewards incorrect"
             );
         }
 
@@ -337,6 +306,24 @@ contract MainnetForkTest is AngstromTest {
             uniV4: uni
         });
         assertEq(pendingRewards, 0, "pendingRewards should be zero");
+        assertEq(
+            uni.getPoolLiquidity(pk.toId()), existingLiquidity, "call should not modify liquidity"
+        );
+        {
+            uint256 lastGrowthInside = angstrom.getLastGrowthInside({
+                id: pk.toId(),
+                uniPositionKey: keccak256(
+                    abi.encodePacked(
+                        address(actor), -1 * int24(uint24(60)), 1 * int24(uint24(60)), bytes32(0)
+                    )
+                )
+            });
+            assertEq(
+                lastGrowthInside,
+                poolRewardsGlobalGrowth,
+                "lastGrowthInside should equal poolRewardsGlobalGrowth after call"
+            );
+        }
     }
 
     // override function to allow different store index which is appropriate for mainnet

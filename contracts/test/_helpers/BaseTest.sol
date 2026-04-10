@@ -374,8 +374,11 @@ contract BaseTest is Test, HookDeployer {
         uint256 LAST_BLOCK_BIT_OFFSET = 0;
         uint256 STORE_BIT_OFFSET = 64;
         address configStore = PoolConfigStore.unwrap(angstrom.configStore());
-        uint256 slotData = (uint256(blockNumber) << LAST_BLOCK_BIT_OFFSET) | (uint256(uint160(configStore)) << STORE_BIT_OFFSET);
-        vm.store(address(angstrom), bytes32(LAST_BLOCK_CONFIG_STORE_SLOT), bytes32(uint256(slotData)));
+        uint256 slotData = (uint256(blockNumber) << LAST_BLOCK_BIT_OFFSET)
+            | (uint256(uint160(configStore)) << STORE_BIT_OFFSET);
+        vm.store(
+            address(angstrom), bytes32(LAST_BLOCK_CONFIG_STORE_SLOT), bytes32(uint256(slotData))
+        );
         uint64 lastBlockUpdated = angstrom.lastBlockUpdated();
         assertEq(blockNumber, lastBlockUpdated, "lastBlockUpdated not updated as expected");
         address configStoreAfter = PoolConfigStore.unwrap(angstrom.configStore());

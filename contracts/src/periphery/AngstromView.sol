@@ -128,6 +128,24 @@ library AngstromView {
         return self.extsload(uint256(positionLastGrowthInsideSlot));
     }
 
+    /// @notice Returns the total pending rewards of the position defined  by the `(account, key, tickLower, tickUpper, salt)` tuple.
+    /// @dev Sums the return values of `pendingRewards` and `uniswapPendingRewards`.
+    function totalPendingRewards(
+        IAngstromAuth self,
+        address account,
+        PoolKey memory key,
+        int24 tickLower,
+        int24 tickUpper,
+        bytes32 salt,
+        IPoolManager uniV4
+    ) internal view returns (uint256, uint256) {
+        (uint256 rewardsCurrency0, uint256 rewardsCurrency1) =
+            uniswapPendingRewards(account, key, tickLower, tickUpper, salt, uniV4);
+        uint256 angstromRewards =
+            pendingRewards(self, account, key, tickLower, tickUpper, salt, uniV4);
+        return (rewardsCurrency0 + angstromRewards, rewardsCurrency1);
+    }
+
     /// @notice Returns the pending rewards held by the Angstrom hook for the position defined
     /// by the `(account, key, tickLower, tickUpper, salt)` tuple.
     /// @dev Rewards from Angstrom are always in the Currency0 of the pair.
@@ -144,7 +162,7 @@ library AngstromView {
             PoolId id = key.toId();
             bytes32 uniPositionKey =
                 keccak256(abi.encodePacked(account, tickLower, tickUpper, salt));
-            (, int24 currentTick, , ) = uniV4.getSlot0(id);
+            (, int24 currentTick,,) = uniV4.getSlot0(id);
             uint256 growthInside = getGrowthInside(self, id, currentTick, tickLower, tickUpper);
             uint256 lastGrowthInside = getLastGrowthInside(self, id, uniPositionKey);
             uint128 positionTotalLiquidity = uniV4.getPositionLiquidity(id, uniPositionKey);
@@ -155,6 +173,8 @@ library AngstromView {
         }
     }
 
+    /// @notice Returns the pending rewards held by Uniswap's PoolManager contract for the position
+    /// defined by the `(account, key, tickLower, tickUpper, salt)` tuple.
     function uniswapPendingRewards(
         address account,
         PoolKey memory key,
@@ -167,8 +187,13 @@ library AngstromView {
             PoolId id = key.toId();
             bytes32 uniPositionKey =
                 keccak256(abi.encodePacked(account, tickLower, tickUpper, salt));
-            (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = uniV4.getFeeGrowthInside({poolId: id, tickLower: tickLower, tickUpper: tickUpper});
-            (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128) = uniV4.getPositionInfo({poolId: id, positionId: uniPositionKey});
+            (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) =
+                uniV4.getFeeGrowthInside({poolId: id, tickLower: tickLower, tickUpper: tickUpper});
+            (
+                uint128 liquidity,
+                uint256 feeGrowthInside0LastX128,
+                uint256 feeGrowthInside1LastX128
+            ) = uniV4.getPositionInfo({poolId: id, positionId: uniPositionKey});
             uint256 rewardsCurrency0 =
                 X128MathLib.fullMulX128(feeGrowthInside0X128 - feeGrowthInside0LastX128, liquidity);
             uint256 rewardsCurrency1 =

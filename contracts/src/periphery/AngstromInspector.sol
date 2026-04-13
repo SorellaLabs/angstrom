@@ -79,10 +79,9 @@ contract AngstromInspector {
         PoolKey memory key,
         int24 tickLower,
         int24 tickUpper,
-        bytes32 salt,
-        IPoolManager uniV4
+        bytes32 salt
     ) public view returns (uint256, uint256) {
-        return angstrom.totalPendingRewards(account, key, tickLower, tickUpper, salt, uniV4);
+        return angstrom.totalPendingRewards(account, key, tickLower, tickUpper, salt, uniswapPoolManager);
     }
 
     /// @notice Returns the pending rewards held by the Angstrom hook for the position defined
@@ -93,10 +92,9 @@ contract AngstromInspector {
         PoolKey memory key,
         int24 tickLower,
         int24 tickUpper,
-        bytes32 salt,
-        IPoolManager uniV4
+        bytes32 salt
     ) public view returns (uint256) {
-        return angstrom.pendingRewards(account, key, tickLower, tickUpper, salt, uniV4);
+        return angstrom.pendingRewards(account, key, tickLower, tickUpper, salt, uniswapPoolManager);
     }
 
     function uniswapPendingRewards(
@@ -104,9 +102,8 @@ contract AngstromInspector {
         PoolKey memory key,
         int24 tickLower,
         int24 tickUpper,
-        bytes32 salt,
-        IPoolManager uniV4
+        bytes32 salt
     ) public view returns (uint256, uint256) {
-        return AngstromView.uniswapPendingRewards(account, key, tickLower, tickUpper, salt, uniV4);
+        return AngstromView.uniswapPendingRewards(account, key, tickLower, tickUpper, salt, uniswapPoolManager);
     }
 }

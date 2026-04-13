@@ -12,8 +12,6 @@ import {X128MathLib} from "../libraries/X128MathLib.sol";
 import {Positions, Position} from "../types/Positions.sol";
 import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
 
-using PoolIdLibrary for PoolId;
-
 /// @author philogy <https://github.com/philogy>
 /// @author crypto-banker <https://github.com/crypto-banker>
 library AngstromView {

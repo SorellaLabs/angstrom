@@ -71,9 +71,6 @@ contract AngstromTest is BaseTest {
         vm.prank(controller);
         angstrom.configurePool(asset0, asset1, 1, uint24(fee), 0, 0);
 
-        console.log("asset0: %s", asset0);
-        console.log("asset1: %s", asset1);
-
         Account memory user1 = makeAccount("user_1");
         MockERC20(asset0).mint(user1.addr, 100.0e18);
         vm.prank(user1.addr);

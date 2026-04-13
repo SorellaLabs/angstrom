@@ -19,7 +19,7 @@ contract AngstromInspectorScript is Script {
             new AngstromInspector(IAngstromAuth(angstrom), IPoolManager(uniswap));
 
         vm.stopBroadcast();
-        console.log("[INFO] deployed apdater to %s", address(inspector));
+        console.log("[INFO] deployed AngstromInspector to %s", address(inspector));
     }
 
     function isChain(string memory name) internal returns (bool) {

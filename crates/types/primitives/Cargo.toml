@@ -42,8 +42,9 @@ itertools.workspace = true
 [dev-dependencies]
 angstrom-types.workspace = true
 rand.workspace = true
-testing-tools.workspace = true
-tokio.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["alloy-contract", "convert_case"]
 
 [features]
 default = []

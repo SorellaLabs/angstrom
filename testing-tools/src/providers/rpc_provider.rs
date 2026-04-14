@@ -7,7 +7,7 @@ use alloy::{
 };
 use alloy_rpc_types::BlockNumberOrTag;
 use angstrom_types::reth_db_wrapper::DBError;
-use reth_primitives::Account;
+use reth::primitives::Account;
 use reth_provider::{ProviderError, ProviderResult};
 use revm::bytecode::Bytecode;
 use validation::common::db::{BlockStateProvider, BlockStateProviderFactory};

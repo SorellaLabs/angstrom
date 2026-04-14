@@ -20,7 +20,6 @@ reqwest = { version = "0.12.5", features = ["json"] }
 reth.workspace = true
 reth-chainspec.workspace = true
 reth-ethereum-primitives.workspace = true
-reth-primitives.workspace = true
 reth-primitives-traits.workspace = true
 reth-provider.workspace = true
 reth-storage-api.workspace = true
@@ -40,7 +39,6 @@ uniswap_v3_math.workspace = true
 
 [dev-dependencies]
 angstrom-types.workspace = true
-rand.workspace = true
 testing-tools.workspace = true
 tokio.workspace = true
 

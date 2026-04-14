@@ -36,7 +36,6 @@ reth-network.workspace = true
 reth-network-p2p = { git = "https://github.com/paradigmxyz/reth", version = "1.6.0", tag = "v1.6.0" }
 reth-network-peers.workspace = true
 reth-node-builder.workspace = true
-reth-primitives.workspace = true
 reth-tasks.workspace = true
 reth-transaction-pool.workspace = true
 secp256k1.workspace = true
@@ -51,20 +50,15 @@ tracing.workspace = true
 validation.workspace = true
 
 [dev-dependencies]
-angstrom-network.workspace = true
-rand.workspace = true
-reth-discv4 = { workspace = true, features = ["test-utils"] }
 reth-metrics.workspace = true
 reth-network = { workspace = true, features = ["test-utils"] }
-reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
-reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
 secp256k1.workspace = true
-serial_test.workspace = true
-tempfile.workspace = true
-testing-tools.workspace = true
 toml.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["reth-provider"]
 
 [features]
 default = ["serde"]

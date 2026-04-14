@@ -15,34 +15,32 @@ use angstrom_types::{
 use futures::StreamExt;
 use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage, core::RpcResult};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
-use reth_tasks::TaskSpawner;
+use reth_tasks::TaskExecutor;
 use validation::order::OrderValidatorHandle;
 
-pub struct OrderApi<OrderPool, Spawner, Validator, Quoter> {
-    pool:         OrderPool,
-    task_spawner: Spawner,
-    validator:    Validator,
-    amm_quoter:   Quoter
+pub struct OrderApi<OrderPool, Validator, Quoter> {
+    pool:          OrderPool,
+    task_executor: TaskExecutor,
+    validator:     Validator,
+    amm_quoter:    Quoter
 }
 
-impl<OrderPool, Spawner, Validator, Quoter> OrderApi<OrderPool, Spawner, Validator, Quoter> {
+impl<OrderPool, Validator, Quoter> OrderApi<OrderPool, Validator, Quoter> {
     pub fn new(
         pool: OrderPool,
-        task_spawner: Spawner,
+        task_executor: TaskExecutor,
         validator: Validator,
         amm_quoter: Quoter
     ) -> Self {
-        Self { pool, task_spawner, validator, amm_quoter }
+        Self { pool, task_executor, validator, amm_quoter }
     }
 }
 
 #[async_trait::async_trait]
-impl<OrderPool, Spawner, Validator, Quoter> OrderApiServer
-    for OrderApi<OrderPool, Spawner, Validator, Quoter>
+impl<OrderPool, Validator, Quoter> OrderApiServer for OrderApi<OrderPool, Validator, Quoter>
 where
     OrderPool: OrderPoolHandle,
     Quoter: AngstromBookQuoter,
-    Spawner: TaskSpawner + 'static,
     Validator: OrderValidatorHandle
 {
     async fn send_order(&self, order: AllOrders) -> RpcResult<CallResult> {
@@ -109,7 +107,7 @@ where
         let sink = pending.accept().await?;
         let mut subscription = self.amm_quoter.subscribe_to_updates(pools).await;
 
-        self.task_spawner.spawn_task(Box::pin(async move {
+        self.task_executor.spawn_task(async move {
             while let Some(slot0) = subscription.next().await {
                 if sink.is_closed() {
                     break;
@@ -126,7 +124,7 @@ where
                     }
                 }
             }
-        }));
+        });
 
         Ok(())
     }
@@ -143,7 +141,7 @@ where
             .subscribe_orders()
             .map(move |update| update.map(|value| value.filter_out_order(&kind, &filter)));
 
-        self.task_spawner.spawn_task(Box::pin(async move {
+        self.task_executor.spawn_task(async move {
             while let Some(Ok(order)) = subscription.next().await {
                 if sink.is_closed() {
                     break;
@@ -166,7 +164,7 @@ where
                     }
                 }
             }
-        }));
+        });
 
         Ok(())
     }
@@ -294,7 +292,7 @@ mod tests {
     };
     use futures::FutureExt;
     use order_pool::PoolManagerUpdate;
-    use reth_tasks::TokioTaskExecutor;
+    use reth_tasks::TaskExecutor;
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
     use tokio_stream::wrappers::BroadcastStream;
     use validation::order::{GasEstimationFuture, ValidationFuture};
@@ -346,13 +344,11 @@ mod tests {
         );
     }
 
-    fn setup_order_api() -> (
-        OrderApiTestHandle,
-        OrderApi<MockOrderPoolHandle, TokioTaskExecutor, MockValidator, QuoterHandle>
-    ) {
+    fn setup_order_api()
+    -> (OrderApiTestHandle, OrderApi<MockOrderPoolHandle, MockValidator, QuoterHandle>) {
         let (to_pool, pool_rx) = unbounded_channel();
         let pool_handle = MockOrderPoolHandle::new(to_pool);
-        let task_executor = TokioTaskExecutor::default();
+        let task_executor = TaskExecutor::test();
         let (tx, _) = tokio::sync::mpsc::channel(5);
         let q_handle = QuoterHandle(tx);
         let api = OrderApi::new(pool_handle.clone(), task_executor, MockValidator, q_handle);

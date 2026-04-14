@@ -22,7 +22,6 @@ angstrom-rpc.workspace = true
 angstrom-types.workspace = true
 consensus.workspace = true
 dashmap.workspace = true
-enr = { workspace = true, features = ["serde", "k256"] }
 eyre.workspace = true
 futures.workspace = true
 itertools.workspace = true
@@ -44,7 +43,6 @@ reth-network-api.workspace = true
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
 reth-node-ethereum.workspace = true
 reth-node-types.workspace = true
-reth-primitives = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-revm.workspace = true
 reth-tasks.workspace = true

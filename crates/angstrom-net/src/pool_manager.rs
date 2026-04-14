@@ -22,7 +22,7 @@ use order_pool::{
     order_storage::OrderStorage
 };
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
-use reth_tasks::TaskSpawner;
+use reth_tasks::TaskExecutor;
 use telemetry_recorder::telemetry_event;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::SendError};
 use tokio_stream::wrappers::{BroadcastStream, UnboundedReceiverStream};
@@ -175,9 +175,9 @@ where
         self
     }
 
-    pub fn build_with_channels<TP: TaskSpawner>(
+    pub fn build_with_channels(
         self,
-        task_spawner: TP,
+        task_executor: TaskExecutor,
         tx: UnboundedSender<OrderCommand>,
         rx: UnboundedReceiver<OrderCommand>,
         pool_manager_tx: tokio::sync::broadcast::Sender<PoolManagerUpdate>,
@@ -199,7 +199,7 @@ where
         replay(&mut inner);
         self.global_sync.register(MODULE_NAME);
 
-        task_spawner.spawn_critical_task(
+        task_executor.spawn_critical_task(
             "transaction manager",
             Box::pin(PoolManager {
                 eth_network_events:   self.eth_network_events,

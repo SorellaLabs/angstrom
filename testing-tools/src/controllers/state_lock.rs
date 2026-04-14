@@ -41,9 +41,9 @@ pub(crate) struct TestnetStateFutureLock<
 
 impl<C, T, P> TestnetStateFutureLock<C, T, P>
 where
-    C: BlockReader<Block = reth_primitives::Block>
-        + ReceiptProvider<Receipt = reth_primitives::Receipt>
-        + HeaderProvider<Header = reth_primitives::Header>
+    C: BlockReader<Block = reth::primitives::BlockTy<reth::primitives::EthPrimitives>>
+        + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
+        + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + 'static,

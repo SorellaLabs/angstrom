@@ -9,7 +9,7 @@ use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
 use futures::{Future, FutureExt, StreamExt};
 use reth_chainspec::Hardforks;
 use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
-use reth_tasks::{TaskExecutor, TaskSpawner};
+use reth_tasks::TaskExecutor;
 
 use super::AngstromTestnet;
 use crate::{
@@ -25,9 +25,9 @@ use crate::{
 
 impl<C> AngstromTestnet<C, TestnetConfig, WalletProvider>
 where
-    C: BlockReader<Block = reth_primitives::Block>
-        + ReceiptProvider<Receipt = reth_primitives::Receipt>
-        + HeaderProvider<Header = reth_primitives::Header>
+    C: BlockReader<Block = reth::primitives::BlockTy<reth::primitives::EthPrimitives>>
+        + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
+        + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
         + Unpin
         + Clone
@@ -65,7 +65,7 @@ where
         Ok(this)
     }
 
-    pub async fn run_to_completion<TP: TaskSpawner>(mut self, executor: TP) {
+    pub async fn run_to_completion(mut self, executor: TaskExecutor) {
         for s in self.block_syncs {
             s.clear();
         }

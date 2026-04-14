@@ -11,24 +11,23 @@ use jsonrpsee::{
     core::RpcResult,
     types::{ErrorCode, ErrorObjectOwned}
 };
-use reth_tasks::TaskSpawner;
+use reth_tasks::TaskExecutor;
 
-pub struct ConsensusApi<Consensus, Spawner> {
-    consensus:    Consensus,
-    task_spawner: Spawner
+pub struct ConsensusApi<Consensus> {
+    consensus:     Consensus,
+    task_executor: TaskExecutor
 }
 
-impl<Consensus, Spawner> ConsensusApi<Consensus, Spawner> {
-    pub fn new(consensus: Consensus, task_spawner: Spawner) -> Self {
-        Self { consensus, task_spawner }
+impl<Consensus> ConsensusApi<Consensus> {
+    pub fn new(consensus: Consensus, task_executor: TaskExecutor) -> Self {
+        Self { consensus, task_executor }
     }
 }
 
 #[async_trait::async_trait]
-impl<Consensus, Spawner> ConsensusApiServer for ConsensusApi<Consensus, Spawner>
+impl<Consensus> ConsensusApiServer for ConsensusApi<Consensus>
 where
-    Consensus: ConsensusHandle,
-    Spawner: TaskSpawner + 'static
+    Consensus: ConsensusHandle
 {
     async fn get_current_leader(&self) -> RpcResult<ConsensusDataWithBlock<Address>> {
         Ok(self
@@ -70,7 +69,7 @@ where
     ) -> jsonrpsee::core::SubscriptionResult {
         let sink = pending.accept().await?;
         let mut subscription = self.consensus.subscribe_empty_block_attestations();
-        self.task_spawner.spawn_task(Box::pin(async move {
+        self.task_executor.spawn_task(async move {
             while let Some(result) = subscription.next().await {
                 if sink.is_closed() {
                     break;
@@ -88,7 +87,7 @@ where
                     }
                 }
             }
-        }));
+        });
 
         Ok(())
     }

@@ -1,12 +1,11 @@
 use std::time::Duration;
 
-use reth::{chainspec::ChainSpec, transaction_pool::TransactionPool};
+use reth::{chainspec::ChainSpec, primitives::EthPrimitives, transaction_pool::TransactionPool};
 use reth_eth_wire::BasicNetworkPrimitives;
 use reth_network::{NetworkHandle, NetworkManager, PeersInfo, protocol::IntoRlpxSubProtocol};
 use reth_node_builder::{
     BuilderContext, NodeTypes, PrimitivesTy, TxTy, components::NetworkBuilder, node::FullNodeTypes
 };
-use reth_primitives::EthPrimitives;
 use reth_transaction_pool::{PoolPooledTx, PoolTransaction};
 
 /// A basic ethereum payload service.

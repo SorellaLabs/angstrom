@@ -3,7 +3,7 @@ use std::sync::Arc;
 use alloy_rpc_types::{Block, TransactionReceipt};
 use itertools::Itertools;
 use parking_lot::RwLock;
-use reth_primitives::{RecoveredBlock, TransactionSigned};
+use reth::primitives::{RecoveredBlock, TransactionSigned};
 use reth_provider::{Chain, ExecutionOutcome};
 use reth_trie_common::{LazyTrieData, SortedTrieData};
 
@@ -51,7 +51,7 @@ impl AnvilConsensusCanonStateNotification {
             .into_iter()
             .map(|r| {
                 let r = r.into_primitives_receipt();
-                reth_primitives::Receipt {
+                reth::primitives::ReceiptTy::<reth::primitives::EthPrimitives> {
                     tx_type:             r.inner.tx_type(),
                     success:             r.inner.status(),
                     cumulative_gas_used: r.inner.cumulative_gas_used(),

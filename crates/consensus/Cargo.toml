@@ -32,5 +32,4 @@ uniswap-v4.workspace = true
 dashmap.workspace = true
 testing-tools.workspace = true
 tracing.workspace = true
-tracing-appender.workspace = true
 tracing-subscriber.workspace = true

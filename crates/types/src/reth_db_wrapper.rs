@@ -230,7 +230,7 @@ where
     fn account_code(
         &self,
         addr: &Address
-    ) -> reth_provider::ProviderResult<Option<reth_primitives::Bytecode>> {
+    ) -> reth_provider::ProviderResult<Option<reth_primitives_traits::Bytecode>> {
         self.db
             .state_by_block_id(self.block.load(std::sync::atomic::Ordering::Relaxed).into())?
             .account_code(addr)
@@ -247,16 +247,6 @@ where
             .state_by_block_id(self.block.load(std::sync::atomic::Ordering::Relaxed).into())?
             .account_balance(addr)
     }
-
-    fn storage_by_hashed_key(
-        &self,
-        address: Address,
-        hashed_storage_key: StorageKey
-    ) -> ProviderResult<Option<StorageValue>> {
-        self.db
-            .state_by_block_id(self.block.load(std::sync::atomic::Ordering::Relaxed).into())?
-            .storage_by_hashed_key(address, hashed_storage_key)
-    }
 }
 
 impl<DB> AccountReader for RethDbWrapper<DB>
@@ -266,7 +256,7 @@ where
     fn basic_account(
         &self,
         address: &Address
-    ) -> reth_provider::ProviderResult<Option<reth_primitives::Account>> {
+    ) -> reth_provider::ProviderResult<Option<reth_primitives_traits::Account>> {
         self.db
             .state_by_block_id(self.block.load(std::sync::atomic::Ordering::Relaxed).into())?
             .basic_account(address)
@@ -401,7 +391,7 @@ where
     fn bytecode_by_hash(
         &self,
         code_hash: &B256
-    ) -> reth_provider::ProviderResult<Option<reth_primitives::Bytecode>> {
+    ) -> reth_provider::ProviderResult<Option<reth_primitives_traits::Bytecode>> {
         self.db
             .state_by_block_id(self.block.load(std::sync::atomic::Ordering::Relaxed).into())?
             .bytecode_by_hash(code_hash)

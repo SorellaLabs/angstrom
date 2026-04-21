@@ -446,7 +446,7 @@ where
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
-            eth_handle.subscribe_cannon_state_notifications().await,
+            eth_handle.subscribe_network(),
             handles.consensus_rx_op
         ),
         signer,

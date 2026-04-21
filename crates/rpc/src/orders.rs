@@ -423,7 +423,11 @@ mod tests {
     impl OrderValidatorHandle for MockValidator {
         type Order = AllOrders;
 
-        fn validate_order(&self, _origin: OrderOrigin, _order: Self::Order) -> ValidationFuture {
+        fn validate_order(
+            &self,
+            _origin: OrderOrigin,
+            _order: Self::Order
+        ) -> ValidationFuture<'_> {
             unimplemented!("order validation is complicated")
         }
 
@@ -432,7 +436,7 @@ mod tests {
             _block_number: u64,
             _completed_orders: Vec<B256>,
             _addresses: Vec<Address>
-        ) -> ValidationFuture {
+        ) -> ValidationFuture<'_> {
             unimplemented!("no new block")
         }
 
@@ -442,11 +446,11 @@ mod tests {
             _is_internal: bool,
             _token_0: Address,
             _token_1: Address
-        ) -> GasEstimationFuture {
+        ) -> GasEstimationFuture<'_> {
             Box::pin(future::ready(Ok((U256::from(250_000u64), 10))))
         }
 
-        fn valid_nonce_for_user(&self, _address: Address) -> validation::order::NonceFuture {
+        fn valid_nonce_for_user(&self, _address: Address) -> validation::order::NonceFuture<'_> {
             Box::pin(async move { 50 })
         }
 

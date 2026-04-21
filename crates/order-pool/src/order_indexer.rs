@@ -16,7 +16,6 @@ use angstrom_types::{
 };
 use futures_util::{Stream, StreamExt};
 use tokio::sync::oneshot::Sender;
-use tracing::error;
 use validation::order::{OrderValidationResults, OrderValidatorHandle};
 
 use crate::{

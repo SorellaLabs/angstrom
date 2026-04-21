@@ -170,7 +170,7 @@ prometheus = "0"
 proptest = "1"
 proptest-derive = "0"
 quote = "1"
-rand = "0.9.0"
+rand = "0.9.3"
 rand_distr = "0.5.1"
 rayon = "1"
 reth = { git = "https://github.com/paradigmxyz/reth", version = "2.0.0", tag = "v2.0.0" }

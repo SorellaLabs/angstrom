@@ -187,6 +187,9 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let eth_event_rx_stream = UnboundedReceiverStream::new(eth_event_rx);
     let (_eth_event_tx_pmb, eth_event_rx_pmb) = tokio::sync::mpsc::unbounded_channel::<EthEvent>();
     let eth_event_rx_stream_pmb = UnboundedReceiverStream::new(eth_event_rx_pmb);
+    let (_eth_event_tx_consensus, eth_event_rx_consensus) =
+        tokio::sync::mpsc::unbounded_channel::<EthEvent>();
+    let eth_event_rx_stream_consensus = UnboundedReceiverStream::new(eth_event_rx_consensus);
     // let eth_data_sub = node.provider.subscribe_to_canonical_state();
 
     let global_block_sync = GlobalBlockSync::new(block_id);
@@ -292,7 +295,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
-            mock_canon.subscribe_to_canonical_state(),
+            eth_event_rx_stream_consensus,
             handles.consensus_rx_op
         ),
         signer,

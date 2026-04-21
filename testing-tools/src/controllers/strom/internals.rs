@@ -320,7 +320,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         let consensus = ConsensusManager::new(
             ManagerNetworkDeps::new(
                 strom_network_handle.clone(),
-                eth_handle.subscribe_cannon_state_notifications().await,
+                eth_handle.subscribe_network(),
                 strom_handles.consensus_rx_op
             ),
             node_config.angstrom_signer(),

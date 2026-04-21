@@ -179,6 +179,8 @@ where
             filled_orders,
             address_changeset: eoas
         };
+
+        self.send_events(EthEvent::NewBlock(tip));
         self.send_events(transitions);
     }
 

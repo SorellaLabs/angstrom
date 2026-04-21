@@ -3206,6 +3206,7 @@ name = "consensus"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "angstrom-eth",
  "angstrom-metrics",
  "angstrom-network",
  "angstrom-types",

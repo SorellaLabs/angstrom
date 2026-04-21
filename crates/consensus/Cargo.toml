@@ -10,6 +10,7 @@ exclude.workspace = true
 
 [dependencies]
 alloy.workspace = true
+angstrom-eth.workspace = true
 angstrom-metrics.workspace = true
 angstrom-network.workspace = true
 angstrom-types.workspace = true

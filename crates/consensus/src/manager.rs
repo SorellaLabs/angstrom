@@ -3,64 +3,65 @@ use std::{
     future::Future,
     pin::Pin,
     sync::Arc,
-    task::{Context, Poll, Waker}
+    task::{Context, Poll, Waker},
 };
 
 use alloy::{
     consensus::BlockHeader,
     primitives::{BlockNumber, Bytes},
-    providers::Provider
+    providers::Provider,
 };
+use angstrom_eth::manager::EthEvent;
 use angstrom_metrics::ConsensusMetricsWrapper;
 use angstrom_network::{StromMessage, StromNetworkHandle};
 use angstrom_types::{
     block_sync::BlockSyncConsumer,
     consensus::{
-        ConsensusRoundName, ConsensusRoundOrderHashes, StromConsensusEvent, SystemTimeSlotClock
+        ConsensusRoundName, ConsensusRoundOrderHashes, StromConsensusEvent, SystemTimeSlotClock,
     },
     contract_payloads::angstrom::UniswapAngstromRegistry,
     primitive::{AngstromMetaSigner, AngstromSigner},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
     submission::SubmissionHandler,
-    traits::ChainExt
+    traits::ChainExt,
 };
 use futures::StreamExt;
 use matching_engine::MatchingEngineHandle;
 use order_pool::order_storage::OrderStorage;
 use reth_metrics::common::mpsc::UnboundedMeteredReceiver;
-use reth_provider::{CanonStateNotification, CanonStateNotifications};
+use reth_provider::{CanonStateNotification};
 use reth_tasks::shutdown::GracefulShutdown;
 use telemetry_recorder::telemetry_event;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::{, UnboundedReceiverStream};
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
 use crate::{
     AngstromValidator, ConsensusDataWithBlock, ConsensusRequest, ConsensusSubscriptionData,
     ConsensusSubscriptionRequestKind, ConsensusTimingConfig,
     leader_selection::WeightedRoundRobin,
-    rounds::{ConsensusMessage, RoundStateMachine, SharedRoundState}
+    rounds::{ConsensusMessage, RoundStateMachine, SharedRoundState},
 };
 
 const MODULE_NAME: &str = "Consensus";
 
 pub struct ConsensusManager<P, Matching, BlockSync, S: AngstromMetaSigner>
 where
-    P: Provider + Unpin + 'static
+    P: Provider + Unpin + 'static,
 {
-    current_height:         BlockNumber,
-    leader_selection:       WeightedRoundRobin,
-    consensus_round_state:  RoundStateMachine<P, Matching, S>,
-    canonical_block_stream: BroadcastStream<CanonStateNotification>,
-    strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>,
-    network:                StromNetworkHandle,
-    block_sync:             BlockSync,
-    rpc_rx:                 mpsc::UnboundedReceiver<ConsensusRequest>,
-    state_updates:          Option<mpsc::UnboundedSender<ConsensusRoundName>>,
-    subscribers:            ConsensusSubscriptionManager,
+    current_height: BlockNumber,
+    leader_selection: WeightedRoundRobin,
+    consensus_round_state: RoundStateMachine<P, Matching, S>,
+    canonical_block_stream: UnboundedReceiverStream<EthEvent>,
+    strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>,
+    network: StromNetworkHandle,
+    block_sync: BlockSync,
+    rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>,
+    state_updates: Option<mpsc::UnboundedSender<ConsensusRoundName>>,
+    subscribers: ConsensusSubscriptionManager,
 
     /// Track broadcasted messages to avoid rebroadcasting
-    broadcasted_messages: HashSet<StromConsensusEvent>
+    broadcasted_messages: HashSet<StromConsensusEvent>,
 }
 
 impl<P, Matching, BlockSync, S> ConsensusManager<P, Matching, BlockSync, S>
@@ -68,7 +69,7 @@ where
     P: Provider + Unpin + 'static,
     BlockSync: BlockSyncConsumer,
     Matching: MatchingEngineHandle,
-    S: AngstromMetaSigner
+    S: AngstromMetaSigner,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -86,10 +87,9 @@ where
         rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>,
         state_updates: Option<mpsc::UnboundedSender<ConsensusRoundName>>,
         timing_config: ConsensusTimingConfig,
-        slot_clock: SystemTimeSlotClock
+        slot_clock: SystemTimeSlotClock,
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
-        let wrapped_broadcast_stream = BroadcastStream::new(canonical_block_stream);
         tracing::info!(?validators, "setting up with validators");
         let mut leader_selection = WeightedRoundRobin::new(validators.clone(), deploy_block);
         let leader = leader_selection.choose_proposer(current_height).unwrap();
@@ -115,25 +115,48 @@ where
                     provider,
                     matching_engine,
                     timing_config,
-                    slot_clock.clone()
+                    slot_clock.clone(),
                 ),
-                slot_clock
+                slot_clock,
             ),
             rpc_rx,
             state_updates,
             block_sync,
             network,
-            canonical_block_stream: wrapped_broadcast_stream,
+            canonical_block_stream,
             broadcasted_messages: HashSet::new(),
-            subscribers: ConsensusSubscriptionManager::default()
+            subscribers: ConsensusSubscriptionManager::default(),
         }
     }
 
-    fn on_blockchain_state(&mut self, notification: CanonStateNotification, waker: Waker) {
+    fn on_blockchain_state(&mut self, event: EthEvent, waker: Waker) {
         tracing::info!("got new block_chain state");
-        let new_block = notification.tip();
 
-        self.current_height = new_block.number();
+        match event {
+            EthEvent::NewBlock(block) => {
+                self.current_height = block;
+
+                self.block_sync
+                    .sign_off_on_block(MODULE_NAME, self.current_height, Some(waker));
+            }
+            EthEvent::ReorgedOrders(_, reorg) => {
+                self.current_height = reorg.last().unwrap();
+                self.block_sync
+                    .sign_off_reorg(MODULE_NAME, reorg, Some(waker));
+
+            }
+            // If this isn't a new block event. we don't wanna reset.
+            EthEvent::AddedNode(node) => {
+                self.leader_selection.add_validator(node, 100);
+                return;
+            }
+            EthEvent::RemovedNode(node) => {
+                self.leader_selection.remove_validator(&node);
+                return; 
+            }
+            _ => return
+        }
+
         ConsensusMetricsWrapper::new().set_block_height(self.current_height);
         let round_leader = self
             .leader_selection
@@ -150,18 +173,6 @@ where
         }
         self.broadcasted_messages.clear();
 
-        match notification {
-            CanonStateNotification::Reorg { old, new } => {
-                let tip = new.tip_number();
-                let reorg = old.reorged_range(&new).unwrap_or(tip..=tip);
-                self.block_sync
-                    .sign_off_reorg(MODULE_NAME, reorg, Some(waker));
-            }
-            CanonStateNotification::Commit { .. } => {
-                self.block_sync
-                    .sign_off_on_block(MODULE_NAME, self.current_height, Some(waker));
-            }
-        }
     }
 
     fn handle_request(&mut self, request: ConsensusRequest) {
@@ -170,7 +181,7 @@ where
                 let block = self.current_height;
                 let _ = tx.send(ConsensusDataWithBlock {
                     data: self.consensus_round_state.current_leader(),
-                    block
+                    block,
                 });
             }
             ConsensusRequest::CurrentConsensusState(tx) => {
@@ -190,14 +201,14 @@ where
                 let block = self.current_height;
                 let _ = tx.send(ConsensusDataWithBlock {
                     data: self.consensus_round_state.timing(),
-                    block
+                    block,
                 });
             }
             ConsensusRequest::IsRoundClosed(tx) => {
                 let block = self.current_height;
                 let _ = tx.send(ConsensusDataWithBlock {
                     data: self.consensus_round_state.is_auction_closed(),
-                    block
+                    block,
                 });
             }
         }
@@ -256,7 +267,7 @@ where
                 self.network
                     .broadcast_message(StromMessage::BundleUnlockAttestation(
                         self.current_height,
-                        p
+                        p,
                     ));
             }
         };
@@ -293,7 +304,7 @@ where
     P: Provider + Unpin + 'static,
     Matching: MatchingEngineHandle,
     BlockSync: BlockSyncConsumer,
-    S: AngstromMetaSigner
+    S: AngstromMetaSigner,
 {
     type Output = ();
 
@@ -301,11 +312,9 @@ where
         let this = self.get_mut();
 
         while let Poll::Ready(Some(msg)) = this.canonical_block_stream.poll_next_unpin(cx) {
-            match msg {
-                Ok(notification) => this.on_blockchain_state(notification, cx.waker().clone()),
-                Err(e) => tracing::error!("Error receiving chain state notification: {}", e)
-            };
+            this.on_blockchain_state(msg, cx.waker().clone());
         }
+
         while let Poll::Ready(Some(data)) = this.rpc_rx.poll_recv(cx) {
             this.handle_request(data);
         }
@@ -325,16 +334,16 @@ where
 }
 
 pub struct ManagerNetworkDeps {
-    network:                StromNetworkHandle,
-    canonical_block_stream: CanonStateNotifications,
-    strom_consensus_event:  UnboundedMeteredReceiver<StromConsensusEvent>
+    network: StromNetworkHandle,
+    canonical_block_stream: UnboundedReceiverStream<EthEvent>,
+    strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>,
 }
 
 impl ManagerNetworkDeps {
     pub fn new(
         network: StromNetworkHandle,
-        canonical_block_stream: CanonStateNotifications,
-        strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>
+        canonical_block_stream: UnboundedReceiverStream<EthEvent>,
+        strom_consensus_event: UnboundedMeteredReceiver<StromConsensusEvent>,
     ) -> Self {
         Self { network, canonical_block_stream, strom_consensus_event }
     }
@@ -343,14 +352,14 @@ impl ManagerNetworkDeps {
 #[derive(Debug, Default)]
 struct ConsensusSubscriptionManager {
     subscribers:
-        HashMap<ConsensusSubscriptionRequestKind, Vec<mpsc::Sender<ConsensusSubscriptionData>>>
+        HashMap<ConsensusSubscriptionRequestKind, Vec<mpsc::Sender<ConsensusSubscriptionData>>>,
 }
 
 impl ConsensusSubscriptionManager {
     fn add_subscription(
         &mut self,
         kind: ConsensusSubscriptionRequestKind,
-        tx: mpsc::Sender<ConsensusSubscriptionData>
+        tx: mpsc::Sender<ConsensusSubscriptionData>,
     ) {
         self.subscribers.entry(kind).or_default().push(tx);
     }
@@ -373,9 +382,9 @@ impl ConsensusSubscriptionManager {
             .get_mut(&ConsensusSubscriptionRequestKind::RoundEventOrders)
         {
             let order_hashes = ConsensusRoundOrderHashes {
-                limit:    HashSet::from_iter(data.limit_order_hashes()),
+                limit: HashSet::from_iter(data.limit_order_hashes()),
                 searcher: HashSet::from_iter(data.searcher_order_hashes()),
-                round:    data.round_event()
+                round: data.round_event(),
             };
             subs.retain(|tx| {
                 tx.try_send(ConsensusSubscriptionData::RoundEventOrders(order_hashes.clone()))

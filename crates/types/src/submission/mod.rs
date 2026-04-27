@@ -6,7 +6,7 @@ use std::{ops::Deref, pin::Pin, sync::Arc};
 use alloy::{
     consensus::{EthereumTxEnvelope, TxEip4844Variant},
     eips::eip1559::Eip1559Estimation,
-    network::TransactionBuilder,
+    network::{NetworkTransactionBuilder, TransactionBuilder},
     primitives::Address,
     providers::Provider,
     rpc::types::TransactionRequest,

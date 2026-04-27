@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use alloy::{
     eips::Encodable2718,
-    network::TransactionBuilder,
+    network::{NetworkTransactionBuilder, TransactionBuilder},
     primitives::{Address, Bytes, U256, aliases::I24},
     providers::{
         Identity, Provider, ProviderBuilder, RootProvider,

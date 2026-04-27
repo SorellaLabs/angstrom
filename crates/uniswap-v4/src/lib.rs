@@ -346,7 +346,7 @@ pub mod fuzz_uniswap {
             panic!(
                 "replay failed {:?} gas: {} logs: {:#?}",
                 result.result.output(),
-                result.result.gas_used(),
+                result.result.tx_gas_used(),
                 result.result.logs()
             );
         }

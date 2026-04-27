@@ -30,6 +30,10 @@ contract EventEmitter is Ownable {
     error InputLengthMismatch();
     error TopicsExceedMax();
 
+    constructor(address initialOwner) {
+        _initializeOwner(initialOwner);
+    }
+
     function emitFeeClaimQueued(
         address[] calldata assets,
         uint256[] calldata amounts,

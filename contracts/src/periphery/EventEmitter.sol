@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Ownable} from "solady/src/auth/Ownable.sol";
+import {AccessControlEnumerable} from "lib/openzeppelin-contracts/contracts/access/extensions/AccessControlEnumerable.sol";
 
-/// @notice Simple contract which allows the contract owner to emit events.
-contract EventEmitter is Ownable {
+/// @notice Simple contract which allows the contract `DEFAULT_ADMIN_ROLE` to emit events.
+contract EventEmitter is AccessControlEnumerable {
     enum FeeClaimType {
         GAS,
         PROTOCOL,
@@ -29,9 +29,15 @@ contract EventEmitter is Ownable {
 
     error InputLengthMismatch();
     error TopicsExceedMax();
+    error ZeroAdminsAtConstruction();
 
-    constructor(address initialOwner) {
-        _initializeOwner(initialOwner);
+    constructor(address[] memory initialAdmins) {
+        if (initialAdmins.length == 0) {
+            revert ZeroAdminsAtConstruction();
+        }
+        for (uint256 i = 0; i < initialAdmins.length; ++i) {
+            _grantRole(DEFAULT_ADMIN_ROLE, initialAdmins[i]);
+        }
     }
 
     function emitFeeClaimQueued(
@@ -40,7 +46,7 @@ contract EventEmitter is Ownable {
         FeeClaimType claimType,
         uint256 startBlock,
         uint256 endBlock
-    ) external onlyOwner {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (assets.length != amounts.length) {
             revert InputLengthMismatch();
         }
@@ -55,7 +61,7 @@ contract EventEmitter is Ownable {
         FeeClaimType claimType,
         uint256 startBlock,
         uint256 endBlock
-    ) external onlyOwner {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (assets.length != amounts.length) {
             revert InputLengthMismatch();
         }
@@ -69,7 +75,7 @@ contract EventEmitter is Ownable {
     /// @param logData defines the unindexed data of the log.
     function emitGenericEvent(bytes32[] calldata topics, bytes calldata logData)
         external
-        onlyOwner
+        onlyRole(DEFAULT_ADMIN_ROLE)
     {
         if (topics.length > 4) {
             revert TopicsExceedMax();

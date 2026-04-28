@@ -7,7 +7,6 @@ import {EventEmitter} from "src/periphery/EventEmitter.sol";
 
 contract EventEmitterScript is Script {
     function run() public {
-        vm.startBroadcast();
         address timelock = timelockOnCurrentChain();
         address multisig = multisigOnCurrentChain();
 
@@ -15,7 +14,10 @@ contract EventEmitterScript is Script {
         initialAdmins[0] = timelock;
         initialAdmins[1] = multisig;
 
+        vm.startBroadcast();
         EventEmitter emitter = new EventEmitter(initialAdmins);
+        vm.stopBroadcast();
+
         console.log("[INFO] deployed event emitter to %s", address(emitter));
     }
 

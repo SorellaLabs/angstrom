@@ -123,6 +123,8 @@ jobs:
     name: forge fmt && forge test
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
     steps:
       - uses: actions/checkout@v4
         with:

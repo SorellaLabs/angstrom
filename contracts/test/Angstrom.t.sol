@@ -45,7 +45,7 @@ contract AngstromTest is BaseTest {
 
     RouterActor actor;
 
-    function setUp() public {
+    function setUp() public virtual {
         uni = new PoolManager(address(0));
         angstrom = Angstrom(deployAngstrom(type(Angstrom).creationCode, uni, controller));
         domainSeparator = computeDomainSeparator(address(angstrom));
@@ -70,9 +70,6 @@ contract AngstromTest is BaseTest {
 
         vm.prank(controller);
         angstrom.configurePool(asset0, asset1, 1, uint24(fee), 0, 0);
-
-        console.log("asset0: %s", asset0);
-        console.log("asset1: %s", asset1);
 
         Account memory user1 = makeAccount("user_1");
         MockERC20(asset0).mint(user1.addr, 100.0e18);
@@ -193,9 +190,12 @@ contract AngstromTest is BaseTest {
         swapAmount1 = bound(swapAmount1, 1e8, 10e18);
         swapAmount2 = bound(swapAmount2, 1e8, 10e18);
 
-        uint248 liq = 100_000e21;
-
-        PoolKey memory pk = _createPool(60, unlockedFee, liq, 0);
+        PoolKey memory pk = _createPool({
+            tickSpacing: 60,
+            unlockedFee: unlockedFee,
+            startLiquidity: 100_000e21,
+            protocolUnlockedFee: 0
+        });
 
         vm.prank(node.addr);
         angstrom.execute("");
@@ -259,7 +259,7 @@ contract AngstromTest is BaseTest {
         uint24 unlockedFee,
         uint248 startLiquidity,
         uint24 protocolUnlockedFee
-    ) internal returns (PoolKey memory pk) {
+    ) internal virtual returns (PoolKey memory pk) {
         vm.prank(controller);
         angstrom.configurePool(asset0, asset1, tickSpacing, 0, unlockedFee, protocolUnlockedFee);
         angstrom.initializePool(asset0, asset1, 0, TickMath.getSqrtPriceAtTick(0));

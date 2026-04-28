@@ -54,3 +54,6 @@ optimizer = true
 ast = true
 src = "../crates/uniswap-v4/src/uniswap/loaders"
 libs = ["lib"]
+
+[rpc_endpoints]
+mainnet = "${ETH_RPC_URL}"

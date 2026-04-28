@@ -6,7 +6,7 @@ import {Asset, AssetLib} from "./Asset.sol";
 import {Pair, PairLib} from "./Pair.sol";
 import {PriceAB as Price10} from "src/types/Price.sol";
 import {TopOfBlockOrder, OrdersLib} from "./OrderTypes.sol";
-import {PoolUpdate, PoolUpdateLib} from "./PoolUpdate.sol";
+import {PoolUpdate, RewardsUpdate, PoolUpdateLib} from "./PoolUpdate.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 
 struct Bundle {
@@ -99,6 +99,39 @@ library BundleLib {
         newPairs[self.pairs.length].asset1 = asset1;
         newPairs[self.pairs.length].price10 = price10;
         self.pairs = newPairs;
+        return self;
+    }
+
+    function addPoolUpdate(
+        Bundle memory self,
+        address assetIn,
+        address assetOut,
+        uint128 amountIn,
+        bool onlyCurrent,
+        uint128 onlyCurrentQuantity,
+        int24 startTick,
+        uint128 startLiquidity,
+        uint128[] memory quantities,
+        uint160 rewardChecksum
+    ) internal pure returns (Bundle memory) {
+        PoolUpdate[] memory newPoolUpdates = new PoolUpdate[](self.poolUpdates.length + 1);
+        for (uint256 i = 0; i < self.poolUpdates.length; i++) {
+            newPoolUpdates[i] = self.poolUpdates[i];
+        }
+        newPoolUpdates[self.poolUpdates.length] = PoolUpdate(
+            assetIn,
+            assetOut,
+            amountIn,
+            RewardsUpdate(
+                onlyCurrent,
+                onlyCurrentQuantity,
+                startTick,
+                startLiquidity,
+                quantities,
+                rewardChecksum
+            )
+        );
+        self.poolUpdates = newPoolUpdates;
         return self;
     }
 

@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import {AccessControlEnumerable} from "lib/openzeppelin-contracts/contracts/access/extensions/AccessControlEnumerable.sol";
+
+/// @notice Simple contract which allows the contract `DEFAULT_ADMIN_ROLE` to emit events.
+contract EventEmitter is AccessControlEnumerable {
+    enum FeeClaimType {
+        GAS,
+        PROTOCOL,
+        BOTH
+    }
+
+    event FeeClaimQueued(
+        address indexed asset,
+        FeeClaimType indexed claimType,
+        uint256 amount,
+        uint256 startBlock,
+        uint256 endBlock
+    );
+
+    event FeeClaimExecuted(
+        address indexed asset,
+        FeeClaimType indexed claimType,
+        uint256 amount,
+        uint256 startBlock,
+        uint256 endBlock
+    );
+
+    error InputLengthMismatch();
+    error TopicsExceedMax();
+    error ZeroAdminsAtConstruction();
+
+    constructor(address[] memory initialAdmins) {
+        if (initialAdmins.length == 0) {
+            revert ZeroAdminsAtConstruction();
+        }
+        for (uint256 i = 0; i < initialAdmins.length; ++i) {
+            _grantRole(DEFAULT_ADMIN_ROLE, initialAdmins[i]);
+        }
+    }
+
+    function emitFeeClaimQueued(
+        address[] calldata assets,
+        uint256[] calldata amounts,
+        FeeClaimType claimType,
+        uint256 startBlock,
+        uint256 endBlock
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (assets.length != amounts.length) {
+            revert InputLengthMismatch();
+        }
+        for (uint256 i = 0; i < assets.length; ++i) {
+            emit FeeClaimQueued(assets[i], claimType, amounts[i], startBlock, endBlock);
+        }
+    }
+
+    function emitFeeClaimExecuted(
+        address[] calldata assets,
+        uint256[] calldata amounts,
+        FeeClaimType claimType,
+        uint256 startBlock,
+        uint256 endBlock
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (assets.length != amounts.length) {
+            revert InputLengthMismatch();
+        }
+        for (uint256 i = 0; i < assets.length; ++i) {
+            emit FeeClaimExecuted(assets[i], claimType, amounts[i], startBlock, endBlock);
+        }
+    }
+
+    /// @notice Emits an event defined entirely by the calldata.
+    /// @param topics defines the indexed topics and can have from 0 to 4 fields.
+    /// @param logData defines the unindexed data of the log.
+    function emitGenericEvent(bytes32[] calldata topics, bytes calldata logData)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        if (topics.length > 4) {
+            revert TopicsExceedMax();
+        }
+        assembly {
+            // Allocate memory for the logData
+            let dataPtr := mload(0x40)
+            let logDataLength := logData.length
+            calldatacopy(dataPtr, logData.offset, logDataLength)
+
+            // Update the free memory pointer
+            mstore(0x40, add(dataPtr, logDataLength))
+
+            let topicsLength := topics.length
+            switch topicsLength
+            case 0 {
+                log0(dataPtr, logDataLength)
+            }
+            case 1 {
+                log1(dataPtr, logDataLength, calldataload(topics.offset))
+            }
+            case 2 {
+                log2(
+                    dataPtr,
+                    logDataLength,
+                    calldataload(topics.offset),
+                    calldataload(add(topics.offset, 32))
+                )
+            }
+            case 3 {
+                log3(
+                    dataPtr,
+                    logDataLength,
+                    calldataload(topics.offset),
+                    calldataload(add(topics.offset, 32)),
+                    calldataload(add(topics.offset, 64))
+                )
+            }
+            case 4 {
+                log4(
+                    dataPtr,
+                    logDataLength,
+                    calldataload(topics.offset),
+                    calldataload(add(topics.offset, 32)),
+                    calldataload(add(topics.offset, 64)),
+                    calldataload(add(topics.offset, 96))
+                )
+            }
+        }
+    }
+}

@@ -153,7 +153,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
                     self.uniswap_pools
                         .calculate_rewards(pool_address, &with_storage)
                         .await
-                        .map_err(|_| UserAccountVerificationError::InvalidToBSwap)
+                        .map_err(|e| UserAccountVerificationError::InvalidToBSwap(e.to_string()))
                 })
                 .await?;
 

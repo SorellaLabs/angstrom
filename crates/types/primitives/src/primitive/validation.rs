@@ -40,8 +40,8 @@ pub enum OrderValidationError {
 
 #[derive(Debug, Error, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UserAccountVerificationError {
-    #[error("the input or output generates a invalid tob swap")]
-    InvalidToBSwap,
+    #[error("the input or output generates a invalid tob swap: {0}")]
+    InvalidToBSwap(String),
     #[error("tried to verify for block {} where current is {}", requested, current)]
     BlockMissMatch { requested: u64, current: u64, pool_info: UserOrderPoolInfo },
     #[error("order hash has been cancelled {order_hash:?}")]

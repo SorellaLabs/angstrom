@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {AccessControlEnumerable} from "lib/openzeppelin-contracts/contracts/access/extensions/AccessControlEnumerable.sol";
+import {
+    AccessControlEnumerable
+} from "lib/openzeppelin-contracts/contracts/access/extensions/AccessControlEnumerable.sol";
 
 /// @notice Simple contract which allows the contract `DEFAULT_ADMIN_ROLE` to emit events.
 contract EventEmitter is AccessControlEnumerable {

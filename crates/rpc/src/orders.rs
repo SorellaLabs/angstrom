@@ -44,6 +44,7 @@ where
     Validator: OrderValidatorHandle
 {
     async fn send_order(&self, order: AllOrders) -> RpcResult<CallResult> {
+        tracing::debug!(?order, "recieved order from RPC");
         match self.pool.new_order(OrderOrigin::External, order).await {
             Ok(v) => Ok(CallResult::from_success(v)),
             Err(e) => Ok(e.into())

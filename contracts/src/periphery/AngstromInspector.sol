@@ -81,7 +81,9 @@ contract AngstromInspector {
         int24 tickUpper,
         bytes32 salt
     ) public view returns (uint256, uint256) {
-        return angstrom.totalPendingRewards(account, key, tickLower, tickUpper, salt, uniswapPoolManager);
+        return angstrom.totalPendingRewards(
+            account, key, tickLower, tickUpper, salt, uniswapPoolManager
+        );
     }
 
     /// @notice Returns the pending rewards held by the Angstrom hook for the position defined
@@ -104,6 +106,8 @@ contract AngstromInspector {
         int24 tickUpper,
         bytes32 salt
     ) public view returns (uint256, uint256) {
-        return AngstromView.uniswapPendingRewards(account, key, tickLower, tickUpper, salt, uniswapPoolManager);
+        return AngstromView.uniswapPendingRewards(
+            account, key, tickLower, tickUpper, salt, uniswapPoolManager
+        );
     }
 }

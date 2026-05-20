@@ -30,7 +30,6 @@ use consensus::ConsensusHandler;
 use eyre::WrapErr;
 use parking_lot::RwLock;
 use reth::{
-    args::DefaultLogArgs,
     chainspec::{ChainSpec, EthChainSpec, EthereumChainSpecParser},
     cli::Cli,
     tasks::TaskExecutor

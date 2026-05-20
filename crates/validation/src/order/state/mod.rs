@@ -93,6 +93,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
             &UserOrderPoolInfo
         ) -> Result<(u128, u128), UserAccountVerificationError>
     ) -> OrderValidationResults {
+        let order_debug = format!("{order:?}");
         metrics
             .applying_state_transitions(async || {
                 let order_hash = order.order_hash();
@@ -127,7 +128,7 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
                         )
                     })
                     .unwrap_or_else(|e| {
-                        tracing::warn!(%e,"user account tracker failed to validate order");
+                        tracing::warn!(%e, order=order_debug, "user account tracker failed to validate order");
                         OrderValidationResults::Invalid {
                             hash:  order_hash,
                             error: OrderValidationError::StateError(e)

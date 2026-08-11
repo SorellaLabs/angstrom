@@ -13,7 +13,7 @@ library RayMathLib {
     uint256 internal constant RAY_2 = 1e54;
 
     function mulRayDown(uint256 x, uint256 y) internal pure returns (uint256) {
-        return x * y / RAY;
+        return x.mulDiv(y, RAY);
     }
 
     function mulRayUp(uint256 x, uint256 y) internal pure returns (uint256) {
@@ -21,7 +21,7 @@ library RayMathLib {
     }
 
     function divRayDown(uint256 x, uint256 y) internal pure returns (uint256) {
-        return x * RAY / y;
+        return x.mulDiv(RAY, y);
     }
 
     function divRayUp(uint256 x, uint256 y) internal pure returns (uint256) {

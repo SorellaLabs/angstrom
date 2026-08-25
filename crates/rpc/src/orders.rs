@@ -16,6 +16,7 @@ use futures::StreamExt;
 use jsonrpsee::{PendingSubscriptionSink, SubscriptionMessage, core::RpcResult};
 use order_pool::{OrderPoolHandle, PoolManagerUpdate};
 use reth_tasks::TaskExecutor;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use validation::order::OrderValidatorHandle;
 
 pub struct OrderApi<OrderPool, Validator, Quoter> {
@@ -143,10 +144,21 @@ where
             .map(move |update| update.map(|value| value.filter_out_order(&kind, &filter)));
 
         self.task_executor.spawn_task(async move {
-            while let Some(Ok(order)) = subscription.next().await {
+            while let Some(update) = subscription.next().await {
                 if sink.is_closed() {
                     break;
                 }
+
+                let order = match update {
+                    Ok(order) => order,
+                    Err(BroadcastStreamRecvError::Lagged(dropped)) => {
+                        tracing::warn!(
+                            dropped,
+                            "order subscription lagged; continuing with retained updates"
+                        );
+                        continue;
+                    }
+                };
 
                 if let Some(result) = order {
                     match SubscriptionMessage::new(

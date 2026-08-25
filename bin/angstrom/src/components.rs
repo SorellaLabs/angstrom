@@ -141,7 +141,7 @@ impl StromHandles {
 pub fn initialize_strom_handles() -> StromHandles {
     let (eth_tx, eth_rx) = channel(100);
     let (matching_tx, matching_rx) = channel(100);
-    let (pool_manager_tx, _) = tokio::sync::broadcast::channel(100);
+    let (pool_manager_tx, _) = tokio::sync::broadcast::channel(10000);
     let (pool_tx, pool_rx) = reth_metrics::common::mpsc::metered_unbounded_channel("orderpool");
     let (orderpool_tx, orderpool_rx) = unbounded_channel();
     let (validator_tx, validator_rx) = unbounded_channel();

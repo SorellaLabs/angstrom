@@ -7869,6 +7869,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "protocol-fees"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-types",
+ "angstrom-types",
+ "clap",
+ "eyre",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.23",
+]
+
+[[package]]
 name = "quanta"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

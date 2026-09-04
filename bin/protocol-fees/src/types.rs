@@ -1,5 +1,5 @@
 use alloy_primitives::Address;
-use angstrom_types::{ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, CONTROLLER_V1_ADDRESS};
+use angstrom_types_primitives::{ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, CONTROLLER_V1_ADDRESS};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolFeeBlockRange {

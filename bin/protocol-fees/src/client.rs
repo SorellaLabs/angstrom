@@ -58,7 +58,7 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             })
             .map(|(block_number, distribute, saved)| ProtocolFeeBlockCalculationBuilder {
                 block_number,
-                saves: saved.unwrap_or_default(),
+                bundle_saved: saved.unwrap_or_default(),
                 distribute_calls: distribute.unwrap_or_default()
             })
             .collect::<Vec<_>>();

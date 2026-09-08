@@ -37,7 +37,7 @@ pub struct ProtocolFeeCalculationBuilder {
 
 pub struct ProtocolFeeBlockCalculationBuilder {
     pub block_number:     u64,
-    pub saves:            Vec<Asset>,
+    pub bundle_saved:     Vec<Asset>,
     pub distribute_calls: Vec<DecodedLogWithMeta<ControllerV1::distributeFeesCall>>
 }
 

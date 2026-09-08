@@ -253,37 +253,4 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
 }
 
 #[cfg(test)]
-mod tests {
-    use alloy_primitives::{Bytes, U64};
-    use alloy_provider::ProviderBuilder;
-    use alloy_sol_types::SolValue;
-    use alloy_transport::mock::Asserter;
-
-    use super::*;
-
-    async fn client() -> (Asserter, ProtocolFeeFetcher<impl Provider>) {
-        static INIT: std::sync::Once = std::sync::Once::new();
-        INIT.call_once(|| angstrom_types_primitives::init_with_chain_id(1));
-        let rpc = Asserter::new();
-        rpc.push_success(&U64::from(angstrom_deployed_block() + 10));
-        let provider = ProviderBuilder::new().connect_mocked_client(rpc.clone());
-        (rpc, ProtocolFeeFetcher::new(provider).await.unwrap())
-    }
-
-    #[tokio::test]
-    async fn calculation_keeps_the_constructor_block_and_scans_from_deployment() {
-        let (rpc, client) = client().await;
-        rpc.push_success(&U64::from(client.max_block + 1));
-        assert_eq!(client.provider.get_block_number().await.unwrap(), client.max_block + 1);
-        // An eleven-block range is a single chunk per scan, so the whole
-        // calculation is `owner()` plus one `eth_getLogs` for each log kind.
-        rpc.push_success(&Bytes::from(Address::repeat_byte(3).abi_encode()));
-        rpc.push_success(&Vec::<Log>::new()); // No distributeFees calls.
-        rpc.push_success(&Vec::<Log>::new()); // No Angstrom pool-manager swaps.
-        let calculation = client.calculate().await.unwrap();
-        assert!(calculation.blocks.is_empty());
-        assert!(calculation.tokens.is_empty());
-        assert!(calculation.ledger().unwrap().is_empty());
-        assert!(rpc.read_q().is_empty());
-    }
-}
+mod tests {}

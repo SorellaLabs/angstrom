@@ -43,28 +43,29 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             .header;
         let block = BlockNumHash::new(number, header.hash);
         let last_collection = self.all_distribute_fees().await?;
-        let saved = self.saved_gross(last_collection).await?;
+        let saved = self.all_angstrom_bundle_assets(last_collection).await?;
         let mut tokens = Vec::new();
 
-        for (asset, amount) in saved {
-            let token = MintableMockERC20::new(asset, &self.provider);
-            let pinned = BlockId::hash_canonical(block.hash);
-            let (symbol, decimals) =
-                tokio::try_join!(async { token.symbol().block(pinned).call().await }, async {
-                    token.decimals().block(pinned).call().await
-                })?;
-            tokens.push(TokenSavings {
-                asset,
-                symbol,
-                saved_gross: format_units(amount, decimals)?
-            });
-        }
-        let current = self
-            .provider
-            .get_block_by_number(number.into())
-            .await?
-            .ok_or_else(|| eyre!("missing accounting block {number}"))?;
-        ensure!(current.header.hash == block.hash, "accounting block reorganized; rerun");
+        // for (asset, amount) in saved {
+        //     let token = MintableMockERC20::new(asset, &self.provider);
+        //     let pinned = BlockId::hash_canonical(block.hash);
+        //     let (symbol, decimals) =
+        //         tokio::try_join!(async { token.symbol().block(pinned).call().await },
+        // async {             token.decimals().block(pinned).call().await
+        //         })?;
+        //     tokens.push(TokenSavings {
+        //         asset,
+        //         symbol,
+        //         saved_gross: format_units(amount, decimals)?
+        //     });
+        // }
+        // let current = self
+        //     .provider
+        //     .get_block_by_number(number.into())
+        //     .await?
+        //     .ok_or_else(|| eyre!("missing accounting block {number}"))?;
+        // ensure!(current.header.hash == block.hash, "accounting block reorganized;
+        // rerun");
         Ok(BundleFees { block, tokens })
     }
 

@@ -7872,13 +7872,18 @@ dependencies = [
 name = "protocol-fees"
 version = "0.1.0"
 dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
  "alloy-primitives",
  "alloy-provider",
  "alloy-rpc-types",
- "angstrom-types",
+ "alloy-sol-types",
+ "alloy-transport",
+ "angstrom-types-primitives",
  "clap",
  "eyre",
- "serde",
+ "futures",
+ "pade",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.23",

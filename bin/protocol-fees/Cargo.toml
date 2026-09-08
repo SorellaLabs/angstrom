@@ -9,17 +9,20 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
+alloy-consensus.workspace = true
 alloy-eips.workspace = true
-alloy-primitives = { workspace = true, features = ["serde"] }
-alloy-provider = { workspace = true, features = ["ws", "debug-api"] }
+alloy-primitives.workspace = true
+alloy-provider = { workspace = true, features = ["ws"] }
 alloy-rpc-types.workspace = true
-alloy-rpc-types-trace = "1.8.2"
 alloy-sol-types.workspace = true
 angstrom-types-primitives.workspace = true
 clap = { workspace = true, features = ["derive"] }
 eyre.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+futures.workspace = true
+pade.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+alloy-transport.workspace = true

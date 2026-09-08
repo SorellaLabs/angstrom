@@ -1,23 +1,21 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     sync::Arc
 };
 
 use alloy_consensus::Transaction;
-use alloy_eips::{BlockId, BlockNumHash};
-use alloy_primitives::{Address, Bytes, U256, utils::format_units};
+use alloy_primitives::Address;
 use alloy_provider::{Provider, network::TransactionResponse};
 use alloy_rpc_types::{Filter, Log};
-use alloy_sol_types::{SolCall, SolEvent, SolValue};
+use alloy_sol_types::{SolCall, SolEvent};
 use angstrom_types_primitives::{
-    ERC20,
     contract_bindings::{
         angstrom::Angstrom, controller_v_1::ControllerV1, mintable_mock_erc_20::MintableMockERC20,
         pool_manager::PoolManager
     },
     contract_payloads::{Asset, angstrom::AngstromBundle}
 };
-use eyre::{Context, Result, ensure, eyre};
+use eyre::{Result, eyre};
 use futures::StreamExt;
 use itertools::Itertools;
 use pade::PadeDecode;
@@ -68,7 +66,7 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
 
     async fn get_all_tokens(&self, tokens: &HashSet<Address>) -> eyre::Result<Vec<TokenMeta>> {
         let provider = self.provider.clone();
-        futures::future::try_join_all(tokens.into_iter().map(|asset| {
+        futures::future::try_join_all(tokens.iter().map(|asset| {
             let provider = &provider;
             async move {
                 let token = MintableMockERC20::new(*asset, &provider);
@@ -256,15 +254,10 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
 
 #[cfg(test)]
 mod tests {
-    use alloy_consensus::{Signed, TxEnvelope, TxLegacy, transaction::Recovered};
-    use alloy_primitives::{B256, Signature, U64, keccak256};
+    use alloy_primitives::{Bytes, U64};
     use alloy_provider::ProviderBuilder;
+    use alloy_sol_types::SolValue;
     use alloy_transport::mock::Asserter;
-    use angstrom_types_primitives::{
-        contract_bindings::angstrom::Angstrom::executeCall,
-        contract_payloads::{Asset, angstrom::AngstromBundle}
-    };
-    use pade::PadeEncode;
 
     use super::*;
 
@@ -277,50 +270,20 @@ mod tests {
         (rpc, ProtocolFeeFetcher::new(provider).await.unwrap())
     }
 
-    fn log(index: u64, data: Bytes) -> Log {
-        Log {
-            inner: alloy_primitives::Log::new_unchecked(angstrom_address(), vec![], data),
-            block_number: Some(angstrom_deployed_block() + 10),
-            log_index: Some(index),
-            transaction_hash: Some(B256::repeat_byte(index as u8)),
-            ..Default::default()
-        }
-    }
-
-    fn distribution(index: u64, target: Address, total: Option<u64>) -> Log {
-        let mut call = ControllerV1::distributeFeesCall::default();
-        if let Some(total) = total {
-            call.assets.resize_with(1, Default::default);
-            call.assets[0].addr = Address::repeat_byte(1);
-            call.assets[0].total = U256::from(total);
-            call.assets[0].dists.resize_with(1, Default::default);
-            call.assets[0].dists[0].to = Address::repeat_byte(2);
-            call.assets[0].dists[0].amount = U256::from(total);
-        }
-        log(
-            index,
-            (target, U256::ZERO, Bytes::from(call.abi_encode()))
-                .abi_encode_params()
-                .into()
-        )
-    }
-
     #[tokio::test]
-    async fn calculation_keeps_the_constructor_block_and_defaults_to_deployment() {
+    async fn calculation_keeps_the_constructor_block_and_scans_from_deployment() {
         let (rpc, client) = client().await;
         rpc.push_success(&U64::from(client.max_block + 1));
         assert_eq!(client.provider.get_block_number().await.unwrap(), client.max_block + 1);
-        let mut block = alloy_rpc_types::Block::<alloy_rpc_types::Transaction>::default();
-        block.header.number = client.max_block;
-        block.header.hash = B256::repeat_byte(1);
-        rpc.push_success(&block);
+        // An eleven-block range is a single chunk per scan, so the whole
+        // calculation is `owner()` plus one `eth_getLogs` for each log kind.
         rpc.push_success(&Bytes::from(Address::repeat_byte(3).abi_encode()));
-        rpc.push_success(&Vec::<Log>::new()); // No previous collection.
-        rpc.push_success(&Vec::<Log>::new()); // No savings since deployment.
-        rpc.push_success(&block);
-        let fees = client.calculate().await.unwrap();
-        assert_eq!(fees.block.number, client.max_block);
-        assert!(fees.tokens.is_empty());
+        rpc.push_success(&Vec::<Log>::new()); // No distributeFees calls.
+        rpc.push_success(&Vec::<Log>::new()); // No Angstrom pool-manager swaps.
+        let calculation = client.calculate().await.unwrap();
+        assert!(calculation.blocks.is_empty());
+        assert!(calculation.tokens.is_empty());
+        assert!(calculation.ledger().unwrap().is_empty());
         assert!(rpc.read_q().is_empty());
     }
 }

@@ -18,20 +18,28 @@ pub async fn run() -> eyre::Result<()> {
     let provider = ProviderBuilder::new()
         .connect_ws(WsConnect::new(&cli.eth_ws_url))
         .await?;
-    let fees_calc_builder = ProtocolFeeFetcher::new(provider).await?.calculate().await?;
+    let calculation = ProtocolFeeFetcher::new(provider).await?.calculate().await?;
+    let ledger = calculation.ledger()?;
 
-    println!("Bundle savings at block {} ({}):", fees.block.number, fees.block.hash);
-    for token in fees.tokens {
+    println!("Bundle-held ledger over {} block(s) with activity:", calculation.blocks.len());
+    for row in &ledger {
+        let show = |amount| match calculation.token(row.asset) {
+            Some(token) => token.format(amount),
+            None => Ok(format!("{amount} raw (unresolved token)"))
+        };
         println!(
-            "{} ({}): gross saved {}, collectible 0",
-            token.symbol, token.asset, token.saved_gross
+            "{}: saved gross {}, pulled {}, candidate outstanding {}",
+            row.asset,
+            show(row.saved_gross)?,
+            show(row.pulled_against_saved)?,
+            show(row.candidate_outstanding_saved)?
         );
     }
     println!("Collectible bundle-held fees: 0");
     println!(
         "No collection calldata for {}: the current audit does not authorize bundle-held \
-         withdrawals. Gross savings do not establish protocol ownership or satisfy the \
-         protected-balance and reservation checks.",
+         withdrawals. Candidate outstanding saved is a collective commitment remainder; it does \
+         not establish protocol ownership or satisfy the protected-balance and reservation checks.",
         cli.recipient
     );
     Ok(())

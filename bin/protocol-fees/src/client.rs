@@ -6,14 +6,15 @@ use std::{
 use alloy_consensus::Transaction;
 use alloy_eips::{BlockId, BlockNumHash};
 use alloy_primitives::{Address, Bytes, U256, utils::format_units};
-use alloy_provider::Provider;
+use alloy_provider::{Provider, network::TransactionResponse};
 use alloy_rpc_types::{Filter, Log};
-use alloy_sol_types::{SolCall, SolValue};
+use alloy_sol_types::{SolCall, SolEvent, SolValue};
 use angstrom_types_primitives::{
     contract_bindings::{
-        angstrom::Angstrom, controller_v_1::ControllerV1, mintable_mock_erc_20::MintableMockERC20
+        angstrom::Angstrom, controller_v_1::ControllerV1, mintable_mock_erc_20::MintableMockERC20,
+        pool_manager::PoolManager
     },
-    contract_payloads::angstrom::AngstromBundle
+    contract_payloads::{Asset, angstrom::AngstromBundle}
 };
 use eyre::{Context, Result, ensure, eyre};
 use futures::StreamExt;
@@ -41,7 +42,7 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             .unwrap()
             .header;
         let block = BlockNumHash::new(number, header.hash);
-        let last_collection = self.last_collection().await?;
+        let last_collection = self.all_distribute_fees().await?;
         let saved = self.saved_gross(last_collection).await?;
         let mut tokens = Vec::new();
 
@@ -67,16 +68,12 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
         Ok(BundleFees { block, tokens })
     }
 
-    async fn last_collection(&self) -> Result<Vec<Log>> {
-        let owner = ControllerV1::new(controller_v1_address(), &self.provider)
-            .owner()
-            .block(self.max_block.into())
-            .call()
-            .await?;
-        let filter = Filter::new()
-            .address(owner)
-            .event("CallExecuted(bytes32,uint256,address,uint256,bytes)");
-
+    async fn get_logs_over_angstrom_range<T: PartialEq + Eq + PartialOrd>(
+        &self,
+        base_filter: Filter,
+        log_kind: &str,
+        transform_fn: impl FnOnce(Vec<Log>) -> eyre::Result<Vec<DecodedLogWithMeta<T>>>
+    ) -> Result<Vec<DecodedLogWithMeta<T>>> {
         let total_blocks = self.max_block - angstrom_deployed_block() + 1;
         let block_chunks = (angstrom_deployed_block()..=self.max_block)
             .step_by(2_000)
@@ -87,11 +84,12 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
         let mut buffered_log_stream = futures::stream::iter(block_chunks)
             .map(|(from, to)| {
                 let provider = provider.clone();
-                let filter = filter.clone().from_block(from).to_block(to);
+                let filter = base_filter.clone().from_block(from).to_block(to);
+                let transform_fn = |logs| transform_fn(logs);
                 async move {
                     let logs = provider.get_logs(&filter).await?;
 
-                    let valid_logs = decode_distribute_fees_logs(logs)?;
+                    let valid_logs = transform_fn(logs)?;
                     eyre::Ok(((from, to), valid_logs))
                 }
             })
@@ -105,67 +103,133 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             total_progress += to - from + 1;
             all_valid_logs.extend(batch_logs);
             tracing::info!(
+                log_kind,
                 blocks_searched = total_progress,
                 total_blocks,
                 total_progress = (total_progress as f64 / total_blocks as f64),
-                "DISTRIBUTE FEES log progress - completed batch"
+                "log fetch progress - completed batch"
             )
         }
 
-        tracing::info!(total_blocks, "DISTRIBUTE FEES log progress - COMPLETE");
+        tracing::info!(total_blocks, "log fetch progress - COMPLETE");
 
-        all_valid_logs.sort_by_key(|log| {
-            (log.block_number.unwrap(), log.transaction_index.unwrap(), log.log_index.unwrap())
-        });
+        all_valid_logs.sort();
 
         Ok(all_valid_logs)
     }
 
-    async fn saved_gross(&self, last_collection: Option<Log>) -> Result<BTreeMap<Address, U256>> {
-        let start = last_collection
-            .as_ref()
-            .and_then(|log| log.block_number)
-            .unwrap_or_else(angstrom_deployed_block);
-        let mut saved = BTreeMap::<Address, U256>::new();
-        let mut processed = HashSet::new();
-        for from in (start..=self.max_block).step_by(2_000) {
-            let to = (from + 1_999).min(self.max_block);
-            let filter = Filter::new()
-                .address(angstrom_address())
-                .from_block(from)
-                .to_block(to);
-            let logs = self.provider.get_logs(&filter).await?;
-            // Settlement emits the bundle savings commitment as an anonymous log.
-            for log in logs.into_iter().filter(|log| log.topics().is_empty()) {
-                if last_collection.as_ref().is_some_and(|last| {
-                    (log.block_number, log.log_index) <= (last.block_number, last.log_index)
-                }) {
-                    continue
-                }
-                let hash = log
-                    .transaction_hash
-                    .ok_or_else(|| eyre!("missing bundle transaction hash"))?;
-                if !processed.insert(hash) {
-                    continue
-                }
-                let transaction = self
-                    .provider
-                    .get_transaction_by_hash(hash)
-                    .await?
-                    .ok_or_else(|| eyre!("missing bundle transaction {hash}"))?;
+    async fn all_distribute_fees(
+        &self
+    ) -> Result<Vec<DecodedLogWithMeta<ControllerV1::distributeFeesCall>>> {
+        let owner = ControllerV1::new(controller_v1_address(), &self.provider)
+            .owner()
+            .block(self.max_block.into())
+            .call()
+            .await?;
+        let filter = Filter::new()
+            .address(owner)
+            .event("CallExecuted(bytes32,uint256,address,uint256,bytes)");
 
-                let execute_call = Angstrom::executeCall::abi_decode(transaction.input())?;
-                let bundle = AngstromBundle::pade_decode(&mut execute_call.encoded.as_ref(), None)?;
-                for asset in bundle.assets {
-                    let total = saved.entry(asset.addr).or_default();
-                    *total = total
-                        .checked_add(U256::from(asset.save))
-                        .ok_or_else(|| eyre!("saved amount overflow for {}", asset.addr))?;
+        let logs_with_data = self
+            .get_logs_over_angstrom_range(filter, "DISTRIBUTE FEES", decode_distribute_fees_logs)
+            .await?;
+
+        Ok(logs_with_data)
+    }
+
+    async fn all_angstrom_bundle_assets(&self) -> Result<Vec<(u64, Vec<Asset>)>> {
+        let filter = Filter::new()
+            .event_signature(PoolManager::Swap::SIGNATURE_HASH)
+            .address(pool_manager_address());
+
+        let logs_with_data = self
+            .get_logs_over_angstrom_range(
+                filter,
+                "POOL MANAGER ANGSTROM SWAPS",
+                decode_angstrom_pool_manager_logs
+            )
+            .await?;
+
+        let successful_txs = logs_with_data
+            .iter()
+            .map(|log| log.tx_hash)
+            .collect::<HashSet<_>>();
+        let block_numbers = logs_with_data
+            .into_iter()
+            .map(|log| log.block_number)
+            .collect::<HashSet<_>>();
+
+        let total_blocks = block_numbers.len();
+
+        let provider = self.provider.clone();
+        let mut bundle_stream = futures::stream::iter(block_numbers)
+            .map(|block_number| {
+                let provider = provider.clone();
+                let successful_txs = &successful_txs;
+                async move {
+                    let block = provider
+                        .get_block_by_number(block_number.into())
+                        .await?
+                        .unwrap();
+
+                    let txs = block.transactions.into_transactions().filter(|tx| {
+                        tx.to() == Some(angstrom_address())
+                            && successful_txs.contains(&tx.tx_hash())
+                    });
+
+                    let mut assets = Vec::new();
+
+                    for transaction in txs {
+                        let input: &[u8] = transaction.input();
+                        let Some(call) = Angstrom::executeCall::abi_decode(input).ok() else {
+                            continue;
+                        };
+
+                        let tx_hash = transaction.tx_hash();
+                        let is_success = provider
+                            .get_transaction_receipt(tx_hash)
+                            .await?
+                            .ok_or_else(|| eyre::eyre!("tx does not exist: {tx_hash:?}"))?
+                            .status();
+                        if is_success {
+                            let mut input = call.encoded.as_ref();
+
+                            let decoded_input = AngstromBundle::pade_decode(&mut input, None)?;
+
+                            assets.push((transaction.tx_hash(), decoded_input.assets));
+                            break;
+                        }
+                    }
+
+                    eyre::Ok((block_number, assets))
                 }
+            })
+            .buffer_unordered(1000);
+
+        let mut all_assets_with_block = Vec::new();
+
+        let mut total_progress = 0;
+        while let Some(output) = bundle_stream.next().await {
+            let (block_number, assets) = output?;
+            assert!(assets.len() <= 1);
+
+            if let Some((_, block_assets)) = assets.into_iter().next() {
+                all_assets_with_block.push((block_number, block_assets));
             }
-            tracing::info!(from, to, bundles = processed.len(), "scanned bundle savings");
+            total_progress += 1;
+            if total_progress % 1000 == 0 {
+                tracing::info!(
+                    blocks_searched = total_progress,
+                    total_blocks,
+                    total_progress = (total_progress as f64 / total_blocks as f64),
+                    "bundle fetch progress - completed batch"
+                )
+            }
+
+            tracing::info!(total_blocks, "bundle fetch progress - COMPLETE");
         }
-        Ok(saved)
+
+        Ok(all_assets_with_block)
     }
 }
 
@@ -236,60 +300,6 @@ mod tests {
         let fees = client.calculate().await.unwrap();
         assert_eq!(fees.block.number, client.max_block);
         assert!(fees.tokens.is_empty());
-        assert!(rpc.read_q().is_empty());
-    }
-
-    #[tokio::test]
-    async fn selects_the_latest_nonzero_distribution_to_controller() {
-        let (rpc, client) = client().await;
-        let target = controller_v1_address();
-        let latest = distribution(3, target, Some(9));
-        rpc.push_success(&Bytes::from(Address::repeat_byte(3).abi_encode()));
-        rpc.push_success(&vec![
-            latest.clone(),
-            distribution(7, Address::repeat_byte(4), Some(12)),
-            distribution(1, target, Some(5)),
-            distribution(6, target, None),
-            distribution(5, target, Some(0)),
-        ]);
-        assert_eq!(client.last_collection().await.unwrap(), Some(latest));
-        assert!(rpc.read_q().is_empty());
-    }
-
-    #[tokio::test]
-    async fn savings_include_only_later_logs_in_the_collection_block_once() {
-        let (rpc, client) = client().await;
-        let asset = Asset { addr: Address::repeat_byte(1), save: 9, take: 9, settle: 0 };
-        let bundle = AngstromBundle::new(vec![asset.clone()], vec![], vec![], vec![], vec![]);
-        let mut summary = asset.addr.as_slice().to_vec();
-        summary.extend_from_slice(&asset.save.to_be_bytes());
-        let later = log(3, keccak256(summary).to_vec().into());
-        rpc.push_success(&vec![log(1, Bytes::new()), later.clone(), later.clone()]);
-        let signed = Signed::new_unchecked(
-            TxLegacy {
-                input: executeCall { encoded: bundle.pade_encode().into() }
-                    .abi_encode()
-                    .into(),
-                ..Default::default()
-            },
-            Signature::new(U256::from(1), U256::from(2), false),
-            later.transaction_hash.unwrap()
-        );
-        rpc.push_success(&alloy_rpc_types::Transaction {
-            inner:               Recovered::new_unchecked(
-                TxEnvelope::Legacy(signed),
-                Address::ZERO
-            ),
-            block_hash:          None,
-            block_number:        Some(client.max_block),
-            transaction_index:   Some(1),
-            effective_gas_price: Some(0)
-        });
-        let savings = client
-            .saved_gross(Some(log(2, Bytes::new())))
-            .await
-            .unwrap();
-        assert_eq!(savings, BTreeMap::from([(asset.addr, U256::from(9))]));
         assert!(rpc.read_q().is_empty());
     }
 }

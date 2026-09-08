@@ -1,3 +1,4 @@
+use alloy_eips::BlockNumHash;
 use alloy_primitives::Address;
 use angstrom_types_primitives::{ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, CONTROLLER_V1_ADDRESS};
 

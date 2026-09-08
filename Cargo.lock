@@ -7883,6 +7883,7 @@ dependencies = [
  "clap",
  "eyre",
  "futures",
+ "itertools 0.10.5",
  "pade",
  "tokio",
  "tracing",

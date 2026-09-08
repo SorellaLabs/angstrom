@@ -19,6 +19,7 @@ angstrom-types-primitives.workspace = true
 clap = { workspace = true, features = ["derive"] }
 eyre.workspace = true
 futures.workspace = true
+itertools.workspace = true
 pade.workspace = true
 tokio.workspace = true
 tracing.workspace = true

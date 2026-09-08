@@ -18,7 +18,7 @@ pub async fn run() -> eyre::Result<()> {
     let provider = ProviderBuilder::new()
         .connect_ws(WsConnect::new(&cli.eth_ws_url))
         .await?;
-    let fees = ProtocolFeeFetcher::new(provider).await?.calculate().await?;
+    let fees_calc_builder = ProtocolFeeFetcher::new(provider).await?.calculate().await?;
 
     println!("Bundle savings at block {} ({}):", fees.block.number, fees.block.hash);
     for token in fees.tokens {

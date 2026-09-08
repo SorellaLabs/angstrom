@@ -4,7 +4,8 @@ use alloy_rpc_types::Log;
 use alloy_sol_types::{SolCall, SolEvent, SolValue};
 use angstrom_types_primitives::{
     ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, CONTROLLER_V1_ADDRESS, POOL_MANAGER_ADDRESS,
-    contract_bindings::{controller_v_1::ControllerV1, pool_manager::PoolManager}
+    contract_bindings::{controller_v_1::ControllerV1, pool_manager::PoolManager},
+    contract_payloads::Asset
 };
 
 pub fn angstrom_deployed_block() -> u64 {
@@ -23,15 +24,21 @@ pub fn pool_manager_address() -> Address {
     *POOL_MANAGER_ADDRESS.get().unwrap()
 }
 
-pub struct TokenSavings {
-    pub asset:       Address,
-    pub symbol:      String,
-    pub saved_gross: String
+pub struct TokenMeta {
+    pub asset:    Address,
+    pub symbol:   String,
+    pub decimals: u8
 }
 
-pub struct BundleFees {
-    pub block:  BlockNumHash,
-    pub tokens: Vec<TokenSavings>
+pub struct ProtocolFeeCalculationBuilder {
+    pub blocks: Vec<ProtocolFeeBlockCalculationBuilder>,
+    pub tokens: Vec<TokenMeta>
+}
+
+pub struct ProtocolFeeBlockCalculationBuilder {
+    pub block_number:     u64,
+    pub saves:            Vec<Asset>,
+    pub distribute_calls: Vec<DecodedLogWithMeta<ControllerV1::distributeFeesCall>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

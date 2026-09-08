@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc
 };
 
@@ -10,6 +10,7 @@ use alloy_provider::{Provider, network::TransactionResponse};
 use alloy_rpc_types::{Filter, Log};
 use alloy_sol_types::{SolCall, SolEvent, SolValue};
 use angstrom_types_primitives::{
+    ERC20,
     contract_bindings::{
         angstrom::Angstrom, controller_v_1::ControllerV1, mintable_mock_erc_20::MintableMockERC20,
         pool_manager::PoolManager
@@ -18,6 +19,7 @@ use angstrom_types_primitives::{
 };
 use eyre::{Context, Result, ensure, eyre};
 use futures::StreamExt;
+use itertools::Itertools;
 use pade::PadeDecode;
 
 use crate::types::*;
@@ -33,47 +35,59 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
         Ok(Self { provider: Arc::new(provider), max_block })
     }
 
-    pub async fn calculate(&self) -> Result<BundleFees> {
-        let number = self.max_block;
-        let header = self
-            .provider
-            .get_block_by_number(number.into())
-            .await?
-            .unwrap()
-            .header;
-        let block = BlockNumHash::new(number, header.hash);
-        let last_collection = self.all_distribute_fees().await?;
-        let saved = self.all_angstrom_bundle_assets(last_collection).await?;
-        let mut tokens = Vec::new();
+    pub async fn calculate(&self) -> Result<ProtocolFeeCalculationBuilder> {
+        let mut all_collections = self.all_distribute_fees().await?;
+        let mut all_bundle_saves = self.all_angstrom_bundle_assets().await?;
 
-        // for (asset, amount) in saved {
-        //     let token = MintableMockERC20::new(asset, &self.provider);
-        //     let pinned = BlockId::hash_canonical(block.hash);
-        //     let (symbol, decimals) =
-        //         tokio::try_join!(async { token.symbol().block(pinned).call().await },
-        // async {             token.decimals().block(pinned).call().await
-        //         })?;
-        //     tokens.push(TokenSavings {
-        //         asset,
-        //         symbol,
-        //         saved_gross: format_units(amount, decimals)?
-        //     });
-        // }
-        // let current = self
-        //     .provider
-        //     .get_block_by_number(number.into())
-        //     .await?
-        //     .ok_or_else(|| eyre!("missing accounting block {number}"))?;
-        // ensure!(current.header.hash == block.hash, "accounting block reorganized;
-        // rerun");
-        Ok(BundleFees { block, tokens })
+        let saved_tokens = all_bundle_saves
+            .iter()
+            .flat_map(|(_, assets)| assets.iter().map(|asset| asset.addr))
+            .collect::<HashSet<_>>();
+
+        let all_tokens = self.get_all_tokens(&saved_tokens).await?;
+
+        let block_data = (angstrom_deployed_block()..=self.max_block)
+            .filter_map(|block_num| {
+                let distribute = all_collections.remove(&block_num);
+                let saved = all_bundle_saves.remove(&block_num);
+                if distribute.is_none() && saved.is_none() {
+                    None
+                } else {
+                    Some((block_num, distribute, saved))
+                }
+            })
+            .map(|(block_number, distribute, saved)| ProtocolFeeBlockCalculationBuilder {
+                block_number,
+                saves: saved.unwrap_or_default(),
+                distribute_calls: distribute.unwrap_or_default()
+            })
+            .collect::<Vec<_>>();
+
+        Ok(ProtocolFeeCalculationBuilder { blocks: block_data, tokens: all_tokens })
     }
 
-    async fn get_logs_over_angstrom_range<T: PartialEq + Eq + PartialOrd>(
+    async fn get_all_tokens(&self, tokens: &HashSet<Address>) -> eyre::Result<Vec<TokenMeta>> {
+        let provider = self.provider.clone();
+        futures::future::try_join_all(tokens.into_iter().map(|asset| {
+            let provider = &provider;
+            async move {
+                let token = MintableMockERC20::new(*asset, &provider);
+                let (symbol, decimals) =
+                    tokio::try_join!(async { token.symbol().call().await }, async {
+                        token.decimals().call().await
+                    })?;
+
+                Ok(TokenMeta { symbol, decimals, asset: *asset })
+            }
+        }))
+        .await
+    }
+
+    async fn get_logs_over_angstrom_range<T>(
         &self,
         base_filter: Filter,
         log_kind: &str,
-        transform_fn: impl FnOnce(Vec<Log>) -> eyre::Result<Vec<DecodedLogWithMeta<T>>>
+        transform_fn: impl Fn(Vec<Log>) -> eyre::Result<Vec<DecodedLogWithMeta<T>>> + Copy
     ) -> Result<Vec<DecodedLogWithMeta<T>>> {
         let total_blocks = self.max_block - angstrom_deployed_block() + 1;
         let block_chunks = (angstrom_deployed_block()..=self.max_block)
@@ -86,7 +100,6 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             .map(|(from, to)| {
                 let provider = provider.clone();
                 let filter = base_filter.clone().from_block(from).to_block(to);
-                let transform_fn = |logs| transform_fn(logs);
                 async move {
                     let logs = provider.get_logs(&filter).await?;
 
@@ -96,8 +109,8 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             })
             .buffer_unordered(100);
 
-        // The chunks complete out of order, so fold each one into a running maximum
-        // instead of taking the last collection the stream happens to yield.
+        // The chunks complete out of order, so collect them all and restore execution
+        // order once the whole range is in.
         let mut total_progress = 0;
         let mut all_valid_logs = Vec::new();
         while let Some(((from, to), batch_logs)) = buffered_log_stream.next().await.transpose()? {
@@ -112,16 +125,17 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             )
         }
 
-        tracing::info!(total_blocks, "log fetch progress - COMPLETE");
+        tracing::info!(log_kind, total_blocks, "log fetch progress - COMPLETE");
 
-        all_valid_logs.sort();
+        // Position alone orders these, so `T` itself needs no comparison bounds.
+        all_valid_logs.sort_unstable_by_key(|log| (log.block_number, log.tx_index, log.log_index));
 
         Ok(all_valid_logs)
     }
 
     async fn all_distribute_fees(
         &self
-    ) -> Result<Vec<DecodedLogWithMeta<ControllerV1::distributeFeesCall>>> {
+    ) -> Result<HashMap<u64, Vec<DecodedLogWithMeta<ControllerV1::distributeFeesCall>>>> {
         let owner = ControllerV1::new(controller_v1_address(), &self.provider)
             .owner()
             .block(self.max_block.into())
@@ -135,10 +149,13 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             .get_logs_over_angstrom_range(filter, "DISTRIBUTE FEES", decode_distribute_fees_logs)
             .await?;
 
-        Ok(logs_with_data)
+        Ok(logs_with_data
+            .into_iter()
+            .map(|log| (log.block_number, log))
+            .into_group_map())
     }
 
-    async fn all_angstrom_bundle_assets(&self) -> Result<Vec<(u64, Vec<Asset>)>> {
+    async fn all_angstrom_bundle_assets(&self) -> Result<HashMap<u64, Vec<Asset>>> {
         let filter = Filter::new()
             .event_signature(PoolManager::Swap::SIGNATURE_HASH)
             .address(pool_manager_address());
@@ -168,10 +185,13 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
                 let provider = provider.clone();
                 let successful_txs = &successful_txs;
                 async move {
+                    // `into_transactions` yields nothing unless the block was
+                    // requested with full bodies.
                     let block = provider
                         .get_block_by_number(block_number.into())
+                        .full()
                         .await?
-                        .unwrap();
+                        .ok_or_else(|| eyre!("missing bundle block {block_number}"))?;
 
                     let txs = block.transactions.into_transactions().filter(|tx| {
                         tx.to() == Some(angstrom_address())
@@ -207,7 +227,7 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             })
             .buffer_unordered(1000);
 
-        let mut all_assets_with_block = Vec::new();
+        let mut all_assets_with_block = HashMap::new();
 
         let mut total_progress = 0;
         while let Some(output) = bundle_stream.next().await {
@@ -215,7 +235,7 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
             assert!(assets.len() <= 1);
 
             if let Some((_, block_assets)) = assets.into_iter().next() {
-                all_assets_with_block.push((block_number, block_assets));
+                all_assets_with_block.insert(block_number, block_assets);
             }
             total_progress += 1;
             if total_progress % 1000 == 0 {
@@ -226,9 +246,9 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
                     "bundle fetch progress - completed batch"
                 )
             }
-
-            tracing::info!(total_blocks, "bundle fetch progress - COMPLETE");
         }
+
+        tracing::info!(total_blocks, "bundle fetch progress - COMPLETE");
 
         Ok(all_assets_with_block)
     }

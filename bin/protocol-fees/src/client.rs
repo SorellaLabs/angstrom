@@ -91,22 +91,7 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
                 async move {
                     let logs = provider.get_logs(&filter).await?;
 
-                    let mut valid_logs = Vec::new();
-                    for log in logs {
-                        // Timelock puts id/index in topics; the data contains
-                        // target/value/calldata.
-                        let (target, _, calldata) =
-                            <(Address, U256, Bytes)>::abi_decode_params(&log.data().data)?;
-                        if target == controller_v1_address()
-                            && calldata.starts_with(&ControllerV1::distributeFeesCall::SELECTOR)
-                        {
-                            let call = ControllerV1::distributeFeesCall::abi_decode(&calldata)?;
-                            if call.assets.iter().any(|asset| !asset.total.is_zero()) {
-                                valid_logs.push(log);
-                            }
-                        }
-                    }
-
+                    let valid_logs = decode_distribute_fees_logs(logs)?;
                     eyre::Ok(((from, to), valid_logs))
                 }
             })
@@ -170,8 +155,7 @@ impl<P: Provider> ProtocolFeeFetcher<P> {
                     .ok_or_else(|| eyre!("missing bundle transaction {hash}"))?;
 
                 let execute_call = Angstrom::executeCall::abi_decode(transaction.input())?;
-                let bundle =
-                    AngstromBundle::pade_decode(&mut &execute_call.encoded.as_ref(), None)?;
+                let bundle = AngstromBundle::pade_decode(&mut execute_call.encoded.as_ref(), None)?;
                 for asset in bundle.assets {
                     let total = saved.entry(asset.addr).or_default();
                     *total = total

@@ -4,7 +4,7 @@
 
 Move the hardcoded user-fee `LP_DONATION_SPLIT` into a small on-chain configuration contract, and add a second, independently configurable LP/protocol split for top-of-block (ToB) auction payments in the same contract. Nodes read both rates from canonical state at parent block **H** and use that one snapshot to build the bundle targeting **H+1**.
 
-`OffchainProtocolFeeConfig` is the only contract deployed. Angstrom, `ControllerV1`, and the governance contracts are unchanged and are called only through their existing interfaces. Angstrom does not read this contract or enforce its ratios; it is off-chain configuration that lands in the bundle as ordinary donation and `save` amounts.
+`AngstromProtocolFeeConfig` is the only contract deployed. Angstrom, `ControllerV1`, and the governance contracts are unchanged and are called only through their existing interfaces. Angstrom does not read this contract or enforce its ratios; it is off-chain configuration that lands in the bundle as ordinary donation and `save` amounts.
 
 ## Scope
 
@@ -24,7 +24,7 @@ Move the hardcoded user-fee `LP_DONATION_SPLIT` into a small on-chain configurat
 - Per-pool overrides
 - Automated treasury payout scheduling
 - Recalling an already-submitted transaction
-- Any change to Angstrom, `ControllerV1`, or the governance contracts. `OffchainProtocolFeeConfig` is the only contract deployed, Angstrom never calls it, and the retained ToB portion settles through `Asset.save` exactly as the retained user fee already does.
+- Any change to Angstrom, `ControllerV1`, or the governance contracts. `AngstromProtocolFeeConfig` is the only contract deployed, Angstrom never calls it, and the retained ToB portion settles through `Asset.save` exactly as the retained user fee already does.
 
 ## Parameters
 
@@ -44,7 +44,7 @@ Global to this deployment. Bounds inclusive `0..=1_000_000`. Deploying at these 
 
 ## Contract
 
-`contracts/src/periphery/OffchainProtocolFeeConfig.sol`:
+`contracts/src/periphery/AngstromProtocolFeeConfig.sol`:
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -58,7 +58,7 @@ interface IControllerOwners {
     function fastOwner() external view returns (address);
 }
 
-contract OffchainProtocolFeeConfig {
+contract AngstromProtocolFeeConfig {
     using AngstromView for IAngstromAuth;
 
     IAngstromAuth private immutable ANGSTROM;
@@ -280,7 +280,7 @@ Also test: contract auth (owner, fast owner, everyone else rejected, identical o
 ## Rollout
 
 1. Implement and test the contract, arithmetic, tracking, both splits, allocation, and accounting.
-2. Deploy `OffchainProtocolFeeConfig(existingAngstrom, 750_000, 1_000_000)`. Verify resolved authorities, runtime code, layout, initial values, and getter/slot-0 agreement.
+2. Deploy `AngstromProtocolFeeConfig(existingAngstrom, 750_000, 1_000_000)`. Verify resolved authorities, runtime code, layout, initial values, and getter/slot-0 agreement.
 3. Configure the address and activation block **A** on all nodes; require the contract to exist in canonical state at **A-1**. A node that cannot read valid config does not build affected bundles.
 4. **Activate at the existing economics** (`750_000`, `1_000_000`). Only the config source, the integer arithmetic, and the new allocation paths go live. Verify construction, settlement, and accounting against real blocks.
 5. **Then** enable the chosen ToB share via the setter, once step 4 holds and Payout scope is satisfied. Do not combine steps 4 and 5 — a discrepancy would be ambiguous between the code change and the economic change.

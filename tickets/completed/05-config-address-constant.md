@@ -17,4 +17,5 @@ Let each network name its deployed config contract.
 - Address resolves per network alongside the existing addresses.
 
 ## Notes
-Rates are never constants. Activation block **A** is ticket 12.
+Rates are never constants. Ticket 12 renames this to `PROTOCOL_FEE_CONFIG_ADDRESS` and
+adds the deployed-block constant; ticket 45 sets the real values.

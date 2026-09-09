@@ -3,7 +3,7 @@
 **Blocks on:** 13
 
 ## Files
-- `crates/eth/src/protocol_fee_config.rs` — created by ticket 13
+- `crates/types/primitives/src/contract_payloads/protocol_fees.rs` — created by ticket 13
 - `crates/types/src/reth_db_wrapper.rs` — `.latest().unwrap()` and the defaulting accessors
 - `crates/consensus/src/rounds/mod.rs` — skip or retry the round
 

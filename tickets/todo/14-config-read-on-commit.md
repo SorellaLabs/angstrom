@@ -4,7 +4,7 @@
 
 ## Files
 - `crates/eth/src/manager.rs` — `handle_commit`, `get_protocol_config_update`
-- `crates/eth/src/protocol_fee_config.rs` — created by ticket 13
+- `crates/types/primitives/src/contract_payloads/protocol_fees.rs` — created by ticket 13
 
 ## Goal
 Replace the event-derived config with a storage read.

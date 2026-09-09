@@ -12,8 +12,8 @@ collectible and emits no calldata — keep that until every step below is done.
   current filter keeps `Swap.fee == 0`, but `UnlockHook.sol:62` returns the pool's governance-set
   `unlockedFee` for *every* swap including bundles, so any pool with a nonzero `unlockedFee` has all
   its bundles dropped. Bundles with no swap are dropped too (`PoolUpdates.sol:193` skips when
-  `amountIn == 0`). `_nodeBundleLock` (`TopLevelAuth.sol:222`) permits one `execute` per block, so
-  one log per block is the complete set.
+  `amountIn == 0`). `_nodeBundleLock` (`TopLevelAuth.sol:222`) permits one successful `execute` per
+  block, so Angstrom's zero-topic logs — at most one per block — are the complete set.
 - **Verify the commitment**: `log.data == keccak256(concat(addr20 || save16))` before accruing.
 - **Decode strictly**: full PADE consumption plus a `pade_encode()` round-trip — pade's `Vec`
   decoder silently drops a truncated final asset.
@@ -24,13 +24,16 @@ collectible and emits no calldata — keep that until every step below is done.
   log filter can find them; this needs `debug_traceTransaction` or per-block storage reads. Reading
   today's `ControllerV1.owner()` `CallExecuted` logs misses pulls through a rotated owner or
   controller, and each miss *inflates* the result.
-- **Classify each pull by source.** The code assumes every pull was against `save`, which only holds
-  if no collector proceeds were ever sent to Angstrom (`UnlockSwapFeeCollector.sol:40` takes an
-  arbitrary `to`). An unclassified pull is a stop.
+- **Classify each pull by source and claimant.** Source: the code assumes every pull was against
+  `save`, which only holds if no collector proceeds were ever sent to Angstrom
+  (`UnlockSwapFeeCollector.sol:40` takes an arbitrary `to`). Claimant: `pullFee` carries no
+  GAS/PROTOCOL tag, so `protocolClaimsExecuted` has to come from governance records — without it you
+  get protocol *gross*, not the outstanding figure a withdrawal is sized against. An unlabeled pull
+  is a stop.
 
 ## 3. Split protocol out of `save`
 
-`save` is fed from four places: ToB gas (`bundles.rs:280,287`), the 25% book-fee complement
+`save` is fed from four sites: ToB gas (`bundles.rs:280` and `:287`), the 25% book-fee complement
 (`:509`), and `collect_extra` (`state.rs:180`), which sweeps residual liquidity. User-order gas
 arrives *only* through that last channel, mixed with LP-intended residual and dust — so subtracting
 `extra_fee_asset0` is not enough; the builder's arithmetic must be replayed bit-exactly (`f64 *
@@ -39,15 +42,13 @@ stop, since `extra_fee_asset0` is gas *plus* referral.
 
 ## 4. Prove the remainder is unencumbered
 
-`balanceOf(Angstrom) == U + L + S + P + X`. Nothing here reads `balanceOf`. `U` (deposits,
-withdrawals, internal orders) and `L` (LP rewards — currency0 only, including removed pools) emit no
-events either, so they carry the same trace-or-replay cost as step 2. `X` must include the
-CREATE-prestate balance; Angstrom has no `receive`/`fallback`, so any ETH is always `X`, never a fee.
+`balanceOf(Angstrom) == U + L + S + P + X`. Nothing here reads `balanceOf`. `S` is step 1 minus step
+2. `U` (deposits, withdrawals, internal orders) and `L` (LP rewards — currency0 only, including
+removed pools) emit no events either, so they carry the same trace-or-replay cost as step 2. `P` is
+unspent collector proceeds paid to Angstrom. `X` must include the CREATE-prestate balance; Angstrom
+has no `receive`/`fallback`, so any ETH is always `X`, never a fee.
 
 ## 5. Gate it
 
 Verify `eth_chainId`, and end at a fixed block number *and* hash rather than the chain head. Until
 every §2.6 gate passes the withdrawable amount is zero by definition; §2.7 calldata follows.
-
-
-

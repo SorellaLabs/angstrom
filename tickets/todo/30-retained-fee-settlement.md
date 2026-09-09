@@ -19,6 +19,8 @@ Land the protocol's share in `save` with no contract change.
 ## Done when
 - Exact `save` on chain, zero unresolved deltas.
 - The saved amount is both allocated and reserved, so `collect_extra` cannot double count it.
+- `save_amount` carries only the configured fee. Unallocated remainders reach `save` through
+  `collect_extra` as today and are never added here.
 
 ## Notes
 `add_gas_fee` increments `save` despite its name. `tribute` moves `take`, not `save`, and is not a

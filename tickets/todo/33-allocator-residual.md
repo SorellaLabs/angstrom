@@ -6,11 +6,14 @@
 - `crates/types/src/uni_structure/pool_swap.rs` — `t0_donation_vec`
 
 ## Goal
-Make rounding visible instead of implicit.
+Make unplaced budget visible instead of implicit.
 
 ## Do
-- Have the donation allocator return its residual alongside the vector
-  (`crates/types/src/uni_structure/pool_swap.rs`).
+- Return the remainder alongside the vector.
+- Split it into two buckets: integer-allocation rounding, and budget the allocator did not place.
 
 ## Done when
-- Every allocation reports what it did not place.
+- Every allocation reports what it did not place, in which bucket.
+
+## Notes
+Reporting only. Allocation policy is unchanged — no logic is added to exhaust the LP budget.

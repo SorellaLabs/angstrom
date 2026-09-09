@@ -16,6 +16,7 @@ Move the hardcoded user-fee `LP_DONATION_SPLIT` into a small on-chain configurat
 - Integer split arithmetic replacing `f64`
 - ToB split applied before the donation merge
 - Retained fees through the existing `Asset.save` path
+- Explicit accounting of retained remainders, separate from the configured fee
 - Fee accounting, reconciliation, and post-settlement verification
 
 **Out of scope**
@@ -237,9 +238,9 @@ Rules that are easy to get wrong:
 - No ToB order means both ToB values are zero. A selected ToB order that fails to evaluate is an error, not zero revenue.
 - Running the existing allocator on a smaller budget may shift rewards between tick ranges. Each LP is not promised the configured fraction of its previous claim.
 
-**Conservation.** Have the allocator return its unallocated remainder alongside the vector. Per source, assert `sum(donations) + residual == budget`, then `encoded_tob_donation + tob_protocol_fee + tob_residual == gross_tob_reward`. Residuals are integer-allocation rounding kept through `collect_extra` as today, reported separately from the explicit fee. Reject over-allocation, malformed ranges, and unexplained remainders of any size — no "material" threshold.
+**Conservation.** Have the allocator return its unallocated remainder alongside the vector. Per source, assert `sum(donations) + remainder == budget`, then `encoded_tob_donation + tob_protocol_fee + tob_remainder == gross_tob_reward`. Remainders reach `save` through the existing `collect_extra` path, never through `save_amount`, and split into two buckets accounted separately from each other and from the configured protocol fee: integer-allocation rounding, and budget the allocator did not place. Reject over-allocation, malformed ranges, and unexplained discrepancies of any size — no "material" threshold.
 
-**No-ops.** A true no-op (zero deltas, unchanged price and tick) allocates its whole budget to the active range at that source's end state, with zero residual, and fails if that range has no liquidity. A book no-op after a ToB swap uses the post-ToB state. A moving swap with missing range metadata is an error, not a no-op. `Some(empty)` must not silently skip allocation.
+**No-ops and unallocated budget.** Existing allocation policy is retained. When a valid swap leaves part of its donation budget unallocated because of the allocator's limits, and when the donation vector is empty, that budget stays with the protocol through `collect_extra` / `Asset.save`. Both are accepted and rare, and no redistribution logic is added to exhaust the LP budget. Make the retention explicit and accounted rather than an unremarked side effect: `Some(empty)` must not skip allocation silently. Paths that already allocate to LPs keep doing so — this does not authorize routing every no-op's budget to the protocol. A book no-op after a ToB swap uses the post-ToB state. A moving swap with missing range metadata is an error, not a no-op.
 
 **Settlement accounting** reuses the existing retained-fee pattern:
 
@@ -300,10 +301,10 @@ Design alignment does not establish implementation correctness. Each item below 
 
 1. **One snapshot, one parent.** Drive a round end to end; assert gas estimation and final construction used the same snapshot and parent hash, and that neither re-read config or pool state. Change the head mid-round — including a same-height reorg — and assert the stale result is rejected.
 2. **Cancellation.** Invalidate a round while matching, simulation, signing, or an endpoint send is in flight; assert no later send or retry occurs. Assert on sends that did not happen, not on the presence of a token. Cover the dropped-join-handle case.
-3. **Conservation.** Per source, `sum(donations) + explicit fee + residual == gross`, all nonnegative, residual attributed to documented allocation steps. Assert the saved amount is both allocated and reserved so `collect_extra` cannot double count it.
+3. **Conservation.** Per source, `sum(donations) + configured fee + rounding + retained remainder == gross`, all nonnegative, each bucket attributed to documented allocation steps. Assert the configured fee is both allocated and reserved so `collect_extra` cannot double count it, and that a retained remainder is counted exactly once.
 4. **Real bundles against real contracts.** Execute builder-produced bundles against unchanged Angstrom in the Anvil harness: exact `save`, zero unresolved deltas, expected reward growth. Hand-written fixtures do not satisfy this.
 
-Coverage that must not be dropped: true no-ops with and without active liquidity; book-only exact-match batches with positive user fees; book no-ops after a ToB move; zero budgets that still carry swap metadata; `Some(empty)`; and **two pools sharing token0**, asserting per-pool application and checked accumulation.
+Coverage that must not be dropped: empty donation vectors and true no-ops, asserting the budget is retained and accounted, with and without active liquidity; book-only exact-match batches with positive user fees; book no-ops after a ToB move; zero budgets that still carry swap metadata; `Some(empty)`; and **two pools sharing token0**, asserting per-pool application and checked accumulation.
 
 Also test: contract auth (owner, fast owner, everyone else rejected, identical owner/fast-owner, reverting lookups, and authority following a controller replacement), bounds and atomic rejection, ABI shape (exactly one state-changing function, three views, no fallback, no receive, no withdrawal path), getter and slot-0 agreement at one block hash, tracking across startup/commit/reorg/gaps/read failure, `0 / 75 / 80 / 100%` and large-`u128` arithmetic with property tests, and replay behavior either side of **A**.
 
@@ -312,7 +313,7 @@ Also test: contract auth (owner, fast owner, everyone else rejected, identical o
 1. Implement and test the contract, arithmetic, tracking, both splits, allocation, and accounting.
 2. Deploy `AngstromProtocolFeeConfig(existingAngstrom, 750_000, 1_000_000)`. Verify resolved authorities, runtime code, layout, initial values, and getter/slot-0 agreement.
 3. Configure the address and activation block **A** on all nodes; require the contract to exist in canonical state at **A-1**. A node that cannot read valid config does not build affected bundles.
-4. **Activate at the existing economics** (`750_000`, `1_000_000`). Only the config source, the integer arithmetic, and the new allocation paths go live. Verify construction, settlement, and accounting against real blocks.
+4. **Activate at the existing economics** (`750_000`, `1_000_000`). Only the rate source, the integer arithmetic, and the ToB split path go live; allocation policy is unchanged, though the documented integer-arithmetic differences still apply. Verify construction, settlement, and accounting against real blocks.
 5. **Then** enable the chosen ToB share via the setter, once step 4 holds and Payout scope is satisfied. Do not combine steps 4 and 5 — a discrepancy would be ambiguous between the code change and the economic change.
 6. Replay before **A** keeps the legacy `f64` path, full ToB budget, and legacy allocation behavior. At or after **A**, load rates from historical parent state. Missing historical state is a reported gap, not a silent use of today's rate.
 7. To disable the ToB fee, set the pair back to `(currentUserShare, 1_000_000)`. Future rounds only; nothing already accrued reverses.

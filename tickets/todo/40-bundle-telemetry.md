@@ -11,8 +11,8 @@
 Feed the ledger.
 
 ## Do
-- Per pool and per included bundle, record gross ToB payment, LP allocation, explicit protocol fee,
-  allocation residual, and the snapshot identity.
+- Per pool and per included bundle, record gross ToB payment, LP allocation, the configured
+  protocol fee, rounding and retained-remainder buckets separately, and the snapshot identity.
 - Keep the historical construction parent separate from the local round generation so replay and
   other nodes can reproduce the check.
 

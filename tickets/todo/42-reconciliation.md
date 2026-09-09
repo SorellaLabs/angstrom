@@ -13,6 +13,8 @@ Detect a bad allocation that already settled.
 ## Do
 - Reconstruct expected allocations from each bundle's construction parent and the rates in force
   there; compare with the included reward updates and saved amounts.
+- A retained remainder is expected, not a mismatch — reconcile it as its own bucket, separate from
+  the configured fee.
 - Report mismatches and missing reconstruction data, and withhold those amounts from any proposed
   distribution.
 - Prove a proposed withdrawal leaves LP rewards and user balances backed — Angstrom's ERC20 balance

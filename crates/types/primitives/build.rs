@@ -8,7 +8,7 @@ const OUT_DIRECTORY: &str = "abis-types/";
 const SRC_DIRECTORY: &str = "contracts/src";
 const BINDINGS_PATH: &str = "/src/contract_bindings/mod.rs";
 
-const WANTED_CONTRACTS: [&str; 9] = [
+const WANTED_CONTRACTS: [&str; 10] = [
     "Angstrom.sol",
     "PoolManager.sol",
     "PoolGate.sol",
@@ -17,7 +17,8 @@ const WANTED_CONTRACTS: [&str; 9] = [
     "ControllerV1.sol",
     "PositionFetcher.sol",
     "PositionManager.sol",
-    "IPositionDescriptor.sol"
+    "IPositionDescriptor.sol",
+    "AngstromProtocolFeeConfig.sol"
 ];
 
 // builds the contracts crate. then goes and generates bindings on this

@@ -30,3 +30,5 @@ pub mod ray;
 pub use ray::*;
 pub mod slot0;
 pub use slot0::*;
+pub mod protocol_fees;
+pub use protocol_fees::*;

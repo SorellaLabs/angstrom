@@ -14,9 +14,11 @@ use angstrom_types::{
     block_sync::BlockSyncProducer,
     contract_bindings::{
         angstrom::Angstrom::{PoolKey, executeCall},
+        angstrom_protocol_fee_config::AngstromProtocolFeeConfig::LpDonationSplitsSet,
         controller_v_1::ControllerV1::{NodeAdded, NodeRemoved, PoolConfigured, PoolRemoved}
     },
     contract_payloads::angstrom::{AngPoolConfigEntry, AngstromBundle, AngstromPoolConfigStore},
+    primitive::DonationSplitSnapshot,
     traits::ChainExt
 };
 use futures::Future;
@@ -41,23 +43,25 @@ alloy::sol!(
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
 pub struct EthDataCleanser<Sync> {
-    pub(crate) angstrom_address:  Address,
+    pub(crate) angstrom_address: Address,
     pub(crate) periphery_address: Address,
+    pub(crate) protocol_fee_config_address: Address,
     /// our command receiver
-    pub(crate) commander:         ReceiverStream<EthCommand>,
+    pub(crate) commander: ReceiverStream<EthCommand>,
     /// people listening to events
-    pub(crate) event_listeners:   Vec<UnboundedSender<EthEvent>>,
+    pub(crate) event_listeners: Vec<UnboundedSender<EthEvent>>,
     /// for rebroadcasting
-    pub(crate) cannon_sender:     tokio::sync::broadcast::Sender<CanonStateNotification>,
+    pub(crate) cannon_sender: tokio::sync::broadcast::Sender<CanonStateNotification>,
     /// Notifications for Canonical Block updates
     pub(crate) canonical_updates: BroadcastStream<CanonStateNotification>,
-    pub(crate) angstrom_tokens:   HashMap<Address, usize>,
+    pub(crate) angstrom_tokens: HashMap<Address, usize>,
     /// handles syncing of blocks.
-    block_sync:                   Sync,
+    block_sync: Sync,
     /// updated by periphery contract.
-    pub(crate) pool_store:        Arc<AngstromPoolConfigStore>,
+    pub(crate) pool_store: Arc<AngstromPoolConfigStore>,
     /// the set of currently active nodes.
-    pub(crate) node_set:          HashSet<Address>
+    pub(crate) node_set: HashSet<Address>,
+    pub(crate) protocol_fee_config: Option<DonationSplitSnapshot>
 }
 
 impl<Sync> EthDataCleanser<Sync>
@@ -67,6 +71,7 @@ where
     pub fn spawn(
         angstrom_address: Address,
         periphery_address: Address,
+        protocol_fee_config_address: Address,
         canonical_updates: CanonStateNotifications,
         executor: TaskExecutor,
         tx: Sender<EthCommand>,
@@ -83,6 +88,7 @@ where
         let mut this = Self {
             angstrom_address,
             periphery_address,
+            protocol_fee_config_address,
             canonical_updates: BroadcastStream::new(canonical_updates),
             commander: stream,
             angstrom_tokens,
@@ -90,7 +96,8 @@ where
             block_sync: sync,
             pool_store,
             node_set,
-            event_listeners
+            event_listeners,
+            protocol_fee_config: None
         };
         // ensure we broadcast node set. will allow for proper connections
         // on the network side
@@ -127,7 +134,7 @@ where
     }
 
     fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) {
-        tracing::info!("got new block update!!!!!");
+        tracing::info!(?canonical_updates, "got new block update!!!!!");
         telemetry_recorder::telemetry_event!(EthUpdaterSnapshot::from((
             &*self,
             canonical_updates.clone()
@@ -142,6 +149,14 @@ where
 
     fn handle_reorg(&mut self, old: Arc<impl ChainExt>, new: Arc<impl ChainExt>) {
         self.apply_periphery_logs(&new);
+
+        if let Some(protocol_config_update) = self.get_protocol_config_update(&new) {
+            self.protocol_fee_config = Some(protocol_config_update);
+            self.send_events(EthEvent::ProtocolFeeConfigUpdated(protocol_config_update));
+        } else if let Some(protocol_config_update) = self.get_protocol_config_update(&old) {
+            todo!()
+        }
+
         // notify producer of reorg if one happened. NOTE: reth also calls this
         // on reverts
         let tip = new.tip_number();
@@ -164,6 +179,11 @@ where
     fn handle_commit(&mut self, new: Arc<impl ChainExt>) {
         // handle this first so the newest state is the first available
         self.apply_periphery_logs(&new);
+
+        if let Some(protocol_config_update) = self.get_protocol_config_update(&new) {
+            self.protocol_fee_config = Some(protocol_config_update);
+            self.send_events(EthEvent::ProtocolFeeConfigUpdated(protocol_config_update));
+        }
 
         let tip = new.tip_number();
         tracing::info!(?self.block_sync);
@@ -321,6 +341,32 @@ where
             .unique()
             .collect()
     }
+
+    fn get_protocol_config_update(&self, chain: &impl ChainExt) -> Option<DonationSplitSnapshot> {
+        let protocol_fee_config_address = self.protocol_fee_config_address;
+
+        chain
+            .receipts_by_block_hash(chain.tip_hash())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| r.success)
+            .flat_map(|receipt| &receipt.logs)
+            .filter(|log| log.address == protocol_fee_config_address)
+            .filter_map(|log| {
+                if let Ok(protocol_fee_config_updated) = LpDonationSplitsSet::decode_log(log) {
+                    tracing::info!(?protocol_fee_config_updated, "protocol fee config updated");
+                    let split = DonationSplitSnapshot {
+                        block_number: chain.tip_number(),
+                        block_hash:   chain.tip_hash(),
+                        splits:       protocol_fee_config_updated.data.into()
+                    };
+                    Some(split)
+                } else {
+                    None
+                }
+            })
+            .last()
+    }
 }
 
 impl<Sync> Future for EthDataCleanser<Sync>
@@ -369,7 +415,8 @@ pub enum EthEvent {
         pool: PoolKey
     },
     AddedNode(Address),
-    RemovedNode(Address)
+    RemovedNode(Address),
+    ProtocolFeeConfigUpdated(DonationSplitSnapshot)
 }
 
 #[cfg(test)]
@@ -447,16 +494,18 @@ pub mod test {
         let (_cannon_tx, cannon_rx) = tokio::sync::broadcast::channel(3);
         let (tx, _) = tokio::sync::broadcast::channel(3);
         EthDataCleanser {
-            commander:         ReceiverStream::new(command_rx),
-            event_listeners:   vec![],
-            angstrom_tokens:   HashMap::default(),
-            node_set:          HashSet::default(),
-            angstrom_address:  angstrom_address.unwrap_or_default(),
-            periphery_address: Address::default(),
-            canonical_updates: BroadcastStream::new(cannon_rx),
-            block_sync:        GlobalBlockSync::new(1),
-            cannon_sender:     tx,
-            pool_store:        Default::default()
+            commander:                   ReceiverStream::new(command_rx),
+            event_listeners:             vec![],
+            angstrom_tokens:             HashMap::default(),
+            node_set:                    HashSet::default(),
+            angstrom_address:            angstrom_address.unwrap_or_default(),
+            periphery_address:           Address::default(),
+            protocol_fee_config_address: Address::default(),
+            canonical_updates:           BroadcastStream::new(cannon_rx),
+            block_sync:                  GlobalBlockSync::new(1),
+            cannon_sender:               tx,
+            pool_store:                  Default::default(),
+            protocol_fee_config:         None
         }
     }
 

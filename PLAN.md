@@ -52,20 +52,19 @@ pragma solidity ^0.8.26;
 
 import {IAngstromAuth} from "../interfaces/IAngstromAuth.sol";
 import {AngstromView} from "./AngstromView.sol";
-
-interface IControllerOwners {
-    function owner() external view returns (address);
-    function fastOwner() external view returns (address);
-}
+import {ControllerV1} from "./ControllerV1.sol";
 
 contract AngstromProtocolFeeConfig {
     using AngstromView for IAngstromAuth;
 
+    /// @dev 100% in E6, and the denominator both shares are taken over.
+    uint32 internal constant MAX_SHARE_E6 = 1_000_000;
+
     IAngstromAuth private immutable ANGSTROM;
 
-    // Slot 0: userLpShareE6 in bytes 0..4, tobLpShareE6 in bytes 4..8.
-    uint32 private userLpShareE6;
-    uint32 private tobLpShareE6;
+    // Slot 0: _userLpShareE6 in bytes 0..4, _tobLpShareE6 in bytes 4..8.
+    uint32 private _userLpShareE6;
+    uint32 private _tobLpShareE6;
 
     error NotAuthorized();
     error InvalidConfig();
@@ -75,39 +74,70 @@ contract AngstromProtocolFeeConfig {
         uint32 oldTobLpShareE6, uint32 newTobLpShareE6
     );
 
-    constructor(IAngstromAuth angstrom, uint32 initialUser, uint32 initialTob) {
-        if (address(angstrom) == address(0) || initialUser > 1_000_000 || initialTob > 1_000_000) {
+    constructor(IAngstromAuth angstrom, uint32 initialUserLpShareE6, uint32 initialTobLpShareE6) {
+        if (
+            address(angstrom) == address(0) || initialUserLpShareE6 > MAX_SHARE_E6
+                || initialTobLpShareE6 > MAX_SHARE_E6
+        ) {
             revert InvalidConfig();
         }
         ANGSTROM = angstrom;
-        userLpShareE6 = initialUser;
-        tobLpShareE6 = initialTob;
-        emit LpDonationSplitsSet(0, initialUser, 0, initialTob);
+        _userLpShareE6 = initialUserLpShareE6;
+        _tobLpShareE6 = initialTobLpShareE6;
+        emit LpDonationSplitsSet(0, initialUserLpShareE6, 0, initialTobLpShareE6);
     }
 
-    function setLpDonationSplits(uint32 newUser, uint32 newTob) external {
-        IControllerOwners controller = IControllerOwners(ANGSTROM.controller());
-        if (msg.sender != controller.fastOwner() && msg.sender != controller.owner()) {
+    function setLpDonationSplits(uint32 newUserLpShareE6, uint32 newTobLpShareE6) external {
+        ControllerV1 angstromController = ControllerV1(controller());
+        // `owner()` is only reached when the caller is not the fast owner, so a fast-owner call
+        // does not depend on the owner lookup. Either lookup reverting fails closed.
+        if (
+            msg.sender != angstromController.fastOwner() && msg.sender != angstromController.owner()
+        ) {
             revert NotAuthorized();
         }
-        if (newUser > 1_000_000 || newTob > 1_000_000) revert InvalidConfig();
+        if (newUserLpShareE6 > MAX_SHARE_E6 || newTobLpShareE6 > MAX_SHARE_E6) {
+            revert InvalidConfig();
+        }
 
-        (uint32 oldUser, uint32 oldTob) = (userLpShareE6, tobLpShareE6);
-        (userLpShareE6, tobLpShareE6) = (newUser, newTob);
-        emit LpDonationSplitsSet(oldUser, newUser, oldTob, newTob);
+        (uint32 oldUserLpShareE6, uint32 oldTobLpShareE6) = (_userLpShareE6, _tobLpShareE6);
+        (_userLpShareE6, _tobLpShareE6) = (newUserLpShareE6, newTobLpShareE6);
+
+        emit LpDonationSplitsSet(
+            oldUserLpShareE6, newUserLpShareE6, oldTobLpShareE6, newTobLpShareE6
+        );
     }
 
-    function getLpDonationSplits() external view returns (uint32, uint32) {
-        return (userLpShareE6, tobLpShareE6);
+    function getLpDonationSplits()
+        external
+        view
+        returns (uint32 userLpShareE6, uint32 tobLpShareE6)
+    {
+        return (_userLpShareE6, _tobLpShareE6);
+    }
+
+    /// @notice The Angstrom deployment this config is bound to. Fixed at construction.
+    function angstrom() public view returns (address) {
+        return address(ANGSTROM);
+    }
+
+    /// @notice The controller whose owner and fast owner may call `setLpDonationSplits`,
+    /// resolved from Angstrom's live state on every call.
+    function controller() public view returns (address) {
+        return ANGSTROM.controller();
     }
 }
 ```
 
+**As built.** The block above reflects the implemented contract with its natspec condensed; `contracts/src/periphery/AngstromProtocolFeeConfig.sol` is authoritative. Private state carries a leading underscore per `ControllerV1`'s convention, which frees the bare names for the getter's named returns so the generated ABI — and the Rust bindings built from it — document themselves.
+
 Deploy with `(existingAngstrom, 750_000, 1_000_000)`.
 
-**Authorization** resolves through `AngstromView.controller()` to the live controller, then its `owner()` or `fastOwner()`. Either may call; neither the controller itself nor the deployer has standing. If the controller is ever replaced, authority follows the replacement. The mainnet script sets the timelock as owner and the multisig as fast owner, so the multisig can call directly and the timelock through its normal scheduling. Config authority stays separate from withdrawal authority: `distributeFees` remains owner-only.
+**Authorization** resolves through `AngstromView.controller()` to the live controller, then its `owner()` or `fastOwner()`, typed as `ControllerV1` directly rather than through a local interface so the two accessors cannot drift from the deployed controller. Either may call; neither the controller itself nor the deployer has standing. If the controller is ever replaced, authority follows the replacement. The mainnet script sets the timelock as owner and the multisig as fast owner, so the multisig can call directly and the timelock through its normal scheduling. Config authority stays separate from withdrawal authority: `distributeFees` remains owner-only.
 
 **Both rates always move together.** The setter writes the full pair, so a queued timelock call will overwrite an intervening fast-owner change. Governance tooling must show both values and re-check the other one before execution.
+
+**Accessors.** `angstrom()` returns the bound deployment; `controller()` returns `ANGSTROM.controller()` and is what the setter itself calls, so authorization and inspection cannot disagree. Both are views: the contract still has exactly one state-changing function, no fallback, no receive, and no path that moves value. `controller()` reads live state rather than a stored copy, so a controller replacement moves configuration authority with it and is observable before the fact.
 
 **Two read paths, one requirement:** a single read must return both rates from one pinned parent state. Decode slot 0, or call `getLpDonationSplits()` — never compose a pair from two reads. Fields stay private so there is no auto-generated single-value getter to compose from.
 
@@ -117,7 +147,7 @@ user_lp_share_e6 = word & 0xffff_ffff
 tob_lp_share_e6  = (word >> 32) & 0xffff_ffff
 ```
 
-Verify this layout against compiler output; it is part of the interface.
+Verified against compiler output — `forge inspect AngstromProtocolFeeConfig storageLayout` reports `_userLpShareE6` at slot 0 offset 0 and `_tobLpShareE6` at slot 0 offset 4, and the immutable occupies no slot. This layout is part of the interface: changing the declaration order or the widths breaks every off-chain decoder. Selectors for governance tooling: `setLpDonationSplits` `0xb3226f60`, `getLpDonationSplits` `0xfa35d883`, `angstrom` `0xff3ddeb8`, `controller` `0xf77c4791`.
 
 ## Node changes
 
@@ -275,7 +305,7 @@ Design alignment does not establish implementation correctness. Each item below 
 
 Coverage that must not be dropped: true no-ops with and without active liquidity; book-only exact-match batches with positive user fees; book no-ops after a ToB move; zero budgets that still carry swap metadata; `Some(empty)`; and **two pools sharing token0**, asserting per-pool application and checked accumulation.
 
-Also test: contract auth (owner, fast owner, everyone else rejected, identical owner/fast-owner, reverting lookups), bounds and atomic rejection, ABI shape (two external functions, no fallback, no withdrawal), getter and slot-0 agreement at one block hash, tracking across startup/commit/reorg/gaps/read failure, `0 / 75 / 80 / 100%` and large-`u128` arithmetic with property tests, and replay behavior either side of **A**.
+Also test: contract auth (owner, fast owner, everyone else rejected, identical owner/fast-owner, reverting lookups, and authority following a controller replacement), bounds and atomic rejection, ABI shape (exactly one state-changing function, three views, no fallback, no receive, no withdrawal path), getter and slot-0 agreement at one block hash, tracking across startup/commit/reorg/gaps/read failure, `0 / 75 / 80 / 100%` and large-`u128` arithmetic with property tests, and replay behavior either side of **A**.
 
 ## Rollout
 

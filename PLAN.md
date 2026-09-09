@@ -8,14 +8,23 @@ Move the hardcoded user-fee `LP_DONATION_SPLIT` into a small on-chain configurat
 
 ## Scope
 
-| In | Out |
-| --- | --- |
-| The config contract, its setter and getter | On-chain or consensus-level enforcement of the ratios |
-| Pinned canonical read of both rates | Per-pool overrides |
-| One snapshot threaded through both bundle paths | Automated treasury payout scheduling |
-| Integer split arithmetic replacing `f64` | A source-specific fee ledger (see Deferred) |
-| ToB split applied before donation merge | Post-settlement allocation reconstruction (see Deferred) |
-| Retained fees via existing `Asset.save` | Recalling an already-submitted transaction |
+**In scope**
+
+- The config contract, its setter and getter
+- Pinned canonical read of both rates
+- One snapshot threaded through both bundle paths
+- Integer split arithmetic replacing `f64`
+- ToB split applied before the donation merge
+- Retained fees through the existing `Asset.save` path
+- Fee accounting, reconciliation, and post-settlement verification
+
+**Out of scope**
+
+- On-chain or consensus-level enforcement of the ratios
+- Per-pool overrides
+- Automated treasury payout scheduling
+- Recalling an already-submitted transaction
+- Any change to Angstrom, `ControllerV1`, or the governance contracts. `OffchainProtocolFeeConfig` is the only contract deployed, Angstrom never calls it, and the retained ToB portion settles through `Asset.save` exactly as the retained user fee already does.
 
 ## Parameters
 
@@ -168,7 +177,7 @@ Read both rates at each canonical head, pinned to that block's hash — locally 
 
 1. Subscribe to canonical updates before taking the startup snapshot, then reconcile queued updates.
 2. Validate the address holds the expected code for the intended Angstrom immutable. An empty account reads as zero storage and must not be mistaken for two valid 0% settings.
-3. On commit and on reorg, read the new head and publish with that block's identity. A reorg that merely removes an update carries no replacement event, which is why storage is the source of truth and `LpDonationSplitsSet` is only for humans.
+3. On commit and on reorg, read the new head and publish with that block's identity. A reorg that merely removes an update carries no replacement event, which is why storage is the source of truth. Index `LpDonationSplitsSet` separately for operator-facing change history and telemetry: filter by the config address, account for removed blocks, and process every relevant block in a notification. It is a view over what storage already decided, never a second source of configuration.
 4. The read must complete before consumers build the corresponding round. Today's cleanser callbacks are synchronous, so the read participates in block synchronization rather than running detached.
 5. A failed read skips or retries the round. It never falls back to a stale or default rate. The local provider adapter currently unwraps state-provider errors; those panics must become errors.
 
@@ -230,7 +239,7 @@ Never re-read the rate per pool or between estimation and construction. Retain t
 
 A setter landing in H+1 before the bundle still does not apply to it; the bundle uses H. This is node policy, not something Angstrom validates.
 
-Identify async work by parent hash plus a round generation that changes on reset, and discard results that no longer match — a matching block height is not enough, since same-height reorgs exist. Simulation must be pinned to the requested parent hash for every read including cache misses; cloning `RethDbWrapper` currently shares an `Arc<AtomicU64>` selector, which defeats this. Submission-time `estimate_gas` needs the same parent state and H+1 environment.
+Identify async work by parent hash plus a round generation that changes on reset, and discard results that no longer match — a matching block height is not enough, since same-height reorgs exist. Simulation must be pinned to the requested parent hash for every read including cache misses; cloning `RethDbWrapper` currently shares an `Arc<AtomicU64>` selector, which defeats this. What that needs is an immutable provider per parent hash, caches that never carry state across hashes, and unavailable state surfacing as an error rather than a fallback to current state — not a wider rework of the provider layer. Submission-time `estimate_gas` needs the same parent state and H+1 environment.
 
 Round reset must **abort** its submission task, not just drop the join handle — a dropped handle leaves the task running. Re-check cancellation and identity after async preparation, before signing, and before each endpoint send.
 
@@ -249,7 +258,11 @@ Before enabling a **nonzero ToB share**, name the accounting component and its r
 3. undoes and re-derives accruals across reorgs;
 4. cannot collect the same fee twice across restart, backfill, or a re-reviewed proposal.
 
-None of this blocks activation at the initial economics, where the ToB protocol share is zero.
+None of this blocks activation at the initial economics, where the ToB protocol share is zero. That is the ordering, not a reduction in scope: the ledger is built and reconciling before step 5 of Rollout, and until then there is no new protocol share for it to account for.
+
+Build it against canonical included bundles. Reconstruct the expected allocations from each bundle's construction parent and the rates in force there, then compare them with the included reward updates and saved amounts. A successful EVM simulation and a passing peer-finalization result are not evidence of compliance — peer checks run on `PoolSolution`s, upstream of where the splits are applied. Report mismatches and missing reconstruction data, and withhold those amounts from any proposed distribution. This detects a bad allocation after inclusion; it cannot prevent or reverse settlement.
+
+Feed it from bundle telemetry recording, per pool and per included bundle: gross ToB payment, LP allocation, explicit protocol fee, allocation residual, and the snapshot identity. Keep the historical construction parent separate from the local round generation so replay and other nodes can reproduce the check.
 
 ## Implementation acceptance
 

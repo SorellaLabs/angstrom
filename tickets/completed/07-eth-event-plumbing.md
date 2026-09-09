@@ -17,5 +17,6 @@ Get a snapshot out of `EthDataCleanser` to consumers.
 - Consumers receive a snapshot carrying the publishing block's identity.
 
 ## Notes
-This landed reading `LpDonationSplitsSet` logs. That is the wrong source — see tickets 13-15 and 18.
-`handle_reorg` still has a `todo!()`.
+Log-derived is the right source, matching how `pool_store` is maintained. What is missing:
+the initial value is never loaded from chain (16), only the tip block of a notification is scanned
+(14), and `handle_reorg` still has a `todo!()` instead of inverting the change (15).

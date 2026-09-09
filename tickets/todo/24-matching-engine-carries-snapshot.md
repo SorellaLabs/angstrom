@@ -1,17 +1,23 @@
-# 24 — Carry the snapshot through the matching engine
+# 24 — Carry the snapshot to both consumers
 
 **Blocks on:** 23
 
 ## Files
+- `crates/consensus/src/rounds/mod.rs:337` — `solve_pools` call
+- `crates/consensus/src/rounds/proposal.rs:164` — `from_proposal`
 - `crates/matching-engine/src/lib.rs` — `solve_pools`
-- `crates/matching-engine/src/manager.rs` — `MatcherCommand::BuildProposal`
+- `crates/matching-engine/src/manager.rs:46` — `MatcherCommand::BuildProposal`
+- `crates/matching-engine/src/manager.rs:175` — `for_gas_finalization`
 
 ## Goal
-Get the round's splits to where the bundle is built.
+Both `process_solution` call sites get the round's one snapshot.
 
 ## Do
-- Thread `DonationSplitSnapshot` through `solve_pools` in `crates/matching-engine/src/lib.rs` and
-  `MatcherCommand::BuildProposal` in `crates/matching-engine/src/manager.rs`.
+- Add the snapshot to `solve_pools` and to `MatcherCommand::BuildProposal`, alongside
+  `pool_snapshots`, through to `for_gas_finalization`.
+- Stash the same value on `ProposalState` so `try_build_proposal` passes it to `from_proposal`.
+  `try_build_proposal` receives the matching result as a parameter, so it runs after the engine —
+  it cannot be the capture point for both.
 
 ## Done when
-- The splits reach `process_solution` without a second read.
+- `for_gas_finalization` and `from_proposal` in one round are given the same snapshot.

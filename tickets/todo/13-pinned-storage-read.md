@@ -1,32 +1,45 @@
-# 13 — Read both rates from pinned storage
+# 13 — Load the initial config from chain
 
 **Blocks on:** 04, 05
 
 ## Files
 - `crates/types/primitives/src/contract_payloads/protocol_fees.rs` (new)
 - `crates/types/primitives/src/contract_payloads/mod.rs` — module wiring
-- `crates/types/primitives/src/primitive/protocol_fees.rs` — `from_slot0`
-- `crates/types/constants/src/lib.rs` — config address
+- `crates/types/primitives/src/primitive/protocol_fees.rs` — `DonationSplits::from_slot0`
 - `crates/types/primitives/src/contract_payloads/angstrom/mod.rs:243` —
   `AngstromPoolConfigStore::load_from_chain`, the pattern to follow
 
 ## Goal
-Storage is the source of truth, read at one block hash.
+One pinned read that gives the node its starting rates. Everything after this comes from logs.
 
 ## Do
-- New module `contract_payloads/protocol_fees.rs`, generic over `Provider<N>` and taking the config
-  address and a `BlockId`, mirroring `AngstromPoolConfigStore::load_from_chain`.
-- Read slot 0 of the config address pinned to a block hash — locally via the provider, or over RPC
-  with an EIP-1898 block-hash identifier and `requireCanonical: true`. Never `latest`, never a bare
-  number; the existing `load_from_chain` call site passes `Latest`, which is not acceptable here.
-- Validate the address holds the expected code for the intended Angstrom immutable before trusting
-  the word; an empty account reads as zero storage and must not pass as two valid 0% settings.
-- Decode with `DonationSplits::from_slot0`, return a `DonationSplitSnapshot`.
+- Mirror `AngstromPoolConfigStore::load_from_chain`:
+
+```rust
+pub async fn load_from_chain<N, P>(
+    config_address: Address,
+    block_id: BlockId,
+    provider: &P
+) -> eyre::Result<DonationSplits>
+where
+    N: Network,
+    P: Provider<N>
+```
+
+- `get_code_at(config_address).block_id(block_id)` must be non-empty. An empty account reads as
+  zero storage and would otherwise decode as two valid 0% settings.
+- Confirm the deployment is bound to this node's Angstrom: call `angstrom()` at the same block and
+  compare against `ANGSTROM_ADDRESS`. The wrong deployment silently yields someone else's rates.
+- `get_storage_at(config_address, PROTOCOL_FEE_CONFIG_SLOT).block_id(block_id)` — slot `0`, named
+  as a constant in this module following `CONFIG_STORE_SLOT` in `contract_payloads/mod.rs`.
+- Decode with `DonationSplits::from_slot0`. Errors are `eyre::Result`, not `String`.
 
 ## Done when
-- One call returns both rates and the block identity they came from.
-- An empty or wrong-code account is an error.
+- One call returns both rates from one block.
+- An empty account, a wrong-code account, or a deployment bound to a different Angstrom is an
+  error.
 
 ## Notes
-Belongs beside the contract payloads it decodes, not in `crates/eth` — that crate consumes
-canonical notifications and does no provider fetching.
+Called once, at node init (ticket 16). There is no per-block provider read: the round path never
+touches a provider for this, so solving stays off the network. Belongs beside the contract payload
+it decodes, not in `crates/eth`.

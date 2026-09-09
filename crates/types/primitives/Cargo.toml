@@ -38,13 +38,14 @@ uniswap_v3_math.workspace = true
 [build-dependencies]
 convert_case.workspace = true
 itertools.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 angstrom-types.workspace = true
 rand.workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["alloy-contract", "convert_case"]
+ignored = ["alloy-contract", "convert_case", "serde_json"]
 
 [features]
 default = []

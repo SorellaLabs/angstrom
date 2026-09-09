@@ -1,22 +1,25 @@
 # 23 — One snapshot per round
 
-**Blocks on:** 14, 16
+**Blocks on:** 16
 
 ## Files
-- `crates/consensus/src/manager.rs`
-- `crates/consensus/src/rounds/mod.rs`
-- `crates/consensus/src/rounds/proposal.rs`
+- `crates/consensus/src/manager.rs:129` — `on_blockchain_state`
+- `crates/consensus/src/rounds/mod.rs:190` — `SharedRoundState`
+- `crates/consensus/src/rounds/mod.rs:277` — `matching_engine_output`
 
 ## Goal
-Capture the rates once at parent H and hold them for the whole round.
+Hold the current rates in memory and fix them for the whole round.
 
 ## Do
-- `crates/consensus/src/manager.rs`, `rounds/mod.rs`, `rounds/proposal.rs`.
-- Take one `DonationSplitSnapshot` per round and reuse it for matching, gas estimation, and final
-  construction.
-- Retain the round's pool snapshots too, rather than re-fetching mutable pool state for final
-  construction.
+- Hold the latest `DonationSplitSnapshot` on `SharedRoundState`, seeded at init (16) and updated
+  from `EthEvent::ProtocolFeeConfigUpdated` in `on_blockchain_state`, beside the existing
+  `NewBlock` handling.
+- Capture it once per round in `matching_engine_output`, next to the existing
+  `let pool_snapshots = self.fetch_pool_snapshot();` at `:336`. That call site is above both
+  consumers, so one capture covers gas estimation and final construction.
+- No provider call on this path. Block sync already guarantees the cleanser has applied the
+  block's logs before the round runs.
 
 ## Done when
-- No re-read of config or pool state between estimation and construction.
-- A setter landing in H+1 does not affect the bundle built on H.
+- Gas estimation and final construction use the same value.
+- An update arriving mid-round does not change the bundle being built.

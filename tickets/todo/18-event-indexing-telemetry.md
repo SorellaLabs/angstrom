@@ -1,19 +1,18 @@
-# 18 — Index LpDonationSplitsSet as telemetry only
+# 18 — Record config changes for operators
 
-**Blocks on:** 14
+**Blocks on:** 14, 15
 
 ## Files
-- `crates/eth/src/manager.rs` — log filter
 - `crates/eth/src/telemetry.rs`
+- `crates/telemetry-recorder/src/lib.rs`
 
 ## Goal
-Keep operator-facing change history without letting it configure anything.
+Operator-visible change history.
 
 ## Do
-- Keep the log filter on the config address, but as a view over what storage already decided.
-- Process every relevant block in a notification, not only the tip, and account for removed blocks.
-- Never feed it into the snapshot consumers use.
+- On each applied or inverted change, record the old pair, the new pair, and the block identity.
+- Mark reorg inversions as such so history does not read as a governance action that never
+  happened.
 
 ## Done when
-- Change history is reported.
-- Deleting the indexer changes no bundle.
+- Every rate change the node acted on is visible with its block, including inversions.

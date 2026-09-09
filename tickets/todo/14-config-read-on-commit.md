@@ -1,20 +1,24 @@
-# 14 — Read config on canonical commit
+# 14 — Apply config changes from logs
 
-**Blocks on:** 13, 07
+**Blocks on:** 07
 
 ## Files
-- `crates/eth/src/manager.rs` — `handle_commit`, `get_protocol_config_update`
-- `crates/types/primitives/src/contract_payloads/protocol_fees.rs` — created by ticket 13
+- `crates/eth/src/manager.rs:209` — `apply_periphery_logs`
+- `crates/eth/src/manager.rs:345` — `get_protocol_config_update`, to be folded in and deleted
 
 ## Goal
-Replace the event-derived config with a storage read.
+Maintain the config from logs, exactly as `pool_store` is maintained.
 
 ## Do
-- In `handle_commit` (`crates/eth/src/manager.rs`), drop `get_protocol_config_update`'s log scan as
-  the config source and read storage at the new head instead.
-- Publish `ProtocolFeeConfigUpdated` with that block's identity.
-- The read must complete before the block update is released — cleanser callbacks are synchronous,
-  so it participates in block synchronization rather than running detached.
+- Handle `LpDonationSplitsSet` inside `apply_periphery_logs`, beside `NodeAdded` and
+  `PoolConfigured`, filtered on the config address. Delete the separate
+  `get_protocol_config_update` and its call sites in `handle_commit` / `handle_reorg`.
+- Process **every block in the notification**, not only the tip. `apply_periphery_logs` and
+  `get_protocol_config_update` both scan `receipts_by_block_hash(chain.tip_hash())` today, so a
+  change in a non-tip block is silently missed.
+- Apply in block order; the last update in the notification wins.
+- Publish `EthEvent::ProtocolFeeConfigUpdated` with the notification tip's number and hash.
 
 ## Done when
-- A commit that contains no setter transaction still publishes the current rates.
+- A config change in any block of a multi-block commit is applied.
+- No provider call happens anywhere in the cleanser.

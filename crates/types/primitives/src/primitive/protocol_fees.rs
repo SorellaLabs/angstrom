@@ -9,8 +9,13 @@ pub struct DonationSplits {
 }
 
 impl From<LpDonationSplitsSet> for DonationSplits {
+    /// `AngstromProtocolFeeConfig` rejects either share above `1_000_000`, and
+    /// the eth manager only decodes logs emitted by that address, so the bounds
+    /// hold by construction. A panic here means a misconfigured address or a
+    /// stale ABI, not bad input.
     fn from(value: LpDonationSplitsSet) -> Self {
-        Self { user_lp_share_e6: value.newUserLpShareE6, tob_lp_share_e6: value.newTobLpShareE6 }
+        Self::new(value.newUserLpShareE6, value.newTobLpShareE6)
+            .expect("this is not possible - verification is done onchain")
     }
 }
 
@@ -20,10 +25,10 @@ impl DonationSplits {
     /// The only constructor. Rejects either share above DENOM.
     pub fn new(user_lp_share_e6: u32, tob_lp_share_e6: u32) -> eyre::Result<Self> {
         if user_lp_share_e6 > Self::DENOM {
-            return Err(eyre::eyre!("`user_lp_share_e6` must be greater than `1_000_000`"));
+            return Err(eyre::eyre!("`user_lp_share_e6` must be at most `1_000_000`"));
         }
         if tob_lp_share_e6 > Self::DENOM {
-            return Err(eyre::eyre!("`tob_lp_share_e6` must be greater than `1_000_000`"));
+            return Err(eyre::eyre!("`tob_lp_share_e6` must be at most `1_000_000`"));
         }
         Ok(Self { user_lp_share_e6, tob_lp_share_e6 })
     }

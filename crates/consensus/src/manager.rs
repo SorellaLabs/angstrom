@@ -162,6 +162,15 @@ where
                 self.leader_selection.remove_validator(&node);
                 return;
             }
+            // The cleanser publishes this ahead of the same notification's
+            // `NewBlock`, so the round that block opens starts from it. A round
+            // already in flight keeps the snapshot it captured, which is why
+            // this does not reset.
+            EthEvent::ProtocolFeeConfigUpdated(config) => {
+                self.consensus_round_state
+                    .update_protocol_fee_config(config);
+                return;
+            }
             _ => return
         }
 

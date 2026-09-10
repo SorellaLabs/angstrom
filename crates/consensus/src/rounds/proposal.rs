@@ -10,8 +10,8 @@ use angstrom_types::{
     consensus::{
         ConsensusRoundName, PreProposalAggregation, Proposal, SlotClock, StromConsensusEvent
     },
-    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
-    orders::{OrderFillState, PoolSolution},
+    contract_payloads::angstrom::AngstromBundle,
+    orders::OrderFillState,
     primitive::AngstromMetaSigner,
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
     traits::BundleProcessing
@@ -20,10 +20,9 @@ use futures::{FutureExt, future::BoxFuture};
 use matching_engine::{MatchingEngineHandle, manager::MatchingEngineError};
 
 use super::{ConsensusState, SharedRoundState};
-use crate::rounds::{ConsensusMessage, preproposal_wait_trigger::LastRoundInfo};
+use crate::rounds::{ConsensusMessage, MatchingOutput, preproposal_wait_trigger::LastRoundInfo};
 
-type MatchingEngineFuture =
-    BoxFuture<'static, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>;
+type MatchingEngineFuture = BoxFuture<'static, Result<MatchingOutput, MatchingEngineError>>;
 
 /// Proposal State.
 ///
@@ -103,7 +102,7 @@ impl ProposalState {
     fn try_build_proposal<P, Matching, S: AngstromMetaSigner>(
         &mut self,
         cx: &mut Context<'_>,
-        result: Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>,
+        result: Result<MatchingOutput, MatchingEngineError>,
         handles: &mut SharedRoundState<P, Matching, S>
     ) -> bool
     where
@@ -129,7 +128,11 @@ impl ProposalState {
                     "Failed to properly build proposal, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
                 )
             })
-            .map(|(pool_solution, gas_info)| {
+            .map(|(pool_solution, gas_info, _splits)| {
+                // `_splits` is the round's single configuration read, arriving on the
+                // same result as the gas it was matched with. Ticket 26 threads it
+                // into `from_proposal` below; nothing re-reads it in between.
+
                 // Record matching results metrics
                 let metrics = BlockMetricsWrapper::new();
                 let pools_solved = pool_solution.len();

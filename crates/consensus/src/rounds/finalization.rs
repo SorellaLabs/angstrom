@@ -64,7 +64,7 @@ impl FinalizationState {
         let future = handles
             .matching_engine_output(preproposal)
             .map(move |output| {
-                let Ok((solution, _)) = output else {
+                let Ok((solution, ..)) = output else {
                     return false;
                 };
 

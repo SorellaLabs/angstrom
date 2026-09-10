@@ -44,6 +44,14 @@ mod proposal;
 
 type PollTransition<P, Matching, S> = Poll<Option<Box<dyn ConsensusState<P, Matching, S>>>>;
 
+/// What one drive of the matching engine produces: its solutions, the gas it
+/// was simulated for, and the round's single [`DonationSplitSnapshot`].
+///
+/// The snapshot rides along with the result rather than being read again at the
+/// far end, which is what makes gas estimation and final construction use the
+/// same value even when a setter lands mid-round.
+pub type MatchingOutput = (Vec<PoolSolution>, BundleGasDetails, DonationSplitSnapshot);
+
 pub trait ConsensusState<P, Matching, S>: Send
 where
     P: Provider + Unpin + 'static,
@@ -124,6 +132,13 @@ where
         self.current_state.name().is_closed()
     }
 
+    /// Records the configuration a canonical update published. The round in
+    /// flight has already captured its own copy, so this only ever changes what
+    /// the *next* round starts from.
+    pub fn update_protocol_fee_config(&mut self, config: DonationSplitSnapshot) {
+        self.shared_state.protocol_fee_config = config;
+    }
+
     pub fn reset_round(&mut self, new_block: BlockNumHash, new_leader: Address) {
         let next_slot_duration = self.slot_clock.duration_to_next_slot().unwrap();
         let elapsed_time = self.slot_clock.slot_duration() - next_slot_duration;
@@ -199,10 +214,10 @@ pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching, S: Angstrom
     messages:            VecDeque<ConsensusMessage>,
     consensus_config:    ConsensusTimingConfig,
     slot_clock:          SystemTimeSlotClock,
-    /// Seeded from the init-block read (ticket 16). Ticket 23 maintains it from
-    /// `EthEvent::ProtocolFeeConfigUpdated` and captures it once per round;
-    /// nothing reads it yet.
-    #[allow(dead_code, reason = "seed for the round snapshot, ticket 23")]
+    /// The latest published configuration: seeded from the init-block read and
+    /// maintained from `EthEvent::ProtocolFeeConfigUpdated`. Read exactly once
+    /// per round, by `matching_engine_output`; a round already in flight keeps
+    /// what it captured, so this is never the value a bundle is built from.
     protocol_fee_config: DonationSplitSnapshot
 }
 
@@ -291,8 +306,7 @@ where
     fn matching_engine_output(
         &self,
         pre_proposal_aggregation: HashSet<PreProposalAggregation>
-    ) -> BoxFuture<'static, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>
-    {
+    ) -> BoxFuture<'static, Result<MatchingOutput, MatchingEngineError>> {
         // fetch
         let mut limit = Vec::new();
         let mut searcher = Vec::new();
@@ -347,12 +361,18 @@ where
             .collect();
 
         let pool_snapshots = self.fetch_pool_snapshot();
+        // The round's one read of the configuration, taken here because this call
+        // site sits above both consumers of it. No provider call: block sync has
+        // already applied this block's logs by the time a round runs.
+        let splits = self.protocol_fee_config;
         let parent_hash = self.block_height.hash;
         let matcher = self.matching_engine.clone();
         async move {
-            matcher
+            let (solutions, gas) = matcher
                 .solve_pools(limit, searcher, pool_snapshots, parent_hash)
-                .await
+                .await?;
+
+            Ok((solutions, gas, splits))
         }
         .boxed()
     }
@@ -612,6 +632,10 @@ pub mod tests {
 
     async fn setup_state_machine()
     -> RoundStateMachine<ProviderDef, MockMatchingEngine, PrivateKeySigner> {
+        // Every metrics wrapper unwraps this, so a test that builds one panics
+        // unless it has been decided one way or the other.
+        let _ = angstrom_metrics::METRICS_ENABLED.set(false);
+
         let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
         let signer = AngstromSigner::random();
         let leader_id = signer.address();
@@ -789,6 +813,34 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    /// A round reads the configuration once and keeps it. The setter that lands
+    /// while it is in flight belongs to the *next* round, not this one.
+    #[tokio::test]
+    async fn a_config_update_mid_round_does_not_change_the_round_being_built() {
+        init_tracing();
+        let mut state_machine = setup_state_machine().await;
+        let at_round_start = state_machine.shared_state.protocol_fee_config;
+
+        // The round's one capture, taken where the matching engine is driven.
+        let output = state_machine
+            .shared_state
+            .matching_engine_output(HashSet::default());
+
+        let updated = DonationSplitSnapshot {
+            block_number: 2,
+            block_hash:   B256::repeat_byte(2),
+            splits:       DonationSplits::new(500_000, 250_000).unwrap()
+        };
+        assert_ne!(updated, at_round_start, "the update has to actually be a change");
+        state_machine.update_protocol_fee_config(updated);
+
+        let (.., captured) = output.await.unwrap();
+        assert_eq!(captured, at_round_start, "the round kept what it captured");
+
+        // ...and the next round starts from the update.
+        assert_eq!(state_machine.shared_state.protocol_fee_config, updated);
     }
 
     #[tokio::test]

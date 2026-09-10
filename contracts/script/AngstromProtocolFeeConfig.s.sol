@@ -81,7 +81,13 @@ contract AngstromProtocolFeeConfigScript is BaseScript {
         address owner = ControllerV1(resolvedController).owner();
         address fastOwner = ControllerV1(resolvedController).fastOwner();
         require(owner != address(0), "Controller owner is the zero address");
-        require(fastOwner != address(0), "Controller fast owner is the zero address");
+        // Only enforced on mainnet, where the split between a timelock `owner` and a multisig
+        // `fastOwner` is the point and a zero `fastOwner` means it is broken. Testnet controllers
+        // are routinely deployed without one, so requiring it everywhere fails a deployment for a
+        // condition that is not a fault there.
+        if (block.chainid == MAINNET_CHAIN_ID) {
+            require(fastOwner != address(0), "Controller fast owner is the zero address");
+        }
         console.log("    owner: %s", owner);
         console.log("    fastOwner: %s", fastOwner);
 

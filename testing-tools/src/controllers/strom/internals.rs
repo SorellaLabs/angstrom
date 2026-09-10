@@ -6,7 +6,9 @@ use std::{
     time::Duration
 };
 
-use alloy::{primitives::Address, providers::Provider, signers::local::PrivateKeySigner};
+use alloy::{
+    eips::BlockNumHash, primitives::Address, providers::Provider, signers::local::PrivateKeySigner
+};
 use alloy_rpc_types::BlockId;
 use angstrom::components::StromHandles;
 use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
@@ -198,6 +200,16 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         block_sync.clear();
         block_sync.set_block(block_number);
 
+        // Consensus names the parent it builds on by hash, so resolve the one that
+        // goes with `block_number` rather than handing it a placeholder.
+        let block_hash = state_provider
+            .rpc_provider()
+            .get_block_by_number(block_number.into())
+            .await?
+            .ok_or_else(|| eyre::eyre!("block {block_number} not found"))?
+            .header
+            .hash;
+
         tracing::debug!(node_id = node_config.node_id, block_number, "creating strom internals");
 
         let network_stream = Box::pin(eth_handle.subscribe_network())
@@ -347,7 +359,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             initial_validators,
             order_storage.clone(),
             block_number,
-            block_number,
+            BlockNumHash::new(block_number, block_hash),
             pool_registry,
             uniswap_pools.clone(),
             mev_boost_provider,

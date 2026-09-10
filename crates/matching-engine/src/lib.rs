@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use alloy_primitives::Address;
+use alloy_primitives::{Address, B256};
 use angstrom_types::{
     contract_payloads::angstrom::BundleGasDetails,
     orders::PoolSolution,
@@ -24,11 +24,15 @@ pub use manager::MatchingManager;
 use crate::manager::MatchingEngineError;
 
 pub trait MatchingEngineHandle: Send + Sync + Clone + Unpin + 'static {
+    /// `parent_hash` is the H the round is building on. It reaches bundle
+    /// simulation unchanged, so the gas the solutions are priced with comes
+    /// from the same state the bundle was built against.
     fn solve_pools(
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        parent_hash: B256
     ) -> BoxFuture<'_, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>;
 }
 

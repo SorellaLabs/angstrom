@@ -9,7 +9,7 @@ use std::{
 
 use alloy::{
     self,
-    eips::{BlockId, BlockNumberOrTag},
+    eips::{BlockId, BlockNumHash, BlockNumberOrTag},
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
@@ -393,7 +393,7 @@ where
     let block_height = node.provider.best_block_number().unwrap();
 
     init_validation(
-        RethDbWrapper::new(node.provider.clone(), block_height),
+        RethDbWrapper::new(node.provider.clone(), BlockNumHash::new(block_id, block_hash)),
         block_height,
         angstrom_address,
         node_address,
@@ -470,7 +470,9 @@ where
         validators,
         order_storage.clone(),
         deploy_block,
-        block_height,
+        // The init tip, number and hash together: the pair `protocol_fee_config` was
+        // read at, and a consistent parent for the first round.
+        BlockNumHash::new(block_id, block_hash),
         uni_ang_registry,
         uniswap_pools.clone(),
         submission_handler,

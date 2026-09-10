@@ -48,7 +48,7 @@ impl FinalizationState {
         let searcher_count = orders.searcher.len();
 
         BlockMetricsWrapper::new().record_state_transition(
-            handles.block_height,
+            handles.block_height.number,
             "Finalization",
             slot_offset_ms,
             limit_count,
@@ -98,7 +98,7 @@ impl FinalizationState {
             completed:           false,
             verification_start:  now,
             consensus_start:     now,
-            block_height:        handles.block_height
+            block_height:        handles.block_height.number
         }
     }
 }

@@ -7,6 +7,7 @@ use std::{
 };
 
 use alloy::{
+    eips::BlockNumHash,
     primitives::{BlockNumber, Bytes},
     providers::Provider
 };
@@ -46,7 +47,9 @@ pub struct ConsensusManager<P, Matching, BlockSync, S: AngstromMetaSigner>
 where
     P: Provider + Unpin + 'static
 {
-    current_height:         BlockNumber,
+    /// The canonical tip, by number and hash. The hash is the parent every
+    /// round of this height builds and simulates against.
+    current_height:         BlockNumHash,
     leader_selection:       WeightedRoundRobin,
     consensus_round_state:  RoundStateMachine<P, Matching, S>,
     canonical_block_stream: UnboundedReceiverStream<EthEvent>,
@@ -75,7 +78,7 @@ where
         validators: Vec<AngstromValidator>,
         order_storage: Arc<OrderStorage>,
         deploy_block: BlockNumber,
-        current_height: BlockNumber,
+        current_height: BlockNumHash,
         pool_registry: UniswapAngstromRegistry,
         uniswap_pools: SyncedUniswapPools,
         provider: SubmissionHandler<P>,
@@ -90,11 +93,13 @@ where
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         tracing::info!(?validators, "setting up with validators");
         let mut leader_selection = WeightedRoundRobin::new(validators.clone(), deploy_block);
-        let leader = leader_selection.choose_proposer(current_height).unwrap();
+        let leader = leader_selection
+            .choose_proposer(current_height.number)
+            .unwrap();
         block_sync.register(MODULE_NAME);
 
         let metrics = ConsensusMetricsWrapper::new();
-        metrics.set_block_height(current_height);
+        metrics.set_block_height(current_height.number);
 
         Self {
             strom_consensus_event,
@@ -135,11 +140,16 @@ where
             EthEvent::NewBlock(block) => {
                 self.current_height = block;
 
-                self.block_sync
-                    .sign_off_on_block(MODULE_NAME, self.current_height, Some(waker));
+                self.block_sync.sign_off_on_block(
+                    MODULE_NAME,
+                    self.current_height.number,
+                    Some(waker)
+                );
             }
-            EthEvent::ReorgedOrders(_, reorg) => {
-                self.current_height = *reorg.end();
+            EthEvent::ReorgedOrders(_, reorg, tip) => {
+                // The tip rather than `reorg.end()`, so the height and the hash always
+                // describe the same block.
+                self.current_height = tip;
                 self.block_sync
                     .sign_off_reorg(MODULE_NAME, reorg, Some(waker));
             }
@@ -155,10 +165,10 @@ where
             _ => return
         }
 
-        ConsensusMetricsWrapper::new().set_block_height(self.current_height);
+        ConsensusMetricsWrapper::new().set_block_height(self.current_height.number);
         let round_leader = self
             .leader_selection
-            .choose_proposer(self.current_height)
+            .choose_proposer(self.current_height.number)
             .unwrap();
         tracing::info!(?round_leader, "selected new round leader");
 
@@ -175,14 +185,14 @@ where
     fn handle_request(&mut self, request: ConsensusRequest) {
         match request {
             ConsensusRequest::CurrentLeader(tx) => {
-                let block = self.current_height;
+                let block = self.current_height.number;
                 let _ = tx.send(ConsensusDataWithBlock {
                     data: self.consensus_round_state.current_leader(),
                     block
                 });
             }
             ConsensusRequest::CurrentConsensusState(tx) => {
-                let block = self.current_height;
+                let block = self.current_height.number;
                 let data = self.leader_selection.get_validator_state();
                 let _ = tx.send(ConsensusDataWithBlock { data, block });
             }
@@ -195,14 +205,14 @@ where
                     .add_subscription(ConsensusSubscriptionRequestKind::RoundEventOrders, tx);
             }
             ConsensusRequest::Timing(tx) => {
-                let block = self.current_height;
+                let block = self.current_height.number;
                 let _ = tx.send(ConsensusDataWithBlock {
                     data: self.consensus_round_state.timing(),
                     block
                 });
             }
             ConsensusRequest::IsRoundClosed(tx) => {
-                let block = self.current_height;
+                let block = self.current_height.number;
                 let _ = tx.send(ConsensusDataWithBlock {
                     data: self.consensus_round_state.is_auction_closed(),
                     block
@@ -212,11 +222,11 @@ where
     }
 
     fn on_network_event(&mut self, event: StromConsensusEvent) {
-        if self.current_height != event.block_height() {
+        if self.current_height.number != event.block_height() {
             tracing::warn!(
                 event_block_height=%event.block_height(),
                 msg_sender=%event.sender(),
-                current_height=%self.current_height,
+                current_height=%self.current_height.number,
                 "ignoring event for wrong block",
             );
             return;
@@ -225,8 +235,10 @@ where
         if let StromConsensusEvent::BundleUnlockAttestation(_, block, bytes) = &event {
             // verify is correct
             if AttestAngstromBlockEmpty::is_valid_attestation(block + 1, bytes) {
-                let data =
-                    ConsensusDataWithBlock { data: bytes.clone(), block: self.current_height };
+                let data = ConsensusDataWithBlock {
+                    data:  bytes.clone(),
+                    block: self.current_height.number
+                };
                 self.subscribers.subscription_send_attestations(data);
             }
         }
@@ -241,7 +253,7 @@ where
         match event.clone() {
             ConsensusMessage::StateChange(state) => {
                 // If we have telemetry, record the state change.
-                telemetry_event!(self.current_height, state);
+                telemetry_event!(self.current_height.number, state);
 
                 // If we have a state update listener, report the new state.
                 if let Some(su) = self.state_updates.as_ref() {
@@ -258,12 +270,13 @@ where
                 .network
                 .broadcast_message(StromMessage::PreProposeAgg(p)),
             ConsensusMessage::PropagateEmptyBlockAttestation(p) => {
-                let data = ConsensusDataWithBlock { data: p.clone(), block: self.current_height };
+                let data =
+                    ConsensusDataWithBlock { data: p.clone(), block: self.current_height.number };
                 self.subscribers.subscription_send_attestations(data);
 
                 self.network
                     .broadcast_message(StromMessage::BundleUnlockAttestation(
-                        self.current_height,
+                        self.current_height.number,
                         p
                     ));
             }

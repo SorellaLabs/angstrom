@@ -1,6 +1,9 @@
 use std::{fmt::Debug, sync::Arc, task::Poll};
 
-use alloy::primitives::{Address, B256, U256};
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256, U256}
+};
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     reth_db_wrapper::SetBlock
@@ -33,8 +36,11 @@ pub enum ValidationRequest {
     /// gas cost has be delegated to each user order. ensures we won't have a
     /// failure.
     Bundle {
-        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleGasDetails>>,
-        bundle: AngstromBundle
+        sender:      tokio::sync::oneshot::Sender<eyre::Result<BundleGasDetails>>,
+        bundle:      AngstromBundle,
+        /// The parent H to simulate against. Named by the caller, and carried
+        /// back on the result.
+        parent_hash: B256
     },
     NewBlock {
         sender:       tokio::sync::oneshot::Sender<OrderValidationResults>,
@@ -118,18 +124,14 @@ where
                 &mut self.utils.thread_pool,
                 self.utils.metrics.clone()
             ),
-            ValidationRequest::Bundle { sender, bundle } => {
-                tracing::debug!("simulating bundle");
-                let bn = self
-                    .order_validator
-                    .block_number
-                    .load(std::sync::atomic::Ordering::SeqCst);
+            ValidationRequest::Bundle { sender, bundle, parent_hash } => {
+                tracing::debug!(?parent_hash, "simulating bundle");
                 self.bundle_validator.simulate_bundle(
                     sender,
                     bundle,
+                    parent_hash,
                     &mut self.utils.thread_pool,
-                    self.utils.metrics.clone(),
-                    bn
+                    self.utils.metrics.clone()
                 );
             }
             ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
@@ -139,7 +141,11 @@ where
                         .on_new_block(block_number, orders, addresses);
                 });
 
-                self.db.set_block(block_number);
+                // The selector is a `BlockNumHash`, but this request only carries a
+                // number, so the canonical hash for it is resolved here.
+                let block_hash = self.db.block_hash(block_number).unwrap().unwrap();
+                self.db
+                    .set_block(BlockNumHash::new(block_number, block_hash));
 
                 let gas_updates = self.utils.token_pricing_ref().generate_gas_updates();
                 sender

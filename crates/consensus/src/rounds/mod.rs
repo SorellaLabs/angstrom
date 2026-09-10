@@ -7,6 +7,7 @@ use std::{
 };
 
 use alloy::{
+    eips::BlockNumHash,
     primitives::{Address, B256, BlockNumber, Bytes, FixedBytes},
     providers::Provider
 };
@@ -123,7 +124,7 @@ where
         self.current_state.name().is_closed()
     }
 
-    pub fn reset_round(&mut self, new_block: u64, new_leader: Address) {
+    pub fn reset_round(&mut self, new_block: BlockNumHash, new_leader: Address) {
         let next_slot_duration = self.slot_clock.duration_to_next_slot().unwrap();
         let elapsed_time = self.slot_clock.slot_duration() - next_slot_duration;
 
@@ -182,7 +183,10 @@ where
 }
 
 pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching, S: AngstromMetaSigner> {
-    block_height:        BlockNumber,
+    /// The parent H this round builds on, by number *and* hash. A number alone
+    /// cannot name one branch of a same-height reorg, and bundle simulation has
+    /// to be pinned to exactly one.
+    block_height:        BlockNumHash,
     matching_engine:     Matching,
     signer:              AngstromSigner<S>,
     round_leader:        Address,
@@ -211,7 +215,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        block_height: BlockNumber,
+        block_height: BlockNumHash,
         order_storage: Arc<OrderStorage>,
         signer: AngstromSigner<S>,
         round_leader: Address,
@@ -305,7 +309,7 @@ where
 
         // Record post-quorum order counts
         BlockMetricsWrapper::new().record_matching_input_post_quorum(
-            self.block_height,
+            self.block_height.number,
             valid_limit.len(),
             valid_searcher.len()
         );
@@ -343,8 +347,14 @@ where
             .collect();
 
         let pool_snapshots = self.fetch_pool_snapshot();
+        let parent_hash = self.block_height.hash;
         let matcher = self.matching_engine.clone();
-        async move { matcher.solve_pools(limit, searcher, pool_snapshots).await }.boxed()
+        async move {
+            matcher
+                .solve_pools(limit, searcher, pool_snapshots, parent_hash)
+                .await
+        }
+        .boxed()
     }
 
     fn filter_quorum_orders<O: Hash + Eq + Clone>(&self, input: Vec<O>) -> Vec<O> {
@@ -397,7 +407,7 @@ where
         }
 
         proposal
-            .is_valid(&self.block_height, self.two_thirds_of_validation_set())
+            .is_valid(&self.block_height.number, self.two_thirds_of_validation_set())
             .then(|| {
                 self.messages
                     .push_back(ConsensusMessage::PropagateProposal(proposal.clone()));
@@ -437,7 +447,7 @@ where
         Pro: Into<ConsensusMessage> + Eq + Hash + Clone
     {
         // ensure pre_proposal is valid
-        if !valid(&proposal, &self.block_height) {
+        if !valid(&proposal, &self.block_height.number) {
             tracing::info!("got a invalid consensus message");
             return;
         }
@@ -535,7 +545,8 @@ pub mod tests {
     };
 
     use alloy::{
-        primitives::Address,
+        eips::BlockNumHash,
+        primitives::{Address, B256},
         providers::{ProviderBuilder, RootProvider, fillers::*, network::Ethereum, *},
         signers::local::PrivateKeySigner
     };
@@ -625,7 +636,7 @@ pub mod tests {
 
         let slot_clock = SystemTimeSlotClock::new_with_chain_id(1).unwrap();
         let shared_state = SharedRoundState::new(
-            1, // block height
+            BlockNumHash::new(1, B256::repeat_byte(1)), // parent
             order_storage,
             signer,
             leader_id,
@@ -784,12 +795,14 @@ pub mod tests {
     async fn test_reset_round() {
         init_tracing();
         let mut state_machine = setup_state_machine().await;
-        let new_block = 2;
+        let new_block = BlockNumHash::new(2, B256::repeat_byte(2));
         let new_leader = Address::random();
 
         // Reset round with new block and leader
         state_machine.reset_round(new_block, new_leader);
 
+        // Number and hash move together, so a round can never carry the previous
+        // parent's identity into a new height.
         assert_eq!(state_machine.shared_state.block_height, new_block);
         assert_eq!(state_machine.shared_state.round_leader, new_leader);
 

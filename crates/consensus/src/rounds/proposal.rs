@@ -61,7 +61,7 @@ impl ProposalState {
 
         let metrics = BlockMetricsWrapper::new();
         metrics.record_state_transition(
-            handles.block_height,
+            handles.block_height.number,
             "Proposal",
             slot_offset_ms,
             limit_count,
@@ -78,7 +78,7 @@ impl ProposalState {
             }
         }
         metrics.record_matching_input_pre_quorum(
-            handles.block_height,
+            handles.block_height.number,
             matching_limit,
             matching_searcher
         );
@@ -96,7 +96,7 @@ impl ProposalState {
             submission_future: None,
             proposal: None,
             trigger_time,
-            block_height: handles.block_height
+            block_height: handles.block_height.number
         }
     }
 
@@ -115,11 +115,11 @@ impl ProposalState {
 
         // Record proposal build time metric
         ConsensusMetricsWrapper::new()
-            .set_proposal_build_time(handles.block_height, build_duration.as_millis());
+            .set_proposal_build_time(handles.block_height.number, build_duration.as_millis());
 
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();
-        let target_block = handles.block_height + 1;
+        let target_block = handles.block_height.number + 1;
 
         tracing::debug!("starting to build proposal");
 
@@ -151,7 +151,7 @@ impl ProposalState {
                 }
 
                 let proposal = Proposal::generate_proposal(
-                    handles.block_height,
+                    handles.block_height.number,
                     &handles.signer,
                     self.pre_proposal_aggs.clone(),
                     pool_solution
@@ -197,7 +197,7 @@ impl ProposalState {
 
         // Capture slot clock for metrics timing
         let slot_clock = handles.slot_clock.clone();
-        let block_height = handles.block_height;
+        let block_height = handles.block_height.number;
 
         let submission_future = Box::pin(async move {
             // Record submission start

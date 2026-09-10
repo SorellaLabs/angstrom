@@ -108,7 +108,7 @@ where
             let limit_count = orders.limit.len();
             let searcher_count = orders.searcher.len();
             BlockMetricsWrapper::new().record_state_transition(
-                handles.block_height,
+                handles.block_height.number,
                 "BidAggregation",
                 slot_offset_ms,
                 limit_count,
@@ -117,7 +117,7 @@ where
 
             // create the transition
             let pre_proposal = PreProposalState::new(
-                handles.block_height,
+                handles.block_height.number,
                 std::mem::take(&mut self.received_pre_proposals),
                 std::mem::take(&mut self.pre_proposals_aggregation),
                 handles,

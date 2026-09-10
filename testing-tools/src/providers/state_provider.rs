@@ -28,7 +28,9 @@ pub struct AnvilStateProvider<P> {
 }
 
 impl<P: WithWalletProvider> SetBlock for AnvilStateProvider<P> {
-    fn set_block(&self, _: u64) {}
+    /// Anvil only advances when a test mines, so its tip already *is* the block
+    /// under test and there is nothing to move.
+    fn set_block(&self, _: alloy::eips::BlockNumHash) {}
 }
 
 impl<P: WithWalletProvider> AnvilStateProvider<P> {
@@ -181,8 +183,17 @@ impl<P: WithWalletProvider> BlockNumReader for AnvilStateProvider<P> {
         panic!("never used");
     }
 
-    fn block_number(&self, _: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
-        panic!("never used");
+    /// Bundle validation resolves the parent it was handed through here, so an
+    /// unknown hash has to come back as `None` rather than a panic.
+    fn block_number(&self, hash: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
+        Ok(async_to_sync(
+            self.provider
+                .rpc_provider()
+                .get_block_by_hash(hash)
+                .into_future()
+        )
+        .unwrap()
+        .map(|block| block.header.number))
     }
 
     fn convert_number(

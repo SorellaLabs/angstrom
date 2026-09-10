@@ -4,7 +4,7 @@ use std::{
 };
 
 use alloy::hex;
-use alloy_primitives::Address;
+use alloy_primitives::{Address, B256};
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     matching::match_estimate_response::BundleEstimate,
@@ -47,6 +47,7 @@ pub enum MatcherCommand {
         Vec<BookOrder>,
         Vec<OrderWithStorageData<TopOfBlockOrder>>,
         HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        B256,
         oneshot::Sender<Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>
     ),
     EstimateGasPerPool {
@@ -78,15 +79,19 @@ impl MatchingEngineHandle for MatcherHandle {
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        parent_hash: B256
     ) -> futures_util::future::BoxFuture<
         '_,
         Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>
     > {
         Box::pin(async move {
             let (tx, rx) = oneshot::channel();
-            self.send_request(rx, MatcherCommand::BuildProposal(limit, searcher, pools, tx))
-                .await
+            self.send_request(
+                rx,
+                MatcherCommand::BuildProposal(limit, searcher, pools, parent_hash, tx)
+            )
+            .await
         })
     }
 }
@@ -125,7 +130,8 @@ impl<V: BundleValidatorHandle> MatchingManager<V> {
         &self,
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        pool_snapshots: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pool_snapshots: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        parent_hash: B256
     ) -> Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
@@ -177,7 +183,7 @@ impl<V: BundleValidatorHandle> MatchingManager<V> {
 
         let gas_response = self
             .validation_handle
-            .fetch_gas_for_bundle(bundle)
+            .fetch_gas_for_bundle(bundle, parent_hash)
             .await
             .map_err(|e| {
                 let proposal_snapshot =
@@ -206,8 +212,12 @@ pub async fn manager_thread<V: BundleValidatorHandle>(
 
     while let Some(c) = input.recv().await {
         match c {
-            MatcherCommand::BuildProposal(limit, searcher, snapshot, r) => {
-                let r = r.send(manager.build_proposal(limit, searcher, snapshot).await);
+            MatcherCommand::BuildProposal(limit, searcher, snapshot, parent_hash, r) => {
+                let r = r.send(
+                    manager
+                        .build_proposal(limit, searcher, snapshot, parent_hash)
+                        .await
+                );
                 if r.is_err() {
                     tracing::error!("failed to send built proposal back to caller");
                 }

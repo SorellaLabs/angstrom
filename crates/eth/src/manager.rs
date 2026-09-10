@@ -7,6 +7,7 @@ use std::{
 
 use alloy::{
     consensus::Transaction,
+    eips::BlockNumHash,
     primitives::{Address, B256, Log, aliases::I24},
     sol_types::{SolCall, SolEvent}
 };
@@ -178,7 +179,8 @@ where
         let new_filled: HashSet<_> = self.fetch_filled_order(&new).collect();
 
         let difference: Vec<_> = old_filled.difference(&new_filled).copied().collect();
-        let reorged_orders = EthEvent::ReorgedOrders(difference, reorg);
+        let reorged_orders =
+            EthEvent::ReorgedOrders(difference, reorg, BlockNumHash::new(tip, new.tip_hash()));
 
         self.send_events(reorged_orders);
     }
@@ -202,7 +204,7 @@ where
             address_changeset: eoas
         };
 
-        self.send_events(EthEvent::NewBlock(tip));
+        self.send_events(EthEvent::NewBlock(BlockNumHash::new(tip, new.tip_hash())));
         self.send_events(transitions);
     }
 
@@ -437,13 +439,19 @@ where
 #[derive(Debug, Clone)]
 pub enum EthEvent {
     //TODO: add shit here
-    NewBlock(u64),
+    /// The new canonical tip, by number *and* hash. The hash is what lets a
+    /// consumer name the exact parent it is building on; a number cannot,
+    /// since same-height reorgs exist.
+    NewBlock(BlockNumHash),
     NewBlockTransitions {
         block_number:      u64,
         filled_orders:     Vec<B256>,
         address_changeset: Vec<Address>
     },
-    ReorgedOrders(Vec<B256>, RangeInclusive<u64>),
+    /// The orders the reorg dropped, the range it covers, and the tip the new
+    /// chain now ends on — carried for the same reason as
+    /// [`EthEvent::NewBlock`].
+    ReorgedOrders(Vec<B256>, RangeInclusive<u64>, BlockNumHash),
     FinalizedBlock(u64),
     NewPool {
         pool: PoolKey
@@ -745,7 +753,7 @@ pub mod test {
 
         for _ in 0..1 {
             match rx.try_recv().expect("Should receive 1 event") {
-                EthEvent::ReorgedOrders(_, range) => {
+                EthEvent::ReorgedOrders(_, range, _) => {
                     assert_eq!(*range.start(), 95);
                     assert_eq!(*range.end(), 95);
                     received_reorg = true;

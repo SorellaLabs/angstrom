@@ -1,6 +1,7 @@
 use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
 
 use alloy::{
+    eips::BlockNumHash,
     network::{Ethereum, EthereumWallet},
     node_bindings::{Anvil, AnvilInstance},
     primitives::Address,
@@ -456,7 +457,7 @@ impl ReplayRunner {
             validators,
             order_storage.clone(),
             block_number,
-            block_number,
+            BlockNumHash::new(block_number, block_hash),
             pool_registry,
             uniswap_pools.clone(),
             mev_boost_provider,

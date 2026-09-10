@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use alloy::primitives::Address;
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256}
+};
 use angstrom_types::{
     contract_payloads::angstrom::BundleGasDetails,
     orders::PoolSolution,
@@ -19,8 +22,13 @@ impl MatchingEngineHandle for MockMatchingEngine {
         &self,
         _: Vec<BookOrder>,
         _: Vec<OrderWithStorageData<TopOfBlockOrder>>,
-        _: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        _: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        parent_hash: B256
     ) -> BoxFuture<'_, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>> {
-        async move { Ok((vec![], BundleGasDetails::default())) }.boxed()
+        // Echoes the hash back rather than defaulting it, so a test cannot pass on a
+        // parent the caller never asked for. The height is not something a mock can
+        // resolve, so it stays zero.
+        async move { Ok((vec![], BundleGasDetails::new(0, BlockNumHash::new(0, parent_hash)))) }
+            .boxed()
     }
 }

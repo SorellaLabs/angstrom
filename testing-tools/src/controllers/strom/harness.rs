@@ -4,7 +4,13 @@ use std::{
     sync::{Arc, atomic::AtomicUsize}
 };
 
-use alloy::{self, eips::BlockId, network::Network, primitives::Address, providers::Provider};
+use alloy::{
+    self,
+    eips::{BlockId, BlockNumHash},
+    network::Network,
+    primitives::Address,
+    providers::Provider
+};
 use alloy_primitives::U256;
 use angstrom::components::StromHandles;
 use angstrom_eth::manager::EthEvent;
@@ -306,6 +312,16 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     )
     .await?;
 
+    // Consensus names the parent it builds on by hash, so resolve the one that goes
+    // with `block_id` rather than handing it a placeholder.
+    let block_hash = provider
+        .rpc_provider()
+        .get_block_by_number(block_id.into())
+        .await?
+        .ok_or_else(|| eyre::eyre!("block {block_id} not found"))?
+        .header
+        .hash;
+
     let (state_tx, state_rx) = tokio::sync::mpsc::unbounded_channel();
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
@@ -317,7 +333,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         validators,
         order_storage.clone(),
         deploy_block,
-        block_id,
+        BlockNumHash::new(block_id, block_hash),
         uni_ang_registry,
         uniswap_pools.clone(),
         submission_handler,

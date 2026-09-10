@@ -292,7 +292,7 @@ where
                 );
                 waker.clone().wake_by_ref();
             }
-            EthEvent::ReorgedOrders(orders, range) => {
+            EthEvent::ReorgedOrders(orders, range, _) => {
                 self.order_indexer.reorg(orders);
                 self.global_sync
                     .sign_off_reorg(MODULE_NAME, range, Some(waker))

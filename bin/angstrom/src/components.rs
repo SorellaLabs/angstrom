@@ -319,7 +319,9 @@ where
         &querying_provider
     )
     .await
-    .expect("failed to load the protocol fee config at the init block");
+    .map_err(|e| {
+        eyre::eyre!("failed to load the protocol fee config at init block {block_id}: {e}")
+    })?;
 
     let global_block_sync = GlobalBlockSync::new(block_id);
 

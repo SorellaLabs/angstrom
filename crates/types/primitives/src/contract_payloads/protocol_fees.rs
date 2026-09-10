@@ -2,6 +2,7 @@ use alloy_eips::BlockId;
 use alloy_network::Network;
 use alloy_primitives::{Address, B256, U256};
 use alloy_provider::Provider;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     contract_bindings::angstrom_protocol_fee_config::AngstromProtocolFeeConfig::{
@@ -30,10 +31,32 @@ const DEPLOYED_INITIAL_PROTOCOL_FEE_CONFIG: DonationSplitSnapshot = DonationSpli
     splits:       DonationSplits { user_lp_share_e6: 750_000, tob_lp_share_e6: 1_000_000 }
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+// A derived `Deserialize` would be a second constructor that skips the `DENOM`
+// bounds check, so the wire shape is decoded first and routed through
+// [`DonationSplits::new`]. `Serialize` is unaffected and stays derived, which is
+// what keeps the round trip symmetric.
+#[serde(try_from = "RawDonationSplits")]
 pub struct DonationSplits {
     user_lp_share_e6: u32,
     tob_lp_share_e6:  u32
+}
+
+/// The wire shape of [`DonationSplits`], and the only reason it exists is to
+/// give `try_from` something unvalidated to decode into. Field names match the
+/// derived `Serialize` output so the pair round-trips.
+#[derive(Deserialize)]
+struct RawDonationSplits {
+    user_lp_share_e6: u32,
+    tob_lp_share_e6:  u32
+}
+
+impl TryFrom<RawDonationSplits> for DonationSplits {
+    type Error = eyre::Report;
+
+    fn try_from(raw: RawDonationSplits) -> Result<Self, Self::Error> {
+        Self::new(raw.user_lp_share_e6, raw.tob_lp_share_e6)
+    }
 }
 
 impl DonationSplits {
@@ -110,7 +133,9 @@ fn split(gross: u128, share_e6: u32) -> (u128, u128) {
     (lp, gross - lp) // LP rounds down, protocol takes the exact remainder
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+// A plain derive is safe here: the fields are already public, and `splits`
+// carries its own bounds check through the `try_from` above.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct DonationSplitSnapshot {
     pub block_number: u64,
     pub block_hash:   B256,
@@ -138,14 +163,26 @@ impl DonationSplitSnapshot {
         P: Provider<N>
     {
         // `AngstromAddressConfig::try_init` skips a zero deployed block, so unset and
-        // genesis are indistinguishable here. Treating unset as genesis sends the call
-        // down the read path, where the code check gives the actionable error.
+        // genesis are indistinguishable here. Treating unset as genesis is safe: the
+        // pre-deployment const does not depend on an address, and every later block
+        // falls through to the unset-address check below.
         let deployed_block = PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK
             .get()
             .copied()
             .unwrap_or_default();
         if block_number <= deployed_block {
             return Ok(DEPLOYED_INITIAL_PROTOCOL_FEE_CONFIG);
+        }
+
+        // Past deployment there is nothing to read without an address, and an unset one
+        // must never resolve to a rate. Checked before any provider call so the error
+        // names the unset constant rather than reporting an empty account at the zero
+        // address, and so a node that reaches this cannot start.
+        if config_address == Address::ZERO {
+            return Err(eyre::eyre!(
+                "`PROTOCOL_FEE_CONFIG_ADDRESS` is unset, cannot read the protocol fee config at \
+                 block {block_number} (past the deployed block {deployed_block})"
+            ));
         }
 
         let block_id = BlockId::Hash(block_hash.into());
@@ -223,15 +260,23 @@ mod tests {
         a
     }
 
-    async fn load_at(block_number: u64, asserter: Asserter) -> eyre::Result<DonationSplitSnapshot> {
+    async fn load_with_address(
+        config_address: Address,
+        block_number: u64,
+        asserter: Asserter
+    ) -> eyre::Result<DonationSplitSnapshot> {
         let provider = ProviderBuilder::new().connect_mocked_client(asserter);
         DonationSplitSnapshot::load_from_chain(
-            Address::repeat_byte(0xcf),
+            config_address,
             block_number,
             B256::repeat_byte(0xbb),
             &provider
         )
         .await
+    }
+
+    async fn load_at(block_number: u64, asserter: Asserter) -> eyre::Result<DonationSplitSnapshot> {
+        load_with_address(Address::repeat_byte(0xcf), block_number, asserter).await
     }
 
     async fn load(asserter: Asserter) -> eyre::Result<DonationSplitSnapshot> {
@@ -263,6 +308,30 @@ mod tests {
         // resolution is distinguishable from a chain read.
         assert_eq!(snapshot.block_number, 0);
         assert_eq!(snapshot.block_hash, B256::ZERO);
+    }
+
+    #[tokio::test]
+    async fn unset_address_past_deployment_is_an_error() {
+        angstrom_address();
+        // Nothing queued, so reaching the provider at all fails this test: the error
+        // has to come from the address check, not from reading an empty account.
+        let err = load_with_address(Address::ZERO, POST_DEPLOYMENT_BLOCK, Asserter::new())
+            .await
+            .unwrap_err();
+
+        assert!(err.to_string().contains("PROTOCOL_FEE_CONFIG_ADDRESS"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn unset_address_at_or_before_deployment_still_resolves() {
+        angstrom_address();
+        // The pre-deployment const does not depend on an address, so an unset one is
+        // not a failure here. This is what lets replay run before activation.
+        let snapshot = load_with_address(Address::ZERO, 0, Asserter::new())
+            .await
+            .unwrap();
+
+        assert_eq!(snapshot, DEPLOYED_INITIAL_PROTOCOL_FEE_CONFIG);
     }
 
     #[tokio::test]
@@ -331,6 +400,53 @@ mod tests {
         }
         // 75% of 7 rounds down to 5, protocol takes the exact remainder.
         assert_eq!(s.split_user(7), (5, 2));
+    }
+
+    #[test]
+    fn splits_round_trip_through_json() {
+        let splits = DonationSplits::new(750_000, 1_000_000).unwrap();
+        let json = serde_json::to_string(&splits).unwrap();
+
+        assert_eq!(serde_json::from_str::<DonationSplits>(&json).unwrap(), splits);
+    }
+
+    #[test]
+    fn a_snapshot_round_trips_through_json() {
+        let snapshot = DonationSplitSnapshot {
+            block_number: 4242,
+            block_hash:   B256::repeat_byte(0x7e),
+            splits:       DonationSplits::new(123_456, 654_321).unwrap()
+        };
+        let json = serde_json::to_string(&snapshot).unwrap();
+
+        assert_eq!(serde_json::from_str::<DonationSplitSnapshot>(&json).unwrap(), snapshot);
+    }
+
+    #[test]
+    fn deserializing_a_share_above_denom_fails() {
+        // A derived `Deserialize` would accept these and hand back a pair that
+        // `DonationSplits::new` would have rejected.
+        let over_user = r#"{"user_lp_share_e6":1000001,"tob_lp_share_e6":1000000}"#;
+        let over_tob = r#"{"user_lp_share_e6":750000,"tob_lp_share_e6":1000001}"#;
+
+        assert!(serde_json::from_str::<DonationSplits>(over_user).is_err());
+        assert!(serde_json::from_str::<DonationSplits>(over_tob).is_err());
+        // The bound is inclusive, so the maximum itself still decodes.
+        assert!(
+            serde_json::from_str::<DonationSplits>(
+                r#"{"user_lp_share_e6":1000000,"tob_lp_share_e6":1000000}"#
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_snapshot_inherits_the_share_bounds_check() {
+        // The snapshot takes a plain derive, so this proves the check reaches it
+        // through its `splits` field rather than being skipped.
+        let json = r#"{"block_number":1,"block_hash":"0x0000000000000000000000000000000000000000000000000000000000000000","splits":{"user_lp_share_e6":1000001,"tob_lp_share_e6":0}}"#;
+
+        assert!(serde_json::from_str::<DonationSplitSnapshot>(json).is_err());
     }
 
     #[test]

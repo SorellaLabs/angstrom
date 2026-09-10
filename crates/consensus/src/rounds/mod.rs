@@ -18,7 +18,7 @@ use angstrom_types::{
     },
     contract_payloads::{
         angstrom::{BundleGasDetails, UniswapAngstromRegistry},
-        protocol_fees::{DonationSplitSnapshot, DonationSplits}
+        protocol_fees::DonationSplitSnapshot
     },
     orders::PoolSolution,
     primitive::{AngstromMetaSigner, AngstromSigner},
@@ -545,7 +545,10 @@ pub mod tests {
             StromConsensusEvent,
             slot_clock::{SlotClock, SystemTimeSlotClock}
         },
-        contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        contract_payloads::{
+            angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+            protocol_fees::DonationSplits
+        },
         primitive::{AngstromSigner, UniswapPoolRegistry},
         submission::SubmissionHandler
     };
@@ -562,8 +565,8 @@ pub mod tests {
     use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
     use super::{
-        ConsensusMessage, DonationSplitSnapshot, DonationSplits, RoundStateMachine,
-        SharedRoundState, pre_proposal::PreProposalState
+        ConsensusMessage, DonationSplitSnapshot, RoundStateMachine, SharedRoundState,
+        pre_proposal::PreProposalState
     };
     use crate::{
         AngstromValidator, ConsensusTimingConfig,

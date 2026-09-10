@@ -139,15 +139,21 @@ where
 
     fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) {
         tracing::info!(?canonical_updates, "got new block update!!!!!");
-        telemetry_recorder::telemetry_event!(EthUpdaterSnapshot::from((
-            &*self,
-            canonical_updates.clone()
-        )));
 
         match canonical_updates.clone() {
             CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new),
             CanonStateNotification::Commit { new } => self.handle_commit(new)
         }
+
+        // Emitted after the handlers, so every field describes the state this
+        // notification produced rather than the state it replaced. That is what makes
+        // `protocol_fee_config` the pair in force at this tip, and what lets an
+        // operator derive change history by diffing consecutive snapshots.
+        telemetry_recorder::telemetry_event!(EthUpdaterSnapshot::from((
+            &*self,
+            canonical_updates.clone()
+        )));
+
         let _ = self.cannon_sender.send(canonical_updates);
     }
 
@@ -1288,6 +1294,69 @@ pub mod test {
             eth.protocol_fee_config.splits,
             DonationSplits::new(750_000, 1_000_000).unwrap()
         );
+    }
+
+    /// The snapshot the telemetry stream carries for `eth` as it stands.
+    ///
+    /// `on_canon_update` emits this *after* the handlers, so building it from
+    /// the cleanser's current state is exactly what that call produces. The
+    /// notification is only stored on the snapshot as `chain_update` and is
+    /// never read by the `From` impl, so an empty chain is enough.
+    fn snapshot_of(eth: &EthDataCleanser<GlobalBlockSync>) -> EthUpdaterSnapshot {
+        EthUpdaterSnapshot::from((
+            eth,
+            CanonStateNotification::Commit {
+                new: Arc::new(reth_execution_types::Chain::default())
+            }
+        ))
+    }
+
+    #[test]
+    fn the_snapshot_carries_the_splits_in_force_at_the_tip() {
+        let (mut eth, config_addr, _rx) = setup_config_eth_manager();
+        let before = snapshot_of(&eth);
+
+        let setter =
+            receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]);
+        eth.handle_commit(Arc::new(MockChain {
+            hash: BlockHash::random(),
+            number: 100,
+            receipts: vec![&setter],
+            ..Default::default()
+        }));
+        let after = snapshot_of(&eth);
+
+        // The notification's own setter is included rather than lagging by one,
+        // which is what emitting after the handlers buys.
+        assert_eq!(
+            after.protocol_fee_config.splits,
+            DonationSplits::new(800_000, 900_000).unwrap()
+        );
+        // A notification that changed the config shows up as a diff between
+        // consecutive snapshots — this is the change history, derived.
+        assert_ne!(before.protocol_fee_config, after.protocol_fee_config);
+
+        // ...and one that did not change it leaves them equal, so a diff is not
+        // reported where no governance action happened.
+        eth.handle_commit(Arc::new(MockChain {
+            hash: BlockHash::random(),
+            number: 101,
+            ..Default::default()
+        }));
+        assert_eq!(snapshot_of(&eth).protocol_fee_config, after.protocol_fee_config);
+    }
+
+    #[test]
+    fn the_snapshot_round_trips_with_the_config_on_it() {
+        // The consumer decodes this from json, so the added field has to survive
+        // the trip the same way the rest of the snapshot does.
+        let (eth, _config_addr, _rx) = setup_config_eth_manager();
+        let snapshot = snapshot_of(&eth);
+
+        let json = serde_json::to_value(&snapshot).unwrap();
+        let decoded: EthUpdaterSnapshot = serde_json::from_value(json).unwrap();
+
+        assert_eq!(decoded.protocol_fee_config, snapshot.protocol_fee_config);
     }
 
     #[test]

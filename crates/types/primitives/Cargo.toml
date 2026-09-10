@@ -44,6 +44,7 @@ serde_json.workspace = true
 alloy-transport.workspace = true
 angstrom-types.workspace = true
 rand.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 
 [package.metadata.cargo-machete]

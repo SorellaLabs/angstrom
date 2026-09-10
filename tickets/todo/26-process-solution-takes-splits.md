@@ -1,6 +1,6 @@
-# 27 — process_solution takes DonationSplits explicitly
+# 26 — process_solution takes DonationSplits explicitly
 
-**Blocks on:** 24
+**Blocks on:** 23
 
 ## Files
 - `crates/types/src/traits/bundles.rs` — trait decl (~:35) and impl (~:217), `from_proposal`, `for_gas_finalization`

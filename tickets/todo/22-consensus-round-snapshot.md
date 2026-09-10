@@ -1,4 +1,4 @@
-# 23 — One snapshot per round
+# 22 — One snapshot per round
 
 **Blocks on:** 16
 

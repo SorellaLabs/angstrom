@@ -24,4 +24,4 @@ Name both config constants consistently and give them safe pre-deployment defaul
 ## Notes
 This is the activation block **A**: the contract must exist in canonical state at **A-1**, so
 deployment block and activation are the same value. A node holding the zero address or block `0`
-has no config and must not build affected bundles — see ticket 17. Real values land in ticket 45.
+has no config and must not build affected bundles — see ticket 17. Real values land in ticket 44.

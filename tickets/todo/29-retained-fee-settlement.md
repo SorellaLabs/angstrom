@@ -1,6 +1,6 @@
-# 30 — Settle both retained portions through save
+# 29 — Settle both retained portions through save
 
-**Blocks on:** 29
+**Blocks on:** 28
 
 ## Files
 - `crates/types/src/traits/bundles.rs`

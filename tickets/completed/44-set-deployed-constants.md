@@ -1,6 +1,6 @@
-# 45 — Set the deployed config constants
+# 44 — Set the deployed config constants
 
-**Blocks on:** 12, 44
+**Blocks on:** 12, 43
 
 ## Files
 - `crates/types/constants/src/lib.rs`
@@ -10,7 +10,7 @@ Point nodes at the live contract.
 
 ## Do
 - Replace the `Address::ZERO` / `0` defaults with the deployed address and deployment block from
-  ticket 44, per network.
+  ticket 43, per network.
 
 ## Done when
 - Nodes read config from the deployed contract, and require it to exist in canonical state at

@@ -1,6 +1,6 @@
-# 24 — Carry the snapshot to both consumers
+# 23 — Carry the snapshot to both consumers
 
-**Blocks on:** 23
+**Blocks on:** 22
 
 ## Files
 - `crates/consensus/src/rounds/mod.rs:337` — `solve_pools` call

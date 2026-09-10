@@ -1,6 +1,6 @@
-# 43 — Replay either side of A
+# 42 — Replay either side of A
 
-**Blocks on:** 12, 28
+**Blocks on:** 12, 27
 
 ## Files
 - `bin/replay/src/lib.rs`

@@ -1,6 +1,6 @@
-# 35 — Empty-vector and unallocated-budget retention
+# 34 — Empty-vector and unallocated-budget retention
 
-**Blocks on:** 33
+**Blocks on:** 32
 
 ## Files
 - `crates/types/src/uni_structure/pool_swap.rs`

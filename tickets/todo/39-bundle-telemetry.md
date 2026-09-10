@@ -1,6 +1,6 @@
-# 40 — Record per-bundle fee telemetry
+# 39 — Record per-bundle fee telemetry
 
-**Blocks on:** 30
+**Blocks on:** 29
 
 ## Files
 - `crates/telemetry-recorder/src/lib.rs`

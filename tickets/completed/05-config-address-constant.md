@@ -18,4 +18,4 @@ Let each network name its deployed config contract.
 
 ## Notes
 Rates are never constants. Ticket 12 renames this to `PROTOCOL_FEE_CONFIG_ADDRESS` and
-adds the deployed-block constant; ticket 45 sets the real values.
+adds the deployed-block constant; ticket 44 sets the real values.

@@ -1,6 +1,6 @@
-# 39 — Coverage that must not be dropped
+# 38 — Coverage that must not be dropped
 
-**Blocks on:** 30, 35
+**Blocks on:** 29, 34
 
 ## Files
 - `crates/types/src/traits/bundles.rs`

@@ -1,6 +1,6 @@
-# 25 — Identify async work by parent hash and generation
+# 24 — Identify async work by parent hash and generation
 
-**Blocks on:** 23
+**Blocks on:** 22
 
 ## Files
 - `crates/consensus/src/rounds/mod.rs`

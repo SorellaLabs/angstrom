@@ -1,6 +1,6 @@
-# 26 — Round reset aborts the submission task
+# 25 — Round reset aborts the submission task
 
-**Blocks on:** 25
+**Blocks on:** 24
 
 ## Files
 - `crates/consensus/src/rounds/proposal.rs:314` — `tokio::spawn(submission_future)`

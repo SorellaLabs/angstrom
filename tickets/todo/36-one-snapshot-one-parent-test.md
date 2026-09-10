@@ -1,6 +1,6 @@
-# 37 — One snapshot, one parent
+# 36 — One snapshot, one parent
 
-**Blocks on:** 23, 25
+**Blocks on:** 22, 24
 
 ## Files
 - `crates/consensus/src/rounds/mod.rs`

@@ -220,8 +220,10 @@ pub fn try_init_with_chain_id(chain_id: ChainId) -> eyre::Result<()> {
             err |= GAS_TOKEN_ADDRESS
                 .set(address!("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"))
                 .is_err();
-            err |= PROTOCOL_FEE_CONFIG_ADDRESS.set(Address::ZERO).is_err();
-            err |= PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK.set(0).is_err();
+            err |= PROTOCOL_FEE_CONFIG_ADDRESS
+                .set(address!("0xa58f681e8Db5f9624e03fdfAE899128BD7e3918a"))
+                .is_err();
+            err |= PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK.set(25948466).is_err();
             err |= ANGSTROM_DOMAIN
                 .set(alloy_sol_types::eip712_domain!(
                     name: "Angstrom",

@@ -27,7 +27,10 @@ use angstrom_types::{
         angstrom::Angstrom::PoolKey,
         controller_v_1::ControllerV1::{self, PoolConfigured, PoolRemoved}
     },
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     pair_with_price::PairsWithPrice,
     primitive::{AngstromSigner, UniswapPoolRegistry, try_init_with_chain_id, *},
     submission::{ChainSubmitterHolder, SubmissionHandler}
@@ -261,15 +264,34 @@ impl ReplayRunner {
 
         let eth_snap = block_log.eth_snapshot.as_ref().unwrap();
 
+        // Blocks at or before the config contract's deployment resolve without a
+        // provider call, so replay either side of activation needs no special case
+        // here.
+        let block_hash = rpc
+            .get_block_by_number(block_number.into())
+            .await?
+            .ok_or_else(|| eyre::eyre!("replay block {block_number} not found"))?
+            .header
+            .hash;
+        let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+            *PROTOCOL_FEE_CONFIG_ADDRESS.get().unwrap(),
+            block_number,
+            block_hash,
+            &rpc
+        )
+        .await?;
+
         let eth_handle = EthDataCleanser::spawn(
             angstrom_address,
             controller,
+            *PROTOCOL_FEE_CONFIG_ADDRESS.get().unwrap(),
             sub,
             executor.clone(),
             strom_handles.eth_tx,
             strom_handles.eth_rx,
             eth_snap.angstrom_tokens.clone(),
             eth_snap.pool_store.clone(),
+            protocol_fee_config,
             global_block_sync.clone(),
             eth_snap.node_set.clone(),
             vec![]
@@ -443,7 +465,8 @@ impl ReplayRunner {
             strom_handles.consensus_rx_rpc,
             None,
             ConsensusTimingConfig::default(),
-            SystemTimeSlotClock::new_default().unwrap()
+            SystemTimeSlotClock::new_default().unwrap(),
+            protocol_fee_config
         );
         executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
             consensus.run_till_shutdown(grace)

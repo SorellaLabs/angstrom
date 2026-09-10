@@ -3,7 +3,7 @@
 **Blocks on:** 03
 
 ## Files
-- `crates/types/primitives/src/primitive/protocol_fees.rs`
+- `crates/types/primitives/src/contract_payloads/protocol_fees.rs`
 
 ## Goal
 Bind a rate pair to the exact block it was read from.

@@ -11,8 +11,9 @@ Never build on a guessed or defaulted rate.
 
 ## Do
 - A failed init load is fatal: the node does not start rather than starting without config.
-- The zero address or a zero deployed block (ticket 12 defaults) means no config: do not build
-  affected bundles.
+- With the config address unset, a read past `PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK` fails: do not
+  build affected bundles. Blocks at or before that height resolve to the baked-in const (13)
+  and are not a failure.
 - A round with no rates produces no proposal. No fallback to a default or a previous value.
 
 ## Done when

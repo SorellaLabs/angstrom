@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod angstrom;
 pub mod asset;
+pub mod protocol_fees;
 pub mod rewards;
 
 pub const CONFIG_STORE_SLOT: u32 = 3;

@@ -18,7 +18,7 @@ use angstrom_types::{
     consensus::{
         ConsensusRoundName, ConsensusRoundOrderHashes, StromConsensusEvent, SystemTimeSlotClock
     },
-    contract_payloads::angstrom::UniswapAngstromRegistry,
+    contract_payloads::{angstrom::UniswapAngstromRegistry, protocol_fees::DonationSplitSnapshot},
     primitive::{AngstromMetaSigner, AngstromSigner},
     sol_bindings::rpc_orders::AttestAngstromBlockEmpty,
     submission::SubmissionHandler
@@ -84,7 +84,8 @@ where
         rpc_rx: mpsc::UnboundedReceiver<ConsensusRequest>,
         state_updates: Option<mpsc::UnboundedSender<ConsensusRoundName>>,
         timing_config: ConsensusTimingConfig,
-        slot_clock: SystemTimeSlotClock
+        slot_clock: SystemTimeSlotClock,
+        protocol_fee_config: DonationSplitSnapshot
     ) -> Self {
         let ManagerNetworkDeps { network, canonical_block_stream, strom_consensus_event } = netdeps;
         tracing::info!(?validators, "setting up with validators");
@@ -112,7 +113,8 @@ where
                     provider,
                     matching_engine,
                     timing_config,
-                    slot_clock.clone()
+                    slot_clock.clone(),
+                    protocol_fee_config
                 ),
                 slot_clock
             ),

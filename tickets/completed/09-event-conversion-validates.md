@@ -3,7 +3,7 @@
 **Blocks on:** 03, 02
 
 ## Files
-- `crates/types/primitives/src/primitive/protocol_fees.rs` — `From<LpDonationSplitsSet>`
+- `crates/types/primitives/src/contract_payloads/protocol_fees.rs` — `From<LpDonationSplitsSet>`
 - `crates/eth/src/manager.rs` — the call site
 
 ## Goal
@@ -11,7 +11,7 @@ Keep `new()` the only construction path, so bounds cannot be skipped.
 
 ## Do
 - `impl From<LpDonationSplitsSet> for DonationSplits` in
-  `crates/types/primitives/src/primitive/protocol_fees.rs` currently builds the struct directly and
+  `crates/types/primitives/src/contract_payloads/protocol_fees.rs` currently builds the struct directly and
   skips validation.
 - Keep it `From`, not `TryFrom`. Delegate to `new()` and unwrap the result with
   `.expect("this is not possible - verification is done onchain")`.

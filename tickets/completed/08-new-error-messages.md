@@ -3,7 +3,7 @@
 **Blocks on:** 03
 
 ## Files
-- `crates/types/primitives/src/primitive/protocol_fees.rs` — `DonationSplits::new`
+- `crates/types/primitives/src/contract_payloads/protocol_fees.rs` — `DonationSplits::new`
 
 ## Goal
 Say what the guard actually enforces.

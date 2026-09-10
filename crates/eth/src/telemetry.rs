@@ -5,7 +5,8 @@ use std::{
 
 use alloy::primitives::Address;
 use angstrom_types::{
-    block_sync::BlockSyncProducer, contract_payloads::angstrom::AngstromPoolConfigStore,
+    block_sync::BlockSyncProducer,
+    contract_payloads::{angstrom::AngstromPoolConfigStore, protocol_fees::DonationSplitSnapshot},
     traits::ChainExt
 };
 use chrono::Utc;
@@ -17,7 +18,8 @@ use telemetry_recorder::OrderTelemetryExt;
 
 use crate::manager::EthDataCleanser;
 
-/// The state of our eth-updater, right before we go to the next block
+/// The state of our eth-updater as of a notification's tip, with that
+/// notification's logs already applied.
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EthUpdaterSnapshot {
@@ -27,10 +29,15 @@ pub struct EthUpdaterSnapshot {
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub angstrom_tokens:   HashMap<Address, usize>,
 
-    pub pool_store: Arc<AngstromPoolConfigStore>,
+    pub pool_store:          Arc<AngstromPoolConfigStore>,
     /// the set of currently active nodes.
-    pub node_set:   HashSet<Address>,
-    pub timestamp:  chrono::DateTime<Utc>
+    pub node_set:            HashSet<Address>,
+    /// The splits in force at this notification's tip, this notification's own
+    /// setters included. Change history is derived by diffing this across
+    /// consecutive snapshots; `chain_update` says whether a diff came from a
+    /// commit or a reorg.
+    pub protocol_fee_config: DonationSplitSnapshot,
+    pub timestamp:           chrono::DateTime<Utc>
 }
 
 impl<Sync: BlockSyncProducer> From<(&EthDataCleanser<Sync>, CanonStateNotification)>
@@ -38,13 +45,14 @@ impl<Sync: BlockSyncProducer> From<(&EthDataCleanser<Sync>, CanonStateNotificati
 {
     fn from((data, update): (&EthDataCleanser<Sync>, CanonStateNotification)) -> Self {
         Self {
-            angstrom_tokens:   data.angstrom_tokens.clone(),
-            angstrom_address:  data.angstrom_address,
-            periphery_address: data.periphery_address,
-            chain_update:      update.into(),
-            pool_store:        data.pool_store.clone(),
-            node_set:          data.node_set.clone(),
-            timestamp:         Utc::now()
+            angstrom_tokens:     data.angstrom_tokens.clone(),
+            angstrom_address:    data.angstrom_address,
+            periphery_address:   data.periphery_address,
+            chain_update:        update.into(),
+            pool_store:          data.pool_store.clone(),
+            node_set:            data.node_set.clone(),
+            protocol_fee_config: data.protocol_fee_config,
+            timestamp:           Utc::now()
         }
     }
 }

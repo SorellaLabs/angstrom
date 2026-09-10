@@ -16,7 +16,10 @@ use angstrom_types::{
         ConsensusRoundEvent, ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal,
         SlotClock, StromConsensusEvent, SystemTimeSlotClock
     },
-    contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{BundleGasDetails, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     orders::PoolSolution,
     primitive::{AngstromMetaSigner, AngstromSigner},
     submission::SubmissionHandler,
@@ -179,19 +182,24 @@ where
 }
 
 pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching, S: AngstromMetaSigner> {
-    block_height:     BlockNumber,
-    matching_engine:  Matching,
-    signer:           AngstromSigner<S>,
-    round_leader:     Address,
-    validators:       Vec<AngstromValidator>,
-    order_storage:    Arc<OrderStorage>,
-    _metrics:         ConsensusMetricsWrapper,
-    pool_registry:    UniswapAngstromRegistry,
-    uniswap_pools:    SyncedUniswapPools,
-    provider:         Arc<SubmissionHandler<P>>,
-    messages:         VecDeque<ConsensusMessage>,
-    consensus_config: ConsensusTimingConfig,
-    slot_clock:       SystemTimeSlotClock
+    block_height:        BlockNumber,
+    matching_engine:     Matching,
+    signer:              AngstromSigner<S>,
+    round_leader:        Address,
+    validators:          Vec<AngstromValidator>,
+    order_storage:       Arc<OrderStorage>,
+    _metrics:            ConsensusMetricsWrapper,
+    pool_registry:       UniswapAngstromRegistry,
+    uniswap_pools:       SyncedUniswapPools,
+    provider:            Arc<SubmissionHandler<P>>,
+    messages:            VecDeque<ConsensusMessage>,
+    consensus_config:    ConsensusTimingConfig,
+    slot_clock:          SystemTimeSlotClock,
+    /// Seeded from the init-block read (ticket 16). Ticket 23 maintains it from
+    /// `EthEvent::ProtocolFeeConfigUpdated` and captures it once per round;
+    /// nothing reads it yet.
+    #[allow(dead_code, reason = "seed for the round snapshot, ticket 23")]
+    protocol_fee_config: DonationSplitSnapshot
 }
 
 // contains shared impls
@@ -214,7 +222,8 @@ where
         provider: SubmissionHandler<P>,
         matching_engine: Matching,
         consensus_config: ConsensusTimingConfig,
-        slot_clock: SystemTimeSlotClock
+        slot_clock: SystemTimeSlotClock,
+        protocol_fee_config: DonationSplitSnapshot
     ) -> Self {
         Self {
             block_height,
@@ -229,7 +238,8 @@ where
             messages: VecDeque::new(),
             provider: Arc::new(provider),
             consensus_config,
-            slot_clock
+            slot_clock,
+            protocol_fee_config
         }
     }
 
@@ -535,7 +545,10 @@ pub mod tests {
             StromConsensusEvent,
             slot_clock::{SlotClock, SystemTimeSlotClock}
         },
-        contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        contract_payloads::{
+            angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+            protocol_fees::DonationSplits
+        },
         primitive::{AngstromSigner, UniswapPoolRegistry},
         submission::SubmissionHandler
     };
@@ -552,7 +565,8 @@ pub mod tests {
     use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
     use super::{
-        ConsensusMessage, RoundStateMachine, SharedRoundState, pre_proposal::PreProposalState
+        ConsensusMessage, DonationSplitSnapshot, RoundStateMachine, SharedRoundState,
+        pre_proposal::PreProposalState
     };
     use crate::{
         AngstromValidator, ConsensusTimingConfig,
@@ -622,7 +636,12 @@ pub mod tests {
             provider,
             MockMatchingEngine {},
             ConsensusTimingConfig::default(),
-            slot_clock.clone()
+            slot_clock.clone(),
+            DonationSplitSnapshot {
+                block_number: 1,
+                block_hash:   Default::default(),
+                splits:       DonationSplits::new(750_000, 1_000_000).unwrap()
+            }
         );
         RoundStateMachine::new(shared_state, slot_clock)
     }

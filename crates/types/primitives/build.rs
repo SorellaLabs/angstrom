@@ -8,7 +8,7 @@ const OUT_DIRECTORY: &str = "abis-types/";
 const SRC_DIRECTORY: &str = "contracts/src";
 const BINDINGS_PATH: &str = "/src/contract_bindings/mod.rs";
 
-const WANTED_CONTRACTS: [&str; 9] = [
+const WANTED_CONTRACTS: [&str; 10] = [
     "Angstrom.sol",
     "PoolManager.sol",
     "PoolGate.sol",
@@ -17,7 +17,8 @@ const WANTED_CONTRACTS: [&str; 9] = [
     "ControllerV1.sol",
     "PositionFetcher.sol",
     "PositionManager.sol",
-    "IPositionDescriptor.sol"
+    "IPositionDescriptor.sol",
+    "AngstromProtocolFeeConfig.sol"
 ];
 
 // builds the contracts crate. then goes and generates bindings on this
@@ -81,6 +82,7 @@ fn main() {
             }
             let raw = file_name.split('.').collect::<Vec<_>>()[0].to_owned();
             path.push(format!("{raw}.json"));
+            strip_volatile(&path);
 
             Some((raw, path.to_str()?.to_owned()))
         })
@@ -114,6 +116,29 @@ pub mod {mod_name} {{
 
     for contract_build in sol_macro_invocation {
         write!(&mut f, "{contract_build}").expect("failed to write sol macro to contract");
+    }
+}
+
+/// solc numbers source units by their index in the compilation job, so these
+/// fields shift whenever the set of compiled files changes even though the abi
+/// and bytecode are identical. `sol!` doesn't read them, so drop them to keep
+/// the checked in artifacts stable.
+fn strip_volatile(path: &std::path::Path) {
+    let Ok(raw) = std::fs::read_to_string(path) else { return };
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&raw) else { return };
+    let Some(artifact) = value.as_object_mut() else { return };
+
+    artifact.remove("ast");
+    artifact.remove("id");
+    for key in ["bytecode", "deployedBytecode"] {
+        if let Some(bytecode) = artifact.get_mut(key).and_then(|b| b.as_object_mut()) {
+            bytecode.remove("sourceMap");
+            bytecode.remove("immutableReferences");
+        }
+    }
+
+    if let Ok(stripped) = serde_json::to_string(&value) {
+        let _ = std::fs::write(path, stripped);
     }
 }
 

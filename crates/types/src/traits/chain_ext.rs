@@ -17,6 +17,10 @@ pub trait ChainExt {
     fn successful_tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_;
     fn reorged_range(&self, new: impl ChainExt) -> Option<RangeInclusive<u64>>;
     fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<Block>> + '_;
+    /// Every block in the notification, oldest first. A notification can span
+    /// several blocks, so anything that must not miss a log walks these rather
+    /// than only the tip.
+    fn block_hashes(&self) -> Vec<BlockHash>;
 }
 
 impl ChainExt for Chain {
@@ -74,5 +78,9 @@ impl ChainExt for Chain {
 
     fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<Block>> + '_ {
         self.blocks_iter()
+    }
+
+    fn block_hashes(&self) -> Vec<BlockHash> {
+        ChainExt::blocks_iter(self).map(|b| b.hash()).collect()
     }
 }

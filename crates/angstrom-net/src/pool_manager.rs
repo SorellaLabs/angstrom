@@ -315,6 +315,8 @@ where
             EthEvent::AddedNode(_) => {}
             EthEvent::RemovedNode(_) => {}
             EthEvent::NewBlock(_) => {}
+            // consensus carries the donation splits; the order pool has no use for them.
+            EthEvent::ProtocolFeeConfigUpdated(_) => {}
         }
     }
 

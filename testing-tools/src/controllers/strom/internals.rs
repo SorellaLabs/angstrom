@@ -22,9 +22,12 @@ use angstrom_rpc::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::{ConsensusRoundName, SlotClock, SystemTimeSlotClock},
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     pair_with_price::PairsWithPrice,
-    primitive::{PoolId, UniswapPoolRegistry},
+    primitive::{PROTOCOL_FEE_CONFIG_ADDRESS, PoolId, UniswapPoolRegistry},
     sol_bindings::testnet::TestnetHub,
     submission::{ChainSubmitterHolder, SubmissionHandler},
     testnet::InitialTestnetState
@@ -155,15 +158,32 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             .state_provider()
             .subscribe_to_canonical_state();
 
+        // The address may be unset here — `AngstromAddressConfig::try_init` does not
+        // set it. Zero matches no log, and a block at or before the deployed block
+        // resolves without a provider call.
+        let protocol_fee_config_address = PROTOCOL_FEE_CONFIG_ADDRESS
+            .get()
+            .copied()
+            .unwrap_or_default();
+        let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+            protocol_fee_config_address,
+            block_number,
+            b.tip().hash(),
+            &state_provider.rpc_provider()
+        )
+        .await?;
+
         let eth_handle = EthDataCleanser::spawn(
             inital_angstrom_state.angstrom_addr,
             inital_angstrom_state.controller_addr,
+            protocol_fee_config_address,
             sub,
             executor.clone(),
             strom_handles.eth_tx,
             strom_handles.eth_rx,
             angstrom_tokens,
             pool_config_store.clone(),
+            protocol_fee_config,
             block_sync.clone(),
             node_set,
             vec![]
@@ -336,7 +356,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             strom_handles.consensus_rx_rpc,
             state_updates,
             consensus::ConsensusTimingConfig::default(),
-            SystemTimeSlotClock::new_default().unwrap()
+            SystemTimeSlotClock::new_default().unwrap(),
+            protocol_fee_config
         );
 
         // spin up amm quoter

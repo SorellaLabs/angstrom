@@ -18,9 +18,10 @@ use angstrom_types::{
         angstrom::{
             AngPoolConfigEntry, AngstromPoolConfigStore, AngstromPoolPartialKey,
             UniswapAngstromRegistry
-        }
+        },
+        protocol_fees::DonationSplitSnapshot
     },
-    primitive::{AngstromSigner, UniswapPoolRegistry},
+    primitive::{AngstromSigner, PROTOCOL_FEE_CONFIG_ADDRESS, UniswapPoolRegistry},
     submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
@@ -291,6 +292,20 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     // spinup matching engine
     let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
 
+    // The address may be unset here — `AngstromAddressConfig::try_init` does not
+    // set it. A block at or before the deployed block resolves without a
+    // provider call.
+    let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+        PROTOCOL_FEE_CONFIG_ADDRESS
+            .get()
+            .copied()
+            .unwrap_or_default(),
+        block_id,
+        Default::default(),
+        &provider.rpc_provider()
+    )
+    .await?;
+
     let (state_tx, state_rx) = tokio::sync::mpsc::unbounded_channel();
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
@@ -311,7 +326,8 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         handles.consensus_rx_rpc,
         Some(state_tx),
         consensus::ConsensusTimingConfig::default(),
-        SystemTimeSlotClock::new_default().unwrap()
+        SystemTimeSlotClock::new_default().unwrap(),
+        protocol_fee_config
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

@@ -27,12 +27,15 @@ use angstrom_network::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::{SlotClock, StromConsensusEvent, SystemTimeSlotClock},
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId, Slot0Update,
-        UniswapPoolRegistry
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS,
+        PROTOCOL_FEE_CONFIG_ADDRESS, PoolId, Slot0Update, UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
@@ -223,6 +226,7 @@ where
 
     let angstrom_address = *ANGSTROM_ADDRESS.get().unwrap();
     let controller = *CONTROLLER_V1_ADDRESS.get().unwrap();
+    let protocol_fee_config_address = *PROTOCOL_FEE_CONFIG_ADDRESS.get().unwrap();
     let deploy_block = *ANGSTROM_DEPLOYED_BLOCK.get().unwrap();
     let gas_token = *GAS_TOKEN_ADDRESS.get().unwrap();
     let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
@@ -300,13 +304,24 @@ where
     // have a gap in which a pool is deployed durning startup. This isn't
     // critical but we will want to fix this down the road.
     // let block_id = querying_provider.get_block_number().await.unwrap();
-    let block_id = match sub.recv().await.expect("first block") {
-        CanonStateNotification::Commit { new } => new.tip().number,
-        CanonStateNotification::Reorg { new, .. } => new.tip().number
+    let (block_id, block_hash) = match sub.recv().await.expect("first block") {
+        CanonStateNotification::Commit { new } => (new.tip().number, new.tip().hash()),
+        CanonStateNotification::Reorg { new, .. } => (new.tip().number, new.tip().hash())
     };
 
     tracing::info!(?block_id, "starting up with block");
     let eth_data_sub = node.provider.subscribe_to_canonical_state();
+
+    let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+        protocol_fee_config_address,
+        block_id,
+        block_hash,
+        &querying_provider
+    )
+    .await
+    .map_err(|e| {
+        eyre::eyre!("failed to load the protocol fee config at init block {block_id}: {e}")
+    })?;
 
     let global_block_sync = GlobalBlockSync::new(block_id);
 
@@ -320,12 +335,14 @@ where
     let eth_handle = EthDataCleanser::spawn(
         angstrom_address,
         controller,
+        protocol_fee_config_address,
         eth_data_sub,
         executor.clone(),
         handles.eth_tx,
         handles.eth_rx,
         angstrom_tokens,
         pool_config_store.clone(),
+        protocol_fee_config,
         global_block_sync.clone(),
         node_set.clone(),
         vec![handles.eth_handle_tx.take().unwrap()]
@@ -462,7 +479,8 @@ where
         handles.consensus_rx_rpc,
         None,
         config.consensus_timing,
-        SystemTimeSlotClock::new_default().unwrap()
+        SystemTimeSlotClock::new_default().unwrap(),
+        protocol_fee_config
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

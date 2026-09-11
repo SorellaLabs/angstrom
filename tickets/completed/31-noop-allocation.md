@@ -34,7 +34,7 @@ Keep today's behavior, but make it deliberate and accounted.
    `solution.reward_t0 + total_lp_user_donate` is never handed to an allocator at all. That budget
    stays in `contract_liquid` and `collect_extra` sweeps it into `save`. Keep that behavior, but
    record it: emit the amount as an `unplaced` residual for the book source so ticket 30's per-pool
-   check still balances and ticket 36 can report it.
+   check still balances.
 
 3. **A moving swap with missing range metadata is an error.** `:341` and `:344` call
    `r.lower_tick.unwrap()` / `r.upper_tick.unwrap()` on a non-final range. A range that moved but
@@ -60,7 +60,7 @@ The only edits unique to it are step 2's book-side residual and step 3's two unw
 
 A book no-op after a ToB swap uses the post-ToB state: `post_tob_price` at `:384` is already the
 ToB swap's end price, and the `ucp.is_zero()` branch is below it, so this holds by construction.
-Ticket 35 asserts it rather than anything needing to change here.
+Ticket 33 asserts it rather than anything needing to change here.
 
 **As built.** Steps 1, 2 and 4 landed as written. Step 3 landed as written but is unreachable —
 see below.
@@ -88,4 +88,4 @@ ever makes it reachable, "malformed metadata still fails" becomes testable then.
 Coverage: `empty_steps_retains_its_whole_budget_as_unplaced` asserts retention lands in its own
 bucket rather than folded into rounding, and `true_noop_without_liquidity_retains_its_budget`
 covers the no-liquidity case without a panic. The `ucp.is_zero()` book branch needs a
-`PoolSolution` to drive, so its assertion belongs to ticket 35's `book_noop_after_tob_move`.
+`PoolSolution` to drive, so its assertion belongs to ticket 33's `book_noop_after_tob_move`.

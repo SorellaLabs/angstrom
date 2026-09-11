@@ -61,7 +61,7 @@ wrong against the contract — the thing no unit test in `crates/types` can reac
 PLAN.md calls out fixtures explicitly.
 
 Step 3's balance check is only sound because the harness controls the starting state. It is **not**
-a template for ticket 38, where Angstrom's balance also holds user funds in flight and is
+a template for ticket 35, where Angstrom's balance also holds user funds in flight and is
 explicitly not the withdrawable amount.
 
 `crates/types/tests/angstrom.rs::build_bundle` is the existing fixture test and is `#[ignore]`d with

@@ -1,4 +1,4 @@
-# 35 — Coverage that must not be dropped
+# 33 — Coverage that must not be dropped
 
 **Blocks on:** 27, 31
 

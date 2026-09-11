@@ -55,7 +55,7 @@ Reporting only. Allocation policy is unchanged — no logic is added to exhaust 
 
 The distinction is by *exit*, not by inspecting the numbers: an allocator that never ran reports
 `unplaced`, and one that ran but could not place the last few units reports `rounding`. Keeping
-them apart is what lets ticket 38 treat a rounding remainder as expected and an unplaced budget as
+them apart is what lets ticket 35 treat a rounding remainder as expected and an unplaced budget as
 worth reading, without a threshold.
 
 `remaining_donation` is reused as a loop variable twice — set at `:250` for the blob pass and

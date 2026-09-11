@@ -111,4 +111,4 @@ placed than was available fails the same equality, with no branch of its own.
 does not balance. `sums_overflow_rather_than_wrapping_into_agreement` covers step 3.
 `allocation_conserves_its_budget` drives a real swap through `t0_donation_vec` across five budgets.
 The per-pool checks in `process_solution` are wired but not yet driven by a test — `crates/types`
-has no way to build a `PoolSolution` programmatically today, which is ticket 35's job.
+has no way to build a `PoolSolution` programmatically today, which is ticket 33's job.

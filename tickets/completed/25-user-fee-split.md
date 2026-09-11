@@ -42,7 +42,7 @@ let (total_lp_user_donate, save_amount) = splits.split_user(total_user_fees);
 gross` holds by construction — which the `f64` path did not guarantee. The two agree exactly while
 `total_user_fees` stays under roughly `2^53 / 3`; above that the `f64` product loses precision and
 `save_amount` can come out a unit apart. That is the documented activation difference, not a
-regression — replay before **A** keeps the old path (39).
+regression — replay before **A** keeps the old path (37).
 
 The arithmetic itself is already covered by ticket 3's tests. Conservation at the
 `process_solution` level is ticket 30's; this ticket is the wiring.

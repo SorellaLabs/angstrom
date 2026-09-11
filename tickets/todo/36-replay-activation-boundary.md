@@ -1,4 +1,4 @@
-# 39 — Replay either side of A
+# 36 — Replay either side of A
 
 **Blocks on:** 12, 25
 

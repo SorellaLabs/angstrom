@@ -1,4 +1,4 @@
-# 40 — Deploy AngstromProtocolFeeConfig
+# 37 — Deploy AngstromProtocolFeeConfig
 
 **Blocks on:** 10, 11
 
@@ -20,4 +20,4 @@ Get the contract on chain at the existing economics.
 
 ## Notes
 Deploying at `(750_000, 1_000_000)` preserves current economics exactly. Nothing reads the contract
-until ticket 41 sets the constants.
+until ticket 38 sets the constants.

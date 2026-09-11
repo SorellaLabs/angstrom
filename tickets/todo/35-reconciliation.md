@@ -1,6 +1,6 @@
-# 38 — Reconcile allocations after inclusion
+# 35 — Reconcile allocations after inclusion
 
-**Blocks on:** 37
+**Blocks on:** 34
 
 ## Overview
 Peer finalization runs on `PoolSolution`s, upstream of where the splits are applied, and EVM
@@ -12,12 +12,13 @@ then compares that against what the bundle actually encoded. Residuals reconcile
 buckets, so a `save` exceeding the configured fee by exactly its residual is correct and one
 exceeding it by anything else is not. A mismatch, or reconstruction data that cannot be
 resolved, withholds those amounts rather than blocking anything — an unverifiable amount is not
-a verified one. The real risk is step 1: reconstruction needs pool state as of the construction
-parent, and if an archive node cannot supply it, the narrowed scope gets recorded here rather
+a verified one. The real risk is step 1:
+reconstruction needs pool state as of the construction parent, and if an archive node cannot
+supply it, the narrowed scope gets recorded here rather
 than quietly shipped.
 
 ## Files
-- `crates/fee-ledger/` — the crate from ticket 37
+- `crates/eth/src/fee_ledger.rs` — the ledger module from ticket 34
 - `crates/types/src/traits/bundles.rs` — `process_solution`, reused to reconstruct
 - `crates/types/primitives/src/contract_payloads/protocol_fees.rs:load_from_chain` — historical rates
 - `contracts/src/periphery/ControllerV1.sol:224` — `distributeFees`, unchanged
@@ -27,9 +28,9 @@ Detect a bad allocation that already settled.
 
 ## Do
 
-1. **Reconstruct.** For each included bundle, take its construction parent from ticket 36's
-   record, read the rates in force at that parent with `load_from_chain`, and re-run the split
-   arithmetic. Reuse `process_solution`'s own path rather than reimplementing it — a second
+1. **Reconstruct.** For each included bundle, take the construction parent to be the canonical
+   parent of the block it landed in, read the rates in force there with `load_from_chain`, and
+   re-run the split arithmetic. Reuse `process_solution`'s own path rather than reimplementing it — a second
    implementation drifts, and a drift here reads as a false mismatch.
 
 2. **Compare** against what the bundle actually encoded: per pool, the `RewardsUpdate` totals
@@ -64,6 +65,19 @@ reconstruction needs the pool state as of the construction parent, not today's. 
 not to be reachable from an archive node, reconciliation narrows to the parts that do not need pool
 state — the splits themselves and `Asset.save` — and that reduction should be recorded here rather
 than quietly shipped.
+
+**The construction parent is inferred, not recorded.** Per-bundle telemetry was dropped, so
+nothing records the parent a bundle was actually built on. Step 1 assumes it was the canonical
+parent of the block the bundle landed in, which holds unless the bundle landed later than the
+block it targeted or on a replacement branch — PLAN.md records both as accepted limitations and
+asks for the construction parent to be recorded precisely because of them.
+
+When the assumption does not hold, reconstruction reads the wrong rates and the bundle is
+withheld. That is the safe direction, but it is a false positive: a rate change landing near an
+inclusion boundary sends legitimate amounts to human review rather than reconciling clean. The
+cost is bounded by how rarely the rates move, which is a governance action. What is lost
+outright is any check on a bundle built from a stale round — with no recorded parent there is
+nothing for the inferred one to disagree with.
 
 Step 5 is why ticket 32's balance assertion is explicitly not a template: it works there only
 because the Anvil harness controls the starting state.

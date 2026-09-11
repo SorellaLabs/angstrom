@@ -69,7 +69,7 @@ Err(error) => {
 Applied once per pool to that pool's gross total, structurally: `process_solution` runs per
 `PoolSolution` and the split sits directly above `t0_donation_vec`, so it cannot land per tick, per
 fragment, or after cross-pool aggregation. Two pools sharing token0 accumulate separately in
-`asset_builder` — ticket 35 asserts that.
+`asset_builder` — ticket 33 asserts that.
 
 At the deployed `tobLpShareE6 = 1_000_000`, `tob_lp_budget == gross` and `tob_protocol_fee == 0`,
 so this path is inert until rollout step 5. Step 4 activates it at zero.

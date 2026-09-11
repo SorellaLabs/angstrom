@@ -22,7 +22,6 @@ use tracing::{Level, debug, error, trace, warn};
 
 use crate::{
     consensus::{PreProposal, Proposal},
-    contract_payloads::angstrom::LP_DONATION_SPLIT,
     matching::get_quantities_at_price,
     orders::{OrderFillState, OrderOutcome, OrderSet, PoolSolution},
     testnet::TestnetStateOverrides,
@@ -231,7 +230,7 @@ impl BundleProcessing for AngstromBundle {
         t1: Address,
         store_index: u16,
         shared_gas: Option<U256>,
-        _splits: DonationSplits
+        splits: DonationSplits
     ) -> eyre::Result<()> {
         tracing::info!(?solution);
         let process_solution_span =
@@ -410,8 +409,7 @@ impl BundleProcessing for AngstromBundle {
         };
 
         // add user donation split
-        let total_lp_user_donate = (total_user_fees as f64 * LP_DONATION_SPLIT) as u128;
-        let save_amount = total_user_fees - total_lp_user_donate;
+        let (total_lp_user_donate, save_amount) = splits.split_user(total_user_fees);
 
         // We then use `post_tob_price` as the start price for our book swap, just as
         // our matcher did.  We want to use the representation of the book swap
@@ -428,9 +426,13 @@ impl BundleProcessing for AngstromBundle {
             .as_ref()
             .map(|bsv| bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate));
 
-        let tob_donation_vec = tob_swap_info
+        let (tob_donation_vec, _tob_protocol_fee) = tob_swap_info
             .as_ref()
-            .map(|(tob_vec, tob_d)| tob_vec.t0_donation_vec(*tob_d));
+            .map(|(tob_vec, gross_tob_reward)| {
+                let (tob_lp_budget, protocol) = splits.split_tob(*gross_tob_reward);
+                (Some(tob_vec.t0_donation_vec(tob_lp_budget)), protocol)
+            })
+            .unwrap_or((None, 0u128));
 
         let donation = match (book_donation_vec, tob_donation_vec) {
             (Some(bsv), Some(tob)) => {

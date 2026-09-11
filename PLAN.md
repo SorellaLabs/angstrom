@@ -289,6 +289,8 @@ Before enabling a **nonzero ToB share**, name the accounting component and its r
 3. undoes and re-derives accruals across reorgs;
 4. cannot collect the same fee twice across restart, backfill, or a re-reviewed proposal.
 
+The component is [`crates/types/src/fee_ledger.rs`](crates/types/src/fee_ledger.rs) (accrual) and [`crates/types/src/fee_reconciliation.rs`](crates/types/src/fee_reconciliation.rs) (reconciliation); the responsible operator is still to be named. Two gaps stand between them and point 2: nothing in the node emits `EthEvent::FinalizedBlock`, so no accrual is ever marked withdrawable, and the ToB protocol fee is not reconstructible from an included bundle, so a nonzero ToB share withholds rather than reconciles. Both must close before step 5.
+
 None of this blocks activation at the initial economics, where the ToB protocol share is zero. That is the ordering, not a reduction in scope: the ledger is built and reconciling before step 5 of Rollout, and until then there is no new protocol share for it to account for.
 
 Build it against canonical included bundles. Reconstruct the expected allocations from each bundle's construction parent and the rates in force there, then compare them with the included reward updates and saved amounts. A successful EVM simulation and a passing peer-finalization result are not evidence of compliance — peer checks run on `PoolSolution`s, upstream of where the splits are applied. Report mismatches and missing reconstruction data, and withhold those amounts from any proposed distribution. This detects a bad allocation after inclusion; it cannot prevent or reverse settlement.

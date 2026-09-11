@@ -2,9 +2,9 @@ use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
 
 use alloy::{
     eips::BlockNumHash,
-    network::{Ethereum, EthereumWallet},
+    network::{Ethereum, EthereumWallet, Network},
     node_bindings::{Anvil, AnvilInstance},
-    primitives::Address,
+    primitives::{Address, B256},
     providers::Provider
 };
 use alloy_primitives::aliases::I24;
@@ -40,6 +40,7 @@ use consensus::{
     AngstromValidator, ConsensusHandler, ConsensusManager, ConsensusTimingConfig,
     ManagerNetworkDeps
 };
+use eyre::WrapErr;
 use futures::{Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
@@ -274,7 +275,7 @@ impl ReplayRunner {
             .ok_or_else(|| eyre::eyre!("replay block {block_number} not found"))?
             .header
             .hash;
-        let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+        let protocol_fee_config = load_replay_protocol_fee_config(
             *PROTOCOL_FEE_CONFIG_ADDRESS.get().unwrap(),
             block_number,
             block_hash,
@@ -579,4 +580,76 @@ where
         })
         .into_iter()
         .collect::<Vec<_>>()
+}
+
+/// Loads the rates in force at a replayed block, naming an unreadable
+/// historical config as a gap for that block.
+///
+/// `load_from_chain` already errors on an empty account, a config bound to a
+/// different Angstrom, or a failed provider call, but propagating that bare
+/// says only that something went wrong. Naming the block is what makes a
+/// spread of replays report one attributable gap per block instead of an
+/// opaque abort. There is deliberately no fallback arm: a block whose
+/// historical config cannot be read is never replayed on today's rate.
+async fn load_replay_protocol_fee_config<N, P>(
+    config_address: Address,
+    block_number: u64,
+    block_hash: B256,
+    provider: &P
+) -> eyre::Result<DonationSplitSnapshot>
+where
+    N: Network,
+    P: Provider<N>
+{
+    DonationSplitSnapshot::load_from_chain(config_address, block_number, block_hash, provider)
+        .await
+        .wrap_err_with(|| {
+            format!(
+                "replay gap at block {block_number}: historical protocol fee config at \
+                 {config_address} could not be read"
+            )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::{primitives::Bytes, providers::ProviderBuilder, transports::mock::Asserter};
+
+    use super::*;
+
+    /// A config address that cannot be read at the replayed block — here an
+    /// empty account, which `load_from_chain` rejects rather than decoding as
+    /// two valid 0% shares.
+    async fn load_unreadable_at(block_number: u64) -> eyre::Result<DonationSplitSnapshot> {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let asserter = Asserter::new();
+        asserter.push_success(&Bytes::new());
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter);
+
+        load_replay_protocol_fee_config(
+            Address::repeat_byte(0xcf),
+            block_number,
+            B256::repeat_byte(0xbb),
+            &provider
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_historical_config_is_a_named_gap() {
+        let err = load_unreadable_at(9_999).await.unwrap_err();
+
+        // Named: a spread of replays can attribute the gap to one block rather
+        // than reading an opaque provider error.
+        let named = format!("{err:#}");
+        assert!(named.contains("replay gap at block 9999"), "{named}");
+        assert!(named.contains("could not be read"), "{named}");
+    }
+
+    #[tokio::test]
+    async fn a_gapped_block_is_not_replayed_on_todays_rate() {
+        // The gap has no fallback arm, so nothing hands back the deployed
+        // const — or any other rate — when the historical read fails.
+        assert!(load_unreadable_at(9_999).await.is_err());
+    }
 }

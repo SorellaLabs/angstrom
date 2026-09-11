@@ -462,4 +462,47 @@ mod tests {
         assert_eq!(asym.split_user(1_000), (1_000, 0));
         assert_eq!(asym.split_tob(1_000), (0, 1_000));
     }
+
+    /// The smallest `total_user_fees` at which the deployed integer split and
+    /// the deleted `LP_DONATION_SPLIT: f64 = 0.75` disagree. Below it every
+    /// `3 * fees` fits in f64's 53-bit mantissa, so `fees as f64 * 0.75` is
+    /// exactly `3 * fees / 4` and truncating it lands on the same floor the
+    /// integer path computes; at and above it the product is rounded first.
+    const F64_DIVERGENCE: u128 = 3_002_399_751_580_333;
+
+    fn legacy_f64_user_split(gross: u128) -> u128 {
+        (gross as f64 * 0.75) as u128
+    }
+
+    /// Replay at or before **A** resolves to the deployed const without a
+    /// provider call, so it runs the integer path at exactly the rates the
+    /// `f64` path used. This measures whether that reproduces the old bundles,
+    /// which is what decides whether a legacy branch is needed at all.
+    ///
+    /// It does, below `F64_DIVERGENCE`. So the only thing a pre-**A** replay
+    /// has left to answer is whether any recorded block's per-pool
+    /// `total_user_fees` reached ~3.0e15 t0 units — for an 18-decimal token,
+    /// 0.003 of it in fees from a single batch.
+    #[test]
+    fn the_deployed_split_reproduces_the_legacy_f64_path_below_its_bound() {
+        let splits = DEPLOYED_INITIAL_PROTOCOL_FEE_CONFIG.splits;
+
+        // `save_amount` was `total_user_fees - total_lp_user_donate` on both
+        // paths, so agreeing on the LP half is agreeing on the whole split.
+        for gross in [0u128, 1, 7, 99, 1_000_000, 1_000_000_000_000, 1_000_000_000_000_000] {
+            assert_eq!(splits.split_user(gross).0, legacy_f64_user_split(gross), "at {gross}");
+        }
+
+        // The bound is tight: the last values under it still agree.
+        for gross in (F64_DIVERGENCE - 10_000)..F64_DIVERGENCE {
+            assert_eq!(splits.split_user(gross).0, legacy_f64_user_split(gross), "at {gross}");
+        }
+
+        // At the bound the `f64` product rounds up where the integer path
+        // floors, so a pre-**A** bundle built on fees this large would differ by
+        // a unit. That difference is the whole of what a legacy branch buys.
+        let (lp, protocol) = splits.split_user(F64_DIVERGENCE);
+        assert_eq!(legacy_f64_user_split(F64_DIVERGENCE), lp + 1);
+        assert_eq!(lp + protocol, F64_DIVERGENCE, "the integer path still conserves");
+    }
 }

@@ -57,4 +57,4 @@ The const carries a fixed block identity, so a pre-deployment resolution is dist
 chain read. Consumers that check parent identity (22) must expect that.
 
 Pre-deployment resolution is what lets replay work at or before **A** without the caller
-special-casing it — see ticket 36.
+special-casing it — see ticket 34.

@@ -17,11 +17,11 @@ Move the hardcoded user-fee `LP_DONATION_SPLIT` into a small on-chain configurat
 - ToB split applied before the donation merge
 - Retained fees through the existing `Asset.save` path
 - Explicit accounting of retained remainders, separate from the configured fee
-- Fee accounting, reconciliation, and post-settlement verification
 
 **Out of scope**
 
 - On-chain or consensus-level enforcement of the ratios
+- Fee accounting, reconciliation, and post-settlement verification. Deferred to the follow-up that enables a nonzero ToB share — see **Payout scope**
 - Per-pool overrides
 - Automated treasury payout scheduling
 - Recalling an already-submitted transaction
@@ -280,22 +280,20 @@ Round reset must **abort** its submission task, not just drop the join handle �
 
 ## Payout scope
 
-Fee accounting and reconciliation are required. **Automated payout scheduling is not part of this release** — no scheduled or unattended withdrawal exists. Every distribution is an operator-reviewed timelock execution of the owner-only `ControllerV1.distributeFees`. Nothing built here holds withdrawal authority or initiates a distribution; the fast owner cannot distribute at all.
+**No fee accounting ships in this release, and no automated payout scheduling exists.** Every distribution is an operator-reviewed timelock execution of the owner-only `ControllerV1.distributeFees`. Nothing built here holds withdrawal authority or initiates a distribution; the fast owner cannot distribute at all.
 
-Before enabling a **nonzero ToB share**, name the accounting component and its responsible operator in the rollout artifacts, and show that it:
+This release activates at `(750_000, 1_000_000)`, where the **ToB protocol share is zero**. The user protocol share it does retain already exists on `main` and is already withdrawn without a ledger, so this release creates no new revenue stream for a ledger to account for. That is what makes the deferral safe rather than a reduction in scope.
 
-1. derives accruals from canonical included bundles, not proposal or submission telemetry;
-2. proves a proposed withdrawal leaves LP rewards and user balances backed — Angstrom's ERC20 balance is not the withdrawable amount;
-3. undoes and re-derives accruals across reorgs;
-4. cannot collect the same fee twice across restart, backfill, or a re-reviewed proposal.
+**Before enabling a nonzero ToB share**, an accounting component and its responsible operator must be named in the rollout artifacts, and it must be shown to:
 
-The component is [`crates/types/src/fee_ledger.rs`](crates/types/src/fee_ledger.rs) (accrual) and [`crates/types/src/fee_reconciliation.rs`](crates/types/src/fee_reconciliation.rs) (reconciliation); the responsible operator is still to be named. Two gaps stand between them and point 2: nothing in the node emits `EthEvent::FinalizedBlock`, so no accrual is ever marked withdrawable, and the ToB protocol fee is not reconstructible from an included bundle, so a nonzero ToB share withholds rather than reconciles. Both must close before step 5.
+1. derive accruals from canonical included bundles, not proposal or submission telemetry;
+2. prove a proposed withdrawal leaves LP rewards and user balances backed — Angstrom's ERC20 balance is **not** the withdrawable amount, since it also holds user funds in flight and unclaimed LP rewards;
+3. undo and re-derive accruals across reorgs;
+4. not collect the same fee twice across restart, backfill, or a re-reviewed proposal.
 
-None of this blocks activation at the initial economics, where the ToB protocol share is zero. That is the ordering, not a reduction in scope: the ledger is built and reconciling before step 5 of Rollout, and until then there is no new protocol share for it to account for.
+That component belongs to the step-5 follow-up, where it can be exercised against a fee that is actually nonzero. Two things it will need that this release does not supply: nothing in the node emits `EthEvent::FinalizedBlock`, so there is no finality signal to gate withdrawability on; and the ToB protocol fee is not reconstructible from an included bundle, so reconciliation cannot verify a ToB split from chain state alone. Both are prerequisites for step 5, not gaps in step 4.
 
-Build it against canonical included bundles. Reconstruct the expected allocations from each bundle's construction parent and the rates in force there, then compare them with the included reward updates and saved amounts. A successful EVM simulation and a passing peer-finalization result are not evidence of compliance — peer checks run on `PoolSolution`s, upstream of where the splits are applied. Report mismatches and missing reconstruction data, and withhold those amounts from any proposed distribution. This detects a bad allocation after inclusion; it cannot prevent or reverse settlement.
-
-Feed it from bundle telemetry recording, per pool and per included bundle: gross ToB payment, LP allocation, explicit protocol fee, allocation residual, and the snapshot identity. Keep the historical construction parent separate from the local round generation so replay and other nodes can reproduce the check.
+When it is built, build it against canonical included bundles: reconstruct the expected allocations from each bundle's construction parent and the rates in force there, then compare them with the included reward updates and saved amounts. A successful EVM simulation and a passing peer-finalization result are not evidence of compliance — peer checks run on `PoolSolution`s, upstream of where the splits are applied. Report mismatches and missing reconstruction data, and withhold those amounts from any proposed distribution. This detects a bad allocation after inclusion; it cannot prevent or reverse settlement.
 
 ## Implementation acceptance
 
@@ -312,10 +310,10 @@ Also test: contract auth (owner, fast owner, everyone else rejected, identical o
 
 ## Rollout
 
-1. Implement and test the contract, arithmetic, tracking, both splits, allocation, and accounting.
+1. Implement and test the contract, arithmetic, tracking, both splits, and allocation.
 2. Deploy `AngstromProtocolFeeConfig(existingAngstrom, 750_000, 1_000_000)`. Verify resolved authorities, runtime code, layout, initial values, and getter/slot-0 agreement.
 3. Configure the address and activation block **A** on all nodes; require the contract to exist in canonical state at **A-1**. A node that cannot read valid config does not build affected bundles.
-4. **Activate at the existing economics** (`750_000`, `1_000_000`). Only the rate source, the integer arithmetic, and the ToB split path go live; allocation policy is unchanged, though the documented integer-arithmetic differences still apply. Verify construction, settlement, and accounting against real blocks.
-5. **Then** enable the chosen ToB share via the setter, once step 4 holds and Payout scope is satisfied. Do not combine steps 4 and 5 — a discrepancy would be ambiguous between the code change and the economic change.
+4. **Activate at the existing economics** (`750_000`, `1_000_000`). Only the rate source, the integer arithmetic, and the ToB split path go live; allocation policy is unchanged, though the documented integer-arithmetic differences still apply. Verify construction and settlement against real blocks.
+5. **Then** enable the chosen ToB share via the setter, once step 4 holds and Payout scope is satisfied — which means the accounting component is built, named, reconciling, and its two prerequisites closed. That is a separate change from this one. Do not combine steps 4 and 5 — a discrepancy would be ambiguous between the code change and the economic change.
 6. Replay before **A** keeps the legacy `f64` path, full ToB budget, and legacy allocation behavior. At or after **A**, load rates from historical parent state. Missing historical state is a reported gap, not a silent use of today's rate.
 7. To disable the ToB fee, set the pair back to `(currentUserShare, 1_000_000)`. Future rounds only; nothing already accrued reverses.

@@ -492,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_steps_retains_its_whole_budget_as_unplaced() {
+    fn empty_donation_vec_retains_its_budget() {
         let pool = pool(1_000_000_000_000_000);
         let swap = pool.noop();
         assert!(swap.steps.is_empty());
@@ -501,6 +501,22 @@ mod tests {
         assert!(donations.is_empty());
         // Retention is its own bucket - not folded into rounding.
         assert_eq!(residual, DonationResidual { rounding: 0, unplaced: 5_000 });
+    }
+
+    /// A swap that moved but has nothing to hand out: every range's target is
+    /// zero, so the vector carries only zeros and neither residual bucket
+    /// fills.
+    #[test]
+    fn zero_budget_with_swap_metadata() {
+        let pool = pool(1_000_000_000_000_000);
+        let swap = pool
+            .swap_current_with_amount(I256::unchecked_from(1_000_000_000i128), true)
+            .unwrap();
+        assert!(!swap.steps.is_empty(), "the case needs swap metadata to be present");
+
+        let (donations, residual) = swap.t0_donation_vec(0).unwrap();
+        assert_eq!(sum_donations(&donations).unwrap(), 0);
+        assert_eq!(residual, DonationResidual { rounding: 0, unplaced: 0 });
     }
 
     #[test]

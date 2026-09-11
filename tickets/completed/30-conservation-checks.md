@@ -84,3 +84,31 @@ once" requirement: adding a residual to `save_amount` would both reserve it *and
 `collect_extra` sweep it, double counting. Ticket 27's Notes has the mechanism.
 
 No "material" threshold anywhere — the checks are equality, and any discrepancy fails the bundle.
+
+**As built.** All three steps landed. The one structural deviation: step 1's per-source check and
+step 2's two per-pool checks are the same equality with a different number of buckets, so they are
+one shared `check_conservation(source, placed, protocol_fee, residual, gross)` in `donation.rs`
+rather than three hand-rolled blocks. A two-way source passes a fee of `0`. `sum_donations` sits
+beside it — the name ticket 30's own snippet used — and folds with `checked_add` rather than
+`.sum()`, per step 3; `check_conservation` chains `checked_add` the same way, so an overflow fails
+the check instead of wrapping into agreement with it.
+
+`t0_donation_vec` is now `eyre::Result<(Vec<DonationType>, DonationResidual)>`. Its two call sites
+in `bundles.rs` moved from `.map(..).unwrap_or(..)` to `match`, because `?` cannot propagate out of
+a closure.
+
+The per-pool checks run just before the donation merge rather than just after. The merge consumes
+both vectors by value, and it does not change what was placed, so the assertion is identical and
+this is only where the values are still in scope.
+
+`book_budget` is now a named binding built with `checked_add`, replacing the unchecked
+`solution.reward_t0 + total_lp_user_donate` in both the allocator call and `total_donation`'s
+`unwrap_or` fallback.
+
+Coverage: `an_inflated_donation_vector_fails_the_check` is the "Done when" bullet — one more unit
+placed than was available fails the same equality, with no branch of its own.
+`the_configured_fee_is_its_own_bucket` asserts the three-way ToB shape and that misfiling the fee
+does not balance. `sums_overflow_rather_than_wrapping_into_agreement` covers step 3.
+`allocation_conserves_its_budget` drives a real swap through `t0_donation_vec` across five budgets.
+The per-pool checks in `process_solution` are wired but not yet driven by a test — `crates/types`
+has no way to build a `PoolSolution` programmatically today, which is ticket 35's job.

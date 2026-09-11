@@ -61,3 +61,31 @@ The only edits unique to it are step 2's book-side residual and step 3's two unw
 A book no-op after a ToB swap uses the post-ToB state: `post_tob_price` at `:384` is already the
 ToB swap's end price, and the `ucp.is_zero()` branch is below it, so this holds by construction.
 Ticket 35 asserts it rather than anything needing to change here.
+
+**As built.** Steps 1, 2 and 4 landed as written. Step 3 landed as written but is unreachable —
+see below.
+
+Step 1 needed no change, as the ticket anticipated: neither call site inspects `steps` before
+calling, so a `Some(empty)` swap vec enters `t0_donation_vec` and comes back out as
+`unplaced == budget` rather than being short-circuited around.
+
+Step 2 is the ticket's one real edit. The `ucp.is_zero()` arm now returns
+`DonationResidual { rounding: 0, unplaced: book_budget }` instead of `DonationResidual::default()`,
+so ticket 30's per-pool book check balances on a branch that never reaches an allocator. Behavior
+is unchanged: the budget still stays in `contract_liquid` and `collect_extra` still sweeps it into
+`save`. `total_donation`'s `unwrap_or` fallback is untouched apart from reading the same
+`book_budget` binding.
+
+**Step 3's `bail!`s are defensive, not reachable.** `reduce_ranges` only ends a batch early when
+`init` is true (`while !acc.4`), so `final_tick` is `Some` for every range except the last one —
+and the last range takes the `DonationType::current` arm, which reads no bound. A non-final range
+with a missing bound therefore cannot be constructed through this function. The unwraps are
+converted to `bail!`s naming the range index as specified, but there is no test, because
+`TickInterval` and `reduce_ranges` are both private and the input cannot be built. Recorded rather
+than faked, the same way ticket 29 recorded the unreachable `filled_price == None` arm. If a seam
+ever makes it reachable, "malformed metadata still fails" becomes testable then.
+
+Coverage: `empty_steps_retains_its_whole_budget_as_unplaced` asserts retention lands in its own
+bucket rather than folded into rounding, and `true_noop_without_liquidity_retains_its_budget`
+covers the no-liquidity case without a panic. The `ucp.is_zero()` book branch needs a
+`PoolSolution` to drive, so its assertion belongs to ticket 35's `book_noop_after_tob_move`.

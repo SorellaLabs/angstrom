@@ -28,7 +28,7 @@ use crate::{
     traits::{tob::TopOfBlockOrderRewardCalc, user_orders::UserOrderFromInternal},
     uni_structure::{
         BaselinePoolState,
-        donation::{DonationCalculation, DonationResidual}
+        donation::{DonationCalculation, DonationResidual, check_conservation, sum_donations}
     }
 };
 
@@ -423,27 +423,65 @@ impl BundleProcessing for AngstromBundle {
         // let book_swap_vec = PoolPriceVec::from_price_range(post_tob_price,
         // book_end_price)?;
 
+        // The budget the book allocator is handed: book surplus plus the LP share of
+        // the user fees.
+        let book_budget = solution
+            .reward_t0
+            .checked_add(total_lp_user_donate)
+            .ok_or_else(|| eyre::eyre!("book donation budget exceeds u128"))?;
+
         // We need to do our donations in the right order - first the ToB and then the
         // book.  So let's do that
-        let (book_donation_vec, _book_residual) = book_swap_vec
-            .as_ref()
-            .map(|bsv| {
-                let (vec, residual) =
-                    bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate);
+        let (book_donation_vec, book_residual) = match book_swap_vec.as_ref() {
+            Some(bsv) => {
+                let (vec, residual) = bsv.t0_donation_vec(book_budget)?;
                 (Some(vec), residual)
-            })
-            .unwrap_or((None, DonationResidual::default()));
+            }
+            // A zero UCP means this budget is never handed to an allocator at all. It
+            // stays with the protocol through `collect_extra`, as it does today -
+            // reported here rather than dropped silently.
+            None => (None, DonationResidual { rounding: 0, unplaced: book_budget })
+        };
 
-        let (tob_donation_vec, tob_protocol_fee, _tob_residual) = tob_swap_info
-            .as_ref()
-            .map(|(tob_vec, gross_tob_reward)| {
+        let (tob_donation_vec, tob_protocol_fee, tob_residual) = match tob_swap_info.as_ref() {
+            Some((tob_vec, gross_tob_reward)) => {
                 let (tob_lp_budget, protocol) = splits.split_tob(*gross_tob_reward);
-                let (vec, residual) = tob_vec.t0_donation_vec(tob_lp_budget);
+                let (vec, residual) = tob_vec.t0_donation_vec(tob_lp_budget)?;
                 (Some(vec), protocol, residual)
-            })
-            .unwrap_or((None, 0u128, DonationResidual::default()));
+            }
+            None => (None, 0u128, DonationResidual::default())
+        };
 
-        // Both retained portions settle together through `save`.
+        // Conservation, per pool and per source. The ToB gross splits three ways - LPs,
+        // the configured fee, and what the allocator did not place - and the book
+        // budget two.
+        let gross_tob = tob_swap_info.as_ref().map(|(_, gross)| *gross).unwrap_or(0);
+        check_conservation(
+            "ToB",
+            tob_donation_vec
+                .as_deref()
+                .map(sum_donations)
+                .transpose()?
+                .unwrap_or(0),
+            tob_protocol_fee,
+            tob_residual,
+            gross_tob
+        )?;
+        check_conservation(
+            "book",
+            book_donation_vec
+                .as_deref()
+                .map(sum_donations)
+                .transpose()?
+                .unwrap_or(0),
+            0,
+            book_residual,
+            book_budget
+        )?;
+
+        // Both retained portions settle together through `save`. The residuals above
+        // reach `save` through `collect_extra` instead, so adding them here would
+        // count them twice.
         let save_amount = user_protocol_fee
             .checked_add(tob_protocol_fee)
             .ok_or_else(|| eyre::eyre!("retained fees exceed u128"))?;
@@ -459,7 +497,7 @@ impl BundleProcessing for AngstromBundle {
         let total_donation = donation
             .as_ref()
             .map(|d| d.total_donated)
-            .unwrap_or(solution.reward_t0 + total_lp_user_donate);
+            .unwrap_or(book_budget);
 
         // Find our net AMM vec by combining T0s.  There's not a specific reason we use
         // T0 for this, we might want to make this a bit more robust or careful

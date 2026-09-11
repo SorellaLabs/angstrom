@@ -310,9 +310,95 @@ impl Add<&[DonationType]> for &DonationCalculation {
     }
 }
 
+/// Checked sum of what an allocation actually placed. Overflow has to fail a
+/// conservation check rather than wrap into agreement with it.
+pub fn sum_donations(donations: &[DonationType]) -> eyre::Result<u128> {
+    donations
+        .iter()
+        .try_fold(0u128, |acc, d| acc.checked_add(d.donation()))
+        .ok_or_else(|| eyre::eyre!("donation total overflowed"))
+}
+
+/// Nothing is created or lost: everything a source was handed was placed with
+/// LPs, retained as the configured protocol fee, or reported as residual. A
+/// source with no fee of its own passes `0`. Over-allocation fails the same
+/// equality, so it needs no branch of its own, and there is no tolerance - any
+/// discrepancy fails the bundle.
+pub fn check_conservation(
+    source: &str,
+    placed: u128,
+    protocol_fee: u128,
+    residual: DonationResidual,
+    gross: u128
+) -> eyre::Result<()> {
+    let accounted = placed
+        .checked_add(protocol_fee)
+        .and_then(|v| v.checked_add(residual.total()))
+        .ok_or_else(|| eyre::eyre!("{source} donation accounting overflowed"))?;
+    if accounted != gross {
+        eyre::bail!(
+            "{source} placed {placed} + fee {protocol_fee} + residual {} != gross {gross}",
+            residual.total()
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DonationCalculation, DonationType};
+    use super::{
+        DonationCalculation, DonationResidual, DonationType, check_conservation, sum_donations
+    };
+
+    fn donations(amounts: &[u128]) -> Vec<DonationType> {
+        amounts
+            .iter()
+            .map(|d| DonationType::Current { donation: *d, final_tick: 0, liquidity: 100 })
+            .collect()
+    }
+
+    #[test]
+    fn an_inflated_donation_vector_fails_the_check() {
+        let residual = DonationResidual { rounding: 10, unplaced: 0 };
+        // 90 placed + 10 residual is the budget it was handed.
+        check_conservation("book", sum_donations(&donations(&[50, 40])).unwrap(), 0, residual, 100)
+            .unwrap();
+        // One more unit placed than was ever available.
+        assert!(
+            check_conservation(
+                "book",
+                sum_donations(&donations(&[50, 41])).unwrap(),
+                0,
+                residual,
+                100
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn the_configured_fee_is_its_own_bucket() {
+        let residual = DonationResidual { rounding: 3, unplaced: 0 };
+        // ToB gross splits three ways: LPs, the configured fee, and the residual.
+        check_conservation("ToB", 70, 27, residual, 100).unwrap();
+        // Attributing the fee to the wrong bucket does not balance.
+        assert!(check_conservation("ToB", 70, 0, residual, 100).is_err());
+    }
+
+    #[test]
+    fn sums_overflow_rather_than_wrapping_into_agreement() {
+        assert!(sum_donations(&donations(&[u128::MAX, 1])).is_err());
+        assert!(
+            check_conservation(
+                "ToB",
+                u128::MAX,
+                1,
+                DonationResidual::default(),
+                u128::MAX.wrapping_add(1)
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     pub fn constructs_from_empty_vec() {

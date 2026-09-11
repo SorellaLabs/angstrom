@@ -6,7 +6,7 @@ use itertools::Itertools;
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 
 use super::{
-    donation::{DonationResidual, DonationType},
+    donation::{DonationResidual, DonationType, check_conservation, sum_donations},
     liquidity_base::LiquidityAtPoint
 };
 
@@ -237,10 +237,13 @@ impl<'a> PoolSwapResult<'a> {
             .collect::<Vec<_>>()
     }
 
-    pub fn t0_donation_vec(&self, total_donation: u128) -> (Vec<DonationType>, DonationResidual) {
+    pub fn t0_donation_vec(
+        &self,
+        total_donation: u128
+    ) -> eyre::Result<(Vec<DonationType>, DonationResidual)> {
         // Return nothing if we have no steps in this
         if self.steps.is_empty() {
-            return (vec![], DonationResidual { rounding: 0, unplaced: total_donation });
+            return Ok((vec![], DonationResidual { rounding: 0, unplaced: total_donation }));
         }
         // if end price is lower, than is zfo
         let direction = self.start_price >= self.end_price;
@@ -337,18 +340,24 @@ impl<'a> PoolSwapResult<'a> {
                 };
                 remaining_donation -= donation;
 
-                if i == last_range {
+                // A range that moved but carries no tick bound is malformed input, not a
+                // no-op - it has no position to donate into.
+                Ok(if i == last_range {
                     let final_tick = self.end_tick;
                     DonationType::current(final_tick, donation, r.liquidity)
                 } else if direction {
-                    let low_tick = r.lower_tick.unwrap();
+                    let low_tick = r
+                        .lower_tick
+                        .ok_or_else(|| eyre::eyre!("range {i} has no lower tick bound"))?;
                     DonationType::above(low_tick, donation, r.liquidity)
                 } else {
-                    let high_tick = r.upper_tick.unwrap();
+                    let high_tick = r
+                        .upper_tick
+                        .ok_or_else(|| eyre::eyre!("range {i} has no upper tick bound"))?;
                     DonationType::below(high_tick, donation, r.liquidity)
-                }
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<eyre::Result<Vec<_>>>()?;
 
         // An empty blob places nothing at all; otherwise what is still standing after
         // the distribution pass is what integer division left behind.
@@ -358,7 +367,11 @@ impl<'a> PoolSwapResult<'a> {
             DonationResidual { rounding: remaining_donation, unplaced: 0 }
         };
 
-        (donations, residual)
+        // The identity this function is responsible for: everything handed to it was
+        // either placed or reported.
+        check_conservation("allocator", sum_donations(&donations)?, 0, residual, total_donation)?;
+
+        Ok((donations, residual))
     }
 
     /// Returns the amount of T0 exchanged over this swap with a sign attached,
@@ -432,5 +445,71 @@ pub struct TickInterval {
 impl TickInterval {
     pub fn avg_price(&self) -> Ray {
         Ray::calc_price(U256::from(self.d_t0), U256::from(self.d_t1))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity};
+
+    /// A single liquidity range with no initialized ticks, so a swap stays
+    /// inside it and produces steps without crossing a tick boundary.
+    fn pool(liquidity: u128) -> BaselinePoolState {
+        let start_tick = 0;
+        BaselinePoolState::new(
+            BaselineLiquidity::new(
+                10,
+                start_tick,
+                SqrtPriceX96::at_tick(start_tick).unwrap(),
+                liquidity,
+                HashMap::new(),
+                HashMap::new()
+            ),
+            0,
+            0
+        )
+    }
+
+    #[test]
+    fn allocation_conserves_its_budget() {
+        let pool = pool(1_000_000_000_000_000);
+        let swap = pool
+            .swap_current_with_amount(I256::unchecked_from(1_000_000_000i128), true)
+            .unwrap();
+        assert!(!swap.steps.is_empty(), "test needs a swap that actually moved");
+
+        for budget in [0u128, 1, 7, 1_000, 999_999_999_999] {
+            let (donations, residual) = swap.t0_donation_vec(budget).unwrap();
+            assert_eq!(
+                sum_donations(&donations).unwrap() + residual.total(),
+                budget,
+                "budget {budget} was not conserved"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_steps_retains_its_whole_budget_as_unplaced() {
+        let pool = pool(1_000_000_000_000_000);
+        let swap = pool.noop();
+        assert!(swap.steps.is_empty());
+
+        let (donations, residual) = swap.t0_donation_vec(5_000).unwrap();
+        assert!(donations.is_empty());
+        // Retention is its own bucket - not folded into rounding.
+        assert_eq!(residual, DonationResidual { rounding: 0, unplaced: 5_000 });
+    }
+
+    #[test]
+    fn true_noop_without_liquidity_retains_its_budget() {
+        let pool = pool(0);
+        let swap = pool.noop();
+
+        let (donations, residual) = swap.t0_donation_vec(5_000).unwrap();
+        assert!(donations.is_empty());
+        assert_eq!(residual, DonationResidual { rounding: 0, unplaced: 5_000 });
     }
 }

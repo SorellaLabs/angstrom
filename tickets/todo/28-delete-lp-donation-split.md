@@ -32,5 +32,5 @@ is the definition only — a one-line delete with no call sites to chase.
 
 It is a `pub const` in a library crate, so it produces no dead-code warning while it lingers;
 nothing fails if this ticket is deferred, which is exactly why it is worth doing rather than
-forgetting. Ticket 40 does **not** depend on it staying — see that ticket's Notes on whether a
+forgetting. Ticket 39 does **not** depend on it staying — see that ticket's Notes on whether a
 legacy `f64` path is needed at all.

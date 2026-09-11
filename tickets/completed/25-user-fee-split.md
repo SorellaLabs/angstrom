@@ -42,10 +42,10 @@ let (total_lp_user_donate, save_amount) = splits.split_user(total_user_fees);
 gross` holds by construction — which the `f64` path did not guarantee. The two agree exactly while
 `total_user_fees` stays under roughly `2^53 / 3`; above that the `f64` product loses precision and
 `save_amount` can come out a unit apart. That is the documented activation difference, not a
-regression — replay before **A** keeps the old path (40).
+regression — replay before **A** keeps the old path (39).
 
-The arithmetic itself is already covered by ticket 03's tests. Conservation at the
-`process_solution` level is ticket 31's; this ticket is the wiring.
+The arithmetic itself is already covered by ticket 3's tests. Conservation at the
+`process_solution` level is ticket 30's; this ticket is the wiring.
 
 Ticket 28 deletes the constant itself. The import is already gone by then, so 28 is left with the
 definition only.
@@ -56,6 +56,6 @@ definition only.
 `crates/types/tests/angstrom.rs::build_bundle` is the only test that drives `process_solution`, and
 it is `#[ignore]`d because its base64 fixture predates `cancel_requested` on `PoolSolution` — it
 fails identically with and without this change, on the `serde_json` decode at `:41`, before
-`process_solution` is reached. Not revived here: ticket 33 replaces fixture-based coverage with
+`process_solution` is reached. Not revived here: ticket 32 replaces fixture-based coverage with
 builder-produced bundles against real contracts. The split arithmetic itself is covered by ticket
-03's `splits_conserve_and_round_lp_down`.
+3's `splits_conserve_and_round_lp_down`.

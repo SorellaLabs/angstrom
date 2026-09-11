@@ -25,7 +25,7 @@ construction paths are driven from one read rather than two.
 
 The impl names it `_splits` for now: the rates are not read until ticket 25 replaces the `f64`
 split, and `-D warnings` rejects an unused binding. `_gas_details` on `from_proposal` already
-carries the same marker. `LP_DONATION_SPLIT` is untouched here; 27 and 30 retire it.
+carries the same marker. `LP_DONATION_SPLIT` is untouched here; 27 and 29 retire it.
 
 `build_dummy_for_tob_gas` and `build_dummy_for_user_gas` stay rate-free. They are gas probes with
 no donations at all, so they never reach `process_solution` — the claim is that no path that

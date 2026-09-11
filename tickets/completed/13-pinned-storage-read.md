@@ -54,7 +54,7 @@ The const bypasses `DonationSplits::new`, the documented only constructor. The v
 and in range by inspection; keep them next to `DENOM` so a change is visible.
 
 The const carries a fixed block identity, so a pre-deployment resolution is distinguishable from a
-chain read. Consumers that check parent identity (22, 34) must expect that.
+chain read. Consumers that check parent identity (22, 33) must expect that.
 
 Pre-deployment resolution is what lets replay work at or before **A** without the caller
-special-casing it — see ticket 40.
+special-casing it — see ticket 39.

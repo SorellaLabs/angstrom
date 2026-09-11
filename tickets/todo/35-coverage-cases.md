@@ -1,6 +1,6 @@
-# 36 — Coverage that must not be dropped
+# 35 — Coverage that must not be dropped
 
-**Blocks on:** 27, 32
+**Blocks on:** 27, 31
 
 ## Files
 - `crates/types/src/traits/bundles.rs` — `process_solution` under test
@@ -11,7 +11,7 @@ Keep the awkward cases tested.
 
 ## Do
 
-One named test per case. Each asserts ticket 31's conservation identity *and* which bucket the
+One named test per case. Each asserts ticket 30's conservation identity *and* which bucket the
 budget landed in — a test that only checks the total passes when retention is misfiled as rounding.
 
 | test | case | asserts |

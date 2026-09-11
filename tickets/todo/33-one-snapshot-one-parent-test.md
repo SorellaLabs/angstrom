@@ -1,4 +1,4 @@
-# 34 — One snapshot, one parent
+# 33 — One snapshot, one parent
 
 **Blocks on:** 22
 
@@ -29,7 +29,7 @@ owned round identity was dropped in a renumber, and nothing else carries it.
 3. **Check on receipt.** In `try_build_proposal` (`proposal.rs:102`), compare the result's
    `(parent, generation)` against `handles.block_height` and `handles.round_generation`, and
    discard on mismatch rather than building. Re-check before signing and before each endpoint send
-   in the submission future — ticket 35 shares this checkpoint.
+   in the submission future — ticket 34 shares this checkpoint.
 
 4. **The same-snapshot half needs no new mechanism.** The snapshot rides out of
    `matching_engine_output` on `MatchingOutput` as one local `splits` used twice, so gas estimation

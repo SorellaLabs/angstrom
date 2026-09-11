@@ -1,11 +1,11 @@
-# 38 — Accrual ledger from canonical bundles
+# 37 — Accrual ledger from canonical bundles
 
-**Blocks on:** 37
+**Blocks on:** 36
 
 ## Files
 - `crates/fee-ledger/` (new) — name and owning operator to be settled in this ticket
 - `crates/eth/src/manager.rs:150,209` — `handle_reorg` / `apply_periphery_logs`, the commit/reorg feed
-- `crates/telemetry-recorder/src/lib.rs` — ticket 37's `BundleFees`, reconstruction input only
+- `crates/telemetry-recorder/src/lib.rs` — ticket 36's `BundleFees`, reconstruction input only
 
 ## Goal
 Know what is owed, from chain state rather than telemetry about intent.
@@ -44,8 +44,8 @@ Know what is owed, from chain state rather than telemetry about intent.
 Crate name and owning operator are a deliverable of this ticket, not a precondition — PLAN.md
 requires both named in the rollout artifacts before a nonzero ToB share.
 
-Ticket 37's `BundleFees` is the *reconstruction input* for ticket 39, never the accrual source.
-Accruing from it would mean the ledger agrees with the builder by construction, and 39's whole
+Ticket 36's `BundleFees` is the *reconstruction input* for ticket 38, never the accrual source.
+Accruing from it would mean the ledger agrees with the builder by construction, and 38's whole
 purpose is to detect a builder that got it wrong.
 
 Nothing here holds withdrawal authority or initiates a distribution. `distributeFees` stays

@@ -1,6 +1,6 @@
-# 31 — Conservation per source
+# 30 — Conservation per source
 
-**Blocks on:** 30, 27
+**Blocks on:** 29, 27
 
 ## Files
 - `crates/types/src/uni_structure/pool_swap.rs:237` — `t0_donation_vec`, per-source check
@@ -29,7 +29,7 @@ if accounted != total_donation {
    above `total_donation` fails the same check — over-allocation needs no separate branch.
 
 2. **Per pool, in `process_solution`,** after the merge at `:435` and with both residuals from
-   ticket 30 in scope:
+   ticket 29 in scope:
 
 ```rust
 // ToB: gross splits three ways and nothing else.
@@ -65,8 +65,8 @@ Four buckets, kept separate and each attributable:
 | --- | --- | --- |
 | placed donations | `RewardsUpdate` | LPs |
 | configured fee | `save_amount` → `save` (27) | protocol |
-| rounding residual | `contract_liquid` → `collect_extra` → `save` (30) | protocol |
-| unplaced residual | same path as rounding (30, 32) | protocol |
+| rounding residual | `contract_liquid` → `collect_extra` → `save` (29) | protocol |
+| unplaced residual | same path as rounding (29, 31) | protocol |
 
 The last two reach `save` without passing through `save_amount`. That is the "counted exactly
 once" requirement: adding a residual to `save_amount` would both reserve it *and* let

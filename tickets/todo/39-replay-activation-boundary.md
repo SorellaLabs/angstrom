@@ -1,4 +1,4 @@
-# 40 — Replay either side of A
+# 39 — Replay either side of A
 
 **Blocks on:** 12, 25
 
@@ -31,7 +31,7 @@ Keep historical replay byte-exact.
    account or a config bound to a different Angstrom. Ensure replay surfaces that as a named gap
    per block and keeps going, rather than aborting the run or substituting today's rate.
 
-4. **Legacy allocation behavior needs nothing.** Tickets 30 and 32 are reporting-only — allocation
+4. **Legacy allocation behavior needs nothing.** Tickets 29 and 31 are reporting-only — allocation
    policy is unchanged, so there is no pre-**A** allocation path to preserve.
 
 ## Done when

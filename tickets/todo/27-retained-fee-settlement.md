@@ -59,9 +59,9 @@ same amount lands in `save` twice. This is the pattern the user fee already used
 
 `collect_extra` is called once, in `AssetBuilder::get_asset_array` (`asset/builder.rs:103`), after
 the four stages are chained with `and_then`. That single call is where every unallocated remainder
-becomes `save` — which is why ticket 30's residual must not be added to `save_amount`, or it is
+becomes `save` — which is why ticket 29's residual must not be added to `save_amount`, or it is
 counted twice.
 
 The `unwrap_or(solution.reward_t0 + total_lp_user_donate)` fallback at `:443` is reached only when
 both donation vectors are `None`, which implies no ToB order, so it cannot miss a ToB fee. Ticket
-32 makes that branch's retention explicit; it is not a correctness gap here.
+31 makes that branch's retention explicit; it is not a correctness gap here.

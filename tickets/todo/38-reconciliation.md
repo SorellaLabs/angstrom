@@ -1,9 +1,9 @@
-# 39 — Reconcile allocations after inclusion
+# 38 — Reconcile allocations after inclusion
 
-**Blocks on:** 38
+**Blocks on:** 37
 
 ## Files
-- `crates/fee-ledger/` — the crate from ticket 38
+- `crates/fee-ledger/` — the crate from ticket 37
 - `crates/types/src/traits/bundles.rs` — `process_solution`, reused to reconstruct
 - `crates/types/primitives/src/contract_payloads/protocol_fees.rs:load_from_chain` — historical rates
 - `contracts/src/periphery/ControllerV1.sol:224` — `distributeFees`, unchanged
@@ -13,7 +13,7 @@ Detect a bad allocation that already settled.
 
 ## Do
 
-1. **Reconstruct.** For each included bundle, take its construction parent from ticket 37's
+1. **Reconstruct.** For each included bundle, take its construction parent from ticket 36's
    record, read the rates in force at that parent with `load_from_chain`, and re-run the split
    arithmetic. Reuse `process_solution`'s own path rather than reimplementing it — a second
    implementation drifts, and a drift here reads as a false mismatch.
@@ -22,7 +22,7 @@ Detect a bad allocation that already settled.
    against the expected LP allocation, and the `Asset.save` against the expected protocol fee plus
    the swept residuals.
 
-3. **Residuals are expected, not mismatches.** Reconcile `rounding` and `unplaced` (ticket 30) as
+3. **Residuals are expected, not mismatches.** Reconcile `rounding` and `unplaced` (ticket 29) as
    their own buckets. A bundle whose `save` exceeds the configured fee by exactly its residual is
    correct; one that exceeds it by anything else is not.
 
@@ -51,5 +51,5 @@ not to be reachable from an archive node, reconciliation narrows to the parts th
 state — the splits themselves and `Asset.save` — and that reduction should be recorded here rather
 than quietly shipped.
 
-Step 5 is why ticket 33's balance assertion is explicitly not a template: it works there only
+Step 5 is why ticket 32's balance assertion is explicitly not a template: it works there only
 because the Anvil harness controls the starting state.

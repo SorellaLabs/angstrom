@@ -1,4 +1,4 @@
-# 37 — Record per-bundle fee telemetry
+# 36 — Record per-bundle fee telemetry
 
 **Blocks on:** 27
 
@@ -57,11 +57,11 @@ BundleFees {
 **Construction parent and round generation are separate fields on purpose.** The generation is
 local bookkeeping — another node replaying this bundle has no idea what this node's counter was
 at. The parent hash is what reproduces the check. Collapsing them into one identity makes the
-record unreconstructible off this node, which is the thing ticket 39 needs it for.
+record unreconstructible off this node, which is the thing ticket 38 needs it for.
 
-This is proposal-time telemetry: it records what the builder *intended*. Ticket 38 derives accruals
+This is proposal-time telemetry: it records what the builder *intended*. Ticket 37 derives accruals
 from canonical included bundles and must not read this as the source of truth — it is the
-reconstruction input, cross-checked against chain state, which is why 39 can detect a mismatch at
+reconstruction input, cross-checked against chain state, which is why 38 can detect a mismatch at
 all. If the ledger trusted this record, a mis-split bundle would reconcile against its own wrong
 arithmetic.
 

@@ -1,4 +1,4 @@
-# 30 — Allocator returns its unallocated remainder
+# 29 — Allocator returns its unallocated remainder
 
 **Blocks on:** 26
 
@@ -36,13 +36,13 @@ impl DonationResidual {
 
 - `:239`, `self.steps.is_empty()` — return
   `(vec![], DonationResidual { rounding: 0, unplaced: total_donation })`. Today this drops the
-  whole budget on the floor with no record; that is ticket 32's case and this is where it becomes
+  whole budget on the floor with no record; that is ticket 31's case and this is where it becomes
   visible.
 - `filled_price == None` (`:310`, empty blob) — every range's donation is `0`, so the loop places
   nothing. Report the whole budget as `unplaced`.
 - Otherwise — the `remaining_donation` still standing after the `:335` loop is `rounding`.
 
-4. Update both call sites in `bundles.rs` to destructure the pair. Ticket 31 consumes the
+4. Update both call sites in `bundles.rs` to destructure the pair. Ticket 30 consumes the
    residuals; for this ticket, binding them `_book_residual` / `_tob_residual` is enough to keep
    `-D warnings` quiet.
 
@@ -55,7 +55,7 @@ Reporting only. Allocation policy is unchanged — no logic is added to exhaust 
 
 The distinction is by *exit*, not by inspecting the numbers: an allocator that never ran reports
 `unplaced`, and one that ran but could not place the last few units reports `rounding`. Keeping
-them apart is what lets ticket 39 treat a rounding remainder as expected and an unplaced budget as
+them apart is what lets ticket 38 treat a rounding remainder as expected and an unplaced budget as
 worth reading, without a threshold.
 
 `remaining_donation` is reused as a loop variable twice — set at `:250` for the blob pass and

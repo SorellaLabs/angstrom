@@ -1,6 +1,6 @@
-# 35 — Cancellation
+# 34 — Cancellation
 
-**Blocks on:** 34
+**Blocks on:** 33
 
 ## Files
 - `crates/consensus/src/rounds/proposal.rs:36` — the `submission_future` field
@@ -13,7 +13,7 @@ Prove a reset actually stops work.
 
 ## Do
 
-**This ticket has to build the mechanism it tests** — see ticket 34's Notes on the dropped
+**This ticket has to build the mechanism it tests** — see ticket 33's Notes on the dropped
 implementation ticket.
 
 1. **Keep the handle abortable.** `submission_future` is typed
@@ -38,7 +38,7 @@ impl Drop for ProposalState {
    call site needs to change. Today that drop leaks a running task.
 
 3. **Re-check identity inside the future**, after the async preparation and before each endpoint
-   send, using ticket 34's `(parent, generation)`. Abort closes the window after the drop; the
+   send, using ticket 33's `(parent, generation)`. Abort closes the window after the drop; the
    re-check closes the window before it, where the task is mid-`await` and has not yet been
    dropped.
 
@@ -52,7 +52,7 @@ impl Drop for ProposalState {
 - A dropped `ProposalState` aborts its submission task.
 
 ## Notes
-Now blocks on 34 rather than nothing: step 3 needs the identity pair, and the ticket cannot assert
+Now blocks on 33 rather than nothing: step 3 needs the identity pair, and the ticket cannot assert
 "no later send" without a way to say which round a send belongs to. The `Blocks on: —` it carried
 was an artifact of the renumber that dropped its implementation ticket.
 

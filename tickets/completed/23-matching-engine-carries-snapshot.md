@@ -36,7 +36,7 @@ when a `LpDonationSplitsSet` log appears, and it is `B256::ZERO` pre-deployment.
 hashes in one signature is a trap; the rates are what this code needs.
 
 The snapshot itself stays on `MatchingOutput`, where its identity is the round's provenance and
-ticket 37 will want it.
+ticket 36 will want it.
 
 It is *not* stashed on `ProposalState` as the ticket first suggested. Ticket 22 had already decided
 the other way: the snapshot rides out of `matching_engine_output` on `MatchingOutput`, so the value

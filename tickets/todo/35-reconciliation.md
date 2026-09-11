@@ -30,8 +30,8 @@ Detect a bad allocation that already settled.
 
 1. **Reconstruct.** For each included bundle, take the construction parent to be the canonical
    parent of the block it landed in, read the rates in force there with `load_from_chain`, and
-   re-run the split arithmetic. Reuse `process_solution`'s own path rather than reimplementing it — a second
-   implementation drifts, and a drift here reads as a false mismatch.
+   re-run the split arithmetic. Reuse `process_solution`'s own path rather than reimplementing
+   it — a second implementation drifts, and a drift here reads as a false mismatch.
 
 2. **Compare** against what the bundle actually encoded: per pool, the `RewardsUpdate` totals
    against the expected LP allocation, and the `Asset.save` against the expected protocol fee plus

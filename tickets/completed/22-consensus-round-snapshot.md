@@ -39,14 +39,14 @@ DonationSplitSnapshot)`. Carrying it on the result rather than stashing it somew
 "the same value" structural: there is one capture in one tuple, so the value matching was driven
 on and the value final construction reads cannot diverge, rather than being two reads that happen
 to agree. It lands in `try_build_proposal` as `_splits`, in scope at the `from_proposal` call
-ticket 26 will thread it into; it is deliberately *not* held on `ProposalState`, which would be a
+ticket 24 will thread it into; it is deliberately *not* held on `ProposalState`, which would be a
 second copy of something already in scope where it is needed. `FinalizationState` ignores the
 extra element.
 
 Coverage: `a_config_update_mid_round_does_not_change_the_round_being_built` drives a capture, lands
 a setter while it is in flight, and asserts the round kept what it captured *and* that the next
 round starts from the update — the two halves of "done when" are one property. That both consumers
-see it is structural, per above, so there is nothing separate to assert until ticket 26 gives
+see it is structural, per above, so there is nothing separate to assert until ticket 24 gives
 `from_proposal` something to do with it.
 
 The six `rounds::tests` that use `setup_state_machine` were already failing before this ticket —

@@ -128,11 +128,7 @@ impl ProposalState {
                     "Failed to properly build proposal, THERE SHALL BE NO PROPOSAL THIS BLOCK :("
                 )
             })
-            .map(|(pool_solution, gas_info, _splits)| {
-                // `_splits` is the round's single configuration read, arriving on the
-                // same result as the gas it was matched with. Ticket 26 threads it
-                // into `from_proposal` below; nothing re-reads it in between.
-
+            .map(|(pool_solution, gas_info, splits)| {
                 // Record matching results metrics
                 let metrics = BlockMetricsWrapper::new();
                 let pools_solved = pool_solution.len();
@@ -164,8 +160,15 @@ impl ProposalState {
                 let snapshot = handles.fetch_pool_snapshot();
                 let all_orders = handles.order_storage.get_all_orders();
 
+                // `splits` is the round's single configuration read, arriving on the
+                // same result as the gas it was matched with, so this bundle and the
+                // one the gas was estimated for are built from the same rates.
                 let bundle = AngstromBundle::from_proposal(
-                    &proposal, all_orders, gas_info, &snapshot
+                    &proposal,
+                    all_orders,
+                    gas_info,
+                    &snapshot,
+                    splits.splits
                 )
                 .inspect_err(|e| {
                     tracing::info!(err=%e,

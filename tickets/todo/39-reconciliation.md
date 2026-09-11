@@ -1,9 +1,9 @@
-# 41 — Reconcile allocations after inclusion
+# 39 — Reconcile allocations after inclusion
 
-**Blocks on:** 40
+**Blocks on:** 38
 
 ## Files
-- the ledger crate from ticket 40
+- the ledger crate from ticket 38
 - `crates/types/src/traits/bundles.rs` — reconstruct expected allocations
 - `contracts/src/periphery/ControllerV1.sol` — `distributeFees`, unchanged
 

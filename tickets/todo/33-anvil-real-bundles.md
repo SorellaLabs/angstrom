@@ -1,6 +1,6 @@
-# 35 — Builder bundles against unchanged Angstrom
+# 33 — Builder bundles against unchanged Angstrom
 
-**Blocks on:** 29
+**Blocks on:** 27
 
 ## Files
 - `testing-tools/src/contracts/`

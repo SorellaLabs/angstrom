@@ -6,6 +6,7 @@ use angstrom_types_primitives::{
         Pair,
         angstrom::{AngstromBundle, BundleGasDetails, TopOfBlockOrder, UserOrder},
         asset::builder::*,
+        protocol_fees::DonationSplits,
         rewards::{PoolUpdate, RewardsUpdate}
     },
     primitive::{OrderId, PoolId, Ray, SqrtPriceX96},
@@ -44,7 +45,8 @@ pub trait BundleProcessing: Sized {
         t0: Address,
         t1: Address,
         store_index: u16,
-        shared_gas: Option<U256>
+        shared_gas: Option<U256>,
+        splits: DonationSplits
     ) -> eyre::Result<()>;
 
     fn build_dummy_for_tob_gas(
@@ -79,13 +81,15 @@ pub trait BundleProcessing: Sized {
         proposal: &Proposal,
         orders: OrderSet<AllOrders, RpcTopOfBlockOrder>,
         _gas_details: BundleGasDetails,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self>;
 
     fn for_gas_finalization(
         limit: Vec<OrderWithStorageData<AllOrders>>,
         solutions: Vec<PoolSolution>,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self>;
 }
 
@@ -226,7 +230,8 @@ impl BundleProcessing for AngstromBundle {
         t0: Address,
         t1: Address,
         store_index: u16,
-        shared_gas: Option<U256>
+        shared_gas: Option<U256>,
+        _splits: DonationSplits
     ) -> eyre::Result<()> {
         tracing::info!(?solution);
         let process_solution_span =
@@ -787,7 +792,8 @@ impl BundleProcessing for AngstromBundle {
         proposal: &Proposal,
         orders: OrderSet<AllOrders, RpcTopOfBlockOrder>,
         _gas_details: BundleGasDetails,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self> {
         trace!("Starting from_proposal");
         let mut top_of_block_orders = Vec::new();
@@ -866,7 +872,8 @@ impl BundleProcessing for AngstromBundle {
                 *t0,
                 *t1,
                 *store_index,
-                Some(U256::ZERO)
+                Some(U256::ZERO),
+                splits
             )?;
         }
 
@@ -885,7 +892,8 @@ impl BundleProcessing for AngstromBundle {
     fn for_gas_finalization(
         limit: Vec<OrderWithStorageData<AllOrders>>,
         solutions: Vec<PoolSolution>,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
         let mut pool_updates = Vec::new();
@@ -954,7 +962,8 @@ impl BundleProcessing for AngstromBundle {
                 *t0,
                 *t1,
                 *store_index,
-                None
+                None,
+                splits
             )?;
         }
 

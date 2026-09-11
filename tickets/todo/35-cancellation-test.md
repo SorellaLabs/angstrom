@@ -1,6 +1,6 @@
-# 37 — Cancellation
+# 35 — Cancellation
 
-**Blocks on:** 25
+**Blocks on:** —
 
 ## Files
 - `crates/consensus/src/rounds/proposal.rs`

@@ -3,7 +3,9 @@
 mod solutionlib;
 
 use angstrom_types::{
-    contract_payloads::{angstrom::AngstromBundle, asset::builder::AssetBuilder},
+    contract_payloads::{
+        angstrom::AngstromBundle, asset::builder::AssetBuilder, protocol_fees::DonationSplits
+    },
     orders::PoolSolution,
     traits::BundleProcessing,
     uni_structure::BaselinePoolState
@@ -56,7 +58,8 @@ fn build_bundle() {
             t0,
             t1,
             store_index,
-            shared_gas
+            shared_gas,
+            DonationSplits::new(750_000, 1_000_000).unwrap()
         )
         .expect("Bundle processing failed");
 

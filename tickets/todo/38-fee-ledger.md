@@ -1,6 +1,6 @@
-# 40 — Accrual ledger from canonical bundles
+# 38 — Accrual ledger from canonical bundles
 
-**Blocks on:** 39
+**Blocks on:** 37
 
 ## Files
 - new crate under `crates/` — name and owning operator to be settled in this ticket

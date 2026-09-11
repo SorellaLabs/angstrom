@@ -1,6 +1,6 @@
-# 32 — Allocator returns its unallocated remainder
+# 30 — Allocator returns its unallocated remainder
 
-**Blocks on:** 28
+**Blocks on:** 26
 
 ## Files
 - `crates/types/src/uni_structure/pool_swap.rs` — `t0_donation_vec`

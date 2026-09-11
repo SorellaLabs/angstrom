@@ -6,7 +6,10 @@ use std::{
 use alloy::hex;
 use alloy_primitives::{Address, B256};
 use angstrom_types::{
-    contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
+    contract_payloads::{
+        angstrom::{AngstromBundle, BundleGasDetails},
+        protocol_fees::DonationSplits
+    },
     matching::match_estimate_response::BundleEstimate,
     orders::PoolSolution,
     primitive::PoolId,
@@ -48,6 +51,7 @@ pub enum MatcherCommand {
         Vec<OrderWithStorageData<TopOfBlockOrder>>,
         HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
         B256,
+        DonationSplits,
         oneshot::Sender<Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>
     ),
     EstimateGasPerPool {
@@ -80,7 +84,8 @@ impl MatchingEngineHandle for MatcherHandle {
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pools: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
-        parent_hash: B256
+        parent_hash: B256,
+        splits: DonationSplits
     ) -> futures_util::future::BoxFuture<
         '_,
         Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>
@@ -89,7 +94,7 @@ impl MatchingEngineHandle for MatcherHandle {
             let (tx, rx) = oneshot::channel();
             self.send_request(
                 rx,
-                MatcherCommand::BuildProposal(limit, searcher, pools, parent_hash, tx)
+                MatcherCommand::BuildProposal(limit, searcher, pools, parent_hash, splits, tx)
             )
             .await
         })
@@ -131,7 +136,8 @@ impl<V: BundleValidatorHandle> MatchingManager<V> {
         limit: Vec<BookOrder>,
         searcher: Vec<OrderWithStorageData<TopOfBlockOrder>>,
         pool_snapshots: HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
-        parent_hash: B256
+        parent_hash: B256,
+        splits: DonationSplits
     ) -> Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError> {
         // Pull all the orders out of all the preproposals and build OrderPools out of
         // them.  This is ugly and inefficient right now
@@ -177,9 +183,13 @@ impl<V: BundleValidatorHandle> MatchingManager<V> {
 
         // generate bundle without final gas known.
         trace!("Building bundle for gas finalization");
-        let bundle =
-            AngstromBundle::for_gas_finalization(limit.clone(), solutions.clone(), &pool_snapshots)
-                .map_err(|_| MatchingEngineError::NoOrdersFilled)?;
+        let bundle = AngstromBundle::for_gas_finalization(
+            limit.clone(),
+            solutions.clone(),
+            &pool_snapshots,
+            splits
+        )
+        .map_err(|_| MatchingEngineError::NoOrdersFilled)?;
 
         let gas_response = self
             .validation_handle
@@ -212,10 +222,10 @@ pub async fn manager_thread<V: BundleValidatorHandle>(
 
     while let Some(c) = input.recv().await {
         match c {
-            MatcherCommand::BuildProposal(limit, searcher, snapshot, parent_hash, r) => {
+            MatcherCommand::BuildProposal(limit, searcher, snapshot, parent_hash, splits, r) => {
                 let r = r.send(
                     manager
-                        .build_proposal(limit, searcher, snapshot, parent_hash)
+                        .build_proposal(limit, searcher, snapshot, parent_hash, splits)
                         .await
                 );
                 if r.is_err() {

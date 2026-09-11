@@ -39,8 +39,7 @@ from disagreeing by construction instead of by convention. That in turn needed
 `EthEvent::NewBlock` and `EthEvent::ReorgedOrders` to carry `BlockNumHash` rather than a bare
 number; the eth manager already had `tip_hash()`, nothing downstream of it did. The reorg arm
 takes the new tip instead of `reorg.end()`, for the same no-disagreement reason. Ticket 23 carries
-the `DonationSplitSnapshot` down the same path and ticket 24 adds the generation tag; both build
-on this rather than replacing it.
+the `DonationSplitSnapshot` down the same path and builds on this rather than replacing it.
 
 `Validator`'s `db: Arc<DB>` field is removed — `set_block` was its only use.
 `AnvilStateProvider::block_number` was `panic!("never used")` and is now implemented, since bundle

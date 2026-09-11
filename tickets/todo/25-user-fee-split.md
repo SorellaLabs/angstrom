@@ -1,6 +1,6 @@
-# 27 — Integer user-fee split
+# 25 — Integer user-fee split
 
-**Blocks on:** 26
+**Blocks on:** 24
 
 ## Files
 - `crates/types/src/traits/bundles.rs:408`

@@ -30,5 +30,5 @@ which is what makes "no fallback to a default or a previous value" hold. Neither
 `DonationSplits` nor `DonationSplitSnapshot` derives `Default`, and nothing calls
 `unwrap_or_default` on a snapshot, so there is no default to fall back to.
 
-Until ticket 44 sets the real address, every network holds `Address::ZERO` / block `0`, so a node
+Until ticket 42 sets the real address, every network holds `Address::ZERO` / block `0`, so a node
 on a live chain head will not start. That is the intended fail-closed posture, not a regression.

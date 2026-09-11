@@ -1,6 +1,6 @@
-# 31 — Fix callers broken by the signature change
+# 29 — Fix callers broken by the signature change
 
-**Blocks on:** 26
+**Blocks on:** 24
 
 ## Files
 - `crates/angstrom-net/src/manager.rs:303` — non-exhaustive `EthEvent` match

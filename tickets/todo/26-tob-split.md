@@ -1,6 +1,6 @@
-# 28 — Apply the ToB split before the donation merge
+# 26 — Apply the ToB split before the donation merge
 
-**Blocks on:** 27
+**Blocks on:** 25
 
 ## Files
 - `crates/types/src/traits/bundles.rs` — around `tob_donation_vec`

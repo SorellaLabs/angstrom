@@ -1,6 +1,6 @@
-# 30 — Delete LP_DONATION_SPLIT
+# 28 — Delete LP_DONATION_SPLIT
 
-**Blocks on:** 27
+**Blocks on:** 25
 
 ## Files
 - `crates/types/primitives/src/contract_payloads/angstrom/mod.rs:25`

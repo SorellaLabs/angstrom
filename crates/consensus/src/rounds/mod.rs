@@ -369,7 +369,7 @@ where
         let matcher = self.matching_engine.clone();
         async move {
             let (solutions, gas) = matcher
-                .solve_pools(limit, searcher, pool_snapshots, parent_hash)
+                .solve_pools(limit, searcher, pool_snapshots, parent_hash, splits.splits)
                 .await?;
 
             Ok((solutions, gas, splits))
@@ -669,7 +669,7 @@ pub mod tests {
             pool_registry,
             uniswap_pools,
             provider,
-            MockMatchingEngine {},
+            MockMatchingEngine::default(),
             ConsensusTimingConfig::default(),
             slot_clock.clone(),
             DonationSplitSnapshot {
@@ -838,6 +838,16 @@ pub mod tests {
 
         let (.., captured) = output.await.unwrap();
         assert_eq!(captured, at_round_start, "the round kept what it captured");
+        assert_eq!(
+            *state_machine
+                .shared_state
+                .matching_engine
+                .last_splits
+                .lock()
+                .unwrap(),
+            Some(captured.splits),
+            "the engine was driven on the same rates final construction is handed"
+        );
 
         // ...and the next round starts from the update.
         assert_eq!(state_machine.shared_state.protocol_fee_config, updated);

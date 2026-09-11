@@ -2,6 +2,18 @@
 
 **Blocks on:** 29
 
+## Overview
+Several paths through the donation allocator retain budget for the protocol today without
+recording that they did: an empty step vector, and the `ucp.is_zero()` book branch that never
+hands its budget to an allocator at all. Ticket 29 already built the residual type that makes
+retention reportable; this ticket is the one that says which cases must route through it, and
+that the resulting retention is intended rather than an unremarked side effect. Almost no code
+is unique to it — the book-side residual in step 2 and the two unwraps in step 3 are the whole
+diff. Those unwraps are the one behavior change: a range that moved but carries no tick bound is
+malformed input, and turning a panic into an error is not the same as accepting it. Allocation
+policy is explicitly unchanged, and an earlier requirement that a true no-op allocate its whole
+budget to the active range is withdrawn rather than deferred.
+
 ## Files
 - `crates/types/src/uni_structure/pool_swap.rs:239` — the `steps.is_empty()` exit
 - `crates/types/src/uni_structure/pool_swap.rs:341,344` — `lower_tick` / `upper_tick` unwraps

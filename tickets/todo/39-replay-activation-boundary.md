@@ -2,6 +2,21 @@
 
 **Blocks on:** 12, 25
 
+## Overview
+Rollout step 6 requires replay before **A** to stay byte-exact, and PLAN.md frames that as
+keeping the legacy `f64` path alive. This ticket's argument is that the requirement may already
+be satisfied without one: `load_from_chain` short-circuits to the baked-in const at or before
+the deployed block, so a pre-**A** replay runs the integer path at exactly the rates the `f64`
+path used, and the two agree while `3 * total_user_fees` stays inside the f64 mantissa. So the
+work is to measure first — replay a spread of recorded pre-**A** blocks and diff the produced
+bundle against what was included — and add the branch only if a real divergence shows up. That
+ordering matters because the branch is not free: it needs the snapshot threaded rather than just
+`DonationSplits`, which ticket 23 deliberately decided against, so it means reopening that
+decision rather than widening a signature quietly. The other half of the ticket is that
+unreadable historical config must surface as a named gap per block, rather than aborting the run
+or silently substituting today's rate. Allocation behavior needs nothing preserved — tickets 29
+and 31 are reporting-only.
+
 ## Files
 - `testing-tools/src/replay/runner.rs:277` — the existing `load_from_chain` call
 - `bin/replay/src/lib.rs`

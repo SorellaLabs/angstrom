@@ -2,6 +2,19 @@
 
 **Blocks on:** 33
 
+## Overview
+A round reset replaces `current_state` wholesale, which drops the proposal state and — today —
+leaves its submission task running. The cause is a type rather than a missing call:
+`submission_future` holds a `BoxFuture`, and boxing the `JoinHandle` erased the `abort()` that
+would have stopped it. The fix is to keep the `JoinHandle`, which is already a `Future` with
+that same `Output`, and add a `Drop` impl, so the existing reset path becomes the cancellation
+path with no call site changing. Abort closes the window after the drop; re-checking
+`(parent, generation)` inside the future closes the window before it, while the task is
+mid-await — which is why this now blocks on ticket 33. Tests must count sends against a
+recording submitter rather than assert a cancellation token exists, since the claim is that no
+further send happened, not that a mechanism is present. What this closes is the retry and the
+second send; a transaction already in flight cannot be recalled.
+
 ## Files
 - `crates/consensus/src/rounds/proposal.rs:36` — the `submission_future` field
 - `crates/consensus/src/rounds/proposal.rs:320` — `tokio::spawn(submission_future)`

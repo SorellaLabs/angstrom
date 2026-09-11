@@ -2,6 +2,19 @@
 
 **Blocks on:** 22
 
+## Overview
+PLAN.md's first acceptance criterion is that a round uses one snapshot and one parent
+throughout, and rejects async results that no longer belong to it. Half of that is already
+structural: the snapshot rides out of `matching_engine_output` on `MatchingOutput` as one local
+used twice, so gas estimation and final construction cannot diverge, and the test only has to
+assert it. The other half does not exist — round-generation identity was owned by a ticket
+deleted in the `716f9e90` renumber, so this ticket has to build the mechanism before it can test
+it. That means a `round_generation` on `SharedRoundState` bumped in `reset_round`, tagging the
+async result with `(parent, generation)`, and discarding mismatches in `try_build_proposal`.
+Both fields are needed: a hash alone misses a reset without a new head, and a height alone
+misses a same-height reorg. Note that `setup_state_machine` currently dials a public RPC, which
+has to be pointed at the harness or a stub before any test can honestly live there.
+
 ## Files
 - `crates/consensus/src/rounds/mod.rs:53` — `MatchingOutput`
 - `crates/consensus/src/rounds/mod.rs:142` — `reset_round`

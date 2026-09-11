@@ -2,6 +2,19 @@
 
 **Blocks on:** 36
 
+## Overview
+A new crate answering what the protocol is owed, derived from chain state rather than from
+telemetry about what the builder meant to do. It accrues from bundles decoded out of included
+blocks' calldata on the same canonical commit/reorg feed the eth cleanser uses, processing every
+block in a notification rather than just the tip — `apply_periphery_logs` had exactly that bug.
+Accruals key on `(block_hash, tx_hash, pool_id, token)`, because block number is not a key when
+same-height reorgs can give two different bundles the same one. That key is also what makes a
+reorg a delete rather than an inversion, and what makes restart and backfill idempotent by
+upsert. Accrual happens on commit so the ledger stays current, but rows only become withdrawable
+at finalization, so a reorg can never remove a row that was already withdrawable. Nothing here
+holds withdrawal authority; the crate produces numbers a human reads before an operator-reviewed
+timelock execution.
+
 ## Files
 - `crates/fee-ledger/` (new) — name and owning operator to be settled in this ticket
 - `crates/eth/src/manager.rs:150,209` — `handle_reorg` / `apply_periphery_logs`, the commit/reorg feed

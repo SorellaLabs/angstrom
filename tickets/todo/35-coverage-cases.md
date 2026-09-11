@@ -2,6 +2,16 @@
 
 **Blocks on:** 27, 31
 
+## Overview
+PLAN.md names a set of awkward cases that must not lose coverage, and this ticket turns each one
+into a named test. It is also the first real coverage of `process_solution`: `bundles.rs` has no
+`mod tests` today, and the crate's only integration test is an `#[ignore]`d fixture whose base64
+blob went stale. Every test asserts ticket 30's conservation identity *and* which bucket the
+budget landed in — a test that only checks the total still passes when retention is misfiled as
+rounding. Build the solutions programmatically; a fixture is exactly what went stale last time.
+`two_pools_sharing_token0` is the case that catches a split applied after cross-pool aggregation
+rather than per pool, which is the mistake the arithmetic is most likely to make.
+
 ## Files
 - `crates/types/src/traits/bundles.rs` — `process_solution` under test
 - `crates/types/src/uni_structure/pool_swap.rs` — `t0_donation_vec` under test

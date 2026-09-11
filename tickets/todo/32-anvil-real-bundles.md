@@ -2,6 +2,19 @@
 
 **Blocks on:** 27
 
+## Overview
+PLAN.md's fourth acceptance criterion says hand-written fixtures do not satisfy it, and this is
+the ticket that honours that. Stand up the existing Anvil harness against a real deployed
+Angstrom, drive `process_solution` and `from_proposal` to produce a genuine `AngstromBundle`,
+and submit it. Three things get asserted: that the transaction succeeded — which *is* the
+zero-unresolved-delta assertion, since `_saveAndSettle` reverts otherwise — that `save` for
+token0 is exactly right, and that reward growth matches the bundle's `RewardsUpdate`. Exact
+`save` needs two assertions rather than one because nothing on chain accumulates it; `pullFee`
+transfers straight from the raw ERC20 balance. Run it at both the deployed rates and a nonzero
+ToB share, so the ToB fee path is exercised somewhere before rollout step 5 turns it on for
+real. This is the only test that can catch a `save_amount` that is correct in the builder's
+arithmetic but wrong against the contract.
+
 ## Files
 - `testing-tools/src/contracts/environment/angstrom.rs` — `AngstromEnv`, real deployment
 - `testing-tools/src/providers/anvil_submission.rs:27` — `submit`, bundle → signed tx

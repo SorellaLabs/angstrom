@@ -2,6 +2,18 @@
 
 **Blocks on:** 27
 
+## Overview
+The per-pool fee numbers are all local to `process_solution` and none of them survive the call,
+so nothing downstream can say what a bundle intended. This ticket returns them instead of
+emitting from inside, because `process_solution` also runs for gas probes and a telemetry record
+per probe is wrong. One new `TelemetryMessage` variant carries them, emitted once per bundle
+from `try_build_proposal`, where the round identity is in scope. Construction parent and round
+generation stay separate fields on purpose: the generation is local bookkeeping that means
+nothing to another node, while the parent hash is what makes the record reproducible off this
+one. This is proposal-time telemetry describing intent — ticket 38 uses it as reconstruction
+input and cross-checks it against chain state, never as the source of truth. If the ledger
+trusted it, a mis-split bundle would reconcile against its own wrong arithmetic.
+
 ## Files
 - `crates/telemetry-recorder/src/lib.rs:45` — `TelemetryMessage`
 - `crates/types/src/traits/bundles.rs` — where the numbers are produced

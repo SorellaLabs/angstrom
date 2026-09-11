@@ -2,6 +2,17 @@
 
 **Blocks on:** 29, 27
 
+## Overview
+Tickets 26, 27 and 29 split each pool's gross into three destinations — LP donations, the
+configured protocol fee, and whatever the allocator could not place — but nothing yet proves the
+pieces add back up. This ticket adds equality checks at two levels: inside `t0_donation_vec`,
+which owns `placed + residual == budget`, and inside `process_solution`, where ToB gross must
+account three ways and the book budget two. Making the allocator fallible is the structural
+change; over-allocation then fails the same check without needing a branch of its own. The
+subtlety worth holding onto is that residuals reach `save` through `collect_extra` and must
+never be added to `save_amount`, or the same amount is both reserved and swept. Every check is
+an equality — PLAN.md rules out a "material" threshold anywhere.
+
 ## Files
 - `crates/types/src/uni_structure/pool_swap.rs:237` — `t0_donation_vec`, per-source check
 - `crates/types/src/traits/bundles.rs:427-447` — per-pool check across both sources

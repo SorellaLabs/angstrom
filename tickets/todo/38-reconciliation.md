@@ -2,6 +2,20 @@
 
 **Blocks on:** 37
 
+## Overview
+Peer finalization runs on `PoolSolution`s, upstream of where the splits are applied, and EVM
+simulation only proves a bundle settles — neither is evidence the split was right. This ticket
+detects a bad allocation after it has already settled, which is the most that can be done here:
+it cannot prevent or reverse settlement. For each included bundle it reads the rates in force at
+the construction parent and re-runs the split arithmetic through `process_solution`'s own path,
+then compares that against what the bundle actually encoded. Residuals reconcile as their own
+buckets, so a `save` exceeding the configured fee by exactly its residual is correct and one
+exceeding it by anything else is not. A mismatch, or reconstruction data that cannot be
+resolved, withholds those amounts rather than blocking anything — an unverifiable amount is not
+a verified one. The real risk is step 1: reconstruction needs pool state as of the construction
+parent, and if an archive node cannot supply it, the narrowed scope gets recorded here rather
+than quietly shipped.
+
 ## Files
 - `crates/fee-ledger/` — the crate from ticket 37
 - `crates/types/src/traits/bundles.rs` — `process_solution`, reused to reconstruct

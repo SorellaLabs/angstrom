@@ -18,8 +18,9 @@ supply it, the narrowed scope gets recorded here rather
 than quietly shipped.
 
 ## Files
-- `crates/eth/src/fee_ledger.rs` — the ledger module from ticket 34
-- `crates/types/src/traits/bundles.rs` — `process_solution`, reused to reconstruct
+- `crates/types/src/fee_reconciliation.rs` (new module) — the reconciliation
+- `crates/types/src/fee_ledger.rs` — the ledger module from ticket 34
+- `crates/types/src/traits/bundles.rs` — `process_solution`, the path to reconstruct against
 - `crates/types/primitives/src/contract_payloads/protocol_fees.rs:load_from_chain` — historical rates
 - `contracts/src/periphery/ControllerV1.sol:224` — `distributeFees`, unchanged
 
@@ -81,3 +82,71 @@ nothing for the inferred one to disagree with.
 
 Step 5 is why ticket 32's balance assertion is explicitly not a template: it works there only
 because the Anvil harness controls the starting state.
+
+**As built.** `crates/types/src/fee_reconciliation.rs`, beside ticket 34's ledger and beside
+`bundles.rs`, whose `process_solution` is what it reconciles against. Steps 2-5 landed. Step 1
+narrowed, and the narrowing runs deeper than this ticket anticipated.
+
+**Step 1 cannot be built as written, and the reason is not the one the Notes expected.** The
+ticket foresaw pool state being unreachable from an archive node. The harder problem is that
+`process_solution`'s *inputs* are not recorded anywhere: it takes a `PoolSolution` and a
+`BaselinePoolState`, and an included bundle encodes neither. `solution.reward_t0` is a
+matching-engine output that is never encoded at all, and `orders_by_pool` wants
+`OrderWithStorageData` — validation-derived state a bundle does not carry. So "reuse
+`process_solution`'s own path" has nothing to feed it, archive node or not. This is the reduction
+the ticket asked be recorded here rather than quietly shipped.
+
+**What that leaves is more than the fallback the ticket described, and less than step 1.** The
+Notes offered "the splits themselves and `Asset.save`" as the floor. The user-fee split turns out
+to reconstruct *exactly*, with no pool state: `get_quantities_at_price` takes only the fill
+amount, the gas, the pool's bundle fee and the UCP; the bundle encodes the fill
+(`OrderQuantities`), the gas (`extra_fee_asset0`) and the UCP (`Pair.price_1over0`), and the
+bundle fee is `AngPoolConfigEntry.fee_in_e6` in the pool config store at the construction parent.
+`user_fees_for_pair` re-derives `total_user_fees` from those four, `split_user` at the parent's
+rates turns it into the expected protocol fee, and
+`the_user_fee_is_re_derived_from_the_encoded_orders` pins it to a closed form so the check cannot
+drift into agreeing with the implementation it is checking.
+
+**The ToB split is what is actually lost.** Its gross is `calc_vec_and_reward`'s output against
+pool state at the construction parent, which only a live `EnhancedUniswapPool` produces today. So
+when the rates at the parent retain a ToB share, the bundle's amounts are **withheld** rather
+than compared —`a_nonzero_tob_share_withholds_rather_than_passing` asserts that, and
+`DonationSplits::retains_tob()` is the one-line accessor it turns on. At the deployed
+`tobLpShareE6 = 1_000_000` nothing is withheld on that ground, so rollout step 4 reconciles in
+full. **Closing this is a precondition for step 5**, and it is the same work as reaching
+`BaselinePoolState` at an arbitrary historical parent.
+
+**Step 2 is half of what it asks.** `Asset.save` is compared against the expected protocol fee
+plus the ToB gas the bundle encodes. The `RewardsUpdate` totals are carried on
+`PoolExpectation::lp_reward` but not compared, because the expected LP allocation is
+`reward_t0 + split_user_lp(fees) + split_tob_lp(gross)` and two of those three are the
+unreconstructible terms above. Comparing it against the one term that is known would flag every
+correct bundle.
+
+Step 3 holds: `expected_retained` is the configured fee plus ToB gas, and `save` above it is
+`residual` — its own bucket, reported rather than treated as a mismatch. `save` *below* it is a
+`Mismatch` carrying the shortfall. That is an asymmetric detector and worth stating: a builder
+that under-retains is caught, and one that over-retains is indistinguishable from a large
+allocator residual without the residual being independently derivable. The direction it catches
+is the one where the protocol is shorted.
+
+Step 4: every non-`Reconciled` outcome is withheld, including `UnresolvedParent` — reconcile_bundle
+returns a withheld result rather than an error, so an unreadable parent withholds the amount and
+reports why instead of failing the run. Step 5: `withdrawable` computes finalized accruals minus
+withheld and errors if that exceeds the balance, so the balance is an upper bound and never the
+source.
+
+The construction parent is inferred, as the ticket's Notes describe; `BundleReconciliation::parent`
+carries that caveat at the point of use.
+
+Coverage, each checked against the mutation that should break it: `a_legitimate_residual_reconciles_clean`,
+`a_mis_split_bundle_is_flagged_and_withheld` (fails when the shortfall branch is removed),
+`a_bundle_with_no_resolvable_construction_parent_is_withheld`,
+`a_nonzero_tob_share_withholds_rather_than_passing` (fails when the `retains_tob` branch is
+removed), `the_user_fee_is_re_derived_from_the_encoded_orders`, and
+`withdrawable_is_bounded_by_the_balance_and_never_sourced_from_it` (fails when the balance bound
+is dropped). Each mutation failed only the test that owns it.
+
+`reconcile_bundle` is library API an operator's tooling calls with a provider; it is deliberately
+not wired into the node, because nothing in the node may act on its result — every distribution
+stays an operator-reviewed timelock execution.

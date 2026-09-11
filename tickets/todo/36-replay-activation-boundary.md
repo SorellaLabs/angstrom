@@ -55,12 +55,10 @@ Keep historical replay byte-exact.
   today's rate.
 
 ## Notes
-The one genuine behavior change that pre-**A** replay cannot reproduce is ticket 26 step 4: a ToB
-order that fails `calc_vec_and_reward` used to yield a bundle with no ToB donation, and now errors
-out of `process_solution`. If any recorded block hit that path, replay will now fail where the
-node once produced a bundle. That is correct — the old behavior was a silently mispriced book swap
-— but it is a replay divergence that no `f64` legacy branch would fix, so record it as a known gap
-rather than chasing it.
+Ticket 26 left the `Err` arm of `calc_vec_and_reward` matching `main`, so a ToB order that fails
+to evaluate still yields a bundle with no ToB donation rather than aborting the solution. That was
+going to be the one behavior change pre-**A** replay could not reproduce; it is not one now, and
+there is no known replay gap from the ToB path to record.
 
 Step 2 is deliberately conditional. PLAN.md rollout step 6 requires the legacy path; this ticket
 asserts the requirement is already satisfied by the const and asks for evidence before adding code

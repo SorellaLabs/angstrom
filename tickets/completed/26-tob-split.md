@@ -3,7 +3,7 @@
 **Blocks on:** 25
 
 ## Files
-- `crates/types/src/traits/bundles.rs:352-378` — `tob_swap_info` and its `Err` arm at `:370`
+- `crates/types/src/traits/bundles.rs:352-378` — `tob_swap_info`
 - `crates/types/src/traits/bundles.rs:431` — `tob_donation_vec`
 - `crates/types/src/traits/tob.rs` — `calc_vec_and_reward`, unchanged
 - `crates/types/src/uni_structure/pool_swap.rs` — `t0_donation_vec`, unchanged
@@ -43,23 +43,8 @@ let (tob_donation_vec, _tob_protocol_fee) = tob_swap_info
 3. Bind the fee as `_tob_protocol_fee` for now — 27 folds it into `save_amount`, and `-D warnings`
    rejects an unused binding. Same marker ticket 24 used for `_splits`.
 
-4. **A selected ToB order that fails to evaluate becomes an error.** The `Err` arm at `:370` logs
-   and returns `None`, which silently turns a failed evaluation into both zero ToB revenue and a
-   pre-ToB `post_tob_price`. Propagate instead, keeping the log:
-
-```rust
-Err(error) => {
-    error!(?error, "Error in ToB swap vs AMM");
-    return Err(error);
-}
-```
-
-   `calc_vec_and_reward` already returns `eyre::Result`, so this needs no new import. The `else`
-   branch at `:375` (no `solution.searcher`) keeps returning `None` — that is the genuine zero case.
-
 ## Done when
 - No ToB order means both values are zero — `unwrap_or` yields `(None, 0)`.
-- A selected ToB order that fails to evaluate is an error, not zero revenue.
 - The share touches only ToB surplus. `total_user_fees`, `solution.reward_t0`, gas, and
   unlocked-swap fees are untouched by this ticket.
 - `calc_vec_and_reward`, `calc_reward`, bid ranking, swap quantities and the post-ToB price are
@@ -78,11 +63,20 @@ The `total_donation` fallback at `:443` is reached only when both donation vecto
 which implies no ToB, so it stays correct here. Ticket 27 revisits it to compute `total_donation`
 from the actual merged donations.
 
-**As built.** Both steps landed as written; no deviations. `tob_swap_info` still carries gross, so
+**As built.** Steps 1-3 landed as written; no deviations. `tob_swap_info` still carries gross, so
 `post_tob_price` and `net_pool_vec` are untouched.
 
-Step 4 widens `process_solution`'s failure surface, which is the point but worth stating: a ToB
-order that fails `calc_vec_and_reward` used to yield a bundle with no ToB donation *and* a pre-ToB
-`post_tob_price` — a silently mispriced book swap on top of the lost revenue. It now aborts the
-solution. The early `return` drops `process_solution_span` by RAII, so the explicit `drop` at the
-end of the function is unaffected.
+**The `Err` arm is deliberately left alone.** A selected ToB order that fails
+`calc_vec_and_reward` still logs and yields `None`, which means zero ToB revenue *and* a pre-ToB
+`post_tob_price` — a silently mispriced book swap on top of the lost revenue, since the order is
+encoded and its assets booked at `:276-303` regardless of whether the evaluation succeeded.
+
+That is a real bug, but it is `main`'s bug: the arm is byte-for-byte what `main` has. Propagating
+the error would be a deviation from `main` rather than a repair of anything this branch changed,
+so it stays out of scope. Nothing downstream diverges either — the fee path degrades to the
+genuine no-ToB case, `split_tob` is never reached and `tob_protocol_fee` is `0`, which is what
+`main` produced too.
+
+Do not expect ticket 30's conservation check to cover this: with a gross of zero the identity
+holds vacuously. Conservation proves the split of a *known* gross; it cannot notice that the
+gross was wrongly computed as zero.

@@ -34,3 +34,8 @@ It is a `pub const` in a library crate, so it produces no dead-code warning whil
 nothing fails if this ticket is deferred, which is exactly why it is worth doing rather than
 forgetting. Ticket 39 does **not** depend on it staying — see that ticket's Notes on whether a
 legacy `f64` path is needed at all.
+
+**As built.** One-line delete, no call sites. The grep's only remaining hit is prose:
+`contracts/script/AngstromProtocolFeeConfig.s.sol:26` says the deployed `750_000` matches "the
+`LP_DONATION_SPLIT` this replaces", which is a historical note rather than a reference and is left
+as it is.

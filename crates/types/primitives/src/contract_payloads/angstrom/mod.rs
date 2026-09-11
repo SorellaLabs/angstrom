@@ -22,7 +22,6 @@ mod tob;
 pub use order::{OrderQuantities, StandingValidation, UserOrder};
 pub use tob::*;
 
-pub const LP_DONATION_SPLIT: f64 = 0.75;
 // We set high for ticks
 const BASE_GAS_FOR_POOL: usize = 350_000;
 const BASE_EST_FOR_USER: usize = 90_000;

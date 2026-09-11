@@ -26,7 +26,10 @@ use crate::{
     orders::{OrderFillState, OrderOutcome, OrderSet, PoolSolution},
     testnet::TestnetStateOverrides,
     traits::{tob::TopOfBlockOrderRewardCalc, user_orders::UserOrderFromInternal},
-    uni_structure::{BaselinePoolState, donation::DonationCalculation}
+    uni_structure::{
+        BaselinePoolState,
+        donation::{DonationCalculation, DonationResidual}
+    }
 };
 
 pub trait BundleProcessing: Sized {
@@ -409,7 +412,7 @@ impl BundleProcessing for AngstromBundle {
         };
 
         // add user donation split
-        let (total_lp_user_donate, save_amount) = splits.split_user(total_user_fees);
+        let (total_lp_user_donate, user_protocol_fee) = splits.split_user(total_user_fees);
 
         // We then use `post_tob_price` as the start price for our book swap, just as
         // our matcher did.  We want to use the representation of the book swap
@@ -422,17 +425,28 @@ impl BundleProcessing for AngstromBundle {
 
         // We need to do our donations in the right order - first the ToB and then the
         // book.  So let's do that
-        let book_donation_vec = book_swap_vec
+        let (book_donation_vec, _book_residual) = book_swap_vec
             .as_ref()
-            .map(|bsv| bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate));
+            .map(|bsv| {
+                let (vec, residual) =
+                    bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate);
+                (Some(vec), residual)
+            })
+            .unwrap_or((None, DonationResidual::default()));
 
-        let (tob_donation_vec, _tob_protocol_fee) = tob_swap_info
+        let (tob_donation_vec, tob_protocol_fee, _tob_residual) = tob_swap_info
             .as_ref()
             .map(|(tob_vec, gross_tob_reward)| {
                 let (tob_lp_budget, protocol) = splits.split_tob(*gross_tob_reward);
-                (Some(tob_vec.t0_donation_vec(tob_lp_budget)), protocol)
+                let (vec, residual) = tob_vec.t0_donation_vec(tob_lp_budget);
+                (Some(vec), protocol, residual)
             })
-            .unwrap_or((None, 0u128));
+            .unwrap_or((None, 0u128, DonationResidual::default()));
+
+        // Both retained portions settle together through `save`.
+        let save_amount = user_protocol_fee
+            .checked_add(tob_protocol_fee)
+            .ok_or_else(|| eyre::eyre!("retained fees exceed u128"))?;
 
         let donation = match (book_donation_vec, tob_donation_vec) {
             (Some(bsv), Some(tob)) => {

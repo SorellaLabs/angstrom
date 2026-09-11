@@ -61,3 +61,21 @@ worth reading, without a threshold.
 `remaining_donation` is reused as a loop variable twice — set at `:250` for the blob pass and
 reset at `:313` for the distribution pass. Only the second value is the residual; read it after
 the `:315` map completes, not the first.
+
+**As built.** All four steps landed. Both call sites needed slightly more than a destructure: the
+residual has to escape the closure, so the `Option` moved inside it. The book site gained the
+`map` / `unwrap_or` shape the ToB site already had from ticket 26, and the ToB tuple widened from
+two elements to three. Both residuals bind as `_book_residual` / `_tob_residual` for ticket 30.
+
+The `filled_price == None` arm is unreachable today and is kept exactly as the ticket specifies.
+`reduce_ranges` yields one range per `batching` step and the function has already returned on
+`steps.is_empty()`, so `ranges` is non-empty wherever that arm could be reached, `current_blob` is
+`Some`, and `filled_price` is `Some`. Were it ever `None`, `let last_range = ranges.len() - 1` at
+`:318` would underflow first. Recorded rather than fixed — ticket 31 owns the malformed-metadata
+conversions in this function.
+
+The conservation identity holds at all three exits by construction, which is what gives ticket 30
+something to assert rather than something to repair: the empty-steps exit places nothing and
+reports the whole budget; the empty-blob arm reports the whole budget while every `donation` takes
+the `else { 0 }` branch; and the normal exit's per-range `std::cmp::min(remaining_donation, ..)`
+means `remaining_donation` falls by exactly what each range placed and cannot underflow.

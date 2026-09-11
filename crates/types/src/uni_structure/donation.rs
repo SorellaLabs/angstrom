@@ -76,6 +76,21 @@ impl Add<&DonationType> for &DonationType {
     }
 }
 
+/// What `t0_donation_vec` was handed but did not place, by reason.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DonationResidual {
+    /// Left over because each range's target is computed by integer division.
+    pub rounding: u128,
+    /// Budget the allocator had no range to place into at all.
+    pub unplaced: u128
+}
+
+impl DonationResidual {
+    pub fn total(&self) -> u128 {
+        self.rounding + self.unplaced
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct DonationCalculation {
     // the amount to donate to the current tick of the pool.

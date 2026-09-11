@@ -65,3 +65,12 @@ counted twice.
 The `unwrap_or(solution.reward_t0 + total_lp_user_donate)` fallback at `:443` is reached only when
 both donation vectors are `None`, which implies no ToB order, so it cannot miss a ToB fee. Ticket
 31 makes that branch's retention explicit; it is not a correctness gap here.
+
+**As built.** All five steps landed as written. The only structural change is where `save_amount`
+is bound: it moves from the user split down below the ToB split, which is the one point where both
+fees are in scope. The three settlement calls and `total_donation`'s `unwrap_or` fallback are
+untouched.
+
+At the deployed `tobLpShareE6 = 1_000_000` the ToB half is always `0`, so `save_amount` is
+numerically identical to what ticket 25 produced. The `checked_add` is unreachable until rollout
+step 5 — it guards the configuration that makes it reachable, not today's.

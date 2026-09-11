@@ -5,7 +5,10 @@ use angstrom_types_primitives::primitive::{Ray, SqrtPriceX96};
 use itertools::Itertools;
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 
-use super::{donation::DonationType, liquidity_base::LiquidityAtPoint};
+use super::{
+    donation::{DonationResidual, DonationType},
+    liquidity_base::LiquidityAtPoint
+};
 
 const U256_1: U256 = U256::from_limbs([1, 0, 0, 0]);
 
@@ -234,10 +237,10 @@ impl<'a> PoolSwapResult<'a> {
             .collect::<Vec<_>>()
     }
 
-    pub fn t0_donation_vec(&self, total_donation: u128) -> Vec<DonationType> {
+    pub fn t0_donation_vec(&self, total_donation: u128) -> (Vec<DonationType>, DonationResidual) {
         // Return nothing if we have no steps in this
         if self.steps.is_empty() {
-            return vec![];
+            return (vec![], DonationResidual { rounding: 0, unplaced: total_donation });
         }
         // if end price is lower, than is zfo
         let direction = self.start_price >= self.end_price;
@@ -313,7 +316,7 @@ impl<'a> PoolSwapResult<'a> {
         remaining_donation = total_donation;
 
         let last_range = ranges.len() - 1;
-        ranges
+        let donations = ranges
             .iter()
             .enumerate()
             .map(|(i, r)| {
@@ -345,7 +348,17 @@ impl<'a> PoolSwapResult<'a> {
                     DonationType::below(high_tick, donation, r.liquidity)
                 }
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        // An empty blob places nothing at all; otherwise what is still standing after
+        // the distribution pass is what integer division left behind.
+        let residual = if filled_price.is_none() {
+            DonationResidual { rounding: 0, unplaced: total_donation }
+        } else {
+            DonationResidual { rounding: remaining_donation, unplaced: 0 }
+        };
+
+        (donations, residual)
     }
 
     /// Returns the amount of T0 exchanged over this swap with a sign attached,

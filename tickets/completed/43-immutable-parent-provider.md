@@ -72,3 +72,44 @@ incidental. `hashed_post_state` keeps its `unwrap()` — `HashedPostStateProvide
 
 Ticket 46 adds the identity check that proves, per result, that a simulation's reads used the parent
 it was handed. Do both; this removes the race, 46 keeps it removed.
+
+**As built.** All four steps landed; the selector is gone.
+
+- `SetBlock` is replaced by `AtBlock { fn at_block(&self, BlockNumHash) -> Self }` in
+  `reth_db_wrapper.rs`: a state source hands out immutable views of itself, one per block.
+  `RethDbWrapper.block` is a `BlockNumHash` by value (no `Arc<RwLock<_>>`), `at_block` is
+  `Self::new(self.db.clone(), block)`, and `set_block` no longer exists anywhere.
+  `AnvilStateProvider::at_block` clones itself — anvil's tip already *is* the block under test, the
+  reasoning its old no-op `set_block` recorded.
+- `BundleValidator` holds the source as `Arc<DB>`; `simulate_bundle` builds
+  `CacheDB::new(Arc::new(self.db.at_block(parent)))` and hands that to the thread pool, so nothing
+  the simulation reads through is reachable from any other request, and the cache is structurally
+  per-parent rather than incidentally so.
+- Order validation follows the head by rebuilding, through a small `Repoint<DB>` seam in
+  `db_state_utils`: `FetchUtils` rebinds its `db`, `AutoMaxFetchUtils` has nothing to rebind.
+  `OrderValidator::repoint` rebuilds `SimValidation` (via `SimValidation::repoint` /
+  `OrderGasCalculations::repoint`) and the `UserAccountProcessor`, sharing the same `UserAccounts` —
+  they are `Arc`-backed, so in-flight bookkeeping is kept, not copied. `Validator::head_view`
+  resolves the head's hash and takes the view; both former `unwrap`s are errors. On failure the arm
+  logs at error level, keeps the previous view (a known block, not a substitute for it), and still
+  completes the transition — the `NewBlock` requester `unwrap`s the reply, so dropping it would only
+  move the panic. `Validator` gained the bound `Fetch: Repoint<DB>`.
+- Noted: `SimValidation` reads nothing today (`OrderGasCalculations::_db` is unused). It is
+  repointed anyway so that re-enabling gas simulation cannot silently read a stale block.
+- `set_block_moves_every_clone` is inverted into `a_view_of_another_block_leaves_this_one_alone`:
+  a same-height, different-hash view leaves the original on its block, and each resolves its own
+  hash. `FakeDb` (now `pub(crate)` in `bundle::tests`) records every view taken and, on each read,
+  the block the view it went through was pinned to; `simulation_reads_the_parent_it_was_handed`
+  now asserts every read went through the parent's view, not just that a view was taken.
+- **Done-when tests**, `validator.rs`: `a_new_block_and_a_queued_simulation_cannot_move_each_other`
+  builds a real `Validator` over `FakeDb`, queues a bundle simulation against the parent, delivers
+  `NewBlock` for the next height before the simulation runs (order validation's view moves to that
+  head), then drives the simulation and asserts on the parent it *resolved* — the returned
+  `BundleGasDetails::parent` and every recorded read — and that running it left order validation on
+  the head. `a_failed_head_lookup_is_an_error_not_a_panic` covers the last bullet.
+
+Verification: `cargo nextest run -p angstrom-types --lib reth_db_wrapper` — 5 passed;
+`cargo nextest run -p validation --lib` for `bundle::` and `validator::` — 6 passed;
+`cargo check -p angstrom -p testing-tools -p validation --tests` — clean; `cargo +nightly fmt`.
+**Not run, by request:** workspace tests and the mutation checks (reading through the shared source
+instead of a view; skipping the repoint on `NewBlock`); see ticket 37's note on clippy.

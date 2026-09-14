@@ -431,10 +431,73 @@ the PR.
 
 ---
 
-## 13. Contract: shadowing warning, internal denominator, event without sender, and two governance decisions `[PR C.1–C.5]`
+## 13. The deploy script's Sepolia default is a different Angstrom than the node constants `[PR C.6]`
 
-*Owned by tickets 01, 10 — closed by ticket 53.*
+*Owned by tickets 11, 35, 36 — closed by ticket 53.*
 
+**Verified.** `contracts/script/AngstromProtocolFeeConfig.s.sol:135` returns
+`0x9051085355BA7e36177e0a1c4082cb88C270ba90` for Sepolia (copied from `AngstromInspector.s.sol`);
+`crates/types/constants/src/lib.rs:239` sets Sepolia `ANGSTROM_ADDRESS` to
+`0x3B9172ef12bd245A07DA0d43dE29e09036626AFC`. The reviewer's claim that `0x9051…`'s controller
+predates `fastOwner()` — so `verify()` and every `setLpDonationSplits` call revert there — needs
+Sepolia RPC to confirm and I could not.
+
+**The consequence worth checking first.** Ticket 36 recorded a Sepolia config deployment at
+`0xa58f681e8Db5f9624e03fdfAE899128BD7e3918a`, block `11676439`. If it was deployed with this script's
+default, it is bound to `0x9051…`, and `load_from_chain`'s `angstrom()` check (`protocol_fees.rs`)
+will reject it against the constants' `0x3B91…` at every Sepolia node start. Whether that is so is a
+one-call read of `angstrom()` on the deployed contract. Mainnet is unaffected.
+
+---
+
+## 14. Duplicated `strip_volatile` `[PR std]`
+
+*Owned by ticket 02 — closed by ticket 52.*
+
+`crates/types/primitives/build.rs:126` and `crates/uniswap-v4/build.rs:118` — diffed: byte-identical.
+Both added by this branch. Two copies of an artifact-normaliser will drift; share it.
+
+---
+
+## Manually verified
+
+Not tracked as issues and not ticketed. These are settled by hand — against live chain state, by
+inspection of the diff, or by a governance decision — and the record of each belongs with the
+rollout, not in the tree.
+
+### Live deployments
+`crates/types/constants/src/lib.rs:223-226,255-258` point both mainnet and Sepolia at
+`0xa58f681e8Db5f9624e03fdfAE899128BD7e3918a`, deployed blocks `25948466` and `11676439`. The same
+address on both chains is consistent with one deployer at one nonce — plausible, not suspicious — but
+tickets 35 and 36 are the two whose "done when" can only be checked against live state, and that
+needs an RPC endpoint not available in this review. The reviewer's mainnet dry run passed `verify()`
+at `77263de9`; nothing has been run against Sepolia, and issue 13 gives a specific reason to.
+
+The deploy script has a standalone entry point for exactly this:
+
+```
+forge script AngstromProtocolFeeConfigScript --sig "verify(address,address)" \
+  0xa58f681e8Db5f9624e03fdfAE899128BD7e3918a <angstrom> --rpc-url <url>
+```
+
+It checks runtime code, `angstrom()`, `controller()`, the resolved owner and fast owner, the initial
+values, and getter/slot-0 agreement — PLAN.md rollout step 2's full list. Run it on both chains and
+keep the output.
+
+### Churn in checked-in artifacts and a dead file
+- **Nine unrelated ABI artifacts reformatted.** `abis-types/{Angstrom, ControllerV1,
+  IPositionDescriptor, MintableMockERC20, MockRewardsManager, PoolGate, PoolManager,
+  PositionFetcher, PositionManager}.json` were rewritten in a different forge output format (key
+  ordering, `internalType` placement). Normalised and compared: **all nine are semantically
+  identical**, so nothing drifted — but it is a whole-file diff on nine files reviewers must take on
+  trust, and the next regeneration on a different forge version will produce another. Pin the forge
+  version used for `abis-types` regeneration, or revert the eight files unrelated to this work.
+- **Dead file.** `contracts/script/_TmpMockCtl.sol` (added in `5e3c3b85`) has no references anywhere
+  — `grep -rn TmpMockCtl contracts/` hits only its own definition. A `ControllerV1` stand-in with a
+  zero `fastOwner`, presumably for a manual `anvil_setCode` check. Delete it or move it under
+  `contracts/test/`.
+
+### Contract: shadowing warning, internal denominator, event without sender, and two governance decisions `[PR C.1–C.5]`
 All five verified against `contracts/src/periphery/AngstromProtocolFeeConfig.sol` at head:
 
 - **C.3 — solc warning 2519.** `forge build --force` reports `Warning (2519): This declaration
@@ -458,75 +521,3 @@ All five verified against `contracts/src/periphery/AngstromProtocolFeeConfig.sol
   `msg.sender == fastOwner()` (`:70-73`) with bounds `0..=1_000_000` (`:75-77`). Per PLAN.md by design
   ("Either may call"); the reviewer asks that the breadth be confirmed deliberately, and offers
   raise-only or a floor as narrower emergency levers. A governance decision, not a defect.
-
----
-
-## 14. The deploy script's Sepolia default is a different Angstrom than the node constants `[PR C.6]`
-
-*Owned by tickets 11, 35, 36 — closed by ticket 54.*
-
-**Verified.** `contracts/script/AngstromProtocolFeeConfig.s.sol:135` returns
-`0x9051085355BA7e36177e0a1c4082cb88C270ba90` for Sepolia (copied from `AngstromInspector.s.sol`);
-`crates/types/constants/src/lib.rs:239` sets Sepolia `ANGSTROM_ADDRESS` to
-`0x3B9172ef12bd245A07DA0d43dE29e09036626AFC`. The reviewer's claim that `0x9051…`'s controller
-predates `fastOwner()` — so `verify()` and every `setLpDonationSplits` call revert there — needs
-Sepolia RPC to confirm and I could not.
-
-**The consequence worth checking first.** Ticket 36 recorded a Sepolia config deployment at
-`0xa58f681e8Db5f9624e03fdfAE899128BD7e3918a`, block `11676439`. If it was deployed with this script's
-default, it is bound to `0x9051…`, and `load_from_chain`'s `angstrom()` check (`protocol_fees.rs`)
-will reject it against the constants' `0x3B91…` at every Sepolia node start. Whether that is so is a
-one-call read of `angstrom()` on the deployed contract. Mainnet is unaffected.
-
----
-
-## 15. Duplicated `strip_volatile` `[PR std]`
-
-*Owned by ticket 02 — closed by ticket 52.*
-
-`crates/types/primitives/build.rs:126` and `crates/uniswap-v4/build.rs:118` — diffed: byte-identical.
-Both added by this branch. Two copies of an artifact-normaliser will drift; share it.
-
----
-
-## 16. Churn in checked-in artifacts and a dead file
-
-*Owned by tickets 02, 11 — closed by ticket 55.*
-
-- **Nine unrelated ABI artifacts reformatted.** `abis-types/{Angstrom, ControllerV1,
-  IPositionDescriptor, MintableMockERC20, MockRewardsManager, PoolGate, PoolManager,
-  PositionFetcher, PositionManager}.json` were rewritten in a different forge output format (key
-  ordering, `internalType` placement). Normalised and compared: **all nine are semantically
-  identical**, so nothing drifted — but it is a whole-file diff on nine files reviewers must take on
-  trust, and the next regeneration on a different forge version will produce another. Pin the forge
-  version used for `abis-types` regeneration, or revert the eight files unrelated to this work.
-- **Dead file.** `contracts/script/_TmpMockCtl.sol` (added in `5e3c3b85`) has no references anywhere
-  — `grep -rn TmpMockCtl contracts/` hits only its own definition. A `ControllerV1` stand-in with a
-  zero `fastOwner`, presumably for a manual `anvil_setCode` check. Delete it or move it under
-  `contracts/test/`.
-
----
-
-## Manually verified
-
-Not tracked as an issue and not ticketed. This is checked by hand against live chain state before
-release; the record of that check belongs with the rollout, not in the tree.
-
-### Live deployments
-`crates/types/constants/src/lib.rs:223-226,255-258` point both mainnet and Sepolia at
-`0xa58f681e8Db5f9624e03fdfAE899128BD7e3918a`, deployed blocks `25948466` and `11676439`. The same
-address on both chains is consistent with one deployer at one nonce — plausible, not suspicious — but
-tickets 35 and 36 are the two whose "done when" can only be checked against live state, and that
-needs an RPC endpoint not available in this review. The reviewer's mainnet dry run passed `verify()`
-at `77263de9`; nothing has been run against Sepolia, and issue 14 gives a specific reason to.
-
-The deploy script has a standalone entry point for exactly this:
-
-```
-forge script AngstromProtocolFeeConfigScript --sig "verify(address,address)" \
-  0xa58f681e8Db5f9624e03fdfAE899128BD7e3918a <angstrom> --rpc-url <url>
-```
-
-It checks runtime code, `angstrom()`, `controller()`, the resolved owner and fast owner, the initial
-values, and getter/slot-0 agreement — PLAN.md rollout step 2's full list. Run it on both chains and
-keep the output.

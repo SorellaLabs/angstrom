@@ -186,6 +186,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             angstrom_tokens,
             pool_config_store.clone(),
             protocol_fee_config,
+            state_provider.state_provider(),
             block_sync.clone(),
             node_set,
             vec![]

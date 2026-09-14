@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
 // Allows us to impl revm::DatabaseRef on the default provider type.
 use alloy::{
     eips::BlockNumHash,
     primitives::{Address, B256, BlockHash, BlockNumber, Bytes, StorageKey, StorageValue, U256},
     transports::{RpcError, TransportErrorKind}
 };
-use parking_lot::RwLock;
 use reth_chainspec::ChainInfo;
 use reth_provider::{
     AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, BytecodeReader,
@@ -22,21 +19,26 @@ use revm::{primitives::KECCAK_EMPTY, state::AccountInfo};
 use revm_bytecode::Bytecode;
 use revm_database::{BundleState, DBErrorMarker};
 
-pub trait SetBlock: Send + Sync + 'static {
-    fn set_block(&self, block: BlockNumHash);
+/// A state source that hands out immutable views of itself, one per block.
+///
+/// A view never moves after construction: a different block is a different
+/// view, so nothing one reader does can change what another one reads.
+pub trait AtBlock: Send + Sync + 'static {
+    fn at_block(&self, block: BlockNumHash) -> Self;
 }
 
 #[derive(Clone)]
 pub struct RethDbWrapper<DB: StateProviderFactory + Unpin + Clone + 'static> {
     db:    DB,
-    /// The block every read resolves against. A `BlockNumHash` rather than a
-    /// number because a number cannot name one branch of a same-height reorg.
-    block: Arc<RwLock<BlockNumHash>>
+    /// The block every read resolves against, fixed for the life of the view.
+    /// A `BlockNumHash` rather than a number because a number cannot name one
+    /// branch of a same-height reorg.
+    block: BlockNumHash
 }
 
-impl<DB: StateProviderFactory + Unpin + Clone + 'static> SetBlock for RethDbWrapper<DB> {
-    fn set_block(&self, block: BlockNumHash) {
-        *self.block.write() = block;
+impl<DB: StateProviderFactory + Unpin + Clone + 'static> AtBlock for RethDbWrapper<DB> {
+    fn at_block(&self, block: BlockNumHash) -> Self {
+        Self::new(self.db.clone(), block)
     }
 }
 
@@ -45,19 +47,19 @@ where
     DB: StateProviderFactory + Unpin + Clone + 'static
 {
     pub fn new(db: DB, block: BlockNumHash) -> Self {
-        Self { db, block: Arc::new(RwLock::new(block)) }
+        Self { db, block }
     }
 
-    /// The block reads currently resolve against.
+    /// The block reads resolve against.
     pub fn block(&self) -> BlockNumHash {
-        *self.block.read()
+        self.block
     }
 
     /// The one place a state provider is resolved. Every read goes through it,
     /// so none of them can quietly answer from the current tip instead of the
     /// selected block.
     fn state(&self) -> ProviderResult<reth_provider::StateProviderBox> {
-        self.db.state_by_block_id(self.block.read().hash.into())
+        self.db.state_by_block_id(self.block.hash.into())
     }
 }
 
@@ -591,17 +593,20 @@ mod tests {
     }
 
     #[test]
-    fn set_block_moves_every_clone() {
+    fn a_view_of_another_block_leaves_this_one_alone() {
         let (factory, wrapper) = wrapper();
-        let clone = wrapper.clone();
-        let moved = BlockNumHash { number: 42, hash: B256::repeat_byte(0x22) };
+        let other_branch = BlockNumHash { number: 42, hash: B256::repeat_byte(0x22) };
 
-        clone.set_block(moved);
+        // Same height, different branch: a second view, not a moved selector.
+        let other = wrapper.at_block(other_branch);
+        assert_eq!(wrapper.block(), PARENT);
+        assert_eq!(other.block(), other_branch);
 
-        // Same height, different branch — the selector can now tell them apart,
-        // but it is still shared: see ticket 19's notes.
-        assert_eq!(wrapper.block(), moved);
         let _ = wrapper.storage_ref(Address::ZERO, U256::ZERO);
-        assert_eq!(*factory.resolved.lock().unwrap(), vec![BlockId::from(moved.hash)]);
+        let _ = other.storage_ref(Address::ZERO, U256::ZERO);
+        assert_eq!(
+            *factory.resolved.lock().unwrap(),
+            vec![BlockId::from(PARENT.hash), BlockId::from(other_branch.hash)]
+        );
     }
 }

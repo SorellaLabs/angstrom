@@ -1,7 +1,7 @@
 # 52 — Share `strip_volatile` between the two build scripts
 
 **Blocks on:** —
-**Closes:** ISSUES.md 15 (PR #680 standards note)
+**Closes:** ISSUES.md 14 (PR #680 standards note)
 **Follows:** 02
 
 ## Files

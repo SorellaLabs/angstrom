@@ -8,7 +8,7 @@ use std::{
 use alloy::{
     consensus::Transaction,
     eips::BlockNumHash,
-    primitives::{Address, B256, Log, aliases::I24},
+    primitives::{Address, B256, Log, U256, aliases::I24},
     sol_types::{SolCall, SolEvent}
 };
 use angstrom_types::{
@@ -20,15 +20,18 @@ use angstrom_types::{
     },
     contract_payloads::{
         angstrom::{AngPoolConfigEntry, AngstromBundle, AngstromPoolConfigStore},
-        protocol_fees::{DonationSplitSnapshot, DonationSplits}
+        protocol_fees::{DonationSplitSnapshot, DonationSplits, PROTOCOL_FEE_CONFIG_SLOT}
     },
+    primitive::PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK,
     traits::ChainExt
 };
 use futures::Future;
 use futures_util::{FutureExt, StreamExt};
 use itertools::Itertools;
 use pade::PadeDecode;
-use reth_provider::{CanonStateNotification, CanonStateNotifications};
+use reth_provider::{
+    CanonStateNotification, CanonStateNotifications, StateProvider, StateProviderFactory
+};
 use reth_tasks::TaskExecutor;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
@@ -42,6 +45,23 @@ alloy::sol!(
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
 );
+
+/// A pinned storage read, for checking the log-derived config against what
+/// the chain actually holds.
+pub trait ConfigStorage: Send + Sync + 'static {
+    /// `slot` of `address` in the post-state of the block `block_hash` — never
+    /// the current tip.
+    fn storage_at(&self, block_hash: B256, address: Address, slot: U256) -> eyre::Result<U256>;
+}
+
+impl<P: StateProviderFactory + Send + Sync + 'static> ConfigStorage for P {
+    fn storage_at(&self, block_hash: B256, address: Address, slot: U256) -> eyre::Result<U256> {
+        Ok(self
+            .state_by_block_hash(block_hash)?
+            .storage(address, slot.into())?
+            .unwrap_or_default())
+    }
+}
 
 /// Listens for CanonStateNotifications and sends the appropriate updates to be
 /// executed by the order pool
@@ -65,7 +85,10 @@ pub struct EthDataCleanser<Sync> {
     /// the set of currently active nodes.
     pub(crate) node_set: HashSet<Address>,
     /// seeded from a pinned read at the init block, then maintained from logs.
-    pub(crate) protocol_fee_config: DonationSplitSnapshot
+    pub(crate) protocol_fee_config: DonationSplitSnapshot,
+    /// storage, pinned per block, that the log-derived pair is checked against
+    /// before it is published.
+    storage: Box<dyn ConfigStorage>
 }
 
 impl<Sync> EthDataCleanser<Sync>
@@ -83,6 +106,7 @@ where
         angstrom_tokens: HashMap<Address, usize>,
         pool_store: Arc<AngstromPoolConfigStore>,
         protocol_fee_config: DonationSplitSnapshot,
+        storage: impl ConfigStorage,
         sync: Sync,
         node_set: HashSet<Address>,
         event_listeners: Vec<UnboundedSender<EthEvent>>
@@ -102,7 +126,8 @@ where
             pool_store,
             node_set,
             event_listeners,
-            protocol_fee_config
+            protocol_fee_config,
+            storage: Box::new(storage)
         };
         // ensure we broadcast node set. will allow for proper connections
         // on the network side
@@ -138,12 +163,12 @@ where
         }
     }
 
-    fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) {
+    fn on_canon_update(&mut self, canonical_updates: CanonStateNotification) -> eyre::Result<()> {
         tracing::info!(?canonical_updates, "got new block update!!!!!");
 
         match canonical_updates.clone() {
-            CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new),
-            CanonStateNotification::Commit { new } => self.handle_commit(new)
+            CanonStateNotification::Reorg { old, new } => self.handle_reorg(old, new)?,
+            CanonStateNotification::Commit { new } => self.handle_commit(new)?
         }
 
         // Emitted after the handlers, so every field describes the state this
@@ -156,14 +181,19 @@ where
         )));
 
         let _ = self.cannon_sender.send(canonical_updates);
+        Ok(())
     }
 
-    fn handle_reorg(&mut self, old: Arc<impl ChainExt>, new: Arc<impl ChainExt>) {
+    fn handle_reorg(
+        &mut self,
+        old: Arc<impl ChainExt>,
+        new: Arc<impl ChainExt>
+    ) -> eyre::Result<()> {
         // Removing a setter carries no replacement event, so the value it overwrote
         // has to be reinstated from the removed logs before the new chain's own logs
         // land on top of it.
         let reverted_splits = self.reverted_protocol_fee_config(&old);
-        self.apply_periphery_logs(&new, reverted_splits);
+        self.apply_periphery_logs(&new, reverted_splits)?;
 
         // notify producer of reorg if one happened. NOTE: reth also calls this
         // on reverts
@@ -183,11 +213,12 @@ where
             EthEvent::ReorgedOrders(difference, reorg, BlockNumHash::new(tip, new.tip_hash()));
 
         self.send_events(reorged_orders);
+        Ok(())
     }
 
-    fn handle_commit(&mut self, new: Arc<impl ChainExt>) {
+    fn handle_commit(&mut self, new: Arc<impl ChainExt>) -> eyre::Result<()> {
         // handle this first so the newest state is the first available
-        self.apply_periphery_logs(&new, None);
+        self.apply_periphery_logs(&new, None)?;
 
         let tip = new.tip_number();
         tracing::info!(?self.block_sync);
@@ -206,6 +237,7 @@ where
 
         self.send_events(EthEvent::NewBlock(BlockNumHash::new(tip, new.tip_hash())));
         self.send_events(transitions);
+        Ok(())
     }
 
     /// Applies the periphery and protocol-fee-config logs a notification
@@ -217,11 +249,14 @@ where
     /// `reverted_splits` is the pre-image of a config change a reorg removed
     /// (see [`Self::reverted_protocol_fee_config`]). It lands first, so a
     /// `chain` carrying its own setter still ends on the replacement.
+    ///
+    /// Errors if the pair the logs arrive at is not what storage holds at the
+    /// tip, in which case nothing is published and nothing is overwritten.
     fn apply_periphery_logs(
         &mut self,
         chain: &impl ChainExt,
         reverted_splits: Option<DonationSplits>
-    ) {
+    ) -> eyre::Result<()> {
         let periphery_address = self.periphery_address;
         let protocol_fee_config_address = self.protocol_fee_config_address;
         let mut splits = reverted_splits;
@@ -239,16 +274,20 @@ where
                 continue;
             }
 
+            // Every arm below is a no-op for a log that was already applied, so a
+            // re-delivered block cannot double-count or re-announce anything.
             if let Ok(remove_node) = NodeRemoved::decode_log(log) {
                 tracing::info!(?remove_node.node, "node removed from set");
-                self.node_set.remove(&remove_node.node);
-                self.send_events(EthEvent::RemovedNode(remove_node.node));
+                if self.node_set.remove(&remove_node.node) {
+                    self.send_events(EthEvent::RemovedNode(remove_node.node));
+                }
                 continue;
             }
             if let Ok(added_node) = NodeAdded::decode_log(log) {
                 tracing::info!(?added_node.node, "new node added to set");
-                self.node_set.insert(added_node.node);
-                self.send_events(EthEvent::AddedNode(added_node.node));
+                if self.node_set.insert(added_node.node) {
+                    self.send_events(EthEvent::AddedNode(added_node.node));
+                }
                 continue;
             }
             if let Ok(removed_pool) = PoolRemoved::decode_log(log) {
@@ -257,8 +296,9 @@ where
                 self.pool_store
                     .remove_pair(removed_pool.asset0, removed_pool.asset1);
 
-                let t0 = *self.angstrom_tokens.entry(removed_pool.asset0).or_default();
-                let t1 = *self.angstrom_tokens.entry(removed_pool.asset1).or_default();
+                let count = |asset| self.angstrom_tokens.get(asset).copied().unwrap_or_default();
+                let t0 = count(&removed_pool.asset0);
+                let t1 = count(&removed_pool.asset1);
 
                 if t0 == 1 {
                     self.angstrom_tokens.remove_entry(&removed_pool.asset0);
@@ -282,12 +322,19 @@ where
                 tracing::info!("new pool configured log");
                 let asset0 = added_pool.asset0;
                 let asset1 = added_pool.asset1;
+                // The controller emits this for a reconfiguration too, which the
+                // contract applies in place: a known pair keeps its store index and
+                // its tokens are not counted again.
+                let known = self.pool_store.get_entry(asset0, asset1);
                 let entry = AngPoolConfigEntry {
                     pool_partial_key: AngstromPoolConfigStore::derive_store_key(asset0, asset1),
                     tick_spacing:     added_pool.tickSpacing,
                     fee_in_e6:        added_pool.bundleFee.to(),
-                    store_index:      self.pool_store.length()
+                    store_index:      known.map_or(self.pool_store.length(), |k| k.store_index)
                 };
+                if known == Some(entry) {
+                    continue;
+                }
 
                 let pool_key = PoolKey {
                     currency0:   asset0,
@@ -298,12 +345,18 @@ where
                 };
 
                 self.pool_store.new_pool(asset0, asset1, entry);
-                *self.angstrom_tokens.entry(asset0).or_default() += 1;
-                *self.angstrom_tokens.entry(asset1).or_default() += 1;
+                if known.is_none() || known.is_some() {
+                    *self.angstrom_tokens.entry(asset0).or_default() += 1;
+                    *self.angstrom_tokens.entry(asset1).or_default() += 1;
+                }
 
                 self.send_events(EthEvent::NewPool { pool: pool_key });
             }
         }
+
+        // Whether or not a setter landed, the pair about to be in force is checked
+        // against storage before anything is built on it.
+        self.reconcile_with_storage(chain, splits.unwrap_or(self.protocol_fee_config.splits))?;
 
         // One publication per notification, stamped with the tip it is current as of.
         if let Some(splits) = splits {
@@ -315,6 +368,44 @@ where
             self.protocol_fee_config = snapshot;
             self.send_events(EthEvent::ProtocolFeeConfigUpdated(snapshot));
         }
+        Ok(())
+    }
+
+    /// Storage is the source of truth and the logs are only the mechanism: a
+    /// pair the logs arrived at that slot 0 does not hold at the tip — a
+    /// dropped notification, a receipt that did not resolve, a reorg whose
+    /// `old` chain did not carry the setter — is an error, never a value to
+    /// publish. Skipped at or before the deployed block, where the config is
+    /// the baked-in const and storage is empty.
+    fn reconcile_with_storage(
+        &self,
+        chain: &impl ChainExt,
+        splits: DonationSplits
+    ) -> eyre::Result<()> {
+        let tip = BlockNumHash::new(chain.tip_number(), chain.tip_hash());
+        let deployed_block = PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK
+            .get()
+            .copied()
+            .unwrap_or_default();
+        if tip.number <= deployed_block {
+            return Ok(());
+        }
+
+        let word = self.storage.storage_at(
+            tip.hash,
+            self.protocol_fee_config_address,
+            U256::from(PROTOCOL_FEE_CONFIG_SLOT)
+        )?;
+        let stored = DonationSplits::from_slot0(word)?;
+        if stored != splits {
+            eyre::bail!(
+                "protocol fee config at block {} ({}) is {stored:?} in storage but {splits:?} \
+                 from logs",
+                tip.number,
+                tip.hash
+            );
+        }
+        Ok(())
     }
 
     fn fetch_filled_order<'a>(
@@ -416,15 +507,18 @@ where
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // poll all canonical updates
-        while let Poll::Ready(is_some) = self.canonical_updates.poll_next_unpin(cx).map(|res| {
-            res.transpose()
-                .ok()
-                .flatten()
-                .map(|update| self.on_canon_update(update))
-                .is_some()
-        }) {
-            if !is_some {
-                return Poll::Ready(());
+        while let Poll::Ready(next) = self.canonical_updates.poll_next_unpin(cx) {
+            match next {
+                // A critical task, so a panic is how the executor is told the node
+                // cannot go on: nothing may build on a pair storage disagrees with.
+                Some(Ok(update)) => self
+                    .on_canon_update(update)
+                    .unwrap_or_else(|err| panic!("canonical update not applied: {err:#}")),
+                Some(Err(lagged)) => tracing::error!(
+                    %lagged,
+                    "canonical updates were dropped; the config is reconciled at the next head"
+                ),
+                None => return Poll::Ready(())
             }
         }
 
@@ -466,10 +560,15 @@ pub enum EthEvent {
 
 #[cfg(test)]
 pub mod test {
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering}
+    };
+
     use alloy::{
-        consensus::TxLegacy,
+        consensus::{Header, TxLegacy},
         hex,
-        primitives::{BlockHash, BlockNumber, Log, TxKind, U256, aliases::U24, b256},
+        primitives::{BlockHash, BlockNumber, Log, TxKind, aliases::U24, b256},
         signers::{Signature, local::PrivateKeySigner},
         sol_types::SolEvent
     };
@@ -489,10 +588,53 @@ pub mod test {
     };
     use pade::PadeEncode;
     use reth_ethereum_primitives::{Block, Receipt, TransactionSigned};
+    use reth_execution_types::{Chain, ExecutionOutcome};
     use reth_primitives_traits::{LogData, RecoveredBlock};
     use testing_tools::type_generator::orders::{ToBOrderBuilder, UserOrderBuilder};
 
     use super::*;
+
+    /// Slot 0 as the contract packs it: user share in the low 32 bits, tob
+    /// share in the next 32.
+    fn slot0_word((user, tob): (u32, u32)) -> U256 {
+        U256::from(user) | (U256::from(tob) << 32)
+    }
+
+    /// The storage the cleanser reconciles against: a word per block hash, and
+    /// the deployed pair at any block a test did not set.
+    #[derive(Clone, Default)]
+    struct FakeStorage {
+        words: Arc<Mutex<HashMap<B256, U256>>>,
+        fails: Arc<AtomicBool>
+    }
+
+    impl FakeStorage {
+        fn holds(&self, block_hash: B256, pair: (u32, u32)) {
+            self.words
+                .lock()
+                .unwrap()
+                .insert(block_hash, slot0_word(pair));
+        }
+
+        fn fails(&self) {
+            self.fails.store(true, Ordering::SeqCst);
+        }
+    }
+
+    impl ConfigStorage for FakeStorage {
+        fn storage_at(&self, block_hash: B256, _: Address, _: U256) -> eyre::Result<U256> {
+            if self.fails.load(Ordering::SeqCst) {
+                eyre::bail!("storage unavailable");
+            }
+            Ok(self
+                .words
+                .lock()
+                .unwrap()
+                .get(&block_hash)
+                .copied()
+                .unwrap_or(slot0_word((750_000, 1_000_000))))
+        }
+    }
 
     #[derive(Default)]
     pub struct MockChain<'a> {
@@ -569,7 +711,8 @@ pub mod test {
                 block_number: 0,
                 block_hash:   BlockHash::ZERO,
                 splits:       DonationSplits::new(750_000, 1_000_000).unwrap()
-            }
+            },
+            storage:                     Box::new(FakeStorage::default())
         }
     }
 
@@ -668,7 +811,7 @@ pub mod test {
         assert!(!eth.node_set.contains(&node_addr));
 
         // Process the logs
-        eth.apply_periphery_logs(&*mock_chain, None);
+        eth.apply_periphery_logs(&*mock_chain, None).unwrap();
 
         // Verify node was added then removed
         assert!(!eth.node_set.contains(&node_addr));
@@ -721,7 +864,7 @@ pub mod test {
         assert_eq!(eth.pool_store.length(), 0);
 
         // Process the logs
-        eth.apply_periphery_logs(&*mock_chain, None);
+        eth.apply_periphery_logs(&*mock_chain, None).unwrap();
 
         // Verify final state after add and remove
         assert!(!eth.angstrom_tokens.contains_key(&asset0));
@@ -746,7 +889,7 @@ pub mod test {
         eth.event_listeners.push(tx);
 
         // Trigger reorg
-        eth.handle_reorg(old_chain, new_chain);
+        eth.handle_reorg(old_chain, new_chain).unwrap();
 
         // Should receive both NewBlockTransitions and ReorgedOrders events
         let mut received_reorg = false;
@@ -778,7 +921,7 @@ pub mod test {
         eth.event_listeners.push(tx);
 
         // Handle commit
-        eth.handle_commit(new_chain);
+        eth.handle_commit(new_chain).unwrap();
 
         // Verify new block transitions event was sent
         // `handle_commit` sends `NewBlock` ahead of the transitions.
@@ -896,7 +1039,7 @@ pub mod test {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         eth.event_listeners.push(tx);
 
-        eth.handle_commit(mock_chain);
+        eth.handle_commit(mock_chain).unwrap();
 
         // `handle_commit` sends `NewBlock` ahead of the transitions.
         match published_transitions(&mut rx).expect("Should receive an event") {
@@ -949,7 +1092,7 @@ pub mod test {
         let mock_recip = Receipt { logs, success: true, ..Default::default() };
         let mock_chain = Arc::new(MockChain { receipts: vec![&mock_recip], ..Default::default() });
 
-        eth.apply_periphery_logs(&*mock_chain, None);
+        eth.apply_periphery_logs(&*mock_chain, None).unwrap();
 
         assert!(!eth.node_set.contains(&node1));
         assert!(!eth.node_set.contains(&node2));
@@ -993,21 +1136,82 @@ pub mod test {
             tickSpacing: I24::try_from(tick_spacing).unwrap()
         };
 
-        let logs = vec![
-            Log { address: periphery_addr, data: configure1.encode_log_data() },
-            Log { address: periphery_addr, data: configure2.encode_log_data() },
-            Log { address: periphery_addr, data: remove.encode_log_data() },
-        ];
+        let configured = Receipt {
+            logs: vec![
+                Log { address: periphery_addr, data: configure1.encode_log_data() },
+                Log { address: periphery_addr, data: configure2.encode_log_data() },
+            ],
+            success: true,
+            ..Default::default()
+        };
+        eth.apply_periphery_logs(
+            &MockChain { receipts: vec![&configured], ..Default::default() },
+            None
+        )
+        .unwrap();
 
-        let mock_recip = Receipt { logs, success: true, ..Default::default() };
-        let mock_chain = Arc::new(MockChain { receipts: vec![&mock_recip], ..Default::default() });
+        // Reconfigured in place, as the contract does it: one entry, at the index it
+        // was given first, carrying the new tick spacing; each token counted once.
+        let entry = eth.pool_store.get_entry(asset0, asset1).unwrap();
+        assert_eq!(eth.pool_store.length(), 1);
+        assert_eq!(entry.store_index, 0);
+        assert_eq!(entry.tick_spacing, tick_spacing * 2);
+        assert_eq!(eth.angstrom_tokens[&asset0], 1);
+        assert_eq!(eth.angstrom_tokens[&asset1], 1);
 
-        eth.apply_periphery_logs(&*mock_chain, None);
+        let removed = Receipt {
+            logs: vec![Log { address: periphery_addr, data: remove.encode_log_data() }],
+            success: true,
+            ..Default::default()
+        };
+        eth.apply_periphery_logs(
+            &MockChain { receipts: vec![&removed], ..Default::default() },
+            None
+        )
+        .unwrap();
 
-        // Verify final state
-        assert!(eth.angstrom_tokens.contains_key(&asset0));
-        assert!(eth.angstrom_tokens.contains_key(&asset1));
-        assert_eq!(eth.pool_store.length(), 0); // Should be removed
+        // ...so removing it lets both tokens go.
+        assert!(!eth.angstrom_tokens.contains_key(&asset0));
+        assert!(!eth.angstrom_tokens.contains_key(&asset1));
+        assert_eq!(eth.pool_store.length(), 0);
+    }
+
+    #[test]
+    fn re_applying_a_notification_leaves_pool_and_node_state_unchanged() {
+        let periphery_addr = Address::random();
+        let mut eth = setup_non_subscription_eth_manager(Some(Address::random()));
+        eth.periphery_address = periphery_addr;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        eth.event_listeners.push(tx);
+
+        let (asset0, asset1, node) = (Address::random(), Address::random(), Address::random());
+        let configure = PoolConfigured {
+            asset0,
+            asset1,
+            bundleFee: U24::try_from(3000).unwrap(),
+            unlockedFee: U24::ZERO,
+            tickSpacing: 60,
+            protocolUnlockedFee: U24::ZERO
+        };
+        let mock_recip = receipt(vec![
+            Log { address: periphery_addr, data: configure.encode_log_data() },
+            Log { address: periphery_addr, data: NodeAdded { node }.encode_log_data() },
+        ]);
+        let mock_chain = MockChain { receipts: vec![&mock_recip], ..Default::default() };
+
+        eth.apply_periphery_logs(&mock_chain, None).unwrap();
+        let entry = eth.pool_store.get_entry(asset0, asset1);
+        let tokens = eth.angstrom_tokens.clone();
+        let nodes = eth.node_set.clone();
+        assert_eq!(std::iter::from_fn(|| rx.try_recv().ok()).count(), 2);
+
+        // The same blocks delivered again change nothing and announce nothing.
+        eth.apply_periphery_logs(&mock_chain, None).unwrap();
+        assert_eq!(eth.pool_store.get_entry(asset0, asset1), entry);
+        assert_eq!(eth.pool_store.length(), 1);
+        assert_eq!(eth.angstrom_tokens, tokens);
+        assert_eq!(eth.node_set, nodes);
+        assert!(rx.try_recv().is_err(), "a re-applied log was re-announced");
     }
 
     #[test]
@@ -1076,8 +1280,10 @@ pub mod test {
         let mock_chain = Arc::new(MockChain { receipts: vec![&mock_recip], ..Default::default() });
 
         // Should handle duplicate removal gracefully
-        eth.apply_periphery_logs(&*mock_chain, None);
+        eth.apply_periphery_logs(&*mock_chain, None).unwrap();
         assert_eq!(eth.pool_store.length(), 0);
+        // ...without the second removal leaving a zero-count token behind.
+        assert!(eth.angstrom_tokens.is_empty(), "{:?}", eth.angstrom_tokens);
     }
 
     #[test]
@@ -1096,7 +1302,7 @@ pub mod test {
         let mock_chain = Arc::new(MockChain { receipts: vec![&mock_recip], ..Default::default() });
 
         // Should handle removal of non-existent node gracefully
-        eth.apply_periphery_logs(&*mock_chain, None);
+        eth.apply_periphery_logs(&*mock_chain, None).unwrap();
         assert!(!eth.node_set.contains(&non_existent_node));
     }
 
@@ -1156,28 +1362,38 @@ pub mod test {
         })
     }
 
-    fn setup_config_eth_manager()
-    -> (EthDataCleanser<GlobalBlockSync>, Address, tokio::sync::mpsc::UnboundedReceiver<EthEvent>)
-    {
+    /// A cleanser with a config address, a listener, and storage the tests
+    /// can put words into. Storage holds the seeded pair anywhere a test does
+    /// not say otherwise, so a test that changes the config also says what
+    /// storage holds at the tip.
+    fn setup_config_eth_manager() -> (
+        EthDataCleanser<GlobalBlockSync>,
+        Address,
+        tokio::sync::mpsc::UnboundedReceiver<EthEvent>,
+        FakeStorage
+    ) {
         let config_addr = Address::random();
         let mut eth = setup_non_subscription_eth_manager(Some(Address::random()));
         eth.protocol_fee_config_address = config_addr;
+        let storage = FakeStorage::default();
+        eth.storage = Box::new(storage.clone());
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         eth.event_listeners.push(tx);
 
-        (eth, config_addr, rx)
+        (eth, config_addr, rx, storage)
     }
 
     #[test]
     fn config_change_in_a_non_tip_block_is_applied() {
-        let (mut eth, config_addr, mut rx) = setup_config_eth_manager();
+        let (mut eth, config_addr, mut rx, storage) = setup_config_eth_manager();
 
         // The change lands two blocks back; the tip itself carries nothing.
         let ancestor =
             receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]);
         let tip = receipt(vec![]);
         let tip_hash = BlockHash::random();
+        storage.holds(tip_hash, (800_000, 900_000));
 
         eth.handle_commit(Arc::new(MockChain {
             hash: tip_hash,
@@ -1185,7 +1401,8 @@ pub mod test {
             receipts: vec![&tip],
             ancestors: vec![(BlockHash::random(), vec![&ancestor])],
             ..Default::default()
-        }));
+        }))
+        .unwrap();
 
         let expected = DonationSplits::new(800_000, 900_000).unwrap();
         assert_eq!(eth.protocol_fee_config.splits, expected);
@@ -1199,19 +1416,22 @@ pub mod test {
 
     #[test]
     fn the_last_config_change_in_a_notification_wins() {
-        let (mut eth, config_addr, mut rx) = setup_config_eth_manager();
+        let (mut eth, config_addr, mut rx, storage) = setup_config_eth_manager();
 
         let first =
             receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]);
         let second = receipt(vec![splits_log(config_addr, (800_000, 900_000), (600_000, 500_000))]);
+        let tip_hash = BlockHash::random();
+        storage.holds(tip_hash, (600_000, 500_000));
 
         eth.handle_commit(Arc::new(MockChain {
-            hash: BlockHash::random(),
+            hash: tip_hash,
             number: 100,
             receipts: vec![&second],
             ancestors: vec![(BlockHash::random(), vec![&first])],
             ..Default::default()
-        }));
+        }))
+        .unwrap();
 
         let expected = DonationSplits::new(600_000, 500_000).unwrap();
         assert_eq!(eth.protocol_fee_config.splits, expected);
@@ -1222,7 +1442,7 @@ pub mod test {
 
     #[test]
     fn a_reorg_that_removes_a_setter_restores_the_previous_rates() {
-        let (mut eth, config_addr, mut rx) = setup_config_eth_manager();
+        let (mut eth, config_addr, mut rx, _storage) = setup_config_eth_manager();
 
         // The setter that is about to be reorged out moved 75/100 -> 80/90.
         let removed =
@@ -1236,7 +1456,7 @@ pub mod test {
         let new_tip_hash = BlockHash::random();
         let new = Arc::new(MockChain { hash: new_tip_hash, number: 95, ..Default::default() });
 
-        eth.handle_reorg(old, new);
+        eth.handle_reorg(old, new).unwrap();
 
         // Back to the pre-image the removed event recorded.
         let expected = DonationSplits::new(750_000, 1_000_000).unwrap();
@@ -1250,12 +1470,14 @@ pub mod test {
 
     #[test]
     fn a_reorg_that_replaces_a_setter_ends_on_the_replacement() {
-        let (mut eth, config_addr, mut rx) = setup_config_eth_manager();
+        let (mut eth, config_addr, mut rx, storage) = setup_config_eth_manager();
 
         let removed =
             receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]);
         let replacement =
             receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (250_000, 100_000))]);
+        let new_tip_hash = BlockHash::random();
+        storage.holds(new_tip_hash, (250_000, 100_000));
 
         eth.handle_reorg(
             Arc::new(MockChain {
@@ -1265,12 +1487,13 @@ pub mod test {
                 ..Default::default()
             }),
             Arc::new(MockChain {
-                hash: BlockHash::random(),
+                hash: new_tip_hash,
                 number: 100,
                 receipts: vec![&replacement],
                 ..Default::default()
             })
-        );
+        )
+        .unwrap();
 
         let expected = DonationSplits::new(250_000, 100_000).unwrap();
         assert_eq!(eth.protocol_fee_config.splits, expected);
@@ -1279,7 +1502,7 @@ pub mod test {
 
     #[test]
     fn a_reorg_reverts_to_the_state_before_the_whole_removed_range() {
-        let (mut eth, config_addr, _rx) = setup_config_eth_manager();
+        let (mut eth, config_addr, _rx, _storage) = setup_config_eth_manager();
 
         // Two setters removed together: only the earliest one's pre-image is the
         // state as it was before the reorged-out range.
@@ -1296,7 +1519,8 @@ pub mod test {
                 ..Default::default()
             }),
             Arc::new(MockChain { hash: BlockHash::random(), number: 98, ..Default::default() })
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             eth.protocol_fee_config.splits,
@@ -1321,17 +1545,21 @@ pub mod test {
 
     #[test]
     fn the_snapshot_carries_the_splits_in_force_at_the_tip() {
-        let (mut eth, config_addr, _rx) = setup_config_eth_manager();
+        let (mut eth, config_addr, _rx, storage) = setup_config_eth_manager();
         let before = snapshot_of(&eth);
 
         let setter =
             receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]);
+        let (tip, next_tip) = (BlockHash::random(), BlockHash::random());
+        storage.holds(tip, (800_000, 900_000));
+        storage.holds(next_tip, (800_000, 900_000));
         eth.handle_commit(Arc::new(MockChain {
-            hash: BlockHash::random(),
+            hash: tip,
             number: 100,
             receipts: vec![&setter],
             ..Default::default()
-        }));
+        }))
+        .unwrap();
         let after = snapshot_of(&eth);
 
         // The notification's own setter is included rather than lagging by one,
@@ -1347,10 +1575,11 @@ pub mod test {
         // ...and one that did not change it leaves them equal, so a diff is not
         // reported where no governance action happened.
         eth.handle_commit(Arc::new(MockChain {
-            hash: BlockHash::random(),
+            hash: next_tip,
             number: 101,
             ..Default::default()
-        }));
+        }))
+        .unwrap();
         assert_eq!(snapshot_of(&eth).protocol_fee_config, after.protocol_fee_config);
     }
 
@@ -1358,7 +1587,7 @@ pub mod test {
     fn the_snapshot_round_trips_with_the_config_on_it() {
         // The consumer decodes this from json, so the added field has to survive
         // the trip the same way the rest of the snapshot does.
-        let (eth, _config_addr, _rx) = setup_config_eth_manager();
+        let (eth, _config_addr, _rx, _storage) = setup_config_eth_manager();
         let snapshot = snapshot_of(&eth);
 
         let json = serde_json::to_value(&snapshot).unwrap();
@@ -1369,17 +1598,190 @@ pub mod test {
 
     #[test]
     fn a_notification_without_a_setter_leaves_the_seeded_config_alone() {
-        let (mut eth, _config_addr, mut rx) = setup_config_eth_manager();
+        let (mut eth, _config_addr, mut rx, _storage) = setup_config_eth_manager();
         let seeded = eth.protocol_fee_config;
 
         eth.handle_commit(Arc::new(MockChain {
             hash: BlockHash::random(),
             number: 100,
             ..Default::default()
-        }));
+        }))
+        .unwrap();
 
         // The node starts with rates and keeps them until a log says otherwise.
         assert_eq!(eth.protocol_fee_config, seeded);
         assert!(published_config(&mut rx).is_none(), "nothing changed, nothing published");
+    }
+
+    #[test]
+    fn a_pair_storage_does_not_hold_is_an_error_and_nothing_is_published() {
+        let (mut eth, _config_addr, mut rx, storage) = setup_config_eth_manager();
+        let seeded = eth.protocol_fee_config;
+        let tip_hash = BlockHash::random();
+        // Storage moved without a log this node saw: a dropped notification, a
+        // receipt that did not resolve, a reorg whose `old` chain lacked the setter.
+        storage.holds(tip_hash, (800_000, 900_000));
+
+        // A notification without a setter still reconciles, so the drift is caught
+        // at this head rather than never.
+        let err = eth
+            .handle_commit(Arc::new(MockChain {
+                hash: tip_hash,
+                number: 100,
+                ..Default::default()
+            }))
+            .unwrap_err()
+            .to_string();
+
+        // Named: both pairs and the tip.
+        assert!(err.contains(&format!("block 100 ({tip_hash})")), "{err}");
+        assert!(err.contains("800000") && err.contains("750000"), "{err}");
+        // Neither pair is taken, and nothing downstream is released on it.
+        assert_eq!(eth.protocol_fee_config, seeded);
+        assert!(rx.try_recv().is_err(), "an unreconciled notification published events");
+    }
+
+    #[test]
+    fn a_setter_storage_does_not_confirm_is_not_applied() {
+        let (mut eth, config_addr, mut rx, _storage) = setup_config_eth_manager();
+        let seeded = eth.protocol_fee_config;
+        let setter =
+            receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]);
+
+        // Storage still holds the seeded pair at this tip.
+        let err = eth
+            .handle_commit(Arc::new(MockChain {
+                hash: BlockHash::random(),
+                number: 100,
+                receipts: vec![&setter],
+                ..Default::default()
+            }))
+            .unwrap_err();
+
+        assert!(err.to_string().contains("800000"), "{err}");
+        assert_eq!(eth.protocol_fee_config, seeded, "the unconfirmed setter was taken");
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_reorg_is_reconciled_too() {
+        let (mut eth, config_addr, mut rx, storage) = setup_config_eth_manager();
+        let seeded = eth.protocol_fee_config;
+        let removed =
+            receipt(vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]);
+        let new_tip_hash = BlockHash::random();
+        // The logs say the setter was reverted; storage on the new branch disagrees.
+        storage.holds(new_tip_hash, (800_000, 900_000));
+
+        let err = eth
+            .handle_reorg(
+                Arc::new(MockChain {
+                    hash: BlockHash::random(),
+                    number: 100,
+                    receipts: vec![&removed],
+                    ..Default::default()
+                }),
+                Arc::new(MockChain { hash: new_tip_hash, number: 95, ..Default::default() })
+            )
+            .unwrap_err();
+
+        assert!(err.to_string().contains("800000"), "{err}");
+        assert_eq!(eth.protocol_fee_config, seeded);
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_failed_storage_read_is_an_error() {
+        let (mut eth, _config_addr, mut rx, storage) = setup_config_eth_manager();
+        storage.fails();
+
+        let err = eth
+            .handle_commit(Arc::new(MockChain {
+                hash: BlockHash::random(),
+                number: 100,
+                ..Default::default()
+            }))
+            .unwrap_err();
+
+        assert!(err.to_string().contains("storage unavailable"), "{err}");
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn blocks_at_or_before_the_deployed_block_are_not_reconciled() {
+        let (mut eth, _config_addr, _rx, storage) = setup_config_eth_manager();
+        // The deployed block is unset here, so block 0 is at it: the config there
+        // is the baked-in const and storage has nothing to say.
+        storage.fails();
+
+        eth.apply_periphery_logs(&MockChain { number: 0, ..Default::default() }, None)
+            .unwrap();
+    }
+
+    /// One block whose receipt carries `logs`, as a real notification does.
+    fn chain(number: u64, hash: BlockHash, logs: Vec<Log>) -> Arc<Chain> {
+        let header = Header { number, ..Default::default() };
+        let block = RecoveredBlock::new(Block { header, body: Default::default() }, vec![], hash);
+        let outcome =
+            ExecutionOutcome::new(Default::default(), vec![vec![receipt(logs)]], number, vec![]);
+        Arc::new(Chain::new([block], outcome, Default::default()))
+    }
+
+    #[tokio::test]
+    async fn a_queued_backlog_is_applied_in_order_before_the_first_round() {
+        let (mut eth, config_addr, mut rx, storage) = setup_config_eth_manager();
+        let (canon_tx, canon_rx) = tokio::sync::broadcast::channel(8);
+        eth.canonical_updates = BroadcastStream::new(canon_rx);
+        let (first, second) = (BlockHash::random(), BlockHash::random());
+        storage.holds(second, (800_000, 900_000));
+
+        // Both land before the cleanser is polled once — the shape of startup, where
+        // blocks queue on the subscription while pools are discovered.
+        canon_tx
+            .send(CanonStateNotification::Commit { new: chain(101, first, vec![]) })
+            .unwrap();
+        canon_tx
+            .send(CanonStateNotification::Commit {
+                new: chain(
+                    102,
+                    second,
+                    vec![splits_log(config_addr, (750_000, 1_000_000), (800_000, 900_000))]
+                )
+            })
+            .unwrap();
+        futures::future::poll_fn(|cx| {
+            let _ = eth.poll_unpin(cx);
+            Poll::Ready(())
+        })
+        .await;
+
+        // Both blocks released, in order, and the later block's setter published
+        // before that block's round can open.
+        let events: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        let heads: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                EthEvent::NewBlock(block) => Some(block.number),
+                _ => None
+            })
+            .collect();
+        assert_eq!(heads, vec![101, 102]);
+        let config_at = events
+            .iter()
+            .position(|event| matches!(event, EthEvent::ProtocolFeeConfigUpdated(_)))
+            .expect("the setter is published");
+        let second_head_at = events
+            .iter()
+            .position(|event| matches!(event, EthEvent::NewBlock(block) if block.number == 102))
+            .unwrap();
+        assert!(config_at < second_head_at);
+        assert_eq!(
+            eth.protocol_fee_config,
+            DonationSplitSnapshot {
+                block_number: 102,
+                block_hash:   second,
+                splits:       DonationSplits::new(800_000, 900_000).unwrap()
+            }
+        );
     }
 }

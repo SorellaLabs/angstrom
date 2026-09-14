@@ -294,6 +294,7 @@ impl ReplayRunner {
             eth_snap.angstrom_tokens.clone(),
             eth_snap.pool_store.clone(),
             protocol_fee_config,
+            anvil_provider.state_provider(),
             global_block_sync.clone(),
             eth_snap.node_set.clone(),
             vec![]

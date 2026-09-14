@@ -20,6 +20,15 @@ use crate::manager::EthDataCleanser;
 
 /// The state of our eth-updater as of a notification's tip, with that
 /// notification's logs already applied.
+///
+/// Every field is post-notification: `angstrom_tokens`, `pool_store` and
+/// `node_set` include the pools and nodes the notification's own logs added
+/// or removed, exactly as `protocol_fee_config` includes its setters. Before
+/// PR #680 the snapshot was taken *before* the logs were applied, so those
+/// three fields lagged the tip by one notification; a consumer that seeds
+/// state from a recorded snapshot and then replays the same block's
+/// notification now applies that block's logs a second time, which the
+/// cleanser's log application is idempotent against.
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EthUpdaterSnapshot {

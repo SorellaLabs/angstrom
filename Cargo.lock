@@ -1149,6 +1149,7 @@ dependencies = [
  "angstrom-types",
  "anyhow",
  "chrono",
+ "eyre",
  "futures",
  "futures-util",
  "itertools 0.14.0",

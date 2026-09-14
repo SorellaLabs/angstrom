@@ -3,7 +3,8 @@ use std::{future::IntoFuture, time::Duration};
 use alloy::{providers::Provider, rpc::types::Block};
 use alloy_primitives::{Address, B256, BlockNumber, U256};
 use alloy_rpc_types::{BlockId, TransactionReceipt};
-use angstrom_types::reth_db_wrapper::{DBError, SetBlock};
+use angstrom_eth::manager::ConfigStorage;
+use angstrom_types::reth_db_wrapper::{AtBlock, DBError};
 use futures::stream::StreamExt;
 use reth::primitives::EthPrimitives;
 use reth_provider::{
@@ -27,10 +28,24 @@ pub struct AnvilStateProvider<P> {
     pub canon_state_tx: broadcast::Sender<CanonStateNotification>
 }
 
-impl<P: WithWalletProvider> SetBlock for AnvilStateProvider<P> {
+impl<P: WithWalletProvider> ConfigStorage for AnvilStateProvider<P> {
+    fn storage_at(&self, block_hash: B256, address: Address, slot: U256) -> eyre::Result<U256> {
+        Ok(async_to_sync(
+            self.provider
+                .rpc_provider()
+                .get_storage_at(address, slot)
+                .block_id(block_hash.into())
+                .into_future()
+        )?)
+    }
+}
+
+impl<P: WithWalletProvider + Clone> AtBlock for AnvilStateProvider<P> {
     /// Anvil only advances when a test mines, so its tip already *is* the block
-    /// under test and there is nothing to move.
-    fn set_block(&self, _: alloy::eips::BlockNumHash) {}
+    /// under test and every view is of it.
+    fn at_block(&self, _: alloy::eips::BlockNumHash) -> Self {
+        self.clone()
+    }
 }
 
 impl<P: WithWalletProvider> AnvilStateProvider<P> {

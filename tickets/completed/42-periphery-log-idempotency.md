@@ -61,3 +61,45 @@ and `node_set` from pre- to post-notification state on every snapshot. Ticket 18
 the PR."
 
 Nothing about this ticket should revert either change. Both are right; they are just unguarded.
+
+**As built.** Step 1 landed with one refinement, steps 2 and 3 as written.
+
+- `PoolConfigured`: the controller emits the same event for a reconfiguration, which Angstrom's
+  `configurePool` applies in place, so "already known" cannot mean "skip". A known pair keeps its
+  `store_index` (matching the on-chain entry it modifies) and its tokens are not counted again; an
+  entry identical to the stored one is a re-delivered log and `continue`s without re-announcing
+  `NewPool`. `AngPoolConfigEntry` gained `PartialEq, Eq` for that comparison.
+- `PoolRemoved`: the refcount lookup uses `get` instead of `entry().or_default()`, so a duplicate
+  removal no longer inserts a phantom zero-count token. Observed and left alone, out of scope: the
+  count is never decremented when it is above one (`main`'s behaviour).
+- `NodeAdded` / `NodeRemoved` only announce when the set actually changed.
+- `test_pool_config_edge_cases` was pinning the double count — it asserted both tokens still present
+  after the pool's removal, which only held because two `PoolConfigured` logs had counted them twice.
+  Rewritten: after the two logs the store has one entry at index 0 carrying the new tick spacing and
+  each token is counted once; after the removal both tokens are gone. `test_duplicate_pool_removal`
+  now also asserts `angstrom_tokens` is empty. New:
+  `re_applying_a_notification_leaves_pool_and_node_state_unchanged` applies the same block twice and
+  asserts the entry, the counts, the node set and the absence of any second announcement.
+- Step 2: the `EthUpdaterSnapshot` doc comment now states that every field is post-notification,
+  that before PR #680 `angstrom_tokens` / `pool_store` / `node_set` lagged by one notification, and
+  what that means for a consumer that seeds from a snapshot. For the PR description:
+
+  > **Telemetry semantics change.** `EthUpdaterSnapshot` is now emitted after a notification's logs
+  > are applied, so `angstrom_tokens`, `pool_store` and `node_set` describe the state *at* the
+  > notification's tip rather than the state before it (`protocol_fee_config` needs this to mean
+  > "in force at this tip"). Snapshots recorded before this change lag those three fields by one
+  > notification. Replay seeds the cleanser from a recorded snapshot and then replays that block's
+  > notification, so with the new semantics it re-applies that block's periphery logs; log
+  > application is now idempotent, which is what keeps that harmless.
+
+- Step 3, confirmed: the only consumers are `crates/telemetry` (decodes it into a block log) and
+  `testing-tools/src/replay/runner.rs`, which seeds `angstrom_tokens` / `pool_store` / `node_set`
+  from `block_log.eth_snapshot` — recorded at tip *N*, now post-notification — and then replays
+  *N*'s own notification. That is the one place the shift changes behaviour: *N*'s `PoolConfigured`
+  / `NodeAdded` logs are applied a second time, and step 1 is exactly what makes that a no-op. Across
+  the deploy boundary, older recorded snapshots are pre-notification and replay from them applies
+  *N*'s logs once, as before; nothing compares the two generations against each other.
+
+Verification: `cargo nextest run -p angstrom-eth --lib` — 30 passed (with ticket 37's changes in the
+same tree); `cargo +nightly fmt`. **Not run, by request:** workspace tests and the mutation checks
+(re-counting a known pair, restoring `entry().or_default()`); see ticket 37's note on clippy.

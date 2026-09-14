@@ -6,8 +6,9 @@ use alloy::{
 };
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
-    reth_db_wrapper::SetBlock
+    reth_db_wrapper::AtBlock
 };
+use eyre::eyre;
 use futures_util::{Future, FutureExt};
 use telemetry_recorder::telemetry_event;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -24,7 +25,7 @@ use crate::{
         },
         state::{
             account::{UserAccountProcessor, user::UserAccounts},
-            db_state_utils::StateFetchUtils,
+            db_state_utils::{Repoint, StateFetchUtils},
             pools::PoolsTracker
         }
     }
@@ -74,6 +75,7 @@ pub struct Validator<DB, Pools, Fetch> {
     order_validator:  OrderValidator<DB, Pools, Fetch>,
     bundle_validator: BundleValidator<DB>,
     utils:            SharedTools,
+    /// The state source order validation takes a fresh view of on each block.
     db:               Arc<DB>
 }
 
@@ -86,9 +88,9 @@ where
         + Send
         + Sync
         + 'static
-        + SetBlock,
+        + AtBlock,
     Pools: PoolsTracker + Send + Sync + 'static,
-    Fetch: StateFetchUtils + Send + Sync + 'static,
+    Fetch: StateFetchUtils + Repoint<DB> + Send + Sync + 'static,
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
     pub fn new(
@@ -141,11 +143,17 @@ where
                         .on_new_block(block_number, orders, addresses);
                 });
 
-                // The selector is a `BlockNumHash`, but this request only carries a
-                // number, so the canonical hash for it is resolved here.
-                let block_hash = self.db.block_hash(block_number).unwrap().unwrap();
-                self.db
-                    .set_block(BlockNumHash::new(block_number, block_hash));
+                // Order validation follows the head through a fresh view per block,
+                // never by moving a view a queued simulation may be reading through.
+                match self.head_view(block_number) {
+                    Ok(view) => self.order_validator.repoint(Arc::new(view)),
+                    Err(err) => tracing::error!(
+                        %err,
+                        block_number,
+                        "could not take a view of the new head; order validation keeps its \
+                         previous one"
+                    )
+                }
 
                 let gas_updates = self.utils.token_pricing_ref().generate_gas_updates();
                 sender
@@ -205,6 +213,19 @@ where
     pub fn token_price_generator(&self) -> crate::TokenPriceGenerator {
         self.utils.token_pricing.clone()
     }
+
+    /// A view pinned to the canonical block at `number`. Only a number arrives
+    /// on this path, so the hash is resolved here; a lookup that fails is an
+    /// error, never a substitute block.
+    fn head_view(&self, number: u64) -> eyre::Result<DB> {
+        let hash = self
+            .db
+            .block_hash(number)
+            .map_err(|e| eyre!("failed to resolve the hash of block {number} - {e:?}"))?
+            .ok_or_else(|| eyre!("block {number} is not a known block"))?;
+
+        Ok(self.db.at_block(BlockNumHash::new(number, hash)))
+    }
 }
 
 impl<DB, Pools, Fetch> Future for Validator<DB, Pools, Fetch>
@@ -216,10 +237,10 @@ where
         + reth_provider::BlockNumReader
         + Send
         + Sync
-        + SetBlock,
+        + AtBlock,
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug,
     Pools: PoolsTracker + Send + Sync + Unpin + 'static,
-    Fetch: StateFetchUtils + Send + Sync + Unpin + 'static
+    Fetch: StateFetchUtils + Repoint<DB> + Send + Sync + Unpin + 'static
 {
     type Output = ();
 
@@ -243,5 +264,140 @@ where
         }
 
         self.utils.poll_unpin(cx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::atomic::AtomicU64, task::Poll};
+
+    use angstrom_types::primitive::AngstromAddressConfig;
+    use tokio::{runtime::Handle, sync::oneshot};
+    use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
+
+    use super::*;
+    use crate::{
+        bundle::tests::{FakeDb, PARENT, PARENT_NUMBER},
+        common::{TokenPriceGenerator, key_split_threadpool::KeySplitThreadpool},
+        order::{
+            sim::SimValidation,
+            state::{db_state_utils::FetchUtils, pools::AngstromPoolsTracker}
+        }
+    };
+
+    type TestValidator = Validator<FakeDb, AngstromPoolsTracker, FetchUtils<FakeDb>>;
+
+    /// A validator over `db`, plus the request sender that keeps it alive: a
+    /// closed request channel is its shutdown signal.
+    async fn validator(db: FakeDb) -> (TestValidator, UnboundedSender<ValidationRequest>) {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let angstrom = Address::repeat_byte(0xaa);
+        let node = Address::repeat_byte(0xbb);
+        let db = Arc::new(db);
+        let pools = SyncedUniswapPools::new(Default::default(), tokio::sync::mpsc::channel(1).0);
+
+        let order_validator = OrderValidator::new(
+            SimValidation::new(db.clone(), angstrom, node),
+            Arc::new(AtomicU64::new(PARENT_NUMBER)),
+            AngstromPoolsTracker::new(angstrom, Default::default()),
+            FetchUtils::new(angstrom, db.clone()),
+            pools.clone()
+        )
+        .await;
+        let utils = SharedTools::new(
+            TokenPriceGenerator::from_snapshot(pools, HashMap::new(), Address::ZERO, 0),
+            Box::pin(futures::stream::pending()),
+            KeySplitThreadpool::new(Handle::current(), 1)
+        );
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let validator = Validator::new(
+            rx,
+            order_validator,
+            BundleValidator::new(db.clone(), angstrom, node),
+            utils,
+            db
+        );
+
+        (validator, tx)
+    }
+
+    /// The block order validation's state reads are pinned to.
+    fn order_view(validator: &TestValidator) -> Option<BlockNumHash> {
+        validator
+            .order_validator
+            .state
+            .user_account_tracker
+            .fetch_utils
+            .db
+            .pinned()
+    }
+
+    fn new_block(
+        validator: &mut TestValidator,
+        number: u64
+    ) -> oneshot::Receiver<OrderValidationResults> {
+        let (sender, rx) = oneshot::channel();
+        validator.on_new_validation_request(ValidationRequest::NewBlock {
+            sender,
+            block_number: number,
+            orders: vec![],
+            addresses: vec![]
+        });
+        rx
+    }
+
+    /// Polls `validator` until `rx` resolves. A queued simulation only runs
+    /// while the validator's thread pool is polled.
+    async fn drive<T>(validator: &mut TestValidator, rx: oneshot::Receiver<T>) -> T {
+        tokio::select! {
+            res = rx => res.unwrap(),
+            _ = futures::future::poll_fn(|cx| {
+                let _ = validator.poll_unpin(cx);
+                Poll::<()>::Pending
+            }) => unreachable!()
+        }
+    }
+
+    #[tokio::test]
+    async fn a_new_block_and_a_queued_simulation_cannot_move_each_other() {
+        let db = FakeDb::knowing(PARENT_NUMBER);
+        let (mut validator, _keep_open) = validator(db.clone()).await;
+        let parent = BlockNumHash::new(PARENT_NUMBER, PARENT);
+
+        // Queue a simulation against the parent. It runs only once polled.
+        let (sender, rx) = oneshot::channel();
+        validator.on_new_validation_request(ValidationRequest::Bundle {
+            sender,
+            bundle: AngstromBundle::new(vec![], vec![], vec![], vec![], vec![]),
+            parent_hash: PARENT
+        });
+
+        // Move the head under it before it has run.
+        let next = PARENT_NUMBER + 1;
+        new_block(&mut validator, next).await.unwrap();
+        let head = BlockNumHash::new(next, FakeDb::hash_of(next));
+        assert_eq!(order_view(&validator), Some(head));
+
+        // It still resolved the parent it was handed, and every read it made went
+        // through a view of that parent — not the head that arrived meanwhile.
+        let details = drive(&mut validator, rx).await.unwrap();
+        assert_eq!(details.parent(), parent);
+        let reads = db.reads();
+        assert!(!reads.is_empty(), "the simulation read nothing");
+        assert!(reads.iter().all(|read| *read == Some(parent)), "{reads:?}");
+
+        // And running it moved nothing the other way: order validation still reads
+        // the head.
+        assert_eq!(order_view(&validator), Some(head));
+    }
+
+    #[tokio::test]
+    async fn a_failed_head_lookup_is_an_error_not_a_panic() {
+        let (mut validator, _keep_open) = validator(FakeDb::failing()).await;
+
+        // The transition still completes; order validation keeps the view it had
+        // rather than a substitute.
+        new_block(&mut validator, PARENT_NUMBER + 1).await.unwrap();
+        assert_eq!(order_view(&validator), None);
     }
 }

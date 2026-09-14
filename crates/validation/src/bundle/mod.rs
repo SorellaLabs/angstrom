@@ -9,7 +9,7 @@ use angstrom_metrics::validation::ValidationMetrics;
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     primitive::CHAIN_ID,
-    reth_db_wrapper::SetBlock,
+    reth_db_wrapper::AtBlock,
     traits::BundleProcessing
 };
 use eyre::eyre;
@@ -31,7 +31,8 @@ pub mod validator;
 pub use validator::*;
 
 pub struct BundleValidator<DB> {
-    db:               CacheDB<Arc<DB>>,
+    /// The state source every simulation takes its own pinned view of.
+    db:               Arc<DB>,
     angstrom_address: Address,
     /// the address associated with this node.
     /// this will ensure the  node has access and the simulation can pass
@@ -45,13 +46,13 @@ where
         + 'static
         + reth_provider::BlockNumReader
         + revm::DatabaseRef
-        + SetBlock
+        + AtBlock
         + Send
         + Sync,
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
     pub fn new(db: Arc<DB>, angstrom_address: Address, node_address: Address) -> Self {
-        Self { db: CacheDB::new(db), angstrom_address, node_address }
+        Self { db, angstrom_address, node_address }
     }
 
     fn apply_slot_overrides_for_token(
@@ -87,7 +88,6 @@ where
     fn get_block(&self, parent_hash: B256) -> eyre::Result<BlockNumHash> {
         let number = self
             .db
-            .db
             .block_number(parent_hash)
             .map_err(|e| eyre!("failed to resolve parent {parent_hash} - {e:?}"))?
             .ok_or_else(|| eyre!("parent {parent_hash} is not a known block"))?;
@@ -119,11 +119,10 @@ where
         };
         let number = parent.number;
 
-        // Point the db at the parent the caller named before this simulation reads
-        // anything. `self.db`'s own cache is never written to — `&self` means only the
-        // clone below is — so each simulation still starts cold.
-        self.db.db.set_block(parent);
-        let mut db = self.db.clone();
+        // A view of the parent that nothing else holds, with a cache built on it and
+        // nothing else, so no later request can move what this simulation reads and
+        // every read — cache misses included — resolves against `parent`.
+        let mut db = CacheDB::new(Arc::new(self.db.at_block(parent)));
 
         thread_pool.spawn_raw(Box::pin(async move {
             let pool_manager_addr = *angstrom_types::primitive::POOL_MANAGER_ADDRESS.get().unwrap();
@@ -217,13 +216,13 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Mutex;
 
     use alloy::primitives::{B256, BlockNumber};
     use angstrom_types::{
         primitive::AngstromAddressConfig,
-        reth_db_wrapper::{DBError, SetBlock}
+        reth_db_wrapper::{AtBlock, DBError}
     };
     use futures::StreamExt;
     use reth_provider::{BlockHashReader, BlockNumReader, ProviderError, ProviderResult};
@@ -231,40 +230,70 @@ mod tests {
 
     use super::*;
 
-    const PARENT: B256 = B256::repeat_byte(0xa1);
-    const PARENT_NUMBER: u64 = 4_242;
+    pub(crate) const PARENT: B256 = B256::repeat_byte(0xa1);
+    pub(crate) const PARENT_NUMBER: u64 = 4_242;
 
     /// State is empty and every parent lookup is answered from `known`, so a
-    /// test controls exactly which parents exist. Records every block it was
-    /// pointed at.
+    /// test controls exactly which parents exist. Records every view taken of
+    /// it and, on each read, the block the view it went through was pinned to.
     #[derive(Clone)]
-    struct FakeDb {
+    pub(crate) struct FakeDb {
         known:  Option<u64>,
         errors: bool,
-        pinned: Arc<Mutex<Vec<BlockNumHash>>>
+        /// The block this view is pinned to; `None` for the source itself.
+        pinned: Option<BlockNumHash>,
+        views:  Arc<Mutex<Vec<BlockNumHash>>>,
+        reads:  Arc<Mutex<Vec<Option<BlockNumHash>>>>
     }
 
     impl FakeDb {
-        fn knowing(number: u64) -> Self {
-            Self { known: Some(number), errors: false, pinned: Arc::default() }
+        pub(crate) fn knowing(number: u64) -> Self {
+            Self {
+                known:  Some(number),
+                errors: false,
+                pinned: None,
+                views:  Arc::default(),
+                reads:  Arc::default()
+            }
         }
 
-        fn unknown() -> Self {
-            Self { known: None, errors: false, pinned: Arc::default() }
+        pub(crate) fn unknown() -> Self {
+            Self { known: None, ..Self::knowing(0) }
         }
 
-        fn failing() -> Self {
-            Self { known: None, errors: true, pinned: Arc::default() }
+        pub(crate) fn failing() -> Self {
+            Self { errors: true, ..Self::unknown() }
         }
 
-        fn pinned_to(&self) -> Vec<BlockNumHash> {
-            self.pinned.lock().unwrap().clone()
+        /// The hash `block_hash` answers for `number`.
+        pub(crate) fn hash_of(number: u64) -> B256 {
+            B256::from(U256::from(number))
+        }
+
+        /// The block this view is pinned to.
+        pub(crate) fn pinned(&self) -> Option<BlockNumHash> {
+            self.pinned
+        }
+
+        /// Every view taken of the source, in order.
+        pub(crate) fn pinned_to(&self) -> Vec<BlockNumHash> {
+            self.views.lock().unwrap().clone()
+        }
+
+        /// The pinned block of the view each read went through, in order.
+        pub(crate) fn reads(&self) -> Vec<Option<BlockNumHash>> {
+            self.reads.lock().unwrap().clone()
+        }
+
+        fn record_read(&self) {
+            self.reads.lock().unwrap().push(self.pinned);
         }
     }
 
-    impl SetBlock for FakeDb {
-        fn set_block(&self, block: BlockNumHash) {
-            self.pinned.lock().unwrap().push(block);
+    impl AtBlock for FakeDb {
+        fn at_block(&self, block: BlockNumHash) -> Self {
+            self.views.lock().unwrap().push(block);
+            Self { pinned: Some(block), ..self.clone() }
         }
     }
 
@@ -272,6 +301,7 @@ mod tests {
         type Error = DBError;
 
         fn basic_ref(&self, _: Address) -> Result<Option<AccountInfo>, Self::Error> {
+            self.record_read();
             Ok(None)
         }
 
@@ -280,6 +310,7 @@ mod tests {
         }
 
         fn storage_ref(&self, _: Address, _: U256) -> Result<U256, Self::Error> {
+            self.record_read();
             Ok(U256::ZERO)
         }
 
@@ -310,8 +341,11 @@ mod tests {
     }
 
     impl BlockHashReader for FakeDb {
-        fn block_hash(&self, _: BlockNumber) -> ProviderResult<Option<B256>> {
-            unimplemented!()
+        fn block_hash(&self, number: BlockNumber) -> ProviderResult<Option<B256>> {
+            if self.errors {
+                return Err(ProviderError::BestBlockNotFound);
+            }
+            Ok(Some(Self::hash_of(number)))
         }
 
         fn canonical_hashes_range(
@@ -370,9 +404,13 @@ mod tests {
 
         simulate(&db, PARENT).await.unwrap();
 
-        // Pointed at the requested parent, by number and hash, before anything was
-        // read — cache misses included, since the cache is built afterwards.
-        assert_eq!(db.pinned_to(), vec![BlockNumHash::new(PARENT_NUMBER, PARENT)]);
+        // One view, of the requested parent by number and hash, taken before anything
+        // was read — and every read, cache misses included, went through it.
+        let parent = BlockNumHash::new(PARENT_NUMBER, PARENT);
+        assert_eq!(db.pinned_to(), vec![parent]);
+        let reads = db.reads();
+        assert!(!reads.is_empty(), "the simulation read nothing");
+        assert!(reads.iter().all(|read| *read == Some(parent)), "{reads:?}");
     }
 
     #[tokio::test]

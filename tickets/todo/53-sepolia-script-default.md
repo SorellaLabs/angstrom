@@ -1,7 +1,7 @@
-# 54 — Fix the Sepolia deploy-script default, and find out what the Sepolia deployment is bound to
+# 53 — Fix the Sepolia deploy-script default, and find out what the Sepolia deployment is bound to
 
 **Blocks on:** —
-**Closes:** ISSUES.md 14 (PR #680 C.6)
+**Closes:** ISSUES.md 13 (PR #680 C.6)
 **Follows:** 11, 35, 36
 
 ## Files

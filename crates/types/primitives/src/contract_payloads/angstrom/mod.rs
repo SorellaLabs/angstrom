@@ -192,7 +192,7 @@ impl std::str::FromStr for AngstromPoolPartialKey {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AngPoolConfigEntry {
     pub pool_partial_key: AngstromPoolPartialKey,
     pub tick_spacing:     u16,

@@ -310,7 +310,6 @@ where
     };
 
     tracing::info!(?block_id, "starting up with block");
-    let eth_data_sub = node.provider.subscribe_to_canonical_state();
 
     let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
         protocol_fee_config_address,
@@ -331,18 +330,23 @@ where
         UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
-    // created
+    // created.
+    //
+    // The cleanser takes over the subscription opened before pool discovery, so
+    // every block that queued on it meanwhile is applied — in order, after the
+    // init read at `block_id` — rather than dropped with a fresh subscription.
     let eth_handle = EthDataCleanser::spawn(
         angstrom_address,
         controller,
         protocol_fee_config_address,
-        eth_data_sub,
+        sub,
         executor.clone(),
         handles.eth_tx,
         handles.eth_rx,
         angstrom_tokens,
         pool_config_store.clone(),
         protocol_fee_config,
+        node.provider.clone(),
         global_block_sync.clone(),
         node_set.clone(),
         vec![handles.eth_handle_tx.take().unwrap()]

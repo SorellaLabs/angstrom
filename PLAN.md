@@ -204,7 +204,7 @@ fn split(gross: u128, share_e6: u32) -> (u128, u128) {
 
 ## Reading canonical state
 
-Read both rates at each canonical head, pinned to that block's hash — locally via the provider, or over RPC with an EIP-1898 block-hash identifier and `requireCanonical: true`. Never `latest` or a bare block number.
+Read both rates at each canonical head, pinned to that block's hash — locally via the provider, or over RPC with an EIP-1898 block-hash identifier.
 
 1. Subscribe to canonical updates before taking the startup snapshot, then reconcile queued updates.
 2. Validate the address holds the expected code for the intended Angstrom immutable. An empty account reads as zero storage and must not be mistaken for two valid 0% settings.

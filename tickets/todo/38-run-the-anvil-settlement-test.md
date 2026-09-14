@@ -1,7 +1,7 @@
 # 38 — Make the anvil settlement test runnable
 
 **Blocks on:** —
-**Closes:** ISSUES.md 2
+**Closes:** ISSUES.md 10
 **Follows:** 32
 
 ## Files

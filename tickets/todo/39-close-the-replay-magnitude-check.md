@@ -1,7 +1,7 @@
 # 39 — Close the pre-A replay equivalence question
 
 **Blocks on:** —
-**Closes:** ISSUES.md 3
+**Closes:** ISSUES.md 11
 **Follows:** 34, 25
 
 ## Files

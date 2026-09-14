@@ -1,7 +1,7 @@
 # 37 — Reconcile the log-derived config against storage at each head
 
 **Blocks on:** —
-**Closes:** ISSUES.md 1
+**Closes:** ISSUES.md 2
 **Follows:** 07, 13, 14, 15, 16
 
 ## Overview

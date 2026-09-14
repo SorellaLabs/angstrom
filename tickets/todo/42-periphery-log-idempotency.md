@@ -1,7 +1,7 @@
 # 42 — Contain the two out-of-plan behaviour changes in the eth manager
 
 **Blocks on:** —
-**Closes:** ISSUES.md 6
+**Closes:** ISSUES.md 12
 **Follows:** 14, 18
 
 ## Overview

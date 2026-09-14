@@ -1089,16 +1089,18 @@ mod tests {
             .build()
     }
 
-    /// A ToB bid paying `quantity_in` of T1 for `quantity_out` of T0. The gross
-    /// surplus `calc_vec_and_reward` reports is whatever the AMM returns over
-    /// `quantity_out`, so callers pick the gross by choosing `quantity_out`.
+    /// A ToB bid paying `quantity_in` of the pool's token1 `t1` for
+    /// `quantity_out` of T0. The gross surplus `calc_vec_and_reward` reports is
+    /// whatever the AMM returns over `quantity_out`, so callers pick the gross
+    /// by choosing `quantity_out`.
     fn tob_order(
         pool_id: PoolId,
+        t1: Address,
         quantity_in: u128,
         quantity_out: u128
     ) -> OrderWithStorageData<RpcTopOfBlockOrder> {
         let order = ToBOrderBuilder::new()
-            .asset_in(T1)
+            .asset_in(t1)
             .asset_out(T0)
             .quantity_in(quantity_in)
             .quantity_out(quantity_out)
@@ -1112,18 +1114,20 @@ mod tests {
             .unwrap()
     }
 
-    /// Builds a ToB bid whose gross surplus is exactly `gross`.
+    /// Builds a ToB bid paying `quantity_in` of `t1` whose gross surplus is
+    /// exactly `gross`.
     fn tob_with_gross(
         snap: &BaselinePoolState,
         id: PoolId,
+        t1: Address,
+        quantity_in: u128,
         gross: u128
     ) -> (OrderWithStorageData<RpcTopOfBlockOrder>, u128) {
-        let quantity_in = 1_000_000u128;
         let out = snap
             .swap_current_with_amount(I256::unchecked_from(quantity_in), false)
             .unwrap()
             .total_d_t0;
-        (tob_order(id, quantity_in, out - gross), gross)
+        (tob_order(id, t1, quantity_in, out - gross), gross)
     }
 
     fn filled(order: &OrderWithStorageData<AllOrders>) -> OrderOutcome {
@@ -1268,7 +1272,7 @@ mod tests {
         AngstromAddressConfig::INTERNAL_TESTNET.try_init();
         let snap = pool(1_000_000_000_000_000);
         let id = pool_id(1);
-        let (searcher, gross) = tob_with_gross(&snap, id, 1_001);
+        let (searcher, gross) = tob_with_gross(&snap, id, T1, 1_000_000, 1_001);
 
         let splits = DonationSplits::new(750_000, 750_000).unwrap();
         let (lp_budget, protocol_fee) = splits.split_tob(gross);
@@ -1355,15 +1359,20 @@ mod tests {
     }
 
     /// Each pool's gross is split on its own. A single split of the aggregate
-    /// rounds differently, so the two answers disagree by a unit here.
+    /// rounds differently, so the two answers disagree by a unit here. On the
+    /// token1 side each searcher pays into its own pool's token1 and nowhere
+    /// else.
     #[test]
     fn two_pools_sharing_token0() {
         AngstromAddressConfig::INTERNAL_TESTNET.try_init();
         let snap = pool(1_000_000_000_000_000);
         let splits = DonationSplits::new(1_000_000, 750_000).unwrap();
 
-        let (searcher_a, gross_a) = tob_with_gross(&snap, pool_id(1), 1_001);
-        let (searcher_b, gross_b) = tob_with_gross(&snap, pool_id(2), 2_002);
+        // Distinct quantities: with equal ones a crossed pair of searchers
+        // books the same per-token totals as the right pair.
+        let (q_in_a, q_in_b) = (1_000_000, 2_000_000);
+        let (searcher_a, gross_a) = tob_with_gross(&snap, pool_id(1), T1, q_in_a, 1_001);
+        let (searcher_b, gross_b) = tob_with_gross(&snap, pool_id(2), T1_B, q_in_b, 2_002);
 
         let (lp_a, fee_a) = splits.split_tob(gross_a);
         let (lp_b, fee_b) = splits.split_tob(gross_b);
@@ -1411,5 +1420,17 @@ mod tests {
         // of the combined gross.
         assert_eq!(solved.save(T0), per_pool);
         assert_ne!(solved.save(T0), aggregated);
+
+        // Each searcher's input lands on its own token1 alone: received from
+        // the searcher and settled to Uniswap in full, so nothing is borrowed
+        // and nothing is left over to sweep into `save`.
+        for (t1, quantity_in) in [(T1, q_in_a), (T1_B, q_in_b)] {
+            let asset = solved.asset(t1);
+            assert_eq!(
+                (asset.take, asset.settle, asset.save),
+                (0, quantity_in, 0),
+                "{t1}: the searcher's input did not land on its own token1 alone"
+            );
+        }
     }
 }

@@ -132,7 +132,11 @@ contract AngstromProtocolFeeConfigScript is BaseScript {
             return 0x0000000aa232009084Bd71A5797d089AA4Edfad4;
         }
         if (block.chainid == SEPOLIA_CHAIN_ID) {
-            return 0x9051085355BA7e36177e0a1c4082cb88C270ba90;
+            // Must match `ANGSTROM_ADDRESS` in `crates/types/constants`, which the live Sepolia
+            // config is bound to. Not `AngstromInspector.s.sol`'s
+            // 0x9051085355BA7e36177e0a1c4082cb88C270ba90: that Angstrom's controller predates
+            // `fastOwner()`, so `verify` and every `setLpDonationSplits` call revert against it.
+            return 0x3B9172ef12bd245A07DA0d43dE29e09036626AFC;
         }
         revert(
             string.concat(

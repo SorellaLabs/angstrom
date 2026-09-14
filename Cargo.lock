@@ -12932,6 +12932,7 @@ dependencies = [
  "angstrom",
  "angstrom-amm-quoter",
  "angstrom-eth",
+ "angstrom-metrics",
  "angstrom-network",
  "angstrom-rpc",
  "angstrom-types",

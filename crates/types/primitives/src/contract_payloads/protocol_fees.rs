@@ -483,6 +483,11 @@ mod tests {
     /// has left to answer is whether any recorded block's per-pool
     /// `total_user_fees` reached ~3.0e15 t0 units — for an 18-decimal token,
     /// 0.003 of it in fees from a single batch.
+    ///
+    /// Answered (ticket 39): over every successful mainnet bundle from
+    /// deployment through block 25_977_666 the maximum is 683_365_780_083_599
+    /// wei of WETH (block 23_139_381), 4.39× below the bound, so no historical
+    /// bundle diverges and no legacy branch is needed.
     #[test]
     fn the_deployed_split_reproduces_the_legacy_f64_path_below_its_bound() {
         let splits = DEPLOYED_INITIAL_PROTOCOL_FEE_CONFIG.splits;

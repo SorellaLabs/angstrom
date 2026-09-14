@@ -298,22 +298,8 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     // spinup matching engine
     let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
 
-    // The address may be unset here — `AngstromAddressConfig::try_init` does not
-    // set it. A block at or before the deployed block resolves without a
-    // provider call.
-    let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
-        PROTOCOL_FEE_CONFIG_ADDRESS
-            .get()
-            .copied()
-            .unwrap_or_default(),
-        block_id,
-        Default::default(),
-        &provider.rpc_provider()
-    )
-    .await?;
-
-    // Consensus names the parent it builds on by hash, so resolve the one that goes
-    // with `block_id` rather than handing it a placeholder.
+    // The config read and consensus both name `block_id` by hash, so resolve it
+    // rather than handing either a placeholder.
     let block_hash = provider
         .rpc_provider()
         .get_block_by_number(block_id.into())
@@ -321,6 +307,21 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         .ok_or_else(|| eyre::eyre!("block {block_id} not found"))?
         .header
         .hash;
+
+    // Set by `AnvilInitializer::new` from the harness's own deployment.
+    let protocol_fee_config_address = *PROTOCOL_FEE_CONFIG_ADDRESS.get().ok_or_else(|| {
+        eyre::eyre!(
+            "the harness did not deploy and initialize `AngstromProtocolFeeConfig` (see \
+             `AngstromEnv::new` / `AnvilInitializer::new`)"
+        )
+    })?;
+    let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+        protocol_fee_config_address,
+        block_id,
+        block_hash,
+        &provider.rpc_provider()
+    )
+    .await?;
 
     let (state_tx, state_rx) = tokio::sync::mpsc::unbounded_channel();
     let manager = ConsensusManager::new(

@@ -174,6 +174,10 @@ impl AngstromAddressConfig {
             let _ = ANGSTROM_DEPLOYED_BLOCK.set(self.angstrom_deploy_block);
         }
 
+        if self.protocol_fee_config_address != Address::ZERO {
+            let _ = PROTOCOL_FEE_CONFIG_ADDRESS.set(self.protocol_fee_config_address);
+        }
+
         if self.protocol_fee_config_deployed_block != 0 {
             let _ = PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK.set(self.protocol_fee_config_deployed_block);
         }

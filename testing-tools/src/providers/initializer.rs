@@ -13,7 +13,7 @@ use angstrom_types::{
         controller_v_1::ControllerV1::ControllerV1Instance,
         pool_gate::PoolGate::PoolGateInstance
     },
-    primitive::SqrtPriceX96,
+    primitive::{AngstromAddressBuilder, SqrtPriceX96},
     testnet::InitialTestnetState
 };
 use itertools::Itertools;
@@ -66,6 +66,16 @@ impl AnvilInitializer {
         let addr = angstrom_env.angstrom();
         tracing::info!(?addr, "deployed Angstrom enviroment");
 
+        // The callers' `INTERNAL_TESTNET.try_init()` skips both (zero is skipped), so
+        // the values the nodes read come from this deployment.
+        AngstromAddressBuilder::default()
+            .with_protocol_fee_config(angstrom_env.protocol_fee_config())
+            .with_protocol_fee_config_deployed_block(
+                angstrom_env.protocol_fee_config_deployed_block()
+            )
+            .build()
+            .try_init();
+
         let angstrom =
             AngstromInstance::new(angstrom_env.angstrom(), angstrom_env.provider().clone());
 
@@ -78,12 +88,14 @@ impl AnvilInitializer {
         );
 
         let deployed_addresses = DeployedAddresses {
-            angstrom_address:         *angstrom.address(),
-            pool_gate_address:        *pool_gate.address(),
-            controller_v1_address:    angstrom_env.controller_v1(),
-            position_fetcher_address: angstrom_env.position_fetcher(),
-            pool_manager_address:     angstrom_env.pool_manager(),
-            position_manager_address: angstrom_env.position_manager()
+            angstrom_address:                   *angstrom.address(),
+            pool_gate_address:                  *pool_gate.address(),
+            controller_v1_address:              angstrom_env.controller_v1(),
+            position_fetcher_address:           angstrom_env.position_fetcher(),
+            pool_manager_address:               angstrom_env.pool_manager(),
+            position_manager_address:           angstrom_env.position_manager(),
+            protocol_fee_config_address:        angstrom_env.protocol_fee_config(),
+            protocol_fee_config_deployed_block: angstrom_env.protocol_fee_config_deployed_block()
         };
 
         let pending_state = PendingDeployedPools::new();
@@ -138,7 +150,9 @@ impl AnvilInitializer {
                 uniswap_env,
                 deployed_addresses.angstrom_address,
                 deployed_addresses.controller_v1_address,
-                deployed_addresses.position_fetcher_address
+                deployed_addresses.position_fetcher_address,
+                deployed_addresses.protocol_fee_config_address,
+                deployed_addresses.protocol_fee_config_deployed_block
             ),
             angstrom,
             pending_state,

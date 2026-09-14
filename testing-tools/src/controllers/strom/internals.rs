@@ -97,6 +97,9 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
         F: Clone
     {
+        // Every metrics wrapper reads this; the harness never enables metrics.
+        let _ = angstrom_metrics::METRICS_ENABLED.set(false);
+
         let start_block = state_provider
             .rpc_provider()
             .get_block_number()
@@ -160,13 +163,13 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             .state_provider()
             .subscribe_to_canonical_state();
 
-        // The address may be unset here — `AngstromAddressConfig::try_init` does not
-        // set it. Zero matches no log, and a block at or before the deployed block
-        // resolves without a provider call.
-        let protocol_fee_config_address = PROTOCOL_FEE_CONFIG_ADDRESS
-            .get()
-            .copied()
-            .unwrap_or_default();
+        // Set by `AnvilInitializer::new` from the harness's own deployment.
+        let protocol_fee_config_address = *PROTOCOL_FEE_CONFIG_ADDRESS.get().ok_or_else(|| {
+            eyre::eyre!(
+                "the harness did not deploy and initialize `AngstromProtocolFeeConfig` (see \
+                 `AngstromEnv::new` / `AnvilInitializer::new`)"
+            )
+        })?;
         let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
             protocol_fee_config_address,
             block_number,

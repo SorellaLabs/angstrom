@@ -37,6 +37,7 @@ use angstrom_types::{
     traits::{BundleProcessing, TopOfBlockOrderRewardCalc},
     uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity}
 };
+use itertools::izip;
 use testing_tools::{
     contracts::{
         DebugTransaction,
@@ -54,6 +55,9 @@ const CHAIN: u64 = 1;
 const TICK_SPACING: i32 = 10;
 const BUNDLE_FEE: u32 = 2_000;
 const LIQUIDITY: u128 = 1_000_000_000_000_000;
+/// What the first ToB bid in a bundle pays in, in its pool's t1; each later
+/// pool pays one multiple more, so the pools' t1 deltas are told apart.
+const TOB_QUANTITY_IN: u128 = 1_000_000;
 /// `poolRewards` lives at slot 7 and its `rewardGrowthOutside` array is
 /// `REWARD_GROWTH_SIZE` words long, so `globalGrowth` sits just past it.
 /// `contracts/src/periphery/AngstromView.sol:34`.
@@ -92,7 +96,9 @@ impl Harness {
             .try_init();
 
         let fork_url = std::env::var("ETH_WS_URL")
-            .unwrap_or_else(|_| "https://ethereum-rpc.publicnode.com".to_string());
+            .ok()
+            .filter(|url| !url.is_empty())
+            .unwrap_or_else(|| "https://ethereum-rpc.publicnode.com".to_string());
         let anvil = SpawnedAnvil::new_forked(&fork_url).await?;
         // Key 7 is the account `SpawnedAnvil` makes the controller, and the
         // controller is the node `AngstromEnv` toggles below.
@@ -116,20 +122,39 @@ impl Harness {
         Ok(Self { env, angstrom, controller, node })
     }
 
-    /// Deploys a token pair, configures and initializes the pool, and seeds it
-    /// with one wide liquidity range around tick 0.
+    /// Deploys `N` tokens, sorted so the lowest address is token0 of any pair
+    /// it is put in.
+    async fn deploy_tokens<const N: usize>(&self) -> eyre::Result<[Address; N]> {
+        let mut tokens = [Address::ZERO; N];
+        for token in &mut tokens {
+            *token = *MintableMockERC20::deploy(self.provider()).await?.address();
+        }
+        tokens.sort();
+        Ok(tokens)
+    }
+
+    /// Deploys a token pair and sets the pool up.
     async fn deploy_pool(&self, store_index: u16) -> eyre::Result<Pool> {
+        let [t0, t1] = self.deploy_tokens().await?;
+        self.setup_pool(t0, t1, store_index).await
+    }
+
+    /// Two pools that share token0 and nothing else, at `store_index` and the
+    /// one after it.
+    async fn deploy_pools_sharing_token0(&self, store_index: u16) -> eyre::Result<[Pool; 2]> {
+        let [t0, t1, t1_b] = self.deploy_tokens().await?;
+        Ok([
+            self.setup_pool(t0, t1, store_index).await?,
+            self.setup_pool(t0, t1_b, store_index + 1).await?
+        ])
+    }
+
+    /// Configures and initializes the pool, and seeds it with one wide
+    /// liquidity range around tick 0.
+    async fn setup_pool(&self, t0: Address, t1: Address, store_index: u16) -> eyre::Result<Pool> {
         let controller_v1 =
             ControllerV1Instance::new(self.env.controller_v1(), self.provider().clone());
         let pool_gate = PoolGateInstance::new(self.env.pool_gate(), self.provider().clone());
-
-        let raw0 = MintableMockERC20::deploy(self.provider()).await?;
-        let raw1 = MintableMockERC20::deploy(self.provider()).await?;
-        let (t0, t1) = if raw0.address() < raw1.address() {
-            (*raw0.address(), *raw1.address())
-        } else {
-            (*raw1.address(), *raw0.address())
-        };
 
         let start_tick = 0;
         let price = SqrtPriceX96::at_tick(start_tick)?;
@@ -230,65 +255,109 @@ impl Harness {
                 .await?
         ))
     }
+
+    async fn pool_state(&self, pool: &Pool) -> eyre::Result<PoolState> {
+        Ok(PoolState {
+            growth:          self.global_growth(pool).await?,
+            tick_growth:     self.range_tick_growth(pool).await?,
+            pool_manager_t1: self.erc20_balance(pool.t1, self.env.pool_manager()).await?,
+            angstrom_t1:     self.erc20_balance(pool.t1, self.env.angstrom()).await?
+        })
+    }
+}
+
+/// The chain-side state of one pool, read either side of the tx.
+struct PoolState {
+    growth:          U256,
+    tick_growth:     (U256, U256),
+    pool_manager_t1: U256,
+    angstrom_t1:     U256
 }
 
 /// Everything the bundle is checked against, read either side of the tx.
 struct Settled {
     /// `save` for t0 out of the submitted bundle's own `Asset` array.
-    encoded_save:      u128,
+    encoded_save:  u128,
     /// How much t0 the Angstrom contract actually kept.
-    balance_delta:     u128,
-    /// The LP allocation the bundle encoded, summed over its `RewardsUpdate`s.
+    balance_delta: u128,
+    /// One entry per pool the bundle spanned, in the order they were given.
+    pools:         Vec<PoolSettled>
+}
+
+struct PoolSettled {
+    /// The LP allocation the bundle encoded for this pool, summed over its
+    /// `RewardsUpdate`s.
     rewarded:          u128,
     /// LP budget handed to the allocators: the ToB share plus the book budget.
     lp_budget:         u128,
     user_protocol_fee: u128,
     tob_protocol_fee:  u128,
+    /// What the searcher paid in, which is all the t1 the bundle moves net.
+    tob_quantity_in:   u128,
+    /// `save` for this pool's t1 out of the bundle's `Asset` array.
+    t1_save:           u128,
+    /// t1 balance deltas of the PoolManager and of Angstrom.
+    pool_manager_t1:   I256,
+    angstrom_t1:       I256,
     growth_delta:      U256,
     tick_growth_moved: bool
 }
 
 impl Harness {
-    /// Builds a bundle with a ToB bid and a book that clears against itself at
-    /// the post-ToB price, submits it, and reports what the chain did.
+    /// Builds one bundle over `pools` - for each, a ToB bid sized to its gross
+    /// and a book that clears against itself at the post-ToB price - submits
+    /// it, and reports what the chain did.
     async fn settle(
         &self,
-        pool: &Pool,
-        splits: DonationSplits,
-        gross_tob: u128
+        pools: &[(&Pool, u128)],
+        splits: DonationSplits
     ) -> eyre::Result<Settled> {
         let target_block = self.provider().get_block_number().await? + 1;
-        let pool_id = pool.uni_id;
+        let t0 = pools[0].0.t0;
+        assert!(pools.iter().all(|(pool, _)| pool.t0 == t0), "the pools must share token0");
 
-        let searcher = self.tob_bid(pool, 1_000_000, gross_tob, target_block)?;
-        // The book prices at the end of the ToB swap, so it clears against
-        // itself and leaves the AMM where the searcher left it.
-        let (tob_vec, gross) = TopOfBlockOrder::calc_vec_and_reward(&searcher, &pool.snapshot)?;
-        assert_eq!(gross, gross_tob, "ToB order was not sized to the requested gross");
-        let ucp = Ray::from(tob_vec.end_price);
+        let mut orders = Vec::new();
+        let mut solutions = Vec::new();
+        let mut pool_map = HashMap::new();
+        let mut fees = Vec::new();
+        for (i, (pool, gross_tob)) in pools.iter().enumerate() {
+            let quantity_in = TOB_QUANTITY_IN * (i as u128 + 1);
+            let searcher = self.tob_bid(pool, quantity_in, *gross_tob, target_block)?;
+            // The book prices at the end of the ToB swap, so it clears against
+            // itself and leaves the AMM where the searcher left it.
+            let (tob_vec, gross) = TopOfBlockOrder::calc_vec_and_reward(&searcher, &pool.snapshot)?;
+            assert_eq!(gross, *gross_tob, "ToB order was not sized to the requested gross");
+            let ucp = Ray::from(tob_vec.end_price);
 
-        let ask = self.user_order(pool, false, 1_000_000, ucp, target_block);
-        let (t1_out, _, ask_fee) =
-            get_quantities_at_price(false, true, 1_000_000, 0, BUNDLE_FEE as u128, ucp);
-        let bid = self.user_order(pool, true, t1_out, ucp, target_block);
-        let (_, _, bid_fee) =
-            get_quantities_at_price(true, true, t1_out, 0, BUNDLE_FEE as u128, ucp);
+            let ask = self.user_order(pool, false, 1_000_000, ucp, target_block);
+            let (t1_out, _, ask_fee) =
+                get_quantities_at_price(false, true, 1_000_000, 0, BUNDLE_FEE as u128, ucp);
+            let bid = self.user_order(pool, true, t1_out, ucp, target_block);
+            let (_, _, bid_fee) =
+                get_quantities_at_price(true, true, t1_out, 0, BUNDLE_FEE as u128, ucp);
 
-        let (lp_user_fees, user_protocol_fee) = splits.split_user(ask_fee + bid_fee);
-        let (tob_lp_budget, tob_protocol_fee) = splits.split_tob(gross_tob);
+            let (lp_user_fees, user_protocol_fee) = splits.split_user(ask_fee + bid_fee);
+            let (tob_lp_budget, tob_protocol_fee) = splits.split_tob(*gross_tob);
+            fees.push((
+                tob_lp_budget + lp_user_fees,
+                user_protocol_fee,
+                tob_protocol_fee,
+                quantity_in
+            ));
 
-        let solution = PoolSolution {
-            id: pool_id,
-            ucp,
-            fee: BUNDLE_FEE,
-            searcher: Some(searcher),
-            limit: vec![filled(&ask), filled(&bid)],
-            ..Default::default()
-        };
-        let pools =
-            HashMap::from([(pool_id, (pool.t0, pool.t1, pool.snapshot.clone(), pool.store_index))]);
-        let bundle =
-            AngstromBundle::for_gas_finalization(vec![ask, bid], vec![solution], &pools, splits)?;
+            solutions.push(PoolSolution {
+                id: pool.uni_id,
+                ucp,
+                fee: BUNDLE_FEE,
+                searcher: Some(searcher),
+                limit: vec![filled(&ask), filled(&bid)],
+                ..Default::default()
+            });
+            pool_map
+                .insert(pool.uni_id, (pool.t0, pool.t1, pool.snapshot.clone(), pool.store_index));
+            orders.extend([ask, bid]);
+        }
+        let bundle = AngstromBundle::for_gas_finalization(orders, solutions, &pool_map, splits)?;
 
         // The harness funds the orders the same way bundle validation does.
         for (token, slot, value) in bundle
@@ -300,9 +369,11 @@ impl Harness {
                 .await?;
         }
 
-        let growth_before = self.global_growth(pool).await?;
-        let tick_growth_before = self.range_tick_growth(pool).await?;
-        let balance_before = self.erc20_balance(pool.t0, self.env.angstrom()).await?;
+        let mut before = Vec::new();
+        for (pool, _) in pools {
+            before.push(self.pool_state(pool).await?);
+        }
+        let balance_before = self.erc20_balance(t0, self.env.angstrom()).await?;
 
         let submitter = AnvilSubmissionProvider {
             provider:         self.provider().clone(),
@@ -342,25 +413,46 @@ impl Harness {
         // no separate quantity to read back for it.
         assert!(receipt.status(), "bundle reverted: unresolved deltas or a rejected order");
 
-        let balance_after = self.erc20_balance(pool.t0, self.env.angstrom()).await?;
-        Ok(Settled {
-            encoded_save: bundle
+        let balance_after = self.erc20_balance(t0, self.env.angstrom()).await?;
+        let encoded_save = |token| {
+            bundle
                 .assets
                 .iter()
-                .find(|a| a.addr == pool.t0)
-                .expect("t0 missing from the bundle")
-                .save,
+                .find(|a| a.addr == token)
+                .expect("token missing from the bundle")
+                .save
+        };
+        let mut settled = Vec::new();
+        for (
+            (pool, _),
+            (lp_budget, user_protocol_fee, tob_protocol_fee, tob_quantity_in),
+            before
+        ) in izip!(pools, fees, before)
+        {
+            let after = self.pool_state(pool).await?;
+            settled.push(PoolSettled {
+                rewarded: bundle
+                    .pool_updates
+                    .iter()
+                    .filter(|u| bundle.pairs[u.pair_index as usize].store_index == pool.store_index)
+                    .flat_map(|u| u.rewards_update.quantities())
+                    .sum(),
+                lp_budget,
+                user_protocol_fee,
+                tob_protocol_fee,
+                tob_quantity_in,
+                t1_save: encoded_save(pool.t1),
+                pool_manager_t1: I256::from_raw(after.pool_manager_t1)
+                    - I256::from_raw(before.pool_manager_t1),
+                angstrom_t1: I256::from_raw(after.angstrom_t1) - I256::from_raw(before.angstrom_t1),
+                growth_delta: after.growth - before.growth,
+                tick_growth_moved: after.tick_growth != before.tick_growth
+            });
+        }
+        Ok(Settled {
+            encoded_save:  encoded_save(t0),
             balance_delta: (balance_after - balance_before).to::<u128>(),
-            rewarded: bundle
-                .pool_updates
-                .iter()
-                .flat_map(|u| u.rewards_update.quantities())
-                .sum(),
-            lp_budget: tob_lp_budget + lp_user_fees,
-            user_protocol_fee,
-            tob_protocol_fee,
-            growth_delta: self.global_growth(pool).await? - growth_before,
-            tick_growth_moved: self.range_tick_growth(pool).await? != tick_growth_before
+            pools:         settled
         })
     }
 
@@ -430,32 +522,66 @@ fn filled(order: &OrderWithStorageData<AllOrders>) -> OrderOutcome {
     OrderOutcome { id: order.order_id, outcome: OrderFillState::CompleteFill }
 }
 
+/// The per-pool half of every scenario: the searcher's t1 is split between
+/// the PoolManager and Angstrom and nowhere else, Angstrom keeping exactly
+/// the t1 `save` the bundle encoded, and the pool's reward growth is its own
+/// `RewardsUpdate`.
+fn assert_pool_settled(label: &str, pool: &PoolSettled) {
+    // The book nets to zero in t1. It is priced at the ToB end price after a
+    // `Ray` round-trip, so the net swap the bundle encodes comes up a unit
+    // short of `quantity_in`; that unit is what `collect_extra` sweeps into
+    // t1's `save`.
+    assert_eq!(
+        pool.pool_manager_t1 + pool.angstrom_t1,
+        I256::unchecked_from(pool.tob_quantity_in),
+        "{label}: the searcher's t1 did not all reach the PoolManager or Angstrom"
+    );
+    assert_eq!(
+        pool.angstrom_t1,
+        I256::unchecked_from(pool.t1_save),
+        "{label}: Angstrom did not keep exactly the t1 the bundle saves"
+    );
+
+    // Reward growth: `PoolUpdates._updatePool` adds `amount * 2^128 /
+    // liquidity` to `globalGrowth` for a `CurrentOnly` update, and leaves
+    // the per-tick growth alone.
+    assert_eq!(
+        pool.growth_delta,
+        U256::from(pool.rewarded) * (U256::from(1u8) << 128) / U256::from(LIQUIDITY),
+        "{label}: reward growth does not match the bundle's RewardsUpdate"
+    );
+    assert!(!pool.tick_growth_moved, "{label}: a CurrentOnly update moved per-tick growth");
+}
+
 /// The fourth acceptance criterion: a bundle the builder produced, settled by
 /// unchanged Angstrom. Run at the rates the contract is deployed with and at a
 /// nonzero ToB share, so the ToB fee path is exercised before rollout step 5
-/// turns it on for real.
+/// turns it on for real; then once more as a single bundle over two pools
+/// that share token0.
 #[tokio::test]
 async fn builder_bundles_settle_against_unchanged_angstrom() {
     let harness = Harness::new().await.unwrap();
     // A pool per scenario, so every bundle is built from a snapshot that still
-    // matches the chain. Both are deployed before the first bundle: submission
+    // matches the chain. All are deployed before the first bundle: submission
     // signs with an explicit nonce, which leaves the provider's nonce filler
     // behind and breaks any later deploy from the same account.
     let pools = [harness.deploy_pool(0).await.unwrap(), harness.deploy_pool(1).await.unwrap()];
+    let shared = harness.deploy_pools_sharing_token0(2).await.unwrap();
 
     for (pool, (label, splits)) in pools.iter().zip([
         ("deployed rates", DonationSplits::new(750_000, 1_000_000).unwrap()),
         ("nonzero tob share", DonationSplits::new(750_000, 750_000).unwrap())
     ]) {
-        let settled = harness.settle(pool, splits, 1_001).await.unwrap();
+        let settled = harness.settle(&[(pool, 1_001)], splits).await.unwrap();
+        let p = &settled.pools[0];
 
         // Exact `save`: the configured fees plus whatever the allocators could
         // not place, which `collect_extra` sweeps into `save` rather than
         // `save_amount`.
-        let residual = settled.lp_budget - settled.rewarded;
+        let residual = p.lp_budget - p.rewarded;
         assert_eq!(
             settled.encoded_save,
-            settled.user_protocol_fee + settled.tob_protocol_fee + residual,
+            p.user_protocol_fee + p.tob_protocol_fee + residual,
             "{label}: encoded save is not the configured fees plus the swept residual"
         );
 
@@ -466,23 +592,64 @@ async fn builder_bundles_settle_against_unchanged_angstrom() {
         // unclaimed, so the retained total is `save` plus what was donated.
         assert_eq!(
             settled.balance_delta,
-            settled.encoded_save + settled.rewarded,
+            settled.encoded_save + p.rewarded,
             "{label}: the contract did not retain exactly save plus the donation"
         );
-
-        // Reward growth: `PoolUpdates._updatePool` adds `amount * 2^128 /
-        // liquidity` to `globalGrowth` for a `CurrentOnly` update, and leaves
-        // the per-tick growth alone.
-        assert_eq!(
-            settled.growth_delta,
-            U256::from(settled.rewarded) * (U256::from(1u8) << 128) / U256::from(LIQUIDITY),
-            "{label}: reward growth does not match the bundle's RewardsUpdate"
-        );
-        assert!(!settled.tick_growth_moved, "{label}: a CurrentOnly update moved per-tick growth");
+        assert_pool_settled(label, p);
 
         // The second run is the one that makes the ToB fee path non-inert.
         if label == "nonzero tob share" {
-            assert!(settled.tob_protocol_fee > 0, "the ToB fee path was not exercised");
+            assert!(p.tob_protocol_fee > 0, "the ToB fee path was not exercised");
         }
+    }
+
+    // One bundle over two pools sharing token0. The grosses are the unit
+    // test's: at a 75% ToB share the per-pool fees (251 + 501) and a single
+    // split of the aggregate (751) differ by a unit, so `save` accumulating
+    // per pool is observable on chain.
+    let label = "two pools sharing token0";
+    let splits = DonationSplits::new(750_000, 750_000).unwrap();
+    let (gross_a, gross_b) = (1_001, 2_002);
+    let fee_a = splits.split_tob(gross_a).1;
+    let fee_b = splits.split_tob(gross_b).1;
+    let aggregated = splits.split_tob(gross_a + gross_b).1;
+    assert_ne!(
+        fee_a + fee_b,
+        aggregated,
+        "the grosses must be chosen so per-pool and aggregated splits differ"
+    );
+
+    let [a, b] = &shared;
+    let settled = harness
+        .settle(&[(a, gross_a), (b, gross_b)], splits)
+        .await
+        .unwrap();
+    let user_fees: u128 = settled.pools.iter().map(|p| p.user_protocol_fee).sum();
+    let residual: u128 = settled.pools.iter().map(|p| p.lp_budget - p.rewarded).sum();
+    let rewarded: u128 = settled.pools.iter().map(|p| p.rewarded).sum();
+
+    // `save` on t0 is the checked sum of each pool's own fee, plus the user
+    // fees and the residuals each pool's allocators left to sweep.
+    assert_eq!(
+        settled.encoded_save,
+        fee_a + fee_b + user_fees + residual,
+        "{label}: save on t0 is not the sum of the two pools' own fees"
+    );
+    assert_ne!(
+        settled.encoded_save,
+        aggregated + user_fees + residual,
+        "{label}: save on t0 is a single split of the aggregate gross"
+    );
+    assert_eq!(
+        settled.balance_delta,
+        settled.encoded_save + rewarded,
+        "{label}: the contract did not retain exactly save plus both donations"
+    );
+
+    // Each pool's t1 and reward growth are its own. The pools reward different
+    // amounts, so growth following the wrong pool's update would show.
+    assert_ne!(settled.pools[0].rewarded, settled.pools[1].rewarded);
+    for (pool, name) in settled.pools.iter().zip(["pool A", "pool B"]) {
+        assert_pool_settled(&format!("{label}, {name}"), pool);
     }
 }

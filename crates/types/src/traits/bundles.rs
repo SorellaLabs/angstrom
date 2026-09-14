@@ -437,9 +437,12 @@ impl BundleProcessing for AngstromBundle {
                 let (vec, residual) = bsv.t0_donation_vec(book_budget)?;
                 (Some(vec), residual)
             }
-            // A zero UCP means this budget is never handed to an allocator at all. It
-            // stays with the protocol through `collect_extra`, as it does today -
-            // reported here rather than dropped silently.
+            // A zero UCP hands this budget to no allocator. Where it lands then
+            // depends on the ToB side: with no ToB vector either, the `CurrentOnly`
+            // fallback below donates the whole budget to the current tick, so it is
+            // placed; after a ToB move it stays in `contract_liquid` and
+            // `collect_extra` sweeps it into `save`.
+            None if tob_swap_info.is_none() => (None, DonationResidual::default()),
             None => (None, DonationResidual { rounding: 0, unplaced: book_budget })
         };
 
@@ -467,17 +470,16 @@ impl BundleProcessing for AngstromBundle {
             tob_residual,
             gross_tob
         )?;
-        check_conservation(
-            "book",
-            book_donation_vec
-                .as_deref()
-                .map(sum_donations)
-                .transpose()?
-                .unwrap_or(0),
-            0,
-            book_residual,
-            book_budget
-        )?;
+        // `placed` comes from the vectors and the residual from the swap info on
+        // purpose: swapping the residual arms above fails this check in both cases.
+        let book_placed = match book_donation_vec.as_deref() {
+            Some(vec) => sum_donations(vec)?,
+            // No vector from either source: the `CurrentOnly` fallback places the
+            // whole budget.
+            None if tob_donation_vec.is_none() => book_budget,
+            None => 0
+        };
+        check_conservation("book", book_placed, 0, book_residual, book_budget)?;
 
         // Both retained portions settle together through `save`. The residuals above
         // reach `save` through `collect_extra` instead, so adding them here would
@@ -1259,7 +1261,8 @@ mod tests {
 
     /// `ucp == 0` sends the book down the branch that never reaches an
     /// allocator. Conservation still has to balance, which it only does because
-    /// that branch reports its budget as `unplaced`.
+    /// that branch reports its budget as `unplaced`. This pins the retained
+    /// `(None, Some(tob))` arm: swapping the two residual arms fails it.
     #[test]
     fn book_noop_after_tob_move() {
         AngstromAddressConfig::INTERNAL_TESTNET.try_init();
@@ -1289,6 +1292,39 @@ mod tests {
         let (tob_vec, _) = TopOfBlockOrder::calc_vec_and_reward(&searcher, &snap).unwrap();
         assert_eq!(solved.pairs[0].price_1over0, *Ray::from(tob_vec.end_price));
         assert_ne!(solved.pairs[0].price_1over0, *Ray::from(snap.current_price()));
+    }
+
+    /// The `(None, None)` arm: `ucp == 0` and no ToB, so neither source
+    /// produces a vector. The `CurrentOnly` fallback donates the whole book
+    /// budget to the current tick, so it must be reported as placed, not
+    /// `unplaced`.
+    #[test]
+    fn book_budget_with_no_vectors_is_placed_at_the_current_tick() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let snap = pool(1_000_000_000_000_000);
+        let solution = PoolSolution {
+            id: pool_id(1),
+            ucp: Ray::ZERO,
+            searcher: None,
+            reward_t0: 5_000,
+            ..Default::default()
+        };
+        let solved = solve(
+            &[(solution, snap.clone(), T0, T1)],
+            &[],
+            DonationSplits::new(750_000, 1_000_000).unwrap()
+        )
+        .unwrap();
+
+        assert_eq!(
+            solved.pool_updates[0].rewards_update,
+            RewardsUpdate::CurrentOnly {
+                amount:             5_000,
+                expected_liquidity: snap.current_liquidity()
+            }
+        );
+        assert_eq!(solved.rewarded(0), 5_000);
+        assert_eq!(solved.save(T0), 0);
     }
 
     /// A swap vector that exists but holds no steps still goes to the

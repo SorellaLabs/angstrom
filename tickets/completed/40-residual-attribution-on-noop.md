@@ -59,3 +59,38 @@ reason to fix it at the call site rather than in `t0_donation_vec`.
 
 The `unwrap_or(book_budget)` fallback at `:497` and the `CurrentOnly` fallback at `:571` are both
 unchanged from `main` — do not "fix" them here. Only the residual is wrong.
+
+**As built.** The `ucp.is_zero()` arm of the book residual match is now two arms keyed on
+`tob_swap_info`: `None if tob_swap_info.is_none()` reports `DonationResidual::default()`, and the
+remaining `None` (a ToB vector exists) keeps ticket 31's `{ rounding: 0, unplaced: book_budget }`.
+Nothing else moved: `total_donation`'s `unwrap_or(book_budget)`, the `CurrentOnly` fallback,
+`save_amount`, allocation policy and the whole ToB side are `main`'s and are untouched, so the
+money takes the same path as before and only the ledger changed.
+
+The book conservation check no longer derives `placed` from the same condition as the residual.
+It reads a `book_placed` binding from the emission side: `sum_donations` of the book vector when
+there is one, `book_budget` when neither source produced a vector (the `CurrentOnly` fallback
+places the whole budget), else `0`. Deriving `placed` from the vectors and the residual from the
+swap info is deliberate: if the two residual arms are ever swapped, the check fails in both cases
+instead of staying balanced by construction. Confirmed by mutation: with the arms swapped,
+`book_budget_with_no_vectors_is_placed_at_the_current_tick` fails with
+`book placed 5000 + fee 0 + residual 5000 != gross 5000` and `book_noop_after_tob_move` fails with
+`book placed 0 + fee 0 + residual 0 != gross 5000`. Restored; `git diff --stat` matched the
+pre-mutation snapshot.
+
+**The `(None, None)` arm was benign today.** A real solution with `ucp.is_zero()` has no filled
+limit orders and no book surplus, so `total_user_fees` and `reward_t0` are zero and `book_budget`
+is zero; the old arm mis-attributed nothing. The new test reaches the arm with a synthetic nonzero
+budget instead: `book_budget_with_no_vectors_is_placed_at_the_current_tick` builds a
+`PoolSolution` with `ucp: Ray::ZERO`, `searcher: None`, `reward_t0: 5_000` and no orders, and
+asserts the emitted reward is `CurrentOnly { amount: 5_000, expected_liquidity:
+snap.current_liquidity() }`, that `rewarded(0) == 5_000`, and that `save(T0) == 0`. The budget
+went to LPs, and the call only returns `Ok` because the residual reports it as placed.
+`book_noop_after_tob_move` already drove the `(None, Some(tob))` arm and is unchanged apart from
+one sentence in its doc comment saying it pins the retained arm.
+
+Verification: `cargo nextest run -p angstrom-types bundles` - 5 passed;
+`cargo nextest run -p angstrom-types donation` - 7 passed; `cargo +nightly fmt -p angstrom-types`
+- no changes; `cargo clippy -p angstrom-types --all-targets -- -D warnings -A clippy::result_large_err
+-A mismatched_lifetime_syntaxes` - clean. The two allowed lints are pre-existing on `main` in files
+outside this ticket; ticket 41's notes name them.

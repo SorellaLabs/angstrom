@@ -86,8 +86,10 @@ pub struct DonationResidual {
 }
 
 impl DonationResidual {
-    pub fn total(&self) -> u128 {
-        self.rounding + self.unplaced
+    /// `None` on overflow: this feeds a conservation equality, and a wrapped
+    /// total could balance it by accident.
+    pub fn total(&self) -> Option<u128> {
+        self.rounding.checked_add(self.unplaced)
     }
 }
 
@@ -331,14 +333,17 @@ pub fn check_conservation(
     residual: DonationResidual,
     gross: u128
 ) -> eyre::Result<()> {
+    let residual_total = residual
+        .total()
+        .ok_or_else(|| eyre::eyre!("{source} residual overflowed"))?;
     let accounted = placed
         .checked_add(protocol_fee)
-        .and_then(|v| v.checked_add(residual.total()))
+        .and_then(|v| v.checked_add(residual_total))
         .ok_or_else(|| eyre::eyre!("{source} donation accounting overflowed"))?;
     if accounted != gross {
         eyre::bail!(
-            "{source} placed {placed} + fee {protocol_fee} + residual {} != gross {gross}",
-            residual.total()
+            "{source} placed {placed} + fee {protocol_fee} + residual {residual_total} != gross \
+             {gross}"
         );
     }
     Ok(())
@@ -397,6 +402,16 @@ mod tests {
                 u128::MAX.wrapping_add(1)
             )
             .is_err()
+        );
+    }
+
+    /// Both residual buckets populated and summing past `u128::MAX`. An
+    /// unchecked total wraps to 0, which balances a zero gross.
+    #[test]
+    fn a_residual_past_u128_max_fails_rather_than_wrapping() {
+        assert!(
+            check_conservation("x", 0, 0, DonationResidual { rounding: u128::MAX, unplaced: 1 }, 0)
+                .is_err()
         );
     }
 

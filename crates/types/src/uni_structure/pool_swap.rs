@@ -484,7 +484,7 @@ mod tests {
         for budget in [0u128, 1, 7, 1_000, 999_999_999_999] {
             let (donations, residual) = swap.t0_donation_vec(budget).unwrap();
             assert_eq!(
-                sum_donations(&donations).unwrap() + residual.total(),
+                sum_donations(&donations).unwrap() + residual.total().unwrap(),
                 budget,
                 "budget {budget} was not conserved"
             );

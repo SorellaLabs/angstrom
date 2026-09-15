@@ -34,6 +34,7 @@ uniswap-v4.workspace = true
 [dev-dependencies]
 futures.workspace = true
 proptest.workspace = true
+reth-chainspec.workspace = true
 rand.workspace = true
 reth-provider = { workspace = true, features = ["test-utils"] }
 revm-primitives.workspace = true

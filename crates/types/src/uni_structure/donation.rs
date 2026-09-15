@@ -76,6 +76,29 @@ impl Add<&DonationType> for &DonationType {
     }
 }
 
+/// What `t0_donation_vec` was handed but did not place, by reason.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DonationResidual {
+    /// Left over because each range's target is computed by integer division.
+    pub rounding: u128,
+    /// Budget the allocator could not place because of its per-range limit: in
+    /// the upward direction the blob keeps at least one unit of t0 whatever the
+    /// budget.
+    pub capacity: u128,
+    /// Budget the allocator had no range to place into at all.
+    pub unplaced: u128
+}
+
+impl DonationResidual {
+    /// `None` on overflow: this feeds a conservation equality, and a wrapped
+    /// total could balance it by accident.
+    pub fn total(&self) -> Option<u128> {
+        self.rounding
+            .checked_add(self.capacity)
+            .and_then(|v| v.checked_add(self.unplaced))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct DonationCalculation {
     // the amount to donate to the current tick of the pool.
@@ -295,9 +318,125 @@ impl Add<&[DonationType]> for &DonationCalculation {
     }
 }
 
+/// Checked sum of what an allocation actually placed. Overflow has to fail a
+/// conservation check rather than wrap into agreement with it.
+pub fn sum_donations(donations: &[DonationType]) -> eyre::Result<u128> {
+    donations
+        .iter()
+        .try_fold(0u128, |acc, d| acc.checked_add(d.donation()))
+        .ok_or_else(|| eyre::eyre!("donation total overflowed"))
+}
+
+/// Nothing is created or lost: everything a source was handed was placed with
+/// LPs, retained as the configured protocol fee, or reported as residual. A
+/// source with no fee of its own passes `0`. Over-allocation fails the same
+/// equality, so it needs no branch of its own, and there is no tolerance - any
+/// discrepancy fails the bundle.
+pub fn check_conservation(
+    source: &str,
+    placed: u128,
+    protocol_fee: u128,
+    residual: DonationResidual,
+    gross: u128
+) -> eyre::Result<()> {
+    let residual_total = residual
+        .total()
+        .ok_or_else(|| eyre::eyre!("{source} residual overflowed"))?;
+    let accounted = placed
+        .checked_add(protocol_fee)
+        .and_then(|v| v.checked_add(residual_total))
+        .ok_or_else(|| eyre::eyre!("{source} donation accounting overflowed"))?;
+    if accounted != gross {
+        eyre::bail!(
+            "{source} placed {placed} + fee {protocol_fee} + residual {residual_total} != gross \
+             {gross}"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DonationCalculation, DonationType};
+    use super::{
+        DonationCalculation, DonationResidual, DonationType, check_conservation, sum_donations
+    };
+
+    fn donations(amounts: &[u128]) -> Vec<DonationType> {
+        amounts
+            .iter()
+            .map(|d| DonationType::Current { donation: *d, final_tick: 0, liquidity: 100 })
+            .collect()
+    }
+
+    #[test]
+    fn an_inflated_donation_vector_fails_the_check() {
+        let residual = DonationResidual { rounding: 10, capacity: 0, unplaced: 0 };
+        // 90 placed + 10 residual is the budget it was handed.
+        check_conservation("book", sum_donations(&donations(&[50, 40])).unwrap(), 0, residual, 100)
+            .unwrap();
+        // One more unit placed than was ever available.
+        assert!(
+            check_conservation(
+                "book",
+                sum_donations(&donations(&[50, 41])).unwrap(),
+                0,
+                residual,
+                100
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn the_configured_fee_is_its_own_bucket() {
+        let residual = DonationResidual { rounding: 3, capacity: 0, unplaced: 0 };
+        // ToB gross splits three ways: LPs, the configured fee, and the residual.
+        check_conservation("ToB", 70, 27, residual, 100).unwrap();
+        // Attributing the fee to the wrong bucket does not balance.
+        assert!(check_conservation("ToB", 70, 0, residual, 100).is_err());
+    }
+
+    #[test]
+    fn sums_overflow_rather_than_wrapping_into_agreement() {
+        assert!(sum_donations(&donations(&[u128::MAX, 1])).is_err());
+        assert!(
+            check_conservation(
+                "ToB",
+                u128::MAX,
+                1,
+                DonationResidual::default(),
+                u128::MAX.wrapping_add(1)
+            )
+            .is_err()
+        );
+    }
+
+    /// Residual buckets summing past `u128::MAX`. An unchecked total wraps to
+    /// 0, which balances a zero gross. One case per addition in `total()`'s
+    /// chain, so neither leg can be unchecked without a failure here.
+    #[test]
+    fn a_residual_past_u128_max_fails_rather_than_wrapping() {
+        assert!(
+            check_conservation(
+                "x",
+                0,
+                0,
+                DonationResidual { rounding: u128::MAX, capacity: 0, unplaced: 1 },
+                0
+            )
+            .is_err()
+        );
+        assert!(
+            check_conservation(
+                "x",
+                0,
+                0,
+                DonationResidual { rounding: u128::MAX, capacity: 1, unplaced: 0 },
+                0
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     pub fn constructs_from_empty_vec() {

@@ -13,6 +13,9 @@ test:
 test-integration:
     cargo nextest run --workspace --tests
 
+test-anvil:
+    cargo nextest run -p angstrom-types --features anvil --test anvil_settlement
+
 check-format:
     cargo +nightly fmt --all -- --check
 

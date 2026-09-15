@@ -49,6 +49,14 @@ where
         Self { gas_calculator, metrics: ValidationMetrics::new() }
     }
 
+    /// The same validation reading through `db`.
+    pub fn repoint(&self, db: Arc<DB>) -> Self {
+        Self {
+            gas_calculator: self.gas_calculator.repoint(db),
+            metrics:        self.metrics.clone()
+        }
+    }
+
     /// returns an error if we fail to convert prices or if the amount of token
     /// zero for gas is greater than the max amount specified.
     pub fn calculate_tob_gas(

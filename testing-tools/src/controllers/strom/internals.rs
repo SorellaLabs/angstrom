@@ -6,7 +6,9 @@ use std::{
     time::Duration
 };
 
-use alloy::{primitives::Address, providers::Provider, signers::local::PrivateKeySigner};
+use alloy::{
+    eips::BlockNumHash, primitives::Address, providers::Provider, signers::local::PrivateKeySigner
+};
 use alloy_rpc_types::BlockId;
 use angstrom::components::StromHandles;
 use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
@@ -22,9 +24,12 @@ use angstrom_rpc::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::{ConsensusRoundName, SlotClock, SystemTimeSlotClock},
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     pair_with_price::PairsWithPrice,
-    primitive::{PoolId, UniswapPoolRegistry},
+    primitive::{PROTOCOL_FEE_CONFIG_ADDRESS, PoolId, UniswapPoolRegistry},
     sol_bindings::testnet::TestnetHub,
     submission::{ChainSubmitterHolder, SubmissionHandler},
     testnet::InitialTestnetState
@@ -92,6 +97,9 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
         F: Clone
     {
+        // Every metrics wrapper reads this; the harness never enables metrics.
+        let _ = angstrom_metrics::METRICS_ENABLED.set(false);
+
         let start_block = state_provider
             .rpc_provider()
             .get_block_number()
@@ -155,15 +163,33 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             .state_provider()
             .subscribe_to_canonical_state();
 
+        // Set by `AnvilInitializer::new` from the harness's own deployment.
+        let protocol_fee_config_address = *PROTOCOL_FEE_CONFIG_ADDRESS.get().ok_or_else(|| {
+            eyre::eyre!(
+                "the harness did not deploy and initialize `AngstromProtocolFeeConfig` (see \
+                 `AngstromEnv::new` / `AnvilInitializer::new`)"
+            )
+        })?;
+        let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+            protocol_fee_config_address,
+            block_number,
+            b.tip().hash(),
+            &state_provider.rpc_provider()
+        )
+        .await?;
+
         let eth_handle = EthDataCleanser::spawn(
             inital_angstrom_state.angstrom_addr,
             inital_angstrom_state.controller_addr,
+            protocol_fee_config_address,
             sub,
             executor.clone(),
             strom_handles.eth_tx,
             strom_handles.eth_rx,
             angstrom_tokens,
             pool_config_store.clone(),
+            protocol_fee_config,
+            state_provider.state_provider(),
             block_sync.clone(),
             node_set,
             vec![]
@@ -177,6 +203,16 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         block_sync.clear();
         block_sync.set_block(block_number);
+
+        // Consensus names the parent it builds on by hash, so resolve the one that
+        // goes with `block_number` rather than handing it a placeholder.
+        let block_hash = state_provider
+            .rpc_provider()
+            .get_block_by_number(block_number.into())
+            .await?
+            .ok_or_else(|| eyre::eyre!("block {block_number} not found"))?
+            .header
+            .hash;
 
         tracing::debug!(node_id = node_config.node_id, block_number, "creating strom internals");
 
@@ -327,7 +363,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             initial_validators,
             order_storage.clone(),
             block_number,
-            block_number,
+            BlockNumHash::new(block_number, block_hash),
             pool_registry,
             uniswap_pools.clone(),
             mev_boost_provider,
@@ -336,7 +372,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             strom_handles.consensus_rx_rpc,
             state_updates,
             consensus::ConsensusTimingConfig::default(),
-            SystemTimeSlotClock::new_default().unwrap()
+            SystemTimeSlotClock::new_default().unwrap(),
+            protocol_fee_config
         );
 
         // spin up amm quoter

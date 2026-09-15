@@ -64,11 +64,14 @@ impl ChainSubmitter for AnvilSubmissionProvider {
 
             let tx = self
                 .build_and_sign_tx_with_gas(signer, bundle, tx_features)
-                .await;
+                .await?;
             let hash = *tx.tx_hash();
             let encoded = tx.encoded_2718();
 
             let latency_ms = start.elapsed().as_millis() as u64;
+            if tx_features.cancel.is_cancelled() {
+                return Ok(vec![]);
+            }
 
             self.provider
                 .send_raw_transaction(&encoded)

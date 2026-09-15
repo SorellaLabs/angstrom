@@ -39,6 +39,14 @@ pub trait StateFetchUtils: Clone + Send + Unpin {
     fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> eyre::Result<U256>;
 }
 
+/// Rebuilt to read through another state source, everything else kept.
+///
+/// Order validation follows the head by taking a fresh view per block rather
+/// than by moving a view something else may be reading through.
+pub trait Repoint<DB> {
+    fn repoint(&self, db: Arc<DB>) -> Self;
+}
+
 #[derive(Debug)]
 pub struct UserAccountDetails {
     pub token:           Address,
@@ -131,8 +139,26 @@ impl<DB: revm::DatabaseRef> FetchUtils<DB> {
     }
 }
 
+impl<DB> Repoint<DB> for FetchUtils<DB> {
+    fn repoint(&self, db: Arc<DB>) -> Self {
+        Self {
+            approvals: self.approvals.clone(),
+            balances: self.balances.clone(),
+            nonces: self.nonces.clone(),
+            db,
+            metrics: self.metrics.clone()
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AutoMaxFetchUtils;
+
+impl<DB> Repoint<DB> for AutoMaxFetchUtils {
+    fn repoint(&self, _: Arc<DB>) -> Self {
+        Self
+    }
+}
 
 impl StateFetchUtils for AutoMaxFetchUtils {
     fn is_valid_nonce(&self, _: Address, _: u64) -> eyre::Result<bool> {

@@ -6,6 +6,7 @@ use angstrom_types_primitives::{
         Pair,
         angstrom::{AngstromBundle, BundleGasDetails, TopOfBlockOrder, UserOrder},
         asset::builder::*,
+        protocol_fees::DonationSplits,
         rewards::{PoolUpdate, RewardsUpdate}
     },
     primitive::{OrderId, PoolId, Ray, SqrtPriceX96},
@@ -21,12 +22,14 @@ use tracing::{Level, debug, error, trace, warn};
 
 use crate::{
     consensus::{PreProposal, Proposal},
-    contract_payloads::angstrom::LP_DONATION_SPLIT,
     matching::get_quantities_at_price,
     orders::{OrderFillState, OrderOutcome, OrderSet, PoolSolution},
     testnet::TestnetStateOverrides,
     traits::{tob::TopOfBlockOrderRewardCalc, user_orders::UserOrderFromInternal},
-    uni_structure::{BaselinePoolState, donation::DonationCalculation}
+    uni_structure::{
+        BaselinePoolState,
+        donation::{DonationCalculation, DonationResidual, check_conservation, sum_donations}
+    }
 };
 
 pub trait BundleProcessing: Sized {
@@ -44,7 +47,8 @@ pub trait BundleProcessing: Sized {
         t0: Address,
         t1: Address,
         store_index: u16,
-        shared_gas: Option<U256>
+        shared_gas: Option<U256>,
+        splits: DonationSplits
     ) -> eyre::Result<()>;
 
     fn build_dummy_for_tob_gas(
@@ -79,13 +83,15 @@ pub trait BundleProcessing: Sized {
         proposal: &Proposal,
         orders: OrderSet<AllOrders, RpcTopOfBlockOrder>,
         _gas_details: BundleGasDetails,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self>;
 
     fn for_gas_finalization(
         limit: Vec<OrderWithStorageData<AllOrders>>,
         solutions: Vec<PoolSolution>,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self>;
 }
 
@@ -226,7 +232,8 @@ impl BundleProcessing for AngstromBundle {
         t0: Address,
         t1: Address,
         store_index: u16,
-        shared_gas: Option<U256>
+        shared_gas: Option<U256>,
+        splits: DonationSplits
     ) -> eyre::Result<()> {
         tracing::info!(?solution);
         let process_solution_span =
@@ -405,8 +412,7 @@ impl BundleProcessing for AngstromBundle {
         };
 
         // add user donation split
-        let total_lp_user_donate = (total_user_fees as f64 * LP_DONATION_SPLIT) as u128;
-        let save_amount = total_user_fees - total_lp_user_donate;
+        let (total_lp_user_donate, user_protocol_fee) = splits.split_user(total_user_fees);
 
         // We then use `post_tob_price` as the start price for our book swap, just as
         // our matcher did.  We want to use the representation of the book swap
@@ -417,15 +423,70 @@ impl BundleProcessing for AngstromBundle {
         // let book_swap_vec = PoolPriceVec::from_price_range(post_tob_price,
         // book_end_price)?;
 
+        // The budget the book allocator is handed: book surplus plus the LP share of
+        // the user fees.
+        let book_budget = solution
+            .reward_t0
+            .checked_add(total_lp_user_donate)
+            .ok_or_else(|| eyre::eyre!("book donation budget exceeds u128"))?;
+
         // We need to do our donations in the right order - first the ToB and then the
         // book.  So let's do that
-        let book_donation_vec = book_swap_vec
-            .as_ref()
-            .map(|bsv| bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate));
+        let (book_donation_vec, book_residual) = match book_swap_vec.as_ref() {
+            Some(bsv) => {
+                let (vec, residual) = bsv.t0_donation_vec(book_budget)?;
+                (Some(vec), residual)
+            }
+            // A zero UCP hands this budget to no allocator. Where it lands then
+            // depends on the ToB side: with no ToB vector either, the `CurrentOnly`
+            // fallback below donates the whole budget to the current tick, so it is
+            // placed; after a ToB move it stays in `contract_liquid` and
+            // `collect_extra` sweeps it into `save`.
+            None if tob_swap_info.is_none() => (None, DonationResidual::default()),
+            None => (None, DonationResidual { rounding: 0, capacity: 0, unplaced: book_budget })
+        };
 
-        let tob_donation_vec = tob_swap_info
-            .as_ref()
-            .map(|(tob_vec, tob_d)| tob_vec.t0_donation_vec(*tob_d));
+        let (tob_donation_vec, tob_protocol_fee, tob_residual) = match tob_swap_info.as_ref() {
+            Some((tob_vec, gross_tob_reward)) => {
+                let (tob_lp_budget, protocol) = splits.split_tob(*gross_tob_reward);
+                let (vec, residual) = tob_vec.t0_donation_vec(tob_lp_budget)?;
+                (Some(vec), protocol, residual)
+            }
+            None => (None, 0u128, DonationResidual::default())
+        };
+
+        // Conservation, per pool and per source. The ToB gross splits three ways - LPs,
+        // the configured fee, and what the allocator did not place - and the book
+        // budget two.
+        let gross_tob = tob_swap_info.as_ref().map(|(_, gross)| *gross).unwrap_or(0);
+        check_conservation(
+            "ToB",
+            tob_donation_vec
+                .as_deref()
+                .map(sum_donations)
+                .transpose()?
+                .unwrap_or(0),
+            tob_protocol_fee,
+            tob_residual,
+            gross_tob
+        )?;
+        // `placed` comes from the vectors and the residual from the swap info on
+        // purpose: swapping the residual arms above fails this check in both cases.
+        let book_placed = match book_donation_vec.as_deref() {
+            Some(vec) => sum_donations(vec)?,
+            // No vector from either source: the `CurrentOnly` fallback places the
+            // whole budget.
+            None if tob_donation_vec.is_none() => book_budget,
+            None => 0
+        };
+        check_conservation("book", book_placed, 0, book_residual, book_budget)?;
+
+        // Both retained portions settle together through `save`. The residuals above
+        // reach `save` through `collect_extra` instead, so adding them here would
+        // count them twice.
+        let save_amount = user_protocol_fee
+            .checked_add(tob_protocol_fee)
+            .ok_or_else(|| eyre::eyre!("retained fees exceed u128"))?;
 
         let donation = match (book_donation_vec, tob_donation_vec) {
             (Some(bsv), Some(tob)) => {
@@ -438,7 +499,7 @@ impl BundleProcessing for AngstromBundle {
         let total_donation = donation
             .as_ref()
             .map(|d| d.total_donated)
-            .unwrap_or(solution.reward_t0 + total_lp_user_donate);
+            .unwrap_or(book_budget);
 
         // Find our net AMM vec by combining T0s.  There's not a specific reason we use
         // T0 for this, we might want to make this a bit more robust or careful
@@ -787,7 +848,8 @@ impl BundleProcessing for AngstromBundle {
         proposal: &Proposal,
         orders: OrderSet<AllOrders, RpcTopOfBlockOrder>,
         _gas_details: BundleGasDetails,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self> {
         trace!("Starting from_proposal");
         let mut top_of_block_orders = Vec::new();
@@ -866,7 +928,8 @@ impl BundleProcessing for AngstromBundle {
                 *t0,
                 *t1,
                 *store_index,
-                Some(U256::ZERO)
+                Some(U256::ZERO),
+                splits
             )?;
         }
 
@@ -885,7 +948,8 @@ impl BundleProcessing for AngstromBundle {
     fn for_gas_finalization(
         limit: Vec<OrderWithStorageData<AllOrders>>,
         solutions: Vec<PoolSolution>,
-        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>
+        pools: &HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>,
+        splits: DonationSplits
     ) -> eyre::Result<Self> {
         let mut top_of_block_orders = Vec::new();
         let mut pool_updates = Vec::new();
@@ -954,7 +1018,8 @@ impl BundleProcessing for AngstromBundle {
                 *t0,
                 *t1,
                 *store_index,
-                None
+                None,
+                splits
             )?;
         }
 
@@ -965,5 +1030,407 @@ impl BundleProcessing for AngstromBundle {
             top_of_block_orders,
             user_orders
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_primitives::address;
+    use angstrom_types_primitives::{
+        AngstromAddressConfig,
+        orders::builders::{StoredOrderBuilder, ToBOrderBuilder, UserOrderBuilder},
+        primitive::{AngstromSigner, SqrtPriceX96}
+    };
+
+    use super::*;
+    use crate::uni_structure::liquidity_base::BaselineLiquidity;
+
+    const T0: Address = address!("0x0000000000000000000000000000000000000001");
+    const T1: Address = address!("0x0000000000000000000000000000000000000010");
+    /// A second token1 for the two-pool case, so both pools share T0 only.
+    const T1_B: Address = address!("0x0000000000000000000000000000000000000011");
+
+    /// A single liquidity range with no initialized ticks, sitting at tick 0.
+    fn pool(liquidity: u128) -> BaselinePoolState {
+        BaselinePoolState::new(
+            BaselineLiquidity::new(
+                10,
+                0,
+                SqrtPriceX96::at_tick(0).unwrap(),
+                liquidity,
+                HashMap::new(),
+                HashMap::new()
+            ),
+            0,
+            0
+        )
+    }
+
+    fn pool_id(n: u8) -> PoolId {
+        PoolId::with_last_byte(n)
+    }
+
+    fn user_order(
+        pool_id: PoolId,
+        is_bid: bool,
+        amount: u128,
+        price: Ray
+    ) -> OrderWithStorageData<AllOrders> {
+        UserOrderBuilder::new()
+            .exact()
+            .is_bid(is_bid)
+            .amount(amount)
+            .exact_in(true)
+            .min_price(price)
+            .signing_key(Some(AngstromSigner::random()))
+            .with_storage()
+            .pool_id(pool_id)
+            .is_bid(is_bid)
+            .build()
+    }
+
+    /// A ToB bid paying `quantity_in` of the pool's token1 `t1` for
+    /// `quantity_out` of T0. The gross surplus `calc_vec_and_reward` reports is
+    /// whatever the AMM returns over `quantity_out`, so callers pick the gross
+    /// by choosing `quantity_out`.
+    fn tob_order(
+        pool_id: PoolId,
+        t1: Address,
+        quantity_in: u128,
+        quantity_out: u128
+    ) -> OrderWithStorageData<RpcTopOfBlockOrder> {
+        let order = ToBOrderBuilder::new()
+            .asset_in(t1)
+            .asset_out(T0)
+            .quantity_in(quantity_in)
+            .quantity_out(quantity_out)
+            .signing_key(Some(AngstromSigner::random()))
+            .build();
+        StoredOrderBuilder::new(AllOrders::TOB(order.clone()))
+            .pool_id(pool_id)
+            .bid()
+            .build()
+            .try_map_inner(|_| Ok(order.clone()))
+            .unwrap()
+    }
+
+    /// Builds a ToB bid paying `quantity_in` of `t1` whose gross surplus is
+    /// exactly `gross`.
+    fn tob_with_gross(
+        snap: &BaselinePoolState,
+        id: PoolId,
+        t1: Address,
+        quantity_in: u128,
+        gross: u128
+    ) -> (OrderWithStorageData<RpcTopOfBlockOrder>, u128) {
+        let out = snap
+            .swap_current_with_amount(I256::unchecked_from(quantity_in), false)
+            .unwrap()
+            .total_d_t0;
+        (tob_order(id, t1, quantity_in, out - gross), gross)
+    }
+
+    fn filled(order: &OrderWithStorageData<AllOrders>) -> OrderOutcome {
+        OrderOutcome { id: order.order_id, outcome: OrderFillState::CompleteFill }
+    }
+
+    fn orders_by_pool(
+        orders: &[OrderWithStorageData<AllOrders>]
+    ) -> HashMap<FixedBytes<32>, HashSet<OrderWithStorageData<AllOrders>>> {
+        orders.iter().fold(HashMap::new(), |mut acc, o| {
+            acc.entry(o.pool_id).or_default().insert(o.clone());
+            acc
+        })
+    }
+
+    /// Everything `process_solution` writes out, for one or more pools driven
+    /// through a single `AssetBuilder`.
+    struct Solved {
+        pairs:        Vec<Pair>,
+        assets:       Vec<angstrom_types_primitives::contract_payloads::Asset>,
+        tob_orders:   Vec<TopOfBlockOrder>,
+        pool_updates: Vec<PoolUpdate>
+    }
+
+    impl Solved {
+        fn save(&self, token: Address) -> u128 {
+            self.assets.iter().find(|a| a.addr == token).unwrap().save
+        }
+
+        fn asset(&self, token: Address) -> &angstrom_types_primitives::contract_payloads::Asset {
+            self.assets.iter().find(|a| a.addr == token).unwrap()
+        }
+
+        /// Total T0 the bundle hands to LPs for `pair`.
+        fn rewarded(&self, pair: u16) -> u128 {
+            self.pool_updates
+                .iter()
+                .filter(|u| u.pair_index == pair)
+                .flat_map(|u| u.rewards_update.quantities())
+                .sum()
+        }
+    }
+
+    fn solve(
+        pools: &[(PoolSolution, BaselinePoolState, Address, Address)],
+        orders: &[OrderWithStorageData<AllOrders>],
+        splits: DonationSplits
+    ) -> eyre::Result<Solved> {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let by_pool = orders_by_pool(orders);
+        let mut asset_builder = AssetBuilder::new();
+        for (_, _, t0, t1) in pools {
+            asset_builder.add_or_get_asset(*t0);
+            asset_builder.add_or_get_asset(*t1);
+        }
+        asset_builder.order_assets_properly();
+
+        let mut pairs = Vec::new();
+        let mut user_orders = Vec::new();
+        let mut tob_orders = Vec::new();
+        let mut pool_updates = Vec::new();
+        for (solution, snapshot, t0, t1) in pools {
+            AngstromBundle::process_solution(
+                &mut pairs,
+                &mut asset_builder,
+                &mut user_orders,
+                &by_pool,
+                &mut tob_orders,
+                &mut pool_updates,
+                solution,
+                snapshot,
+                *t0,
+                *t1,
+                0,
+                None,
+                splits
+            )?;
+        }
+        Ok(Solved { pairs, assets: asset_builder.get_asset_array(), tob_orders, pool_updates })
+    }
+
+    /// A batch the book clears on its own: bid and ask net out in T1, the AMM
+    /// never moves, and the only T0 surplus is the user fee. Both halves of the
+    /// split have to be accounted even though no donation is ever placed.
+    #[test]
+    fn book_only_exact_match_with_user_fees() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let snap = pool(1_000_000_000_000_000);
+        let ucp = Ray::from(snap.current_price());
+        let id = pool_id(1);
+        let fee = 2_000u32;
+
+        let ask = user_order(id, false, 1_000_000, ucp);
+        let (t1_out, _, ask_fee) =
+            get_quantities_at_price(false, true, 1_000_000, 0, fee as u128, ucp);
+        let bid = user_order(id, true, t1_out, ucp);
+        let (_, _, bid_fee) = get_quantities_at_price(true, true, t1_out, 0, fee as u128, ucp);
+
+        let total_user_fees = ask_fee + bid_fee;
+        assert!(total_user_fees > 0, "the case needs positive user fees");
+
+        let splits = DonationSplits::new(750_000, 1_000_000).unwrap();
+        let (lp_share, protocol_fee) = splits.split_user(total_user_fees);
+        assert!(protocol_fee > 0, "the case needs a nonzero protocol share");
+
+        let solution = PoolSolution {
+            id,
+            ucp,
+            fee,
+            limit: vec![filled(&ask), filled(&bid)],
+            ..Default::default()
+        };
+        let solved = solve(&[(solution, snap, T0, T1)], &[ask, bid], splits).unwrap();
+
+        // No searcher: nothing encoded, nothing rewarded, and the ToB side of
+        // the conservation check ran on a gross of zero.
+        assert!(solved.tob_orders.is_empty());
+
+        // The AMM did not move, so the allocator had no range to place into and
+        // the LP share is retained rather than donated.
+        assert_eq!(solved.rewarded(0), 0);
+        assert_eq!(
+            solved.save(T0),
+            protocol_fee + lp_share,
+            "both halves of the user fee must reach `save`"
+        );
+
+        // The configured fee is reserved rather than swept: `allocate` spends it
+        // out of contract liquidity, borrowing from Uniswap because the reward
+        // stage starts empty, which is what keeps `collect_extra` from counting
+        // it a second time.
+        let t0 = solved.asset(T0);
+        assert_eq!((t0.take, t0.settle), (protocol_fee, protocol_fee));
+    }
+
+    /// `ucp == 0` sends the book down the branch that never reaches an
+    /// allocator. Conservation still has to balance, which it only does because
+    /// that branch reports its budget as `unplaced`. This pins the retained
+    /// `(None, Some(tob))` arm: swapping the two residual arms fails it.
+    #[test]
+    fn book_noop_after_tob_move() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let snap = pool(1_000_000_000_000_000);
+        let id = pool_id(1);
+        let (searcher, gross) = tob_with_gross(&snap, id, T1, 1_000_000, 1_001);
+
+        let splits = DonationSplits::new(750_000, 750_000).unwrap();
+        let (lp_budget, protocol_fee) = splits.split_tob(gross);
+
+        let solution = PoolSolution {
+            id,
+            ucp: Ray::ZERO,
+            searcher: Some(searcher.clone()),
+            reward_t0: 5_000,
+            ..Default::default()
+        };
+        let solved = solve(&[(solution, snap.clone(), T0, T1)], &[], splits).unwrap();
+
+        // The book budget reached no allocator and is retained; the call only
+        // returns `Ok` because that retention is reported rather than dropped.
+        assert_eq!(solved.rewarded(0), lp_budget);
+        assert_eq!(solved.save(T0), protocol_fee);
+
+        // The pair is priced at the end of the ToB swap, not at the pool's
+        // pre-ToB price.
+        let (tob_vec, _) = TopOfBlockOrder::calc_vec_and_reward(&searcher, &snap).unwrap();
+        assert_eq!(solved.pairs[0].price_1over0, *Ray::from(tob_vec.end_price));
+        assert_ne!(solved.pairs[0].price_1over0, *Ray::from(snap.current_price()));
+    }
+
+    /// The `(None, None)` arm: `ucp == 0` and no ToB, so neither source
+    /// produces a vector. The `CurrentOnly` fallback donates the whole book
+    /// budget to the current tick, so it must be reported as placed, not
+    /// `unplaced`.
+    #[test]
+    fn book_budget_with_no_vectors_is_placed_at_the_current_tick() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let snap = pool(1_000_000_000_000_000);
+        let solution = PoolSolution {
+            id: pool_id(1),
+            ucp: Ray::ZERO,
+            searcher: None,
+            reward_t0: 5_000,
+            ..Default::default()
+        };
+        let solved = solve(
+            &[(solution, snap.clone(), T0, T1)],
+            &[],
+            DonationSplits::new(750_000, 1_000_000).unwrap()
+        )
+        .unwrap();
+
+        assert_eq!(
+            solved.pool_updates[0].rewards_update,
+            RewardsUpdate::CurrentOnly {
+                amount:             5_000,
+                expected_liquidity: snap.current_liquidity()
+            }
+        );
+        assert_eq!(solved.rewarded(0), 5_000);
+        assert_eq!(solved.save(T0), 0);
+    }
+
+    /// A swap vector that exists but holds no steps still goes to the
+    /// allocator. Skipping it would report no residual and fail
+    /// conservation; falling back to `None` would reward the whole budget
+    /// to the current tick instead.
+    #[test]
+    fn some_empty_still_allocates() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let snap = pool(1_000_000_000_000_000);
+        let ucp = Ray::from(snap.current_price());
+        let solution = PoolSolution { id: pool_id(1), ucp, reward_t0: 5_000, ..Default::default() };
+
+        let solved = solve(
+            &[(solution, snap, T0, T1)],
+            &[],
+            DonationSplits::new(750_000, 1_000_000).unwrap()
+        )
+        .unwrap();
+
+        // An empty `DonationCalculation` reports zero expected liquidity. The
+        // skipped-allocator path would have produced the pool's live liquidity
+        // and the whole budget as the reward.
+        assert_eq!(
+            solved.pool_updates[0].rewards_update,
+            RewardsUpdate::CurrentOnly { amount: 0, expected_liquidity: 0 }
+        );
+    }
+
+    /// Each pool's gross is split on its own. A single split of the aggregate
+    /// rounds differently, so the two answers disagree by a unit here. On the
+    /// token1 side each searcher pays into its own pool's token1 and nowhere
+    /// else.
+    #[test]
+    fn two_pools_sharing_token0() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let snap = pool(1_000_000_000_000_000);
+        let splits = DonationSplits::new(1_000_000, 750_000).unwrap();
+
+        // Distinct quantities: with equal ones a crossed pair of searchers
+        // books the same per-token totals as the right pair.
+        let (q_in_a, q_in_b) = (1_000_000, 2_000_000);
+        let (searcher_a, gross_a) = tob_with_gross(&snap, pool_id(1), T1, q_in_a, 1_001);
+        let (searcher_b, gross_b) = tob_with_gross(&snap, pool_id(2), T1_B, q_in_b, 2_002);
+
+        let (lp_a, fee_a) = splits.split_tob(gross_a);
+        let (lp_b, fee_b) = splits.split_tob(gross_b);
+        let per_pool = fee_a + fee_b;
+        let aggregated = splits.split_tob(gross_a + gross_b).1;
+        assert_ne!(
+            per_pool, aggregated,
+            "the grosses must be chosen so per-pool and aggregated splits differ"
+        );
+
+        let solved = solve(
+            &[
+                (
+                    PoolSolution {
+                        id: pool_id(1),
+                        ucp: Ray::ZERO,
+                        searcher: Some(searcher_a),
+                        ..Default::default()
+                    },
+                    snap.clone(),
+                    T0,
+                    T1
+                ),
+                (
+                    PoolSolution {
+                        id: pool_id(2),
+                        ucp: Ray::ZERO,
+                        searcher: Some(searcher_b),
+                        ..Default::default()
+                    },
+                    snap.clone(),
+                    T0,
+                    T1_B
+                )
+            ],
+            &[],
+            splits
+        )
+        .unwrap();
+
+        // Each pool rewarded its own LP budget...
+        assert_eq!(solved.rewarded(0), lp_a);
+        assert_eq!(solved.rewarded(1), lp_b);
+        // ...and the shared T0 `save` is the sum of the two fees, not one split
+        // of the combined gross.
+        assert_eq!(solved.save(T0), per_pool);
+        assert_ne!(solved.save(T0), aggregated);
+
+        // Each searcher's input lands on its own token1 alone: received from
+        // the searcher and settled to Uniswap in full, so nothing is borrowed
+        // and nothing is left over to sweep into `save`.
+        for (t1, quantity_in) in [(T1, q_in_a), (T1_B, q_in_b)] {
+            let asset = solved.asset(t1);
+            assert_eq!(
+                (asset.take, asset.settle, asset.save),
+                (0, quantity_in, 0),
+                "{t1}: the searcher's input did not land on its own token1 alone"
+            );
+        }
     }
 }

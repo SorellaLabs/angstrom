@@ -7,7 +7,7 @@ use std::{
 };
 
 use alloy_primitives::{Address, U256};
-use angstrom_types::{pair_with_price::PairsWithPrice, reth_db_wrapper::SetBlock};
+use angstrom_types::{pair_with_price::PairsWithPrice, reth_db_wrapper::AtBlock};
 use futures::{FutureExt, Stream};
 use reth_provider::BlockNumReader;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -37,7 +37,7 @@ type ValidatorOperation<DB, T> =
 
 pub struct TestOrderValidator<DB>
 where
-    DB: BlockStateProviderFactory + revm::DatabaseRef + Clone + Unpin + 'static + SetBlock
+    DB: BlockStateProviderFactory + revm::DatabaseRef + Clone + Unpin + 'static + AtBlock
 {
     /// allows us to set values to ensure
     pub db:         Arc<DB>,
@@ -53,7 +53,7 @@ where
         + Unpin
         + revm::DatabaseRef
         + BlockNumReader
-        + SetBlock
+        + AtBlock
         + 'static,
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
 {
@@ -126,7 +126,7 @@ where
         + revm::DatabaseRef
         + BlockNumReader
         + 'static
-        + SetBlock,
+        + AtBlock,
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug + Unpin
 {
     type Output = ();
@@ -142,7 +142,7 @@ where
 
 pub struct OrderValidatorChain<DB, T>
 where
-    DB: BlockStateProviderFactory + Clone + Unpin + 'static + revm::DatabaseRef + SetBlock,
+    DB: BlockStateProviderFactory + Clone + Unpin + 'static + revm::DatabaseRef + AtBlock,
     T: 'static
 {
     validator:     TestOrderValidator<DB>,
@@ -159,7 +159,7 @@ where
         + 'static
         + revm::DatabaseRef
         + BlockNumReader
-        + SetBlock,
+        + AtBlock,
     T: 'static,
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
 {

@@ -85,7 +85,11 @@ impl OrderValidatorHandle for MockValidator {
 }
 
 impl BundleValidatorHandle for MockValidator {
-    async fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> eyre::Result<BundleGasDetails> {
+    async fn fetch_gas_for_bundle(
+        &self,
+        bundle: AngstromBundle,
+        _parent_hash: FixedBytes<32>
+    ) -> eyre::Result<BundleGasDetails> {
         let e = bundle.pade_encode();
         let hash = keccak256(e);
 

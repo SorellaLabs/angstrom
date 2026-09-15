@@ -21,6 +21,7 @@ reth.workspace = true
 reth-chainspec.workspace = true
 reth-ethereum-primitives.workspace = true
 reth-primitives-traits.workspace = true
+parking_lot.workspace = true
 reth-provider.workspace = true
 reth-storage-api.workspace = true
 reth-trie.workspace = true
@@ -32,6 +33,7 @@ serde = { workspace = true, default-features = false, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tower = "0.5.2"
 tracing.workspace = true
 tracing-subscriber.workspace = true

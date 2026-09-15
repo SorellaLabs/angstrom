@@ -5,7 +5,10 @@ use angstrom_types_primitives::primitive::{Ray, SqrtPriceX96};
 use itertools::Itertools;
 use uniswap_v3_math::tick_math::{MAX_SQRT_RATIO, MIN_SQRT_RATIO};
 
-use super::{donation::DonationType, liquidity_base::LiquidityAtPoint};
+use super::{
+    donation::{DonationResidual, DonationType, check_conservation, sum_donations},
+    liquidity_base::LiquidityAtPoint
+};
 
 const U256_1: U256 = U256::from_limbs([1, 0, 0, 0]);
 
@@ -234,10 +237,16 @@ impl<'a> PoolSwapResult<'a> {
             .collect::<Vec<_>>()
     }
 
-    pub fn t0_donation_vec(&self, total_donation: u128) -> Vec<DonationType> {
+    pub fn t0_donation_vec(
+        &self,
+        total_donation: u128
+    ) -> eyre::Result<(Vec<DonationType>, DonationResidual)> {
         // Return nothing if we have no steps in this
         if self.steps.is_empty() {
-            return vec![];
+            return Ok((
+                vec![],
+                DonationResidual { rounding: 0, capacity: 0, unplaced: total_donation }
+            ));
         }
         // if end price is lower, than is zfo
         let direction = self.start_price >= self.end_price;
@@ -295,10 +304,14 @@ impl<'a> PoolSwapResult<'a> {
         // At this point, all of our swap is within the blob.  If we have additional
         // donation, we want to distribute it ALL to the blob to get to the best price
         // possible.
+        let mut capacity = 0u128;
         if let Some((c_t0, _)) = current_blob.as_mut() {
             if direction {
                 *c_t0 += remaining_donation
             } else {
+                // The blob keeps at least one unit of t0 whatever the budget, so the rest
+                // is the allocator's capacity limit rather than rounding.
+                capacity = remaining_donation.saturating_sub(c_t0.saturating_sub(1));
                 *c_t0 = c_t0.saturating_sub(remaining_donation);
                 if *c_t0 == 0 {
                     *c_t0 += 1;
@@ -313,7 +326,7 @@ impl<'a> PoolSwapResult<'a> {
         remaining_donation = total_donation;
 
         let last_range = ranges.len() - 1;
-        ranges
+        let donations = ranges
             .iter()
             .enumerate()
             .map(|(i, r)| {
@@ -334,18 +347,41 @@ impl<'a> PoolSwapResult<'a> {
                 };
                 remaining_donation -= donation;
 
-                if i == last_range {
+                // A range that moved but carries no tick bound is malformed input, not a
+                // no-op - it has no position to donate into.
+                Ok(if i == last_range {
                     let final_tick = self.end_tick;
                     DonationType::current(final_tick, donation, r.liquidity)
                 } else if direction {
-                    let low_tick = r.lower_tick.unwrap();
+                    let low_tick = r
+                        .lower_tick
+                        .ok_or_else(|| eyre::eyre!("range {i} has no lower tick bound"))?;
                     DonationType::above(low_tick, donation, r.liquidity)
                 } else {
-                    let high_tick = r.upper_tick.unwrap();
+                    let high_tick = r
+                        .upper_tick
+                        .ok_or_else(|| eyre::eyre!("range {i} has no upper tick bound"))?;
                     DonationType::below(high_tick, donation, r.liquidity)
-                }
+                })
             })
-            .collect::<Vec<_>>()
+            .collect::<eyre::Result<Vec<_>>>()?;
+
+        // An empty blob places nothing at all. Otherwise what the upward absorb could
+        // not shed is capacity, bounded by what is still standing - the distribution
+        // pass rounds each range's target down and can place a unit the blob pass did
+        // not - and the rest is what integer division left behind.
+        let residual = if filled_price.is_none() {
+            DonationResidual { rounding: 0, capacity: 0, unplaced: total_donation }
+        } else {
+            let capacity = capacity.min(remaining_donation);
+            DonationResidual { rounding: remaining_donation - capacity, capacity, unplaced: 0 }
+        };
+
+        // The identity this function is responsible for: everything handed to it was
+        // either placed or reported.
+        check_conservation("allocator", sum_donations(&donations)?, 0, residual, total_donation)?;
+
+        Ok((donations, residual))
     }
 
     /// Returns the amount of T0 exchanged over this swap with a sign attached,
@@ -419,5 +455,186 @@ pub struct TickInterval {
 impl TickInterval {
     pub fn avg_price(&self) -> Ray {
         Ray::calc_price(U256::from(self.d_t0), U256::from(self.d_t1))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::uni_structure::{BaselinePoolState, liquidity_base::BaselineLiquidity};
+
+    /// A single liquidity range with no initialized ticks, so a swap stays
+    /// inside it and produces steps without crossing a tick boundary.
+    fn pool(liquidity: u128) -> BaselinePoolState {
+        let start_tick = 0;
+        BaselinePoolState::new(
+            BaselineLiquidity::new(
+                10,
+                start_tick,
+                SqrtPriceX96::at_tick(start_tick).unwrap(),
+                liquidity,
+                HashMap::new(),
+                HashMap::new()
+            ),
+            0,
+            0
+        )
+    }
+
+    #[test]
+    fn allocation_conserves_its_budget() {
+        let pool = pool(1_000_000_000_000_000);
+        let swap = pool
+            .swap_current_with_amount(I256::unchecked_from(1_000_000_000i128), true)
+            .unwrap();
+        assert!(!swap.steps.is_empty(), "test needs a swap that actually moved");
+
+        for budget in [0u128, 1, 7, 1_000, 999_999_999_999] {
+            let (donations, residual) = swap.t0_donation_vec(budget).unwrap();
+            assert_eq!(
+                sum_donations(&donations).unwrap() + residual.total().unwrap(),
+                budget,
+                "budget {budget} was not conserved"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_donation_vec_retains_its_budget() {
+        let pool = pool(1_000_000_000_000_000);
+        let swap = pool.noop();
+        assert!(swap.steps.is_empty());
+
+        let (donations, residual) = swap.t0_donation_vec(5_000).unwrap();
+        assert!(donations.is_empty());
+        // Retention is its own bucket - not folded into rounding.
+        assert_eq!(residual, DonationResidual { rounding: 0, capacity: 0, unplaced: 5_000 });
+    }
+
+    /// A swap that moved but has nothing to hand out: every range's target is
+    /// zero, so the vector carries only zeros and neither residual bucket
+    /// fills.
+    #[test]
+    fn zero_budget_with_swap_metadata() {
+        let pool = pool(1_000_000_000_000_000);
+        let swap = pool
+            .swap_current_with_amount(I256::unchecked_from(1_000_000_000i128), true)
+            .unwrap();
+        assert!(!swap.steps.is_empty(), "the case needs swap metadata to be present");
+
+        let (donations, residual) = swap.t0_donation_vec(0).unwrap();
+        assert_eq!(sum_donations(&donations).unwrap(), 0);
+        assert_eq!(residual, DonationResidual { rounding: 0, capacity: 0, unplaced: 0 });
+    }
+
+    #[test]
+    fn true_noop_without_liquidity_retains_its_budget() {
+        let pool = pool(0);
+        let swap = pool.noop();
+
+        let (donations, residual) = swap.t0_donation_vec(5_000).unwrap();
+        assert!(donations.is_empty());
+        assert_eq!(residual, DonationResidual { rounding: 0, capacity: 0, unplaced: 5_000 });
+    }
+
+    /// A swap assembled by hand from its steps, since
+    /// `swap_current_with_amount` cannot be steered to exact quantities. It
+    /// ends at `end_tick`: above the start tick 0 it is upward (`direction
+    /// == false`), below it downward.
+    fn swap_from_steps(
+        pool: &BaselinePoolState,
+        steps: Vec<PoolSwapStep>,
+        end_tick: i32
+    ) -> PoolSwapResult<'_> {
+        let mut swap = pool.noop();
+        swap.total_d_t0 = steps.iter().map(|s| s.d_t0).sum();
+        swap.total_d_t1 = steps.iter().map(|s| s.d_t1).sum();
+        swap.steps = steps;
+        swap.end_tick = end_tick;
+        swap.end_price = SqrtPriceX96::at_tick(end_tick).unwrap();
+        swap
+    }
+
+    /// Token0 out 100, token1 in 102, a 5_000 budget upward. The blob keeps one
+    /// unit of t0 whatever the budget, so at most `d_t0 - 1 == 99` is ever
+    /// placed; the 4_901 left is the allocator's limit, not integer division.
+    #[test]
+    fn an_upward_budget_past_the_blobs_t0_is_capacity_not_rounding() {
+        let pool = pool(1_000);
+        let swap = swap_from_steps(
+            &pool,
+            vec![PoolSwapStep {
+                end_tick:  0,
+                init:      false,
+                liquidity: 1_000,
+                d_t0:      100,
+                d_t1:      102
+            }],
+            1
+        );
+
+        let (donations, residual) = swap.t0_donation_vec(5_000).unwrap();
+        assert_eq!(sum_donations(&donations).unwrap(), 99);
+        assert_eq!(residual, DonationResidual { rounding: 0, capacity: 4_901, unplaced: 0 });
+        assert_eq!(99 + residual.total().unwrap(), 5_000);
+    }
+
+    /// The same range and budget downward: the blob absorbs the whole
+    /// remainder, so nothing is capped and the distribution pass places it all.
+    #[test]
+    fn a_downward_budget_is_absorbed_and_reports_no_capacity() {
+        let pool = pool(1_000);
+        let swap = swap_from_steps(
+            &pool,
+            vec![PoolSwapStep {
+                end_tick:  0,
+                init:      false,
+                liquidity: 1_000,
+                d_t0:      100,
+                d_t1:      102
+            }],
+            -1
+        );
+
+        let (donations, residual) = swap.t0_donation_vec(5_000).unwrap();
+        assert_eq!(sum_donations(&donations).unwrap(), 5_000);
+        assert_eq!(residual, DonationResidual { rounding: 0, capacity: 0, unplaced: 0 });
+    }
+
+    /// Two 50/51 ranges merge at zero step cost into the same 100/102 blob, so
+    /// the absorb records capacity 4_901. The distribution pass then rounds
+    /// each range's target down to 0 and places all 50 of each - one unit more
+    /// than the blob pass shed - so capacity has to be clamped to the 4_900
+    /// still standing or the rounding bucket underflows.
+    #[test]
+    fn a_two_range_upward_swap_clamps_capacity_to_what_is_unplaced() {
+        let pool = pool(1_000);
+        let swap = swap_from_steps(
+            &pool,
+            vec![
+                PoolSwapStep {
+                    end_tick:  10,
+                    init:      true,
+                    liquidity: 1_000,
+                    d_t0:      50,
+                    d_t1:      51
+                },
+                PoolSwapStep {
+                    end_tick:  20,
+                    init:      false,
+                    liquidity: 1_000,
+                    d_t0:      50,
+                    d_t1:      51
+                },
+            ],
+            20
+        );
+
+        let (donations, residual) = swap.t0_donation_vec(5_000).unwrap();
+        assert_eq!(sum_donations(&donations).unwrap(), 100);
+        assert_eq!(residual, DonationResidual { rounding: 0, capacity: 4_900, unplaced: 0 });
+        assert_eq!(100 + residual.total().unwrap(), 5_000);
     }
 }

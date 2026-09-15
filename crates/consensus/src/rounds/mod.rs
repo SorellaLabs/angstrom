@@ -7,7 +7,8 @@ use std::{
 };
 
 use alloy::{
-    primitives::{Address, B256, BlockNumber, Bytes, FixedBytes},
+    eips::BlockNumHash,
+    primitives::{Address, B256, BlockNumber, Bytes},
     providers::Provider
 };
 use angstrom_metrics::{BlockMetricsWrapper, ConsensusMetricsWrapper};
@@ -16,9 +17,12 @@ use angstrom_types::{
         ConsensusRoundEvent, ConsensusRoundName, PreProposal, PreProposalAggregation, Proposal,
         SlotClock, StromConsensusEvent, SystemTimeSlotClock
     },
-    contract_payloads::angstrom::{BundleGasDetails, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{BundleGasDetails, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     orders::PoolSolution,
-    primitive::{AngstromMetaSigner, AngstromSigner},
+    primitive::{AngstromMetaSigner, AngstromSigner, PoolId},
     submission::SubmissionHandler,
     uni_structure::BaselinePoolState
 };
@@ -39,6 +43,27 @@ mod preproposal_wait_trigger;
 mod proposal;
 
 type PollTransition<P, Matching, S> = Poll<Option<Box<dyn ConsensusState<P, Matching, S>>>>;
+
+/// The pools a round can build on: each pool's tokens, its AMM state, and its
+/// index in the config store.
+pub type PoolSnapshots = HashMap<PoolId, (Address, Address, BaselinePoolState, u16)>;
+
+/// What one drive of the matching engine produces, together with what the
+/// round captured to drive it: its single [`DonationSplitSnapshot`], the pool
+/// state matching ran on, and the identity of the round it was produced for.
+///
+/// The captures ride along with the result rather than being read again at the
+/// far end, which is what makes gas estimation and final construction use the
+/// same values even when a setter or a pool update lands mid-round.
+pub struct MatchingOutput {
+    pub solutions:      Vec<PoolSolution>,
+    /// The gas, stamped with the parent it was simulated against.
+    pub gas:            BundleGasDetails,
+    pub splits:         DonationSplitSnapshot,
+    pub pool_snapshots: PoolSnapshots,
+    /// The `SharedRoundState::generation` the capture was taken in.
+    pub generation:     u64
+}
 
 pub trait ConsensusState<P, Matching, S>: Send
 where
@@ -120,7 +145,14 @@ where
         self.current_state.name().is_closed()
     }
 
-    pub fn reset_round(&mut self, new_block: u64, new_leader: Address) {
+    /// Records the configuration a canonical update published. The round in
+    /// flight has already captured its own copy, so this only ever changes what
+    /// the *next* round starts from.
+    pub fn update_protocol_fee_config(&mut self, config: DonationSplitSnapshot) {
+        self.shared_state.protocol_fee_config = config;
+    }
+
+    pub fn reset_round(&mut self, new_block: BlockNumHash, new_leader: Address) {
         let next_slot_duration = self.slot_clock.duration_to_next_slot().unwrap();
         let elapsed_time = self.slot_clock.slot_duration() - next_slot_duration;
 
@@ -136,6 +168,7 @@ where
 
         self.shared_state.block_height = new_block;
         self.shared_state.round_leader = new_leader;
+        self.shared_state.generation += 1;
 
         self.current_state = Box::new(BidAggregationState::new(
             self.consensus_wait_duration
@@ -179,19 +212,31 @@ where
 }
 
 pub struct SharedRoundState<P: Provider + Unpin + 'static, Matching, S: AngstromMetaSigner> {
-    block_height:     BlockNumber,
-    matching_engine:  Matching,
-    signer:           AngstromSigner<S>,
-    round_leader:     Address,
-    validators:       Vec<AngstromValidator>,
-    order_storage:    Arc<OrderStorage>,
-    _metrics:         ConsensusMetricsWrapper,
-    pool_registry:    UniswapAngstromRegistry,
-    uniswap_pools:    SyncedUniswapPools,
-    provider:         Arc<SubmissionHandler<P>>,
-    messages:         VecDeque<ConsensusMessage>,
-    consensus_config: ConsensusTimingConfig,
-    slot_clock:       SystemTimeSlotClock
+    /// The parent H this round builds on, by number *and* hash. A number alone
+    /// cannot name one branch of a same-height reorg, and bundle simulation has
+    /// to be pinned to exactly one.
+    block_height:        BlockNumHash,
+    /// Bumped on every reset. Together with the parent hash it is the identity
+    /// a round's async work is stamped with: the hash catches a head that
+    /// moved, this catches a reset that landed on the same parent.
+    generation:          u64,
+    matching_engine:     Matching,
+    signer:              AngstromSigner<S>,
+    round_leader:        Address,
+    validators:          Vec<AngstromValidator>,
+    order_storage:       Arc<OrderStorage>,
+    _metrics:            ConsensusMetricsWrapper,
+    pool_registry:       UniswapAngstromRegistry,
+    uniswap_pools:       SyncedUniswapPools,
+    provider:            Arc<SubmissionHandler<P>>,
+    messages:            VecDeque<ConsensusMessage>,
+    consensus_config:    ConsensusTimingConfig,
+    slot_clock:          SystemTimeSlotClock,
+    /// The latest published configuration: seeded from the init-block read and
+    /// maintained from `EthEvent::ProtocolFeeConfigUpdated`. Read exactly once
+    /// per round, by `matching_engine_output`; a round already in flight keeps
+    /// what it captured, so this is never the value a bundle is built from.
+    protocol_fee_config: DonationSplitSnapshot
 }
 
 // contains shared impls
@@ -203,7 +248,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        block_height: BlockNumber,
+        block_height: BlockNumHash,
         order_storage: Arc<OrderStorage>,
         signer: AngstromSigner<S>,
         round_leader: Address,
@@ -214,10 +259,12 @@ where
         provider: SubmissionHandler<P>,
         matching_engine: Matching,
         consensus_config: ConsensusTimingConfig,
-        slot_clock: SystemTimeSlotClock
+        slot_clock: SystemTimeSlotClock,
+        protocol_fee_config: DonationSplitSnapshot
     ) -> Self {
         Self {
             block_height,
+            generation: 0,
             round_leader,
             validators,
             order_storage,
@@ -229,7 +276,8 @@ where
             messages: VecDeque::new(),
             provider: Arc::new(provider),
             consensus_config,
-            slot_clock
+            slot_clock,
+            protocol_fee_config
         }
     }
 
@@ -256,9 +304,10 @@ where
         (2 * self.validators.len()).div_ceil(3)
     }
 
-    fn fetch_pool_snapshot(
-        &self
-    ) -> HashMap<FixedBytes<32>, (Address, Address, BaselinePoolState, u16)> {
+    /// The live pool state. Read exactly once per round, by
+    /// `matching_engine_output`; final construction builds on the copy that
+    /// call carries out, never on a second read of pools that may have moved.
+    fn fetch_pool_snapshot(&self) -> PoolSnapshots {
         self.uniswap_pools
             .iter()
             .filter_map(|item| {
@@ -277,8 +326,7 @@ where
     fn matching_engine_output(
         &self,
         pre_proposal_aggregation: HashSet<PreProposalAggregation>
-    ) -> BoxFuture<'static, Result<(Vec<PoolSolution>, BundleGasDetails), MatchingEngineError>>
-    {
+    ) -> BoxFuture<'static, Result<MatchingOutput, MatchingEngineError>> {
         // fetch
         let mut limit = Vec::new();
         let mut searcher = Vec::new();
@@ -295,7 +343,7 @@ where
 
         // Record post-quorum order counts
         BlockMetricsWrapper::new().record_matching_input_post_quorum(
-            self.block_height,
+            self.block_height.number,
             valid_limit.len(),
             valid_searcher.len()
         );
@@ -332,9 +380,25 @@ where
             .into_values()
             .collect();
 
+        // The round's one read of the pools and of the configuration, taken here
+        // because this call site sits above both consumers of them. No provider
+        // call for either: block sync applied this block's logs to the config
+        // before the round opened, and the pools are the in-memory
+        // `SyncedUniswapPools` — which the pool manager keeps writing mid-round,
+        // and is why a copy is carried rather than read again.
         let pool_snapshots = self.fetch_pool_snapshot();
+        let splits = self.protocol_fee_config;
+        let parent_hash = self.block_height.hash;
+        let generation = self.generation;
         let matcher = self.matching_engine.clone();
-        async move { matcher.solve_pools(limit, searcher, pool_snapshots).await }.boxed()
+        async move {
+            let (solutions, gas) = matcher
+                .solve_pools(limit, searcher, pool_snapshots.clone(), parent_hash, splits.splits)
+                .await?;
+
+            Ok(MatchingOutput { solutions, gas, splits, pool_snapshots, generation })
+        }
+        .boxed()
     }
 
     fn filter_quorum_orders<O: Hash + Eq + Clone>(&self, input: Vec<O>) -> Vec<O> {
@@ -387,7 +451,7 @@ where
         }
 
         proposal
-            .is_valid(&self.block_height, self.two_thirds_of_validation_set())
+            .is_valid(&self.block_height.number, self.two_thirds_of_validation_set())
             .then(|| {
                 self.messages
                     .push_back(ConsensusMessage::PropagateProposal(proposal.clone()));
@@ -427,7 +491,7 @@ where
         Pro: Into<ConsensusMessage> + Eq + Hash + Clone
     {
         // ensure pre_proposal is valid
-        if !valid(&proposal, &self.block_height) {
+        if !valid(&proposal, &self.block_height.number) {
             tracing::info!("got a invalid consensus message");
             return;
         }
@@ -525,9 +589,11 @@ pub mod tests {
     };
 
     use alloy::{
-        primitives::Address,
+        eips::BlockNumHash,
+        primitives::{Address, B256, U256, aliases::U24},
         providers::{ProviderBuilder, RootProvider, fillers::*, network::Ethereum, *},
-        signers::local::PrivateKeySigner
+        signers::local::PrivateKeySigner,
+        transports::mock::Asserter
     };
     use angstrom_metrics::ConsensusMetricsWrapper;
     use angstrom_types::{
@@ -535,9 +601,13 @@ pub mod tests {
             StromConsensusEvent,
             slot_clock::{SlotClock, SystemTimeSlotClock}
         },
-        contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        contract_bindings::angstrom::Angstrom::PoolKey,
+        contract_payloads::{
+            angstrom::{AngPoolConfigEntry, AngstromPoolConfigStore, UniswapAngstromRegistry},
+            protocol_fees::DonationSplits
+        },
         primitive::{AngstromSigner, UniswapPoolRegistry},
-        submission::SubmissionHandler
+        submission::{ChainSubmitterWrapper, SubmissionHandler}
     };
     use dashmap::DashMap;
     use futures::{Stream, pin_mut};
@@ -549,10 +619,13 @@ pub mod tests {
         }
     };
     use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
-    use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
+    use uniswap_v4::uniswap::{
+        pool::EnhancedUniswapPool, pool_data_loader::DataLoader, pool_manager::SyncedUniswapPools
+    };
 
     use super::{
-        ConsensusMessage, RoundStateMachine, SharedRoundState, pre_proposal::PreProposalState
+        ConsensusMessage, DonationSplitSnapshot, RoundStateMachine, SharedRoundState,
+        pre_proposal::PreProposalState
     };
     use crate::{
         AngstromValidator, ConsensusTimingConfig,
@@ -560,7 +633,7 @@ pub mod tests {
     };
 
     impl RoundStateMachine<ProviderDef, MockMatchingEngine, PrivateKeySigner> {
-        fn set_state_machine_at(
+        pub(crate) fn set_state_machine_at(
             &mut self,
             state: Box<dyn ConsensusState<ProviderDef, MockMatchingEngine, PrivateKeySigner>>
         ) {
@@ -568,7 +641,7 @@ pub mod tests {
         }
     }
 
-    type ProviderDef = FillProvider<
+    pub(crate) type ProviderDef = FillProvider<
         JoinFill<
             Identity,
             JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>
@@ -585,33 +658,60 @@ pub mod tests {
             .try_init();
     }
 
-    async fn setup_state_machine()
+    pub(crate) async fn setup_state_machine()
     -> RoundStateMachine<ProviderDef, MockMatchingEngine, PrivateKeySigner> {
+        setup_state_machine_with(Asserter::new(), vec![], UniswapPoolRegistry::default()).await
+    }
+
+    /// A state machine over a mocked node — `asserter` answers its RPC calls in
+    /// order — with `submitters` behind its submission handler, and every pool
+    /// in `uniswap_registry` configured in the angstrom pool store so that
+    /// `fetch_pool_snapshot` can resolve it.
+    pub(crate) async fn setup_state_machine_with(
+        asserter: Asserter,
+        submitters: Vec<Box<dyn ChainSubmitterWrapper>>,
+        uniswap_registry: UniswapPoolRegistry
+    ) -> RoundStateMachine<ProviderDef, MockMatchingEngine, PrivateKeySigner> {
+        // Every metrics wrapper unwraps this, so a test that builds one panics
+        // unless it has been decided one way or the other.
+        let _ = angstrom_metrics::METRICS_ENABLED.set(false);
+
         let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
         let signer = AngstromSigner::random();
         let leader_id = signer.address();
 
         // Initialize test components
         let pool_store = Arc::new(AngstromPoolConfigStore::default());
+        for (index, key) in uniswap_registry.pools().into_values().enumerate() {
+            pool_store.new_pool(
+                key.currency0,
+                key.currency1,
+                AngPoolConfigEntry {
+                    pool_partial_key: AngstromPoolConfigStore::derive_store_key(
+                        key.currency0,
+                        key.currency1
+                    ),
+                    tick_spacing:     key.tickSpacing.as_i32() as u16,
+                    fee_in_e6:        key.fee.to(),
+                    store_index:      index
+                }
+            );
+        }
         let (tx, _rx) = tokio::sync::mpsc::channel(2);
         let uniswap_pools = SyncedUniswapPools::new(Arc::new(DashMap::new()), tx);
-        let reg = UniswapPoolRegistry::default();
 
-        let pool_registry = UniswapAngstromRegistry::new(reg, pool_store);
+        let pool_registry = UniswapAngstromRegistry::new(uniswap_registry, pool_store);
 
         let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
             .with_recommended_fillers()
-            .connect("https://eth.llamarpc.com")
-            .await
-            .unwrap()
+            .connect_mocked_client(asserter)
             .into();
 
-        let provider =
-            SubmissionHandler { node_provider: querying_provider, submitters: vec![] };
+        let provider = SubmissionHandler { node_provider: querying_provider, submitters };
 
         let slot_clock = SystemTimeSlotClock::new_with_chain_id(1).unwrap();
         let shared_state = SharedRoundState::new(
-            1, // block height
+            BlockNumHash::new(1, B256::repeat_byte(1)), // parent
             order_storage,
             signer,
             leader_id,
@@ -620,9 +720,14 @@ pub mod tests {
             pool_registry,
             uniswap_pools,
             provider,
-            MockMatchingEngine {},
+            MockMatchingEngine::default(),
             ConsensusTimingConfig::default(),
-            slot_clock.clone()
+            slot_clock.clone(),
+            DonationSplitSnapshot {
+                block_number: 1,
+                block_hash:   Default::default(),
+                splits:       DonationSplits::new(750_000, 1_000_000).unwrap()
+            }
         );
         RoundStateMachine::new(shared_state, slot_clock)
     }
@@ -761,16 +866,111 @@ pub mod tests {
         }
     }
 
+    /// A round reads the configuration once and keeps it. The setter that lands
+    /// while it is in flight belongs to the *next* round, not this one.
+    #[tokio::test]
+    async fn a_config_update_mid_round_does_not_change_the_round_being_built() {
+        init_tracing();
+        let mut state_machine = setup_state_machine().await;
+        let at_round_start = state_machine.shared_state.protocol_fee_config;
+
+        // The round's one capture, taken where the matching engine is driven.
+        let output = state_machine
+            .shared_state
+            .matching_engine_output(HashSet::default());
+
+        let updated = DonationSplitSnapshot {
+            block_number: 2,
+            block_hash:   B256::repeat_byte(2),
+            splits:       DonationSplits::new(500_000, 250_000).unwrap()
+        };
+        assert_ne!(updated, at_round_start, "the update has to actually be a change");
+        state_machine.update_protocol_fee_config(updated);
+
+        let captured = output.await.unwrap().splits;
+        assert_eq!(captured, at_round_start, "the round kept what it captured");
+        assert_eq!(
+            *state_machine
+                .shared_state
+                .matching_engine
+                .last_splits
+                .lock()
+                .unwrap(),
+            Some(captured.splits),
+            "the engine was driven on the same rates final construction is handed"
+        );
+
+        // ...and the next round starts from the update.
+        assert_eq!(state_machine.shared_state.protocol_fee_config, updated);
+    }
+
+    /// A round builds on the pool state it matched on. A pool update landing
+    /// while it is in flight — from a block, or from `load_more_ticks` on an
+    /// incoming order — belongs to the next round.
+    #[tokio::test]
+    async fn a_pool_update_mid_round_does_not_change_the_pools_the_round_builds_on() {
+        init_tracing();
+        let (token0, token1) = (Address::repeat_byte(1), Address::repeat_byte(2));
+        let pool_id = B256::repeat_byte(3);
+        let mut registry = UniswapPoolRegistry::default();
+        registry.pools.insert(
+            pool_id,
+            PoolKey {
+                currency0:   token0,
+                currency1:   token1,
+                fee:         U24::ZERO,
+                tickSpacing: alloy::primitives::aliases::I24::unchecked_from(60),
+                hooks:       Address::ZERO
+            }
+        );
+        let state_machine = setup_state_machine_with(Asserter::new(), vec![], registry).await;
+
+        let mut pool = EnhancedUniswapPool::new(DataLoader::default(), 10);
+        pool.token0 = token0;
+        pool.token1 = token1;
+        pool.tick_spacing = 60;
+        pool.sqrt_price_x96 = U256::from(1u128 << 96);
+        pool.liquidity = 1_000;
+        let pool = Arc::new(std::sync::RwLock::new(pool));
+        state_machine
+            .shared_state
+            .uniswap_pools
+            .insert(pool_id, pool.clone());
+
+        // The round's one capture, taken where the matching engine is driven.
+        let handles = &state_machine.shared_state;
+        let output = handles.matching_engine_output(HashSet::default());
+
+        // A tick load lands while the round is in flight.
+        pool.write().unwrap().liquidity = 2_000;
+
+        let output = output.await.unwrap();
+        assert_eq!(
+            output.pool_snapshots[&pool_id].2.current_liquidity(),
+            1_000,
+            "the round kept the pool state it matched on"
+        );
+        assert_eq!(
+            handles.fetch_pool_snapshot()[&pool_id]
+                .2
+                .current_liquidity(),
+            2_000,
+            "the update was real, and is what the next round reads"
+        );
+    }
+
     #[tokio::test]
     async fn test_reset_round() {
         init_tracing();
         let mut state_machine = setup_state_machine().await;
-        let new_block = 2;
+        let new_block = BlockNumHash::new(2, B256::repeat_byte(2));
         let new_leader = Address::random();
 
         // Reset round with new block and leader
         state_machine.reset_round(new_block, new_leader);
 
+        // Number and hash move together, so a round can never carry the previous
+        // parent's identity into a new height.
         assert_eq!(state_machine.shared_state.block_height, new_block);
         assert_eq!(state_machine.shared_state.round_leader, new_leader);
 

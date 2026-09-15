@@ -443,7 +443,7 @@ impl BundleProcessing for AngstromBundle {
             // placed; after a ToB move it stays in `contract_liquid` and
             // `collect_extra` sweeps it into `save`.
             None if tob_swap_info.is_none() => (None, DonationResidual::default()),
-            None => (None, DonationResidual { rounding: 0, unplaced: book_budget })
+            None => (None, DonationResidual { rounding: 0, capacity: 0, unplaced: book_budget })
         };
 
         let (tob_donation_vec, tob_protocol_fee, tob_residual) = match tob_swap_info.as_ref() {

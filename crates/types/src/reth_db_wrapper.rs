@@ -551,6 +551,7 @@ mod tests {
         let _ = wrapper.storage_ref(Address::ZERO, U256::ZERO);
         let _ = wrapper.bytecode_by_hash(&B256::repeat_byte(0xcd));
         let _ = wrapper.state_root(HashedPostState::default());
+        let _ = wrapper.block_hash_ref(7);
 
         // The selector names a branch, not a height, so a same-height reorg is
         // expressible. Under the old `AtomicU64` this was a bare number.
@@ -609,4 +610,90 @@ mod tests {
             vec![BlockId::from(PARENT.hash), BlockId::from(other_branch.hash)]
         );
     }
+
+    // ==== TEMPORARY PROOF TEST (issue 1b) ====
+
+    /// A node whose *startup* block state is gone (pruned / reorged out) but
+    /// whose chain still knows every block hash and every other block-number
+    /// lookup.
+    #[derive(Clone, Default)]
+    struct PrunedStartupFactory {
+        resolved: Arc<Mutex<Vec<BlockId>>>
+    }
+
+    impl PrunedStartupFactory {
+        fn hash_of(n: BlockNumber) -> B256 {
+            B256::from(U256::from(n))
+        }
+    }
+
+    impl StateProviderFactory for PrunedStartupFactory {
+        fn state_by_block_id(&self, block_id: BlockId) -> ProviderResult<reth_provider::StateProviderBox> {
+            self.resolved.lock().unwrap().push(block_id);
+            // Only the startup block's state is unavailable.
+            if block_id == BlockId::from(PARENT.hash) {
+                return Err(ProviderError::StateForHashNotFound(PARENT.hash));
+            }
+            unimplemented!("state for other blocks is available in this scenario")
+        }
+        fn latest(&self) -> ProviderResult<reth_provider::StateProviderBox> { unimplemented!() }
+        fn state_by_block_number_or_tag(&self, _: BlockNumberOrTag) -> ProviderResult<reth_provider::StateProviderBox> { unimplemented!() }
+        fn history_by_block_number(&self, _: BlockNumber) -> ProviderResult<reth_provider::StateProviderBox> { unimplemented!() }
+        fn history_by_block_hash(&self, _: BlockHash) -> ProviderResult<reth_provider::StateProviderBox> { unimplemented!() }
+        fn state_by_block_hash(&self, _: BlockHash) -> ProviderResult<reth_provider::StateProviderBox> { unimplemented!() }
+        fn pending(&self) -> ProviderResult<reth_provider::StateProviderBox> { unimplemented!() }
+        fn pending_state_by_hash(&self, _: B256) -> ProviderResult<Option<reth_provider::StateProviderBox>> { unimplemented!() }
+        fn maybe_pending(&self) -> ProviderResult<Option<reth_provider::StateProviderBox>> { unimplemented!() }
+    }
+
+    impl BlockHashReader for PrunedStartupFactory {
+        /// The canonical chain still knows every hash.
+        fn block_hash(&self, number: BlockNumber) -> ProviderResult<Option<B256>> {
+            Ok(Some(Self::hash_of(number)))
+        }
+        fn canonical_hashes_range(&self, _: BlockNumber, _: BlockNumber) -> ProviderResult<Vec<B256>> { unimplemented!() }
+    }
+
+    impl BlockNumReader for PrunedStartupFactory {
+        fn chain_info(&self) -> ProviderResult<ChainInfo> { unimplemented!() }
+        fn best_block_number(&self) -> ProviderResult<BlockNumber> { Ok(PARENT.number + 10) }
+        fn last_block_number(&self) -> ProviderResult<BlockNumber> { Ok(PARENT.number + 10) }
+        fn block_number(&self, _: B256) -> ProviderResult<Option<BlockNumber>> { Ok(Some(PARENT.number + 1)) }
+        fn convert_number(&self, _: alloy::eips::BlockHashOrNumber) -> ProviderResult<Option<B256>> {
+            Ok(Some(Self::hash_of(PARENT.number + 1)))
+        }
+    }
+
+    impl BlockIdReader for PrunedStartupFactory {
+        fn pending_block_num_hash(&self) -> ProviderResult<Option<BlockNumHash>> { unimplemented!() }
+        fn safe_block_num_hash(&self) -> ProviderResult<Option<BlockNumHash>> { unimplemented!() }
+        fn finalized_block_num_hash(&self) -> ProviderResult<Option<BlockNumHash>> { unimplemented!() }
+    }
+
+    #[test]
+    fn proof_b_new_head_hash_lookup_needs_the_pinned_blocks_state() {
+        let factory = PrunedStartupFactory::default();
+        let wrapper = RethDbWrapper::new(factory.clone(), PARENT);
+        let new_head = PARENT.number + 1;
+
+        // This is exactly the call `Validator::head_view` makes:
+        //   self.db.block_hash(number)   (BlockHashReader, via BlockNumReader's supertrait)
+        let via_reader = BlockHashReader::block_hash(&wrapper, new_head);
+        println!("PROOF-B BlockHashReader::block_hash({new_head}) -> {via_reader:?}");
+
+        // The unpinned siblings answer the same question fine.
+        let via_db_ref = wrapper.block_hash_ref(new_head);
+        println!("PROOF-B DatabaseRef::block_hash_ref({new_head}) -> {via_db_ref:?}");
+        let via_convert = BlockNumReader::convert_number(&wrapper, new_head.into());
+        println!("PROOF-B BlockNumReader::convert_number({new_head}) -> {via_convert:?}");
+
+        let resolved = factory.resolved.lock().unwrap().clone();
+        println!("PROOF-B state_by_block_id calls: {resolved:?}  (pinned = {:?})", PARENT.hash);
+
+        assert!(via_reader.is_err(), "head-hash lookup went through the pinned state");
+        assert_eq!(via_db_ref.unwrap(), PrunedStartupFactory::hash_of(new_head));
+        assert_eq!(via_convert.unwrap(), Some(PrunedStartupFactory::hash_of(new_head)));
+        assert_eq!(resolved, vec![BlockId::from(PARENT.hash)]);
+    }
+
 }

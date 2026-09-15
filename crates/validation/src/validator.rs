@@ -400,4 +400,60 @@ mod tests {
         new_block(&mut validator, PARENT_NUMBER + 1).await.unwrap();
         assert_eq!(order_view(&validator), None);
     }
+
+    // ==== TEMPORARY PROOF TESTS (issue 1) ====
+
+    /// (a) A head transition whose `head_view` fails still replies
+    /// `TransitionedToBlock`, while the view order validation reads through is
+    /// left on the stale one.
+    #[tokio::test]
+    async fn proof_a_failed_transition_reports_success() {
+        // Contrast run: a db whose head lookup works.
+        let good = FakeDb::knowing(PARENT_NUMBER);
+        let (mut v_ok, _k1) = validator(good).await;
+        let next = PARENT_NUMBER + 1;
+        let ok_reply = new_block(&mut v_ok, next).await.unwrap();
+        println!(
+            "PROOF-A good-db reply={} view={:?}",
+            variant(&ok_reply),
+            order_view(&v_ok)
+        );
+
+        // Failing run: head_view errors.
+        let bad = FakeDb::failing();
+        let (mut v_bad, _k2) = validator(bad.clone()).await;
+        let err = v_bad.head_view(next).unwrap_err();
+        println!("PROOF-A head_view({next}) -> Err: {err}");
+        // The same db still answers DatabaseRef::block_hash_ref, so the failure is
+        // specific to the BlockHashReader path head_view uses.
+        println!(
+            "PROOF-A same db, DatabaseRef::block_hash_ref({next}) -> {:?}",
+            revm::DatabaseRef::block_hash_ref(&bad, next)
+        );
+
+        let bad_reply = new_block(&mut v_bad, next).await.unwrap();
+        println!(
+            "PROOF-A failing-db reply={} view={:?}",
+            variant(&bad_reply),
+            order_view(&v_bad)
+        );
+
+        assert!(matches!(ok_reply, OrderValidationResults::TransitionedToBlock(_)));
+        assert!(matches!(bad_reply, OrderValidationResults::TransitionedToBlock(_)));
+        assert_eq!(
+            order_view(&v_ok),
+            Some(BlockNumHash::new(next, FakeDb::hash_of(next))),
+            "good db advanced the view"
+        );
+        assert_eq!(order_view(&v_bad), None, "failing db left the view where it was");
+    }
+
+    fn variant(r: &OrderValidationResults) -> &'static str {
+        match r {
+            OrderValidationResults::Valid(_) => "Valid",
+            OrderValidationResults::Invalid { .. } => "Invalid",
+            OrderValidationResults::TransitionedToBlock(_) => "TransitionedToBlock"
+        }
+    }
+
 }

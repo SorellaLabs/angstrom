@@ -5,7 +5,8 @@ use alloy::{
     network::TransactionBuilder,
     primitives::Bytes,
     providers::{Provider, RootProvider},
-    rpc::client::ClientBuilder
+    rpc::client::ClientBuilder,
+    transports::TransportErrorKind
 };
 use alloy_primitives::Address;
 use futures::stream::{StreamExt, iter};
@@ -55,7 +56,7 @@ impl ChainSubmitter for AngstromSubmitter {
             let mut tx_hash = None;
             let payload = if let Some(bundle) = bundle {
                 let mut tx = self.build_tx(signer, bundle, tx_features);
-                let gas_used = (tx_features.bundle_gas_used)(tx.clone()).await + EXTRA_GAS_LIMIT;
+                let gas_used = (tx_features.bundle_gas_used)(tx.clone()).await? + EXTRA_GAS_LIMIT;
                 tx = tx.with_gas_limit(gas_used);
                 // Angstrom integrators have max priority gas set to 0.
                 tx.set_max_priority_fee_per_gas(0);
@@ -64,7 +65,10 @@ impl ChainSubmitter for AngstromSubmitter {
                 // TODO: manipulate gas before signing based of off defined rebate spec.
                 // This is pending with talks with titan so leaving it for now
 
-                let signed_tx = tx.build(signer).await.unwrap();
+                if tx_features.cancel.is_cancelled() {
+                    eyre::bail!("round reset before signing");
+                }
+                let signed_tx = tx.build(signer).await?;
                 tx_hash = Some(*signed_tx.hash());
                 let tx_payload = Bytes::from(signed_tx.encoded_2718());
 
@@ -74,22 +78,29 @@ impl ChainSubmitter for AngstromSubmitter {
                     max_priority_fee_per_gas: gas
                 }
             } else {
+                if tx_features.cancel.is_cancelled() {
+                    eyre::bail!("round reset before signing");
+                }
                 let unlock_data =
                     AttestAngstromBlockEmpty::sign_and_encode(tx_features.target_block, signer);
                 let unlock_sig = AttestAngstromBlockEmpty::sign(tx_features.target_block, signer);
 
                 let signed_tx = self
                     .build_and_sign_unlock(signer, unlock_sig, tx_features)
-                    .await;
+                    .await?;
                 let tx_payload = Bytes::from(signed_tx.encoded_2718());
 
                 AngstromIntegrationSubmission { tx: tx_payload, unlock_data, ..Default::default() }
             };
 
+            let cancel = &tx_features.cancel;
             // Submit to all endpoints and collect per-endpoint timing
             let results: Vec<_> = iter(self.clients.clone())
                 .map(async |(client, url)| {
                     let endpoint_start = std::time::Instant::now();
+                    if cancel.is_cancelled() {
+                        return (url, Err(TransportErrorKind::custom_str("round reset")), 0);
+                    }
                     let result = client
                         .raw_request::<(&AngstromIntegrationSubmission,), Value>(
                             "angstrom_submitBundle".into(),

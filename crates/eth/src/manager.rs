@@ -33,6 +33,7 @@ use reth_provider::{
     CanonStateNotification, CanonStateNotifications, StateProvider, StateProviderFactory
 };
 use reth_tasks::TaskExecutor;
+use telemetry_recorder::TelemetryMessage;
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 
@@ -45,6 +46,23 @@ alloy::sol!(
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
 );
+
+/// The inclusion half of the parent record: the orders that landed in the tip
+/// and the tip's parent, the state the bundle actually executed on. Set beside
+/// the construction parent the submitting node recorded under the same order
+/// hashes, a difference is a bundle that ran on a state it was not built for.
+/// Observability only — nothing here rejects, retries or holds anything.
+fn record_included_bundle(chain: &impl ChainExt, order_hashes: Vec<B256>) {
+    if order_hashes.is_empty() {
+        return;
+    }
+    telemetry_recorder::telemetry_event!(TelemetryMessage::bundle_included(
+        chain.tip_number(),
+        chain.tip_hash(),
+        chain.tip_parent_hash(),
+        order_hashes
+    ));
+}
 
 /// A pinned storage read, for checking the log-derived config against what
 /// the chain actually holds.
@@ -206,7 +224,11 @@ where
 
         // get all reorged orders
         let old_filled: HashSet<_> = self.fetch_filled_order(&old).collect();
-        let new_filled: HashSet<_> = self.fetch_filled_order(&new).collect();
+        // In bundle order, as the commit path records them, so the key reads the
+        // same on both paths.
+        let landed = self.fetch_filled_order(&new).collect::<Vec<_>>();
+        record_included_bundle(&new, landed.clone());
+        let new_filled: HashSet<_> = landed.into_iter().collect();
 
         let difference: Vec<_> = old_filled.difference(&new_filled).copied().collect();
         let reorged_orders =
@@ -226,6 +248,7 @@ where
 
         let filled_orders = self.fetch_filled_order(&new).collect::<Vec<_>>();
         tracing::info!(?filled_orders, "filled orders found");
+        record_included_bundle(&new, filled_orders.clone());
 
         let eoas = self.get_eoa(new.clone());
 
@@ -345,7 +368,7 @@ where
                 };
 
                 self.pool_store.new_pool(asset0, asset1, entry);
-                if known.is_none() || known.is_some() {
+                if known.is_none() {
                     *self.angstrom_tokens.entry(asset0).or_default() += 1;
                     *self.angstrom_tokens.entry(asset1).or_default() += 1;
                 }
@@ -639,6 +662,7 @@ pub mod test {
     #[derive(Default)]
     pub struct MockChain<'a> {
         pub hash:         BlockHash,
+        pub parent_hash:  BlockHash,
         pub number:       BlockNumber,
         pub transactions: Vec<TransactionSigned>,
         /// The tip block's receipts.
@@ -658,6 +682,10 @@ pub mod test {
 
         fn tip_hash(&self) -> BlockHash {
             self.hash
+        }
+
+        fn tip_parent_hash(&self) -> BlockHash {
+            self.parent_hash
         }
 
         fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>> {
@@ -720,13 +748,10 @@ pub mod test {
         AngstromSigner::random()
     }
 
-    #[test]
-    fn test_fetch_filled_orders() {
-        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+    /// A signed `execute` call to `angstrom_address` carrying one user order
+    /// and one ToB order, with the hashes those orders have in `block`.
+    fn bundle_transaction(angstrom_address: Address, block: u64) -> (TransactionSigned, Vec<B256>) {
         let signing_info = setup_signing_info();
-        let angstrom_address = Address::random();
-        let eth = setup_non_subscription_eth_manager(Some(angstrom_address));
-
         let top_of_block_order = ToBOrderBuilder::new()
             .signing_key(Some(signing_info.clone()))
             .build();
@@ -757,8 +782,8 @@ pub mod test {
         let finalized_tob = TopOfBlockOrder::of_max_gas(&t, 0);
 
         let order_hashes = vec![
-            finalized_user_order.order_hash(&pair, &assets, 0),
-            finalized_tob.order_hash(&pair, &assets, 0),
+            finalized_user_order.order_hash(&pair, &assets, block),
+            finalized_tob.order_hash(&pair, &assets, block),
         ];
 
         let angstrom_bundle_with_orders = AngstromBundle::new(
@@ -777,13 +802,87 @@ pub mod test {
             ..Default::default()
         };
 
-        let mock_tx = TransactionSigned::new_unhashed(leg.into(), Signature::test_signature());
+        (TransactionSigned::new_unhashed(leg.into(), Signature::test_signature()), order_hashes)
+    }
+
+    #[test]
+    fn test_fetch_filled_orders() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let angstrom_address = Address::random();
+        let eth = setup_non_subscription_eth_manager(Some(angstrom_address));
+
+        let (mock_tx, order_hashes) = bundle_transaction(angstrom_address, 0);
         let mock_chain = MockChain { transactions: vec![mock_tx], ..Default::default() };
         let filled_set = eth.fetch_filled_order(&mock_chain).collect::<HashSet<_>>();
 
         for order_hash in order_hashes {
             assert!(filled_set.contains(&order_hash));
         }
+    }
+
+    /// A bundle that lands is recorded with the parent of the block it landed
+    /// in, keyed by its order hashes, so it can be set against the parent the
+    /// submitting node recorded building it for.
+    #[test]
+    fn a_landed_bundle_is_recorded_with_its_inclusion_parent() {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let (telemetry_tx, mut telemetry_rx) = tokio::sync::mpsc::unbounded_channel();
+        telemetry_recorder::TELEMETRY_SENDER
+            .set(telemetry_tx)
+            .expect("only this test installs a telemetry sink");
+        let angstrom_address = Address::random();
+        let mut eth = setup_non_subscription_eth_manager(Some(angstrom_address));
+
+        let (mock_tx, order_hashes) = bundle_transaction(angstrom_address, 101);
+        let (block_hash, parent_hash) = (BlockHash::random(), BlockHash::random());
+        eth.handle_commit(Arc::new(MockChain {
+            number: 101,
+            hash: block_hash,
+            parent_hash,
+            transactions: vec![mock_tx.clone()],
+            ..Default::default()
+        }))
+        .unwrap();
+
+        let mut records = std::iter::from_fn(|| telemetry_rx.try_recv().ok()).filter_map(
+            |message| match message {
+                TelemetryMessage::BundleIncluded {
+                    blocknum,
+                    inclusion_block,
+                    inclusion_parent,
+                    order_hashes,
+                    ..
+                } => Some((blocknum, inclusion_block, inclusion_parent, order_hashes)),
+                _ => None
+            }
+        );
+        let committed = records.next().expect("the landed bundle was recorded");
+        assert_eq!(committed.0, 101);
+        assert_eq!(committed.1, block_hash, "recorded with the block it landed in");
+        assert_eq!(committed.2, parent_hash, "and with the parent it executed on");
+        assert_eq!(
+            committed.3.iter().copied().collect::<HashSet<_>>(),
+            order_hashes.into_iter().collect::<HashSet<_>>(),
+            "keyed by the landed bundle's order hashes"
+        );
+
+        // The same bundle arriving on a replacement branch is recorded the same
+        // way — including the order of the key — with that branch's parent.
+        let (reorg_hash, reorg_parent) = (BlockHash::random(), BlockHash::random());
+        eth.handle_reorg(
+            Arc::new(MockChain { number: 101, hash: block_hash, ..Default::default() }),
+            Arc::new(MockChain {
+                number: 101,
+                hash: reorg_hash,
+                parent_hash: reorg_parent,
+                transactions: vec![mock_tx],
+                ..Default::default()
+            })
+        )
+        .unwrap();
+        let reorged = records.next().expect("the reorged bundle was recorded");
+        assert_eq!((reorged.0, reorged.1, reorged.2), (101, reorg_hash, reorg_parent));
+        assert_eq!(reorged.3, committed.3, "the key reads the same on both paths");
     }
 
     #[test]

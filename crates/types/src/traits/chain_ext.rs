@@ -12,6 +12,9 @@ pub const MAX_REORG_DEPTH: u64 = 150;
 pub trait ChainExt {
     fn tip_number(&self) -> BlockNumber;
     fn tip_hash(&self) -> BlockHash;
+    /// The parent of the tip: the state a bundle landing in the tip actually
+    /// executed on, to set beside the parent it was built for.
+    fn tip_parent_hash(&self) -> BlockHash;
     fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>>;
     fn tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_;
     fn successful_tip_transactions(&self) -> impl Iterator<Item = &TransactionSigned> + '_;
@@ -30,6 +33,10 @@ impl ChainExt for Chain {
 
     fn tip_hash(&self) -> BlockHash {
         self.tip().hash()
+    }
+
+    fn tip_parent_hash(&self) -> BlockHash {
+        self.tip().header().parent_hash
     }
 
     fn receipts_by_block_hash(&self, block_hash: BlockHash) -> Option<Vec<&Receipt>> {

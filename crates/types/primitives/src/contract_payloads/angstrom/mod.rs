@@ -122,7 +122,6 @@ impl AngstromBundle {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct BundleGasDetails {
     /// total gas to execute the bundle on angstrom
@@ -136,6 +135,10 @@ pub struct BundleGasDetails {
 impl BundleGasDetails {
     pub fn new(total_gas_cost_wei: u64, parent: BlockNumHash) -> Self {
         Self { total_gas_cost_wei, parent }
+    }
+
+    pub fn gas_used(&self) -> u64 {
+        self.total_gas_cost_wei
     }
 
     pub fn parent(&self) -> BlockNumHash {

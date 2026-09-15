@@ -64,14 +64,14 @@ impl FinalizationState {
         let future = handles
             .matching_engine_output(preproposal)
             .map(move |output| {
-                let Ok((solution, ..)) = output else {
+                let Ok(output) = output else {
                     return false;
                 };
 
                 let mut proposal_solution = proposal.solutions.clone();
                 proposal_solution.sort();
 
-                let mut verification_solution = solution;
+                let mut verification_solution = output.solutions;
                 verification_solution.sort();
 
                 if !proposal_solution

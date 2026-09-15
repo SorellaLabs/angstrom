@@ -114,19 +114,15 @@ where
     fn get_transaction_count(&self, address: Address) -> RpcWithBlock<Address, U64, u64> {
         let this = self.factory().clone();
         RpcWithBlock::new_provider(move |block_id| {
-            let provider = this
+            // A block this node cannot resolve — a parent that was reorged out,
+            // say — is the caller's error to handle, not a panic on its task.
+            let nonce = this
                 .provider_at(block_id)
-                .map_err(TransportErrorKind::custom)
-                .unwrap();
+                .and_then(|provider| provider.basic_account(&address))
+                .map(|maybe_acc| maybe_acc.map(|acc| acc.nonce).unwrap_or_default())
+                .map_err(TransportErrorKind::custom);
 
-            let maybe_acc = provider
-                .basic_account(&address)
-                .map_err(TransportErrorKind::custom)
-                .unwrap();
-
-            let nonce = maybe_acc.map(|acc| acc.nonce).unwrap_or_default();
-
-            ProviderCall::ready(Ok(nonce))
+            ProviderCall::ready(nonce)
         })
     }
 

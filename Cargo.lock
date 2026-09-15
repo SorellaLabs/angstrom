@@ -1315,6 +1315,7 @@ dependencies = [
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
  "tower",
  "tracing",
  "tracing-subscriber 0.3.23",
@@ -12900,6 +12901,7 @@ dependencies = [
 name = "telemetry-recorder"
 version = "0.1.0"
 dependencies = [
+ "alloy",
  "angstrom-types",
  "chrono",
  "serde",

@@ -103,3 +103,10 @@ Nothing about this ticket should revert either change. Both are right; they are 
 Verification: `cargo nextest run -p angstrom-eth --lib` — 30 passed (with ticket 37's changes in the
 same tree); `cargo +nightly fmt`. **Not run, by request:** workspace tests and the mutation checks
 (re-counting a known pair, restoring `entry().or_default()`); see ticket 37's note on clippy.
+
+**Review fixes** (2026-09-14, found while running the eth suite for tickets 44–48). The reconfigure
+arm counted a known pair's tokens again: the guard read `if known.is_none() || known.is_some()`,
+which is always true, so `test_pool_config_edge_cases` — this ticket's own rewrite — failed on
+`angstrom_tokens[&asset0]` (`2` against `1`) on the untouched tree. The "Not run, by request" note
+above is why it went unnoticed. Now `if known.is_none()`, which is what the As-built describes.
+`cargo nextest run -p angstrom-eth --lib` — 31 passed.

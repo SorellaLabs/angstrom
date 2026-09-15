@@ -387,7 +387,8 @@ impl Harness {
             fees: self.provider().estimate_eip1559_fees().await?,
             chain_id: CHAIN,
             target_block,
-            bundle_gas_used: Box::new(|_| Box::pin(async { 30_000_000u64 }))
+            bundle_gas_used: Box::new(|_| Box::pin(async { Ok(30_000_000u64) })),
+            cancel: angstrom_types::submission::CancellationToken::new()
         };
         let tx_hash = submitter
             .submit(&self.node, Some(&bundle), &features)

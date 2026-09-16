@@ -95,10 +95,20 @@ impl Harness {
             .build()
             .try_init();
 
-        let fork_url = std::env::var("ETH_WS_URL")
+        // This test forks a real chain, so the endpoint is required rather than
+        // defaulted: a public-node fallback would let a misconfigured run look
+        // like a passing one, against whatever chain the fallback happened to
+        // serve. An unset or empty variable is a setup error and says so.
+        let fork_url = std::env::var("CI_ETH_WS_URL")
             .ok()
             .filter(|url| !url.is_empty())
-            .unwrap_or_else(|| "https://ethereum-rpc.publicnode.com".to_string());
+            .ok_or_else(|| {
+                eyre::eyre!(
+                    "CI_ETH_WS_URL is unset or empty; this test forks a real chain and has no \
+                     default. Set it in the environment (it is defined in `.env`, which the test \
+                     does not load for you) or export it before running."
+                )
+            })?;
         let anvil = SpawnedAnvil::new_forked(&fork_url).await?;
         // Key 7 is the account `SpawnedAnvil` makes the controller, and the
         // controller is the node `AngstromEnv` toggles below.

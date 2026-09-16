@@ -13,7 +13,7 @@ env:
   CARGO_INCREMENTAL: "0"
   RUSTFLAGS: "-C debuginfo=0"
   RUST_BACKTRACE: full
-  ETH_WS_URL: ${{ secrets.CI_ETH_WS_URL }}
+  CI_ETH_WS_URL: ${{ secrets.CI_ETH_WS_URL }}
 
 jobs:
   cargo-fmt:

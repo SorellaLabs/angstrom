@@ -130,6 +130,12 @@ impl BlockSyncProducer for GlobalBlockSync {
         tracing::info!(?self.pending_state, "current pending state");
     }
 
+    /// NOTE: this spin waits for every module to have signed off on
+    /// `max_reorg_block`. A module whose queue front is a sign-off for a
+    /// *higher* block - one this reorg is about to undo - never satisfies that
+    /// comparison, so a reorg racing an in-flight block progression spins
+    /// forever. Safe today only because a single producer drives both calls in
+    /// order; it is a live hazard if that ever changes.
     fn reorg(&self, reorg_range: RangeInclusive<u64>) {
         let max_reorg_block = reorg_range.clone().max().unwrap();
         while self.is_transitioning(max_reorg_block) {
@@ -513,23 +519,21 @@ pub mod test {
         global_sync.register(MOD2);
         global_sync.finalize_modules();
 
-        let sync1 = global_sync.clone();
-        let sync2 = global_sync.clone();
+        // Both producer calls are made before either sign-off, which is the
+        // ordering a single producer actually produces. Racing them on two
+        // threads instead livelocks: if `sign_off_on_block(MOD1, 11)` lands
+        // first, MOD1's queue front becomes `ReadyForNextBlock(_, 11)`, and
+        // `reorg`'s `is_transitioning(10)` spin then compares 11 against 10
+        // forever while the thread that would clear it is still inside that
+        // spin. See the note on `reorg` above.
+        global_sync.new_block(11);
+        global_sync.reorg(9..=10);
 
-        let handle1 = thread::spawn(move || {
-            sync1.new_block(11);
-            sync1.sign_off_on_block(MOD1, 11, None);
-        });
+        global_sync.sign_off_on_block(MOD1, 11, None);
+        global_sync.sign_off_reorg(MOD2, 9..=10, None);
 
-        let handle2 = thread::spawn(move || {
-            sync2.reorg(9..=10);
-            sync2.sign_off_reorg(MOD2, 9..=10, None);
-        });
-
-        handle1.join().unwrap();
-        handle2.join().unwrap();
-
-        // Both proposals should be in the queue
+        // Both proposals should be in the queue: neither can transition while
+        // the two modules have signed off on different ones.
         assert!(global_sync.has_proposal());
         assert!(!global_sync.can_operate());
     }

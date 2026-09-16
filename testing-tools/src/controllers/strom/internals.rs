@@ -312,12 +312,16 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             |_| {}
         );
 
-        let rpc_port = node_config.strom_rpc_port();
+        // Port 0 unless a caller pinned one: a `base + node_id` draw over the
+        // whole u16 range can be privileged or already bound.
+        let bind_port = node_config.strom_rpc_port().unwrap_or(0);
         let server = ServerBuilder::default()
-            .build(format!("0.0.0.0:{rpc_port}"))
+            .build(format!("0.0.0.0:{bind_port}"))
             .await?;
 
+        // the real port, which is all anything downstream should use
         let addr = server.local_addr()?;
+        let rpc_port = addr.port() as u64;
 
         executor.spawn_critical_task(
             "rpc",

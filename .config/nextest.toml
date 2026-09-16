@@ -11,3 +11,8 @@ test-group = "testnet"
 # Report a wedged testnet as TIMEOUT after 10 minutes instead of letting it
 # silently consume the rest of the job's budget.
 slow-timeout = { period = "60s", terminate-after = 10 }
+# A test that fails and then passes on retry is a failure, not a pass. The job
+# passes `--retries 1`, so without this a test that failed on its first attempt
+# still reports the job green ("6 passed (1 flaky)", exit 0). Retries still run,
+# so the log still shows whether the failure reproduced on the second attempt.
+flaky-result = "fail"

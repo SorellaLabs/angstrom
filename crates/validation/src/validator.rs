@@ -8,7 +8,6 @@ use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
     reth_db_wrapper::AtBlock
 };
-use eyre::eyre;
 use futures_util::{Future, FutureExt};
 use telemetry_recorder::telemetry_event;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -44,10 +43,12 @@ pub enum ValidationRequest {
         parent_hash: B256
     },
     NewBlock {
-        sender:       tokio::sync::oneshot::Sender<OrderValidationResults>,
-        block_number: u64,
-        orders:       Vec<B256>,
-        addresses:    Vec<Address>
+        sender:    tokio::sync::oneshot::Sender<OrderValidationResults>,
+        /// The head, named by the notification rather than looked up, so a
+        /// same-height reorg is followed to the branch it names.
+        block:     BlockNumHash,
+        orders:    Vec<B256>,
+        addresses: Vec<Address>
     },
     Nonce {
         sender:       tokio::sync::oneshot::Sender<u64>,
@@ -84,6 +85,8 @@ where
     DB: Unpin
         + Clone
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + revm::DatabaseRef
         + Send
         + Sync
@@ -136,30 +139,22 @@ where
                     self.utils.metrics.clone()
                 );
             }
-            ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
+            ValidationRequest::NewBlock { sender, block, orders, addresses } => {
                 tracing::debug!("transitioning to new block");
-                self.utils.metrics.eth_transition_updates(|| {
-                    self.order_validator
-                        .on_new_block(block_number, orders, addresses);
-                });
-
                 // Order validation follows the head through a fresh view per block,
                 // never by moving a view a queued simulation may be reading through.
-                match self.head_view(block_number) {
-                    Ok(view) => self.order_validator.repoint(Arc::new(view)),
-                    Err(err) => tracing::error!(
-                        %err,
-                        block_number,
-                        "could not take a view of the new head; order validation keeps its \
-                         previous one"
-                    )
-                }
+                self.order_validator
+                    .repoint(Arc::new(self.db.at_block(block)));
+                self.utils.metrics.eth_transition_updates(|| {
+                    self.order_validator
+                        .on_new_block(block.number, orders, addresses);
+                });
 
                 let gas_updates = self.utils.token_pricing_ref().generate_gas_updates();
                 sender
                     .send(OrderValidationResults::TransitionedToBlock(gas_updates))
                     .unwrap();
-                telemetry_event!(block_number, self.utils.token_pricing_ref().to_snapshot());
+                telemetry_event!(block.number, self.utils.token_pricing_ref().to_snapshot());
             }
             ValidationRequest::Nonce { sender, user_address } => {
                 let nonce = self.order_validator.fetch_nonce(user_address);
@@ -213,19 +208,6 @@ where
     pub fn token_price_generator(&self) -> crate::TokenPriceGenerator {
         self.utils.token_pricing.clone()
     }
-
-    /// A view pinned to the canonical block at `number`. Only a number arrives
-    /// on this path, so the hash is resolved here; a lookup that fails is an
-    /// error, never a substitute block.
-    fn head_view(&self, number: u64) -> eyre::Result<DB> {
-        let hash = self
-            .db
-            .block_hash(number)
-            .map_err(|e| eyre!("failed to resolve the hash of block {number} - {e:?}"))?
-            .ok_or_else(|| eyre!("block {number} is not a known block"))?;
-
-        Ok(self.db.at_block(BlockNumHash::new(number, hash)))
-    }
 }
 
 impl<DB, Pools, Fetch> Future for Validator<DB, Pools, Fetch>
@@ -235,6 +217,8 @@ where
         + 'static
         + revm::DatabaseRef
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + Send
         + Sync
         + AtBlock,
@@ -334,12 +318,12 @@ mod tests {
 
     fn new_block(
         validator: &mut TestValidator,
-        number: u64
+        block: BlockNumHash
     ) -> oneshot::Receiver<OrderValidationResults> {
         let (sender, rx) = oneshot::channel();
         validator.on_new_validation_request(ValidationRequest::NewBlock {
             sender,
-            block_number: number,
+            block,
             orders: vec![],
             addresses: vec![]
         });
@@ -373,9 +357,8 @@ mod tests {
         });
 
         // Move the head under it before it has run.
-        let next = PARENT_NUMBER + 1;
-        new_block(&mut validator, next).await.unwrap();
-        let head = BlockNumHash::new(next, FakeDb::hash_of(next));
+        let head = BlockNumHash::new(PARENT_NUMBER + 1, B256::repeat_byte(0xb2));
+        new_block(&mut validator, head).await.unwrap();
         assert_eq!(order_view(&validator), Some(head));
 
         // It still resolved the parent it was handed, and every read it made went
@@ -392,12 +375,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_failed_head_lookup_is_an_error_not_a_panic() {
-        let (mut validator, _keep_open) = validator(FakeDb::failing()).await;
+    async fn a_transition_pins_order_validation_to_the_block_it_names() {
+        let db = FakeDb::knowing(PARENT_NUMBER);
+        let (mut validator, _keep_open) = validator(db.clone()).await;
+        let head = BlockNumHash::new(PARENT_NUMBER + 1, B256::repeat_byte(0xb2));
+        let other_branch = BlockNumHash::new(head.number, B256::repeat_byte(0xc3));
 
-        // The transition still completes; order validation keeps the view it had
-        // rather than a substitute.
-        new_block(&mut validator, PARENT_NUMBER + 1).await.unwrap();
-        assert_eq!(order_view(&validator), None);
+        new_block(&mut validator, head).await.unwrap();
+        assert_eq!(order_view(&validator), Some(head));
+
+        // Same height, different branch: followed, not mistaken for the block it
+        // already has.
+        new_block(&mut validator, other_branch).await.unwrap();
+        assert_eq!(order_view(&validator), Some(other_branch));
+
+        // Neither transition looked anything up, so no unavailable state can stop
+        // one.
+        assert_eq!(db.reads(), vec![]);
     }
 }

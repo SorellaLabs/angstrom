@@ -1236,6 +1236,7 @@ dependencies = [
 name = "angstrom-rpc"
 version = "0.1.0"
 dependencies = [
+ "alloy-eips",
  "alloy-primitives",
  "angstrom-amm-quoter",
  "angstrom-metrics",
@@ -13916,6 +13917,7 @@ name = "validation"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-evm 0.30.0",
  "angstrom-metrics",
  "angstrom-types",
  "angstrom-utils",

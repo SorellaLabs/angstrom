@@ -9,7 +9,8 @@ use std::{
 use alloy_primitives::{Address, U256};
 use angstrom_types::{pair_with_price::PairsWithPrice, reth_db_wrapper::AtBlock};
 use futures::{FutureExt, Stream};
-use reth_provider::BlockNumReader;
+use reth_chainspec::EthereumHardforks;
+use reth_provider::{BlockNumReader, ChainSpecProvider, HeaderProvider};
 use tokio::sync::mpsc::UnboundedReceiver;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 use validation::{
@@ -53,6 +54,8 @@ where
         + Unpin
         + revm::DatabaseRef
         + BlockNumReader
+        + HeaderProvider
+        + ChainSpecProvider<ChainSpec: EthereumHardforks>
         + AtBlock
         + 'static,
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug
@@ -125,6 +128,8 @@ where
         + Unpin
         + revm::DatabaseRef
         + BlockNumReader
+        + HeaderProvider
+        + ChainSpecProvider<ChainSpec: EthereumHardforks>
         + 'static
         + AtBlock,
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug + Unpin
@@ -159,6 +164,8 @@ where
         + 'static
         + revm::DatabaseRef
         + BlockNumReader
+        + HeaderProvider
+        + ChainSpecProvider<ChainSpec: EthereumHardforks>
         + AtBlock,
     T: 'static,
     <DB as revm::DatabaseRef>::Error: Send + Sync + std::fmt::Debug

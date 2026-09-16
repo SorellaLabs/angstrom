@@ -46,6 +46,8 @@ pub fn init_validation<
         + 'static
         + AtBlock
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + revm::DatabaseRef
         + Send
         + Sync
@@ -83,6 +85,8 @@ pub fn init_validation_replay<
         + 'static
         + AtBlock
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + revm::DatabaseRef
         + Send
         + Sync

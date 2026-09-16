@@ -18,8 +18,8 @@ pub const PROTOCOL_FEE_CONFIG_SLOT: u32 = 0;
 /// The configuration `AngstromProtocolFeeConfig` is deployed with, which
 /// preserves pre-activation economics exactly.
 ///
-/// Module-private: it is the one value nothing outside here may construct, so
-/// no caller can quietly substitute a default for a real read.
+/// Module-private so it cannot be named outside this module: no caller can
+/// reach for it as a default instead of calling `load_from_chain`.
 ///
 /// Its block identity is fixed rather than the caller's, so a pre-deployment
 /// resolution is distinguishable from a chain read. Consumers that check parent

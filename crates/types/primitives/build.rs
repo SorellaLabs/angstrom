@@ -42,55 +42,42 @@ fn main() {
     let mut out_dir = base_dir.clone();
     out_dir.push(OUT_DIRECTORY);
 
+    // forge compiles into its own gitignored out dir so nothing tracked is
+    // replaced until every regenerated artifact has been checked
+    let staging_dir = contract_dir.join("out");
     let Ok(mut res) = Command::new("forge")
         .arg("bind")
-        .arg("--out")
-        .arg(format!("../{OUT_DIRECTORY}"))
-        .current_dir(contract_dir)
+        .arg("--overwrite")
+        .current_dir(&contract_dir)
         .spawn()
     else {
         println!("didn't update binding because foundry isn't installed");
 
         return;
     };
-    let res = res.wait().unwrap();
-
-    std::fs::read_dir(&out_dir)
-        .unwrap()
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            let file_name = entry.file_name();
-            let file_name_str = file_name.to_str().unwrap();
-            !WANTED_CONTRACTS.contains(&file_name_str)
-        })
-        .for_each(|entry| {
-            let _ = std::fs::remove_dir_all(entry.path());
-        });
-
-    if res.into_raw() != 0 {
+    if res.wait().unwrap().into_raw() != 0 {
         return;
     }
 
-    let sol_macro_invocation = std::fs::read_dir(out_dir)
-        .unwrap()
-        .filter_map(|folder| {
-            let folder = folder.ok()?;
-            let mut path = folder.path();
-            let file_name = path.file_name()?.to_str()?;
-            if !WANTED_CONTRACTS.contains(&file_name) {
-                return None;
-            }
-            let raw = file_name.split('.').collect::<Vec<_>>()[0].to_owned();
-            path.push(format!("{raw}.json"));
-            strip_volatile(&path);
-
-            Some((raw, path.to_str()?.to_owned()))
+    let contracts = WANTED_CONTRACTS
+        .iter()
+        .map(|file_name| {
+            let name = file_name.split('.').next().unwrap();
+            let artifact = format!("{file_name}/{name}.json");
+            let stripped = strip_volatile(&staging_dir.join(&artifact));
+            (name, artifact, stripped)
         })
-        .sorted_unstable_by_key(|key| key.0.clone())
-        .map(|(name, path_of_contracts)| {
-            let path_of_contracts = path_of_contracts.replace(this_dir, "../../..");
+        .sorted_unstable_by_key(|(name, ..)| *name)
+        .collect::<Vec<_>>();
 
-            let mod_name = name.clone().to_case(Case::Snake);
+    let sol_macro_invocation = contracts
+        .into_iter()
+        .map(|(name, artifact, stripped)| {
+            let path = out_dir.join(&artifact);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, stripped).unwrap();
+
+            let mod_name = name.to_case(Case::Snake);
             format!(
                 r#"#[rustfmt::skip]
 pub mod {mod_name} {{
@@ -99,7 +86,7 @@ pub mod {mod_name} {{
         #[sol(rpc, abi)]
         #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
         {name},
-        "{path_of_contracts}"
+        "../../../{OUT_DIRECTORY}{artifact}"
     );
 }}
 "#
@@ -123,10 +110,19 @@ pub mod {mod_name} {{
 /// fields shift whenever the set of compiled files changes even though the abi
 /// and bytecode are identical. `sol!` doesn't read them, so drop them to keep
 /// the checked in artifacts stable.
-fn strip_volatile(path: &std::path::Path) {
-    let Ok(raw) = std::fs::read_to_string(path) else { return };
-    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&raw) else { return };
-    let Some(artifact) = value.as_object_mut() else { return };
+fn strip_volatile(path: &std::path::Path) -> String {
+    let mut value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    // interfaces carry an empty "0x" object; no object at all means forge dropped
+    // the bytecode, which would silently strip `BYTECODE` and `deploy` from the
+    // bindings
+    assert!(
+        value["bytecode"]["object"].is_string(),
+        "{} has no bytecode.object: this forge's `forge bind` omits bytecode (forge 1.8.3 does); \
+         install forge v1.7.0",
+        path.display()
+    );
+    let artifact = value.as_object_mut().unwrap();
 
     artifact.remove("ast");
     artifact.remove("id");
@@ -137,9 +133,7 @@ fn strip_volatile(path: &std::path::Path) {
         }
     }
 
-    if let Ok(stripped) = serde_json::to_string(&value) {
-        let _ = std::fs::write(path, stripped);
-    }
+    serde_json::to_string(&value).unwrap()
 }
 
 pub fn workspace_dir() -> std::path::PathBuf {

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, sync::OnceLock};
+use std::{fmt::Debug, hash::Hash, sync::OnceLock, time::Duration};
 
 use alloy_dyn_abi::Eip712Domain;
 use alloy_primitives::{Address, ChainId, FixedBytes, address};
@@ -13,6 +13,9 @@ sol! {
 pub use ERC20::*;
 
 pub type PoolId = FixedBytes<32>;
+
+/// The L1 slot time.
+pub const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
 
 pub static ANGSTROM_ADDRESS: OnceLock<Address> = OnceLock::new();
 pub static POSITION_MANAGER_ADDRESS: OnceLock<Address> = OnceLock::new();

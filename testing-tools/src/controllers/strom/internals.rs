@@ -353,10 +353,13 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         tracing::debug!("created mev boost provider");
 
+        let (consensus_eth_events, protocol_fee_config) =
+            eth_handle.subscribe_network_with_config().await;
+
         let consensus = ConsensusManager::new(
             ManagerNetworkDeps::new(
                 strom_network_handle.clone(),
-                eth_handle.subscribe_network(),
+                consensus_eth_events,
                 strom_handles.consensus_rx_op
             ),
             node_config.angstrom_signer(),

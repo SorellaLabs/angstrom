@@ -446,7 +446,7 @@ mod tests {
 
         fn new_block(
             &self,
-            _block_number: u64,
+            _block: alloy_eips::BlockNumHash,
             _completed_orders: Vec<B256>,
             _addresses: Vec<Address>
         ) -> ValidationFuture<'_> {

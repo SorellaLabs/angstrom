@@ -449,10 +449,13 @@ impl ReplayRunner {
             .map(|addr| AngstromValidator::new(addr, 100))
             .collect::<Vec<_>>();
 
+        let (consensus_eth_events, protocol_fee_config) =
+            eth_handle.subscribe_network_with_config().await;
+
         let consensus = ConsensusManager::new(
             ManagerNetworkDeps::new(
                 network_handle.clone(),
-                eth_handle.subscribe_network(),
+                consensus_eth_events,
                 strom_handles.consensus_rx_op
             ),
             angstrom_signer,

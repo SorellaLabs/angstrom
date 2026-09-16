@@ -17,10 +17,10 @@ test-anvil:
     cargo nextest run -p angstrom-types --features anvil --test anvil_settlement
 
 check-format:
-    cargo +nightly fmt --all -- --check
+    cargo +nightly-2026-04-23 fmt --all -- --check
 
 fix-format:
-    cargo +nightly fmt --all
+    cargo +nightly-2026-04-23 fmt --all
 
 check-clippy:
     cargo clippy --all-targets -- -D warnings

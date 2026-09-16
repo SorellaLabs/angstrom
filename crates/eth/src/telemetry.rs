@@ -44,8 +44,8 @@ pub struct EthUpdaterSnapshot {
     /// The splits in force at this notification's tip, this notification's own
     /// setters included. Change history is derived by diffing this across
     /// consecutive snapshots; `chain_update` says whether a diff came from a
-    /// commit or a reorg.
-    pub protocol_fee_config: DonationSplitSnapshot,
+    /// commit or a reorg. `None` means the recording predates this field.
+    pub protocol_fee_config: Option<DonationSplitSnapshot>,
     pub timestamp:           chrono::DateTime<Utc>
 }
 
@@ -60,7 +60,7 @@ impl<Sync: BlockSyncProducer> From<(&EthDataCleanser<Sync>, CanonStateNotificati
             chain_update:        update.into(),
             pool_store:          data.pool_store.clone(),
             node_set:            data.node_set.clone(),
-            protocol_fee_config: data.protocol_fee_config,
+            protocol_fee_config: Some(data.protocol_fee_config),
             timestamp:           Utc::now()
         }
     }

@@ -23,12 +23,12 @@ impl MockEthEventHandle {
 
     pub fn block_state_transition(
         &self,
-        block_number: u64,
+        block: BlockNumHash,
         filled_orders: Vec<B256>,
         address_changeset: Vec<Address>
     ) {
         self.tx
-            .send(EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset })
+            .send(EthEvent::NewBlockTransitions { block, filled_orders, address_changeset })
             .expect("failed to send");
     }
 

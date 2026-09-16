@@ -28,11 +28,11 @@ jobs:
 
       - name: Install Nightly
         run: |
-          rustup toolchain install nightly
-          rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
+          rustup toolchain install nightly-2026-04-23
+          rustup component add --toolchain nightly-2026-04-23 rustfmt
 
       - name: Run formatting
-        run: cargo +nightly fmt --all -- --check
+        run: cargo +nightly-2026-04-23 fmt --all -- --check
 
   cargo-clippy:
     name: cargo clippy
@@ -47,7 +47,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.0
           cache: true
 
       - uses: rui314/setup-mold@v1
@@ -74,7 +74,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.0
           cache: true
 
       - uses: rui314/setup-mold@v1
@@ -103,7 +103,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.0
           cache: true
 
       - uses: rui314/setup-mold@v1
@@ -132,7 +132,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.0
           cache: true
 
       - uses: rui314/setup-mold@v1
@@ -162,7 +162,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.0
           cache: true
 
       - name: Install uv

@@ -1,24 +1,21 @@
 use std::{
     collections::{HashMap, HashSet},
-    time::{Duration, SystemTime, UNIX_EPOCH}
+    time::{SystemTime, UNIX_EPOCH}
 };
 
 use alloy::primitives::{Address, B256, U256};
 use angstrom_types::{
     orders::OrderId,
-    primitive::{OrderLocation, PeerId, PoolId},
+    primitive::{ETH_BLOCK_TIME, OrderLocation, PeerId, PoolId},
     sol_bindings::{ext::grouped_orders::AllOrders, grouped_orders::OrderWithStorageData}
 };
 use serde_with::{DisplayFromStr, serde_as};
-use validation::order::OrderValidatorHandle;
+use validation::order::{OrderValidatorHandle, state::order_validators::deadline::expiry_horizon};
 
 use crate::{
     order_indexer::InnerCancelOrderRequest, order_storage::OrderStorage, validator::OrderValidator
 };
 
-/// This is used to remove validated orders. During validation
-/// the same check wil be ran but with more accuracy
-const ETH_BLOCK_TIME: Duration = Duration::from_secs(12);
 const MAX_NEW_ORDER_DELAY_PROPAGATION: u64 = 7000;
 
 /// Used as a storage of order hashes to order ids of validated and pending
@@ -116,8 +113,7 @@ impl OrderTracker {
         block_number: u64,
         storage: &OrderStorage
     ) -> Vec<OrderWithStorageData<AllOrders>> {
-        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let expiry_deadline = U256::from((time + ETH_BLOCK_TIME).as_secs()); // grab all expired hashes
+        let expiry_deadline = expiry_horizon();
 
         // clear canceled order cache
         self.cancelled_orders

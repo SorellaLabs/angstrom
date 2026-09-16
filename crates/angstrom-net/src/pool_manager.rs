@@ -284,9 +284,9 @@ where
 
     fn on_eth_event(&mut self, eth: EthEvent, waker: Waker) {
         match eth {
-            EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
+            EthEvent::NewBlockTransitions { block, filled_orders, address_changeset } => {
                 self.order_indexer.start_new_block_processing(
-                    block_number,
+                    block,
                     filled_orders,
                     address_changeset
                 );

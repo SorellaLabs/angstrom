@@ -4,7 +4,10 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy::primitives::{Address, B256, BlockNumber, U256};
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256, BlockNumber, U256}
+};
 use angstrom_types::{
     orders::{OrderId, OrderOrigin, OrderSet},
     primitive::{NewInitializedPool, OrderLocation, OrderStatus, PeerId, PoolId},
@@ -397,13 +400,13 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     pub fn start_new_block_processing(
         &mut self,
-        block_number: BlockNumber,
+        block: BlockNumHash,
         completed_orders: Vec<B256>,
         address_changes: Vec<Address>
     ) {
-        tracing::info!(%block_number, "starting transition to new block processing");
+        tracing::info!(?block, "starting transition to new block processing");
         self.validator
-            .on_new_block(block_number, completed_orders, address_changes);
+            .on_new_block(block, completed_orders, address_changes);
     }
 
     // given that we cant acutally remove orders on cancel.
@@ -427,10 +430,11 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     fn finish_new_block_processing(
         &mut self,
-        block_number: BlockNumber,
+        block: BlockNumHash,
         mut completed_orders: Vec<B256>,
         address_changes: Vec<Address>
     ) {
+        let block_number = block.number;
         self.block_number = block_number;
         telemetry_recorder::telemetry_event!(OrderPoolSnapshot::from((block_number, &*self)));
         // clear the invalid orders as they could of become valid.
@@ -453,11 +457,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
         completed_orders.extend(expired_orders.into_iter().map(|o| o.order_id.hash));
 
-        self.validator.notify_validation_on_changes(
-            block_number,
-            completed_orders,
-            address_changes
-        );
+        self.validator
+            .notify_validation_on_changes(block, completed_orders, address_changes);
     }
 }
 
@@ -766,7 +767,11 @@ mod tests {
         let completed_orders = vec![order_hash];
         let address_changes = vec![from];
 
-        indexer.finish_new_block_processing(2, completed_orders.clone(), address_changes.clone());
+        indexer.finish_new_block_processing(
+            BlockNumHash::new(2, B256::ZERO),
+            completed_orders.clone(),
+            address_changes.clone()
+        );
 
         // Verify order was removed
         assert!(
@@ -930,7 +935,7 @@ mod tests {
             _ => panic!("Expected invalid order result")
         }
 
-        indexer.finish_new_block_processing(1, vec![], vec![]);
+        indexer.finish_new_block_processing(BlockNumHash::new(1, B256::ZERO), vec![], vec![]);
         assert!(!indexer.is_seen_invalid(&order_hash));
     }
 

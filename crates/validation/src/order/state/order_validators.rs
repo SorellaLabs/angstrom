@@ -1,5 +1,6 @@
 use amount_set::EnsureAmountSet;
 use angstrom_types::{primitive::OrderValidationError, sol_bindings::RawPoolOrder};
+use deadline::EnsureNotExpired;
 use gas_set::EnsureGasSet;
 use max_gas_lt_min::EnsureMaxGasLessThanMinAmount;
 use price_set::EnsurePriceSet;
@@ -7,17 +8,19 @@ use price_set::EnsurePriceSet;
 use crate::order::state::order_validators::partial_min_delta::PartialMinDelta;
 
 pub mod amount_set;
+pub mod deadline;
 pub mod gas_set;
 pub mod max_gas_lt_min;
 pub mod partial_min_delta;
 pub mod price_set;
 
-pub const ORDER_VALIDATORS: [OrderValidator; 5] = [
+pub const ORDER_VALIDATORS: [OrderValidator; 6] = [
     OrderValidator::EnsureAmountSet(EnsureAmountSet),
     OrderValidator::EnsureGasSet(EnsureGasSet),
     OrderValidator::EnsurePriceSet(EnsurePriceSet),
     OrderValidator::EnsureMaxGasLessThanMinAmount(EnsureMaxGasLessThanMinAmount),
-    OrderValidator::PartialMinDelta(PartialMinDelta)
+    OrderValidator::PartialMinDelta(PartialMinDelta),
+    OrderValidator::EnsureNotExpired(EnsureNotExpired)
 ];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -63,7 +66,8 @@ pub enum OrderValidator {
     EnsureMaxGasLessThanMinAmount(EnsureMaxGasLessThanMinAmount),
     EnsurePriceSet(EnsurePriceSet),
     EnsureGasSet(EnsureGasSet),
-    PartialMinDelta(PartialMinDelta)
+    PartialMinDelta(PartialMinDelta),
+    EnsureNotExpired(EnsureNotExpired)
 }
 
 impl OrderValidation for OrderValidator {
@@ -78,7 +82,8 @@ impl OrderValidation for OrderValidator {
             }
             OrderValidator::EnsureGasSet(validator) => validator.validate_order(state),
             OrderValidator::EnsurePriceSet(validator) => validator.validate_order(state),
-            OrderValidator::PartialMinDelta(validator) => validator.validate_order(state)
+            OrderValidator::PartialMinDelta(validator) => validator.validate_order(state),
+            OrderValidator::EnsureNotExpired(validator) => validator.validate_order(state)
         }
     }
 }
@@ -89,13 +94,15 @@ pub fn make_base_order() -> angstrom_types::sol_bindings::grouped_orders::AllOrd
     use angstrom_types::{primitive::Ray, sol_bindings::grouped_orders::AllOrders};
     use testing_tools::type_generator::orders::UserOrderBuilder;
 
+    use crate::order::state::order_validators::deadline::expiry_horizon;
+
     let mut order = match UserOrderBuilder::new()
         .standing()
         .partial()
         .amount(1000)
         .bid_min_price(Ray(U256::from(1)))
         .block(100)
-        .deadline(U256::from(999_999))
+        .deadline(expiry_horizon() + U256::from(3600))
         .nonce(0)
         .recipient(Default::default())
         .build()

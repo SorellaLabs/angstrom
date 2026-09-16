@@ -1,6 +1,9 @@
 use std::{fmt::Debug, future::Future, pin::Pin};
 
-use alloy::primitives::{Address, B256, U256};
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256, U256}
+};
 use angstrom_types::{
     orders::{OrderOrigin, UpdatedGas},
     primitive::OrderValidationError,
@@ -216,7 +219,7 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
     /// orders that are either expired or have been filled.
     fn new_block(
         &self,
-        block_number: u64,
+        block: BlockNumHash,
         completed_orders: Vec<B256>,
         addresses: Vec<Address>
     ) -> ValidationFuture<'_>;
@@ -244,18 +247,15 @@ impl OrderValidatorHandle for ValidationClient {
 
     fn new_block(
         &self,
-        block_number: u64,
+        block: BlockNumHash,
         orders: Vec<B256>,
         addresses: Vec<Address>
     ) -> ValidationFuture<'_> {
         Box::pin(async move {
             let (tx, rx) = channel();
-            let _ = self.0.send(ValidationRequest::NewBlock {
-                sender: tx,
-                block_number,
-                orders,
-                addresses
-            });
+            let _ =
+                self.0
+                    .send(ValidationRequest::NewBlock { sender: tx, block, orders, addresses });
 
             rx.await.unwrap()
         })

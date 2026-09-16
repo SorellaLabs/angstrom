@@ -10,6 +10,7 @@ exclude.workspace = true
 
 [dependencies]
 alloy.workspace = true
+alloy-evm.workspace = true
 angstrom-metrics.workspace = true
 angstrom-types.workspace = true
 angstrom-utils.workspace = true
@@ -20,6 +21,7 @@ futures-util.workspace = true
 pade.workspace = true
 parking_lot = "0.12.1"
 rand.workspace = true
+reth-chainspec.workspace = true
 reth-primitives-traits.workspace = true
 reth-provider.workspace = true
 reth-revm.workspace = true
@@ -34,7 +36,6 @@ uniswap-v4.workspace = true
 [dev-dependencies]
 futures.workspace = true
 proptest.workspace = true
-reth-chainspec.workspace = true
 rand.workspace = true
 reth-provider = { workspace = true, features = ["test-utils"] }
 revm-primitives.workspace = true

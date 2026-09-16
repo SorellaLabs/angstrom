@@ -1,14 +1,17 @@
 // Allows us to impl revm::DatabaseRef on the default provider type.
+use std::{ops::RangeBounds, sync::Arc};
+
 use alloy::{
     eips::BlockNumHash,
     primitives::{Address, B256, BlockHash, BlockNumber, Bytes, StorageKey, StorageValue, U256},
     transports::{RpcError, TransportErrorKind}
 };
 use reth_chainspec::ChainInfo;
+use reth_primitives_traits::SealedHeader;
 use reth_provider::{
     AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, BytecodeReader,
-    HashedPostStateProvider, ProviderError, ProviderResult, StateProofProvider, StateProvider,
-    StateProviderFactory
+    ChainSpecProvider, HashedPostStateProvider, HeaderProvider, ProviderError, ProviderResult,
+    StateProofProvider, StateProvider, StateProviderFactory
 };
 use reth_storage_api::{StateRootProvider, StorageRootProvider};
 use reth_trie::{
@@ -27,7 +30,7 @@ pub trait AtBlock: Send + Sync + 'static {
     fn at_block(&self, block: BlockNumHash) -> Self;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RethDbWrapper<DB: StateProviderFactory + Unpin + Clone + 'static> {
     db:    DB,
     /// The block every read resolves against, fixed for the life of the view.
@@ -122,8 +125,7 @@ where
     /// An unknown block is an error rather than the zero hash, which
     /// `BLOCKHASH` would otherwise read as a real answer.
     fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
-        self.db
-            .block_hash(number)?
+        <Self as BlockHashReader>::block_hash(self, number)?
             .ok_or_else(|| DBError::String(format!("no block hash for {number}")))
     }
 }
@@ -160,6 +162,55 @@ where
         id: alloy::eips::BlockHashOrNumber
     ) -> reth_provider::ProviderResult<Option<BlockNumber>> {
         self.db.convert_hash_or_number(id)
+    }
+}
+
+/// A header is not state, so it is read from the source rather than the view.
+impl<DB> HeaderProvider for RethDbWrapper<DB>
+where
+    DB: StateProviderFactory + HeaderProvider + Unpin + Clone + 'static
+{
+    type Header = DB::Header;
+
+    fn header(&self, block_hash: BlockHash) -> ProviderResult<Option<Self::Header>> {
+        self.db.header(block_hash)
+    }
+
+    fn header_by_number(&self, num: u64) -> ProviderResult<Option<Self::Header>> {
+        self.db.header_by_number(num)
+    }
+
+    fn headers_range(
+        &self,
+        range: impl RangeBounds<BlockNumber>
+    ) -> ProviderResult<Vec<Self::Header>> {
+        self.db.headers_range(range)
+    }
+
+    fn sealed_header(
+        &self,
+        number: BlockNumber
+    ) -> ProviderResult<Option<SealedHeader<Self::Header>>> {
+        self.db.sealed_header(number)
+    }
+
+    fn sealed_headers_while(
+        &self,
+        range: impl RangeBounds<BlockNumber>,
+        predicate: impl FnMut(&SealedHeader<Self::Header>) -> bool
+    ) -> ProviderResult<Vec<SealedHeader<Self::Header>>> {
+        self.db.sealed_headers_while(range, predicate)
+    }
+}
+
+impl<DB> ChainSpecProvider for RethDbWrapper<DB>
+where
+    DB: StateProviderFactory + ChainSpecProvider + Unpin + Clone + 'static
+{
+    type ChainSpec = DB::ChainSpec;
+
+    fn chain_spec(&self) -> Arc<Self::ChainSpec> {
+        self.db.chain_spec()
     }
 }
 
@@ -507,8 +558,9 @@ mod tests {
     }
 
     impl BlockHashReader for RecordingFactory {
-        /// Absent rather than erroring, so `block_hash_ref` is exercised on the
-        /// case that used to default to the zero hash.
+        /// Absent rather than erroring: a hash read that reached the factory
+        /// instead of the pinned state would come back with no resolution
+        /// recorded.
         fn block_hash(&self, _: BlockNumber) -> ProviderResult<Option<B256>> {
             Ok(None)
         }
@@ -551,11 +603,12 @@ mod tests {
         let _ = wrapper.storage_ref(Address::ZERO, U256::ZERO);
         let _ = wrapper.bytecode_by_hash(&B256::repeat_byte(0xcd));
         let _ = wrapper.state_root(HashedPostState::default());
+        let _ = wrapper.block_hash_ref(7);
 
         // The selector names a branch, not a height, so a same-height reorg is
         // expressible. Under the old `AtomicU64` this was a bare number.
         let resolved = factory.resolved.lock().unwrap().clone();
-        assert_eq!(resolved.len(), 4);
+        assert_eq!(resolved.len(), 5);
         assert!(resolved.iter().all(|id| *id == BlockId::from(PARENT.hash)), "{resolved:?}");
 
         // The tip is never consulted, so no read can fall back to current state.
@@ -571,15 +624,6 @@ mod tests {
         assert!(wrapper.basic_ref(Address::ZERO).is_err());
         assert!(wrapper.storage_ref(Address::ZERO, U256::ZERO).is_err());
         assert!(wrapper.code_by_hash_ref(B256::repeat_byte(0xcd)).is_err());
-    }
-
-    #[test]
-    fn an_unknown_block_hash_is_an_error_not_the_zero_hash() {
-        let (_, wrapper) = wrapper();
-
-        // The factory resolves the lookup and reports no such block, so this is
-        // the absent-value case rather than the unavailable-state one.
-        assert!(wrapper.block_hash_ref(7).is_err());
     }
 
     #[test]

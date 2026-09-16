@@ -46,7 +46,7 @@ impl OrderValidatorHandle for MockValidator {
 
     fn new_block(
         &self,
-        _: u64,
+        _: alloy::eips::BlockNumHash,
         _: Vec<alloy_primitives::B256>,
         _: Vec<Address>
     ) -> validation::order::ValidationFuture<'_> {

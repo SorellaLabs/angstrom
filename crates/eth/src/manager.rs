@@ -175,6 +175,10 @@ where
     fn on_command(&mut self, command: EthCommand) {
         match command {
             EthCommand::SubscribeEthNetworkEvents(tx) => self.event_listeners.push(tx),
+            EthCommand::SubscribeEthNetworkEventsWithConfig(tx, config) => {
+                self.event_listeners.push(tx);
+                let _ = config.send(self.protocol_fee_config);
+            }
             EthCommand::SubscribeCannon(tx) => {
                 let _ = tx.send(self.subscribe_cannon_notifications());
             }
@@ -252,13 +256,11 @@ where
 
         let eoas = self.get_eoa(new.clone());
 
-        let transitions = EthEvent::NewBlockTransitions {
-            block_number: new.tip_number(),
-            filled_orders,
-            address_changeset: eoas
-        };
+        let block = BlockNumHash::new(tip, new.tip_hash());
+        let transitions =
+            EthEvent::NewBlockTransitions { block, filled_orders, address_changeset: eoas };
 
-        self.send_events(EthEvent::NewBlock(BlockNumHash::new(tip, new.tip_hash())));
+        self.send_events(EthEvent::NewBlock(block));
         self.send_events(transitions);
         Ok(())
     }
@@ -560,8 +562,10 @@ pub enum EthEvent {
     /// consumer name the exact parent it is building on; a number cannot,
     /// since same-height reorgs exist.
     NewBlock(BlockNumHash),
+    /// The block the transition is to, by number and hash for the same reason
+    /// as [`EthEvent::NewBlock`].
     NewBlockTransitions {
-        block_number:      u64,
+        block:             BlockNumHash,
         filled_orders:     Vec<B256>,
         address_changeset: Vec<Address>
     },
@@ -1025,8 +1029,8 @@ pub mod test {
         // Verify new block transitions event was sent
         // `handle_commit` sends `NewBlock` ahead of the transitions.
         match published_transitions(&mut rx).expect("Should receive an event") {
-            EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
-                assert_eq!(block_number, 100);
+            EthEvent::NewBlockTransitions { block, filled_orders, address_changeset } => {
+                assert_eq!(block.number, 100);
                 assert!(filled_orders.is_empty());
                 assert!(address_changeset.is_empty());
             }
@@ -1142,8 +1146,8 @@ pub mod test {
 
         // `handle_commit` sends `NewBlock` ahead of the transitions.
         match published_transitions(&mut rx).expect("Should receive an event") {
-            EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
-                assert_eq!(block_number, 100);
+            EthEvent::NewBlockTransitions { block, filled_orders, address_changeset } => {
+                assert_eq!(block.number, 100);
                 assert!(filled_orders.is_empty());
                 assert!(address_changeset.is_empty());
             }
@@ -1664,7 +1668,7 @@ pub mod test {
         // The notification's own setter is included rather than lagging by one,
         // which is what emitting after the handlers buys.
         assert_eq!(
-            after.protocol_fee_config.splits,
+            after.protocol_fee_config.unwrap().splits,
             DonationSplits::new(800_000, 900_000).unwrap()
         );
         // A notification that changed the config shows up as a diff between

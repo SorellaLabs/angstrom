@@ -464,10 +464,16 @@ where
 
     executor.spawn_critical_task("amm quoting service", amm);
 
+    // Subscribing and reading the pair are one step, so a setter landing during
+    // startup is either in the snapshot consensus seeds from or in the stream it
+    // is already listening on.
+    let (consensus_eth_events, protocol_fee_config) =
+        eth_handle.subscribe_network_with_config().await;
+
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
-            eth_handle.subscribe_network(),
+            consensus_eth_events,
             handles.consensus_rx_op
         ),
         signer,

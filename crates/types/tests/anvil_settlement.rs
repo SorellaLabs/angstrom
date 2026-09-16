@@ -526,8 +526,8 @@ fn filled(order: &OrderWithStorageData<AllOrders>) -> OrderOutcome {
 /// The per-pool half of every scenario: the searcher's t1 is split between
 /// the PoolManager and Angstrom and nowhere else, Angstrom keeping exactly
 /// the t1 `save` the bundle encoded, and the pool's reward growth is its own
-/// `RewardsUpdate`.
-fn assert_pool_settled(label: &str, pool: &PoolSettled) {
+/// `RewardsUpdate`, which donates exactly `donation`.
+fn assert_pool_settled(label: &str, pool: &PoolSettled, donation: u128) {
     // The book nets to zero in t1. It is priced at the ToB end price after a
     // `Ray` round-trip, so the net swap the bundle encodes comes up a unit
     // short of `quantity_in`; that unit is what `collect_extra` sweeps into
@@ -543,12 +543,13 @@ fn assert_pool_settled(label: &str, pool: &PoolSettled) {
         "{label}: Angstrom did not keep exactly the t1 the bundle saves"
     );
 
+    assert_eq!(pool.rewarded, donation, "{label}: the bundle did not donate the policy's LP share");
     // Reward growth: `PoolUpdates._updatePool` adds `amount * 2^128 /
     // liquidity` to `globalGrowth` for a `CurrentOnly` update, and leaves
     // the per-tick growth alone.
     assert_eq!(
         pool.growth_delta,
-        U256::from(pool.rewarded) * (U256::from(1u8) << 128) / U256::from(LIQUIDITY),
+        U256::from(donation) * (U256::from(1u8) << 128) / U256::from(LIQUIDITY),
         "{label}: reward growth does not match the bundle's RewardsUpdate"
     );
     assert!(!pool.tick_growth_moved, "{label}: a CurrentOnly update moved per-tick growth");
@@ -569,12 +570,18 @@ async fn builder_bundles_settle_against_unchanged_angstrom() {
     let pools = [harness.deploy_pool(0).await.unwrap(), harness.deploy_pool(1).await.unwrap()];
     let shared = harness.deploy_pools_sharing_token0(2).await.unwrap();
 
-    for (pool, (label, splits)) in pools.iter().zip([
-        ("deployed rates", DonationSplits::new(750_000, 1_000_000).unwrap()),
-        ("nonzero tob share", DonationSplits::new(750_000, 750_000).unwrap())
+    // Expected donation and t0 `save`, derived by hand rather than from
+    // `DonationSplits` or the bundle. Each book pays 3,996 in user fees (ask
+    // 2,000 + bid 1,996 at the post-ToB price), 2,997 LP / 999 protocol at a
+    // floored 75%; a 1,001 ToB gross is 1,001 / 0 at 100% and 750 / 251 at
+    // 75%. Both allocators place their whole LP budget, so nothing is swept.
+    for (pool, (label, splits, donation, save)) in pools.iter().zip([
+        ("deployed rates", DonationSplits::new(750_000, 1_000_000).unwrap(), 3_998, 999),
+        ("nonzero tob share", DonationSplits::new(750_000, 750_000).unwrap(), 3_747, 1_250)
     ]) {
         let settled = harness.settle(&[(pool, 1_001)], splits).await.unwrap();
         let p = &settled.pools[0];
+        assert_eq!(settled.encoded_save, save, "{label}: encoded save is not the policy's");
 
         // Exact `save`: the configured fees plus whatever the allocators could
         // not place, which `collect_extra` sweeps into `save` rather than
@@ -596,7 +603,7 @@ async fn builder_bundles_settle_against_unchanged_angstrom() {
             settled.encoded_save + p.rewarded,
             "{label}: the contract did not retain exactly save plus the donation"
         );
-        assert_pool_settled(label, p);
+        assert_pool_settled(label, p, donation);
 
         // The second run is the one that makes the ToB fee path non-inert.
         if label == "nonzero tob share" {
@@ -647,10 +654,13 @@ async fn builder_bundles_settle_against_unchanged_angstrom() {
         "{label}: the contract did not retain exactly save plus both donations"
     );
 
+    // By hand, as above: pool A donates 750 + 2,997 and pool B 1,501 + 2,997
+    // (2,002 at a floored 75%), and t0 `save` is (251 + 999) + (501 + 999).
+    assert_eq!(settled.encoded_save, 2_750, "{label}: encoded save is not the policy's");
+
     // Each pool's t1 and reward growth are its own. The pools reward different
     // amounts, so growth following the wrong pool's update would show.
-    assert_ne!(settled.pools[0].rewarded, settled.pools[1].rewarded);
-    for (pool, name) in settled.pools.iter().zip(["pool A", "pool B"]) {
-        assert_pool_settled(&format!("{label}, {name}"), pool);
+    for (pool, name, donation) in izip!(&settled.pools, ["pool A", "pool B"], [3_747, 4_498]) {
+        assert_pool_settled(&format!("{label}, {name}"), pool, donation);
     }
 }

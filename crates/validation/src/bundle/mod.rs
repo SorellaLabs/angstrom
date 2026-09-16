@@ -1,25 +1,29 @@
 use std::{fmt::Debug, pin::Pin, sync::Arc};
 
 use alloy::{
+    consensus::BlockHeader,
     eips::BlockNumHash,
     primitives::{Address, B256, U256},
     sol_types::SolCall
 };
+use alloy_evm::{EvmEnv, eth::NextEvmEnvAttributes};
 use angstrom_metrics::validation::ValidationMetrics;
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
-    primitive::CHAIN_ID,
+    primitive::{CHAIN_ID, ETH_BLOCK_TIME},
     reth_db_wrapper::AtBlock,
     traits::BundleProcessing
 };
 use eyre::eyre;
 use futures::Future;
 use pade::PadeEncode;
+use reth_chainspec::{EthChainSpec, EthereumHardforks};
+use reth_provider::{ChainSpecProvider, HeaderProvider};
 use revm::{
     Context, InspectEvm, Journal, MainBuilder,
-    context::{BlockEnv, CfgEnv, JournalTr, LocalContext, TxEnv},
+    context::{JournalTr, LocalContext, TxEnv},
     database::CacheDB,
-    primitives::{TxKind, hardfork::SpecId}
+    primitives::TxKind
 };
 use tokio::runtime::Handle;
 
@@ -44,7 +48,8 @@ where
     DB: Unpin
         + Clone
         + 'static
-        + reth_provider::BlockNumReader
+        + HeaderProvider
+        + ChainSpecProvider<ChainSpec: EthereumHardforks>
         + revm::DatabaseRef
         + AtBlock
         + Send
@@ -82,17 +87,37 @@ where
         Ok(())
     }
 
-    /// Places `parent_hash` on the chain. This is also the availability check:
-    /// a hash we cannot resolve is an error, never a quiet fall back to the
+    /// The header of `parent_hash`. This is also the availability check: a
+    /// hash we cannot resolve is an error, never a quiet fall back to the
     /// current tip.
-    fn get_block(&self, parent_hash: B256) -> eyre::Result<BlockNumHash> {
-        let number = self
-            .db
-            .block_number(parent_hash)
+    fn get_block(&self, parent_hash: B256) -> eyre::Result<DB::Header> {
+        self.db
+            .header(parent_hash)
             .map_err(|e| eyre!("failed to resolve parent {parent_hash} - {e:?}"))?
-            .ok_or_else(|| eyre!("parent {parent_hash} is not a known block"))?;
+            .ok_or_else(|| eyre!("parent {parent_hash} is not a known block"))
+    }
 
-        Ok(BlockNumHash::new(number, parent_hash))
+    /// The environment of the block built on `parent`. Its beneficiary and
+    /// prevrandao are not known yet, so the parent's stand in.
+    fn next_block_env(&self, parent: &DB::Header) -> EvmEnv {
+        let chain_spec = self.db.chain_spec();
+        let timestamp = parent.timestamp() + ETH_BLOCK_TIME.as_secs();
+
+        EvmEnv::for_eth_next_block(
+            parent,
+            NextEvmEnvAttributes {
+                timestamp,
+                suggested_fee_recipient: parent.beneficiary(),
+                prev_randao: parent.mix_hash().unwrap_or_default(),
+                gas_limit: parent.gas_limit()
+            },
+            parent
+                .next_block_base_fee(chain_spec.base_fee_params_at_timestamp(timestamp))
+                .unwrap_or_default(),
+            &chain_spec,
+            *CHAIN_ID.get().unwrap(),
+            chain_spec.blob_params_at_timestamp(timestamp)
+        )
     }
 
     pub fn simulate_bundle(
@@ -110,13 +135,15 @@ where
         let node_address = self.node_address;
         let angstrom_address = self.angstrom_address;
 
-        let parent = match self.get_block(parent_hash) {
-            Ok(parent) => parent,
+        let header = match self.get_block(parent_hash) {
+            Ok(header) => header,
             Err(e) => {
                 let _ = sender.send(Err(e));
                 return;
             }
         };
+        let EvmEnv { cfg_env, block_env } = self.next_block_env(&header);
+        let parent = BlockNumHash::new(header.number(), parent_hash);
         let number = parent.number;
 
         // A view of the parent that nothing else holds, with a cache built on it and
@@ -159,10 +186,12 @@ where
                 let encoded_bundle = bundle.pade_encode();
                 let console_log_inspector = CallDataInspector {};
 
+                tracing::info!(block_number = number + 1, "simulating block on");
+                let gas_price = block_env.basefee.into();
                  let mut evm = Context {
                         tx: TxEnv::default(),
-                        block: BlockEnv::default(),
-                        cfg: CfgEnv::<SpecId>::default().with_chain_id(*CHAIN_ID.get().unwrap()),
+                        block: block_env,
+                        cfg: cfg_env,
                         journaled_state: Journal::<CacheDB<Arc<DB>>>::new(db.clone()),
                         chain: (),
                         error: Ok(()),
@@ -170,13 +199,13 @@ where
                     }
                     .modify_cfg_chained(|cfg| {
                         cfg.disable_nonce_check = true;
-                    })
-                    .modify_block_chained(|block| {
-                        block.number = U256::from(number + 1);
-                        tracing::info!(?block.number, "simulating block on");
+                        // The gas limit is the default cap rather than one the node would
+                        // send, so the node's balance against it is not what is being tested.
+                        cfg.disable_balance_check = true;
                     })
                     .modify_tx_chained(|tx| {
                         tx.caller = node_address;
+                        tx.gas_price = gas_price;
                         tx.kind= TxKind::Call(angstrom_address);
                         tx.chain_id = Some(*CHAIN_ID.get().unwrap());
                         tx.data =
@@ -217,43 +246,56 @@ where
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::sync::Mutex;
+    use std::{ops::RangeBounds, sync::Mutex};
 
-    use alloy::primitives::{B256, BlockNumber};
+    use alloy::{
+        consensus::Header,
+        primitives::{B256, BlockNumber}
+    };
     use angstrom_types::{
         primitive::AngstromAddressConfig,
         reth_db_wrapper::{AtBlock, DBError}
     };
     use futures::StreamExt;
+    use reth_chainspec::{ChainSpec, MAINNET};
+    use reth_primitives_traits::SealedHeader;
     use reth_provider::{BlockHashReader, BlockNumReader, ProviderError, ProviderResult};
-    use revm::state::AccountInfo;
+    use revm::{bytecode::Bytecode, state::AccountInfo};
 
     use super::*;
 
     pub(crate) const PARENT: B256 = B256::repeat_byte(0xa1);
-    pub(crate) const PARENT_NUMBER: u64 = 4_242;
+    /// A Prague-era mainnet block and its timestamp, so the chain spec places
+    /// it after the merge.
+    pub(crate) const PARENT_NUMBER: u64 = 22_750_000;
+    const PARENT_TIMESTAMP: u64 = 1_750_000_000;
+    const ANGSTROM: Address = Address::repeat_byte(0xaa);
+    const PARENT_GAS_LIMIT: u64 = 30_000_000;
 
-    /// State is empty and every parent lookup is answered from `known`, so a
-    /// test controls exactly which parents exist. Records every view taken of
-    /// it and, on each read, the block the view it went through was pinned to.
-    #[derive(Clone)]
+    /// State is empty apart from `angstrom_code` and every parent lookup is
+    /// answered from `known`, so a test controls exactly which parents exist.
+    /// Records every view taken of it and, on each read, the block the view it
+    /// went through was pinned to.
+    #[derive(Clone, Debug)]
     pub(crate) struct FakeDb {
-        known:  Option<u64>,
-        errors: bool,
+        known:         Option<u64>,
+        errors:        bool,
+        angstrom_code: Option<Bytecode>,
         /// The block this view is pinned to; `None` for the source itself.
-        pinned: Option<BlockNumHash>,
-        views:  Arc<Mutex<Vec<BlockNumHash>>>,
-        reads:  Arc<Mutex<Vec<Option<BlockNumHash>>>>
+        pinned:        Option<BlockNumHash>,
+        views:         Arc<Mutex<Vec<BlockNumHash>>>,
+        reads:         Arc<Mutex<Vec<Option<BlockNumHash>>>>
     }
 
     impl FakeDb {
         pub(crate) fn knowing(number: u64) -> Self {
             Self {
-                known:  Some(number),
-                errors: false,
-                pinned: None,
-                views:  Arc::default(),
-                reads:  Arc::default()
+                known:         Some(number),
+                errors:        false,
+                angstrom_code: None,
+                pinned:        None,
+                views:         Arc::default(),
+                reads:         Arc::default()
             }
         }
 
@@ -263,11 +305,6 @@ pub(crate) mod tests {
 
         pub(crate) fn failing() -> Self {
             Self { errors: true, ..Self::unknown() }
-        }
-
-        /// The hash `block_hash` answers for `number`.
-        pub(crate) fn hash_of(number: u64) -> B256 {
-            B256::from(U256::from(number))
         }
 
         /// The block this view is pinned to.
@@ -300,12 +337,17 @@ pub(crate) mod tests {
     impl revm::DatabaseRef for FakeDb {
         type Error = DBError;
 
-        fn basic_ref(&self, _: Address) -> Result<Option<AccountInfo>, Self::Error> {
+        fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
             self.record_read();
-            Ok(None)
+            Ok(self
+                .angstrom_code
+                .clone()
+                .filter(|_| address == ANGSTROM)
+                .map(AccountInfo::from_bytecode))
         }
 
         fn code_by_hash_ref(&self, _: B256) -> Result<revm::bytecode::Bytecode, Self::Error> {
+            self.record_read();
             Ok(Default::default())
         }
 
@@ -314,8 +356,9 @@ pub(crate) mod tests {
             Ok(U256::ZERO)
         }
 
-        fn block_hash_ref(&self, _: u64) -> Result<B256, Self::Error> {
-            Ok(B256::ZERO)
+        fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
+            self.block_hash(number)?
+                .ok_or_else(|| DBError::String(format!("no block hash for {number}")))
         }
     }
 
@@ -333,19 +376,64 @@ pub(crate) mod tests {
         }
 
         fn block_number(&self, _: B256) -> ProviderResult<Option<BlockNumber>> {
+            unimplemented!()
+        }
+    }
+
+    impl HeaderProvider for FakeDb {
+        type Header = Header;
+
+        fn header(&self, _: B256) -> ProviderResult<Option<Header>> {
             if self.errors {
                 return Err(ProviderError::BestBlockNotFound);
             }
-            Ok(self.known)
+            Ok(self.known.map(|number| Header {
+                number,
+                timestamp: PARENT_TIMESTAMP,
+                gas_limit: PARENT_GAS_LIMIT,
+                // Above the 15M target, so the next base fee rises.
+                gas_used: 20_000_000,
+                base_fee_per_gas: Some(1_000_000_000),
+                ..Default::default()
+            }))
+        }
+
+        fn header_by_number(&self, _: u64) -> ProviderResult<Option<Header>> {
+            unimplemented!()
+        }
+
+        fn headers_range(&self, _: impl RangeBounds<BlockNumber>) -> ProviderResult<Vec<Header>> {
+            unimplemented!()
+        }
+
+        fn sealed_header(&self, _: BlockNumber) -> ProviderResult<Option<SealedHeader<Header>>> {
+            unimplemented!()
+        }
+
+        fn sealed_headers_while(
+            &self,
+            _: impl RangeBounds<BlockNumber>,
+            _: impl FnMut(&SealedHeader<Header>) -> bool
+        ) -> ProviderResult<Vec<SealedHeader<Header>>> {
+            unimplemented!()
+        }
+    }
+
+    impl ChainSpecProvider for FakeDb {
+        type ChainSpec = ChainSpec;
+
+        fn chain_spec(&self) -> Arc<ChainSpec> {
+            MAINNET.clone()
         }
     }
 
     impl BlockHashReader for FakeDb {
+        /// Answered as of the pinned block, as the wrapper's is, so a lookup
+        /// through the unpinned source errors rather than passing.
         fn block_hash(&self, number: BlockNumber) -> ProviderResult<Option<B256>> {
-            if self.errors {
-                return Err(ProviderError::BestBlockNotFound);
-            }
-            Ok(Some(Self::hash_of(number)))
+            self.record_read();
+            let pinned = self.pinned.ok_or(ProviderError::BestBlockNotFound)?;
+            Ok((number < pinned.number).then(|| B256::from(U256::from(number))))
         }
 
         fn canonical_hashes_range(
@@ -364,18 +452,14 @@ pub(crate) mod tests {
         let mut thread_pool = KeySplitThreadpool::new(Handle::current(), 1);
         let (tx, rx) = tokio::sync::oneshot::channel();
 
-        BundleValidator::new(
-            Arc::new(db.clone()),
-            Address::repeat_byte(0xaa),
-            Address::repeat_byte(0xbb)
-        )
-        .simulate_bundle(
-            tx,
-            AngstromBundle::new(vec![], vec![], vec![], vec![], vec![]),
-            parent,
-            &mut thread_pool,
-            ValidationMetrics::new()
-        );
+        BundleValidator::new(Arc::new(db.clone()), ANGSTROM, Address::repeat_byte(0xbb))
+            .simulate_bundle(
+                tx,
+                AngstromBundle::new(vec![], vec![], vec![], vec![], vec![]),
+                parent,
+                &mut thread_pool,
+                ValidationMetrics::new()
+            );
 
         // The work is queued rather than spawned, so it only runs while the pool is
         // polled: a request that failed before queuing resolves without this.
@@ -396,6 +480,33 @@ pub(crate) mod tests {
 
         // Both halves of the identity, so a same-height reorg is distinguishable.
         assert_eq!(details.parent(), BlockNumHash::new(PARENT_NUMBER, PARENT));
+    }
+
+    #[tokio::test]
+    async fn simulation_runs_in_the_next_block_derived_from_the_parent_header() {
+        // Stops only when every block field matches the block after the parent,
+        // and reverts otherwise.
+        let expected: [(u8, u64); 4] = [
+            (0x42, PARENT_TIMESTAMP + 12), // TIMESTAMP
+            (0x43, PARENT_NUMBER + 1),     // NUMBER
+            (0x45, PARENT_GAS_LIMIT),      // GASLIMIT
+            (0x48, 1_041_666_666)          // BASEFEE, raised by the parent's excess gas
+        ];
+        let mut code = vec![0x60, 0x01]; // PUSH1 1
+        for (opcode, value) in expected {
+            code.push(opcode);
+            code.push(0x67); // PUSH8
+            code.extend(value.to_be_bytes());
+            code.extend([0x14, 0x16]); // EQ AND
+        }
+        let jumpdest = code.len() as u8 + 6;
+        code.extend([0x60, jumpdest, 0x57, 0x5f, 0x5f, 0xfd, 0x5b, 0x00]); // JUMPI, REVERT, JUMPDEST STOP
+        let db = FakeDb {
+            angstrom_code: Some(Bytecode::new_raw(code.into())),
+            ..FakeDb::knowing(PARENT_NUMBER)
+        };
+
+        simulate(&db, PARENT).await.unwrap();
     }
 
     #[tokio::test]

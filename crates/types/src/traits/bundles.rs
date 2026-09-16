@@ -1272,24 +1272,27 @@ mod tests {
         AngstromAddressConfig::INTERNAL_TESTNET.try_init();
         let snap = pool(1_000_000_000_000_000);
         let id = pool_id(1);
-        let (searcher, gross) = tob_with_gross(&snap, id, T1, 1_000_000, 1_001);
+        let (searcher, _) = tob_with_gross(&snap, id, T1, 1_000_000, 1_001);
+        // At a zero price the ask receives no t1, so all 4,000 t0 it pays in is
+        // user fee: the book budget is real t0 in the contract.
+        let ask = user_order(id, false, 4_000, Ray::ZERO);
 
         let splits = DonationSplits::new(750_000, 750_000).unwrap();
-        let (lp_budget, protocol_fee) = splits.split_tob(gross);
 
         let solution = PoolSolution {
             id,
             ucp: Ray::ZERO,
             searcher: Some(searcher.clone()),
-            reward_t0: 5_000,
+            limit: vec![filled(&ask)],
             ..Default::default()
         };
-        let solved = solve(&[(solution, snap.clone(), T0, T1)], &[], splits).unwrap();
+        let solved = solve(&[(solution, snap.clone(), T0, T1)], &[ask], splits).unwrap();
 
-        // The book budget reached no allocator and is retained; the call only
-        // returns `Ok` because that retention is reported rather than dropped.
-        assert_eq!(solved.rewarded(0), lp_budget);
-        assert_eq!(solved.save(T0), protocol_fee);
+        // Floored 75% splits: ToB 1,001 is 750 LP / 251 protocol, user fees
+        // 4,000 are 3,000 LP / 1,000 protocol. Only the ToB LP share is donated;
+        // the 3,000 book budget reached no allocator and is retained in `save`.
+        assert_eq!(solved.rewarded(0), 750);
+        assert_eq!(solved.save(T0), 251 + 1_000 + 3_000);
 
         // The pair is priced at the end of the ToB swap, not at the pool's
         // pre-ToB price.

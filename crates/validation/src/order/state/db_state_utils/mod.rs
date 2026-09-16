@@ -74,7 +74,9 @@ where
 {
     fn is_valid_nonce(&self, user: Address, nonce: u64) -> eyre::Result<bool> {
         let db = self.db.clone();
-        Ok(self.nonces.is_valid_nonce(user, nonce, db))
+        self.nonces
+            .is_valid_nonce(user, nonce, db)
+            .map_err(|e| eyre::eyre!("failed to read the nonce word: {e:?}"))
     }
 
     fn fetch_approval_balance_for_token_overrides(

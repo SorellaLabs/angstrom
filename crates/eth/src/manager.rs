@@ -106,7 +106,12 @@ pub struct EthDataCleanser<Sync> {
     pub(crate) protocol_fee_config: DonationSplitSnapshot,
     /// storage, pinned per block, that the log-derived pair is checked against
     /// before it is published.
-    storage: Box<dyn ConfigStorage>
+    storage: Box<dyn ConfigStorage>,
+    /// Until this is set, canonical updates are left unread on the
+    /// subscription. Applying one earlier would open a block-sync proposal that
+    /// the modules subscribing later never see, stalling `can_operate()` for
+    /// the life of the process.
+    pub(crate) canonical_updates_released: bool
 }
 
 impl<Sync> EthDataCleanser<Sync>
@@ -145,7 +150,8 @@ where
             node_set,
             event_listeners,
             protocol_fee_config,
-            storage: Box::new(storage)
+            storage: Box::new(storage),
+            canonical_updates_released: false
         };
         // ensure we broadcast node set. will allow for proper connections
         // on the network side
@@ -181,6 +187,10 @@ where
             }
             EthCommand::SubscribeCannon(tx) => {
                 let _ = tx.send(self.subscribe_cannon_notifications());
+            }
+            EthCommand::ReleaseCanonicalUpdates(tx) => {
+                self.canonical_updates_released = true;
+                let _ = tx.send(());
             }
         }
     }
@@ -235,8 +245,12 @@ where
         let new_filled: HashSet<_> = landed.into_iter().collect();
 
         let difference: Vec<_> = old_filled.difference(&new_filled).copied().collect();
-        let reorged_orders =
-            EthEvent::ReorgedOrders(difference, reorg, BlockNumHash::new(tip, new.tip_hash()));
+        let reorged_orders = EthEvent::ReorgedOrders {
+            orders:            difference,
+            range:             reorg,
+            tip:               BlockNumHash::new(tip, new.tip_hash()),
+            address_changeset: eoas.into_iter().unique().collect()
+        };
 
         self.send_events(reorged_orders);
         Ok(())
@@ -531,7 +545,19 @@ where
     type Output = ();
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // poll all canonical updates
+        // Commands first: subscriptions must be registered, and the release must
+        // be observed, before any canonical update is applied. The release flips
+        // the flag here, so a backlog still drains in this same poll.
+        while let Poll::Ready(Some(command)) = self.commander.poll_next_unpin(cx) {
+            self.on_command(command)
+        }
+
+        // Left unpolled until released: the subscription itself is what retains
+        // the backlog, so nothing is dropped while we wait.
+        if !self.canonical_updates_released {
+            return Poll::Pending;
+        }
+
         while let Poll::Ready(next) = self.canonical_updates.poll_next_unpin(cx) {
             match next {
                 // A critical task, so a panic is how the executor is told the node
@@ -545,10 +571,6 @@ where
                 ),
                 None => return Poll::Ready(())
             }
-        }
-
-        while let Poll::Ready(Some(command)) = self.commander.poll_next_unpin(cx) {
-            self.on_command(command)
         }
 
         Poll::Pending
@@ -569,10 +591,16 @@ pub enum EthEvent {
         filled_orders:     Vec<B256>,
         address_changeset: Vec<Address>
     },
-    /// The orders the reorg dropped, the range it covers, and the tip the new
-    /// chain now ends on — carried for the same reason as
-    /// [`EthEvent::NewBlock`].
-    ReorgedOrders(Vec<B256>, RangeInclusive<u64>, BlockNumHash),
+    /// The orders the reorg dropped, the range it covers, the tip the new chain
+    /// now ends on — carried for the same reason as [`EthEvent::NewBlock`] —
+    /// and every account either branch touched, whose cached state the reorg
+    /// may have changed.
+    ReorgedOrders {
+        orders:            Vec<B256>,
+        range:             RangeInclusive<u64>,
+        tip:               BlockNumHash,
+        address_changeset: Vec<Address>
+    },
     FinalizedBlock(u64),
     NewPool {
         pool: PoolKey
@@ -736,6 +764,7 @@ pub mod test {
             periphery_address:           Address::default(),
             protocol_fee_config_address: Address::default(),
             canonical_updates:           BroadcastStream::new(cannon_rx),
+            canonical_updates_released:  true,
             block_sync:                  GlobalBlockSync::new(1),
             cannon_sender:               tx,
             pool_store:                  Default::default(),
@@ -999,7 +1028,7 @@ pub mod test {
 
         for _ in 0..1 {
             match rx.try_recv().expect("Should receive 1 event") {
-                EthEvent::ReorgedOrders(_, range, _) => {
+                EthEvent::ReorgedOrders { range, .. } => {
                     assert_eq!(*range.start(), 95);
                     assert_eq!(*range.end(), 95);
                     received_reorg = true;
@@ -1886,5 +1915,95 @@ pub mod test {
                 splits:       DonationSplits::new(800_000, 900_000).unwrap()
             }
         );
+    }
+
+    /// Startup as `components.rs` runs it: a block already queued behind the
+    /// init head, and the block-sync modules registering and subscribing only
+    /// once the cleanser is running. Applied before they subscribe, the block
+    /// would open a proposal none of them sign off, leaving block sync one
+    /// proposal behind for good.
+    #[tokio::test]
+    async fn a_block_queued_behind_the_init_head_reaches_every_block_sync_module() {
+        use tokio_stream::wrappers::UnboundedReceiverStream;
+
+        use crate::handle::Eth;
+
+        async fn poll_once(eth: &mut EthDataCleanser<GlobalBlockSync>) {
+            futures::future::poll_fn(|cx| {
+                let _ = eth.poll_unpin(cx);
+                Poll::Ready(())
+            })
+            .await;
+        }
+
+        /// Signs off every block a module was sent, as the module itself does.
+        fn sign_off_received(
+            sync: &GlobalBlockSync,
+            modules: &mut [(&'static str, UnboundedReceiverStream<EthEvent>)]
+        ) -> Vec<Vec<u64>> {
+            modules
+                .iter_mut()
+                .map(|(name, events)| {
+                    let module = *name;
+                    let mut received = vec![];
+                    while let Some(Some(event)) = events.next().now_or_never() {
+                        if let EthEvent::NewBlock(block) = event {
+                            sync.sign_off_on_block(module, block.number, None);
+                            received.push(block.number);
+                        }
+                    }
+                    received
+                })
+                .collect()
+        }
+
+        let (mut eth, ..) = setup_config_eth_manager();
+        // as `spawn` leaves it
+        eth.canonical_updates_released = false;
+        let (command_tx, command_rx) = tokio::sync::mpsc::channel(8);
+        eth.commander = ReceiverStream::new(command_rx);
+        let handle = EthHandle::new(command_tx);
+        let sync = GlobalBlockSync::new(100);
+        eth.block_sync = sync.clone();
+        let (canon_tx, canon_rx) = tokio::sync::broadcast::channel(8);
+        eth.canonical_updates = BroadcastStream::new(canon_rx);
+        let commit = |number| {
+            canon_tx
+                .send(CanonStateNotification::Commit {
+                    new: chain(number, BlockHash::random(), vec![])
+                })
+                .unwrap();
+        };
+
+        // The init head is 100, and 101 is already queued when the cleanser starts.
+        commit(101);
+        poll_once(&mut eth).await;
+        let mut modules = ["Uniswap", "Order Pool", "Consensus"].map(|name| {
+            sync.register(name);
+            (name, handle.subscribe_network())
+        });
+        poll_once(&mut eth).await;
+        sync.finalize_modules();
+
+        // Held until released: nothing applied, no proposal opened.
+        assert!(!sync.has_proposal());
+        assert_eq!(sign_off_received(&sync, &mut modules), vec![Vec::<u64>::new(); 3]);
+
+        let release = handle.release_canonical_updates();
+        tokio::pin!(release);
+        assert!(futures::poll!(&mut release).is_pending());
+        // The release and the backlog are handled in the same poll: nothing else
+        // wakes the cleanser for a backlog it has not polled yet.
+        poll_once(&mut eth).await;
+        release.await;
+
+        assert_eq!(sign_off_received(&sync, &mut modules), vec![vec![101]; 3]);
+        assert!(sync.can_operate());
+
+        commit(102);
+        poll_once(&mut eth).await;
+        assert_eq!(sign_off_received(&sync, &mut modules), vec![vec![102]; 3]);
+        assert!(sync.can_operate());
+        assert_eq!(sync.current_block_number(), 102);
     }
 }

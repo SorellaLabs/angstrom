@@ -25,6 +25,7 @@ use crate::{
         state::{
             account::{UserAccountProcessor, user::UserAccounts},
             db_state_utils::{Repoint, StateFetchUtils},
+            order_validators::clock::ValidationClock,
             pools::PoolsTracker
         }
     }
@@ -106,6 +107,12 @@ where
         Self { order_validator, rx, utils, bundle_validator, db }
     }
 
+    /// Replay installs its recorded-time clock here, so deadline admission
+    /// judges orders by when they were recorded rather than by today.
+    pub fn set_clock(&mut self, clock: ValidationClock) {
+        self.order_validator.state.set_clock(clock);
+    }
+
     pub fn set_user_account(&mut self, account: UserAccounts) {
         let fetch_clone = self
             .order_validator
@@ -157,8 +164,16 @@ where
                 telemetry_event!(block.number, self.utils.token_pricing_ref().to_snapshot());
             }
             ValidationRequest::Nonce { sender, user_address } => {
-                let nonce = self.order_validator.fetch_nonce(user_address);
-                let _ = sender.send(nonce);
+                match self.order_validator.fetch_nonce(user_address) {
+                    Ok(nonce) => {
+                        let _ = sender.send(nonce);
+                    }
+                    // Dropping `sender` fails this one request. Unreadable state, such as
+                    // a branch a reorg just removed, must not stop the validator.
+                    Err(error) => {
+                        tracing::error!(%error, ?user_address, "could not fetch a valid nonce")
+                    }
+                }
             }
             ValidationRequest::GasEstimation {
                 sender,

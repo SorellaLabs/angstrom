@@ -419,6 +419,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         tracing::info!("created consensus manager");
 
         block_sync.finalize_modules();
+        eth_handle.release_canonical_updates().await;
         Ok((
             Self {
                 rpc_port,

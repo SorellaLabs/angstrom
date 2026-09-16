@@ -80,7 +80,7 @@ impl OrderValidatorHandle for MockValidator {
     }
 
     fn valid_nonce_for_user(&self, _: Address) -> validation::order::NonceFuture<'_> {
-        Box::pin(async move { 10 })
+        Box::pin(async move { Ok(10) })
     }
 }
 

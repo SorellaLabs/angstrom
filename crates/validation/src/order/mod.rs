@@ -32,7 +32,7 @@ pub type ValidationsFuture<'a> =
 pub type GasEstimationFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(U256, u64), String>> + Send + Sync + 'a>>;
 
-pub type NonceFuture<'a> = Pin<Box<dyn Future<Output = u64> + Send + Sync + 'a>>;
+pub type NonceFuture<'a> = Pin<Box<dyn Future<Output = Result<u64, String>> + Send + Sync + 'a>>;
 
 pub enum OrderValidationRequest {
     ValidateOrder(Sender<OrderValidationResults>, AllOrders, OrderOrigin)
@@ -308,7 +308,9 @@ impl OrderValidatorHandle for ValidationClient {
                 .0
                 .send(ValidationRequest::Nonce { sender: tx, user_address: address });
 
-            rx.await.unwrap()
+            // validation drops the sender when it could not read the user's nonces
+            rx.await
+                .map_err(|_| format!("could not fetch a valid nonce for {address}"))
         })
     }
 }

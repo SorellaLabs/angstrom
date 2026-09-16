@@ -10,7 +10,7 @@ use angstrom_types::{
     sol_bindings::{ext::grouped_orders::AllOrders, grouped_orders::OrderWithStorageData}
 };
 use serde_with::{DisplayFromStr, serde_as};
-use validation::order::{OrderValidatorHandle, state::order_validators::deadline::expiry_horizon};
+use validation::order::OrderValidatorHandle;
 
 use crate::{
     order_indexer::InnerCancelOrderRequest, order_storage::OrderStorage, validator::OrderValidator
@@ -111,10 +111,9 @@ impl OrderTracker {
     pub fn remove_expired_orders(
         &mut self,
         block_number: u64,
-        storage: &OrderStorage
+        storage: &OrderStorage,
+        expiry_deadline: U256
     ) -> Vec<OrderWithStorageData<AllOrders>> {
-        let expiry_deadline = expiry_horizon();
-
         // clear canceled order cache
         self.cancelled_orders
             .retain(|_, req| req.deadline > expiry_deadline);

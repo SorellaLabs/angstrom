@@ -44,7 +44,7 @@ use eyre::WrapErr;
 use futures::{Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
-use order_pool::{OrderPoolHandle, PoolConfig};
+use order_pool::{OrderIndexer, OrderPoolHandle, PoolConfig};
 use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
@@ -52,7 +52,10 @@ use telemetry_recorder::TelemetryMessage;
 use tracing::{Instrument, span};
 use uniswap_v4::configure_uniswap_manager;
 use validation::{
-    common::TokenPriceGenerator, init_validation_replay, validator::ValidationClient
+    common::TokenPriceGenerator,
+    init_validation_replay,
+    order::state::order_validators::clock::ValidationClock,
+    validator::{ValidationClient, Validator}
 };
 
 use super::fake_network::FakeNetwork;
@@ -70,7 +73,10 @@ pub struct ReplayRunner {
     anvil_provider: AnvilProvider<WalletProvider>,
     fake_network:   FakeNetwork,
     block_log:      BlockLog,
-    pool_handle:    PoolHandle
+    pool_handle:    PoolHandle,
+    /// advanced to each recorded event's timestamp, so deadline admission
+    /// judges replayed orders by when they were recorded
+    clock:          ValidationClock
 }
 
 impl ReplayRunner {
@@ -112,12 +118,15 @@ impl ReplayRunner {
                         Duration::from_micros(delta.abs().num_microseconds().unwrap() as u64);
                     tokio::time::sleep(sleep_duration).await;
                     last_timestamp = *timestamp;
+                    self.clock.set(timestamp.timestamp().max(0) as u64);
                     tracing::info!("Slept for time delta, applying new order");
 
-                    self.pool_handle
-                        .new_order(*origin, order.clone())
-                        .await
-                        .unwrap();
+                    // A recorded order can be rejected on replay (it may have been
+                    // rejected when it was recorded, too), so report it and keep going
+                    // rather than abandoning every event after it.
+                    if let Err(error) = self.pool_handle.new_order(*origin, order.clone()).await {
+                        tracing::warn!(%error, "replayed order was rejected");
+                    }
                 }
                 TelemetryMessage::CancelOrder { cancel, timestamp, .. } => {
                     tracing::info!("CancelOrder event playing back");
@@ -126,6 +135,7 @@ impl ReplayRunner {
                         Duration::from_micros(delta.abs().num_microseconds().unwrap() as u64);
                     tokio::time::sleep(sleep_duration).await;
                     last_timestamp = *timestamp;
+                    self.clock.set(timestamp.timestamp().max(0) as u64);
                     tracing::info!("CancelOrder sleep completed");
                     self.pool_handle.cancel_order(cancel.clone()).await;
                 }
@@ -137,6 +147,7 @@ impl ReplayRunner {
                     tokio::time::sleep(sleep_duration).await;
                     tracing::info!("Consensus event sleep completed");
                     last_timestamp = *timestamp;
+                    self.clock.set(timestamp.timestamp().max(0) as u64);
 
                     self.fake_network
                         .to_consensus_manager
@@ -265,6 +276,9 @@ impl ReplayRunner {
             .subscribe_to_canonical_state();
 
         let eth_snap = block_log.eth_snapshot.as_ref().unwrap();
+        let clock = ValidationClock::replay(Duration::from_secs(
+            eth_snap.timestamp.timestamp().max(0) as u64
+        ));
 
         // Blocks at or before the config contract's deployment resolve without a
         // provider call, so replay either side of activation needs no special case
@@ -371,7 +385,13 @@ impl ReplayRunner {
             token_conversion,
             pool_config_store.clone(),
             strom_handles.validator_rx,
-            |validator| validator.set_user_account(user_account)
+            {
+                let clock = clock.clone();
+                move |validator: &mut _| {
+                    Validator::set_user_account(validator, user_account);
+                    Validator::set_clock(validator, clock);
+                }
+            }
         );
 
         let pool_config = PoolConfig {
@@ -405,9 +425,13 @@ impl ReplayRunner {
             strom_handles.orderpool_rx,
             strom_handles.pool_manager_tx,
             block_number,
-            |order_indexer| {
-                // Order storage is set above.
-                order_indexer.set_tracker(pool_snapshot.order_tracker);
+            {
+                let clock = clock.clone();
+                move |order_indexer: &mut _| {
+                    // Order storage is set above.
+                    OrderIndexer::set_tracker(order_indexer, pool_snapshot.order_tracker);
+                    OrderIndexer::set_clock(order_indexer, clock);
+                }
             }
         );
 
@@ -497,8 +521,9 @@ impl ReplayRunner {
 
         tracing::info!("created consensus manager");
         global_block_sync.finalize_modules();
+        eth_handle.release_canonical_updates().await;
 
-        Ok(Self { anvil, anvil_provider, fake_network, block_log, pool_handle })
+        Ok(Self { anvil, anvil_provider, fake_network, block_log, pool_handle, clock })
     }
 }
 

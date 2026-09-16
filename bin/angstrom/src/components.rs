@@ -394,11 +394,9 @@ where
         querying_provider.clone()
     ));
 
-    let block_height = node.provider.best_block_number().unwrap();
-
     init_validation(
         RethDbWrapper::new(node.provider.clone(), BlockNumHash::new(block_id, block_hash)),
-        block_height,
+        block_id,
         angstrom_address,
         node_address,
         update_stream,
@@ -500,6 +498,9 @@ where
     });
 
     global_block_sync.finalize_modules();
+    // Last: every module is now registered and subscribed, so the queued blocks
+    // can be applied in order without opening a proposal nobody receives.
+    eth_handle.release_canonical_updates().await;
     tracing::info!("started angstrom");
     exit.await
 }

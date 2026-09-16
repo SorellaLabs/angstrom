@@ -40,7 +40,12 @@ impl MockEthEventHandle {
 
     pub fn reorged_orders(&self, orders: Vec<B256>, tip: BlockNumHash) {
         self.tx
-            .send(EthEvent::ReorgedOrders(orders, tip.number..=tip.number, tip))
+            .send(EthEvent::ReorgedOrders {
+                orders,
+                range: tip.number..=tip.number,
+                tip,
+                address_changeset: vec![]
+            })
             .expect("state changes")
     }
 }

@@ -1,4 +1,4 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use alloy::primitives::U256;
 use angstrom_types::{
@@ -6,13 +6,18 @@ use angstrom_types::{
     sol_bindings::RawPoolOrder
 };
 
-use super::{OrderValidation, OrderValidationState};
+use super::{OrderValidation, OrderValidationState, clock::ValidationClock};
 
 /// A deadline at or before this is expired: it cannot outlive the next block.
 /// The pool prunes by the same horizon, so admission and pruning agree.
-pub fn expiry_horizon() -> U256 {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+pub fn expiry_horizon_at(now: Duration) -> U256 {
     U256::from((now + ETH_BLOCK_TIME).as_secs())
+}
+
+/// The horizon on the system clock. Replay passes its own clock's `now()` to
+/// [`expiry_horizon_at`] instead.
+pub fn expiry_horizon() -> U256 {
+    expiry_horizon_at(ValidationClock::System.now())
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -24,7 +29,9 @@ impl OrderValidation for EnsureNotExpired {
         state: &mut OrderValidationState<O>
     ) -> Result<(), OrderValidationError> {
         match state.order().deadline() {
-            Some(deadline) if deadline <= expiry_horizon() => Err(OrderValidationError::Expired),
+            Some(deadline) if deadline <= state.expiry_horizon() => {
+                Err(OrderValidationError::Expired)
+            }
             _ => Ok(())
         }
     }

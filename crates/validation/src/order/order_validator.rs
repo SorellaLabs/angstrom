@@ -53,20 +53,16 @@ where
         Self { state, sim, block_number }
     }
 
-    pub fn fetch_nonce(&self, addr: Address) -> u64 {
+    pub fn fetch_nonce(&self, addr: Address) -> eyre::Result<u64> {
         loop {
             let nonce = random();
-            let Ok(is_valid) = self
+            if self
                 .state
                 .user_account_tracker
                 .fetch_utils
-                .is_valid_nonce(addr, nonce)
-            else {
-                panic!("db failure");
-            };
-
-            if is_valid {
-                return nonce;
+                .is_valid_nonce(addr, nonce)?
+            {
+                return Ok(nonce);
             }
         }
     }

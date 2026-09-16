@@ -146,12 +146,12 @@ where
                     Some(waker)
                 );
             }
-            EthEvent::ReorgedOrders(_, reorg, tip) => {
-                // The tip rather than `reorg.end()`, so the height and the hash always
+            EthEvent::ReorgedOrders { range, tip, .. } => {
+                // The tip rather than `range.end()`, so the height and the hash always
                 // describe the same block.
                 self.current_height = tip;
                 self.block_sync
-                    .sign_off_reorg(MODULE_NAME, reorg, Some(waker));
+                    .sign_off_reorg(MODULE_NAME, range, Some(waker));
             }
             // If this isn't a new block event. we don't wanna reset.
             EthEvent::AddedNode(node) => {

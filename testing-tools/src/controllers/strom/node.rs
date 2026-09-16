@@ -52,8 +52,10 @@ use crate::{
 };
 
 /// How long a node waits for its sessions to come up before failing the spawn
-/// instead of waiting until the harness is killed.
-const PEER_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
+/// instead of waiting until the harness is killed. Generous because a 4-vCPU CI
+/// runner is much slower than a developer machine; it only has to be short
+/// enough that a genuinely wedged handshake is reported rather than hung.
+const PEER_CONNECTION_TIMEOUT: Duration = Duration::from_secs(90);
 
 pub struct TestnetNode<C: Unpin, P, G> {
     testnet_node_id: u64,

@@ -223,7 +223,7 @@ impl PoolSnapshot {
     }
 
     #[cfg(test)]
-    pub fn at_tick(&self, tick: i32, direction: bool) -> eyre::Result<PoolPrice> {
+    pub fn at_tick(&self, tick: i32, direction: bool) -> eyre::Result<PoolPrice<'_>> {
         let price = SqrtPriceX96::at_tick(tick)?;
         let range = self
             .get_range_for_tick(tick, direction)

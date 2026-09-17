@@ -1,9 +1,10 @@
 use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
 
 use alloy::{
-    network::{Ethereum, EthereumWallet},
+    eips::BlockNumHash,
+    network::{Ethereum, EthereumWallet, Network},
     node_bindings::{Anvil, AnvilInstance},
-    primitives::Address,
+    primitives::{Address, B256},
     providers::Provider
 };
 use alloy_primitives::aliases::I24;
@@ -27,7 +28,10 @@ use angstrom_types::{
         angstrom::Angstrom::PoolKey,
         controller_v_1::ControllerV1::{self, PoolConfigured, PoolRemoved}
     },
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     pair_with_price::PairsWithPrice,
     primitive::{AngstromSigner, UniswapPoolRegistry, try_init_with_chain_id, *},
     submission::{ChainSubmitterHolder, SubmissionHandler}
@@ -36,10 +40,11 @@ use consensus::{
     AngstromValidator, ConsensusHandler, ConsensusManager, ConsensusTimingConfig,
     ManagerNetworkDeps
 };
+use eyre::WrapErr;
 use futures::{Stream, StreamExt};
 use jsonrpsee::server::ServerBuilder;
 use matching_engine::MatchingManager;
-use order_pool::{OrderPoolHandle, PoolConfig};
+use order_pool::{OrderIndexer, OrderPoolHandle, PoolConfig};
 use reth_provider::CanonStateSubscriptions;
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
@@ -47,7 +52,10 @@ use telemetry_recorder::TelemetryMessage;
 use tracing::{Instrument, span};
 use uniswap_v4::configure_uniswap_manager;
 use validation::{
-    common::TokenPriceGenerator, init_validation_replay, validator::ValidationClient
+    common::TokenPriceGenerator,
+    init_validation_replay,
+    order::state::order_validators::clock::ValidationClock,
+    validator::{ValidationClient, Validator}
 };
 
 use super::fake_network::FakeNetwork;
@@ -65,7 +73,10 @@ pub struct ReplayRunner {
     anvil_provider: AnvilProvider<WalletProvider>,
     fake_network:   FakeNetwork,
     block_log:      BlockLog,
-    pool_handle:    PoolHandle
+    pool_handle:    PoolHandle,
+    /// advanced to each recorded event's timestamp, so deadline admission
+    /// judges replayed orders by when they were recorded
+    clock:          ValidationClock
 }
 
 impl ReplayRunner {
@@ -107,12 +118,15 @@ impl ReplayRunner {
                         Duration::from_micros(delta.abs().num_microseconds().unwrap() as u64);
                     tokio::time::sleep(sleep_duration).await;
                     last_timestamp = *timestamp;
+                    self.clock.set(timestamp.timestamp().max(0) as u64);
                     tracing::info!("Slept for time delta, applying new order");
 
-                    self.pool_handle
-                        .new_order(*origin, order.clone())
-                        .await
-                        .unwrap();
+                    // A recorded order can be rejected on replay (it may have been
+                    // rejected when it was recorded, too), so report it and keep going
+                    // rather than abandoning every event after it.
+                    if let Err(error) = self.pool_handle.new_order(*origin, order.clone()).await {
+                        tracing::warn!(%error, "replayed order was rejected");
+                    }
                 }
                 TelemetryMessage::CancelOrder { cancel, timestamp, .. } => {
                     tracing::info!("CancelOrder event playing back");
@@ -121,6 +135,7 @@ impl ReplayRunner {
                         Duration::from_micros(delta.abs().num_microseconds().unwrap() as u64);
                     tokio::time::sleep(sleep_duration).await;
                     last_timestamp = *timestamp;
+                    self.clock.set(timestamp.timestamp().max(0) as u64);
                     tracing::info!("CancelOrder sleep completed");
                     self.pool_handle.cancel_order(cancel.clone()).await;
                 }
@@ -132,6 +147,7 @@ impl ReplayRunner {
                     tokio::time::sleep(sleep_duration).await;
                     tracing::info!("Consensus event sleep completed");
                     last_timestamp = *timestamp;
+                    self.clock.set(timestamp.timestamp().max(0) as u64);
 
                     self.fake_network
                         .to_consensus_manager
@@ -260,16 +276,39 @@ impl ReplayRunner {
             .subscribe_to_canonical_state();
 
         let eth_snap = block_log.eth_snapshot.as_ref().unwrap();
+        let clock = ValidationClock::replay(Duration::from_secs(
+            eth_snap.timestamp.timestamp().max(0) as u64
+        ));
+
+        // Blocks at or before the config contract's deployment resolve without a
+        // provider call, so replay either side of activation needs no special case
+        // here.
+        let block_hash = rpc
+            .get_block_by_number(block_number.into())
+            .await?
+            .ok_or_else(|| eyre::eyre!("replay block {block_number} not found"))?
+            .header
+            .hash;
+        let protocol_fee_config = load_replay_protocol_fee_config(
+            *PROTOCOL_FEE_CONFIG_ADDRESS.get().unwrap(),
+            block_number,
+            block_hash,
+            &rpc
+        )
+        .await?;
 
         let eth_handle = EthDataCleanser::spawn(
             angstrom_address,
             controller,
+            *PROTOCOL_FEE_CONFIG_ADDRESS.get().unwrap(),
             sub,
             executor.clone(),
             strom_handles.eth_tx,
             strom_handles.eth_rx,
             eth_snap.angstrom_tokens.clone(),
             eth_snap.pool_store.clone(),
+            protocol_fee_config,
+            anvil_provider.state_provider(),
             global_block_sync.clone(),
             eth_snap.node_set.clone(),
             vec![]
@@ -346,7 +385,13 @@ impl ReplayRunner {
             token_conversion,
             pool_config_store.clone(),
             strom_handles.validator_rx,
-            |validator| validator.set_user_account(user_account)
+            {
+                let clock = clock.clone();
+                move |validator: &mut _| {
+                    Validator::set_user_account(validator, user_account);
+                    Validator::set_clock(validator, clock);
+                }
+            }
         );
 
         let pool_config = PoolConfig {
@@ -380,9 +425,13 @@ impl ReplayRunner {
             strom_handles.orderpool_rx,
             strom_handles.pool_manager_tx,
             block_number,
-            |order_indexer| {
-                // Order storage is set above.
-                order_indexer.set_tracker(pool_snapshot.order_tracker);
+            {
+                let clock = clock.clone();
+                move |order_indexer: &mut _| {
+                    // Order storage is set above.
+                    OrderIndexer::set_tracker(order_indexer, pool_snapshot.order_tracker);
+                    OrderIndexer::set_clock(order_indexer, clock);
+                }
             }
         );
 
@@ -424,17 +473,20 @@ impl ReplayRunner {
             .map(|addr| AngstromValidator::new(addr, 100))
             .collect::<Vec<_>>();
 
+        let (consensus_eth_events, protocol_fee_config) =
+            eth_handle.subscribe_network_with_config().await;
+
         let consensus = ConsensusManager::new(
             ManagerNetworkDeps::new(
                 network_handle.clone(),
-                eth_handle.subscribe_network(),
+                consensus_eth_events,
                 strom_handles.consensus_rx_op
             ),
             angstrom_signer,
             validators,
             order_storage.clone(),
             block_number,
-            block_number,
+            BlockNumHash::new(block_number, block_hash),
             pool_registry,
             uniswap_pools.clone(),
             mev_boost_provider,
@@ -443,7 +495,8 @@ impl ReplayRunner {
             strom_handles.consensus_rx_rpc,
             None,
             ConsensusTimingConfig::default(),
-            SystemTimeSlotClock::new_default().unwrap()
+            SystemTimeSlotClock::new_default().unwrap(),
+            protocol_fee_config
         );
         executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
             consensus.run_till_shutdown(grace)
@@ -468,8 +521,9 @@ impl ReplayRunner {
 
         tracing::info!("created consensus manager");
         global_block_sync.finalize_modules();
+        eth_handle.release_canonical_updates().await;
 
-        Ok(Self { anvil, anvil_provider, fake_network, block_log, pool_handle })
+        Ok(Self { anvil, anvil_provider, fake_network, block_log, pool_handle, clock })
     }
 }
 
@@ -555,4 +609,76 @@ where
         })
         .into_iter()
         .collect::<Vec<_>>()
+}
+
+/// Loads the rates in force at a replayed block, naming an unreadable
+/// historical config as a gap for that block.
+///
+/// `load_from_chain` already errors on an empty account, a config bound to a
+/// different Angstrom, or a failed provider call, but propagating that bare
+/// says only that something went wrong. Naming the block is what makes a
+/// spread of replays report one attributable gap per block instead of an
+/// opaque abort. There is deliberately no fallback arm: a block whose
+/// historical config cannot be read is never replayed on today's rate.
+async fn load_replay_protocol_fee_config<N, P>(
+    config_address: Address,
+    block_number: u64,
+    block_hash: B256,
+    provider: &P
+) -> eyre::Result<DonationSplitSnapshot>
+where
+    N: Network,
+    P: Provider<N>
+{
+    DonationSplitSnapshot::load_from_chain(config_address, block_number, block_hash, provider)
+        .await
+        .wrap_err_with(|| {
+            format!(
+                "replay gap at block {block_number}: historical protocol fee config at \
+                 {config_address} could not be read"
+            )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::{primitives::Bytes, providers::ProviderBuilder, transports::mock::Asserter};
+
+    use super::*;
+
+    /// A config address that cannot be read at the replayed block — here an
+    /// empty account, which `load_from_chain` rejects rather than decoding as
+    /// two valid 0% shares.
+    async fn load_unreadable_at(block_number: u64) -> eyre::Result<DonationSplitSnapshot> {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let asserter = Asserter::new();
+        asserter.push_success(&Bytes::new());
+        let provider = ProviderBuilder::new().connect_mocked_client(asserter);
+
+        load_replay_protocol_fee_config(
+            Address::repeat_byte(0xcf),
+            block_number,
+            B256::repeat_byte(0xbb),
+            &provider
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_historical_config_is_a_named_gap() {
+        let err = load_unreadable_at(9_999).await.unwrap_err();
+
+        // Named: a spread of replays can attribute the gap to one block rather
+        // than reading an opaque provider error.
+        let named = format!("{err:#}");
+        assert!(named.contains("replay gap at block 9999"), "{named}");
+        assert!(named.contains("could not be read"), "{named}");
+    }
+
+    #[tokio::test]
+    async fn a_gapped_block_is_not_replayed_on_todays_rate() {
+        // The gap has no fallback arm, so nothing hands back the deployed
+        // const — or any other rate — when the historical read fails.
+        assert!(load_unreadable_at(9_999).await.is_err());
+    }
 }

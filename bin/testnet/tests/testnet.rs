@@ -15,19 +15,30 @@ use reth_provider::test_utils::NoopProvider;
 use testing_tools::{controllers::enviroments::AngstromTestnet, utils::noop_agent};
 use testnet::cli::{init_tracing, testnet::TestnetCli};
 
+/// These tests fork a real chain, so the endpoint is required rather than
+/// defaulted: a public-node fallback would let a misconfigured run look like a
+/// passing one, against whatever chain the fallback happened to serve. Panics
+/// rather than returning `Err` because the runner's result is discarded.
+fn required_fork_url() -> String {
+    std::env::var("CI_ETH_WS_URL")
+        .ok()
+        .filter(|url| !url.is_empty())
+        .expect(
+            "CI_ETH_WS_URL is unset or empty; these tests fork a real chain and have no default. \
+             Set it in the environment (it is defined in `.env`, which the test does not load for \
+             you) or export it before running."
+        )
+}
+
 #[test]
-#[serial_test::serial]
+#[serial_test::file_serial]
 fn testnet_deploy() {
     init_tracing(4);
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
 
     let runner = reth::CliRunner::try_default_runtime().unwrap();
     let _ = runner.run_command_until_exit(|ctx| async move {
-        let cli = TestnetCli {
-            eth_fork_url: std::env::var("ETH_WS_URL")
-                .unwrap_or_else(|_| "wss://ethereum-rpc.publicnode.com".to_string()),
-            ..Default::default()
-        };
+        let cli = TestnetCli { eth_fork_url: required_fork_url(), ..Default::default() };
 
         let testnet = AngstromTestnet::spawn_testnet(
             NoopProvider::default(),
@@ -44,25 +55,21 @@ fn testnet_deploy() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::file_serial]
 fn testnet_bundle_unlock() {
     init_tracing(3);
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
     let _ = runner.run_command_until_exit(|ctx| async move {
-        let config = TestnetCli {
-            eth_fork_url: std::env::var("ETH_WS_URL")
-                .unwrap_or_else(|_| "wss://ethereum-rpc.publicnode.com".to_string()),
-            ..Default::default()
-        };
+        let config = TestnetCli { eth_fork_url: required_fork_url(), ..Default::default() };
 
         let config = config.make_config().unwrap();
         let agents = vec![noop_agent];
         tracing::info!("spinning up testnet for unlock attestation test");
 
         // spawn testnet
-        let testnet = AngstromTestnet::spawn_testnet(
+        let mut testnet = AngstromTestnet::spawn_testnet(
             NoopProvider::default(),
             config,
             agents,
@@ -78,6 +85,8 @@ fn testnet_bundle_unlock() {
         // Get initial state for addresses
         let signer = testnet.get_random_peer(vec![]).get_sk();
 
+        // owned here so unwinding kills anvil even if a step below panics
+        let _anvil = testnet.take_anvil_instance();
         let executor = ctx.task_executor.clone();
         let testnet_task = ctx.task_executor.spawn_critical_task(
             "testnet",
@@ -138,9 +147,9 @@ fn testnet_bundle_unlock() {
         tracing::info!("attestation unlock included for block {bn:?}");
 
         // Verify transaction was successful
-        assert!(receipt.status(), "unlock transaction should succeed");
-
+        let succeeded = receipt.status();
         testnet_task.abort();
+        assert!(succeeded, "unlock transaction should succeed");
         eyre::Ok(())
     });
 }

@@ -284,18 +284,21 @@ where
 
     fn on_eth_event(&mut self, eth: EthEvent, waker: Waker) {
         match eth {
-            EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
+            EthEvent::NewBlockTransitions { block, filled_orders, address_changeset } => {
                 self.order_indexer.start_new_block_processing(
-                    block_number,
+                    block,
                     filled_orders,
                     address_changeset
                 );
                 waker.clone().wake_by_ref();
             }
-            EthEvent::ReorgedOrders(orders, range) => {
-                self.order_indexer.reorg(orders);
-                self.global_sync
-                    .sign_off_reorg(MODULE_NAME, range, Some(waker))
+            EthEvent::ReorgedOrders { orders, range, tip, address_changeset } => {
+                // Signed off on `PoolInnerEvent::HasHandledReorg`, not here: until the
+                // indexer has repointed validation at `tip`, it still reads the branch
+                // the reorg removed.
+                self.order_indexer
+                    .start_reorg_processing(tip, range, orders, address_changeset);
+                waker.clone().wake_by_ref();
             }
             EthEvent::FinalizedBlock(block) => {
                 self.order_indexer.finalized_block(block);
@@ -315,6 +318,8 @@ where
             EthEvent::AddedNode(_) => {}
             EthEvent::RemovedNode(_) => {}
             EthEvent::NewBlock(_) => {}
+            // consensus carries the donation splits; the order pool has no use for them.
+            EthEvent::ProtocolFeeConfigUpdated(_) => {}
         }
     }
 
@@ -398,6 +403,11 @@ where
                 PoolInnerEvent::HasTransitionedToNewBlock(block) => {
                     self.global_sync
                         .sign_off_on_block(MODULE_NAME, block, Some(waker()));
+                    None
+                }
+                PoolInnerEvent::HasHandledReorg(range) => {
+                    self.global_sync
+                        .sign_off_reorg(MODULE_NAME, range, Some(waker()));
                     None
                 }
                 PoolInnerEvent::None => None

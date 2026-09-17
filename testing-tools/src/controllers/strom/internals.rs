@@ -6,12 +6,14 @@ use std::{
     time::Duration
 };
 
-use alloy::{primitives::Address, providers::Provider, signers::local::PrivateKeySigner};
+use alloy::{
+    eips::BlockNumHash, primitives::Address, providers::Provider, signers::local::PrivateKeySigner
+};
 use alloy_rpc_types::BlockId;
 use angstrom::components::StromHandles;
 use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
 use angstrom_eth::{
-    handle::Eth,
+    handle::{Eth, EthCommand, EthHandle},
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{PoolManagerBuilder, StromNetworkHandle, pool_manager::PoolHandle};
@@ -22,9 +24,12 @@ use angstrom_rpc::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::{ConsensusRoundName, SlotClock, SystemTimeSlotClock},
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     pair_with_price::PairsWithPrice,
-    primitive::{PoolId, UniswapPoolRegistry},
+    primitive::{PROTOCOL_FEE_CONFIG_ADDRESS, PoolId, UniswapPoolRegistry},
     sol_bindings::testnet::TestnetHub,
     submission::{ChainSubmitterHolder, SubmissionHandler},
     testnet::InitialTestnetState
@@ -64,10 +69,29 @@ pub struct AngstromNodeInternals<P> {
     pub order_storage:    Arc<OrderStorage>,
     pub pool_handle:      PoolHandle,
     pub tx_strom_handles: SendingStromHandles,
-    pub testnet_hub:      StromContractInstance
+    pub testnet_hub:      StromContractInstance,
+    eth_handle:           EthHandle
 }
 
 impl<P: WithWalletProvider> AngstromNodeInternals<P> {
+    /// Lets the cleanser start applying canonical updates.
+    ///
+    /// Unlike the node, the harness does not run consensus when it builds the
+    /// modules: consensus sits behind a state lock until the node is started.
+    /// A block applied before then opens a block-sync proposal consensus cannot
+    /// sign off, and from the next block on the cleanser busy-waits for it in
+    /// `GlobalBlockSync::new_block`, pinning a runtime worker per node. That
+    /// starves the peer handshakes setup is waiting on, so blocks are held
+    /// until consensus starts.
+    pub fn release_canonical_updates(&self) {
+        // Fire and forget: repeating it is harmless, and nothing needs the ack.
+        let (ack, _) = tokio::sync::oneshot::channel();
+        let _ = self
+            .eth_handle
+            .sender
+            .try_send(EthCommand::ReleaseCanonicalUpdates(ack));
+    }
+
     pub async fn new<G: GlobalTestingConfig, F>(
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
@@ -92,6 +116,9 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         ) -> Pin<Box<dyn Future<Output = eyre::Result<()>> + Send + 'a>>,
         F: Clone
     {
+        // Every metrics wrapper reads this; the harness never enables metrics.
+        let _ = angstrom_metrics::METRICS_ENABLED.set(false);
+
         let start_block = state_provider
             .rpc_provider()
             .get_block_number()
@@ -155,15 +182,33 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             .state_provider()
             .subscribe_to_canonical_state();
 
+        // Set by `AnvilInitializer::new` from the harness's own deployment.
+        let protocol_fee_config_address = *PROTOCOL_FEE_CONFIG_ADDRESS.get().ok_or_else(|| {
+            eyre::eyre!(
+                "the harness did not deploy and initialize `AngstromProtocolFeeConfig` (see \
+                 `AngstromEnv::new` / `AnvilInitializer::new`)"
+            )
+        })?;
+        let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+            protocol_fee_config_address,
+            block_number,
+            b.tip().hash(),
+            &state_provider.rpc_provider()
+        )
+        .await?;
+
         let eth_handle = EthDataCleanser::spawn(
             inital_angstrom_state.angstrom_addr,
             inital_angstrom_state.controller_addr,
+            protocol_fee_config_address,
             sub,
             executor.clone(),
             strom_handles.eth_tx,
             strom_handles.eth_rx,
             angstrom_tokens,
             pool_config_store.clone(),
+            protocol_fee_config,
+            state_provider.state_provider(),
             block_sync.clone(),
             node_set,
             vec![]
@@ -177,6 +222,16 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         block_sync.clear();
         block_sync.set_block(block_number);
+
+        // Consensus names the parent it builds on by hash, so resolve the one that
+        // goes with `block_number` rather than handing it a placeholder.
+        let block_hash = state_provider
+            .rpc_provider()
+            .get_block_by_number(block_number.into())
+            .await?
+            .ok_or_else(|| eyre::eyre!("block {block_number} not found"))?
+            .header
+            .hash;
 
         tracing::debug!(node_id = node_config.node_id, block_number, "creating strom internals");
 
@@ -276,12 +331,16 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             |_| {}
         );
 
-        let rpc_port = node_config.strom_rpc_port();
+        // Port 0 unless a caller pinned one: a `base + node_id` draw over the
+        // whole u16 range can be privileged or already bound.
+        let bind_port = node_config.strom_rpc_port().unwrap_or(0);
         let server = ServerBuilder::default()
-            .build(format!("0.0.0.0:{rpc_port}"))
+            .build(format!("0.0.0.0:{bind_port}"))
             .await?;
 
+        // the real port, which is all anything downstream should use
         let addr = server.local_addr()?;
+        let rpc_port = addr.port() as u64;
 
         executor.spawn_critical_task(
             "rpc",
@@ -317,17 +376,20 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
 
         tracing::debug!("created mev boost provider");
 
+        let (consensus_eth_events, protocol_fee_config) =
+            eth_handle.subscribe_network_with_config().await;
+
         let consensus = ConsensusManager::new(
             ManagerNetworkDeps::new(
                 strom_network_handle.clone(),
-                eth_handle.subscribe_network(),
+                consensus_eth_events,
                 strom_handles.consensus_rx_op
             ),
             node_config.angstrom_signer(),
             initial_validators,
             order_storage.clone(),
             block_number,
-            block_number,
+            BlockNumHash::new(block_number, block_hash),
             pool_registry,
             uniswap_pools.clone(),
             mev_boost_provider,
@@ -336,7 +398,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             strom_handles.consensus_rx_rpc,
             state_updates,
             consensus::ConsensusTimingConfig::default(),
-            SystemTimeSlotClock::new_default().unwrap()
+            SystemTimeSlotClock::new_default().unwrap(),
+            protocol_fee_config
         );
 
         // spin up amm quoter
@@ -375,6 +438,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         tracing::info!("created consensus manager");
 
         block_sync.finalize_modules();
+        // Canonical updates stay held until `release_canonical_updates`, which the
+        // node calls when it starts consensus.
         Ok((
             Self {
                 rpc_port,
@@ -382,7 +447,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 order_storage,
                 pool_handle,
                 tx_strom_handles,
-                testnet_hub
+                testnet_hub,
+                eth_handle
             },
             consensus,
             validator

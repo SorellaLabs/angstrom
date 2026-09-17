@@ -78,10 +78,13 @@ impl TestnetStateOverrides {
                     .into_iter()
                     .flat_map(move |(token, i)| {
                         i.into_iter().map(move |(user, amount)| {
-                            // Set internal balance mapping: _balances[user][token] = amount
+                            // Set internal balance mapping: _balances[token][user]. Doubled like
+                            // the ERC20 overrides: the contract prices an exact-out order's input
+                            // after the pool fee, which the bundle does not carry, so `amount`
+                            // falls short of what it debits.
                             let slot =
                                 keccak256((user, keccak256((token, 5).abi_encode())).abi_encode());
-                            (angstrom_addr, slot, U256::from(amount))
+                            (angstrom_addr, slot, U256::from(amount) * U256::from(2))
                         })
                     })
             )

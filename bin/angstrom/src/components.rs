@@ -9,7 +9,7 @@ use std::{
 
 use alloy::{
     self,
-    eips::{BlockId, BlockNumberOrTag},
+    eips::{BlockId, BlockNumHash, BlockNumberOrTag},
     primitives::Address,
     providers::{Provider, ProviderBuilder, network::Ethereum}
 };
@@ -27,12 +27,15 @@ use angstrom_network::{
 use angstrom_types::{
     block_sync::{BlockSyncProducer, GlobalBlockSync},
     consensus::{SlotClock, StromConsensusEvent, SystemTimeSlotClock},
-    contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+    contract_payloads::{
+        angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        protocol_fees::DonationSplitSnapshot
+    },
     pair_with_price::PairsWithPrice,
     primitive::{
         ANGSTROM_ADDRESS, ANGSTROM_DEPLOYED_BLOCK, AngstromMetaSigner, AngstromSigner,
-        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS, PoolId, Slot0Update,
-        UniswapPoolRegistry
+        CONTROLLER_V1_ADDRESS, GAS_TOKEN_ADDRESS, POOL_MANAGER_ADDRESS,
+        PROTOCOL_FEE_CONFIG_ADDRESS, PoolId, Slot0Update, UniswapPoolRegistry
     },
     reth_db_provider::RethDbLayer,
     reth_db_wrapper::RethDbWrapper,
@@ -223,6 +226,7 @@ where
 
     let angstrom_address = *ANGSTROM_ADDRESS.get().unwrap();
     let controller = *CONTROLLER_V1_ADDRESS.get().unwrap();
+    let protocol_fee_config_address = *PROTOCOL_FEE_CONFIG_ADDRESS.get().unwrap();
     let deploy_block = *ANGSTROM_DEPLOYED_BLOCK.get().unwrap();
     let gas_token = *GAS_TOKEN_ADDRESS.get().unwrap();
     let pool_manager = *POOL_MANAGER_ADDRESS.get().unwrap();
@@ -300,13 +304,23 @@ where
     // have a gap in which a pool is deployed durning startup. This isn't
     // critical but we will want to fix this down the road.
     // let block_id = querying_provider.get_block_number().await.unwrap();
-    let block_id = match sub.recv().await.expect("first block") {
-        CanonStateNotification::Commit { new } => new.tip().number,
-        CanonStateNotification::Reorg { new, .. } => new.tip().number
+    let (block_id, block_hash) = match sub.recv().await.expect("first block") {
+        CanonStateNotification::Commit { new } => (new.tip().number, new.tip().hash()),
+        CanonStateNotification::Reorg { new, .. } => (new.tip().number, new.tip().hash())
     };
 
     tracing::info!(?block_id, "starting up with block");
-    let eth_data_sub = node.provider.subscribe_to_canonical_state();
+
+    let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+        protocol_fee_config_address,
+        block_id,
+        block_hash,
+        &querying_provider
+    )
+    .await
+    .map_err(|e| {
+        eyre::eyre!("failed to load the protocol fee config at init block {block_id}: {e}")
+    })?;
 
     let global_block_sync = GlobalBlockSync::new(block_id);
 
@@ -316,16 +330,23 @@ where
         UniswapAngstromRegistry::new(uniswap_registry.clone(), pool_config_store.clone());
 
     // Build our PoolManager using the PoolConfig and OrderStorage we've already
-    // created
+    // created.
+    //
+    // The cleanser takes over the subscription opened before pool discovery, so
+    // every block that queued on it meanwhile is applied — in order, after the
+    // init read at `block_id` — rather than dropped with a fresh subscription.
     let eth_handle = EthDataCleanser::spawn(
         angstrom_address,
         controller,
-        eth_data_sub,
+        protocol_fee_config_address,
+        sub,
         executor.clone(),
         handles.eth_tx,
         handles.eth_rx,
         angstrom_tokens,
         pool_config_store.clone(),
+        protocol_fee_config,
+        node.provider.clone(),
         global_block_sync.clone(),
         node_set.clone(),
         vec![handles.eth_handle_tx.take().unwrap()]
@@ -373,11 +394,9 @@ where
         querying_provider.clone()
     ));
 
-    let block_height = node.provider.best_block_number().unwrap();
-
     init_validation(
-        RethDbWrapper::new(node.provider.clone(), block_height),
-        block_height,
+        RethDbWrapper::new(node.provider.clone(), BlockNumHash::new(block_id, block_hash)),
+        block_id,
         angstrom_address,
         node_address,
         update_stream,
@@ -443,17 +462,25 @@ where
 
     executor.spawn_critical_task("amm quoting service", amm);
 
+    // Subscribing and reading the pair are one step, so a setter landing during
+    // startup is either in the snapshot consensus seeds from or in the stream it
+    // is already listening on.
+    let (consensus_eth_events, protocol_fee_config) =
+        eth_handle.subscribe_network_with_config().await;
+
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
             network_handle.clone(),
-            eth_handle.subscribe_network(),
+            consensus_eth_events,
             handles.consensus_rx_op
         ),
         signer,
         validators,
         order_storage.clone(),
         deploy_block,
-        block_height,
+        // The init tip, number and hash together: the pair `protocol_fee_config` was
+        // read at, and a consistent parent for the first round.
+        BlockNumHash::new(block_id, block_hash),
         uni_ang_registry,
         uniswap_pools.clone(),
         submission_handler,
@@ -462,7 +489,8 @@ where
         handles.consensus_rx_rpc,
         None,
         config.consensus_timing,
-        SystemTimeSlotClock::new_default().unwrap()
+        SystemTimeSlotClock::new_default().unwrap(),
+        protocol_fee_config
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {
@@ -470,6 +498,9 @@ where
     });
 
     global_block_sync.finalize_modules();
+    // Last: every module is now registered and subscribed, so the queued blocks
+    // can be applied in order without opening a proposal nobody receives.
+    eth_handle.release_canonical_updates().await;
     tracing::info!("started angstrom");
     exit.await
 }

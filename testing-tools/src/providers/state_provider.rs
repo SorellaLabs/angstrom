@@ -1,14 +1,17 @@
-use std::{future::IntoFuture, time::Duration};
+use std::{future::IntoFuture, ops::RangeBounds, sync::Arc, time::Duration};
 
-use alloy::{providers::Provider, rpc::types::Block};
+use alloy::{consensus::Header, providers::Provider, rpc::types::Block};
 use alloy_primitives::{Address, B256, BlockNumber, U256};
 use alloy_rpc_types::{BlockId, TransactionReceipt};
-use angstrom_types::reth_db_wrapper::{DBError, SetBlock};
+use angstrom_eth::manager::ConfigStorage;
+use angstrom_types::reth_db_wrapper::{AtBlock, DBError};
 use futures::stream::StreamExt;
-use reth::primitives::EthPrimitives;
+use reth::primitives::{EthPrimitives, SealedHeader};
+use reth_chainspec::{ChainSpec, DEV};
 use reth_provider::{
     BlockHashReader, BlockNumReader, CanonStateNotification, CanonStateNotifications,
-    CanonStateSubscriptions, NodePrimitivesProvider, ProviderError, ProviderResult
+    CanonStateSubscriptions, ChainSpecProvider, HeaderProvider, NodePrimitivesProvider,
+    ProviderError, ProviderResult
 };
 use revm::{bytecode::Bytecode, state::AccountInfo};
 use tokio::sync::broadcast;
@@ -27,8 +30,24 @@ pub struct AnvilStateProvider<P> {
     pub canon_state_tx: broadcast::Sender<CanonStateNotification>
 }
 
-impl<P: WithWalletProvider> SetBlock for AnvilStateProvider<P> {
-    fn set_block(&self, _: u64) {}
+impl<P: WithWalletProvider> ConfigStorage for AnvilStateProvider<P> {
+    fn storage_at(&self, block_hash: B256, address: Address, slot: U256) -> eyre::Result<U256> {
+        Ok(async_to_sync(
+            self.provider
+                .rpc_provider()
+                .get_storage_at(address, slot)
+                .block_id(block_hash.into())
+                .into_future()
+        )?)
+    }
+}
+
+impl<P: WithWalletProvider + Clone> AtBlock for AnvilStateProvider<P> {
+    /// Anvil only advances when a test mines, so its tip already *is* the block
+    /// under test and every view is of it.
+    fn at_block(&self, _: alloy::eips::BlockNumHash) -> Self {
+        self.clone()
+    }
 }
 
 impl<P: WithWalletProvider> AnvilStateProvider<P> {
@@ -181,8 +200,15 @@ impl<P: WithWalletProvider> BlockNumReader for AnvilStateProvider<P> {
         panic!("never used");
     }
 
-    fn block_number(&self, _: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
-        panic!("never used");
+    fn block_number(&self, hash: alloy_primitives::B256) -> ProviderResult<Option<BlockNumber>> {
+        Ok(async_to_sync(
+            self.provider
+                .rpc_provider()
+                .get_block_by_hash(hash)
+                .into_future()
+        )
+        .unwrap()
+        .map(|block| block.header.number))
     }
 
     fn convert_number(
@@ -219,6 +245,54 @@ impl<P: WithWalletProvider> BlockNumReader for AnvilStateProvider<P> {
         panic!("never used");
     }
 }
+impl<P: WithWalletProvider> HeaderProvider for AnvilStateProvider<P> {
+    type Header = Header;
+
+    /// Bundle validation resolves the parent it was handed through here, so an
+    /// unknown hash has to come back as `None` rather than a panic.
+    fn header(&self, hash: B256) -> ProviderResult<Option<Header>> {
+        Ok(async_to_sync(
+            self.provider
+                .rpc_provider()
+                .get_block_by_hash(hash)
+                .into_future()
+        )
+        .unwrap()
+        .map(|block| block.header.inner))
+    }
+
+    fn header_by_number(&self, _: u64) -> ProviderResult<Option<Header>> {
+        panic!("never used");
+    }
+
+    fn headers_range(&self, _: impl RangeBounds<BlockNumber>) -> ProviderResult<Vec<Header>> {
+        panic!("never used");
+    }
+
+    fn sealed_header(&self, _: BlockNumber) -> ProviderResult<Option<SealedHeader<Header>>> {
+        panic!("never used");
+    }
+
+    fn sealed_headers_while(
+        &self,
+        _: impl RangeBounds<BlockNumber>,
+        _: impl FnMut(&SealedHeader<Header>) -> bool
+    ) -> ProviderResult<Vec<SealedHeader<Header>>> {
+        panic!("never used");
+    }
+}
+
+impl<P: WithWalletProvider + std::fmt::Debug> ChainSpecProvider for AnvilStateProvider<P> {
+    type ChainSpec = ChainSpec;
+
+    /// Only the fork schedule is read from here, and the dev spec activates
+    /// every fork it knows at genesis. It stops at Prague, so a simulation runs
+    /// one fork behind a node on the mainnet state Anvil forks.
+    fn chain_spec(&self) -> Arc<ChainSpec> {
+        DEV.clone()
+    }
+}
+
 impl<P: WithWalletProvider> BlockHashReader for AnvilStateProvider<P> {
     fn block_hash(&self, _: BlockNumber) -> ProviderResult<Option<alloy_primitives::B256>> {
         panic!("never used");

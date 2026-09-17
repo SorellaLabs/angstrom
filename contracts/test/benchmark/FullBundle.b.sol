@@ -267,7 +267,7 @@ contract FullBundleBenchmark is BaseTest {
             order.maxExtraFeeAsset0 = fee0;
             order.extraFeeAsset0 = fee0;
             order.nonce = 1;
-            order.deadline = uint40(vm.unixTime()) / 1000 + 60 minutes;
+            order.deadline = uint40(vm.unixTime() / 1000 + 60 minutes);
             sign(
                 user,
                 order.meta,
@@ -490,7 +490,7 @@ contract FullBundleBenchmark is BaseTest {
             order.maxExtraFeeAsset0 = fee0;
             order.extraFeeAsset0 = fee0;
             order.nonce = 1;
-            order.deadline = uint40(vm.unixTime()) / 1000 + 60 minutes;
+            order.deadline = uint40(vm.unixTime() / 1000 + 60 minutes);
             sign(
                 user,
                 order.meta,

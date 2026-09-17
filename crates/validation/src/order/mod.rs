@@ -1,6 +1,9 @@
 use std::{fmt::Debug, future::Future, pin::Pin};
 
-use alloy::primitives::{Address, B256, U256};
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256, U256}
+};
 use angstrom_types::{
     orders::{OrderOrigin, UpdatedGas},
     primitive::OrderValidationError,
@@ -29,7 +32,7 @@ pub type ValidationsFuture<'a> =
 pub type GasEstimationFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(U256, u64), String>> + Send + Sync + 'a>>;
 
-pub type NonceFuture<'a> = Pin<Box<dyn Future<Output = u64> + Send + Sync + 'a>>;
+pub type NonceFuture<'a> = Pin<Box<dyn Future<Output = Result<u64, String>> + Send + Sync + 'a>>;
 
 pub enum OrderValidationRequest {
     ValidateOrder(Sender<OrderValidationResults>, AllOrders, OrderOrigin)
@@ -216,7 +219,7 @@ pub trait OrderValidatorHandle: Send + Sync + Clone + Debug + Unpin + 'static {
     /// orders that are either expired or have been filled.
     fn new_block(
         &self,
-        block_number: u64,
+        block: BlockNumHash,
         completed_orders: Vec<B256>,
         addresses: Vec<Address>
     ) -> ValidationFuture<'_>;
@@ -244,18 +247,15 @@ impl OrderValidatorHandle for ValidationClient {
 
     fn new_block(
         &self,
-        block_number: u64,
+        block: BlockNumHash,
         orders: Vec<B256>,
         addresses: Vec<Address>
     ) -> ValidationFuture<'_> {
         Box::pin(async move {
             let (tx, rx) = channel();
-            let _ = self.0.send(ValidationRequest::NewBlock {
-                sender: tx,
-                block_number,
-                orders,
-                addresses
-            });
+            let _ =
+                self.0
+                    .send(ValidationRequest::NewBlock { sender: tx, block, orders, addresses });
 
             rx.await.unwrap()
         })
@@ -308,7 +308,9 @@ impl OrderValidatorHandle for ValidationClient {
                 .0
                 .send(ValidationRequest::Nonce { sender: tx, user_address: address });
 
-            rx.await.unwrap()
+            // validation drops the sender when it could not read the user's nonces
+            rx.await
+                .map_err(|_| format!("could not fetch a valid nonce for {address}"))
         })
     }
 }

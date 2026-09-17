@@ -25,6 +25,21 @@ use testnet::cli::{init_tracing, testnet::TestnetCli};
 use tokio::time::timeout;
 use tracing::{Instrument, Level, span};
 
+/// These tests fork a real chain, so the endpoint is required rather than
+/// defaulted: a public-node fallback would let a misconfigured run look like a
+/// passing one, against whatever chain the fallback happened to serve. Panics
+/// rather than returning `Err` because the runner's result is discarded.
+fn required_fork_url() -> String {
+    std::env::var("CI_ETH_WS_URL")
+        .ok()
+        .filter(|url| !url.is_empty())
+        .expect(
+            "CI_ETH_WS_URL is unset or empty; these tests fork a real chain and have no default. \
+             Set it in the environment (it is defined in `.env`, which the test does not load for \
+             you) or export it before running."
+        )
+}
+
 fn internal_balance_agent<'a>(
     _: &'a InitialTestnetState,
     agent_config: AgentConfig
@@ -170,11 +185,7 @@ where
         + 'static,
     V: Fn(WalletProviderRpc) -> Pin<Box<dyn Future<Output = ()> + Send>>
 {
-    let config = TestnetCli {
-        eth_fork_url: std::env::var("ETH_WS_URL")
-            .unwrap_or_else(|_| "wss://ethereum-rpc.publicnode.com".to_string()),
-        ..Default::default()
-    };
+    let config = TestnetCli { eth_fork_url: required_fork_url(), ..Default::default() };
 
     let config = config.make_config().unwrap();
     let agents = vec![agent_fn];
@@ -182,7 +193,7 @@ where
     tracing::info!("spinning up e2e nodes for {}", test_name);
 
     // spawn testnet
-    let testnet =
+    let mut testnet =
         AngstromTestnet::spawn_testnet(NoopProvider::default(), config, agents, ctx.clone())
             .await
             .expect("failed to start angstrom testnet");
@@ -190,20 +201,21 @@ where
     // grab provider so we can query from the chain later.
     let provider = testnet.node_provider(Some(1)).rpc_provider();
 
+    // owned here so unwinding kills anvil even if the assert below panics
+    let _anvil = testnet.take_anvil_instance();
     let task = ctx.spawn_critical_task("testnet", testnet.run_to_completion(ctx.clone()).boxed());
 
     tracing::info!("waiting for valid block in {}", test_name);
-    assert!(
-        timeout(Duration::from_secs(60 * 5), validation_fn(provider))
-            .await
-            .is_ok()
-    );
+    let landed = timeout(Duration::from_secs(60 * 5), validation_fn(provider))
+        .await
+        .is_ok();
     task.abort();
+    assert!(landed, "{test_name}: no valid block within 5m");
     Ok(())
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::file_serial]
 fn test_internal_balances_land() {
     init_tracing(3);
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
@@ -221,7 +233,7 @@ fn test_internal_balances_land() {
 }
 
 #[test]
-#[serial_test::serial]
+#[serial_test::file_serial]
 fn testnet_lands_block() {
     init_tracing(3);
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
@@ -324,18 +336,14 @@ async fn wait_for_valid_block(provider: WalletProviderRpc) {
 static WORKED: AtomicBool = AtomicBool::new(false);
 
 #[test]
-#[serial_test::serial]
+#[serial_test::file_serial]
 fn test_remove_add_pool() {
     init_tracing(3);
     AngstromAddressConfig::INTERNAL_TESTNET.try_init();
     let runner = reth::CliRunner::try_default_runtime().unwrap();
 
     let _ = runner.run_command_until_exit(|ctx| async move {
-        let config = TestnetCli {
-            eth_fork_url: std::env::var("ETH_WS_URL")
-                .unwrap_or_else(|_| "wss://ethereum-rpc.publicnode.com".to_string()),
-            ..Default::default()
-        };
+        let config = TestnetCli { eth_fork_url: required_fork_url(), ..Default::default() };
 
         let config = config.make_config().unwrap();
         let agents = vec![add_remove_agent];
@@ -343,7 +351,7 @@ fn test_remove_add_pool() {
         tracing::info!("spinning up e2e nodes for remove add pool test");
 
         // spawn testnet
-        let testnet = AngstromTestnet::spawn_testnet(
+        let mut testnet = AngstromTestnet::spawn_testnet(
             NoopProvider::default(),
             config,
             agents,
@@ -355,6 +363,8 @@ fn test_remove_add_pool() {
         // grab provider so we can query from the chain later.
         let provider = testnet.node_provider(Some(1)).rpc_provider();
 
+        // owned here so unwinding kills anvil even if an assert below panics
+        let _anvil = testnet.take_anvil_instance();
         let testnet_task = ctx.task_executor.spawn_critical_task(
             "testnet",
             testnet.run_to_completion(ctx.task_executor.clone()).boxed()
@@ -369,12 +379,9 @@ fn test_remove_add_pool() {
         // Wait for the agent to complete
         tokio::time::sleep(Duration::from_secs(30)).await;
 
-        assert!(
-            WORKED.load(std::sync::atomic::Ordering::SeqCst),
-            "failed to properly run the test"
-        );
-
+        let worked = WORKED.load(std::sync::atomic::Ordering::SeqCst);
         testnet_task.abort();
+        assert!(worked, "failed to properly run the test");
         eyre::Ok(())
     });
 }

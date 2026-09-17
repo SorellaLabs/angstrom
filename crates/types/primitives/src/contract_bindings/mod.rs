@@ -9,6 +9,16 @@ pub mod angstrom {
     );
 }
 #[rustfmt::skip]
+pub mod angstrom_protocol_fee_config {
+    alloy_sol_types::sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc, abi)]
+        #[derive(Debug, Default, PartialEq, Eq,Hash, serde::Serialize, serde::Deserialize)]
+        AngstromProtocolFeeConfig,
+        "../../../abis-types/AngstromProtocolFeeConfig.sol/AngstromProtocolFeeConfig.json"
+    );
+}
+#[rustfmt::skip]
 pub mod controller_v_1 {
     alloy_sol_types::sol!(
         #[allow(missing_docs)]

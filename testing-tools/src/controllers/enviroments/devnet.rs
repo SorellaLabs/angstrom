@@ -120,7 +120,7 @@ where
             .await?;
             tracing::info!(node_id, "made angstrom node");
 
-            node.connect_to_all_peers(&mut self.peers).await;
+            node.connect_to_all_peers(&mut self.peers).await?;
             tracing::info!(node_id, "connected to all peers");
             block_sync.clear();
 

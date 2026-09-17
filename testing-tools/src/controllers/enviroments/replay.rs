@@ -103,6 +103,9 @@ where
                 TelemetryMessage::Error { message, .. } => {
                     println!("Error: {message}");
                 }
+                // Records of what the original node did, not inputs to replay.
+                TelemetryMessage::BundleSubmitted { .. }
+                | TelemetryMessage::BundleIncluded { .. } => {}
 
                 _ => todo!()
             }

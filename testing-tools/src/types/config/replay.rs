@@ -6,13 +6,11 @@ pub struct ReplayConfig {
     /// testnet configuration files associated with our runner.  If this is
     /// false, this is a "live" replay that weill be replayed on a specified
     /// chain forked to a local anvil
-    initial_state:     InitialStateConfig,
-    testnet_replay:    bool,
-    eth_fork_url:      String,
-    seed:              u16,
-    leader_rpc_port:   u16,
-    angstrom_rpc_port: u16,
-    target_block:      u64
+    initial_state:  InitialStateConfig,
+    testnet_replay: bool,
+    eth_fork_url:   String,
+    seed:           u16,
+    target_block:   u64
 }
 
 impl ReplayConfig {
@@ -23,17 +21,7 @@ impl ReplayConfig {
         target_block: u64
     ) -> Self {
         let seed = rand::random();
-        let leader_rpc_port = rand::random();
-        let angstrom_rpc_port = rand::random();
-        Self {
-            initial_state,
-            testnet_replay,
-            eth_fork_url,
-            seed,
-            leader_rpc_port,
-            angstrom_rpc_port,
-            target_block
-        }
+        Self { initial_state, testnet_replay, eth_fork_url, seed, target_block }
     }
 
     pub fn testnet_replay(&self) -> bool {
@@ -50,8 +38,8 @@ impl GlobalTestingConfig for ReplayConfig {
         format!("/tmp/testnet_anvil_{}.ipc", self.seed)
     }
 
-    fn base_angstrom_rpc_port(&self) -> u16 {
-        self.angstrom_rpc_port
+    fn base_angstrom_rpc_port(&self) -> Option<u16> {
+        None
     }
 
     fn node_count(&self) -> u64 {
@@ -62,8 +50,8 @@ impl GlobalTestingConfig for ReplayConfig {
         self.testnet_replay
     }
 
-    fn leader_eth_rpc_port(&self) -> u16 {
-        self.leader_rpc_port
+    fn leader_eth_rpc_port(&self) -> Option<u16> {
+        None
     }
 
     fn config_type(&self) -> super::TestingConfigKind {

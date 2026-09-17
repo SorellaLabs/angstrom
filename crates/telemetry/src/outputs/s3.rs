@@ -82,6 +82,6 @@ impl S3Storage {
 
         let bytes = resp.body.collect().await?.into_bytes().to_vec();
 
-        Ok(BlockLog::from_deflate_base64(&bytes))
+        BlockLog::from_deflate_base64(&bytes)
     }
 }

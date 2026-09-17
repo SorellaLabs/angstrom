@@ -57,6 +57,10 @@ use crate::{
 /// enough that a genuinely wedged handshake is reported rather than hung.
 const PEER_CONNECTION_TIMEOUT: Duration = Duration::from_secs(90);
 
+/// How often a node waiting on its sessions re-reads its peer count, which
+/// changes without waking the waiter.
+const PEER_COUNT_RECHECK: Duration = Duration::from_millis(100);
+
 pub struct TestnetNode<C: Unpin, P, G> {
     testnet_node_id: u64,
     network:         TestnetNodeNetwork,
@@ -345,6 +349,9 @@ where
 
     pub fn start_conensus(&self) {
         self.state_lock.set_consensus(true);
+        // Consensus is the last block-sync module to run, so blocks can now be
+        // applied without opening a proposal nobody signs off.
+        self.strom.release_canonical_updates();
     }
 
     pub fn stop_consensus(&self) {
@@ -420,6 +427,7 @@ where
         tracing::debug!(pubkey = ?self.network.pubkey, "attempting connections to {connections_needed} peers");
         let node_id = self.testnet_node_id;
         let mut last_peer_count = 0;
+        let mut recheck = tokio::time::interval(PEER_COUNT_RECHECK);
 
         let res = tokio::time::timeout(
             PEER_CONNECTION_TIMEOUT,
@@ -446,8 +454,10 @@ where
                     return Poll::Ready(Ok(()));
                 }
 
-                // Both futures above registered the waker, so park here rather
-                // than spinning a tokio worker for the whole handshake.
+                // Nothing above wakes this when a session comes up: the join handles
+                // only wake it once a network task exits. Without a timer of our own
+                // it would sleep until the timeout, however early the peers connect.
+                while recheck.poll_tick(cx).is_ready() {}
                 Poll::Pending
             })
         )

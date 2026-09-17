@@ -13,7 +13,7 @@ use alloy_rpc_types::BlockId;
 use angstrom::components::StromHandles;
 use angstrom_amm_quoter::{QuoterHandle, QuoterManager};
 use angstrom_eth::{
-    handle::Eth,
+    handle::{Eth, EthCommand, EthHandle},
     manager::{EthDataCleanser, EthEvent}
 };
 use angstrom_network::{PoolManagerBuilder, StromNetworkHandle, pool_manager::PoolHandle};
@@ -69,10 +69,29 @@ pub struct AngstromNodeInternals<P> {
     pub order_storage:    Arc<OrderStorage>,
     pub pool_handle:      PoolHandle,
     pub tx_strom_handles: SendingStromHandles,
-    pub testnet_hub:      StromContractInstance
+    pub testnet_hub:      StromContractInstance,
+    eth_handle:           EthHandle
 }
 
 impl<P: WithWalletProvider> AngstromNodeInternals<P> {
+    /// Lets the cleanser start applying canonical updates.
+    ///
+    /// Unlike the node, the harness does not run consensus when it builds the
+    /// modules: consensus sits behind a state lock until the node is started.
+    /// A block applied before then opens a block-sync proposal consensus cannot
+    /// sign off, and from the next block on the cleanser busy-waits for it in
+    /// `GlobalBlockSync::new_block`, pinning a runtime worker per node. That
+    /// starves the peer handshakes setup is waiting on, so blocks are held
+    /// until consensus starts.
+    pub fn release_canonical_updates(&self) {
+        // Fire and forget: repeating it is harmless, and nothing needs the ack.
+        let (ack, _) = tokio::sync::oneshot::channel();
+        let _ = self
+            .eth_handle
+            .sender
+            .try_send(EthCommand::ReleaseCanonicalUpdates(ack));
+    }
+
     pub async fn new<G: GlobalTestingConfig, F>(
         node_config: TestingNodeConfig<G>,
         state_provider: AnvilProvider<P>,
@@ -419,7 +438,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
         tracing::info!("created consensus manager");
 
         block_sync.finalize_modules();
-        eth_handle.release_canonical_updates().await;
+        // Canonical updates stay held until `release_canonical_updates`, which the
+        // node calls when it starts consensus.
         Ok((
             Self {
                 rpc_port,
@@ -427,7 +447,8 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
                 order_storage,
                 pool_handle,
                 tx_strom_handles,
-                testnet_hub
+                testnet_hub,
+                eth_handle
             },
             consensus,
             validator

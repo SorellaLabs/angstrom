@@ -584,9 +584,9 @@ where
             liquidity_gross_before + (liquidity_delta.unsigned_abs())
         };
 
-        // we do not need to check if liqudity_gross_after > maxLiquidity because we are
-        // only calling update tick on a burn or mint log. this should already
-        // be validated when a log is
+        // we do not need to check if liqudity_gross_after > maxLiquidity
+        // because we are only calling update tick on a burn or mint
+        // log. this should already be validated when a log is
         let flipped = (liquidity_gross_after == 0) != (liquidity_gross_before == 0);
 
         if liquidity_gross_before == 0 {
@@ -609,8 +609,8 @@ where
         let mask = U256::from(1) << bit_pos;
 
         if let Some(word) = self.tick_bitmap.get_mut(&word_pos) {
-            // if the word xor mask flips the bit, then and that of mask will == mask if bit
-            // flipped.
+            // if the word xor mask flips the bit, then and that of mask will ==
+            // mask if bit flipped.
             if ((*word ^ mask) & mask) == mask {
                 *word ^= mask;
             }

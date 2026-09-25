@@ -96,8 +96,8 @@ where
     /// Returns `Ok` with the block hash if found, or the default hash
     /// otherwise.
     fn block_hash_ref(&self, number: u64) -> Result<B256, Self::Error> {
-        // Get the block hash or default hash with an attempt to convert U256 block
-        // number to u64
+        // Get the block hash or default hash with an attempt to convert U256
+        // block number to u64
         Ok(self.db.block_hash(number)?.unwrap_or_default())
     }
 }

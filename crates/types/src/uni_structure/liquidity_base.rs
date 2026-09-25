@@ -52,14 +52,14 @@ impl BaselineLiquidity {
         let zfo = self.start_sqrt_price >= price;
         let tick_at_price = get_tick_at_sqrt_ratio(price.into())?;
 
-        // now that we have the direction, what we need to do is calculate what the
-        // current liquidity will be.
+        // now that we have the direction, what we need to do is calculate what
+        // the current liquidity will be.
         let current_liquidity: i128 = self.start_liquidity.saturating_into();
         // if we are going down
         // let current_tick = self.start_tick;
         let liquidity = if zfo {
-            // we want to sort high to low, so that as iterator is consumed, we are going
-            // down
+            // we want to sort high to low, so that as iterator is consumed, we
+            // are going down
             self.initialized_ticks
                 .iter()
                 .filter(|(t, _)| *t < &self.start_tick)

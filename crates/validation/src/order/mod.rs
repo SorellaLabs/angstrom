@@ -135,7 +135,8 @@ impl OrderValidationResults {
         }
     }
 
-    // hmm the structure here is probably overkill to avoid 8 extra lines of code
+    // hmm the structure here is probably overkill to avoid 8 extra lines of
+    // code
     fn map_and_process<Old, New, DB>(
         order: OrderWithStorageData<Old>,
         sim: &SimValidation<DB>,
@@ -165,9 +166,9 @@ impl OrderValidationResults {
         order.priority_data.gas += gas_used;
         order.priority_data.gas_units = gas_units;
 
-        // we only apply the error if there isn't one already as other parked reasons
-        // for orders (balances and approvals) take priority as its more actions
-        // needed and thus more pressing
+        // we only apply the error if there isn't one already as other parked
+        // reasons for orders (balances and approvals) take priority as
+        // its more actions needed and thus more pressing
         if order.is_currently_valid.is_none() {
             order.is_currently_valid = possible_error;
         }

@@ -50,7 +50,8 @@ impl TestnetStateOverrides {
             .map(|(token, user_balances)| {
                 // Calculate total amount needed for this token
                 let total_needed: u128 = user_balances.values().sum();
-                // Set contract's ERC20 balance: token.balanceOf[angstrom_addr] = total_needed
+                // Set contract's ERC20 balance: token.balanceOf[angstrom_addr]
+                // = total_needed
                 let contract_balance_slot = keccak256((angstrom_addr, 1).abi_encode());
                 (*token, contract_balance_slot, U256::from(total_needed) * U256::from(2))
             })
@@ -78,7 +79,8 @@ impl TestnetStateOverrides {
                     .into_iter()
                     .flat_map(move |(token, i)| {
                         i.into_iter().map(move |(user, amount)| {
-                            // Set internal balance mapping: _balances[user][token] = amount
+                            // Set internal balance mapping:
+                            // _balances[user][token] = amount
                             let slot =
                                 keccak256((user, keccak256((token, 5).abi_encode())).abi_encode());
                             (angstrom_addr, slot, U256::from(amount))

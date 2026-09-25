@@ -199,8 +199,8 @@ impl OrderTracker {
         deadline: Option<U256>
     ) {
         let valid_until = deadline.unwrap_or_else(|| {
-            // if no deadline is provided the cancellation request is valid until block
-            // transition
+            // if no deadline is provided the cancellation request is valid
+            // until block transition
             U256::from(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)

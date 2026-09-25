@@ -30,8 +30,8 @@ impl AnvilConsensusCanonStateNotification {
     pub fn new_block(&self, block: &Block, receipts: Vec<TransactionReceipt>) -> Arc<Chain> {
         let mut chain = self.chain.write();
 
-        // the consensus only uses the block number so we can use default values for the
-        // rest of the block
+        // the consensus only uses the block number so we can use default values
+        // for the rest of the block
         let b = block
             .clone()
             .into_consensus()

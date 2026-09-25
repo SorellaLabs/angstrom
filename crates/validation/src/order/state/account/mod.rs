@@ -95,8 +95,9 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
         {
             // TODO: update this error message because we can't replace order
             // unless the hash is lower. This is simply due to the fact that
-            // we need uniformity across all nodes validation in order to properly
-            // do slashing as everything needs to be replicable across the board.
+            // we need uniformity across all nodes validation in order to
+            // properly do slashing as everything needs to be
+            // replicable across the board.
             let conflicting_order_hashes = conflicting_orders
                 .iter()
                 .filter(|o| o.order_hash <= order_hash)
@@ -115,8 +116,8 @@ impl<S: StateFetchUtils> UserAccountProcessor<S> {
 
         let (tob_reward_t0, tob_reward_token_in) = tob_rewards(&mut order, &pool_info).await?;
 
-        // get the live state sorted up to the nonce, level, doesn't check orders above
-        // that
+        // get the live state sorted up to the nonce, level, doesn't check
+        // orders above that
         let live_state = self
             .user_accounts
             .get_live_state_for_order(
@@ -425,7 +426,8 @@ mod tests {
             .expect("order should be valid");
         info!(?verify_result0, "Verified order0");
 
-        // verify second order and check that order0 hash is in the invalid_orders
+        // verify second order and check that order0 hash is in the
+        // invalid_orders
         let res = processor
             .verify_order(order1, pool_info1, 420, false, async |_, _| Ok((0, 0)))
             .await
@@ -677,7 +679,8 @@ mod tests {
         // Prepare for new block
         processor.prepare_for_new_block(vec![user], vec![order.hash()]);
 
-        // Try to add same order again - should succeed because state was cleared
+        // Try to add same order again - should succeed because state was
+        // cleared
         let result = processor
             .verify_order(order, pool_info, 420, false, async |_, _| Ok((0, 0)))
             .await

@@ -91,7 +91,8 @@ impl BreachTestScenario {
         for i in 0..num_orders {
             let priority = if i % 3 == 0 { OrderPriority::TOB } else { OrderPriority::Book };
             let (tob_bid_amount, order_pool_id) = if matches!(priority, OrderPriority::TOB) {
-                // Generate realistic bid amounts for TOB orders, higher index = higher bid
+                // Generate realistic bid amounts for TOB orders, higher index =
+                // higher bid
                 (1000u128 + (i as u128 * 500), Some(pool_id))
             } else {
                 (0u128, None)

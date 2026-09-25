@@ -23,13 +23,14 @@ impl TopOfBlockOrderRewardCalc for TopOfBlockOrder {
         tob: &OrderWithStorageData<RpcTopOfBlockOrder>,
         snapshot: &'a BaselinePoolState
     ) -> eyre::Result<(PoolSwapResult<'a>, u128)> {
-        // First let's simulate the actual ToB swap and use that to determine what our
-        // leftover T0 is for rewards
+        // First let's simulate the actual ToB swap and use that to determine
+        // what our leftover T0 is for rewards
         if tob.is_bid {
-            // If ToB is a bid, it's buying T0.  To reward, it will offer in more T1
-            // than needed, but the entire input will be swapped through the AMM.
-            // Therefore, our input quantity is simple - the entire input amount from
-            // the order.
+            // If ToB is a bid, it's buying T0.  To reward, it will offer in
+            // more T1 than needed, but the entire input will be
+            // swapped through the AMM. Therefore, our input
+            // quantity is simple - the entire input amount from the
+            // order.
             let res =
                 snapshot.swap_current_with_amount(I256::unchecked_from(tob.quantity_in), false)?;
             let leftover = res
@@ -39,14 +40,16 @@ impl TopOfBlockOrderRewardCalc for TopOfBlockOrder {
 
             Ok((res, leftover))
         } else {
-            // If ToB is an Ask, it's inputting T0.  We will take the reward T0 first
-            // before swapping the remaining T0 with the AMM, so we need to determine
-            // how much T0 will actually get to the AMM.  To do this, we determine how
-            // much T0 is required to produce the quantity of T1 the order expects to
-            // receive as output.  This quantity is our input which moves the AMM.
+            // If ToB is an Ask, it's inputting T0.  We will take the reward T0
+            // first before swapping the remaining T0 with the AMM,
+            // so we need to determine how much T0 will actually get
+            // to the AMM.  To do this, we determine how much T0 is
+            // required to produce the quantity of T1 the order expects to
+            // receive as output.  This quantity is our input which moves the
+            // AMM.
 
-            // First we find the amount of T0 in it would take to at least hit our quantity
-            // out
+            // First we find the amount of T0 in it would take to at least hit
+            // our quantity out
 
             let cost = snapshot
                 .swap_current_with_amount(-I256::unchecked_from(tob.quantity_out), true)?

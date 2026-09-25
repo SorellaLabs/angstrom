@@ -326,9 +326,9 @@ impl UserAccounts {
     ) -> Vec<B256> {
         let token = action.token_address;
         if is_tob {
-            // we only want ot insert this if we are the highest tob order for the given
-            // pool. when we did the accounting, we verified that we had enough
-            // funds
+            // we only want ot insert this if we are the highest tob order for
+            // the given pool. when we did the accounting, we
+            // verified that we had enough funds
             let mut user_entry = self.pending_tob_actions.entry(user).or_default();
             let token_entry = user_entry.entry(token).or_default();
 
@@ -403,12 +403,14 @@ impl UserAccounts {
         let baseline_balance = *baseline.token_balance.get(&token)?;
         let baseline_angstrom_balance = *baseline.angstrom_balance.get(&token)?;
 
-        // the values returned here are the negative delta compaired to baseline.
+        // the values returned here are the negative delta compaired to
+        // baseline.
         let (pending_approvals_spend, pending_balance_spend, pending_angstrom_balance_spend) = self
             .iter_of_tob_and_book_unique_tob(user, token)
             .filter(|action| {
-                // we want to filter out all other tob orders that are on the same pool
-                // given that there can only be 1 valid tob per pool.
+                // we want to filter out all other tob orders that are on the
+                // same pool given that there can only be 1
+                // valid tob per pool.
                 !(action.is_tob && order_priority.is_tob && action.pool_info.pool_id == pool_id)
             })
             .take_while(|state| state.is_higher_priority(&order_priority) == Ordering::Greater)

@@ -174,8 +174,8 @@ impl PoolSnapshot {
                 (target_tick, r.liquidity)
             })
             .unzip();
-        // We want to skip the last tick (representing the current range) but skip the
-        // first liquidity (representing start_liquidity)
+        // We want to skip the last tick (representing the current range) but
+        // skip the first liquidity (representing start_liquidity)
         let checksum_bytes = ticks
             .iter()
             .take(ticks.len() - 1)

@@ -95,8 +95,8 @@ async fn start_endpoint<F: Hook + 'static>(
 /// database and process metrics.
 pub async fn initialize_prometheus_metrics(port: u16) -> eyre::Result<()> {
     let process = metrics_process::Collector::default();
-    // Clone `process` to move it into the hook and use the original `process` for
-    // describe below.
+    // Clone `process` to move it into the hook and use the original `process`
+    // for describe below.
     let cloned_process = process.clone();
     let hooks: Vec<Box<dyn Hook<Output = ()>>> = vec![
         Box::new(move || cloned_process.collect()),

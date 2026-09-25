@@ -41,7 +41,8 @@ impl<S: AngstromMetaSigner> StromSession<S> for Shutdown {
         if let Some(mut inner) = self.to_session_manager.take() {
             // Only proceed if we successfully reserved capacity.
             if matches!(inner.poll_reserve(cx), Poll::Ready(Ok(()))) {
-                // Session manager may already be dropped during shutdown; ignore send errors.
+                // Session manager may already be dropped during shutdown;
+                // ignore send errors.
                 let _ = inner
                     .send_item(StromSessionMessage::Disconnected { peer_id: self.remote_peer_id });
                 cx.waker().wake_by_ref();
@@ -49,8 +50,8 @@ impl<S: AngstromMetaSigner> StromSession<S> for Shutdown {
                 self.to_session_manager = Some(inner);
             }
         } else {
-            // once this returns Poll::Ready(None) we know that the shutdown has been
-            // registered and we can drop this
+            // once this returns Poll::Ready(None) we know that the shutdown has
+            // been registered and we can drop this
             while let Poll::Ready(cmd) = self.commands_rx.poll_next_unpin(cx) {
                 if cmd.is_none() {
                     tracing::info!(?self.remote_peer_id, "properly shutdown peer");

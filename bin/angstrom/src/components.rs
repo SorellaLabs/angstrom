@@ -207,9 +207,10 @@ where
     let node_address = signer.address();
 
     // NOTE:
-    // no key is installed and this is strictly for internal usage. Realsically, we
-    // should build a alloy provider impl that just uses the raw underlying db
-    // so it will be quicker than rpc + won't be bounded by the rpc threadpool.
+    // no key is installed and this is strictly for internal usage. Realsically,
+    // we should build a alloy provider impl that just uses the raw
+    // underlying db so it will be quicker than rpc + won't be bounded by
+    // the rpc threadpool.
     let url = node.rpc_server_handle().ipc_endpoint().unwrap();
     tracing::info!(?url, ?config.mev_boost_endpoints, "backup to database is");
     let querying_provider: Arc<_> = ProviderBuilder::<_, _, Ethereum>::default()
@@ -296,9 +297,9 @@ where
             acc
         });
 
-    // re-fetch given the fetch pools takes awhile. given this, we do techincally
-    // have a gap in which a pool is deployed durning startup. This isn't
-    // critical but we will want to fix this down the road.
+    // re-fetch given the fetch pools takes awhile. given this, we do
+    // techincally have a gap in which a pool is deployed durning startup.
+    // This isn't critical but we will want to fix this down the road.
     // let block_id = querying_provider.get_block_number().await.unwrap();
     let block_id = match sub.recv().await.expect("first block") {
         CanonStateNotification::Commit { new } => new.tip().number,

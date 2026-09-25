@@ -166,8 +166,9 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
                     }
                     Entry::Occupied(mut o) => {
                         let current = o.get();
-                        // if this order on same pool_id has a higher tob reward or they are the
-                        // same and it has a lower order hash. replace
+                        // if this order on same pool_id has a higher tob reward
+                        // or they are the same and it
+                        // has a lower order hash. replace
                         if searcher.tob_reward > current.tob_reward
                             || (searcher.tob_reward == current.tob_reward
                                 && searcher.order_id.hash < current.order_id.hash)
@@ -206,7 +207,8 @@ impl<BlockSync: BlockSyncConsumer> QuoterManager<BlockSync> {
                     tick
                 };
 
-                // Receiver may have been dropped during shutdown; ignore send errors.
+                // Receiver may have been dropped during shutdown; ignore send
+                // errors.
                 let _ = tx.send(update);
             });
 

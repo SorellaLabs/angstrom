@@ -284,7 +284,8 @@ impl AngstromPoolConfigStore {
         let Some((_, entry)) = self.entries.remove(&key) else { return };
         let index = entry.store_index;
 
-        // if we have any indexes that are GT the index we remove, we subtract 1 from it
+        // if we have any indexes that are GT the index we remove, we subtract 1
+        // from it
         self.entries.iter_mut().for_each(|mut f| {
             let v = f.value_mut();
             if v.store_index > index {

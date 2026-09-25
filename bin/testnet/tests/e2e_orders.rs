@@ -362,7 +362,8 @@ fn test_remove_add_pool() {
 
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        // Just verify the testnet is running by checking we can get a block number
+        // Just verify the testnet is running by checking we can get a block
+        // number
         let block_number = provider.get_block_number().await.unwrap();
         tracing::info!("Testnet is running, current block: {}", block_number);
 

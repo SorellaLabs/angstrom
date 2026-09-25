@@ -22,8 +22,9 @@ impl BuildRewardsUpdate for RewardsUpdate {
         snapshot: &PoolSnapshot,
         donation_data: &DonationResult
     ) -> eyre::Result<Self> {
-        // If our bound is a higher tick value, we're doing this the `from_above` way,
-        // otherwise we're coming from below the current tick
+        // If our bound is a higher tick value, we're doing this the
+        // `from_above` way, otherwise we're coming from below the
+        // current tick
 
         // current = end
         // from above == ask

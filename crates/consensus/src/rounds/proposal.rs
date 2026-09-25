@@ -68,7 +68,8 @@ impl ProposalState {
             searcher_count
         );
 
-        // Count matching input orders from preproposal aggregations (pre-quorum)
+        // Count matching input orders from preproposal aggregations
+        // (pre-quorum)
         let mut matching_limit = 0usize;
         let mut matching_searcher = 0usize;
         for agg in &pre_proposal_aggregation {

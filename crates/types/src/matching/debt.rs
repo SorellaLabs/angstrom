@@ -58,8 +58,8 @@ impl DebtType {
     }
 
     pub fn t0_at_price<T: Into<Ray>>(&self, price: T) -> u128 {
-        // If it's an ExactIn debt our output is rounded down, otherwise it's ExactOut
-        // and the input is rounded up
+        // If it's an ExactIn debt our output is rounded down, otherwise it's
+        // ExactOut and the input is rounded up
         let round_up = match self {
             Self::ExactIn(_) => false,
             Self::ExactOut(_) => true
@@ -70,7 +70,8 @@ impl DebtType {
 
     pub fn slack_at_price<T: Into<Ray>>(&self, price: T) -> u128 {
         let ray_price: Ray = price.into();
-        // If I'm on the Ask side (ExactOut debt) I need to substract 1 from my slack
+        // If I'm on the Ask side (ExactOut debt) I need to substract 1 from my
+        // slack
         let ask_side = match self {
             Self::ExactIn(_) => 0,
             Self::ExactOut(_) => 1
@@ -228,13 +229,13 @@ impl Debt {
     /// in a debt's T1 value
     pub fn freed_t0(&self, t1_change: u128) -> u128 {
         let i_t0 = self.current_t0();
-        // If we're freeing as much as is in the debt or more, we're freeing the whole
-        // amount
+        // If we're freeing as much as is in the debt or more, we're freeing the
+        // whole amount
         if t1_change >= self.magnitude() {
             return i_t0;
         }
-        // Otherwise we figure out how much t0 we still need at the new magnitude and
-        // return the difference
+        // Otherwise we figure out how much t0 we still need at the new
+        // magnitude and return the difference
         let f_t0 = self
             .magnitude
             .same_type(self.magnitude.magnitude().saturating_sub(t1_change))
@@ -250,8 +251,8 @@ impl Debt {
         if target_t0 == 0 {
             return self.magnitude();
         }
-        // Otherwise let's figure out the difference between the T1 we have and the T1
-        // we need to keep
+        // Otherwise let's figure out the difference between the T1 we have and
+        // the T1 we need to keep
         let target_t1 = match self.bid_side() {
             // The smallest quantity for a given T0 on the bid side is Price (x)
             true => self.price().quantity(target_t0, true),
@@ -344,7 +345,8 @@ impl Debt {
             "Fraction calculation"
         );
 
-        // if A = sqrt(x + dX) then we have to square A and subtract the original X
+        // if A = sqrt(x + dX) then we have to square A and subtract the
+        // original X
         let debt_delta_t0 = &t0_start
             - &a_fraction
                 .pow(2)
@@ -379,8 +381,8 @@ impl Add<Debt> for Debt {
         if magnitude.magnitude() == 0 {
             return None;
         }
-        // If our new magnitude is on the same side, we stay at our price.  If we flip,
-        // we flip to the other price
+        // If our new magnitude is on the same side, we stay at our price.  If
+        // we flip, we flip to the other price
         let cur_price =
             if magnitude.same_side(&self.magnitude) { self.cur_price } else { rhs.cur_price };
         Some(Self { magnitude, cur_price })

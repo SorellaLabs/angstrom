@@ -49,8 +49,9 @@ where
         if testnet {
             tracing::debug!("Starting up block monitoring task");
             let sp = this.provider.as_wallet_state_provider();
-            // Attach to the current Tokio runtime; this task is cancelled cleanly
-            // when the runtime shuts down, avoiding shutdown panics.
+            // Attach to the current Tokio runtime; this task is cancelled
+            // cleanly when the runtime shuts down, avoiding
+            // shutdown panics.
             tokio::spawn(sp.listen_to_new_blocks());
         }
         Ok(this)

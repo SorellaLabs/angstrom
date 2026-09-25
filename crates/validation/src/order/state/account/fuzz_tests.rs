@@ -208,7 +208,7 @@ impl BreachTestScenario {
         for (_pool_id, mut pool_tobs) in tob_orders_by_pool {
             if pool_tobs.len() > 1 {
                 // Sort by bid amount descending (highest bid first)
-                pool_tobs.sort_by(|a, b| b.2.cmp(&a.2));
+                pool_tobs.sort_by_key(|b| std::cmp::Reverse(b.2));
 
                 // Mark all but the highest bid as invalid
                 for (hash, _amount, _) in pool_tobs.iter().skip(1) {

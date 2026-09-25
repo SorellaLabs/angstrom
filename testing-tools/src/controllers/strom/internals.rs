@@ -364,7 +364,7 @@ impl<P: WithWalletProvider> AngstromNodeInternals<P> {
             state_provider: state_provider.state_provider()
         };
 
-        futures::stream::iter(agents.into_iter())
+        futures::stream::iter(agents)
             .map(|agent| (agent)(&inital_angstrom_state, agent_config.clone()))
             .buffer_unordered(4)
             .collect::<Vec<_>>()

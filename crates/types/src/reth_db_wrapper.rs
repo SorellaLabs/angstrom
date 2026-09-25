@@ -13,8 +13,8 @@ use reth_provider::{
 };
 use reth_storage_api::{StateRootProvider, StorageRootProvider};
 use reth_trie::{
-    AccountProof, HashedPostState, HashedStorage, MultiProof, StorageMultiProof, TrieInput,
-    updates::TrieUpdates
+    AccountProof, ExecutionWitnessMode, HashedPostState, HashedStorage, MultiProof,
+    StorageMultiProof, TrieInput, updates::TrieUpdates
 };
 use revm::state::AccountInfo;
 use revm_bytecode::Bytecode;
@@ -291,7 +291,7 @@ impl<DB> HashedPostStateProvider for RethDbWrapper<DB>
 where
     DB: StateProviderFactory + Unpin + Clone + 'static
 {
-    fn hashed_post_state(&self, bundle_state: &BundleState) -> HashedPostState {
+    fn hashed_post_state(&self, bundle_state: &BundleState) -> ProviderResult<HashedPostState> {
         self.db.latest().unwrap().hashed_post_state(bundle_state)
     }
 }
@@ -371,8 +371,13 @@ where
         self.db.latest()?.proof(input, address, slots)
     }
 
-    fn witness(&self, input: TrieInput, target: HashedPostState) -> ProviderResult<Vec<Bytes>> {
-        self.db.latest()?.witness(input, target)
+    fn witness(
+        &self,
+        input: TrieInput,
+        target: HashedPostState,
+        mode: ExecutionWitnessMode
+    ) -> ProviderResult<Vec<Bytes>> {
+        self.db.latest()?.witness(input, target, mode)
     }
 
     fn multiproof(

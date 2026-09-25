@@ -18,7 +18,10 @@ use angstrom_types::{
 use futures::FutureExt;
 use order_pool::OrderPoolHandle;
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
 use telemetry_recorder::TelemetryMessage;
@@ -45,6 +48,9 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + Clone
         + 'static

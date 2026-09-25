@@ -8,7 +8,10 @@ use alloy::{
 use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
 use futures::{Future, FutureExt, StreamExt};
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 use reth_tasks::TaskExecutor;
 
 use super::AngstromTestnet;
@@ -29,6 +32,9 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + Clone
         + 'static
@@ -120,7 +126,7 @@ where
         let leader_provider = Rc::new(Cell::new(p));
         // take the provider and then set all people in the testnet as nodes.
 
-        let nodes = futures::stream::iter(configs.into_iter())
+        let nodes = futures::stream::iter(configs)
             .map(|node_config| {
                 let c = c.clone();
                 let initial_validators = initial_validators.clone();

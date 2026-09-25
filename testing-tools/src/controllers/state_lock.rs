@@ -17,7 +17,10 @@ use matching_engine::manager::MatcherHandle;
 use parking_lot::Mutex;
 use reth_chainspec::Hardforks;
 use reth_network::{Peers, test_utils::Peer};
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 use reth_tasks::TaskExecutor;
 use tokio::task::JoinHandle;
 use tracing::{Level, span};
@@ -45,6 +48,9 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + 'static,
     T: Provider + Unpin + 'static,
@@ -180,6 +186,9 @@ where
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + 'static
 {
     type Output = ();

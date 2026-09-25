@@ -5,7 +5,7 @@ use itertools::Itertools;
 use parking_lot::RwLock;
 use reth::primitives::{RecoveredBlock, TransactionSigned};
 use reth_provider::{Chain, ExecutionOutcome};
-use reth_trie_common::{LazyTrieData, SortedTrieData};
+use reth_trie_common::{ComputedTrieData, LazyTrieData};
 
 #[derive(Clone, Debug)]
 pub struct AnvilConsensusCanonStateNotification {
@@ -67,11 +67,7 @@ impl AnvilConsensusCanonStateNotification {
                 .set_first_block(recovered_block.number);
         }
 
-        chain.append_block(
-            recovered_block,
-            ex,
-            LazyTrieData::from_sorted(SortedTrieData::default())
-        );
+        chain.append_block(recovered_block, ex, LazyTrieData::ready(ComputedTrieData::default()));
 
         Arc::new(chain.clone())
     }

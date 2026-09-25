@@ -1076,8 +1076,13 @@ mod proptest_tests {
                     prop_assert!(total_consumption <= initial_balance,
                         "Total consumption {} should not exceed balance {}", total_consumption, initial_balance);
 
-                    // If TOB order would cause breach, it should invalidate book orders
-                    let book_total: u128 = book_amounts.iter().sum();
+                    // If TOB order would cause breach, it should invalidate book orders. Only book
+                    // orders that were valid count: invalid ones never consumed any balance.
+                    let book_total: u128 = book_order_results
+                        .iter()
+                        .filter(|(_, _, was_valid)| *was_valid)
+                        .map(|(_, amount, _)| amount)
+                        .sum();
                     if tob_amount + book_total > initial_balance && tob_verified.is_currently_valid() {
                         prop_assert!(!tob_verified.invalidates.is_empty(),
                             "TOB order should invalidate some book orders when causing breach");

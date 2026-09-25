@@ -42,7 +42,7 @@ fn main() {
     out_dir.push(OUT_DIRECTORY);
 
     let Ok(mut res) = Command::new("forge")
-        .arg("bind")
+        .arg("build")
         .arg("--out")
         .arg(format!("../{OUT_DIRECTORY}"))
         .current_dir(contract_dir)

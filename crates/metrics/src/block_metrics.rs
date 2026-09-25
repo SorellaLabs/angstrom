@@ -139,7 +139,7 @@ impl BlockMetricsWrapper {
                     METRICS_ENABLED
                         .get()
                         .copied()
-                        .unwrap()
+                        .unwrap_or_default()
                         .then_some(BlockMetrics)
                 )
             })

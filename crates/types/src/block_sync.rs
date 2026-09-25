@@ -330,7 +330,11 @@ impl Eq for SignOffState {}
 
 #[cfg(test)]
 pub mod test {
-    use std::{sync::Arc, thread, time::Duration};
+    use std::{
+        sync::{Arc, Barrier},
+        thread,
+        time::Duration
+    };
 
     use crate::block_sync::{BlockSyncConsumer, BlockSyncProducer, GlobalBlockSync};
 
@@ -515,14 +519,20 @@ pub mod test {
 
         let sync1 = global_sync.clone();
         let sync2 = global_sync.clone();
+        // new_block/reorg spin until outstanding sign-offs complete, so queue
+        // both proposals before either (partial) sign-off happens.
+        let barrier1 = Arc::new(Barrier::new(2));
+        let barrier2 = barrier1.clone();
 
         let handle1 = thread::spawn(move || {
             sync1.new_block(11);
+            barrier1.wait();
             sync1.sign_off_on_block(MOD1, 11, None);
         });
 
         let handle2 = thread::spawn(move || {
             sync2.reorg(9..=10);
+            barrier2.wait();
             sync2.sign_off_reorg(MOD2, 9..=10, None);
         });
 
@@ -530,6 +540,7 @@ pub mod test {
         handle2.join().unwrap();
 
         // Both proposals should be in the queue
+        assert_eq!(global_sync.pending_state.read().unwrap().len(), 2);
         assert!(global_sync.has_proposal());
         assert!(!global_sync.can_operate());
     }

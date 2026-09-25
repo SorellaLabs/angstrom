@@ -93,7 +93,10 @@ jobs:
   cargo-test-integration:
     name: cargo test (integration)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The testnet tests are serialized (see .config/nextest.toml), so a run with
+    # one genuine failure plus its retry needs more than 25 minutes to report as
+    # a failure rather than be cancelled.
+    timeout-minutes: 45
     steps:
       - name: Check-Out
         uses: actions/checkout@v4

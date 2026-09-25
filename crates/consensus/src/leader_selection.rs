@@ -116,11 +116,12 @@ impl WeightedRoundRobin {
     }
 
     pub fn choose_proposer(&mut self, block_number: BlockNumber) -> Option<Address> {
-        // 1. this is not ideal, since on multi-block reorgs the same proposer will be
-        //    chosen for the length of the reorg
-        // 2. reverting the block number (self.block_number = block_number) is also not
-        //    ideal, since nodes who were offline will not have seen the reorg, thus
-        //    would not have executed the extra rounds after this if statement
+        // 1. this is not ideal, since on multi-block reorgs the same proposer
+        //    will be chosen for the length of the reorg
+        // 2. reverting the block number (self.block_number = block_number) is
+        //    also not ideal, since nodes who were offline will not have seen
+        //    the reorg, thus would not have executed the extra rounds after
+        //    this if statement
         if block_number == self.block_number {
             if self.last_proposer.is_none() {
                 self.last_proposer = Some(self.proposer_selection());
@@ -302,9 +303,10 @@ mod tests {
         algo.proposer_selection();
 
         // After proposer selection:
-        // 1. All validators should have their priority increased by their voting power
-        // 2. The selected validator (highest priority) should then have total_power
-        //    subtracted
+        // 1. All validators should have their priority increased by their
+        //    voting power
+        // 2. The selected validator (highest priority) should then have
+        //    total_power subtracted
         let total_power: u64 = initial_powers.iter().sum();
 
         for validator in algo.validators.iter() {
@@ -406,7 +408,8 @@ mod tests {
         let mut algo1 = WeightedRoundRobin::new(validators.clone(), BlockNumber::default());
         let mut algo2 = WeightedRoundRobin::new(validators, BlockNumber::default());
 
-        // Run multiple rounds and verify both instances select the same proposers
+        // Run multiple rounds and verify both instances select the same
+        // proposers
         for i in 1..=10 {
             let proposer1 = algo1.choose_proposer(i);
             let proposer2 = algo2.choose_proposer(i);

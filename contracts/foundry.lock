@@ -1,0 +1,23 @@
+{
+  "lib/forge-std": {
+    "rev": "999be66ec94c78090087f674bbf52ce1cca12b75"
+  },
+  "lib/openzeppelin-contracts": {
+    "rev": "840c974028316f3c8172c1b8e5ed67ad95e255ca"
+  },
+  "lib/solady": {
+    "rev": "d467eb6a62c77c25d977baa0e513bf1b4a5f1e6c"
+  },
+  "lib/solmate": {
+    "rev": "c93f7716c9909175d45f6ef80a34a650e2d24e56"
+  },
+  "lib/super-sol": {
+    "rev": "0a5cf91303aa6e36bca82487fd236ccc1d17c141"
+  },
+  "lib/transient-goodies": {
+    "rev": "bc54829dcfbe561f3222a404f35e3cc462693603"
+  },
+  "lib/v4-periphery": {
+    "rev": "4d85e047e321d0c02134fec9044879c0cd00ea7d"
+  }
+}

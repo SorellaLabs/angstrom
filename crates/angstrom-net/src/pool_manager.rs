@@ -467,7 +467,8 @@ where
                 this.on_network_event(event);
             }
 
-            // poll underlying pool. This is the validation process that's being polled
+            // poll underlying pool. This is the validation process that's being
+            // polled
             while let Poll::Ready(Some(orders)) = this.order_indexer.poll_next_unpin(cx) {
                 this.on_pool_events(orders, || cx.waker().clone());
             }

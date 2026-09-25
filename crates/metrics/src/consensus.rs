@@ -44,7 +44,7 @@ impl ConsensusMetricsWrapper {
                     METRICS_ENABLED
                         .get()
                         .copied()
-                        .unwrap()
+                        .unwrap_or_default()
                         .then(ConsensusMetrics::default)
                 )
             })

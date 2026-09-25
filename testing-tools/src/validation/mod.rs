@@ -185,8 +185,8 @@ where
         for op in self.operations {
             pool.poll_for(self.poll_duration).await;
 
-            // because we insta await. this is safe. so we can tell the rust analyzer to
-            // stop being annoying
+            // because we insta await. this is safe. so we can tell the rust
+            // analyzer to stop being annoying
             let (r_pool, r_state) = (op)(pool, state).await;
             pool = r_pool;
             state = r_state;

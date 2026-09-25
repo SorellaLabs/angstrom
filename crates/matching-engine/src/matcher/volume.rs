@@ -206,16 +206,18 @@ impl<'a> VolumeFillMatcher<'a> {
             return Some(VolumeFillMatchEndReason::NoLongerCross);
         }
 
-        // Limit to price so that AMM orders will only offer the quantity they can
-        // profitably sell.  (Non-AMM orders ignore the provided price)
-        // These quantities might be in T0 or T1 depending, we might want to be a bit
-        // more explicit about this, but they will always be in the SAME amount
+        // Limit to price so that AMM orders will only offer the quantity they
+        // can profitably sell.  (Non-AMM orders ignore the provided
+        // price) These quantities might be in T0 or T1 depending, we
+        // might want to be a bit more explicit about this, but they
+        // will always be in the SAME amount
         let (bid_q, ask_q) = Self::get_match_quantities(&bid, &ask, self.debt.as_ref());
 
         debug!(bid_q, ask_q, bid_price = ?bid.price(), ask_price = ?ask.price(), "Bid and ask stats");
 
-        // Check to see if we have a 0-quantity ask and need to do an ask-side fill
-        // This is only applicable if our ask order has the debt in it
+        // Check to see if we have a 0-quantity ask and need to do an ask-side
+        // fill This is only applicable if our ask order has the debt in
+        // it
         if ask_q == 0 && ask.is_debt() {
             debug!("Executing ask-side backmatch");
 
@@ -235,9 +237,10 @@ impl<'a> VolumeFillMatcher<'a> {
 
             debug!(original = ?ask, next = ?next_ask, "Orders for ask-side backmatch");
 
-            // First we check if we have a combination AMM/Debt Composite order.  If we do,
-            // we're here because the AMM can't provide more T0 than it costs to move the
-            // debt.  In this case, we should use all the AMM liquidity possible to move the
+            // First we check if we have a combination AMM/Debt Composite order.
+            // If we do, we're here because the AMM can't provide
+            // more T0 than it costs to move the debt.  In this
+            // case, we should use all the AMM liquidity possible to move the
             // debt FIRST before we do any kind of backmatch
             if ask.is_amm() {
                 debug!("Composite is combination AMM and Debt");
@@ -265,24 +268,27 @@ impl<'a> VolumeFillMatcher<'a> {
                 return None;
             }
 
-            // If we don't have a valid ask order to do an ask-side fill, we are done
+            // If we don't have a valid ask order to do an ask-side fill, we are
+            // done
             if next_ask.price() > bid.price() {
                 return Some(VolumeFillMatchEndReason::NoLongerCross);
             }
 
-            // If our next order is an AMM but the AMM is already our best bid-side order,
-            // we are done
+            // If our next order is an AMM but the AMM is already our best
+            // bid-side order, we are done
             if next_ask.is_amm() && bid.is_amm() {
                 return Some(VolumeFillMatchEndReason::NoMoreAsks);
             }
 
-            // Determine if we're going to backmatch in a T1 context - this is true if our
-            // first ask is a solo debt order and our next ask is an inverse order
+            // Determine if we're going to backmatch in a T1 context - this is
+            // true if our first ask is a solo debt order and our
+            // next ask is an inverse order
             let t1_context = !ask.is_amm() && next_ask.inverse_order();
 
-            // Check to see if our next order is AMM.  If so we have to do some cool
-            // bounding math where we reset the bound of our current order to be
-            // the closer of the intersection point or the next order's bound.
+            // Check to see if our next order is AMM.  If so we have to do some
+            // cool bounding math where we reset the bound of our
+            // current order to be the closer of the intersection
+            // point or the next order's bound.
             let normal_next_q = next_ask.quantity(&bid, self.debt.as_ref());
             let next_ask_q = if next_ask.is_amm() {
                 self.debt
@@ -336,7 +342,8 @@ impl<'a> VolumeFillMatcher<'a> {
             match next_ask_q.cmp(&cur_ask_q) {
                 Ordering::Equal => {
                     debug!("Equal match quantities");
-                    // We annihilated in which case the debt price has moved to the next_ask price
+                    // We annihilated in which case the debt price has moved to
+                    // the next_ask price
                     self.results.price = Some(next_ask.price());
                     // Mark as filled if non-AMM order
                     if !next_ask.is_amm() && !next_ask.is_composite() {
@@ -349,8 +356,9 @@ impl<'a> VolumeFillMatcher<'a> {
                 }
                 Ordering::Greater => {
                     debug!("Next ask greater than current ask");
-                    // Our next order is greater than our debt.  The debt has been moved to next_ask
-                    // price without consuming the entirety of next_ask
+                    // Our next order is greater than our debt.  The debt has
+                    // been moved to next_ask price without
+                    // consuming the entirety of next_ask
                     // The end point is our next ask's price
                     self.results.price = Some(next_ask.price());
                     // Set the Debt's current price to the target price
@@ -369,7 +377,8 @@ impl<'a> VolumeFillMatcher<'a> {
                     // Find the end price of the debt and move it there
                     if let Some(cur_debt) = self.debt.as_mut() {
                         let new_debt = cur_debt.partial_fill(matched);
-                        // Our new final price is the last moved price of our debt
+                        // Our new final price is the last moved price of our
+                        // debt
                         self.results.price = Some(new_debt.price().into());
                         *cur_debt = new_debt;
                     }
@@ -390,9 +399,10 @@ impl<'a> VolumeFillMatcher<'a> {
         debug!(bid_quantity = bid_q, ask_quantity = ask_q, "Executing normal match");
 
         // If either quantity is zero at this point we should break
-        // I actually think this might be OK - there are some edge cases where this is
-        // fine
-        // A 0-volume match can happen if we have some kind of "slack" bid or ask left
+        // I actually think this might be OK - there are some edge cases where
+        // this is fine
+        // A 0-volume match can happen if we have some kind of "slack" bid or
+        // ask left
         if ask_q == 0 || bid_q == 0 {
             return Some(VolumeFillMatchEndReason::ZeroQuantity);
         }
@@ -431,14 +441,15 @@ impl<'a> VolumeFillMatcher<'a> {
         if let Some((a_o, direction)) = amm_order
             && let Some(amm) = self.amm_price.as_mut()
         {
-            // We shouldn't be in a t1 context unless a_o.is_debt() is true, but let's be
-            // explicit
+            // We shouldn't be in a t1 context unless a_o.is_debt() is true, but
+            // let's be explicit
             let quantity = if t1_context && a_o.is_debt() {
                 // Move the AMM by the amount of T0 "freed" from the debt
                 self.debt.unwrap().freed_t0(matched)
             } else {
                 // Move the AMM by the portion of the matched T0
-                // Can unwrap here as we've checked to be sure the order is valid
+                // Can unwrap here as we've checked to be sure the order is
+                // valid
                 let quantities = a_o.composite_t0_quantities(matched, direction);
                 debug!(quantities = ?quantities, "Found mixed quantities");
                 quantities.0.unwrap()
@@ -450,14 +461,14 @@ impl<'a> VolumeFillMatcher<'a> {
             }
         }
 
-        // Find our partial match quantity if we need our debt to calculate that.  We
-        // have to do this before we adjust the debt because it relies on the current
-        // debt
+        // Find our partial match quantity if we need our debt to calculate
+        // that.  We have to do this before we adjust the debt because
+        // it relies on the current debt
         let t1_matched = if t1_context {
             matched
         } else {
-            // Our matched quantity is in T0 so we have to convert it into the appropriate
-            // T1 quantity for our book order
+            // Our matched quantity is in T0 so we have to convert it into the
+            // appropriate T1 quantity for our book order
             match (bid.inverse_order(), ask.inverse_order()) {
                 // For an inverse bid the listed quantity is the T1
                 (true, false) => bid
@@ -486,11 +497,13 @@ impl<'a> VolumeFillMatcher<'a> {
             if t1_context {
                 if let Some(d) = self.debt.as_mut() {
                     if d_o.is_amm() {
-                        // If the AMM is here, we've used the T1 to feed T0 into the AMM.  Maybe
-                        // we've done this at the AMM step?
+                        // If the AMM is here, we've used the T1 to feed T0 into
+                        // the AMM.  Maybe we've done
+                        // this at the AMM step?
                         *d = d.flat_fill_t1(matched);
                     } else {
-                        // In t1 context, if we don't have the AMM in this order, we use the T1
+                        // In t1 context, if we don't have the AMM in this
+                        // order, we use the T1
                         // difference to adjust the price.
                         *d = d.partial_fill_t1(matched);
                     }
@@ -503,8 +516,8 @@ impl<'a> VolumeFillMatcher<'a> {
             }
         } else {
             // Without a debt order we can alwasys just add the total of our
-            // compared orders' debts - if both have debt it annihilates and if neither does
-            // we don't need to do it
+            // compared orders' debts - if both have debt it annihilates and if
+            // neither does we don't need to do it
             if let Some(net_debt) = ask
                 .as_debt(Some(t1_matched), false)
                 .xor(bid.as_debt(Some(t1_matched), true))
@@ -522,8 +535,8 @@ impl<'a> VolumeFillMatcher<'a> {
                 debug!("Equal match");
                 // We annihilated
 
-                // If we have a debt price, this is our current price, otherwise we get a price
-                // from our order outcomes
+                // If we have a debt price, this is our current price, otherwise
+                // we get a price from our order outcomes
                 let new_price = self
                     .debt
                     .map(|d| d.price())
@@ -601,7 +614,8 @@ impl<'a> VolumeFillMatcher<'a> {
             match (bid.inverse_order(), ask.inverse_order()) {
                 // Inverse vs inverse is a T1 match
                 (true, true) => {
-                    // We already know these are book orders so we can unwrap here
+                    // We already know these are book orders so we can unwrap
+                    // here
                     (bid.quantity_t1(debt).unwrap(), ask.quantity_t1(debt).unwrap())
                 }
                 // Mixed order returns quantity in T0 at debt or order price
@@ -610,8 +624,8 @@ impl<'a> VolumeFillMatcher<'a> {
                 (false, false) => (bid.quantity(ask, debt), ask.quantity(bid, debt))
             }
         } else {
-            // We have either a book order and a Composite order or a pair of Composite
-            // orders, all of which return T0
+            // We have either a book order and a Composite order or a pair of
+            // Composite orders, all of which return T0
             (bid.quantity(ask, debt), ask.quantity(bid, debt))
         }
     }
@@ -631,14 +645,15 @@ impl<'a> VolumeFillMatcher<'a> {
                 .get(book_idx.get())
                 .map(|order| OrderContainer::BookOrder { order, state: *state });
         }
-        // Fix what makes a price "less" or "more" advantageous depending on direction
+        // Fix what makes a price "less" or "more" advantageous depending on
+        // direction
         let (less_advantageous, more_advantageous) = if bid {
-            // If it's a bid, a lower price is less advantageous and a higher price is more
-            // advantageous
+            // If it's a bid, a lower price is less advantageous and a higher
+            // price is more advantageous
             (Ordering::Less, Ordering::Greater)
         } else {
-            // If it's an ask, a higher price is less advantageous and a lower price is more
-            // advantageous
+            // If it's an ask, a higher price is less advantageous and a lower
+            // price is more advantageous
             (Ordering::Greater, Ordering::Less)
         };
         let mut cur_idx = book_idx.get();
@@ -651,11 +666,11 @@ impl<'a> VolumeFillMatcher<'a> {
         let book_order = book.get(cur_idx);
 
         let this_side_debt = debt.filter(|d| d.bid_side() == bid);
-        // If we have some debt that is at a better price, then we're going to be making
-        // a debt order
+        // If we have some debt that is at a better price, then we're going to
+        // be making a debt order
         if let Some(mut d) = this_side_debt {
-            // Compare our debt to our book price, debt is more advantageous if there's no
-            // book order
+            // Compare our debt to our book price, debt is more advantageous if
+            // there's no book order
             let debt_book_cmp = book_order
                 .map(|b| {
                     let book_price = b.price_for_book_side(bid);
@@ -669,7 +684,8 @@ impl<'a> VolumeFillMatcher<'a> {
                     }
                 })
                 .unwrap_or(more_advantageous);
-            // Compare our debt to our AMM, debt is more advantageous if there's no AMM
+            // Compare our debt to our AMM, debt is more advantageous if there's
+            // no AMM
             let debt_amm_cmp = amm
                 .map(|a| d.partial_cmp(a).unwrap())
                 .unwrap_or(more_advantageous);
@@ -714,7 +730,8 @@ impl<'a> VolumeFillMatcher<'a> {
             }
         }
 
-        // If we have an AMM price, see if it takes precedence over our book order
+        // If we have an AMM price, see if it takes precedence over our book
+        // order
         amm.and_then(|a| {
             debug!("Comparing AMM to book");
             let bound_price = if let Some(o) = book_order {

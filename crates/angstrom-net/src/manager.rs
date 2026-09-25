@@ -289,7 +289,8 @@ impl<DB: Unpin, P: Peers + Unpin> Future for StromNetworkManager<DB, P> {
             match self.from_handle_rx.poll_next_unpin(cx) {
                 Poll::Ready(Some(msg)) => self.on_handle_message(msg),
                 Poll::Ready(None) => {
-                    // This is only possible if the channel was deliberately closed since we always
+                    // This is only possible if the channel was deliberately
+                    // closed since we always
                     // have an instance of `NetworkHandle`
                     error!("Strom network message channel closed.");
                     return Poll::Ready(());

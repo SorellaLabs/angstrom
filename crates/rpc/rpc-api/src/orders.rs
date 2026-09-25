@@ -79,7 +79,7 @@ pub trait OrderApi {
     // MULTI CALL
     #[method(name = "sendOrders")]
     async fn send_orders(&self, orders: Vec<AllOrders>) -> RpcResult<Vec<CallResult>> {
-        futures::stream::iter(orders.into_iter())
+        futures::stream::iter(orders)
             .map(|order| async { self.send_order(order).await })
             .buffered(3)
             .collect::<Vec<_>>()
@@ -90,7 +90,7 @@ pub trait OrderApi {
 
     #[method(name = "pendingOrders")]
     async fn pending_orders(&self, from: Vec<Address>) -> RpcResult<Vec<PendingOrder>> {
-        Ok(futures::stream::iter(from.into_iter())
+        Ok(futures::stream::iter(from)
             .map(|order| async move { self.pending_order(order).await })
             .buffered(3)
             .collect::<Vec<_>>()
@@ -104,7 +104,7 @@ pub trait OrderApi {
 
     #[method(name = "cancelOrders")]
     async fn cancel_orders(&self, request: Vec<CancelOrderRequest>) -> RpcResult<Vec<bool>> {
-        futures::stream::iter(request.into_iter())
+        futures::stream::iter(request)
             .map(|order| async { self.cancel_order(order).await })
             .buffered(3)
             .collect::<Vec<_>>()
@@ -118,7 +118,7 @@ pub trait OrderApi {
         &self,
         orders: Vec<(bool, bool, Address, Address)>
     ) -> RpcResult<Vec<Result<(U256, u64), String>>> {
-        futures::stream::iter(orders.into_iter())
+        futures::stream::iter(orders)
             .map(|(is_book, is_internal, token_0, token_1)| async move {
                 self.estimate_gas(is_book, is_internal, token_0, token_1)
                     .await
@@ -132,7 +132,7 @@ pub trait OrderApi {
 
     #[method(name = "orderStatuses")]
     async fn status_of_orders(&self, order_hashes: Vec<B256>) -> RpcResult<Vec<CallResult>> {
-        futures::stream::iter(order_hashes.into_iter())
+        futures::stream::iter(order_hashes)
             .map(|order| async move { self.order_status(order).await })
             .buffered(3)
             .collect::<Vec<_>>()
@@ -146,7 +146,7 @@ pub trait OrderApi {
         &self,
         pool_ids_with_location: Vec<(PoolId, OrderLocation)>
     ) -> RpcResult<Vec<AllOrders>> {
-        Ok(futures::stream::iter(pool_ids_with_location.into_iter())
+        Ok(futures::stream::iter(pool_ids_with_location)
             .map(|(pair, location)| async move { self.orders_by_pool_id(pair, location).await })
             .buffered(3)
             .collect::<Vec<_>>()

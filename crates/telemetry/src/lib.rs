@@ -110,8 +110,9 @@ impl Telemetry {
             while self.block_cache.len() >= MAX_BLOCKS {
                 let oldest_key = self.block_cache.keys().copied().min().unwrap();
                 if let Some(mut block) = self.block_cache.remove(&oldest_key) {
-                    // If we have a block that doesn't have any errors when we remove it. We know
-                    // that it hasn't been pushed so we will push it here.
+                    // If we have a block that doesn't have any errors when we
+                    // remove it. We know that it hasn't
+                    // been pushed so we will push it here.
                     if !block.has_error() {
                         for out in self.outputs.iter() {
                             block.set_node_constants(self.node_consts.clone());
@@ -226,8 +227,8 @@ impl Future for Telemetry {
 
         while let Poll::Ready(Some(_)) = self.pending_submissions.poll_next_unpin(cx) {}
 
-        // We want to be careful here as we want to ensure that all readings have been
-        // sent before this
+        // We want to be careful here as we want to ensure that all readings
+        // have been sent before this
         if let Poll::Ready(guard) = self.guard.poll_unpin(cx) {
             let cache = self.block_cache.clone();
 

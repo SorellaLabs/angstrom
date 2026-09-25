@@ -62,8 +62,8 @@ impl<'a> SwapStep<'a> {
         let low_tick = low.to_tick()?;
         let high_tick = high.to_tick()?;
 
-        // Make sure both of our price ticks are within bounds, otherwise return an
-        // error
+        // Make sure both of our price ticks are within bounds, otherwise return
+        // an error
         if low_tick >= liq_range.upper_tick || high_tick < liq_range.lower_tick {
             return Err(eyre!("Ticks out of bounds, unable to construct step"));
         }
@@ -126,8 +126,8 @@ impl<'a> SwapStep<'a> {
         let (low_price, high_price) = low_to_high(&start_price, &end_price);
         // Low price is valid if it's within our liquidity range
         let low_price_valid = liq_range.price_in_range(*low_price);
-        // High price is valid if it's either within our liquidity range or at the very
-        // top of the liquidity range
+        // High price is valid if it's either within our liquidity range or at
+        // the very top of the liquidity range
         let high_price_valid = liq_range.price_in_range(*high_price)
             || *high_price == SqrtPriceX96::at_tick(liq_range.upper_tick).unwrap();
         if !(low_price_valid && high_price_valid) {
@@ -328,12 +328,14 @@ impl<'a> PoolPriceVec<'a> {
             // Update our current liquidiy range
             let liq_range =
                 current_liq_range.ok_or_else(|| eyre!("Unable to find next liquidity range"))?;
-            // Compute our swap towards the appropriate end of our current liquidity bound
+            // Compute our swap towards the appropriate end of our current
+            // liquidity bound
             let target_tick = liq_range.end_tick(direction);
             let target_price = SqrtPriceX96::at_tick(target_tick)?;
-            // If our target price is equal to our current price, we're precisely at the
-            // "bottom" of a liquidity range and we can skip this computation as
-            // it will be a null step - but we're going to add the null step anyways for
+            // If our target price is equal to our current price, we're
+            // precisely at the "bottom" of a liquidity range and we
+            // can skip this computation as it will be a null step -
+            // but we're going to add the null step anyways for
             // donation purposes
             if target_price == current_price {
                 steps.push(SwapStep {
@@ -373,13 +375,13 @@ impl<'a> PoolPriceVec<'a> {
 
             // See how much output we have yet to go
             if is_swap_input {
-                // If our left_to_swap is the input, we want to subtract the amount in that was
-                // allocated and the fee
+                // If our left_to_swap is the input, we want to subtract the
+                // amount in that was allocated and the fee
                 left_to_swap = left_to_swap.saturating_sub(amount_in.saturating_to());
                 left_to_swap = left_to_swap.saturating_sub(amount_fee.saturating_to());
             } else {
-                // If our left_to_swap is the output, we want to subtract the amount out that
-                // was allocated
+                // If our left_to_swap is the output, we want to subtract the
+                // amount out that was allocated
                 left_to_swap = left_to_swap.saturating_sub(amount_out.saturating_to());
             }
 
@@ -402,7 +404,8 @@ impl<'a> PoolPriceVec<'a> {
             });
             // (avg_price, end_price, amount_out, liq_range));
 
-            // If we're going to be continuing, move on to the next liquidity range
+            // If we're going to be continuing, move on to the next liquidity
+            // range
             current_liq_range = liq_range.next(direction);
             current_price = SqrtPriceX96::from(fin_price);
         }
@@ -422,8 +425,9 @@ impl<'a> PoolPriceVec<'a> {
     /// PriceVec
     pub fn t0_donation(&self, total_donation: u128) -> DonationResult {
         tracing::trace!(total_donation, "Performing donation to end price");
-        // If we have no steps we can just short-circuit this whole thing and take the
-        // whole donation as tribute.  This will likely never happen.
+        // If we have no steps we can just short-circuit this whole thing and
+        // take the whole donation as tribute.  This will likely never
+        // happen.
         let Some(steps) = self.steps.as_ref() else {
             // in the case we don't cross any ticks
             return DonationResult {
@@ -436,60 +440,65 @@ impl<'a> PoolPriceVec<'a> {
 
         let mut remaining_donation = total_donation;
         let price_dropping = self.start_bound.price > self.end_bound.price;
-        // The price will drop if we are adding T0 to the pool to get T1 out.  In these
-        // cases we should round up.  If the price is increasing, we're atting T1 to the
-        // pool to get T0 out and we should round down
+        // The price will drop if we are adding T0 to the pool to get T1 out.
+        // In these cases we should round up.  If the price is
+        // increasing, we're atting T1 to the pool to get T0 out and we
+        // should round down
         let round_up = price_dropping;
 
         let mut current_blob: Option<(u128, u128)> = None;
         let steps_iter = steps.iter().filter(|s| !s.empty() && s.is_initialized);
 
         for step in steps_iter {
-            // If our current blob is empty, we can just insert the current step's stats
-            // into it
+            // If our current blob is empty, we can just insert the current
+            // step's stats into it
             let Some((c_t0, c_t1)) = &mut current_blob else {
                 current_blob = Some((step.d_t0, step.d_t1));
                 continue;
             };
 
-            // Find the average price of our current step and get our existing blob to
-            // that price
+            // Find the average price of our current step and get our existing
+            // blob to that price
             let target_price = step.avg_price().unwrap();
             let target_t0 = target_price.inverse_quantity(*c_t1, round_up);
-            // The step cost is the difference between the amount of t0 we actually moved
-            // and the amount we should have moved to be at this step's average price
+            // The step cost is the difference between the amount of t0 we
+            // actually moved and the amount we should have moved to
+            // be at this step's average price
             let step_cost = c_t0.abs_diff(target_t0);
 
-            // If the move costs as much or less than what we have to spend, we've completed
-            // this step and can merge blobs
+            // If the move costs as much or less than what we have to spend,
+            // we've completed this step and can merge blobs
             let step_complete = remaining_donation >= step_cost;
 
             let increment = std::cmp::min(remaining_donation, step_cost);
             if price_dropping {
-                // If the price T1/T0 is dropping, we're going to be giving our LPs MORE T0 in
-                // exchange for the T1 they pay us
+                // If the price T1/T0 is dropping, we're going to be giving our
+                // LPs MORE T0 in exchange for the T1 they pay
+                // us
                 *c_t0 += increment;
             } else {
-                // If the price T1/T0 is increasing, we're going to be refunding T0 to the LPs,
-                // meaning they have effectively given us LESS T0 for the T1 we paid them
+                // If the price T1/T0 is increasing, we're going to be refunding
+                // T0 to the LPs, meaning they have effectively
+                // given us LESS T0 for the T1 we paid them
                 *c_t0 = c_t0.saturating_sub(increment)
             }
             remaining_donation -= increment;
 
             if step_complete {
-                // If we had enough reward to complete this step, we continue and merge this
-                // step into the blob
+                // If we had enough reward to complete this step, we continue
+                // and merge this step into the blob
                 *c_t0 += step.d_t0;
                 *c_t1 += step.d_t1;
             } else {
-                // If we didn't have enough reward to complete this step, we're done
+                // If we didn't have enough reward to complete this step, we're
+                // done
                 break;
             }
         }
 
-        // At this point, all of our swap is within the blob.  If we have additional
-        // donation, we want to distribute it ALL to the blob to get to the best price
-        // possible.
+        // At this point, all of our swap is within the blob.  If we have
+        // additional donation, we want to distribute it ALL to the blob
+        // to get to the best price possible.
         if let Some((c_t0, _)) = current_blob.as_mut() {
             if price_dropping {
                 *c_t0 += remaining_donation
@@ -500,15 +509,15 @@ impl<'a> PoolPriceVec<'a> {
                 }
             }
         }
-        // Now we can find our filled price - if the price is dropping we want to round
-        // down otherwise we want to round up.  Note that this diverges from other
-        // rounding being done.
+        // Now we can find our filled price - if the price is dropping we want
+        // to round down otherwise we want to round up.  Note that this
+        // diverges from other rounding being done.
         let filled_price =
             current_blob.map(|(t0, t1)| Ray::calc_price_generic(t0, t1, !price_dropping));
 
         tracing::trace!(?filled_price, swap_end_price = ?self.end_bound.price, "Found post-donation price");
-        // We've now found our filled price, we can allocate our reward to each tick
-        // based on how much it costs to bring them to that price.
+        // We've now found our filled price, we can allocate our reward to each
+        // tick based on how much it costs to bring them to that price.
         // We can start remaining_donation over
         remaining_donation = total_donation;
         let mut total_donated = 0_u128;
@@ -520,12 +529,14 @@ impl<'a> PoolPriceVec<'a> {
                     // T1 is constant, so we need to know how much t0 we need
                     let target_t0 = f.inverse_quantity(step.d_t1, round_up);
                     if price_dropping {
-                        // If the filled_price should be lower than our current price, then our
-                        // target T0 is MORE than we have in this step
+                        // If the filled_price should be lower than our current
+                        // price, then our target T0 is
+                        // MORE than we have in this step
                         std::cmp::min(remaining_donation, target_t0.saturating_sub(step.d_t0))
                     } else {
-                        // If the filled_price should be higher than our current price, then our
-                        // target T0 is LESS than we have in this step
+                        // If the filled_price should be higher than our current
+                        // price, then our target T0 is
+                        // LESS than we have in this step
                         std::cmp::min(remaining_donation, step.d_t0.saturating_sub(target_t0))
                     }
                 } else {
@@ -533,8 +544,9 @@ impl<'a> PoolPriceVec<'a> {
                 };
                 remaining_donation -= reward;
                 total_donated += reward;
-                // We associate a reward with a specific liquidity range and we will extract the
-                // lower or upper tick depending on the direction of our rewards
+                // We associate a reward with a specific liquidity range and we
+                // will extract the lower or upper tick
+                // depending on the direction of our rewards
                 ((step.liq_range.lower_tick(), step.liq_range.upper_tick()), (true, reward))
             })
             .collect();

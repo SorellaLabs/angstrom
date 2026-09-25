@@ -386,7 +386,8 @@ contract AngstromHandler is BaseTest {
                 address(e.assets[pool.asset0Index]),
                 address(e.assets[pool.asset1Index]),
                 pool.tickSpacing
-            ).toId();
+            )
+            .toId();
 
         int24[] memory rewardableTicks = _getRewardableTicks(id, pool.tickSpacing);
         uint256 totalTicks = rewardableTicks.length;
@@ -527,7 +528,8 @@ contract AngstromHandler is BaseTest {
                 address(e.assets[pool.asset0Index]),
                 address(e.assets[pool.asset1Index]),
                 pool.tickSpacing
-            ).toId();
+            )
+            .toId();
     }
 
     function totalPools() public view returns (uint256) {

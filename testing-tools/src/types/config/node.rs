@@ -193,8 +193,8 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
         tracing::info!("connected to anvil");
 
         if self.global_config.use_testnet() {
-            // Only setup our addresses with eth if we're a Testnet config or a Replay
-            // config that's not forked from main
+            // Only setup our addresses with eth if we're a Testnet config or a
+            // Replay config that's not forked from main
             let mut addresses_with_eth = self
                 .global_config
                 .initial_state_config()

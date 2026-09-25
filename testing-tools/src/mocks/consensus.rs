@@ -22,8 +22,8 @@ impl MockConsensusEventHandle {
 
         // 15 second interval
         let mut interval = tokio::time::interval(Duration::from_secs(15));
-        // If we miss, we want to make sure we're aligned with our original interval and
-        // skip extra ticks
+        // If we miss, we want to make sure we're aligned with our original
+        // interval and skip extra ticks
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         (Self { tx, interval: Mutex::new(interval) }, UnboundedReceiverStream::new(rx))

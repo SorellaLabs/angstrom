@@ -75,7 +75,8 @@ where
             }
             StromConsensusEvent::Proposal(_, proposal) => {
                 if let Some(proposal) = handles.verify_proposal(proposal) {
-                    // given a proposal was seen. we will skip directly to verification
+                    // given a proposal was seen. we will skip directly to
+                    // verification
                     self.proposal = Some(proposal);
                     self.waker.as_ref().inspect(|w| w.wake_by_ref());
                 }

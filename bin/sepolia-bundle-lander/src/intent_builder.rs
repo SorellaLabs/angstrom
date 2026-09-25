@@ -287,9 +287,9 @@ where
         }
 
         let t1_with_current_price = pool_price.mul_quantity(token0_bal);
-        // if the current amount of t0 mulled through the price is more than our other
-        // balance this means that we have more t0 then t1 and thus want to sell
-        // some t0 for t1
+        // if the current amount of t0 mulled through the price is more than our
+        // other balance this means that we have more t0 then t1 and
+        // thus want to sell some t0 for t1
         let zfo = t1_with_current_price > token1_bal;
 
         let amount = if exact_in {

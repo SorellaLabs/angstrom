@@ -51,11 +51,11 @@ pub fn get_quantities_at_price(
     fee: u128,
     ray_ucp: Ray // this is t1 / t0
 ) -> (u128, u128, u128) {
-    // Recreate our calculation that we do in the contract to make sure the numbers
-    // all check out
+    // Recreate our calculation that we do in the contract to make sure the
+    // numbers all check out
 
-    // tracing::trace!(is_bid, exact_in, fill_amount, gas, fee, ?ray_ucp, "Detail
-    // price/quantity");
+    // tracing::trace!(is_bid, exact_in, fill_amount, gas, fee, ?ray_ucp,
+    // "Detail price/quantity");
 
     match (is_bid, exact_in) {
         // ExactIn Bid - fill_amount is the exact amount of T1 being input to get a T0 output
@@ -69,8 +69,8 @@ pub fn get_quantities_at_price(
 
             // The total amount of t0 exchanged at UCP for the input T1
             let exchanged_t0 = bid_price.quantity(fill_amount, false);
-            // The amount of T0 post-fee that will be the output of this order (gas is
-            // subtracted from this)
+            // The amount of T0 post-fee that will be the output of this order
+            // (gas is subtracted from this)
             let net_t0 = bid_fee_price.quantity(fill_amount, false);
             let contract_t0 = exchanged_t0.saturating_sub(net_t0);
             (fill_amount, net_t0.saturating_sub(gas), contract_t0)
@@ -82,10 +82,11 @@ pub fn get_quantities_at_price(
             // Find the fee price
             let bid_fee_price = bid_price.scale_to_fee(fee);
 
-            // Find out how much T1 it would take to purchase the ExactOut quantity and gas
-            // post-fee
+            // Find out how much T1 it would take to purchase the ExactOut
+            // quantity and gas post-fee
             let t1_required = bid_fee_price.inverse_quantity(fill_amount + gas, true);
-            // Find out how much that T0 that T1 could have purchased at the base UCP
+            // Find out how much that T0 that T1 could have purchased at the
+            // base UCP
             let total_t0_purchased = bid_price.quantity(t1_required, false);
             // Use the difference between the two to calculate the fee in T0
             let contract_t0 = total_t0_purchased.saturating_sub(fill_amount + gas);
@@ -99,7 +100,8 @@ pub fn get_quantities_at_price(
             // Find the amount of T1 we will return to the user
             let net_t1_out = ask_fee_price.quantity(fill_amount.saturating_sub(gas), false);
 
-            // The amount of T0 you could buy with that T1 at UCP is the net T0 sold
+            // The amount of T0 you could buy with that T1 at UCP is the net T0
+            // sold
             let net_t0_sold = ray_ucp.inverse_quantity(net_t1_out, true);
 
             // The contract fee is TotalT0 - Gas - NetT0Sold
@@ -118,8 +120,8 @@ pub fn get_quantities_at_price(
             // This is the total t0 input - net + fee + gas
             let total_t0_input = ask_fee_price.inverse_quantity(fill_amount, true) + gas;
 
-            // How much T0 would it have cost to fill this T1 at the more advantageous price
-            // (net only)
+            // How much T0 would it have cost to fill this T1 at the more
+            // advantageous price (net only)
             let net_t0 = ray_ucp.inverse_quantity(fill_amount, true);
 
             let contract_fee = total_t0_input.saturating_sub(gas).saturating_sub(net_t0);
@@ -166,8 +168,8 @@ pub fn amm_debt_same_move_solve(
     //     .floor_sqrt()
     //     * Integer::TWO;
 
-    // let b = debt_numerator.div_round(l, RoundingMode::Nearest).0 + (Integer::ONE
-    // << precision);
+    // let b = debt_numerator.div_round(l, RoundingMode::Nearest).0 +
+    // (Integer::ONE << precision);
 
     debug!(b = ?b, "B factor");
 
@@ -264,7 +266,8 @@ pub fn price_intersect_solve(
         (Direction::BuyingT0, (Some(a), Some(b))) => {
             if a <= Integer::ZERO {
                 if b <= Integer::ZERO {
-                    // They're both negative, we want the number with the lowest magnitude
+                    // They're both negative, we want the number with the lowest
+                    // magnitude
                     std::cmp::max(a, b)
                 } else {
                     a
@@ -276,7 +279,8 @@ pub fn price_intersect_solve(
         (Direction::SellingT0, (Some(a), Some(b))) => {
             if a >= Integer::ZERO {
                 if b >= Integer::ZERO {
-                    // They're both positive, we want the number with the lowest magnitude
+                    // They're both positive, we want the number with the lowest
+                    // magnitude
                     std::cmp::min(a, b)
                 } else {
                     a
@@ -378,8 +382,9 @@ mod tests {
         let quantity = resolve_precision(192, res, RoundingMode::Up);
         debug!(quantity, "Quantity found");
 
-        // Validate that the quantity returned brings the two prices as close together
-        // as possible.  We do this by checking the result against result+1 and result-1
+        // Validate that the quantity returned brings the two prices as close
+        // together as possible.  We do this by checking the result
+        // against result+1 and result-1
         let max_tick_target = SqrtPriceX96::at_tick(MAX_TICK).unwrap();
         let price_gaps = [Some(quantity), Some(quantity + 1), quantity.checked_sub(1)].map(|e| {
             e.map(|q| {

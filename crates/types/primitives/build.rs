@@ -41,8 +41,14 @@ fn main() {
     let mut out_dir = base_dir.clone();
     out_dir.push(OUT_DIRECTORY);
 
+    if !submodules_checked_out(&base_dir) {
+        println!("didn't update binding because the contract dependencies aren't checked out");
+
+        return;
+    }
+
     let Ok(mut res) = Command::new("forge")
-        .arg("bind")
+        .arg("build")
         .arg("--out")
         .arg(format!("../{OUT_DIRECTORY}"))
         .current_dir(contract_dir)
@@ -115,6 +121,20 @@ pub mod {mod_name} {{
     for contract_build in sol_macro_invocation {
         write!(&mut f, "{contract_build}").expect("failed to write sol macro to contract");
     }
+}
+
+/// Whether every git submodule (the contracts' Solidity dependencies) is
+/// checked out. `forge build` would otherwise clone them itself mid-build.
+fn submodules_checked_out(base_dir: &std::path::Path) -> bool {
+    let Ok(gitmodules) = std::fs::read_to_string(base_dir.join(".gitmodules")) else {
+        return true;
+    };
+    gitmodules
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("path = "))
+        .all(|path| {
+            std::fs::read_dir(base_dir.join(path)).is_ok_and(|mut dir| dir.next().is_some())
+        })
 }
 
 pub fn workspace_dir() -> std::path::PathBuf {

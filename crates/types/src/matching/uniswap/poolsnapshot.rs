@@ -44,7 +44,7 @@ impl PoolSnapshot {
         fee: u32
     ) -> eyre::Result<Self> {
         // Sort our ranges
-        ranges.sort_by(|a, b| a.lower_tick.cmp(&b.lower_tick));
+        ranges.sort_by_key(|a| a.lower_tick);
 
         // Tick spacing must be a positive integer
         if tick_spacing <= 0 {
@@ -174,8 +174,8 @@ impl PoolSnapshot {
                 (target_tick, r.liquidity)
             })
             .unzip();
-        // We want to skip the last tick (representing the current range) but skip the
-        // first liquidity (representing start_liquidity)
+        // We want to skip the last tick (representing the current range) but
+        // skip the first liquidity (representing start_liquidity)
         let checksum_bytes = ticks
             .iter()
             .take(ticks.len() - 1)

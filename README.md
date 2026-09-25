@@ -1,7 +1,7 @@
 # Angstrom
 
 ## Prerequisites
-- [Rust](https://rustup.rs/) (minimum version 1.88.0, see `rust-version` in Cargo.toml)
+- [Rust](https://rustup.rs/) (minimum version 1.96.0, see `rust-version` in Cargo.toml)
   - Nightly toolchain with rustfmt component (for formatting)
 - [just](https://github.com/casey/just#installation) (task runner)
 - [cargo-nextest](https://nexte.st/book/installation) (for running tests)

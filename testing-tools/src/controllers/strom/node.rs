@@ -3,7 +3,8 @@ use std::{
     net::SocketAddr,
     pin::Pin,
     sync::Arc,
-    task::Poll
+    task::Poll,
+    time::Duration
 };
 
 use alloy::signers::local::PrivateKeySigner;
@@ -49,6 +50,16 @@ use crate::{
     },
     validation::TestOrderValidator
 };
+
+/// How long a node waits for its sessions to come up before failing the spawn
+/// instead of waiting until the harness is killed. Generous because a 4-vCPU CI
+/// runner is much slower than a developer machine; it only has to be short
+/// enough that a genuinely wedged handshake is reported rather than hung.
+const PEER_CONNECTION_TIMEOUT: Duration = Duration::from_secs(90);
+
+/// How often a node waiting on its sessions re-reads its peer count, which
+/// changes without waking the waiter.
+const PEER_COUNT_RECHECK: Duration = Duration::from_millis(100);
 
 pub struct TestnetNode<C: Unpin, P, G> {
     testnet_node_id: u64,
@@ -151,8 +162,7 @@ where
     /// General
     /// -------------------------------------
     pub fn node_rpc_url(&self) -> String {
-        let port = (4200 + self.testnet_node_id) as u16;
-        format!("http://localhost:{port}")
+        format!("http://localhost:{}", self.strom.rpc_port)
     }
 
     pub fn testnet_node_id(&self) -> u64 {
@@ -339,6 +349,9 @@ where
 
     pub fn start_conensus(&self) {
         self.state_lock.set_consensus(true);
+        // Consensus is the last block-sync module to run, so blocks can now be
+        // applied without opening a proposal nobody signs off.
+        self.strom.release_canonical_updates();
     }
 
     pub fn stop_consensus(&self) {
@@ -364,7 +377,7 @@ where
     pub async fn connect_to_all_peers(
         &mut self,
         other_peers: &mut HashMap<u64, TestnetNode<C, P, G>>
-    ) {
+    ) -> eyre::Result<()> {
         self.start_network();
         other_peers.iter().for_each(|(_, peer)| {
             self.connect_to_eth_peer(peer.network.pubkey(), peer.eth_socket_addr());
@@ -374,7 +387,7 @@ where
 
         let connections_expected = other_peers.len();
         self.initialize_internal_connections(connections_expected)
-            .await;
+            .await
     }
 
     pub fn pre_post_network_event_channel_swap<E>(
@@ -407,17 +420,26 @@ where
         Ok(())
     }
 
-    pub(crate) async fn initialize_internal_connections(&mut self, connections_needed: usize) {
+    pub(crate) async fn initialize_internal_connections(
+        &mut self,
+        connections_needed: usize
+    ) -> eyre::Result<()> {
         tracing::debug!(pubkey = ?self.network.pubkey, "attempting connections to {connections_needed} peers");
+        let node_id = self.testnet_node_id;
         let mut last_peer_count = 0;
-        std::future::poll_fn(|cx| {
-            loop {
+        let mut recheck = tokio::time::interval(PEER_COUNT_RECHECK);
+
+        let res = tokio::time::timeout(
+            PEER_CONNECTION_TIMEOUT,
+            std::future::poll_fn(|cx| {
                 if self
                     .state_lock
                     .poll_fut_to_initialize_network_connections(cx)
                     .is_ready()
                 {
-                    panic!("peer connection failed");
+                    return Poll::Ready(Err(eyre::eyre!(
+                        "node {node_id}: network future terminated during peer setup"
+                    )));
                 }
 
                 let peer_cnt = self.network.strom_handle.peer_count();
@@ -426,12 +448,29 @@ where
                     last_peer_count = peer_cnt;
                 }
 
-                if connections_needed == peer_cnt {
-                    return Poll::Ready(());
+                // `>=`, not `==`: a transient duplicate session can carry the
+                // count past the target and it would never be observed equal.
+                if peer_cnt >= connections_needed {
+                    return Poll::Ready(Ok(()));
                 }
-            }
-        })
-        .await
+
+                // Nothing above wakes this when a session comes up: the join handles
+                // only wake it once a network task exits. Without a timer of our own
+                // it would sleep until the timeout, however early the peers connect.
+                while recheck.poll_tick(cx).is_ready() {}
+                Poll::Pending
+            })
+        )
+        .await;
+
+        match res {
+            Ok(res) => res,
+            Err(_) => Err(eyre::eyre!(
+                "node {node_id} connected to {}/{connections_needed} peers after {}s",
+                self.network.strom_handle.peer_count(),
+                PEER_CONNECTION_TIMEOUT.as_secs()
+            ))
+        }
     }
 
     pub(crate) async fn testnet_future(self) {

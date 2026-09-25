@@ -54,6 +54,14 @@ where
     G: GlobalTestingConfig,
     P: WithWalletProvider
 {
+    /// Moves the anvil child out of the testnet so the caller's scope owns it.
+    /// The testnet is normally moved into a spawned task, which is not
+    /// guaranteed to be dropped when a test panics; holding the instance in the
+    /// test's own scope means unwinding always kills anvil.
+    pub fn take_anvil_instance(&mut self) -> Option<AnvilInstance> {
+        self._anvil_instance.take()
+    }
+
     pub fn node_provider(&self, node_id: Option<u64>) -> &AnvilProvider<P> {
         self.peers
             .get(&node_id.unwrap_or_default())

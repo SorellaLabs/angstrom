@@ -28,7 +28,10 @@ pub trait GlobalTestingConfig: Debug + Clone + Send + Sync {
 
     fn initial_state_config(&self) -> InitialStateConfig;
 
-    fn leader_eth_rpc_port(&self) -> u16;
+    /// `None` lets the OS assign the port. A fixed draw over the whole `u16`
+    /// range can land on a privileged port (`EACCES`) or one already in use
+    /// (`EADDRINUSE`); only pin a port when a caller needs to know it up front.
+    fn leader_eth_rpc_port(&self) -> Option<u16>;
 
-    fn base_angstrom_rpc_port(&self) -> u16;
+    fn base_angstrom_rpc_port(&self) -> Option<u16>;
 }

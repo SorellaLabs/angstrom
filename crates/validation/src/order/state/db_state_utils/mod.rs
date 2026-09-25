@@ -39,6 +39,14 @@ pub trait StateFetchUtils: Clone + Send + Unpin {
     fn fetch_token_balance_in_angstrom(&self, user: Address, token: Address) -> eyre::Result<U256>;
 }
 
+/// Rebuilt to read through another state source, everything else kept.
+///
+/// Order validation follows the head by taking a fresh view per block rather
+/// than by moving a view something else may be reading through.
+pub trait Repoint<DB> {
+    fn repoint(&self, db: Arc<DB>) -> Self;
+}
+
 #[derive(Debug)]
 pub struct UserAccountDetails {
     pub token:           Address,
@@ -66,7 +74,9 @@ where
 {
     fn is_valid_nonce(&self, user: Address, nonce: u64) -> eyre::Result<bool> {
         let db = self.db.clone();
-        Ok(self.nonces.is_valid_nonce(user, nonce, db))
+        self.nonces
+            .is_valid_nonce(user, nonce, db)
+            .map_err(|e| eyre::eyre!("failed to read the nonce word: {e:?}"))
     }
 
     fn fetch_approval_balance_for_token_overrides(
@@ -131,8 +141,26 @@ impl<DB: revm::DatabaseRef> FetchUtils<DB> {
     }
 }
 
+impl<DB> Repoint<DB> for FetchUtils<DB> {
+    fn repoint(&self, db: Arc<DB>) -> Self {
+        Self {
+            approvals: self.approvals.clone(),
+            balances: self.balances.clone(),
+            nonces: self.nonces.clone(),
+            db,
+            metrics: self.metrics.clone()
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AutoMaxFetchUtils;
+
+impl<DB> Repoint<DB> for AutoMaxFetchUtils {
+    fn repoint(&self, _: Arc<DB>) -> Self {
+        Self
+    }
+}
 
 impl StateFetchUtils for AutoMaxFetchUtils {
     fn is_valid_nonce(&self, _: Address, _: u64) -> eyre::Result<bool> {

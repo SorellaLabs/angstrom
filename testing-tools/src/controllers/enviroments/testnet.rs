@@ -190,7 +190,7 @@ where
             let (node_id, mut node, bs) = res?;
             bs.clear();
 
-            node.connect_to_all_peers(&mut self.peers).await;
+            node.connect_to_all_peers(&mut self.peers).await?;
             self.peers.insert(node_id, node);
         }
 

@@ -34,6 +34,8 @@ pub enum OrderValidationError {
     PriceOutOfPoolBounds,
     #[error("order was cancelled")]
     CancelledOrder,
+    #[error("order deadline has passed")]
+    Expired,
     #[error("{err}")]
     Unknown { err: String }
 }

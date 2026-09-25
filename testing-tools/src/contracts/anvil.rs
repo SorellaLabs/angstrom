@@ -51,13 +51,33 @@ pub type LocalAnvilRpc = alloy::providers::fillers::FillProvider<
 >;
 
 pub async fn spawn_anvil(anvil_key: usize) -> eyre::Result<(AnvilInstance, WalletProviderRpc)> {
-    let anvil = Anvil::new()
+    spawn_anvil_inner(anvil_key, None).await
+}
+
+/// Spawns anvil forked from `fork_url`. Deploying Angstrom needs the create3
+/// factory at `SUB_ZERO_FACTORY` to already exist, so anything that mines a
+/// hook address has to start from a chain that has it.
+pub async fn spawn_anvil_forked(
+    anvil_key: usize,
+    fork_url: &str
+) -> eyre::Result<(AnvilInstance, WalletProviderRpc)> {
+    spawn_anvil_inner(anvil_key, Some(fork_url)).await
+}
+
+async fn spawn_anvil_inner(
+    anvil_key: usize,
+    fork_url: Option<&str>
+) -> eyre::Result<(AnvilInstance, WalletProviderRpc)> {
+    let mut anvil_builder = Anvil::new()
         .chain_id(*CHAIN_ID.get().unwrap())
         .arg("--ipc")
         .arg("--code-size-limit")
         .arg("393216")
-        .arg("--disable-block-gas-limit")
-        .try_spawn()?;
+        .arg("--disable-block-gas-limit");
+    if let Some(url) = fork_url {
+        anvil_builder = anvil_builder.fork(url);
+    }
+    let anvil = anvil_builder.try_spawn()?;
 
     let endpoint = "/tmp/anvil.ipc";
     tracing::info!(?endpoint);

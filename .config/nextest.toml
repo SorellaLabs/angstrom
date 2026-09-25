@@ -1,0 +1,13 @@
+# Each testnet integration test spawns an anvil mainnet fork plus three
+# in-process Angstrom nodes. nextest gives every test its own process, so the
+# `file_serial` locks in the test files are what actually serialize them; this
+# group keeps nextest from scheduling them concurrently in the first place.
+[test-groups]
+testnet = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "package(testnet) and kind(test)"
+test-group = "testnet"
+# Report a wedged testnet as TIMEOUT after 10 minutes instead of letting it
+# silently consume the rest of the job's budget.
+slow-timeout = { period = "60s", terminate-after = 10 }

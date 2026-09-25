@@ -1149,6 +1149,7 @@ dependencies = [
  "angstrom-types",
  "anyhow",
  "chrono",
+ "eyre",
  "futures",
  "futures-util",
  "itertools 0.14.0",
@@ -1235,6 +1236,7 @@ dependencies = [
 name = "angstrom-rpc"
 version = "0.1.0"
 dependencies = [
+ "alloy-eips",
  "alloy-primitives",
  "angstrom-amm-quoter",
  "angstrom-metrics",
@@ -1296,6 +1298,7 @@ dependencies = [
  "itertools 0.14.0",
  "malachite",
  "pade",
+ "parking_lot",
  "reqwest 0.12.28",
  "reth",
  "reth-chainspec 2.0.0",
@@ -1313,6 +1316,7 @@ dependencies = [
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
  "tower",
  "tracing",
  "tracing-subscriber 0.3.23",
@@ -1342,6 +1346,7 @@ dependencies = [
  "alloy-signer",
  "alloy-signer-local",
  "alloy-sol-types",
+ "alloy-transport",
  "angstrom-types",
  "angstrom-types-constants",
  "base64 0.22.1",
@@ -1361,7 +1366,9 @@ dependencies = [
  "rand 0.9.2",
  "secp256k1 0.30.0",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "uniswap_v3_math",
 ]
@@ -4576,6 +4583,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76ee7a02da4d231650c7cea31349b889be2f45ddb3ef3032d2ec8185f6313fd2"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "fslock"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04412b8935272e3a9bae6f48c7bfff74c2911f60525404edfdd28e49884c3bfb"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -12425,6 +12442,7 @@ version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "911bd979bf1070a3f3aa7b691a3b3e9968f339ceeec89e08c280a8a22207a32f"
 dependencies = [
+ "fslock",
  "futures-executor",
  "futures-util",
  "log",
@@ -12895,6 +12913,7 @@ dependencies = [
 name = "telemetry-recorder"
 version = "0.1.0"
 dependencies = [
+ "alloy",
  "angstrom-types",
  "chrono",
  "serde",
@@ -12927,6 +12946,7 @@ dependencies = [
  "angstrom",
  "angstrom-amm-quoter",
  "angstrom-eth",
+ "angstrom-metrics",
  "angstrom-network",
  "angstrom-rpc",
  "angstrom-types",
@@ -13796,6 +13816,7 @@ dependencies = [
  "revm-bytecode 9.0.0",
  "revm-primitives 22.1.0",
  "serde",
+ "serde_json",
  "telemetry-recorder",
  "thiserror 1.0.69",
  "tokio",
@@ -13907,6 +13928,7 @@ name = "validation"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-evm 0.30.0",
  "angstrom-metrics",
  "angstrom-types",
  "angstrom-utils",
@@ -13918,6 +13940,7 @@ dependencies = [
  "parking_lot",
  "proptest",
  "rand 0.9.2",
+ "reth-chainspec 2.0.0",
  "reth-primitives-traits 0.1.0",
  "reth-provider",
  "reth-revm",

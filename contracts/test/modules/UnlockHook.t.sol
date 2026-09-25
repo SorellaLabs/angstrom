@@ -120,7 +120,8 @@ contract UnlookHookTest is BaseTest {
         angstrom.execute("");
         int128 noFeeOut = actor.swap(
                 pk, false, -int256(swapAmount), 1461446703485210103287273052203988822378723970341
-            ).amount0();
+            )
+            .amount0();
 
         vm.revertToState(snapshotId);
 
@@ -131,7 +132,8 @@ contract UnlookHookTest is BaseTest {
         angstrom.execute("");
         int128 withFeeOut = actor.swap(
                 pk, false, -int256(swapAmount), 1461446703485210103287273052203988822378723970341
-            ).amount0();
+            )
+            .amount0();
 
         assertGe(noFeeOut, 0);
         assertGe(withFeeOut, 0);

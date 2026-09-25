@@ -135,7 +135,8 @@ library OrdersLib {
                 _toHookData(order.hook, order.hookPayload),
                 order.nonce,
                 order.deadline
-            ).hash();
+            )
+            .hash();
     }
 
     function hash(ExactStandingOrder memory order) internal pure returns (bytes32) {
@@ -152,7 +153,8 @@ library OrdersLib {
                 _toHookData(order.hook, order.hookPayload),
                 order.nonce,
                 order.deadline
-            ).hash();
+            )
+            .hash();
     }
 
     function hash(PartialFlashOrder memory order) internal pure returns (bytes32) {
@@ -168,7 +170,8 @@ library OrdersLib {
                 order.recipient,
                 _toHookData(order.hook, order.hookPayload),
                 order.validForBlock
-            ).hash();
+            )
+            .hash();
     }
 
     function hash(ExactFlashOrder memory order) internal pure returns (bytes32) {
@@ -184,7 +187,8 @@ library OrdersLib {
                 order.recipient,
                 _toHookData(order.hook, order.hookPayload),
                 order.validForBlock
-            ).hash();
+            )
+            .hash();
     }
 
     function hash(TopOfBlockOrder memory order) internal pure returns (bytes32) {
@@ -197,7 +201,8 @@ library OrdersLib {
                 order.assetOut,
                 order.recipient,
                 order.validForBlock
-            ).hash();
+            )
+            .hash();
     }
 
     /// @dev WARNING: Assumes `pairs` are sorted.

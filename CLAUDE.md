@@ -106,7 +106,7 @@ forge fmt --check                          # Check formatting
 ## Important Notes
 
 1. **Dependencies**:
-   - Requires Rust 1.88.0+ (edition 2024)
+   - Requires Rust 1.96.0+ (edition 2024)
    - Requires Foundry for contracts
    - Requires Python 3.12 for FFI tests
    - Requires nightly Rust for formatting

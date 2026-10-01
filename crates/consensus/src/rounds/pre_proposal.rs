@@ -72,8 +72,8 @@ impl PreProposalState {
 
         pre_proposals.insert(my_preproposal);
 
-        // ensure we get polled to start the checks for when we have 2f +1 pre_proposals
-        // collected
+        // ensure we get polled to start the checks for when we have 2f +1
+        // pre_proposals collected
         waker.wake_by_ref();
         tracing::info!("starting pre proposal");
 
@@ -107,7 +107,8 @@ where
                 ),
             StromConsensusEvent::Proposal(_, proposal) => {
                 if let Some(proposal) = handles.verify_proposal(proposal) {
-                    // given a proposal was seen. we will skip directly to verification
+                    // given a proposal was seen. we will skip directly to
+                    // verification
                     self.proposal = Some(proposal);
                     self.waker.wake_by_ref();
                 }

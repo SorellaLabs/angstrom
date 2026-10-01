@@ -144,8 +144,8 @@ pub async fn deploy_contract_and_create_pool(
     .await?;
     let angstrom_address = *testhub.address();
 
-    // if we don't do these sequentially, the provider nonce messes up and doesn't
-    // deploy properly
+    // if we don't do these sequentially, the provider nonce messes up and
+    // doesn't deploy properly
     let token0 = anvil_mine_delay(
         Box::pin(async {
             MockERC20::deploy(provider.clone())

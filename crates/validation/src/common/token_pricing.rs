@@ -109,8 +109,9 @@ impl TokenPriceGenerator {
         let new_gas_wei = provider.get_gas_price().await.unwrap_or_default();
 
         let blocks_to_avg_price = blocks_to_avg_price_override.unwrap_or(BLOCKS_TO_AVG_PRICE);
-        // for each pool, we want to load the last 5 blocks and get the sqrt_price_96
-        // and then convert it into the price of the underlying pool
+        // for each pool, we want to load the last 5 blocks and get the
+        // sqrt_price_96 and then convert it into the price of the
+        // underlying pool
         let pools = futures::stream::iter(uni.iter())
             .map(|id| {
                 let pool_key = *id.key();
@@ -371,8 +372,8 @@ impl TokenPriceGenerator {
         if token_0 == self.base_gas_token {
             return Some(Ray::scale_to_ray(U256::from(1)));
         }
-        // should only be called if token_1 is weth or needs multi-hop as otherwise
-        // conversion factor will be 1-1
+        // should only be called if token_1 is weth or needs multi-hop as
+        // otherwise conversion factor will be 1-1
         if token_1 == self.base_gas_token {
             // if so, just pull the price
             let pool_key = self.pair_to_pool.get(&(token_0, token_1))?;
@@ -413,8 +414,8 @@ impl TokenPriceGenerator {
 
             // if we have this, this means that (p0, p1) has (p0, gas) pair.
             // because of this, we can just convert directly on this.
-            // if first_flip = true, means token0 < gas, were price is gas / token0.
-            // thus gas_am t0 * price = gas.
+            // if first_flip = true, means token0 < gas, were price is gas /
+            // token0. thus gas_am t0 * price = gas.
 
             Some(
                 prices
@@ -431,8 +432,8 @@ impl TokenPriceGenerator {
                     / U256::from(size)
             )
         } else if let Some(key) = self.pair_to_pool.get(&(token_0_hop2, token_1_hop2)) {
-            // because we are going through token1 here and we want token zero, we need to
-            // do some extra math
+            // because we are going through token1 here and we want token zero,
+            // we need to do some extra math
             let default_pool_key = self
                 .pair_to_pool
                 .get(&(token_0, token_1))
@@ -548,8 +549,8 @@ pub mod test {
         let queue = VecDeque::from([pair; 5]);
         prices.insert(FixedBytes::<32>::with_last_byte(1), queue);
 
-        // assumes token1 is 6 decimals and token 0 is 18 with a conversion rate of 0.2
-        // gives us 200000
+        // assumes token1 is 6 decimals and token 0 is 18 with a conversion rate
+        // of 0.2 gives us 200000
         let pair2_rate = U256::from(200000);
 
         let pair = PairsWithPrice {
@@ -652,8 +653,8 @@ pub mod test {
         // 625000000000000000000000000000000
 
         // hop 1 rate
-        // assumes token1 is 6 decimals and token 0 is 18 with a conversion rate of 0.2
-        // gives us 200000 TOKEN1 / WETH
+        // assumes token1 is 6 decimals and token 0 is 18 with a conversion rate
+        // of 0.2 gives us 200000 TOKEN1 / WETH
         //
         // hop 2 rate
         // token 1 is 18 decimals, token 0 is 6 with a conversion rate of 1/8
@@ -766,7 +767,8 @@ pub mod test {
         const TEST_TOKEN: Address = address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"); // USDC address as example
 
         // Pool 1: WETH as token0, TEST_TOKEN as token1
-        // Price represents TEST_TOKEN/WETH = 3700 (meaning 1 WETH = 3700 TEST_TOKEN)
+        // Price represents TEST_TOKEN/WETH = 3700 (meaning 1 WETH = 3700
+        // TEST_TOKEN)
         pairs_to_key.insert((WETH_ADDRESS, TEST_TOKEN), FixedBytes::<32>::with_last_byte(1));
 
         // token 1 usdc, token 0 weth
@@ -870,7 +872,8 @@ pub mod test {
             );
         }
 
-        // Verify decreasing gas prices lead to decreasing token amounts for both pairs
+        // Verify decreasing gas prices lead to decreasing token amounts for
+        // both pairs
         for i in 1..weth_t0_results.len() {
             let (prev_gas, prev_amount) = weth_t0_results[i - 1];
             let (curr_gas, curr_amount) = weth_t0_results[i];

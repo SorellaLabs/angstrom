@@ -75,8 +75,9 @@ where
                     .get_eth_conversion_price(token0, token1, gas_in_wei)
                     .ok_or_else(|| eyre::eyre!("failed to get conversion price"))?;
 
-                // For TOB orders, given they are only valid for the current block,
-                // we return a error given the order will never be included.
+                // For TOB orders, given they are only valid for the current
+                // block, we return a error given the order will
+                // never be included.
                 if gas_token_0 > max_gas {
                     return Err(eyre::eyre!("tob order doesn't have enough gas for target block"));
                 }

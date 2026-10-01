@@ -8,7 +8,10 @@ use angstrom_types::{
     sol_bindings::grouped_orders::AllOrders
 };
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 
 use crate::{
     controllers::enviroments::{AngstromTestnet, DevnetStateMachine},
@@ -24,6 +27,9 @@ where
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + 'static
 {
     type FunctionOutput;
@@ -43,6 +49,9 @@ where
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + 'static
 {
     type FunctionOutput = StateMachineCheckedActionHookFn<'a, C>;

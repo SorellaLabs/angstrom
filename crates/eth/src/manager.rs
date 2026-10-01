@@ -667,6 +667,9 @@ pub mod test {
         // Handle commit
         eth.handle_commit(new_chain);
 
+        // handle_commit emits NewBlock before NewBlockTransitions
+        assert!(matches!(rx.try_recv(), Ok(EthEvent::NewBlock(100))));
+
         // Verify new block transitions event was sent
         match rx.try_recv().expect("Should receive an event") {
             EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {
@@ -783,6 +786,8 @@ pub mod test {
         eth.event_listeners.push(tx);
 
         eth.handle_commit(mock_chain);
+
+        assert!(matches!(rx.try_recv(), Ok(EthEvent::NewBlock(100))));
 
         match rx.try_recv().expect("Should receive an event") {
             EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset } => {

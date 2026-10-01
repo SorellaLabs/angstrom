@@ -127,9 +127,9 @@ where
         // grab the last round info if we were the leader.
         let info = self.current_state.last_round_info();
 
-        // reset before we got to proposal, we decay the round time to handle this case
-        // as otherwise, can end up in a loop where we never submit and never
-        // adjust time
+        // reset before we got to proposal, we decay the round time to handle
+        // this case as otherwise, can end up in a loop where we never
+        // submit and never adjust time
         if info.is_none() && self.shared_state.i_am_leader() {
             self.consensus_wait_duration.reset_before_submission();
         }
@@ -316,8 +316,9 @@ where
                     }
                     Entry::Occupied(mut o) => {
                         let current = o.get();
-                        // if this order on same pool_id has a higher tob reward or they are the
-                        // same and it has a lower order hash. replace
+                        // if this order on same pool_id has a higher tob reward
+                        // or they are the same and it
+                        // has a lower order hash. replace
                         if searcher.tob_reward > current.tob_reward
                             || (searcher.tob_reward == current.tob_reward
                                 && searcher.order_id.hash < current.order_id.hash)

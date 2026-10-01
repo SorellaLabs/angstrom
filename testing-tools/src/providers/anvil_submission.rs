@@ -42,15 +42,32 @@ impl ChainSubmitter for AnvilSubmissionProvider {
             if alloy::primitives::address!("0x48bC5A530873DcF0b890aD50120e7ee5283E0112")
                 == pool_manager_addr
             {
-                use alloy::providers::ext::AnvilApi;
+                use alloy::{
+                    primitives::{U256, keccak256},
+                    providers::ext::AnvilApi,
+                    sol_types::SolValue
+                };
                 use futures::StreamExt;
 
                 let block = self.provider.get_block_number().await.unwrap() + 1;
                 let order_overrides = bundle.fetch_needed_overrides(block);
                 let angstrom_address = self.angstrom_address();
+                // The token balances bundle validation simulates with. `take` includes
+                // what the bundle borrows to pay orders out, which the testnet pools'
+                // liquidity does not cover. The testnet tokens keep balances at slot 1.
+                let asset_balances = bundle.assets.iter().flat_map(move |asset| {
+                    [(pool_manager_addr, asset.take), (angstrom_address, asset.settle)].map(
+                        |(holder, quantity)| {
+                            let slot = keccak256((holder, 1).abi_encode());
+                            (asset.addr, slot, U256::from(quantity) * U256::from(2))
+                        }
+                    )
+                });
 
                 let _ = futures::stream::iter(
-                    order_overrides.into_slots_with_overrides(angstrom_address)
+                    order_overrides
+                        .into_slots_with_overrides(angstrom_address)
+                        .chain(asset_balances)
                 )
                 .then(|(token, slot, value)| async move {
                     self.provider

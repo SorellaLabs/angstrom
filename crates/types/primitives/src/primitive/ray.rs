@@ -410,7 +410,8 @@ impl Ray {
     }
 
     fn calc_price_inner(t0: Natural, t1: Natural, rm: RoundingMode) -> Self {
-        // P = t1/t0 but we multiply by 1e27 to preserve precision for the Ray format
+        // P = t1/t0 but we multiply by 1e27 to preserve precision for the Ray
+        // format
         let output = (t1 * const_1e27()).div_round(t0, rm).0;
         let inner = U256::from_limbs_slice(&output.into_limbs_asc());
         Self(inner)

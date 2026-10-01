@@ -230,7 +230,8 @@ impl ReplayRunner {
         let order_api =
             OrderApi::new(pool.clone(), executor.clone(), validation_client.clone(), amm_quoter);
 
-        // We set -1 as the start of the replay will be triggering new block transition.
+        // We set -1 as the start of the replay will be triggering new block
+        // transition.
         let block_number = block_num - 1;
 
         let global_block_sync = GlobalBlockSync::new(block_number);

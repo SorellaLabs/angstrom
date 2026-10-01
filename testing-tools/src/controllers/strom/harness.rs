@@ -177,10 +177,10 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         .map_err(|e| eyre::eyre!("{e}"))?
     );
 
-    // re-fetch given the fetch pools takes awhile. given this, we do techincally
-    // have a gap in which a pool is deployed durning startup.  This isn't critical
-    // but we will want to fix this down the road. let block_id =
-    // querying_provider.get_block_number().await.unwrap();
+    // re-fetch given the fetch pools takes awhile. given this, we do
+    // techincally have a gap in which a pool is deployed durning startup.
+    // This isn't critical but we will want to fix this down the road. let
+    // block_id = querying_provider.get_block_number().await.unwrap();
 
     // Data stream - can be mocked if we're looking at a single block
     let (_eth_event_tx, eth_event_rx) = tokio::sync::mpsc::unbounded_channel::<EthEvent>();
@@ -222,8 +222,8 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     let pool_ids = uniswap_pool_manager.pool_addresses().collect::<Vec<_>>();
 
     executor.spawn_critical_task("uniswap pool manager", Box::pin(uniswap_pool_manager));
-    // EXTERNAL DATA - reads the price history from the chain to establish the price
-    // background. Can be snapshotted or re-read from the chain
+    // EXTERNAL DATA - reads the price history from the chain to establish the
+    // price background. Can be snapshotted or re-read from the chain
     let price_generator = TokenPriceGenerator::new(
         provider.rpc_provider().into(),
         block_id,
@@ -235,8 +235,8 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     .expect("failed to start token price generator");
 
     // Needs to regularly talk to the chain, this one is complicated.  However,
-    // given a single block and no actual updates to the canonical state we should
-    // be able to freeze this in time at a specific block
+    // given a single block and no actual updates to the canonical state we
+    // should be able to freeze this in time at a specific block
     let update_stream = Box::pin(
         mock_canon
             .canonical_state_stream()

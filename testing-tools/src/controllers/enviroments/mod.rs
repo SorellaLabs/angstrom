@@ -20,7 +20,10 @@ use reth_metrics::common::mpsc::{
     UnboundedMeteredReceiver, UnboundedMeteredSender, metered_unbounded_channel
 };
 use reth_network::NetworkHandle;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 pub use state_machine::*;
 use tokio_stream::StreamExt;
 use tracing::{Instrument, Level, span};
@@ -48,12 +51,23 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + Clone
         + 'static,
     G: GlobalTestingConfig,
     P: WithWalletProvider
 {
+    /// Moves the anvil child out of the testnet so the caller's scope owns it.
+    /// The testnet is normally moved into a spawned task, which is not
+    /// guaranteed to be dropped when a test panics; holding the instance in the
+    /// test's own scope means unwinding always kills anvil.
+    pub fn take_anvil_instance(&mut self) -> Option<AnvilInstance> {
+        self._anvil_instance.take()
+    }
+
     pub fn node_provider(&self, node_id: Option<u64>) -> &AnvilProvider<P> {
         self.peers
             .get(&node_id.unwrap_or_default())

@@ -91,7 +91,8 @@ impl BreachTestScenario {
         for i in 0..num_orders {
             let priority = if i % 3 == 0 { OrderPriority::TOB } else { OrderPriority::Book };
             let (tob_bid_amount, order_pool_id) = if matches!(priority, OrderPriority::TOB) {
-                // Generate realistic bid amounts for TOB orders, higher index = higher bid
+                // Generate realistic bid amounts for TOB orders, higher index =
+                // higher bid
                 (1000u128 + (i as u128 * 500), Some(pool_id))
             } else {
                 (0u128, None)
@@ -208,7 +209,7 @@ impl BreachTestScenario {
         for (_pool_id, mut pool_tobs) in tob_orders_by_pool {
             if pool_tobs.len() > 1 {
                 // Sort by bid amount descending (highest bid first)
-                pool_tobs.sort_by(|a, b| b.2.cmp(&a.2));
+                pool_tobs.sort_by_key(|b| std::cmp::Reverse(b.2));
 
                 // Mark all but the highest bid as invalid
                 for (hash, _amount, _) in pool_tobs.iter().skip(1) {
@@ -1075,8 +1076,13 @@ mod proptest_tests {
                     prop_assert!(total_consumption <= initial_balance,
                         "Total consumption {} should not exceed balance {}", total_consumption, initial_balance);
 
-                    // If TOB order would cause breach, it should invalidate book orders
-                    let book_total: u128 = book_amounts.iter().sum();
+                    // If TOB order would cause breach, it should invalidate book orders. Only book
+                    // orders that were valid count: invalid ones never consumed any balance.
+                    let book_total: u128 = book_order_results
+                        .iter()
+                        .filter(|(_, _, was_valid)| *was_valid)
+                        .map(|(_, amount, _)| amount)
+                        .sum();
                     if tob_amount + book_total > initial_balance && tob_verified.is_currently_valid() {
                         prop_assert!(!tob_verified.invalidates.is_empty(),
                             "TOB order should invalidate some book orders when causing breach");

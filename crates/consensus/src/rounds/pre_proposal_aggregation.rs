@@ -74,8 +74,8 @@ impl PreProposalAggregationState {
 
         pre_proposals_aggregation.insert(my_preproposal_aggregation);
 
-        // ensure we get polled to start the checks for when we have 2f +1 pre_proposals
-        // collected
+        // ensure we get polled to start the checks for when we have 2f +1
+        // pre_proposals collected
         waker.wake_by_ref();
         tracing::info!("starting pre proposal aggregation");
 
@@ -118,8 +118,8 @@ where
         handles: &mut SharedRoundState<P, Matching, S>,
         cx: &mut Context<'_>
     ) -> Poll<Option<Box<dyn ConsensusState<P, Matching, S>>>> {
-        // if we aren't the leader. we wait for the proposal to then verify in the
-        // finalization state.
+        // if we aren't the leader. we wait for the proposal to then verify in
+        // the finalization state.
         if let Some(proposal) = self.proposal.take() {
             return Poll::Ready(Some(Box::new(FinalizationState::new(
                 proposal,

@@ -123,15 +123,16 @@ impl<'a> PoolPrice<'a> {
             // There might be a more suave way to do this
             let cur_liq_range = if let Some(lqr) = active_liq_range.as_mut() {
                 debug!("Bumping forward liquidity range");
-                // If we already tested a liquidity range let's move to the next one
+                // If we already tested a liquidity range let's move to the next
+                // one
                 let new_lqr = lqr.next(direction).ok_or_else(|| {
                     eyre!("Unable to find liquidity ranges that span the whole transaction")
                 })?;
                 *lqr = new_lqr;
                 new_lqr
             } else {
-                // Otherwise we can use the one we started in because this is the first
-                // iteration
+                // Otherwise we can use the one we started in because this is
+                // the first iteration
                 active_liq_range = Some(self.liq_range);
                 self.liq_range
             };
@@ -158,8 +159,8 @@ impl<'a> PoolPrice<'a> {
                 0
             )?;
 
-            // If we didn't hit our target and we didn't use all of our quantity then we've
-            // hit a weird error
+            // If we didn't hit our target and we didn't use all of our quantity
+            // then we've hit a weird error
             if new_price != sqrt_ratio_target_x_96 {
                 match direction {
                     Direction::BuyingT0 => {
@@ -214,8 +215,8 @@ impl<'a> PoolPrice<'a> {
         PoolPriceVec::from_price_range(self.clone(), end)
     }
 
-    // /// Create a PoolPriceVec from the current price to the lower bound of the
-    // /// liquidity range that the current price is in
+    // /// Create a PoolPriceVec from the current price to the lower bound of
+    // the /// liquidity range that the current price is in
     // pub fn to_liq_range_lower(&self) -> eyre::Result<PoolPriceVec<'a>> {
     //     self.vec_to(SqrtPriceX96::at_tick(self.liq_range.lower_tick)?)
     // }
@@ -223,13 +224,13 @@ impl<'a> PoolPrice<'a> {
     /// Determine the quantity of t0 needed to bring this price to the price of
     /// the given Debt
     pub fn intersect_with_debt(&self, debt: Debt) -> eyre::Result<u128> {
-        // If the debt is already valid at our current price we can just move it, we're
-        // done
+        // If the debt is already valid at our current price we can just move
+        // it, we're done
         if debt.valid_for_price(self.as_ray()) {
             return Ok(0);
         }
-        // Find out how much it would take to intersect with our debt presuming we stay
-        // within our current liquidity range
+        // Find out how much it would take to intersect with our debt presuming
+        // we stay within our current liquidity range
         let vec_to_upper = self.to_liq_range_upper()?;
         let next_range_start = vec_to_upper.end_bound;
         let t0_to_upper = vec_to_upper.d_t0;
@@ -271,13 +272,15 @@ impl<'a> PoolPrice<'a> {
         // Bounds check our target price if provided
         if let Some(p) = target_price {
             if buy {
-                // Buying from the market will raise the price, so if our target price is on the
-                // wrong side of our current price, we can't do this.
+                // Buying from the market will raise the price, so if our target
+                // price is on the wrong side of our current
+                // price, we can't do this.
                 if p <= self.price {
                     return None;
                 }
             } else {
-                // Selling to the market will lower the price, so the same applies here
+                // Selling to the market will lower the price, so the same
+                // applies here
                 if p >= self.price {
                     return None;
                 }

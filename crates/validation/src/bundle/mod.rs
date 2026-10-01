@@ -172,7 +172,7 @@ where
                     return;
                 }
 
-                let res = BundleGasDetails::new(result.gas_used());
+                let res = BundleGasDetails::new(result.tx_gas_used());
                 let _ = sender.send(Ok(res));
             });
         }))

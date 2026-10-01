@@ -264,8 +264,8 @@ impl BundleProcessing for AngstromBundle {
         // Log the indexes we found for the assets and pair of this solution
         trace!(t0_idx, t1_idx, pair_idx, "Found asset and pair indexes");
 
-        // Add the ToB order to our tob order list - This is currently converting
-        // between two ToB order formats
+        // Add the ToB order to our tob order list - This is currently
+        // converting between two ToB order formats
         if let Some(tob) = solution.searcher.as_ref() {
             // Account for our ToB order
             asset_builder.external_swap(
@@ -307,8 +307,8 @@ impl BundleProcessing for AngstromBundle {
             .map(|o| o.iter().map(|order| (order.order_id, order)).collect())
             .unwrap_or_else(|| default);
 
-        // Loop through our filled user orders, do accounting, and add them to our user
-        // order list
+        // Loop through our filled user orders, do accounting, and add them to
+        // our user order list
         let mut total_user_fees: u128 = 0;
         for (outcome, order) in solution
             .limit
@@ -341,13 +341,14 @@ impl BundleProcessing for AngstromBundle {
 
         let mut ucp = solution.ucp;
 
-        // Now it's time to figure out what's happening with our AMM swap and pool
-        // rewards
+        // Now it's time to figure out what's happening with our AMM swap and
+        // pool rewards
         // Let's get our swap and reward data out of our ToB order, if it exists
         let tob_swap_info = if let Some(ref tob) = solution.searcher {
             match TopOfBlockOrder::calc_vec_and_reward(tob, snapshot) {
                 Ok((v, reward_q)) => {
-                    // if we have a tob swap, and ucp == 0, we are going to want to update it
+                    // if we have a tob swap, and ucp == 0, we are going to want
+                    // to update it
                     if ucp.is_zero() {
                         ucp = Ray::from(v.end_price);
                     }
@@ -374,15 +375,17 @@ impl BundleProcessing for AngstromBundle {
 
         pairs.push(Pair { index0: t0_idx, index1: t1_idx, store_index, price_1over0: *ucp });
 
-        // If we have a ToB swap, our post-tob-price is the price at the end of that
-        // swap, otherwise we're starting from the snapshot's current price
+        // If we have a ToB swap, our post-tob-price is the price at the end of
+        // that swap, otherwise we're starting from the snapshot's
+        // current price
         let post_tob_price = tob_swap_info
             .clone()
             .map(|(v, _)| v)
             .unwrap_or_else(|| snapshot.noop());
 
-        // NOTE: if we have no books, its a zero swap from exact price to exact price.
-        // optimally we have these separate branches but this is just a patch fix
+        // NOTE: if we have no books, its a zero swap from exact price to exact
+        // price. optimally we have these separate branches but this is
+        // just a patch fix
         let book_swap_vec = if solution.ucp.is_zero() {
             // snapshot.noop()
             trace!("No book swap, UCP was zero");
@@ -408,17 +411,19 @@ impl BundleProcessing for AngstromBundle {
         let total_lp_user_donate = (total_user_fees as f64 * LP_DONATION_SPLIT) as u128;
         let save_amount = total_user_fees - total_lp_user_donate;
 
-        // We then use `post_tob_price` as the start price for our book swap, just as
-        // our matcher did.  We want to use the representation of the book swap
-        // (`book_swap_vec`) to distribute any extra rewards from our book matching.
+        // We then use `post_tob_price` as the start price for our book swap,
+        // just as our matcher did.  We want to use the representation
+        // of the book swap (`book_swap_vec`) to distribute any extra
+        // rewards from our book matching.
 
-        // We're making an assumption here that's valid for the Delta validator (that
-        // the AMM was swapped during matching from the post_tob_price to the UCP)
-        // let book_swap_vec = PoolPriceVec::from_price_range(post_tob_price,
+        // We're making an assumption here that's valid for the Delta validator
+        // (that the AMM was swapped during matching from the
+        // post_tob_price to the UCP) let book_swap_vec =
+        // PoolPriceVec::from_price_range(post_tob_price,
         // book_end_price)?;
 
-        // We need to do our donations in the right order - first the ToB and then the
-        // book.  So let's do that
+        // We need to do our donations in the right order - first the ToB and
+        // then the book.  So let's do that
         let book_donation_vec = book_swap_vec
             .as_ref()
             .map(|bsv| bsv.t0_donation_vec(solution.reward_t0 + total_lp_user_donate));
@@ -440,8 +445,9 @@ impl BundleProcessing for AngstromBundle {
             .map(|d| d.total_donated)
             .unwrap_or(solution.reward_t0 + total_lp_user_donate);
 
-        // Find our net AMM vec by combining T0s.  There's not a specific reason we use
-        // T0 for this, we might want to make this a bit more robust or careful
+        // Find our net AMM vec by combining T0s.  There's not a specific reason
+        // we use T0 for this, we might want to make this a bit more
+        // robust or careful
         let net_pool_vec = if let Some((tob_vec, _)) = tob_swap_info {
             // zero for 1 is neg
 
@@ -521,7 +527,8 @@ impl BundleProcessing for AngstromBundle {
                 )
             });
 
-        // The first PoolUpdate is the actual net pool swap and associated rewards
+        // The first PoolUpdate is the actual net pool swap and associated
+        // rewards
         pool_updates.push(PoolUpdate {
             zero_for_one: net_pool_vec.zero_for_one(),
             pair_index: pair_idx as u16,
@@ -554,8 +561,8 @@ impl BundleProcessing for AngstromBundle {
         let user_orders = Vec::new();
         let mut asset_builder = AssetBuilder::new();
 
-        // Get the information for the pool or skip this solution if we can't find a
-        // pool for it
+        // Get the information for the pool or skip this solution if we can't
+        // find a pool for it
         let (t0, t1) = {
             let token_in = user_order.token_in();
             let token_out = user_order.token_out();
@@ -608,15 +615,15 @@ impl BundleProcessing for AngstromBundle {
         let mut asset_builder = AssetBuilder::new();
 
         {
-            // Get the information for the pool or skip this solution if we can't find a
-            // pool for it
+            // Get the information for the pool or skip this solution if we
+            // can't find a pool for it
             let (t0, t1) = {
                 let token_in = user_order.token_in();
                 let token_out = user_order.token_out();
                 if token_in < token_out { (token_in, token_out) } else { (token_out, token_in) }
             };
-            // Make sure the involved assets are in our assets array and we have the
-            // appropriate asset index for them
+            // Make sure the involved assets are in our assets array and we have
+            // the appropriate asset index for them
             let t0_idx = asset_builder.add_or_get_asset(t0) as u16;
             let t1_idx = asset_builder.add_or_get_asset(t1) as u16;
 
@@ -670,8 +677,9 @@ impl BundleProcessing for AngstromBundle {
                         .map(|searcher| (1, searcher.priority_data.gas_units));
                 };
 
-                // Sort the user order list so we can properly associate it with our
-                // OrderOutcomes.  First bids by price then asks by price.
+                // Sort the user order list so we can properly associate it with
+                // our OrderOutcomes.  First bids by price then
+                // asks by price.
                 order_list.sort_by(|a, b| match (a.is_bid, b.is_bid) {
                     (true, true) => b.priority_data.cmp(&a.priority_data),
                     (false, false) => a.priority_data.cmp(&b.priority_data),
@@ -714,7 +722,8 @@ impl BundleProcessing for AngstromBundle {
         user_orders: &mut Vec<UserOrder>
     ) -> eyre::Result<u128> {
         let order = order.unwrap();
-        // Calculate our final amounts based on whether the order is in T0 or T1 context
+        // Calculate our final amounts based on whether the order is in T0 or T1
+        // context
         assert_eq!(outcome.id.hash, order.order_id.hash, "Order and outcome mismatched");
 
         let fill_amount = outcome.fill_amount(order.amount());
@@ -735,12 +744,12 @@ impl BundleProcessing for AngstromBundle {
         let (quantity_in, quantity_out) = if order.is_bid() {
             // one for zero
 
-            // If the order is a bid, we're getting all our T1 in and we're sending t0_net
-            // back to the contract
+            // If the order is a bid, we're getting all our T1 in and we're
+            // sending t0_net back to the contract
             (t1, t0_net)
         } else {
-            // If the order is an ask, we're getting t0_net + t0_fee + gas in and we're
-            // sending t1 back to the contract
+            // If the order is an ask, we're getting t0_net + t0_fee + gas in
+            // and we're sending t1 back to the contract
             // zero for one
             (t0_net + t0_fee + gas, t1)
         };
@@ -805,8 +814,8 @@ impl BundleProcessing for AngstromBundle {
             &orders_by_pool,
             &proposal.solutions
         );
-        // this should never underflow. if it does. means that there is underlying
-        // problem with the gas delegation module
+        // this should never underflow. if it does. means that there is
+        // underlying problem with the gas delegation module
 
         if total_swaps == 0 {
             return Err(eyre::eyre!("have a total swaps count of 0"));
@@ -816,8 +825,9 @@ impl BundleProcessing for AngstromBundle {
         // then sort them and change the offests before we index all orders
         for solution in proposal.solutions.iter() {
             let Some((t0, t1, ..)) = pools.get(&solution.id) else {
-                // This should never happen but let's handle it as gracefully as possible -
-                // right now will skip the pool, not produce an error
+                // This should never happen but let's handle it as gracefully as
+                // possible - right now will skip the pool, not
+                // produce an error
                 warn!(
                     "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
                     pools, solution.id
@@ -833,19 +843,21 @@ impl BundleProcessing for AngstromBundle {
         // Walk through our solutions to add them to the structure
         for solution in proposal.solutions.iter().sorted_unstable_by_key(|k| {
             let Some((t0, t1, ..)) = pools.get(&k.id) else {
-                // This should never happen but let's handle it as gracefully as possible -
-                // right now will skip the pool, not produce an error
+                // This should never happen but let's handle it as gracefully as
+                // possible - right now will skip the pool, not
+                // produce an error
                 return 0usize;
             };
             let t0_idx = asset_builder.add_or_get_asset(*t0);
             let t1_idx = asset_builder.add_or_get_asset(*t1);
             (t0_idx << 16) | t1_idx
         }) {
-            // Get the information for the pool or skip this solution if we can't find a
-            // pool for it
+            // Get the information for the pool or skip this solution if we
+            // can't find a pool for it
             let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
-                // This should never happen but let's handle it as gracefully as possible -
-                // right now will skip the pool, not produce an error
+                // This should never happen but let's handle it as gracefully as
+                // possible - right now will skip the pool, not
+                // produce an error
                 warn!(
                     "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
                     pools, solution.id
@@ -905,8 +917,9 @@ impl BundleProcessing for AngstromBundle {
         // then sort them and change the offests before we index all orders
         for solution in solutions.iter() {
             let Some((t0, t1, ..)) = pools.get(&solution.id) else {
-                // This should never happen but let's handle it as gracefully as possible -
-                // right now will skip the pool, not produce an error
+                // This should never happen but let's handle it as gracefully as
+                // possible - right now will skip the pool, not
+                // produce an error
                 warn!(
                     "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
                     pools, solution.id
@@ -921,8 +934,9 @@ impl BundleProcessing for AngstromBundle {
         // Walk through our solutions to add them to the structure
         for solution in solutions.iter().sorted_unstable_by_key(|k| {
             let Some((t0, t1, ..)) = pools.get(&k.id) else {
-                // This should never happen but let's handle it as gracefully as possible -
-                // right now will skip the pool, not produce an error
+                // This should never happen but let's handle it as gracefully as
+                // possible - right now will skip the pool, not
+                // produce an error
                 return 0usize;
             };
             let t0_idx = asset_builder.add_or_get_asset(*t0);
@@ -930,11 +944,12 @@ impl BundleProcessing for AngstromBundle {
             (t0_idx << 16) | t1_idx
         }) {
             println!("Processing solution");
-            // Get the information for the pool or skip this solution if we can't find a
-            // pool for it
+            // Get the information for the pool or skip this solution if we
+            // can't find a pool for it
             let Some((t0, t1, snapshot, store_index)) = pools.get(&solution.id) else {
-                // This should never happen but let's handle it as gracefully as possible -
-                // right now will skip the pool, not produce an error
+                // This should never happen but let's handle it as gracefully as
+                // possible - right now will skip the pool, not
+                // produce an error
                 warn!(
                     "Skipped a solution as we couldn't find a pool for it: {:?}, {:?}",
                     pools, solution.id

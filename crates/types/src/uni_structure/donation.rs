@@ -96,7 +96,8 @@ pub struct DonationCalculation {
 
 impl DonationCalculation {
     pub fn from_vec(vec: &[DonationType]) -> eyre::Result<Self> {
-        // If we're coming from an empty vec, return an empty DonationCalculation
+        // If we're coming from an empty vec, return an empty
+        // DonationCalculation
         if vec.is_empty() {
             return Ok(Self {
                 donations:     VecDeque::new(),
@@ -125,7 +126,8 @@ impl DonationCalculation {
         } else {
             0
         };
-        // If the first element in our vec is an Above, we need to reverse the vec
+        // If the first element in our vec is an Above, we need to reverse the
+        // vec
         let total_donated = vec.iter().fold(0_u128, |acc, e| acc + e.donation());
         Ok(Self { donations, break_idx, current_tick, total_donated })
     }
@@ -149,8 +151,8 @@ impl DonationCalculation {
     pub fn into_reward_updates(&self) -> (RewardsUpdate, Option<RewardsUpdate>) {
         match (self.break_idx, self.donations.len()) {
             (_, 0) | (_, 1) => {
-                // Whatever our break_idx is, if we have just one donation it must be just the
-                // current tick
+                // Whatever our break_idx is, if we have just one donation it
+                // must be just the current tick
                 let (amount, expected_liquidity) = if let Some(d) = self.donations.front() {
                     (d.donation(), d.liquidity())
                 } else {
@@ -159,7 +161,8 @@ impl DonationCalculation {
                 (RewardsUpdate::CurrentOnly { amount, expected_liquidity }, None)
             }
             (0, len) => {
-                // If the break_idx is 0, the entire donation vec is one side - above
+                // If the break_idx is 0, the entire donation vec is one side -
+                // above
                 let (start_tick, start_liquidity) = (
                     I24::unchecked_from(self.donations[len - 1].tick()),
                     self.donations[len - 1].liquidity()
@@ -177,7 +180,8 @@ impl DonationCalculation {
                 )
             }
             (b, len) if b == (len - 1) => {
-                // If the break_idx is the max index, the entire donation vec is below
+                // If the break_idx is the max index, the entire donation vec is
+                // below
                 let (start_tick, start_liquidity) =
                     (I24::unchecked_from(self.donations[0].tick()), self.donations[0].liquidity());
                 let quantities = self.donations.iter().map(|d| d.donation()).collect();
@@ -212,7 +216,8 @@ impl DonationCalculation {
                 let (below_start_tick, below_start_liquidity) =
                     (I24::unchecked_from(below[0].tick()), below[0].liquidity());
                 let mut below_quantities: Vec<u128> = below.iter().map(|d| d.donation()).collect();
-                // Given that we rewarded "current" above, we can't reward it here
+                // Given that we rewarded "current" above, we can't reward it
+                // here
                 if let Some(last_q) = below_quantities.last_mut() {
                     *last_q = 0;
                 }
@@ -249,47 +254,51 @@ impl Add<&[DonationType]> for &DonationCalculation {
         let mut rel_idx = self.break_idx + 1;
         let mut current_tick = self.current_tick;
         for i in rhs {
-            // We always update our total_donated with the donation amount from our incoming
-            // vec
+            // We always update our total_donated with the donation amount from
+            // our incoming vec
             total_donated += i.donation();
 
-            // If our incoming donation event is "Current", this will be the end and we
-            // should set our final tick to the final tick described there
+            // If our incoming donation event is "Current", this will be the end
+            // and we should set our final tick to the final tick
+            // described there
             if let DonationType::Current { final_tick, .. } = i {
                 current_tick = *final_tick;
             }
             // Check to see if we are going to merge or extend
             // if if rel_idx - 1 gets us something, we're merging
             // if rel_idx - 1 gets us nothing, we're extending off the front
-            // If we've hit the new "Current" then update our final_tick to be that tick
+            // If we've hit the new "Current" then update our final_tick to be
+            // that tick
             if rel_idx == 0 {
-                // We're moving downwards and off the front edge of our storage vec, so we will
-                // just be pushing all future elements to the front of the vec and we don't need
+                // We're moving downwards and off the front edge of our storage
+                // vec, so we will just be pushing all future
+                // elements to the front of the vec and we don't need
                 // to move rel_idx anymore
                 donations.push_front(i.clone());
                 // We no longer need to adjust rel_idx
                 continue;
             } else if let Some(entry) = donations.get_mut(rel_idx - 1) {
-                // If we're already pointing at an existing entry it needs to be combined and
-                // flipped to the new entry type
+                // If we're already pointing at an existing entry it needs to be
+                // combined and flipped to the new entry type
                 *entry = &*entry + i;
                 // We move rel_idx based on the type of new entry we're at
             } else {
-                // If we're up off the back edge of our storage vec, we will be pushing all
-                // future elements to the end of the vec, but we still do want to move rel_idx
+                // If we're up off the back edge of our storage vec, we will be
+                // pushing all future elements to the end of the
+                // vec, but we still do want to move rel_idx
                 // to point at the right end element
                 donations.push_back(i.clone());
             }
-            // Ajdust our pointer.  When we hit `Current` in the new vec, we're done and we
-            // should leave rel_idx pointing there
+            // Ajdust our pointer.  When we hit `Current` in the new vec, we're
+            // done and we should leave rel_idx pointing there
             match i {
                 DonationType::Above { .. } => rel_idx -= 1,
                 DonationType::Below { .. } => rel_idx += 1,
                 DonationType::Current { .. } => ()
             }
         }
-        // We use saturating_sub because if our rel_idx is 0, that's where it should
-        // stay
+        // We use saturating_sub because if our rel_idx is 0, that's where it
+        // should stay
         let break_idx = rel_idx.saturating_sub(1);
         DonationCalculation { donations, total_donated, break_idx, current_tick }
     }

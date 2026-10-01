@@ -24,8 +24,8 @@ pub struct PoolSwap<'a> {
 
 impl<'a> PoolSwap<'a> {
     pub fn swap(mut self) -> eyre::Result<PoolSwapResult<'a>> {
-        // We want to ensure that we set the right limits and are swapping the correct
-        // way.
+        // We want to ensure that we set the right limits and are swapping the
+        // correct way.
 
         if self.direction
             && self
@@ -202,7 +202,8 @@ impl<'a> PoolSwapResult<'a> {
                     let mut acc = (q.d_t0, q.d_t1, q.end_tick, q.liquidity, q.init);
                     while !acc.4 {
                         if let Some(v) = i.next() {
-                            // Putting an assert here for the moment, this should always be equal
+                            // Putting an assert here for the moment, this
+                            // should always be equal
                             // unless something WEIRD happens
                             assert_eq!(acc.3, v.liquidity, "Mismatched liquidity in step");
                             acc.0 += v.d_t0;
@@ -250,51 +251,55 @@ impl<'a> PoolSwapResult<'a> {
         let mut remaining_donation = total_donation;
         let mut current_blob: Option<(u128, u128)> = None;
         for r in ranges.iter() {
-            // If our current blob is empty, we can just insert the current step's stats
-            // into it
+            // If our current blob is empty, we can just insert the current
+            // step's stats into it
             let Some((c_t0, c_t1)) = current_blob.as_mut() else {
                 current_blob = Some((r.d_t0, r.d_t1));
                 continue;
             };
 
-            // Find the average price of our current step and get our existing blob to
-            // that price
+            // Find the average price of our current step and get our existing
+            // blob to that price
             let target_price = r.avg_price();
             let target_t0 = target_price.inverse_quantity(*c_t1, round_up);
-            // The step cost is the difference between the amount of t0 we actually moved
-            // and the amount we should have moved to be at this step's average price
+            // The step cost is the difference between the amount of t0 we
+            // actually moved and the amount we should have moved to
+            // be at this step's average price
             let step_cost = c_t0.abs_diff(target_t0);
 
-            // If the move costs as much or less than what we have to spend, we've completed
-            // this step and can merge blobs
+            // If the move costs as much or less than what we have to spend,
+            // we've completed this step and can merge blobs
             let step_complete = remaining_donation >= step_cost;
 
             let increment = std::cmp::min(remaining_donation, step_cost);
             if direction {
-                // If the price T1/T0 is dropping, we're going to be giving our LPs MORE T0 in
-                // exchange for the T1 they pay us
+                // If the price T1/T0 is dropping, we're going to be giving our
+                // LPs MORE T0 in exchange for the T1 they pay
+                // us
                 *c_t0 += increment;
             } else {
-                // If the price T1/T0 is increasing, we're going to be refunding T0 to the LPs,
-                // meaning they have effectively given us LESS T0 for the T1 we paid them
+                // If the price T1/T0 is increasing, we're going to be refunding
+                // T0 to the LPs, meaning they have effectively
+                // given us LESS T0 for the T1 we paid them
                 *c_t0 = c_t0.saturating_sub(increment)
             }
             remaining_donation -= increment;
 
             if step_complete {
-                // If we had enough reward to complete this step, we continue and merge this
-                // step into the blob
+                // If we had enough reward to complete this step, we continue
+                // and merge this step into the blob
                 *c_t0 += r.d_t0;
                 *c_t1 += r.d_t1;
             } else {
-                // If we didn't have enough reward to complete this step, we're done
+                // If we didn't have enough reward to complete this step, we're
+                // done
                 break;
             }
         }
 
-        // At this point, all of our swap is within the blob.  If we have additional
-        // donation, we want to distribute it ALL to the blob to get to the best price
-        // possible.
+        // At this point, all of our swap is within the blob.  If we have
+        // additional donation, we want to distribute it ALL to the blob
+        // to get to the best price possible.
         if let Some((c_t0, _)) = current_blob.as_mut() {
             if direction {
                 *c_t0 += remaining_donation
@@ -321,12 +326,14 @@ impl<'a> PoolSwapResult<'a> {
                     // T1 is constant, so we need to know how much t0 we need
                     let target_t0 = f.inverse_quantity(r.d_t1, round_up);
                     if direction {
-                        // If the filled_price should be lower than our current price, then our
-                        // target T0 is MORE than we have in this step
+                        // If the filled_price should be lower than our current
+                        // price, then our target T0 is
+                        // MORE than we have in this step
                         std::cmp::min(remaining_donation, target_t0.saturating_sub(r.d_t0))
                     } else {
-                        // If the filled_price should be higher than our current price, then our
-                        // target T0 is LESS than we have in this step
+                        // If the filled_price should be higher than our current
+                        // price, then our target T0 is
+                        // LESS than we have in this step
                         std::cmp::min(remaining_donation, r.d_t0.saturating_sub(target_t0))
                     }
                 } else {

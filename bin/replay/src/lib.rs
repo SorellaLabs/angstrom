@@ -163,8 +163,8 @@ pub async fn build_log_and_provider(
         let blocknum = provider.state_provider().last_block_number()?;
         Ok((raw_log.at_block(blocknum), provider.into_state_provider(), Some(initial_state)))
     } else {
-        // Otherwise we want to just fork the current chain as specified on the command
-        // line
+        // Otherwise we want to just fork the current chain as specified on the
+        // command line
         tracing::info!("Forking target network");
         let (wallet, instance) = node_config.spawn_anvil_rpc().await?;
         let provider = AnvilProvider::new(AnvilStateProvider::new(wallet), instance, None);

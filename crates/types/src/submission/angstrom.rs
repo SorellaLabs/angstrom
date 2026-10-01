@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use alloy::{
     eips::Encodable2718,
-    network::TransactionBuilder,
+    network::{NetworkTransactionBuilder, TransactionBuilder},
     primitives::Bytes,
     providers::{Provider, RootProvider},
     rpc::client::ClientBuilder
@@ -61,8 +61,9 @@ impl ChainSubmitter for AngstromSubmitter {
                 tx.set_max_priority_fee_per_gas(0);
 
                 let gas = tx.max_priority_fee_per_gas.unwrap();
-                // TODO: manipulate gas before signing based of off defined rebate spec.
-                // This is pending with talks with titan so leaving it for now
+                // TODO: manipulate gas before signing based of off defined
+                // rebate spec. This is pending with talks with
+                // titan so leaving it for now
 
                 let signed_tx = tx.build(signer).await.unwrap();
                 tx_hash = Some(*signed_tx.hash());

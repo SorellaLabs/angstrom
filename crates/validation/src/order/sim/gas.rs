@@ -56,9 +56,9 @@ where
         // let bytecode = keccak256(&Angstrom::BYTECODE);
         // assert!(
         //     SETUP_BYTECODE == bytecode,
-        //     "setup bytecode doesn't match bytecode we got. This can mean that the
-        // offsets for gas \      could be miss-set and lead to errors"
-        // );
+        //     "setup bytecode doesn't match bytecode we got. This can mean that
+        // the offsets for gas \      could be miss-set and lead to
+        // errors" );
 
         if let Some(angstrom_address) = angstrom_address {
             Ok(Self {
@@ -93,7 +93,8 @@ where
         //         user_address:  tob.from()
         //     },
         //     |execution_env| {
-        //         let bundle = AngstromBundle::build_dummy_for_tob_gas(tob).unwrap();
+        //         let bundle =
+        // AngstromBundle::build_dummy_for_tob_gas(tob).unwrap();
         //
         //         let bundle = bundle.pade_encode();
         //         let bundle_bytes: Bytes = bundle.into();
@@ -126,7 +127,8 @@ where
         _block: u64
     ) -> eyre::Result<GasUsed> {
         // let exact_in = order.exact_in();
-        // let bundle = AngstromBundle::build_dummy_for_user_gas(order).unwrap();
+        // let bundle =
+        // AngstromBundle::build_dummy_for_user_gas(order).unwrap();
         //
         // let bundle = bundle.pade_encode();
         //
@@ -197,8 +199,8 @@ where
     //     Ok((out, cache_db.0))
     // }
     //
-    // /// deploys angstrom + univ4 and then sets DEFAULT_FROM address as a node in
-    // /// the network.
+    // /// deploys angstrom + univ4 and then sets DEFAULT_FROM address as a node
+    // in /// the network.
     // fn setup_revm_cache_database_for_simulation(db: Arc<DB>) ->
     // eyre::Result<ConfiguredRevm<DB>> {     let cache_db =
     // CacheDB::new(db.clone());
@@ -226,8 +228,8 @@ where
     //         angstrom_types::contract_bindings::angstrom::Angstrom::BYTECODE.
     // clone();
     //
-    //     // in solidity when deploying. constructor args are appended to the end
-    // of the     // bytecode.
+    //     // in solidity when deploying. constructor args are appended to the
+    // end of the     // bytecode.
     //     let constructor_args = (v4_address, DEFAULT_FROM,
     // DEFAULT_FROM).abi_encode().into();     let data: Bytes =
     // [angstrom_raw_bytecode, constructor_args].concat().into();
@@ -242,7 +244,8 @@ where
     //         mine_address_with_factory(DEFAULT_CREATE2_FACTORY, flags,
     // UniswapFlags::mask(), &data);
     //
-    //     let final_mock_initcode = [salt.abi_encode(), data.to_vec()].concat();
+    //     let final_mock_initcode = [salt.abi_encode(),
+    // data.to_vec()].concat();
     //
     //     let (out, cache_db) = Self::execute_with_db(cache_db, |tx| {
     //         tx.transact_to = TxKind::Call(DEFAULT_CREATE2_FACTORY);

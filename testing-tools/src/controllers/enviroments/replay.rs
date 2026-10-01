@@ -18,7 +18,10 @@ use angstrom_types::{
 use futures::FutureExt;
 use order_pool::OrderPoolHandle;
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 use reth_tasks::TaskExecutor;
 use telemetry::blocklog::BlockLog;
 use telemetry_recorder::TelemetryMessage;
@@ -45,6 +48,9 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + Clone
         + 'static
@@ -187,15 +193,16 @@ where
         let pool_keys = node_config.pool_keys();
         let (i, leader_provider, initial_angstrom_state) =
             if node_config.global_config.use_testnet() {
-                // If we're using Testnet thene we want to deploy and configure a local testnet
-                // Anvil
+                // If we're using Testnet thene we want to deploy and configure
+                // a local testnet Anvil
                 let initializer_provider =
                     Self::spawn_provider(node_config.clone(), node_addresses).await?;
                 tokio::time::sleep(Duration::from_millis(1000)).await;
                 Self::anvil_deployment(initializer_provider, pool_keys, ex.clone()).await?
             } else {
-                // If we're not using testnet, then we want to spawn a mainnet fork instead
-                // This is experimental and I'm not sure how well any of it works yet
+                // If we're not using testnet, then we want to spawn a mainnet
+                // fork instead This is experimental and I'm not
+                // sure how well any of it works yet
                 let deployed_addresses =
                     DeployedAddresses::from_globals(Address::random(), Address::random());
                 let res =

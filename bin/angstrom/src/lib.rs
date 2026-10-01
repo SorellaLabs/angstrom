@@ -82,8 +82,8 @@ pub fn run() -> eyre::Result<()> {
         let validation_client = ValidationClient(channels.validator_tx.clone());
         let consensus_client = ConsensusHandler(channels.consensus_tx_rpc.clone());
 
-        // get provider and node set for startup, we need this so when reth startup
-        // happens, we directly can connect to the nodes.
+        // get provider and node set for startup, we need this so when reth
+        // startup happens, we directly can connect to the nodes.
 
         let startup_provider = ProviderBuilder::<_, _, Ethereum>::default()
             .with_recommended_fillers()

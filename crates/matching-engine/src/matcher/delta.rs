@@ -124,8 +124,9 @@ impl<'a> DeltaMatcher<'a> {
 
         let start_sqrt = pool.end_price;
 
-        // If the AMM price is decreasing, it is because the AMM is accepting T0 from
-        // the contract.  An order that purchases T0 from the contract is a bid
+        // If the AMM price is decreasing, it is because the AMM is accepting T0
+        // from the contract.  An order that purchases T0 from the
+        // contract is a bid
         let zfo = start_sqrt >= end_sqrt;
 
         // swap to start
@@ -143,15 +144,15 @@ impl<'a> DeltaMatcher<'a> {
             "AMM swap calc"
         );
         if zfo {
-            // if the amm is swapping from zero to one, it means that we need more liquidity
-            // it in token 1 and less in token zero
+            // if the amm is swapping from zero to one, it means that we need
+            // more liquidity it in token 1 and less in token zero
             (
                 I256::try_from(res.total_d_t0).unwrap() * I256::MINUS_ONE,
                 I256::try_from(res.total_d_t1).unwrap()
             )
         } else {
-            // if we are one for zero, means we are adding liquidity in t0 and removing in
-            // t1
+            // if we are one for zero, means we are adding liquidity in t0 and
+            // removing in t1
             (
                 I256::try_from(res.total_d_t0).unwrap(),
                 I256::try_from(res.total_d_t1).unwrap() * I256::MINUS_ONE
@@ -196,15 +197,17 @@ impl<'a> DeltaMatcher<'a> {
             )
             .filter(|o| !killed.contains(&o.order_id))
             .for_each(|o| {
-                // If we're precisely at our target price, we determine what our minimum and
-                // maximum output is for this order.  Otherwise our minimum is "all of it"
+                // If we're precisely at our target price, we determine what our
+                // minimum and maximum output is for this order.
+                // Otherwise our minimum is "all of it"
                 let at_price = price == o.price_t1_over_t0();
                 let (min_q, max_q) = if at_price {
                     if o.is_partial() {
                         // Partial orders at the price have a range
                         (o.min_amount(), Some(o.amount()))
                     } else {
-                        // Exact orders at the price need to be registered as killable
+                        // Exact orders at the price need to be registered as
+                        // killable
                         let order_q = o.amount();
                         killable_orders.push((o.order_id, order_q, o.is_bid));
                         (order_q, None)
@@ -214,8 +217,9 @@ impl<'a> DeltaMatcher<'a> {
                     (o.amount(), None)
                 };
 
-                // Calculate and account for our minimum fill, preserving quantity numbers in
-                // case we need to use them for slack later
+                // Calculate and account for our minimum fill, preserving
+                // quantity numbers in case we need to use them
+                // for slack later
 
                 let (min_in, min_out) = Self::get_amount_in_out(o, min_q, self.fee, price);
                 // Add the mandatory portion of this order to our overall delta
@@ -231,8 +235,8 @@ impl<'a> DeltaMatcher<'a> {
                 net_t0 += t0_d;
                 net_t1 += t1_d;
 
-                // If we have a maximum available amount, put that into our slack to be matched
-                // later
+                // If we have a maximum available amount, put that into our
+                // slack to be matched later
                 let (t0_s, t1_s) = if let Some(fill_amount) = max_q {
                     let (max_in, max_out) =
                         Self::get_amount_in_out(o, fill_amount, self.fee, price);
@@ -281,8 +285,8 @@ impl<'a> DeltaMatcher<'a> {
                 }
             )
             .into_inner();
-        // We only suggest killing orders if we can actually succeed at fixing this
-        // price
+        // We only suggest killing orders if we can actually succeed at fixing
+        // this price
         if total_elim >= min_target { (total_elim, order_ids) } else { (0_u128, None) }
     }
 
@@ -328,7 +332,8 @@ impl<'a> DeltaMatcher<'a> {
         // liquidity
         let excess_liquidity = if self.solve_for_t0 { &t0_sum } else { &t1_sum };
 
-        // See if we have any partial amount available that actually drains liquidity
+        // See if we have any partial amount available that actually drains
+        // liquidity
         let (available_drain, available_add, bid_is_input) = if self.solve_for_t0 {
             (bid_slack.0, ask_slack.0, false)
         } else {
@@ -338,13 +343,13 @@ impl<'a> DeltaMatcher<'a> {
         // We need our absolute excess in all cases here
         let abs_excess = excess_liquidity.unsigned_abs().saturating_to::<u128>();
 
-        // We should see if we can fix our excess liquidity to be within the realm of
-        // our add?
+        // We should see if we can fix our excess liquidity to be within the
+        // realm of our add?
 
         // Option<(bid_partial_fill, ask_partial_fill)
         let (bid_fill_q, ask_fill_q, reward_t0) = if excess_liquidity.is_negative() {
-            // If our available fill is not enough to resolve our excess liquidity, we can
-            // end here
+            // If our available fill is not enough to resolve our excess
+            // liquidity, we can end here
             let Some(remaining_add) = available_add.checked_sub(abs_excess) else {
                 // See if we can find an order we can kill to fix the problem
                 let min_target = abs_excess - available_add;
@@ -355,41 +360,54 @@ impl<'a> DeltaMatcher<'a> {
             // Otherwise let's see if we can fill any extra after this
             let additional_fillable = min(remaining_add, available_drain);
             if self.solve_for_t0 {
-                // If I'm solving for T0, asks are providing me the extra T0 I need and bids are
-                // matched with my additional_fillable.
+                // If I'm solving for T0, asks are providing me the extra T0 I
+                // need and bids are matched with my
+                // additional_fillable.
 
-                // For T0 solve we do not expect to have excess T0 to donate so `reward_t0` is
-                // just zero.
+                // For T0 solve we do not expect to have excess T0 to donate so
+                // `reward_t0` is just zero.
 
                 (price.quantity(additional_fillable, false), abs_excess + additional_fillable, 0)
             } else {
-                // For T1 swap, we want to figure out how much excess T0 we have, which will
-                // become our `reward_t0`.  We can assume that we will be swapping all of our
-                // excess T1 (`abs_excess`) for T0 and that will be the amount of extra T0 we
-                // have to give as a reward. `additional_fillable` is based on orders that have
-                // been matched against each other, so its effect on our net balances should be
-                // zero and it is allocated to partial orders on both sides of the book.
+                // For T1 swap, we want to figure out how much excess T0 we
+                // have, which will become our `reward_t0`.  We
+                // can assume that we will be swapping all of our
+                // excess T1 (`abs_excess`) for T0 and that will be the amount
+                // of extra T0 we have to give as a reward.
+                // `additional_fillable` is based on orders that have
+                // been matched against each other, so its effect on our net
+                // balances should be zero and it is allocated
+                // to partial orders on both sides of the book.
 
-                // `abs_excess` is in T1 and on this path it is an underflow (negative
-                // quantity), we will be getting our additional T1 from bid orders.  We should
-                // also have an excess of T0 at this point that we're selling to those bid
-                // orders, so we need to calculate how much of our T0 excess will be leaving
-                // before we allocate the rest to rewards.  We would like to overestimate this
-                // sum if possible to make sure we never have rounding errors.
+                // `abs_excess` is in T1 and on this path it is an underflow
+                // (negative quantity), we will be getting our
+                // additional T1 from bid orders.  We should
+                // also have an excess of T0 at this point that we're selling to
+                // those bid orders, so we need to calculate how
+                // much of our T0 excess will be leaving
+                // before we allocate the rest to rewards.  We would like to
+                // overestimate this sum if possible to make
+                // sure we never have rounding errors.
 
-                // We know that each bid order will round its output down, so if we convert
-                // `abs_excess` to T0 at our UCP, we can also round down.  We can presume that
-                // there will be at least 1 bid order accepting the T0 (also rounding down),
-                // and if there is more than one order we will get multiple round-downs which
-                // will mean that the actual output can only be lower than this estimate and we
-                // can only successfully overestimate.
+                // We know that each bid order will round its output down, so if
+                // we convert `abs_excess` to T0 at our UCP, we
+                // can also round down.  We can presume that
+                // there will be at least 1 bid order accepting the T0 (also
+                // rounding down), and if there is more than one
+                // order we will get multiple round-downs which
+                // will mean that the actual output can only be lower than this
+                // estimate and we can only successfully
+                // overestimate.
 
-                // This is our overestimation of how much T0 we are sending out to bids
+                // This is our overestimation of how much T0 we are sending out
+                // to bids
                 let excess_t0_cost = price.inv_ray().inverse_quantity(abs_excess, false);
-                // If we already have a surplus of T0 in the balance, find out how much we will
-                // have left after we settle the bids providing our excess T1.  That's our
-                // reward quantity. (If `t0_sum` is already negative we are in a bad place
-                // overall and surely have nothing to donate to rewards)
+                // If we already have a surplus of T0 in the balance, find out
+                // how much we will have left after we settle
+                // the bids providing our excess T1.  That's our
+                // reward quantity. (If `t0_sum` is already negative we are in a
+                // bad place overall and surely have nothing to
+                // donate to rewards)
                 let reward_t0 = if t0_sum.is_positive() {
                     t0_sum
                         .unsigned_abs()
@@ -412,7 +430,8 @@ impl<'a> DeltaMatcher<'a> {
             }
         } else {
             let Some(remaining_drain) = available_drain.checked_sub(abs_excess) else {
-                // Check if we can do any order killing to fix this and return our status
+                // Check if we can do any order killing to fix this and return
+                // our status
                 let min_target = abs_excess - available_add;
                 let (_, ko) =
                     Self::check_killable_orders(&killable_orders, bid_is_input, min_target);
@@ -420,40 +439,49 @@ impl<'a> DeltaMatcher<'a> {
             };
             let additional_drainable = min(remaining_drain, available_add);
             if self.solve_for_t0 {
-                // If I'm solving for T0, bids are draining my excess T0 and asks are matched
-                // with my additional_fillable
+                // If I'm solving for T0, bids are draining my excess T0 and
+                // asks are matched with my additional_fillable
 
-                // For T0 solve we do not expect to have excess T0 to donate so `reward_t0` is
-                // just zero.
+                // For T0 solve we do not expect to have excess T0 to donate so
+                // `reward_t0` is just zero.
                 (
                     price.quantity(abs_excess + additional_drainable, false),
                     additional_drainable,
                     0_u128
                 )
             } else {
-                // This is very similar to above but we're going to logic it through in the
-                // opposite direction.
+                // This is very similar to above but we're going to logic it
+                // through in the opposite direction.
 
-                // `abs_excess` is in T1 and on this path it is an overflow (positive
-                // quantity), we will be draining our excess T1 using ask orders.  We should
-                // also have an underflow of T0 at this point that we're buying from those ask
-                // orders, so we need to calculate how much we will overflow our T0 defecit to
-                // know how much we can allocate to rewards.  We would like to underestimate
-                // this sum if possible to make sure we never have rounding errors.
+                // `abs_excess` is in T1 and on this path it is an overflow
+                // (positive quantity), we will be draining our
+                // excess T1 using ask orders.  We should
+                // also have an underflow of T0 at this point that we're buying
+                // from those ask orders, so we need to
+                // calculate how much we will overflow our T0 defecit to
+                // know how much we can allocate to rewards.  We would like to
+                // underestimate this sum if possible to make
+                // sure we never have rounding errors.
 
-                // We know that each ask order will round its input up, so if we convert
-                // `abs_excess` to T0 at our UCP, we can also round up.  We can presume that
-                // there will be at least 1 ask order providing the T0 (also rounding up),
-                // and if there is more than one order we will get multiple round-ups which
-                // will mean that the actual input can only be higher than this estimate and we
-                // can only successfully underestimate.
+                // We know that each ask order will round its input up, so if we
+                // convert `abs_excess` to T0 at our UCP, we can
+                // also round up.  We can presume that
+                // there will be at least 1 ask order providing the T0 (also
+                // rounding up), and if there is more than one
+                // order we will get multiple round-ups which
+                // will mean that the actual input can only be higher than this
+                // estimate and we can only successfully
+                // underestimate.
 
-                // This is our underestimation of how much T0 we are getting in from asks
+                // This is our underestimation of how much T0 we are getting in
+                // from asks
                 let excess_t0_gain = price.inverse_quantity(abs_excess, true);
-                // We should already have a defecit of T0 in the balance and this sale should
-                // bring it positive.  If `t0_sum` is already positive...that's weird, but we
-                // can still do this math.  So we see where we stand after our gain and donate
-                // whatever positive value we have.
+                // We should already have a defecit of T0 in the balance and
+                // this sale should bring it positive.  If
+                // `t0_sum` is already positive...that's weird, but we
+                // can still do this math.  So we see where we stand after our
+                // gain and donate whatever positive value we
+                // have.
                 let final_t0 = t0_sum + I256::unchecked_from(excess_t0_gain);
                 let reward_t0 = if final_t0.is_positive() {
                     final_t0.unsigned_abs().to::<u128>()
@@ -461,8 +489,9 @@ impl<'a> DeltaMatcher<'a> {
                     0_u128
                 };
 
-                // Bids will round up so if we round-down for bids we will only have extra in
-                // For asks we already know how much new T0 we're getting in with no change
+                // Bids will round up so if we round-down for bids we will only
+                // have extra in For asks we already know how
+                // much new T0 we're getting in with no change
                 (
                     // Bids are only needed to provide the reciprocal match for
                     // `additional_fillable` (not flipped because they are exact_in in T1)
@@ -494,10 +523,11 @@ impl<'a> DeltaMatcher<'a> {
         let (t1, t0_net, t0_fee) =
             get_quantities_at_price(is_bid, exact_in, fill_amount, gas, fee, ray_ucp);
 
-        // If our order is a bid, our T1 entirely enters the market for liquidity but we
-        // have to consume t0_net, t0_fee and gas from the market as we convert the
-        // incoming T1 into T0.  For asks, because our fee and gas are taken from the
-        // incoming T0, only t0_net enters the market as liquidity.  The entire t1
+        // If our order is a bid, our T1 entirely enters the market for
+        // liquidity but we have to consume t0_net, t0_fee and gas from
+        // the market as we convert the incoming T1 into T0.  For asks,
+        // because our fee and gas are taken from the incoming T0, only
+        // t0_net enters the market as liquidity.  The entire t1
         // quantity exits.
         if is_bid { (t1, t0_net + t0_fee + gas) } else { (t0_net, t1) }
     }
@@ -546,7 +576,8 @@ impl<'a> DeltaMatcher<'a> {
                             let partial_q =
                                 if o.is_bid { &mut bid_partial } else { &mut ask_partial };
                             if *partial_q > 0 {
-                                // If we have partial to fill, check to see if we have enough to
+                                // If we have partial to fill, check to see if
+                                // we have enough to
                                 // completely fill this order
                                 let max_partial = if o.is_partial() {
                                     o.amount() - o.min_amount()
@@ -576,7 +607,8 @@ impl<'a> DeltaMatcher<'a> {
                                 // minimum amount as per our algorithm
                                 OrderFillState::PartialFill(o.min_amount())
                             } else {
-                                // An exact order that we cannot fill (due to 0 remaining slack) is
+                                // An exact order that we cannot fill (due to 0
+                                // remaining slack) is
                                 // Unfilled
                                 OrderFillState::Unfilled
                             }
@@ -657,8 +689,8 @@ impl<'a> DeltaMatcher<'a> {
                 (Ray::from(start_liq.min_sqrt_price()), Ray::from(start_liq.max_sqrt_price()))
             })
             .unwrap_or((Ray::from(U256::ZERO), Ray::from(U256::MAX)));
-        // We ensure that no matter what, we always swap within the bounds of valid
-        // liquidity.
+        // We ensure that no matter what, we always swap within the bounds of
+        // valid liquidity.
 
         // p_max is (highest bid || (MAX_PRICE - 1)) + 1
         let mut p_max =
@@ -672,15 +704,16 @@ impl<'a> DeltaMatcher<'a> {
         let mut killed = HashSet::new();
         let mut dust: Option<(U256, UcpSolution)> = None;
 
-        // Loop on a checked sub, if our prices ever overlap we'll terminate the loop
+        // Loop on a checked sub, if our prices ever overlap we'll terminate the
+        // loop
         while let Some(diff) = p_max.checked_sub(*p_min) {
             //Break if !((p_max - p_min) > 1)
             if diff <= U256_1 {
                 break;
             }
-            // We're willing to kill orders if and only if we're at the end of our
-            // iteration.  I believe that a distance of four will capture the last 2 cycles
-            // of iteration
+            // We're willing to kill orders if and only if we're at the end of
+            // our iteration.  I believe that a distance of four
+            // will capture the last 2 cycles of iteration
             let can_kill = diff <= four;
             // Find the midpoint that we'll be testing
             let p_mid = (p_max + p_min) / two;
@@ -691,11 +724,11 @@ impl<'a> DeltaMatcher<'a> {
                 check_ucp_span.in_scope(|| self.check_ucp(p_mid, &killed))
             };
 
-            // If we're on our last iterations, check to see if we can come up with a
-            // "within_one" solution
+            // If we're on our last iterations, check to see if we can come up
+            // with a "within_one" solution
 
-            // Check to see if we've found a valid dust solution that is better than our
-            // current dust solution if it exists
+            // Check to see if we've found a valid dust solution that is better
+            // than our current dust solution if it exists
             let (total_liq, price_for_one) = if self.solve_for_t0 {
                 (stats.amm_t0 + stats.order_t0, p_mid.price_of(Quantity::Token1(1), false))
             } else {

@@ -24,7 +24,10 @@ use crate::Status;
 pub const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
 
 const STROM_CAPABILITY: Capability = Capability::new_static("strom", 1);
-const STROM_PROTOCOL: Protocol = Protocol::new(STROM_CAPABILITY, 5);
+// One message id per `StromMessageID` variant: reth drops sessions that send
+// ids outside a capability's declared range.
+const STROM_PROTOCOL: Protocol =
+    Protocol::new(STROM_CAPABILITY, StromMessageID::OrderCancellation as u8 + 1);
 /// Represents message IDs for eth protocol messages.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

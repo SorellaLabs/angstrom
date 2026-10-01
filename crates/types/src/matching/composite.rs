@@ -86,23 +86,25 @@ impl<'a> CompositeOrder<'a> {
     /// do a "same side" match.  I'm pretty sure that's the only time that will
     /// happen
     pub fn quantity(&self, external_bound: Ray) -> u128 {
-        // Check whether our external bound or internal bound is closer to our current
-        // price
+        // Check whether our external bound or internal bound is closer to our
+        // current price
         let target_price = self.find_closest_bound(external_bound);
         // The quantity available to the target price is the combination of
         // the amount it takes to get our amm to the target price plus the
         // amount it takes to get our debt to the target price
         let (amm_q, debt_q) = self.calc_quantities(target_price);
         if let Some(Direction::BuyingT0) = self.debt_direction(target_price) {
-            // If the price is going up, we're buying T0 from the AMM but our debt will be
-            // providing less and less T0 so we subtract the `debt_q` from
-            // the `amm_q` to determine how much T0 this composite order can
-            // actually offer in liquidity
+            // If the price is going up, we're buying T0 from the AMM but our
+            // debt will be providing less and less T0 so we
+            // subtract the `debt_q` from the `amm_q` to determine
+            // how much T0 this composite order can actually offer
+            // in liquidity
             amm_q.saturating_sub(debt_q)
         } else {
-            // If the price is going down, we're selling T0 to the AMM and our debt will be
-            // purchasing more and more T0 so we can just add the quantities
-            // together to find the total liquidity consumed by both operations
+            // If the price is going down, we're selling T0 to the AMM and our
+            // debt will be purchasing more and more T0 so we can
+            // just add the quantities together to find the total
+            // liquidity consumed by both operations
             amm_q + debt_q
         }
     }

@@ -141,7 +141,7 @@ futures = "0"
 futures-util = "0"
 hex-literal = "0"
 homedir = "0"
-hsm-signer = { git = "https://github.com/SorellaLabs/hsm-signer", branch = "feat/update-reth" }
+hsm-signer = { git = "https://github.com/SorellaLabs/hsm-signer" }
 hyper = "1.6.0"
 itertools = "0"
 jsonrpsee = "0.26.0"

@@ -5602,7 +5602,7 @@ dependencies = [
 [[package]]
 name = "hsm-signer"
 version = "0.1.0"
-source = "git+https://github.com/SorellaLabs/hsm-signer?branch=feat%2Fupdate-reth#af160461176a33b8118af482742e5b7705ef3cd3"
+source = "git+https://github.com/SorellaLabs/hsm-signer#af160461176a33b8118af482742e5b7705ef3cd3"
 dependencies = [
  "alloy-consensus 2.4.2",
  "alloy-network 2.4.2",

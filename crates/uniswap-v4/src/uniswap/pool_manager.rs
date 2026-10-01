@@ -300,8 +300,14 @@ where
         tracing::info!("starting poll");
         for pool in pools.pools.iter() {
             let pool = pool.value();
-            let mut l = pool.write().expect("failed to write to pool");
-            async_to_sync(l.update_to_block(Some(block_number), provider.provider())).unwrap();
+            // Readers take this lock inside async tasks, so it must not be held while
+            // blocking on the provider: a reader blocked on it can hold the very task
+            // that fetch needs to complete. Only this task writes pools, so updating a
+            // copy and swapping it in loses nothing.
+            let mut updated = pool.read().expect("failed to read pool").clone();
+            async_to_sync(updated.update_to_block(Some(block_number), provider.provider()))
+                .unwrap();
+            *pool.write().expect("failed to write to pool") = updated;
         }
         tracing::info!("finished");
     }
@@ -314,10 +320,12 @@ where
     ) {
         let node_provider = provider.provider();
         let binding = pools.get(&tick_req.pool_id).expect("failed to get pool");
-        let mut pool = binding.write().unwrap();
+        // Updated on a copy for the same reason as `pool_update_workaround`.
+        let mut pool = binding.read().unwrap().clone();
 
         // given we force this to resolve, should'nt be problematic
         async_to_sync(pool.load_more_ticks(tick_req, None, node_provider)).unwrap();
+        *binding.write().unwrap() = pool;
 
         // notify we have updated the liquidity
         notifier.notify_one();

@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use alloy::{
     network::{Ethereum, EthereumWallet},
     node_bindings::{Anvil, AnvilInstance},
-    providers::ext::AnvilApi,
+    providers::{Provider, ext::AnvilApi},
     signers::local::PrivateKeySigner
 };
 use alloy_primitives::{Address, U256};
@@ -21,6 +23,10 @@ use crate::{
         initial_state::PartialConfigPoolKey
     }
 };
+
+/// Budget for the fork-endpoint probe below. Anvil itself would spend about two
+/// minutes in the kernel's TCP retries before reporting anything.
+const FORK_PREFLIGHT_TIMEOUT: Duration = Duration::from_secs(10);
 
 const TESTNET_LEADER_SECRET_KEY: [u8; 32] = [
     102, 27, 190, 55, 135, 232, 40, 136, 200, 139, 236, 174, 205, 166, 147, 166, 128, 135, 124,
@@ -69,8 +75,12 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
         matches!(self.global_config.config_type(), TestingConfigKind::Devnet)
     }
 
-    pub fn strom_rpc_port(&self) -> u64 {
-        self.global_config.base_angstrom_rpc_port() as u64 + self.node_id
+    /// `None` means the RPC server should bind port 0 and report back what the
+    /// OS gave it.
+    pub fn strom_rpc_port(&self) -> Option<u64> {
+        self.global_config
+            .base_angstrom_rpc_port()
+            .map(|base| base as u64 + self.node_id)
     }
 
     pub fn signing_key(&self) -> PrivateKeySigner {
@@ -99,7 +109,7 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             .chain_id(*CHAIN_ID.get().unwrap())
             .arg("--host")
             .arg("0.0.0.0")
-            .port(self.global_config.leader_eth_rpc_port())
+            .port(self.global_config.leader_eth_rpc_port().unwrap_or(0))
             .fork(self.global_config.eth_ws_url())
             .arg("--ipc")
             .arg(self.global_config.anvil_rpc_endpoint(self.node_id))
@@ -125,7 +135,7 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
             .chain_id(*CHAIN_ID.get().unwrap())
             .arg("--host")
             .arg("0.0.0.0")
-            .port(self.global_config.leader_eth_rpc_port())
+            .port(self.global_config.leader_eth_rpc_port().unwrap_or(0))
             .fork(self.global_config.eth_ws_url())
             .arg("--ipc")
             .arg(self.global_config.anvil_rpc_endpoint(self.node_id))
@@ -168,9 +178,14 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
     async fn spawn_testnet_anvil_rpc(
         &self
     ) -> eyre::Result<(WalletProvider, Option<AnvilInstance>)> {
-        let anvil = self
-            .global_config
-            .is_leader(self.node_id)
+        let is_leader = self.global_config.is_leader(self.node_id);
+        if is_leader && let Some((_, fork_url)) = self.global_config.fork_config() {
+            // boxed so this await contributes a pointer, not a nested state
+            // machine, to the layout of every caller up to `run_all`
+            Box::pin(preflight_fork_endpoint(fork_url)).await?;
+        }
+
+        let anvil = is_leader
             .then(|| match self.global_config.config_type() {
                 TestingConfigKind::Testnet => self.configure_testnet_leader_anvil().try_spawn(),
                 TestingConfigKind::Replay => self.configure_replay_leader_anvil().try_spawn(),
@@ -231,5 +246,31 @@ impl<C: GlobalTestingConfig> TestingNodeConfig<C> {
         rpc.anvil_set_balance(sk.address(), U256::MAX).await?;
 
         Ok((WalletProvider::new_with_provider(rpc, sk), Some(anvil)))
+    }
+}
+
+/// Anvil only writes a bad fork endpoint to stderr, and only after the kernel
+/// gives up retrying the handshake; alloy meanwhile reports its blocking read
+/// as `NodeError::Timeout`, whose message is "is the node binary installed?".
+/// One bounded `eth_blockNumber` first turns that into an accurate error.
+async fn preflight_fork_endpoint(fork_url: String) -> eyre::Result<()> {
+    let probe = async {
+        alloy::providers::builder::<Ethereum>()
+            .connect(&fork_url)
+            .await?
+            .get_block_number()
+            .await
+    };
+
+    match tokio::time::timeout(FORK_PREFLIGHT_TIMEOUT, probe).await {
+        Ok(Ok(block)) => {
+            tracing::info!(block, "fork endpoint reachable");
+            Ok(())
+        }
+        Ok(Err(e)) => Err(eyre::eyre!("fork endpoint unreachable: {fork_url}: {e}")),
+        Err(_) => Err(eyre::eyre!(
+            "fork endpoint unreachable: {fork_url} did not answer eth_blockNumber within {}s",
+            FORK_PREFLIGHT_TIMEOUT.as_secs()
+        ))
     }
 }

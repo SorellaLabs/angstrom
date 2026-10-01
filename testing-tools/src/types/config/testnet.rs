@@ -7,10 +7,10 @@ pub struct TestnetConfig {
     /// only the leader can have this
     pub eth_ws_url:           String,
     pub mev_guard:            bool,
-    pub leader_eth_rpc_port:  u16,
+    pub leader_eth_rpc_port:  Option<u16>,
     pub initial_state_config: InitialStateConfig,
     seed:                     u16,
-    angstrom_base_rpc_port:   u16
+    angstrom_base_rpc_port:   Option<u16>
 }
 
 impl TestnetConfig {
@@ -27,17 +27,11 @@ impl TestnetConfig {
             eth_ws_url: eth_ws_url.to_string(),
             mev_guard,
             seed: rand::random(),
-            leader_eth_rpc_port: leader_eth_rpc_port.unwrap_or_else(random_port),
-            angstrom_base_rpc_port: angstrom_base_rpc_port.unwrap_or_else(random_port),
+            leader_eth_rpc_port,
+            angstrom_base_rpc_port,
             initial_state_config
         }
     }
-}
-
-/// A port any user can bind (Linux reserves those below 1024 for root), with
-/// room above it for the per-node offsets.
-fn random_port() -> u16 {
-    rand::random_range(10_000..60_000)
 }
 
 impl GlobalTestingConfig for TestnetConfig {
@@ -69,11 +63,11 @@ impl GlobalTestingConfig for TestnetConfig {
         self.node_count
     }
 
-    fn leader_eth_rpc_port(&self) -> u16 {
+    fn leader_eth_rpc_port(&self) -> Option<u16> {
         self.leader_eth_rpc_port
     }
 
-    fn base_angstrom_rpc_port(&self) -> u16 {
+    fn base_angstrom_rpc_port(&self) -> Option<u16> {
         self.angstrom_base_rpc_port
     }
 

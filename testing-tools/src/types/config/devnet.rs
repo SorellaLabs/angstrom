@@ -77,12 +77,12 @@ impl GlobalTestingConfig for DevnetConfig {
         self.intial_node_count
     }
 
-    fn leader_eth_rpc_port(&self) -> u16 {
+    fn leader_eth_rpc_port(&self) -> Option<u16> {
         unreachable!("only available in Testnet mode");
     }
 
-    fn base_angstrom_rpc_port(&self) -> u16 {
-        self.initial_rpc_port
+    fn base_angstrom_rpc_port(&self) -> Option<u16> {
+        Some(self.initial_rpc_port)
     }
 
     fn initial_state_config(&self) -> InitialStateConfig {

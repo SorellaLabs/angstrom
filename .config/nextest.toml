@@ -1,7 +1,7 @@
 # Each testnet integration test spawns an anvil mainnet fork plus three
 # in-process Angstrom nodes. nextest gives every test its own process, so the
-# in-process `#[serial_test::serial]` locks in the test files don't serialize
-# them; this group keeps nextest from running them concurrently.
+# `file_serial` locks in the test files are what actually serialize them; this
+# group keeps nextest from scheduling them concurrently in the first place.
 [test-groups]
 testnet = { max-threads = 1 }
 

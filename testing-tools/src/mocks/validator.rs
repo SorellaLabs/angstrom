@@ -46,7 +46,7 @@ impl OrderValidatorHandle for MockValidator {
 
     fn new_block(
         &self,
-        _: u64,
+        _: alloy::eips::BlockNumHash,
         _: Vec<alloy_primitives::B256>,
         _: Vec<Address>
     ) -> validation::order::ValidationFuture<'_> {
@@ -80,12 +80,16 @@ impl OrderValidatorHandle for MockValidator {
     }
 
     fn valid_nonce_for_user(&self, _: Address) -> validation::order::NonceFuture<'_> {
-        Box::pin(async move { 10 })
+        Box::pin(async move { Ok(10) })
     }
 }
 
 impl BundleValidatorHandle for MockValidator {
-    async fn fetch_gas_for_bundle(&self, bundle: AngstromBundle) -> eyre::Result<BundleGasDetails> {
+    async fn fetch_gas_for_bundle(
+        &self,
+        bundle: AngstromBundle,
+        _parent_hash: FixedBytes<32>
+    ) -> eyre::Result<BundleGasDetails> {
         let e = bundle.pade_encode();
         let hash = keccak256(e);
 

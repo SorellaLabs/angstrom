@@ -75,6 +75,15 @@ where
         }
     }
 
+    /// The same calculator reading through `db`.
+    pub fn repoint(&self, db: Arc<DB>) -> Self {
+        Self {
+            _db:               CacheDB::new(db),
+            _angstrom_address: self._angstrom_address,
+            node_address:      self.node_address
+        }
+    }
+
     pub fn gas_of_tob_order(
         &self,
         tob: &OrderWithStorageData<TopOfBlockOrder>,

@@ -17,6 +17,7 @@ alloy-sol-types.workspace = true
 angstrom.workspace = true
 angstrom-amm-quoter.workspace = true
 angstrom-eth.workspace = true
+angstrom-metrics.workspace = true
 angstrom-network.workspace = true
 angstrom-rpc.workspace = true
 angstrom-types.workspace = true

@@ -208,7 +208,9 @@ impl Future for Telemetry {
                     event @ TelemetryMessage::NewOrder { blocknum, .. }
                     | event @ TelemetryMessage::CancelOrder { blocknum, .. }
                     | event @ TelemetryMessage::ConsensusStateChange { blocknum, .. }
-                    | event @ TelemetryMessage::Consensus { blocknum, .. } => {
+                    | event @ TelemetryMessage::Consensus { blocknum, .. }
+                    | event @ TelemetryMessage::BundleSubmitted { blocknum, .. }
+                    | event @ TelemetryMessage::BundleIncluded { blocknum, .. } => {
                         self.add_event_to_block(blocknum, event);
                     }
                     TelemetryMessage::GasPriceSnapshot { blocknum, snapshot } => {

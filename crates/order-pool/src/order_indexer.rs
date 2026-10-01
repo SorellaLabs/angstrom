@@ -1,10 +1,15 @@
 use std::{
+    collections::VecDeque,
+    ops::RangeInclusive,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll}
 };
 
-use alloy::primitives::{Address, B256, BlockNumber, U256};
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256, BlockNumber, U256}
+};
 use angstrom_types::{
     orders::{OrderId, OrderOrigin, OrderSet},
     primitive::{NewInitializedPool, OrderLocation, OrderStatus, PeerId, PoolId},
@@ -16,7 +21,10 @@ use angstrom_types::{
 };
 use futures_util::{Stream, StreamExt};
 use tokio::sync::oneshot::Sender;
-use validation::order::{OrderValidationResults, OrderValidatorHandle};
+use validation::order::{
+    OrderValidationResults, OrderValidatorHandle,
+    state::order_validators::{clock::ValidationClock, deadline::expiry_horizon_at}
+};
 
 use crate::{
     PoolManagerUpdate,
@@ -46,7 +54,36 @@ pub struct OrderIndexer<V: OrderValidatorHandle> {
     pub(crate) validator:     OrderValidator<V>,
     /// List of subscribers for order validation result
     /// order
-    pub(crate) subscribers:   OrderSubscriptionTracker
+    pub(crate) subscribers:   OrderSubscriptionTracker,
+    /// execution time for deadline pruning; kept in step with admission's clock
+    pub(crate) clock:         ValidationClock,
+    /// Transitions not yet started, oldest first. The validator runs one at a
+    /// time, and the eth manager can propose the next one (a reorg straight
+    /// after a block) before the current one completes.
+    pending_transitions:      VecDeque<Transition>,
+    /// The sign-off owed once the running transition completes; `None` when
+    /// none is running.
+    transition_in_progress:   Option<SignOff>
+}
+
+/// A block-sync proposal validation has to be carried through.
+enum Transition {
+    NewBlock {
+        block:            BlockNumHash,
+        completed_orders: Vec<B256>,
+        address_changes:  Vec<Address>
+    },
+    Reorg {
+        tip:             BlockNumHash,
+        range:           RangeInclusive<u64>,
+        orders:          Vec<B256>,
+        address_changes: Vec<Address>
+    }
+}
+
+enum SignOff {
+    NewBlock,
+    Reorg(RangeInclusive<u64>)
 }
 
 impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
@@ -61,12 +98,19 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             order_tracker: OrderTracker::default(),
             block_number,
             validator: OrderValidator::new(validator),
-            subscribers: OrderSubscriptionTracker::new(orders_subscriber_tx)
+            subscribers: OrderSubscriptionTracker::new(orders_subscriber_tx),
+            clock: ValidationClock::default(),
+            pending_transitions: VecDeque::new(),
+            transition_in_progress: None
         }
     }
 
     pub fn set_tracker(&mut self, tracker: OrderTracker) {
         self.order_tracker = tracker;
+    }
+
+    pub fn set_clock(&mut self, clock: ValidationClock) {
+        self.clock = clock;
     }
 
     pub fn pending_orders_for_address(
@@ -227,7 +271,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.order_storage.finalized_block(block_number);
     }
 
-    pub fn reorg(&mut self, orders: Vec<B256>) {
+    fn reorg(&mut self, orders: Vec<B256>) {
         self.order_storage
             .reorg(orders)
             .into_iter()
@@ -397,13 +441,55 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     pub fn start_new_block_processing(
         &mut self,
-        block_number: BlockNumber,
+        block: BlockNumHash,
         completed_orders: Vec<B256>,
         address_changes: Vec<Address>
     ) {
-        tracing::info!(%block_number, "starting transition to new block processing");
-        self.validator
-            .on_new_block(block_number, completed_orders, address_changes);
+        tracing::info!(?block, "starting transition to new block processing");
+        self.queue_transition(Transition::NewBlock { block, completed_orders, address_changes });
+    }
+
+    /// Carries validation to the reorg's new `tip` before the orders the reorg
+    /// un-filled are revalidated, and owes [`PoolInnerEvent::HasHandledReorg`]
+    /// once it reads `tip`: until then it is pinned to a block the reorg
+    /// removed, whose state no longer resolves.
+    pub fn start_reorg_processing(
+        &mut self,
+        tip: BlockNumHash,
+        range: RangeInclusive<u64>,
+        orders: Vec<B256>,
+        address_changes: Vec<Address>
+    ) {
+        tracing::info!(?tip, ?range, "starting transition to the reorg's new tip");
+        self.queue_transition(Transition::Reorg { tip, range, orders, address_changes });
+    }
+
+    fn queue_transition(&mut self, transition: Transition) {
+        self.pending_transitions.push_back(transition);
+        self.start_next_transition();
+    }
+
+    /// Starts the oldest pending transition, unless one is still running.
+    fn start_next_transition(&mut self) {
+        if self.transition_in_progress.is_some() {
+            return;
+        }
+        let Some(transition) = self.pending_transitions.pop_front() else { return };
+
+        match transition {
+            Transition::NewBlock { block, completed_orders, address_changes } => {
+                self.transition_in_progress = Some(SignOff::NewBlock);
+                self.validator
+                    .on_new_block(block, completed_orders, address_changes);
+            }
+            Transition::Reorg { tip, range, orders, address_changes } => {
+                self.transition_in_progress = Some(SignOff::Reorg(range));
+                // Transition first, so the un-filled orders queue behind the repoint
+                // rather than validate against the removed branch.
+                self.validator.on_new_block(tip, vec![], address_changes);
+                self.reorg(orders);
+            }
+        }
     }
 
     // given that we cant acutally remove orders on cancel.
@@ -427,10 +513,11 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
     fn finish_new_block_processing(
         &mut self,
-        block_number: BlockNumber,
+        block: BlockNumHash,
         mut completed_orders: Vec<B256>,
         address_changes: Vec<Address>
     ) {
+        let block_number = block.number;
         self.block_number = block_number;
         telemetry_recorder::telemetry_event!(OrderPoolSnapshot::from((block_number, &*self)));
         // clear the invalid orders as they could of become valid.
@@ -439,9 +526,11 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.filled_orders(block_number, &completed_orders);
 
         self.purge_cancelled();
-        let expired_orders = self
-            .order_tracker
-            .remove_expired_orders(block_number, &self.order_storage);
+        let expired_orders = self.order_tracker.remove_expired_orders(
+            block_number,
+            &self.order_storage,
+            expiry_horizon_at(self.clock.now())
+        );
         self.subscribers.notify_expired_orders(&expired_orders);
 
         // deal with changed orders
@@ -453,11 +542,8 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
         completed_orders.extend(expired_orders.into_iter().map(|o| o.order_id.hash));
 
-        self.validator.notify_validation_on_changes(
-            block_number,
-            completed_orders,
-            address_changes
-        );
+        self.validator
+            .notify_validation_on_changes(block, completed_orders, address_changes);
     }
 }
 
@@ -484,7 +570,11 @@ where
                     }
                 }
                 OrderValidatorRes::TransitionComplete => {
-                    validated.push(PoolInnerEvent::HasTransitionedToNewBlock(self.block_number));
+                    validated.push(match self.transition_in_progress.take() {
+                        Some(SignOff::Reorg(range)) => PoolInnerEvent::HasHandledReorg(range),
+                        _ => PoolInnerEvent::HasTransitionedToNewBlock(self.block_number)
+                    });
+                    self.start_next_transition();
                 }
             }
         }
@@ -498,6 +588,8 @@ pub enum PoolInnerEvent {
     Propagation(AllOrders),
     BadOrderMessages(Vec<PeerId>),
     HasTransitionedToNewBlock(u64),
+    /// Validation now reads the reorg's new tip; sign off the reorg `range`.
+    HasHandledReorg(RangeInclusive<u64>),
     None
 }
 
@@ -687,7 +779,11 @@ mod tests {
         // Simulate block transition
         let expired_hashes = indexer
             .order_tracker
-            .remove_expired_orders(2, &indexer.order_storage)
+            .remove_expired_orders(
+                2,
+                &indexer.order_storage,
+                expiry_horizon_at(indexer.clock.now())
+            )
             .into_iter()
             .map(|o| o.order_id.hash)
             .collect::<Vec<_>>();
@@ -766,7 +862,11 @@ mod tests {
         let completed_orders = vec![order_hash];
         let address_changes = vec![from];
 
-        indexer.finish_new_block_processing(2, completed_orders.clone(), address_changes.clone());
+        indexer.finish_new_block_processing(
+            BlockNumHash::new(2, B256::ZERO),
+            completed_orders.clone(),
+            address_changes.clone()
+        );
 
         // Verify order was removed
         assert!(
@@ -930,7 +1030,7 @@ mod tests {
             _ => panic!("Expected invalid order result")
         }
 
-        indexer.finish_new_block_processing(1, vec![], vec![]);
+        indexer.finish_new_block_processing(BlockNumHash::new(1, B256::ZERO), vec![], vec![]);
         assert!(!indexer.is_seen_invalid(&order_hash));
     }
 
@@ -1220,5 +1320,162 @@ mod tests {
         assert!(!all_order_storage_hashes.contains(&order_hash));
 
         // assert!(!indexer.order_tracker.or)
+    }
+
+    /// What validation was asked to do, in the order it was asked.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum ValidationCall {
+        NewBlock(BlockNumHash),
+        Validate(B256)
+    }
+
+    #[derive(Debug, Clone, Default)]
+    struct RecordingValidator(Arc<std::sync::Mutex<Vec<ValidationCall>>>);
+
+    impl RecordingValidator {
+        fn calls(&self) -> Vec<ValidationCall> {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    impl OrderValidatorHandle for RecordingValidator {
+        type Order = AllOrders;
+
+        fn validate_order(
+            &self,
+            _: OrderOrigin,
+            order: AllOrders
+        ) -> validation::order::ValidationFuture<'_> {
+            let hash = order.order_hash();
+            self.0.lock().unwrap().push(ValidationCall::Validate(hash));
+            Box::pin(async move {
+                OrderValidationResults::Invalid {
+                    hash,
+                    error: OrderValidationError::Unknown { err: "only recorded".to_string() }
+                }
+            })
+        }
+
+        fn cancel_order(&self, _: Address, _: B256) {}
+
+        fn new_block(
+            &self,
+            block: BlockNumHash,
+            _: Vec<B256>,
+            _: Vec<Address>
+        ) -> validation::order::ValidationFuture<'_> {
+            self.0.lock().unwrap().push(ValidationCall::NewBlock(block));
+            Box::pin(async { OrderValidationResults::TransitionedToBlock(vec![]) })
+        }
+
+        fn estimate_gas(
+            &self,
+            _: bool,
+            _: bool,
+            _: Address,
+            _: Address
+        ) -> validation::order::GasEstimationFuture<'_> {
+            unimplemented!("the indexer does not estimate gas")
+        }
+
+        fn valid_nonce_for_user(&self, _: Address) -> validation::order::NonceFuture<'_> {
+            unimplemented!("the indexer does not fetch nonces")
+        }
+    }
+
+    fn setup_recording_indexer() -> (OrderIndexer<RecordingValidator>, RecordingValidator) {
+        init_tracing();
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let (tx, _) = broadcast::channel(100);
+        let order_storage = Arc::new(OrderStorage::new(&PoolConfig::default()));
+        let validator = RecordingValidator::default();
+
+        (OrderIndexer::new(validator.clone(), order_storage, 1, tx), validator)
+    }
+
+    /// Polls `indexer` until it has nothing left to emit, returning the
+    /// block-sync sign-offs it asked for, in order.
+    async fn drain_sign_offs(indexer: &mut OrderIndexer<RecordingValidator>) -> Vec<String> {
+        let mut sign_offs = vec![];
+        while let Poll::Ready(Some(events)) =
+            std::future::poll_fn(|cx| Poll::Ready(indexer.poll_next_unpin(cx))).await
+        {
+            sign_offs.extend(events.into_iter().filter_map(|event| match event {
+                PoolInnerEvent::HasTransitionedToNewBlock(block) => Some(format!("block {block}")),
+                PoolInnerEvent::HasHandledReorg(range) => Some(format!("reorg {range:?}")),
+                _ => None
+            }));
+        }
+        sign_offs
+    }
+
+    #[tokio::test]
+    async fn a_reorg_repoints_validation_before_revalidating_the_orders_it_unfilled() {
+        let (mut indexer, validator) = setup_recording_indexer();
+        let from = Address::random();
+        let pool_key = PoolKey {
+            currency0: Address::random(),
+            currency1: Address::random(),
+            ..Default::default()
+        };
+        let pool_id = PoolId::from(pool_key);
+        let order = create_test_order(from, pool_key, None, None);
+        let order_hash = order.order_hash();
+
+        // Filled in block 1 of the branch the reorg is about to remove.
+        indexer.order_storage.add_filled_orders(
+            1,
+            vec![OrderWithStorageData {
+                order,
+                cancel_requested: false,
+                order_id: OrderId {
+                    address: from,
+                    reuse_avoidance: RespendAvoidanceMethod::Nonce(1),
+                    hash: order_hash,
+                    pool_id,
+                    location: OrderLocation::Limit,
+                    deadline: None,
+                    flash_block: None
+                },
+                valid_block: 1,
+                pool_id,
+                is_bid: true,
+                is_currently_valid: None,
+                is_valid: true,
+                priority_data: Default::default(),
+                invalidates: vec![],
+                tob_reward: U256::ZERO
+            }]
+        );
+
+        let tip = BlockNumHash::new(1, B256::repeat_byte(0xb1));
+        indexer.start_reorg_processing(tip, 1..=1, vec![order_hash], vec![from]);
+
+        // Signed off only once the transition to the new tip has completed.
+        assert_eq!(drain_sign_offs(&mut indexer).await, ["reorg 1..=1"]);
+        // The un-filled order was validated against the new tip, not the removed
+        // branch, whose state no longer resolves.
+        assert_eq!(
+            validator.calls(),
+            [ValidationCall::NewBlock(tip), ValidationCall::Validate(order_hash)]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reorg_proposed_mid_transition_waits_for_it() {
+        let (mut indexer, validator) = setup_recording_indexer();
+        let block = BlockNumHash::new(2, B256::repeat_byte(0x02));
+        let tip = BlockNumHash::new(2, B256::repeat_byte(0xb2));
+
+        indexer.start_new_block_processing(block, vec![], vec![]);
+        // Before block 2's transition has completed.
+        indexer.start_reorg_processing(tip, 2..=2, vec![], vec![]);
+
+        assert_eq!(drain_sign_offs(&mut indexer).await, ["block 2", "reorg 2..=2"]);
+        assert_eq!(
+            validator.calls(),
+            [ValidationCall::NewBlock(block), ValidationCall::NewBlock(tip)]
+        );
+        assert_eq!(indexer.block_number, 2);
     }
 }

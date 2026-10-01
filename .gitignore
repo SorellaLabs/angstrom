@@ -27,3 +27,7 @@ verify-contract.sh
 
 # Claude
 .claude/
+
+ISSUES.md
+PLAN.md
+tickets/

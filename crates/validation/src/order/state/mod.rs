@@ -12,7 +12,10 @@ use angstrom_types::{
     }
 };
 use db_state_utils::StateFetchUtils;
-use order_validators::{ORDER_VALIDATORS, OrderValidation, OrderValidationState};
+use order_validators::{
+    ORDER_VALIDATORS, OrderValidation, OrderValidationState, clock::ValidationClock,
+    deadline::expiry_horizon_at
+};
 use parking_lot::RwLock;
 use pools::PoolsTracker;
 use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
@@ -35,9 +38,12 @@ pub struct StateValidation<Pools, Fetch> {
     /// tracks everything user related.
     pub(crate) user_account_tracker: Arc<UserAccountProcessor<Fetch>>,
     /// tracks all info about the current angstrom pool state.
-    pool_tacker:                     Arc<RwLock<Pools>>,
+    pool_tacker: Arc<RwLock<Pools>>,
     /// keeps up-to-date with the on-chain pool
-    uniswap_pools:                   SyncedUniswapPools
+    uniswap_pools: SyncedUniswapPools,
+    /// the execution time deadlines are judged against; the system clock live,
+    /// the recorded time in replay
+    clock: ValidationClock
 }
 
 impl<Pools, Fetch> Clone for StateValidation<Pools, Fetch> {
@@ -45,7 +51,8 @@ impl<Pools, Fetch> Clone for StateValidation<Pools, Fetch> {
         Self {
             user_account_tracker: Arc::clone(&self.user_account_tracker),
             pool_tacker:          Arc::clone(&self.pool_tacker),
-            uniswap_pools:        self.uniswap_pools.clone()
+            uniswap_pools:        self.uniswap_pools.clone(),
+            clock:                self.clock.clone()
         }
     }
 }
@@ -59,7 +66,8 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
         Self {
             pool_tacker: Arc::new(RwLock::new(pools)),
             user_account_tracker: Arc::new(user_account_tracker),
-            uniswap_pools
+            uniswap_pools,
+            clock: ValidationClock::default()
         }
     }
 
@@ -72,8 +80,12 @@ impl<Pools: PoolsTracker, Fetch: StateFetchUtils> StateValidation<Pools, Fetch> 
         self.user_account_tracker.cancel_order(user, hash);
     }
 
+    pub fn set_clock(&mut self, clock: ValidationClock) {
+        self.clock = clock;
+    }
+
     pub fn validate<O: RawPoolOrder>(&self, order: &O) -> Result<(), OrderValidationError> {
-        let mut state = OrderValidationState::new(order);
+        let mut state = OrderValidationState::at(order, expiry_horizon_at(self.clock.now()));
 
         for validator in ORDER_VALIDATORS {
             validator.validate_order(&mut state)?;
@@ -201,5 +213,50 @@ mod test {
             .ask()
             .build();
         validator.validate(&order).unwrap_err();
+    }
+
+    /// Replay judges a recorded order by when it was recorded, so a deadline
+    /// after the recorded time is not expired however long ago that was.
+    #[test]
+    fn a_deadline_after_the_replay_time_but_before_today_is_admitted() {
+        use std::time::Duration;
+
+        use angstrom_types::{
+            primitive::OrderValidationError, sol_bindings::grouped_orders::AllOrders
+        };
+
+        use super::order_validators::{
+            clock::ValidationClock, deadline::expiry_horizon_at, make_base_order
+        };
+
+        fn with_deadline(deadline: U256) -> AllOrders {
+            let mut order = make_base_order();
+            if let AllOrders::PartialStanding(ref mut o) = order {
+                o.deadline = deadline.to();
+            }
+            order
+        }
+
+        let (tx, _) = tokio::sync::mpsc::channel(10);
+        let pools = SyncedUniswapPools::new(Arc::new(DashMap::new()), tx);
+        let mut validation = StateValidation::new(
+            UserAccountProcessor::new(MockFetch::default()),
+            MockPoolTracker::default(),
+            pools
+        );
+        // 2025-01-01T00:00:00Z
+        let recorded = Duration::from_secs(1_735_689_600);
+        let valid_when_recorded = with_deadline(expiry_horizon_at(recorded) + U256::from(3600));
+
+        // On today's clock it expired long ago.
+        assert_eq!(validation.validate(&valid_when_recorded), Err(OrderValidationError::Expired));
+
+        validation.set_clock(ValidationClock::replay(recorded));
+        assert_eq!(validation.validate(&valid_when_recorded), Ok(()));
+        // The replay clock keeps the live boundary.
+        assert_eq!(
+            validation.validate(&with_deadline(expiry_horizon_at(recorded))),
+            Err(OrderValidationError::Expired)
+        );
     }
 }

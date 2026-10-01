@@ -48,7 +48,7 @@ impl FinalizationState {
         let searcher_count = orders.searcher.len();
 
         BlockMetricsWrapper::new().record_state_transition(
-            handles.block_height,
+            handles.block_height.number,
             "Finalization",
             slot_offset_ms,
             limit_count,
@@ -64,14 +64,14 @@ impl FinalizationState {
         let future = handles
             .matching_engine_output(preproposal)
             .map(move |output| {
-                let Ok((solution, _)) = output else {
+                let Ok(output) = output else {
                     return false;
                 };
 
                 let mut proposal_solution = proposal.solutions.clone();
                 proposal_solution.sort();
 
-                let mut verification_solution = solution;
+                let mut verification_solution = output.solutions;
                 verification_solution.sort();
 
                 if !proposal_solution
@@ -98,7 +98,7 @@ impl FinalizationState {
             completed:           false,
             verification_start:  now,
             consensus_start:     now,
-            block_height:        handles.block_height
+            block_height:        handles.block_height.number
         }
     }
 }

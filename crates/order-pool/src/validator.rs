@@ -4,7 +4,10 @@ use std::{
     task::{Context, Poll}
 };
 
-use alloy::primitives::{Address, B256};
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256}
+};
 use angstrom_types::{orders::OrderOrigin, sol_bindings::grouped_orders::AllOrders};
 use futures_util::{Future, FutureExt, Stream, StreamExt, stream::FuturesUnordered};
 use tracing::info;
@@ -20,7 +23,7 @@ pub enum OrderValidator<V: OrderValidatorHandle> {
     /// was some state transition on the address
     ClearingForNewBlock {
         validator:              V,
-        block_number:           u64,
+        block:                  BlockNumHash,
         waiting_for_new_block:  VecDeque<(OrderOrigin, AllOrders)>,
         /// all order hashes that have been filled or expired.
         completed_orders:       Vec<B256>,
@@ -83,7 +86,7 @@ where
 
     pub fn on_new_block(
         &mut self,
-        block_number: u64,
+        block: BlockNumHash,
         completed_orders: Vec<B256>,
         revalidation_addresses: Vec<Address>
     ) {
@@ -103,13 +106,13 @@ where
             remaining_futures: rem_futures,
             completed_orders,
             revalidation_addresses,
-            block_number
+            block
         }
     }
 
     pub fn notify_validation_on_changes(
         &mut self,
-        block_number: u64,
+        block: BlockNumHash,
         orders: Vec<B256>,
         changed_addresses: Vec<Address>
     ) {
@@ -122,7 +125,7 @@ where
         tracing::info!("informing validation that we got a new block");
         let fut = Box::pin(async move {
             validator_clone
-                .new_block(block_number, orders, changed_addresses)
+                .new_block(block, orders, changed_addresses)
                 .await
         });
 
@@ -191,7 +194,7 @@ where
         match this {
             OrderValidator::ClearingForNewBlock {
                 validator,
-                block_number,
+                block,
                 waiting_for_new_block,
                 completed_orders,
                 revalidation_addresses,
@@ -210,7 +213,7 @@ where
                 );
                 let completed_orders = std::mem::take(completed_orders);
                 let revalidation_addresses = std::mem::take(revalidation_addresses);
-                let block = *block_number;
+                let block = *block;
 
                 *this = Self::WaitingForStorageCleanup {
                     validator:             validator.clone(),
@@ -252,7 +255,11 @@ pub enum OrderValidatorRes {
     /// Once all orders for the previous block have been validated. we go
     /// through all the addresses and orders and cleanup. once this is done
     /// we can go back to general flow.
-    EnsureClearForTransition { block: u64, orders: Vec<B256>, addresses: Vec<Address> },
+    EnsureClearForTransition {
+        block:     BlockNumHash,
+        orders:    Vec<B256>,
+        addresses: Vec<Address>
+    },
     /// has fully transitioned to new block
     TransitionComplete
 }

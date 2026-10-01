@@ -4,7 +4,11 @@ bytecode_hash = "none"
 viaIR = false
 optimizer_runs = 21_000
 verbosity = 3
-fs_permissions = [{ access = "read-write", path = ".forge-snapshots/" }]
+fs_permissions = [
+  { access = "read-write", path = ".forge-snapshots/" },
+  # Lets tests assert on a contract's compiled ABI shape.
+  { access = "read", path = "out/" },
+]
 ast = true
 evm_version = "cancun"
 libs = ["lib"]

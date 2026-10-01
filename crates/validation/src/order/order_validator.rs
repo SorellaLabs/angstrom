@@ -16,7 +16,9 @@ use super::{
     OrderValidationRequest,
     sim::SimValidation,
     state::{
-        StateValidation, account::user::UserAddress, db_state_utils::StateFetchUtils,
+        StateValidation,
+        account::user::UserAddress,
+        db_state_utils::{Repoint, StateFetchUtils},
         pools::PoolsTracker
     }
 };
@@ -51,26 +53,37 @@ where
         Self { state, sim, block_number }
     }
 
-    pub fn fetch_nonce(&self, addr: Address) -> u64 {
+    pub fn fetch_nonce(&self, addr: Address) -> eyre::Result<u64> {
         loop {
             let nonce = random();
-            let Ok(is_valid) = self
+            if self
                 .state
                 .user_account_tracker
                 .fetch_utils
-                .is_valid_nonce(addr, nonce)
-            else {
-                panic!("db failure");
-            };
-
-            if is_valid {
-                return nonce;
+                .is_valid_nonce(addr, nonce)?
+            {
+                return Ok(nonce);
             }
         }
     }
 
     pub fn cancel_order(&self, user: Address, hash: B256) {
         self.state.cancel_order(user, hash);
+    }
+
+    /// Repoints every state read at `db`. The account bookkeeping is shared
+    /// with the previous view, so nothing in flight is lost.
+    pub fn repoint(&mut self, db: Arc<DB>)
+    where
+        Fetch: Repoint<DB>
+    {
+        self.sim = self.sim.repoint(db.clone());
+        let tracker = &self.state.user_account_tracker;
+        let repointed = UserAccountProcessor::new_with_accounts(
+            tracker.fetch_utils.repoint(db),
+            tracker.user_accounts.clone()
+        );
+        self.state.user_account_tracker = Arc::new(repointed);
     }
 
     pub fn on_new_block(

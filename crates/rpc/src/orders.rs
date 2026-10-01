@@ -90,7 +90,10 @@ where
     }
 
     async fn valid_nonce(&self, user: Address) -> RpcResult<u64> {
-        Ok(self.validator.valid_nonce_for_user(user).await)
+        self.validator
+            .valid_nonce_for_user(user)
+            .await
+            .map_err(|e| rpc_err(jsonrpsee::types::error::INTERNAL_ERROR_CODE, e, None))
     }
 
     async fn orders_by_pool_id(
@@ -446,7 +449,7 @@ mod tests {
 
         fn new_block(
             &self,
-            _block_number: u64,
+            _block: alloy_eips::BlockNumHash,
             _completed_orders: Vec<B256>,
             _addresses: Vec<Address>
         ) -> ValidationFuture<'_> {
@@ -464,7 +467,7 @@ mod tests {
         }
 
         fn valid_nonce_for_user(&self, _address: Address) -> validation::order::NonceFuture<'_> {
-            Box::pin(async move { 50 })
+            Box::pin(async move { Ok(50) })
         }
 
         fn cancel_order(&self, _: Address, _: B256) {}

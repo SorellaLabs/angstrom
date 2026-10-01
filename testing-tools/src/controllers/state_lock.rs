@@ -5,7 +5,8 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering}
     },
-    task::{Context, Poll}
+    task::{Context, Poll},
+    time::Duration
 };
 
 use alloy::{providers::Provider, signers::local::PrivateKeySigner};
@@ -22,7 +23,10 @@ use reth_provider::{
     StateProviderFactory, StateRangeProviderFactory
 };
 use reth_tasks::TaskExecutor;
-use tokio::task::JoinHandle;
+use tokio::{
+    task::JoinHandle,
+    time::{Instant, Sleep, sleep}
+};
 use tracing::{Level, span};
 
 use crate::{
@@ -258,15 +262,22 @@ impl<T> Drop for StateLockInner<T> {
     }
 }
 
+/// How often a parked state lock re-polls itself. `lock` is a plain
+/// `AtomicBool` with no waker, and we would rather not depend on every inner
+/// future registering one, so this bounds how long a missed wake-up can stall a
+/// node instead of re-polling as fast as the executor allows.
+const IDLE_REPOLL: Duration = Duration::from_millis(1);
+
 struct StateLockFut<T> {
     node_id: u64,
     inner:   Arc<Mutex<T>>,
-    lock:    Arc<AtomicBool>
+    lock:    Arc<AtomicBool>,
+    repoll:  Pin<Box<Sleep>>
 }
 
 impl<T> StateLockFut<T> {
     fn new(node_id: u64, inner: Arc<Mutex<T>>, lock: Arc<AtomicBool>) -> Self {
-        Self { inner, lock, node_id }
+        Self { inner, lock, node_id, repoll: Box::pin(sleep(IDLE_REPOLL)) }
     }
 }
 
@@ -285,7 +296,17 @@ where
             {
                 return Poll::Ready(());
             }
-            cx.waker().wake_by_ref();
+
+            // Wait on a timer rather than waking on every poll. The
+            // unconditional self-wake this replaces kept each state lock
+            // spinning a worker at 100%, and there are four of them per node,
+            // so a three-node testnet starved the runtime its own peer
+            // handshakes needed to make progress.
+            if this.repoll.as_mut().poll(cx).is_ready() {
+                this.repoll.as_mut().reset(Instant::now() + IDLE_REPOLL);
+                // register against the new deadline so we are woken again
+                let _ = this.repoll.as_mut().poll(cx);
+            }
             Poll::Pending
         })
     }

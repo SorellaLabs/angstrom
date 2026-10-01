@@ -2,7 +2,10 @@ use std::{future::Future, pin::Pin};
 
 use alloy_primitives::U256;
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 
 use crate::{
     controllers::enviroments::{AngstromTestnet, DevnetStateMachine},
@@ -20,6 +23,9 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + Clone
         + 'static
@@ -43,6 +49,9 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + Clone
         + 'static

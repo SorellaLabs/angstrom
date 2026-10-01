@@ -336,7 +336,11 @@ impl Eq for SignOffState {}
 
 #[cfg(test)]
 pub mod test {
-    use std::{sync::Arc, thread, time::Duration};
+    use std::{
+        sync::{Arc, Barrier},
+        thread,
+        time::Duration
+    };
 
     use crate::block_sync::{BlockSyncConsumer, BlockSyncProducer, GlobalBlockSync};
 
@@ -519,21 +523,30 @@ pub mod test {
         global_sync.register(MOD2);
         global_sync.finalize_modules();
 
-        // Both producer calls are made before either sign-off, which is the
-        // ordering a single producer actually produces. Racing them on two
-        // threads instead livelocks: if `sign_off_on_block(MOD1, 11)` lands
-        // first, MOD1's queue front becomes `ReadyForNextBlock(_, 11)`, and
-        // `reorg`'s `is_transitioning(10)` spin then compares 11 against 10
-        // forever while the thread that would clear it is still inside that
-        // spin. See the note on `reorg` above.
-        global_sync.new_block(11);
-        global_sync.reorg(9..=10);
+        let sync1 = global_sync.clone();
+        let sync2 = global_sync.clone();
+        // new_block/reorg spin until outstanding sign-offs complete, so queue
+        // both proposals before either (partial) sign-off happens.
+        let barrier1 = Arc::new(Barrier::new(2));
+        let barrier2 = barrier1.clone();
 
-        global_sync.sign_off_on_block(MOD1, 11, None);
-        global_sync.sign_off_reorg(MOD2, 9..=10, None);
+        let handle1 = thread::spawn(move || {
+            sync1.new_block(11);
+            barrier1.wait();
+            sync1.sign_off_on_block(MOD1, 11, None);
+        });
 
-        // Both proposals should be in the queue: neither can transition while
-        // the two modules have signed off on different ones.
+        let handle2 = thread::spawn(move || {
+            sync2.reorg(9..=10);
+            barrier2.wait();
+            sync2.sign_off_reorg(MOD2, 9..=10, None);
+        });
+
+        handle1.join().unwrap();
+        handle2.join().unwrap();
+
+        // Both proposals should be in the queue
+        assert_eq!(global_sync.pending_state.read().unwrap().len(), 2);
         assert!(global_sync.has_proposal());
         assert!(!global_sync.can_operate());
     }

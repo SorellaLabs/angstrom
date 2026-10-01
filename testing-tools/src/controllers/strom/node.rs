@@ -32,7 +32,10 @@ use reth_network::{
     NetworkHandle, NetworkInfo, Peers,
     test_utils::{Peer, PeerHandle}
 };
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 use reth_tasks::TaskExecutor;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -79,6 +82,9 @@ where
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + 'static,
     P: WithWalletProvider,
     G: GlobalTestingConfig

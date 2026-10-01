@@ -1055,8 +1055,10 @@ pub mod test {
         // Handle commit
         eth.handle_commit(new_chain).unwrap();
 
+        // handle_commit emits NewBlock before NewBlockTransitions
+        assert!(matches!(rx.try_recv(), Ok(EthEvent::NewBlock(block)) if block.number == 100));
+
         // Verify new block transitions event was sent
-        // `handle_commit` sends `NewBlock` ahead of the transitions.
         match published_transitions(&mut rx).expect("Should receive an event") {
             EthEvent::NewBlockTransitions { block, filled_orders, address_changeset } => {
                 assert_eq!(block.number, 100);
@@ -1173,7 +1175,9 @@ pub mod test {
 
         eth.handle_commit(mock_chain).unwrap();
 
-        // `handle_commit` sends `NewBlock` ahead of the transitions.
+        // handle_commit emits NewBlock before NewBlockTransitions
+        assert!(matches!(rx.try_recv(), Ok(EthEvent::NewBlock(block)) if block.number == 100));
+
         match published_transitions(&mut rx).expect("Should receive an event") {
             EthEvent::NewBlockTransitions { block, filled_orders, address_changeset } => {
                 assert_eq!(block.number, 100);

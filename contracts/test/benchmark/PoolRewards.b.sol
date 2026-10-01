@@ -68,7 +68,9 @@ contract PoolRewardsTest is BaseTest {
 
         vm.startPrank(controller);
         angstrom.configurePool(asset0, asset1, 60, 0, 0, 0);
-        angstrom.configurePool(asset0, address(clearer), 1, 0, 0, 0);
+        // `clearer` is not deployed sorted relative to `asset0`, order depends on deployer nonce.
+        (address clearerPair0, address clearerPair1) = sort(asset0, address(clearer));
+        angstrom.configurePool(clearerPair0, clearerPair1, 1, 0, 0, 0);
         vm.stopPrank();
         // Note hardcoded slot for `Angstrom.sol`, might be different for test derivations.
         configStore = rawGetConfigStore(address(angstrom));

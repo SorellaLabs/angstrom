@@ -50,7 +50,8 @@ impl TestnetStateOverrides {
             .map(|(token, user_balances)| {
                 // Calculate total amount needed for this token
                 let total_needed: u128 = user_balances.values().sum();
-                // Set contract's ERC20 balance: token.balanceOf[angstrom_addr] = total_needed
+                // Set contract's ERC20 balance: token.balanceOf[angstrom_addr]
+                // = total_needed
                 let contract_balance_slot = keccak256((angstrom_addr, 1).abi_encode());
                 (*token, contract_balance_slot, U256::from(total_needed) * U256::from(2))
             })

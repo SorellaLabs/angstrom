@@ -20,7 +20,10 @@ use reth_metrics::common::mpsc::{
     UnboundedMeteredReceiver, UnboundedMeteredSender, metered_unbounded_channel
 };
 use reth_network::NetworkHandle;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 pub use state_machine::*;
 use tokio_stream::StreamExt;
 use tracing::{Instrument, Level, span};
@@ -48,6 +51,9 @@ where
         + ReceiptProvider<Receipt = reth::primitives::ReceiptTy<reth::primitives::EthPrimitives>>
         + HeaderProvider<Header = reth::primitives::HeaderTy<reth::primitives::EthPrimitives>>
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + Unpin
         + Clone
         + 'static,

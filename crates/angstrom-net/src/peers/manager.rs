@@ -166,7 +166,8 @@ impl Peer {
     /// be taken.
     fn apply_reputation(&mut self, reputation: i32) -> ReputationChangeOutcome {
         let previous = self.reputation;
-        // we add reputation since negative reputation change decrease total reputation
+        // we add reputation since negative reputation change decrease total
+        // reputation
         self.reputation = previous.saturating_add(reputation);
 
         trace!(target: "angstrom::net::peers", reputation=%self.reputation, banned=%self.is_banned(), "applied reputation change");

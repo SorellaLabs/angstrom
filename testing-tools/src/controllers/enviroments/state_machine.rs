@@ -1,7 +1,10 @@
 use std::{future::Future, pin::Pin};
 
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, StateProviderFactory,
+    StateRangeProviderFactory
+};
 
 use super::AngstromTestnet;
 use crate::{
@@ -22,6 +25,9 @@ where
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + 'static
 {
     pub(crate) fn new(testnet: AngstromTestnet<C, DevnetConfig, WalletProvider>) -> Self {

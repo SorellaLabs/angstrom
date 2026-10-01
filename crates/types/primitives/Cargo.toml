@@ -2,6 +2,7 @@
 name = "angstrom-types-primitives"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 alloy-consensus.workspace = true

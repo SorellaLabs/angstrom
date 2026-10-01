@@ -19,7 +19,10 @@ use reth_network::{
 };
 use reth_network_api::PeerId;
 use reth_network_peers::pk2id;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, StateProviderFactory,
+    StateRangeProviderFactory
+};
 use secp256k1::SecretKey;
 pub use strom_peer::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -54,6 +57,9 @@ impl TestnetNodeNetwork {
             + Unpin
             + Clone
             + ChainSpecProvider<ChainSpec: Hardforks>
+            + BalProvider
+            + StateProviderFactory
+            + StateRangeProviderFactory
             + 'static,
         G: GlobalTestingConfig
     {

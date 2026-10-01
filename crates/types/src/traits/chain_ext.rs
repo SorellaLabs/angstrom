@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::{ops::RangeInclusive, sync::Arc};
 
 use alloy::consensus::BlockHeader;
 use alloy_primitives::{BlockHash, BlockNumber};
@@ -84,7 +84,7 @@ impl ChainExt for Chain {
     }
 
     fn blocks_iter(&self) -> impl Iterator<Item = &RecoveredBlock<Block>> + '_ {
-        self.blocks_iter()
+        self.blocks_iter().map(Arc::as_ref)
     }
 
     fn block_hashes(&self) -> Vec<BlockHash> {

@@ -5,7 +5,10 @@ use alloy_primitives::U256;
 use angstrom_types::{block_sync::GlobalBlockSync, testnet::InitialTestnetState};
 use futures::{Future, FutureExt};
 use reth_chainspec::Hardforks;
-use reth_provider::{BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider};
+use reth_provider::{
+    BalProvider, BlockReader, ChainSpecProvider, HeaderProvider, ReceiptProvider,
+    StateProviderFactory, StateRangeProviderFactory
+};
 use reth_tasks::TaskExecutor;
 
 use super::AngstromTestnet;
@@ -28,6 +31,9 @@ where
         + Unpin
         + Clone
         + ChainSpecProvider<ChainSpec: Hardforks>
+        + BalProvider
+        + StateProviderFactory
+        + StateRangeProviderFactory
         + 'static
 {
     pub async fn spawn_devnet(c: C, config: DevnetConfig, ex: TaskExecutor) -> eyre::Result<Self> {

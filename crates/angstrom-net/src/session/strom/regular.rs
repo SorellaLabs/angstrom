@@ -42,7 +42,8 @@ impl RegularProcessing {
             let Some(next) = self.manager_buffer.pop_front() else {
                 return;
             };
-            // If the manager is dropped (e.g., during shutdown), ignore send errors.
+            // If the manager is dropped (e.g., during shutdown), ignore send
+            // errors.
             let _ = self.to_session_manager.send_item(next);
         }
     }
@@ -68,8 +69,8 @@ impl<S: AngstromMetaSigner> StromSession<S> for RegularProcessing {
             }
         }
 
-        // now that we have handled possible outbound messages, lets handle the inbound
-        // messages
+        // now that we have handled possible outbound messages, lets handle the
+        // inbound messages
         while let Poll::Ready(bytes) = self.conn.poll_next_unpin(cx) {
             match bytes {
                 Some(bytes) => {

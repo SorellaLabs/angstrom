@@ -70,19 +70,21 @@ impl BorrowStateTracker {
     /// Combines this borrow state with another borrow state that is expected to
     /// describe operations chronologically following this one
     pub fn and_then(&self, other: &Self) -> Self {
-        // The amount that we will need to borrow is the amount we had to borrow for
-        // this step plus the amount we need to borrow for the next step MINUS the
-        // amount we had liquid at the end of this step (as that will be available to
-        // the next step)
+        // The amount that we will need to borrow is the amount we had to borrow
+        // for this step plus the amount we need to borrow for the next
+        // step MINUS the amount we had liquid at the end of this step
+        // (as that will be available to the next step)
         let borrow_needed = self.take + (other.take.saturating_sub(self.contract_liquid));
-        // The amount we'll have on-hand is equal to the amount we currently have
-        // on-hand minus the amount the next stage would have needed to borrow plus the
-        // amount the next stage will end with on hand
+        // The amount we'll have on-hand is equal to the amount we currently
+        // have on-hand minus the amount the next stage would have
+        // needed to borrow plus the amount the next stage will end with
+        // on hand
         let amount_onhand =
             (self.contract_liquid.saturating_sub(other.take)) + other.contract_liquid;
-        // The amount we owe back to Uniswap is the amount we currently owe to uniswap
-        // plus the amount the next step owes to uniswap MINUS the amount we had liquid
-        // at the end of this step (as that will be available to the next step)
+        // The amount we owe back to Uniswap is the amount we currently owe to
+        // uniswap plus the amount the next step owes to uniswap MINUS
+        // the amount we had liquid at the end of this step (as that
+        // will be available to the next step)
         let amount_owed = self.settle + (other.settle.saturating_sub(self.contract_liquid));
         // The amount we're saving for later just adds up
         let amount_save = self.save + other.save;

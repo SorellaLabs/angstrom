@@ -38,8 +38,8 @@ pub struct StromSessionHandle {
 impl StromSessionHandle {
     /// Sends a disconnect command to the session.
     pub fn disconnect(&self, reason: Option<DisconnectReason>) {
-        // Note: we clone the sender which ensures the channel has capacity to send the
-        // message
+        // Note: we clone the sender which ensures the channel has capacity to
+        // send the message
         let _ = self
             .commands_to_session
             .clone()

@@ -133,10 +133,11 @@ impl StromSessionManager {
     }
 
     fn poll_session_msg(&mut self, cx: &mut Context<'_>) -> Poll<Option<SessionEvent>> {
-        // before we process any data, lets ensure we haven't had any disconnects.
-        // we have to do this as we don't get any notifications of closing
-        // when our objects get dropped from reth so we just check
-        // to ensure all the handles channels are still open
+        // before we process any data, lets ensure we haven't had any
+        // disconnects. we have to do this as we don't get any
+        // notifications of closing when our objects get dropped from
+        // reth so we just check to ensure all the handles channels are
+        // still open
         let dead_peers = self
             .active_sessions
             .iter()

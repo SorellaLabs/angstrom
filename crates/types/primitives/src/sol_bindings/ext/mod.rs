@@ -203,7 +203,8 @@ mod order_validation_priority_tests {
 
     #[test]
     fn test_lower_nonce_has_higher_priority() {
-        // For same TOB and partial status, lower nonce should have higher priority
+        // For same TOB and partial status, lower nonce should have higher
+        // priority
         let lower_nonce = create_priority(true, false, 1);
         let higher_nonce = create_priority(true, false, 2);
 

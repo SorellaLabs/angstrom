@@ -109,7 +109,9 @@ where
                 timestamp,
                 suggested_fee_recipient: parent.beneficiary(),
                 prev_randao: parent.mix_hash().unwrap_or_default(),
-                gas_limit: parent.gas_limit()
+                gas_limit: parent.gas_limit(),
+                // As reth derives its own pending block's: the next slot (EIP-7843).
+                slot_number: parent.slot_number().map(|slot| slot.saturating_add(1))
             },
             parent
                 .next_block_base_fee(chain_spec.base_fee_params_at_timestamp(timestamp))
@@ -237,7 +239,7 @@ where
                     return;
                 }
 
-                let res = BundleGasDetails::new(result.gas_used(), parent);
+                let res = BundleGasDetails::new(result.tx_gas_used(), parent);
                 let _ = sender.send(Ok(res));
             });
         }))

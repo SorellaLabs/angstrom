@@ -254,8 +254,8 @@ where
     }
 
     fn handle_new_block_info(&mut self, block_info: PoolMangerBlocks) {
-        // If there is a reorg, unwind state changes from last_synced block to the
-        // chain head block number
+        // If there is a reorg, unwind state changes from last_synced block to
+        // the chain head block number
         let (chain_head_block_number, block_range, is_reorg) = match block_info {
             PoolMangerBlocks::NewBlock(block) => (block, None, false),
             PoolMangerBlocks::Reorg(tip, range) => {

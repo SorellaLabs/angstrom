@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use alloy::{
     eips::{Encodable2718, eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M},
-    network::TransactionBuilder,
+    network::{NetworkTransactionBuilder, TransactionBuilder},
     providers::Provider,
     sol_types::SolCall
 };

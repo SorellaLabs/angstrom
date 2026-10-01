@@ -406,7 +406,8 @@ mod tests {
         let mut algo1 = WeightedRoundRobin::new(validators.clone(), BlockNumber::default());
         let mut algo2 = WeightedRoundRobin::new(validators, BlockNumber::default());
 
-        // Run multiple rounds and verify both instances select the same proposers
+        // Run multiple rounds and verify both instances select the same
+        // proposers
         for i in 1..=10 {
             let proposer1 = algo1.choose_proposer(i);
             let proposer2 = algo2.choose_proposer(i);

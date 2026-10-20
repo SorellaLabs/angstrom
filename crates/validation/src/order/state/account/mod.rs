@@ -220,7 +220,7 @@ mod tests {
     use alloy::primitives::{Address, U256};
     use angstrom_types::{
         primitive::{AngstromAddressConfig, AngstromSigner, PoolId},
-        sol_bindings::{RawPoolOrder, grouped_orders::AllOrders}
+        sol_bindings::RawPoolOrder
     };
     use testing_tools::type_generator::orders::UserOrderBuilder;
     use tracing::info;
@@ -445,71 +445,6 @@ mod tests {
             vec![order0_hash],
             "order1 should invalidate order0 due to lower nonce"
         );
-    }
-
-    /// The order pool keeps an order displaced by a same-nonce replacement
-    /// when the replacement is cancelled mid-validation, and revalidates it.
-    /// Without that revalidation the displaced order's funds look free.
-    #[tokio::test]
-    async fn cancelled_replacement_needs_displaced_order_revalidation() {
-        for revalidate_displaced in [false, true] {
-            let processor = setup_test_account_processor();
-            let sk = AngstromSigner::random();
-            let user = sk.address();
-            let token0 = Address::random();
-            let token1 = Address::random();
-            let mock_pool = MockPoolTracker::default();
-            mock_pool.add_pool(token0, token1, PoolId::default());
-            let order = |nonce: u64, recipient: Address| {
-                UserOrderBuilder::new()
-                    .standing()
-                    .asset_in(token0)
-                    .asset_out(token1)
-                    .amount(500)
-                    .nonce(nonce)
-                    .recipient(recipient)
-                    .signing_key(Some(sk.clone()))
-                    .build()
-            };
-            let displaced = order(420, user);
-            let replacement = loop {
-                let candidate = order(420, Address::random());
-                if candidate.order_hash() < displaced.order_hash() {
-                    break candidate;
-                }
-            };
-            let later = order(421, user);
-            // Funds for exactly one order.
-            processor
-                .fetch_utils
-                .set_balance_for_user(user, token0, U256::from(500));
-            processor
-                .fetch_utils
-                .set_approval_for_user(user, token0, U256::from(500));
-            let verify = async |order: AllOrders, is_revalidating: bool| {
-                let pool_info = mock_pool.fetch_pool_info_for_order(&order).unwrap();
-                processor
-                    .verify_order(order, pool_info, 420, is_revalidating, async |_, _| Ok((0, 0)))
-                    .await
-                    .unwrap()
-            };
-
-            verify(displaced.clone(), false).await;
-            let res = verify(replacement.clone(), false).await;
-            assert_eq!(res.invalidates, vec![displaced.order_hash()]);
-            processor.cancel_order(user, replacement.order_hash());
-            if revalidate_displaced {
-                let res = verify(displaced.clone(), true).await;
-                assert!(res.is_currently_valid.is_none());
-            }
-
-            let res = verify(later, false).await;
-            assert_eq!(
-                res.is_currently_valid.is_some(),
-                revalidate_displaced,
-                "the later order is funded only if the displaced order's reservation is lost"
-            );
-        }
     }
 
     #[tokio::test]

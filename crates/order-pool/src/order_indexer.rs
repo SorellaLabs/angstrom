@@ -589,7 +589,7 @@ pub enum PoolError {
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         sync::Arc,
         time::{SystemTime, UNIX_EPOCH}
     };
@@ -599,7 +599,9 @@ mod tests {
         contract_bindings::angstrom::Angstrom::PoolKey,
         matching::Ray,
         orders::{CancelOrderRequest, OrderId, builders::ToBOrderBuilder},
-        primitive::{AngstromAddressConfig, AngstromSigner, OrderValidationError},
+        primitive::{
+            AngstromAddressConfig, AngstromSigner, OrderValidationError, UserOrderPoolInfo
+        },
         sol_bindings::RespendAvoidanceMethod
     };
     use testing_tools::{
@@ -607,6 +609,10 @@ mod tests {
     };
     use tokio::sync::broadcast;
     use tracing_subscriber::{EnvFilter, fmt};
+    use validation::order::{
+        GasEstimationFuture, NonceFuture, ValidationFuture,
+        state::{account::UserAccountProcessor, db_state_utils::StateFetchUtils}
+    };
 
     use super::*;
     use crate::PoolConfig;
@@ -1269,21 +1275,6 @@ mod tests {
         }
     }
 
-    /// A replacement of `displaced` by the same owner (a distinct hash).
-    fn replacement_order(
-        owner: &AngstromSigner<PrivateKeySigner>,
-        displaced: &OrderWithStorageData<AllOrders>
-    ) -> AllOrders {
-        UserOrderBuilder::new()
-            .standing()
-            .asset_in(displaced.token_in())
-            .asset_out(displaced.token_out())
-            .amount(900)
-            .signing_key(Some(owner.clone()))
-            .recipient(Address::random())
-            .build()
-    }
-
     #[tokio::test]
     async fn cancel_requires_the_stored_order_owner() {
         for is_tob in [false, true] {
@@ -1490,64 +1481,259 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn cancel_during_validation_revalidates_displaced_orders() {
-        let (mut indexer, owner, displaced) = cancellation_fixture(false);
-        let displaced_hash = displaced.order_hash();
-        indexer
-            .handle_validated_order(OrderValidationResults::Valid(displaced.clone()))
-            .unwrap();
-        let replacement = replacement_order(&owner, &displaced);
-        let hash = replacement.order_hash();
-        let (tx, _rx) = tokio::sync::oneshot::channel();
-        indexer.new_rpc_order(OrderOrigin::Local, replacement.clone(), tx);
-        assert!(!indexer.cancel_order(&CancelOrderRequest::new(owner.address(), hash, &owner)));
+    /// Every account can fund exactly one 500-unit order.
+    #[derive(Clone, Debug)]
+    struct OneOrderOfFunds;
 
-        // Validating the replacement released the displaced order's
-        // reservation; cancelling the replacement must not leave the displaced
-        // order live in storage without one.
-        let result = indexer
-            .handle_validated_order(OrderValidationResults::Valid(validated_order(
-                replacement,
-                displaced.pool_id,
-                vec![displaced_hash]
-            )))
-            .unwrap();
-        assert!(matches!(result, PoolInnerEvent::None));
-        assert!(
-            indexer
-                .order_storage
-                .get_order_from_id(&displaced.order_id)
-                .is_none()
-        );
-        assert!(indexer.order_tracker.is_validating(&displaced_hash));
+    impl StateFetchUtils for OneOrderOfFunds {
+        fn is_valid_nonce(&self, _: Address, _: u64) -> eyre::Result<bool> {
+            Ok(true)
+        }
+
+        fn fetch_approval_balance_for_token_overrides(
+            &self,
+            _: Address,
+            _: Address,
+            _: &HashMap<Address, HashMap<U256, U256>>
+        ) -> eyre::Result<Option<U256>> {
+            unreachable!()
+        }
+
+        fn fetch_approval_balance_for_token(
+            &self,
+            _: Address,
+            _: Address
+        ) -> eyre::Result<Option<U256>> {
+            Ok(Some(U256::from(500)))
+        }
+
+        fn fetch_balance_for_token_overrides(
+            &self,
+            _: Address,
+            _: Address,
+            _: &HashMap<Address, HashMap<U256, U256>>
+        ) -> eyre::Result<Option<U256>> {
+            unreachable!()
+        }
+
+        fn fetch_balance_for_token(&self, _: Address, _: Address) -> eyre::Result<U256> {
+            Ok(U256::from(500))
+        }
+
+        fn fetch_token_balance_in_angstrom(&self, _: Address, _: Address) -> eyre::Result<U256> {
+            Ok(U256::ZERO)
+        }
+    }
+
+    /// Validates against real account reservations and records the order in
+    /// which the pool asks it to cancel and validate.
+    #[derive(Clone)]
+    struct AccountValidator {
+        accounts: Arc<UserAccountProcessor<OneOrderOfFunds>>,
+        pool_id:  PoolId,
+        calls:    Arc<std::sync::Mutex<Vec<(&'static str, B256)>>>
+    }
+
+    impl std::fmt::Debug for AccountValidator {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("AccountValidator")
+        }
+    }
+
+    impl OrderValidatorHandle for AccountValidator {
+        type Order = AllOrders;
+
+        fn validate_order(&self, origin: OrderOrigin, order: AllOrders) -> ValidationFuture<'_> {
+            Box::pin(async move {
+                let hash = order.order_hash();
+                self.calls.lock().unwrap().push(("validate", hash));
+                let pool_info = UserOrderPoolInfo {
+                    pool_id: self.pool_id,
+                    token:   order.token_in(),
+                    is_bid:  order.is_bid()
+                };
+                match self
+                    .accounts
+                    .verify_order(order, pool_info, 1, origin.is_revalidating(), async |_, _| {
+                        Ok((0, 0))
+                    })
+                    .await
+                {
+                    Ok(valid) => OrderValidationResults::Valid(valid),
+                    Err(error) => OrderValidationResults::Invalid {
+                        hash,
+                        error: OrderValidationError::StateError(error)
+                    }
+                }
+            })
+        }
+
+        fn cancel_order(&self, user: Address, hash: B256) {
+            self.calls.lock().unwrap().push(("cancel", hash));
+            self.accounts.cancel_order(user, hash);
+        }
+
+        fn new_block(&self, _: u64, _: Vec<B256>, _: Vec<Address>) -> ValidationFuture<'_> {
+            Box::pin(async { OrderValidationResults::TransitionedToBlock(vec![]) })
+        }
+
+        fn estimate_gas(
+            &self,
+            _: bool,
+            _: bool,
+            _: Address,
+            _: Address
+        ) -> GasEstimationFuture<'_> {
+            Box::pin(async { Ok((U256::ZERO, 1)) })
+        }
+
+        fn valid_nonce_for_user(&self, _: Address) -> NonceFuture<'_> {
+            Box::pin(async { 420 })
+        }
+    }
+
+    fn funded_order(
+        owner: &AngstromSigner<PrivateKeySigner>,
+        pool_key: PoolKey,
+        nonce: u64,
+        recipient: Address
+    ) -> AllOrders {
+        UserOrderBuilder::new()
+            .standing()
+            .asset_in(pool_key.currency0)
+            .asset_out(pool_key.currency1)
+            .amount(500)
+            .nonce(nonce)
+            .recipient(recipient)
+            .signing_key(Some(owner.clone()))
+            .build()
+    }
+
+    struct Displacement {
+        indexer:     OrderIndexer<AccountValidator>,
+        validator:   AccountValidator,
+        owner:       AngstromSigner<PrivateKeySigner>,
+        pool_key:    PoolKey,
+        displaced:   B256,
+        replacement: OrderValidationResults
+    }
+
+    /// A live order and the validation result of a same-nonce replacement
+    /// with a lower hash, which released the live order's reservation.
+    async fn displaced_by_replacement() -> Displacement {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let owner = AngstromSigner::random();
+        let pool_key = PoolKey {
+            currency0: Address::random(),
+            currency1: Address::random(),
+            ..Default::default()
+        };
+        let pool_id = PoolId::from(pool_key);
+        let validator = AccountValidator {
+            accounts: Arc::new(UserAccountProcessor::new(OneOrderOfFunds)),
+            pool_id,
+            calls: Default::default()
+        };
+        let storage = Arc::new(OrderStorage::new(&PoolConfig::with_pool_ids(vec![pool_id])));
+        let (updates, _) = broadcast::channel(16);
+        let mut indexer = OrderIndexer::new(validator.clone(), storage, 1, updates);
+
+        let displaced = funded_order(&owner, pool_key, 420, owner.address());
+        let replacement = loop {
+            let order = funded_order(&owner, pool_key, 420, Address::random());
+            if order.order_hash() < displaced.order_hash() {
+                break order;
+            }
+        };
+        let live = validator
+            .validate_order(OrderOrigin::External, displaced.clone())
+            .await;
+        indexer.handle_validated_order(live).unwrap();
+        let replacement = validator
+            .validate_order(OrderOrigin::External, replacement)
+            .await;
+        assert!(matches!(&replacement, OrderValidationResults::Valid(v)
+            if v.invalidates == vec![displaced.order_hash()]));
+        validator.calls.lock().unwrap().clear();
+
+        Displacement {
+            indexer,
+            validator,
+            owner,
+            pool_key,
+            displaced: displaced.order_hash(),
+            replacement
+        }
+    }
+
+    impl Displacement {
+        /// Runs the queued revalidation and checks the displaced order holds
+        /// the owner's funds again, after the replacement's were released.
+        async fn assert_displaced_order_restored(mut self, replacement: B256) {
+            assert!(self.indexer.order_tracker.is_validating(&self.displaced));
+            self.indexer.next().await.unwrap();
+            assert_eq!(
+                *self.validator.calls.lock().unwrap(),
+                vec![("cancel", replacement), ("validate", self.displaced)]
+            );
+            let live = self
+                .indexer
+                .pending_orders_for_address(self.owner.address());
+            assert_eq!(live.len(), 1);
+            assert_eq!(live[0].order_hash(), self.displaced);
+            let later = self
+                .validator
+                .validate_order(
+                    OrderOrigin::External,
+                    funded_order(&self.owner, self.pool_key, 421, self.owner.address())
+                )
+                .await;
+            assert!(matches!(later, OrderValidationResults::Valid(v)
+                if v.is_currently_valid.is_some()));
+        }
     }
 
     #[tokio::test]
-    async fn stale_validation_revalidates_displaced_orders() {
-        let (mut indexer, owner, displaced) = cancellation_fixture(false);
-        let displaced_hash = displaced.order_hash();
-        indexer
-            .handle_validated_order(OrderValidationResults::Valid(displaced.clone()))
-            .unwrap();
-        let mut stale = validated_order(
-            replacement_order(&owner, &displaced),
-            displaced.pool_id,
-            vec![displaced_hash]
-        );
-        stale.valid_block = indexer.block_number + 1;
+    async fn cancel_during_validation_restores_displaced_reservation() {
+        let mut test = displaced_by_replacement().await;
+        let OrderValidationResults::Valid(replacement) = &test.replacement else { unreachable!() };
+        let hash = replacement.order_hash();
+        let owner = test.owner.clone();
+        assert!(!test.indexer.cancel_order(&CancelOrderRequest::new(
+            owner.address(),
+            hash,
+            &owner
+        )));
 
-        let result = indexer
-            .handle_validated_order(OrderValidationResults::Valid(stale))
-            .unwrap();
-        assert!(matches!(result, PoolInnerEvent::BadOrderMessages(_)));
-        assert!(
-            indexer
-                .order_storage
-                .get_order_from_id(&displaced.order_id)
-                .is_none()
+        let result = std::mem::replace(
+            &mut test.replacement,
+            OrderValidationResults::TransitionedToBlock(vec![])
         );
-        assert!(indexer.order_tracker.is_validating(&displaced_hash));
+        assert!(matches!(
+            test.indexer.handle_validated_order(result).unwrap(),
+            PoolInnerEvent::None
+        ));
+        test.assert_displaced_order_restored(hash).await;
+    }
+
+    #[tokio::test]
+    async fn stale_validation_restores_displaced_reservation() {
+        let mut test = displaced_by_replacement().await;
+        let OrderValidationResults::Valid(replacement) = &mut test.replacement else {
+            unreachable!()
+        };
+        let hash = replacement.order_hash();
+        replacement.valid_block += 1;
+
+        let result = std::mem::replace(
+            &mut test.replacement,
+            OrderValidationResults::TransitionedToBlock(vec![])
+        );
+        assert!(matches!(
+            test.indexer.handle_validated_order(result).unwrap(),
+            PoolInnerEvent::BadOrderMessages(_)
+        ));
+        test.assert_displaced_order_restored(hash).await;
     }
 
     #[test]

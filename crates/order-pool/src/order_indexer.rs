@@ -30,8 +30,12 @@ use crate::{
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct InnerCancelOrderRequest {
     /// The address of the entity requesting the cancellation.
-    pub from:     Address,
-    pub deadline: U256
+    pub from:           Address,
+    pub deadline:       U256,
+    /// Older snapshots also stored unknown-order claims in this cache. Only
+    /// a cancellation bound to a validated owner may authorize propagation.
+    #[serde(default)]
+    pub owner_verified: bool
 }
 
 pub struct OrderIndexer<V: OrderValidatorHandle> {
@@ -92,10 +96,6 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
         self.order_tracker.is_seen_invalid(order_hash)
     }
 
-    fn is_cancelled(&self, order_hash: &B256) -> bool {
-        self.order_tracker.is_cancelled(order_hash)
-    }
-
     pub fn remove_pool(&mut self, key: PoolId) {
         let orders = self.order_storage.remove_pool(key);
         self.order_tracker.handle_pool_removed(&orders);
@@ -122,18 +122,39 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
             return false;
         }
 
-        if self.is_seen_invalid(&request.order_id) || self.is_cancelled(&request.order_id) {
+        if self
+            .order_tracker
+            .order_hash_to_order_id
+            .get(&request.order_id)
+            .is_some_and(|id| id.address != request.user_address)
+        {
+            return false;
+        }
+
+        // Only an owner-matching, confirmed cancellation is idempotently
+        // successful. Unknown-order claims must not be broadcast as authorized.
+        if self
+            .order_tracker
+            .cancelled_orders
+            .get(&request.order_id)
+            .is_some_and(|request_order| {
+                request_order.owner_verified && request_order.from == request.user_address
+            })
+        {
             return true;
         }
 
-        self.validator
-            .cancel_order(request.user_address, request.order_id);
+        if self.is_seen_invalid(&request.order_id) {
+            return false;
+        }
 
         if let Some((is_tob, pool_id)) = self.order_tracker.cancel_order(
             request.user_address,
             request.order_id,
             &self.order_storage
         ) {
+            self.validator
+                .cancel_order(request.user_address, request.order_id);
             // grab all parked orders and see if there valid now
             self.order_tracker
                 .pending_orders_for_address(
@@ -284,6 +305,28 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
 
                     let peers = self.order_tracker.invalid_verification(hash);
                     return Ok(PoolInnerEvent::BadOrderMessages(peers));
+                }
+                // Cancellation can arrive while validation is in flight. Only
+                // the validated owner's signed claim can stop insertion and
+                // propagation of the result.
+                if self.order_tracker.is_valid_cancel(&hash, valid.from()) {
+                    self.validator.cancel_order(valid.from(), hash);
+                    self.order_tracker.order_hash_to_peer_id.remove(&hash);
+                    self.order_tracker.order_hash_to_order_id.remove(&hash);
+                    self.order_tracker.insert_cancel_with_deadline(
+                        valid.from(),
+                        &hash,
+                        valid.deadline()
+                    );
+                    self.order_storage.log_cancel_order(&valid.order);
+                    self.subscribers.try_notify_validation_subscribers(
+                        &hash,
+                        OrderValidationResults::Invalid {
+                            hash,
+                            error: angstrom_types::primitive::OrderValidationError::CancelledOrder
+                        }
+                    );
+                    return Ok(PoolInnerEvent::None);
                 }
                 self.subscribers
                     .notify_order_subscribers(PoolManagerUpdate::NewOrder(valid.clone()));
@@ -526,7 +569,7 @@ mod tests {
     use angstrom_types::{
         contract_bindings::angstrom::Angstrom::PoolKey,
         matching::Ray,
-        orders::OrderId,
+        orders::{CancelOrderRequest, OrderId, builders::ToBOrderBuilder},
         primitive::{AngstromAddressConfig, AngstromSigner, OrderValidationError},
         sol_bindings::RespendAvoidanceMethod
     };
@@ -1138,6 +1181,327 @@ mod tests {
                 .order_hash_to_order_id
                 .contains_key(&order_hash)
         );
+    }
+
+    fn cancellation_fixture(
+        is_tob: bool
+    ) -> (
+        OrderIndexer<MockValidator>,
+        AngstromSigner<PrivateKeySigner>,
+        OrderWithStorageData<AllOrders>
+    ) {
+        let indexer = setup_test_indexer();
+        let signer = AngstromSigner::random();
+        let pool_key = PoolKey {
+            currency0: Address::random(),
+            currency1: Address::random(),
+            ..Default::default()
+        };
+        let pool_id = PoolId::from(pool_key);
+        indexer.new_pool(NewInitializedPool {
+            currency_out: pool_key.currency0,
+            currency_in:  pool_key.currency1,
+            id:           pool_id
+        });
+        let order = if is_tob {
+            AllOrders::TOB(
+                ToBOrderBuilder::new()
+                    .asset_in(pool_key.currency0)
+                    .asset_out(pool_key.currency1)
+                    .quantity_in(900)
+                    .quantity_out(800)
+                    .valid_block(2)
+                    .signing_key(Some(signer.clone()))
+                    .build()
+            )
+        } else {
+            create_test_order(signer.address(), pool_key, None, Some(signer.clone()))
+        };
+        let stored = OrderWithStorageData {
+            order_id: OrderId::from_all_orders(&order, pool_id),
+            order,
+            cancel_requested: false,
+            valid_block: 1,
+            pool_id,
+            is_bid: true,
+            is_currently_valid: None,
+            is_valid: true,
+            priority_data: Default::default(),
+            invalidates: vec![],
+            tob_reward: U256::ZERO
+        };
+        (indexer, signer, stored)
+    }
+
+    #[tokio::test]
+    async fn cancel_requires_the_stored_order_owner() {
+        for is_tob in [false, true] {
+            let (mut indexer, owner, stored) = cancellation_fixture(is_tob);
+            let hash = stored.order_hash();
+            indexer
+                .handle_validated_order(OrderValidationResults::Valid(stored))
+                .unwrap();
+            let (updates, mut received) = broadcast::channel(10);
+            indexer.subscribers = OrderSubscriptionTracker::new(updates);
+
+            let attacker = AngstromSigner::random();
+            let attack = CancelOrderRequest::new(attacker.address(), hash, &attacker);
+            assert!(attack.is_valid(), "the attacker's own signature is authentic");
+            assert!(!indexer.cancel_order(&attack));
+            assert!(
+                indexer
+                    .order_tracker
+                    .order_hash_to_order_id
+                    .contains_key(&hash)
+            );
+            assert!(
+                !indexer
+                    .order_tracker
+                    .is_valid_cancel(&hash, owner.address())
+            );
+            assert!(indexer.order_tracker.pending_cancellations.is_empty());
+            assert_eq!(indexer.pending_orders_for_address(owner.address()).len(), 1);
+            assert!(matches!(received.try_recv(), Err(broadcast::error::TryRecvError::Empty)));
+
+            // The internal mutation boundary independently enforces ownership.
+            assert!(
+                indexer
+                    .order_tracker
+                    .cancel_order(attacker.address(), hash, &indexer.order_storage)
+                    .is_none()
+            );
+            assert_eq!(indexer.pending_orders_for_address(owner.address()).len(), 1);
+
+            let forged = CancelOrderRequest::new(owner.address(), hash, &attacker);
+            assert!(!forged.is_valid());
+            assert!(!indexer.cancel_order(&forged));
+            assert_eq!(indexer.pending_orders_for_address(owner.address()).len(), 1);
+
+            let legitimate = CancelOrderRequest::new(owner.address(), hash, &owner);
+            assert!(indexer.cancel_order(&legitimate));
+            assert!(matches!(received.try_recv(), Ok(PoolManagerUpdate::CancelledOrder {
+                order_hash, user, ..
+            }) if order_hash == hash && user == owner.address()));
+            let saved = serde_json::to_value(&indexer.order_tracker).unwrap();
+            indexer.order_tracker = serde_json::from_value(saved).unwrap();
+            assert!(indexer.cancel_order(&legitimate), "owner cancellation is idempotent");
+            assert!(!indexer.cancel_order(&attack), "another signer cannot replay cancellation");
+            assert!(matches!(received.try_recv(), Err(broadcast::error::TryRecvError::Empty)));
+            assert!(
+                !indexer
+                    .order_tracker
+                    .order_hash_to_order_id
+                    .contains_key(&hash)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cancel_unknown_order_cannot_poison_another_owner() {
+        let (mut indexer, owner, stored) = cancellation_fixture(true);
+        let hash = stored.order_hash();
+        let attacker = AngstromSigner::random();
+        let attack = CancelOrderRequest::new(attacker.address(), hash, &attacker);
+        assert!(!indexer.cancel_order(&attack));
+        assert!(!indexer.cancel_order(&attack), "unverified claims must not trigger gossip");
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        indexer.new_rpc_order(OrderOrigin::Local, stored.order.clone(), tx);
+        assert!(indexer.order_tracker.is_validating(&hash));
+        let result = indexer
+            .handle_validated_order(OrderValidationResults::Valid(stored))
+            .unwrap();
+        assert!(matches!(result, PoolInnerEvent::Propagation(_)));
+        assert!(matches!(rx.await.unwrap(), OrderValidationResults::Valid(_)));
+        assert!(indexer.order_tracker.pending_cancellations.is_empty());
+        assert_eq!(indexer.pending_orders_for_address(owner.address()).len(), 1);
+        assert!(indexer.cancel_order(&CancelOrderRequest::new(owner.address(), hash, &owner)));
+    }
+
+    #[tokio::test]
+    async fn cancel_owner_claim_survives_other_signers_before_order_arrival() {
+        let (mut indexer, owner, stored) = cancellation_fixture(true);
+        let hash = stored.order_hash();
+        let attacker = AngstromSigner::random();
+        let attack = CancelOrderRequest::new(attacker.address(), hash, &attacker);
+        let legitimate = CancelOrderRequest::new(owner.address(), hash, &owner);
+        assert!(!indexer.cancel_order(&attack));
+        assert!(!indexer.cancel_order(&legitimate));
+        assert!(!indexer.cancel_order(&attack));
+
+        // Snapshot round-tripping retains both independent signed claims.
+        let encoded = serde_json::to_value(&indexer.order_tracker).unwrap();
+        indexer.order_tracker = serde_json::from_value(encoded).unwrap();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        indexer.new_rpc_order(OrderOrigin::Local, stored.order, tx);
+        assert!(matches!(
+            rx.await.unwrap(),
+            OrderValidationResults::Invalid { error: OrderValidationError::CancelledOrder, .. }
+        ));
+        assert!(!indexer.order_tracker.is_validating(&hash));
+        assert!(
+            !indexer
+                .order_tracker
+                .order_hash_to_order_id
+                .contains_key(&hash)
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_during_validation_does_not_insert_or_propagate_order() {
+        let (mut indexer, owner, stored) = cancellation_fixture(true);
+        let hash = stored.order_hash();
+        let (updates, mut received) = broadcast::channel(10);
+        indexer.subscribers = OrderSubscriptionTracker::new(updates);
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        indexer.new_rpc_order(OrderOrigin::Local, stored.order.clone(), tx);
+        indexer.new_network_order(PeerId::random(), OrderOrigin::External, stored.order.clone());
+        assert!(indexer.order_tracker.is_validating(&hash));
+        assert!(
+            indexer
+                .order_tracker
+                .order_hash_to_peer_id
+                .contains_key(&hash)
+        );
+        assert!(!indexer.cancel_order(&CancelOrderRequest::new(owner.address(), hash, &owner)));
+
+        let result = indexer
+            .handle_validated_order(OrderValidationResults::Valid(stored))
+            .unwrap();
+        assert!(matches!(result, PoolInnerEvent::None));
+        assert!(matches!(
+            rx.await.unwrap(),
+            OrderValidationResults::Invalid { error: OrderValidationError::CancelledOrder, .. }
+        ));
+        assert!(matches!(received.try_recv(), Err(broadcast::error::TryRecvError::Empty)));
+        assert!(!indexer.order_tracker.is_validating(&hash));
+        assert!(
+            !indexer
+                .order_tracker
+                .order_hash_to_peer_id
+                .contains_key(&hash)
+        );
+        assert!(
+            !indexer
+                .order_tracker
+                .order_hash_to_order_id
+                .contains_key(&hash)
+        );
+        assert!(
+            indexer
+                .pending_orders_for_address(owner.address())
+                .is_empty()
+        );
+        assert!(
+            indexer
+                .order_tracker
+                .is_valid_cancel(&hash, owner.address())
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_during_revalidation_does_not_restore_order() {
+        let (mut indexer, owner, stored) = cancellation_fixture(false);
+        let hash = stored.order_hash();
+        indexer
+            .handle_validated_order(OrderValidationResults::Valid(stored.clone()))
+            .unwrap();
+        // Revalidation removes storage while retaining the validated owner index.
+        assert!(
+            indexer
+                .order_storage
+                .remove_order_from_id(&stored.order_id)
+                .is_some()
+        );
+        indexer.order_tracker.start_validating(hash);
+        assert!(!indexer.cancel_order(&CancelOrderRequest::new(owner.address(), hash, &owner)));
+        let result = indexer
+            .handle_validated_order(OrderValidationResults::Valid(stored))
+            .unwrap();
+        assert!(matches!(result, PoolInnerEvent::None));
+        assert!(!indexer.order_tracker.is_validating(&hash));
+        assert!(
+            !indexer
+                .order_tracker
+                .order_hash_to_order_id
+                .contains_key(&hash)
+        );
+        assert!(
+            indexer
+                .pending_orders_for_address(owner.address())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn cancel_cache_reads_existing_snapshot_shape() {
+        let owner = Address::random();
+        let hash = B256::random();
+        let mut tracker = OrderTracker::default();
+        tracker.insert_cancel_with_deadline(owner, &hash, Some(U256::from(1234)));
+        let mut legacy = serde_json::to_value(tracker).unwrap();
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("pending_cancellations");
+        for request in legacy["cancelled_orders"]
+            .as_object_mut()
+            .unwrap()
+            .values_mut()
+        {
+            request.as_object_mut().unwrap().remove("owner_verified");
+        }
+        let restored: OrderTracker = serde_json::from_value(legacy).unwrap();
+        assert!(restored.is_valid_cancel(&hash, owner));
+        assert!(!restored.is_valid_cancel(&hash, Address::random()));
+        assert!(!restored.cancelled_orders[&hash].owner_verified);
+        assert!(restored.pending_cancellations.is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancel_legacy_unknown_claim_cannot_authorize_gossip_or_block_victim() {
+        let (mut indexer, owner, stored) = cancellation_fixture(true);
+        let hash = stored.order_hash();
+        let attacker = AngstromSigner::random();
+        let mut legacy_tracker = OrderTracker::default();
+        legacy_tracker.insert_cancel_with_deadline(attacker.address(), &hash, stored.deadline());
+        let mut legacy = serde_json::to_value(legacy_tracker).unwrap();
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("pending_cancellations");
+        for request in legacy["cancelled_orders"]
+            .as_object_mut()
+            .unwrap()
+            .values_mut()
+        {
+            request.as_object_mut().unwrap().remove("owner_verified");
+        }
+        indexer.set_tracker(serde_json::from_value(legacy).unwrap());
+        let request = CancelOrderRequest::new(attacker.address(), hash, &attacker);
+        assert!(!indexer.cancel_order(&request));
+        assert!(!indexer.cancel_order(&request));
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        indexer.new_rpc_order(OrderOrigin::Local, stored.order.clone(), tx);
+        let result = indexer
+            .handle_validated_order(OrderValidationResults::Valid(stored))
+            .unwrap();
+        assert!(matches!(result, PoolInnerEvent::Propagation(_)));
+        assert!(matches!(rx.await.unwrap(), OrderValidationResults::Valid(_)));
+        assert_eq!(indexer.pending_orders_for_address(owner.address()).len(), 1);
+        assert!(!indexer.cancel_order(&request));
+        assert!(indexer.cancel_order(&CancelOrderRequest::new(owner.address(), hash, &owner)));
+    }
+
+    #[tokio::test]
+    async fn cancel_invalid_hash_is_not_authorized_for_gossip() {
+        let mut indexer = setup_test_indexer();
+        let signer = AngstromSigner::random();
+        let hash = B256::random();
+        indexer.order_tracker.seen_invalid_orders.insert(hash);
+        assert!(!indexer.cancel_order(&CancelOrderRequest::new(signer.address(), hash, &signer)));
+        assert!(indexer.order_tracker.pending_cancellations.is_empty());
     }
 
     #[tokio::test]

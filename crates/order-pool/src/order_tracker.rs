@@ -40,6 +40,11 @@ pub struct OrderTracker {
     /// Used to protect against late order propagation
     #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub(super) cancelled_orders:       HashMap<B256, InnerCancelOrderRequest>,
+    /// Signed cancellations received before the order's owner is known. Claims
+    /// by different signers must not overwrite or authorize one another.
+    #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, HashMap<DisplayFromStr, _>>")]
+    pub(super) pending_cancellations:  HashMap<B256, HashMap<Address, U256>>,
     pub(super) is_validating:          HashSet<B256>
 }
 
@@ -76,8 +81,13 @@ impl OrderTracker {
     }
 
     pub fn is_valid_cancel(&self, order: &B256, order_addr: Address) -> bool {
-        let Some(req) = self.cancelled_orders.get(order) else { return false };
-        req.from == order_addr
+        self.cancelled_orders
+            .get(order)
+            .is_some_and(|req| req.from == order_addr)
+            || self
+                .pending_cancellations
+                .get(order)
+                .is_some_and(|requests| requests.contains_key(&order_addr))
     }
 
     pub fn is_duplicate(&self, hash: &B256) -> bool {
@@ -122,6 +132,10 @@ impl OrderTracker {
         // clear canceled order cache
         self.cancelled_orders
             .retain(|_, req| req.deadline > expiry_deadline);
+        self.pending_cancellations.retain(|_, requests| {
+            requests.retain(|_, deadline| *deadline > expiry_deadline);
+            !requests.is_empty()
+        });
 
         let hashes = self
             .order_hash_to_order_id
@@ -176,6 +190,7 @@ impl OrderTracker {
     }
 
     pub fn new_valid_order(&mut self, hash: &B256, user: Address, id: OrderId) {
+        self.pending_cancellations.remove(hash);
         self.order_hash_to_peer_id.remove(hash);
         self.order_hash_to_order_id.insert(*hash, id);
         // nonce overlap is checked during validation so its ok we
@@ -183,13 +198,21 @@ impl OrderTracker {
         self.address_to_orders.entry(user).or_default().insert(id);
     }
 
-    fn cancel_with_next_block_deadline(&mut self, from: Address, order_hash: &B256) {
-        let deadline = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + MAX_NEW_ORDER_DELAY_PROPAGATION * ETH_BLOCK_TIME.as_secs();
-        self.insert_cancel_with_deadline(from, order_hash, Some(U256::from(deadline)));
+    fn cancellation_deadline() -> U256 {
+        U256::from(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + MAX_NEW_ORDER_DELAY_PROPAGATION * ETH_BLOCK_TIME.as_secs()
+        )
+    }
+
+    fn record_pending_cancellation(&mut self, from: Address, hash: B256) {
+        self.pending_cancellations
+            .entry(hash)
+            .or_default()
+            .insert(from, Self::cancellation_deadline());
     }
 
     pub(crate) fn insert_cancel_with_deadline(
@@ -210,8 +233,11 @@ impl OrderTracker {
                     - 1
             )
         });
-        self.cancelled_orders
-            .insert(*order_hash, InnerCancelOrderRequest { from, deadline: valid_until });
+        self.cancelled_orders.insert(
+            *order_hash,
+            InnerCancelOrderRequest { from, deadline: valid_until, owner_verified: true }
+        );
+        self.pending_cancellations.remove(order_hash);
     }
 
     pub fn cancel_order(
@@ -220,17 +246,23 @@ impl OrderTracker {
         hash: B256,
         storage: &OrderStorage
     ) -> Option<(bool, PoolId)> {
-        let (canceled, pool_id, is_tob) = self
-            .order_hash_to_order_id
-            .remove(&hash)
-            .map(|v| {
-                (storage.cancel_order(&v), v.pool_id, matches!(v.location, OrderLocation::Searcher))
-            })
-            .unwrap_or_default();
-
-        self.cancel_with_next_block_deadline(from, &hash);
-
-        canceled.then_some((is_tob, pool_id))
+        let Some(id) = self.order_hash_to_order_id.get(&hash).copied() else {
+            self.record_pending_cancellation(from, hash);
+            return None;
+        };
+        // Authenticate against the validated order, not the cancellation's
+        // self-declared (even correctly signed) user address.
+        if id.address != from {
+            return None;
+        }
+        if !storage.cancel_order(&id) {
+            // The order can be temporarily out of storage during revalidation.
+            self.record_pending_cancellation(from, hash);
+            return None;
+        }
+        self.order_hash_to_order_id.remove(&hash);
+        self.insert_cancel_with_deadline(from, &hash, Some(Self::cancellation_deadline()));
+        Some((matches!(id.location, OrderLocation::Searcher), id.pool_id))
     }
 
     pub fn pending_orders_for_address<F>(

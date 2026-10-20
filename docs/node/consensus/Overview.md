@@ -9,21 +9,22 @@ including for unrelated pools.
 Prior-round feedback changes the template only for later rounds, and only after a
 round this node led. Its sample runs from round start until matching and bundle
 gas estimation return, **before final encoding, signing and submission**; it is
-not an end-to-end delivery measurement. Every feedback step lengthens the wait;
-the round's duration sets only the step size. A leader round that never reaches
-proposal shortens the template by 200 ms.
+not an end-to-end delivery measurement. Before the sigmoid below, a round that
+finished after `max_wait_duration_ms + 200 ms` shortens the template and an
+earlier one lengthens it, so from the same starting template a slower round never
+gives a later template. Previously every step lengthened the template, so a slow
+leader round moved that node's next cutoff to about `max_wait_duration_ms`
+(11.2 s with `max_wait_duration_ms = 11200`). A leader round that never reaches proposal still
+shortens the template by 200 ms.
 
 The sigmoid that maps the template into the configured range is centred at
-`min + max/2`, above the range. After a normal leader round its output is close
-to `min_wait_duration_ms`, so the cutoff is in practice `min_wait_duration_ms`
-plus jitter; a node also starts there, including after a restart. A leader
-round whose sample exceeds `max_wait_duration_ms` by a few hundred milliseconds
-moves that node's next cutoff later; one about 1 s longer moves it to about
-`max_wait_duration_ms` (11.2 s with `max_wait_duration_ms = 11200`), where later
-slow rounds keep it. Re-centring the sigmoid would move normal cutoffs toward
-`max_wait_duration_ms` and needs a separate decision. Winner selection,
-preproposal aggregation and builder submission are unchanged. Processing and
-network reserve still need validation under load.
+`min + max/2`, above the range. For the default 8–9 s and configured 9–11.2 s
+ranges its output stays within about 15 ms of `min_wait_duration_ms`, and a node
+starts there, including after a restart, so its cutoff is in practice
+`min_wait_duration_ms` plus jitter. Re-centring the sigmoid would move normal
+cutoffs toward `max_wait_duration_ms` and needs a separate decision. Winner
+selection, preproposal aggregation and builder submission are unchanged.
+Processing and network reserve still need validation under load.
 
 ## Measurement boundaries
 
@@ -140,7 +141,11 @@ endpoints, and rounds where the Ethereum head arrives late.
 Confirm that new bids no longer advance any current round's deadline, prior-round
 feedback affects only later rounds, and quorum progress remains healthy. Force a
 leader round whose matching completes more than 1 s after
-`max_wait_duration_ms + 200 ms` and record that node's next cutoff. Inject one slow and one non-responding endpoint and read `by_endpoint`. Measure
+`max_wait_duration_ms + 200 ms` and confirm that the template it logs next
+(`Updated wait duration to trigger building`, `trigger` in ms) stays within about
+15 ms of `min_wait_duration_ms`. Compare templates, not successive cutoffs: each
+round's 3–40 ms jitter is larger than the feedback step. Inject one slow and one
+non-responding endpoint and read `by_endpoint`. Measure
 the full snapshot-to-first-successful-builder-response tail and its slot offset;
 include failed or missing responses in the assessment rather than conditioning
 only on success. Correlate target-block inclusion and builder rejection reasons.

@@ -77,16 +77,14 @@ impl PreProposalWaitTrigger {
     fn update_wait_duration_base(&mut self, info: LastRoundInfo) {
         let base = self.config.max_wait_time_ms() + TARGET_SUBMISSION_TIME_POST_MAX;
 
-        let delta = if info.time_to_complete < base {
-            (base - info.time_to_complete) / SCALING_REM_ADJUSTMENT
+        // A round that finished late shortens the next wait; an early one
+        // lengthens it.
+        if info.time_to_complete < base {
+            self.wait_duration += (base - info.time_to_complete) / SCALING_REM_ADJUSTMENT;
         } else {
-            (info.time_to_complete - base) * SCALING_REM_ADJUSTMENT
-        };
-
-        if self.wait_duration < base {
-            self.wait_duration += delta;
-        } else {
-            self.wait_duration = self.wait_duration.saturating_sub(delta);
+            self.wait_duration = self
+                .wait_duration
+                .saturating_sub((info.time_to_complete - base) * SCALING_REM_ADJUSTMENT);
         }
 
         self.wait_duration = self.sigmoid_clamp(self.wait_duration);
@@ -148,6 +146,26 @@ mod tests {
     use futures::FutureExt;
 
     use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn a_slower_previous_round_never_delays_the_next_cutoff() {
+        for (min, max) in [(8_000, 9_000), (9_000, 11_200)] {
+            let config =
+                ConsensusTimingConfig { min_wait_duration_ms: min, max_wait_duration_ms: max };
+            let next_wait = |time_to_complete_ms| {
+                let mut template = PreProposalWaitTrigger::new(config);
+                template.update_wait_duration_base(LastRoundInfo {
+                    time_to_complete: Duration::from_millis(time_to_complete_ms)
+                });
+                template.wait_duration
+            };
+
+            let waits =
+                [3_000, 8_000, max, max + 200, max + 500, max + 1_000, max + 3_000].map(next_wait);
+            assert!(waits.is_sorted_by(|faster, slower| slower <= faster), "{waits:?}");
+            assert!(waits[0] < Duration::from_millis(min + 100), "{waits:?}");
+        }
+    }
 
     #[tokio::test(start_paused = true)]
     async fn a_round_started_after_its_budget_is_due_immediately() {

@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::{
     AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
-    EXTRA_GAS_LIMIT, SubmissionResult, TxFeatureInfo, Url
+    EXTRA_GAS_LIMIT, SubmissionResult, TxFeatureInfo, Url, observation::observe_endpoint
 };
 use crate::{primitive::AngstromMetaSigner, sol_bindings::rpc_orders::AttestAngstromBlockEmpty};
 
@@ -87,11 +87,24 @@ impl ChainSubmitter for AngstromSubmitter {
                 AngstromIntegrationSubmission { tx: tx_payload, unlock_data, ..Default::default() }
             };
 
-            // Submit to all endpoints and collect per-endpoint timing
-            let results: Vec<_> = iter(self.clients.clone())
-                .map(async |(client, url)| {
-                    let endpoint_start = std::time::Instant::now();
-                    let result = client
+            tracing::info!(
+                auction_stage = "payload_ready",
+                target_block = tx_features.target_block,
+                submitter = "angstrom",
+                payload_kind = if bundle.is_some() { "bundle" } else { "unlock_attestation" },
+                "auction submission payload ready"
+            );
+
+            // Observe each response before waiting for the other endpoints.
+            let results: Vec<_> = iter(self.clients.clone()).enumerate()
+                .map(async |(endpoint_index, (client, url))| {
+                    let (result, endpoint_latency) = observe_endpoint(
+                        tx_features.target_block,
+                        "angstrom",
+                        endpoint_index,
+                        &url,
+                        if bundle.is_some() { "bundle" } else { "unlock_attestation" },
+                        async { client
                         .raw_request::<(&AngstromIntegrationSubmission,), Value>(
                             "angstrom_submitBundle".into(),
                             (&payload,)
@@ -100,8 +113,10 @@ impl ChainSubmitter for AngstromSubmitter {
                         .map(AngstromSubmissionResponse::from_value)
                         .inspect_err(|e| {
                             tracing::info!(url=%url.as_str(), err=%e, "failed to send angstrom integration message to url");
-                        });
-                    let endpoint_latency = endpoint_start.elapsed().as_millis() as u64;
+                        })
+                        },
+                        AngstromSubmissionResponse::is_success
+                    ).await;
                     (url, result, endpoint_latency)
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)

@@ -121,6 +121,12 @@ impl ProposalState {
         let provider = handles.provider.clone();
         let signer = handles.signer.clone();
         let target_block = handles.block_height + 1;
+        tracing::info!(
+            auction_stage = "matching_complete",
+            target_block,
+            success = result.is_ok(),
+            "auction matching completed"
+        );
 
         tracing::debug!("starting to build proposal");
 
@@ -189,6 +195,13 @@ impl ProposalState {
             return false;
         };
 
+        tracing::info!(
+            auction_stage = "encoding_complete",
+            target_block,
+            payload_kind = if possible_bundle.is_some() { "bundle" } else { "unlock_attestation" },
+            "auction bundle encoding completed"
+        );
+
         let attestation = if possible_bundle.is_none() {
             AttestAngstromBlockEmpty::sign_and_encode(target_block, &signer)
         } else {
@@ -209,6 +222,12 @@ impl ProposalState {
 
             let metrics = BlockMetricsWrapper::new();
             metrics.record_submission_started(block_height, start_offset_ms);
+            tracing::info!(
+                auction_stage = "submission_started",
+                target_block,
+                slot_offset_ms = start_offset_ms,
+                "auction submission started"
+            );
 
             let result = provider
                 .submit_tx(signer, possible_bundle, target_block)
@@ -272,7 +291,7 @@ impl ProposalState {
 
             tracing::info!(
                 candidate_submission_tx_hashes = successful_tx_hashes.len(),
-                "submitted bundle"
+                "all bundle submission responses collected"
             );
 
             // Wait for the target block to be produced
@@ -306,6 +325,7 @@ impl ProposalState {
                 target_block,
                 candidate_submission_tx_hashes = successful_tx_hashes.len(),
                 ?included_tx_hash,
+                auction_stage = "inclusion",
                 "block tx result"
             );
             included

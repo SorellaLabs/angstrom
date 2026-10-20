@@ -53,6 +53,14 @@ impl PreProposalState {
         let limit_count = orders.limit.len();
         let searcher_count = orders.searcher.len();
         let slot_offset_ms = handles.slot_offset_ms();
+        tracing::info!(
+            auction_stage = "cutoff",
+            target_block = block_height + 1,
+            slot_offset_ms,
+            limit_count,
+            searcher_count,
+            "auction local order snapshot"
+        );
 
         let metrics = BlockMetricsWrapper::new();
         metrics.record_preproposal_orders(block_height, limit_count, searcher_count);

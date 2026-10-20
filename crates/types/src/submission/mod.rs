@@ -1,6 +1,7 @@
 pub mod angstrom;
 pub mod mempool;
 pub mod mev_boost;
+mod observation;
 use std::{ops::Deref, pin::Pin, sync::Arc};
 
 use alloy::{

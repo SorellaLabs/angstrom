@@ -7,7 +7,7 @@ use futures::stream::{StreamExt, iter};
 
 use super::{
     AngstromBundle, AngstromSigner, ChainSubmitter, DEFAULT_SUBMISSION_CONCURRENCY,
-    SubmissionResult, TxFeatureInfo, Url
+    SubmissionResult, TxFeatureInfo, Url, observation::observe_endpoint
 };
 use crate::primitive::AngstromMetaSigner;
 
@@ -58,17 +58,35 @@ impl ChainSubmitter for MempoolSubmitter {
             let encoded_tx = tx.encoded_2718();
             let tx_hash = *tx.tx_hash();
 
-            // Submit to all endpoints and collect per-endpoint timing
+            tracing::info!(
+                auction_stage = "payload_ready",
+                target_block = tx_features.target_block,
+                submitter = "mempool",
+                payload_kind = "bundle",
+                "auction submission payload ready"
+            );
+
+            // Observe each response before waiting for the other endpoints.
             let results: Vec<_> = iter(self.clients.clone())
-                .map(async |(client, url)| {
-                    let endpoint_start = std::time::Instant::now();
-                    let result = client
+                .enumerate()
+                .map(async |(endpoint_index, (client, url))| {
+                    let (result, endpoint_latency) = observe_endpoint(
+                        tx_features.target_block,
+                        "mempool",
+                        endpoint_index,
+                        &url,
+                        "bundle",
+                        async {
+                            client
                         .send_raw_transaction(&encoded_tx)
                         .await
                         .inspect_err(|e| {
                             tracing::info!(url=%url.as_str(), err=%e, "failed to send mempool tx");
-                        });
-                    let endpoint_latency = endpoint_start.elapsed().as_millis() as u64;
+                        })
+                        },
+                        |_| true
+                    )
+                    .await;
                     (url, result, endpoint_latency)
                 })
                 .buffer_unordered(DEFAULT_SUBMISSION_CONCURRENCY)

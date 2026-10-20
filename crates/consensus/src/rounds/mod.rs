@@ -879,8 +879,7 @@ pub mod tests {
         let pool_id = B256::ZERO;
         let order_storage = Arc::new(OrderStorage::new(&PoolConfig::with_pool_ids(vec![pool_id])));
         state_machine.shared_state.order_storage = order_storage.clone();
-        // Default timing with no slot time elapsed: 8.5 s plus two 3-40 ms
-        // jitters.
+        // Default timing with no slot time elapsed: 8.0 s plus 3-40 ms jitter.
         let trigger = PreProposalWaitTrigger::new(ConsensusTimingConfig::default())
             .update_for_new_round(None, Duration::ZERO);
         state_machine.set_state_machine_at(Box::new(BidAggregationState::new(trigger)));
@@ -902,7 +901,7 @@ pub mod tests {
         }
         assert!(state_machine.as_mut().poll_next(&mut cx).is_pending());
 
-        tokio::time::advance(Duration::from_millis(8_500)).await;
+        tokio::time::advance(Duration::from_millis(8_000)).await;
         assert!(state_machine.as_mut().poll_next(&mut cx).is_pending());
 
         tokio::time::advance(Duration::from_millis(100)).await;

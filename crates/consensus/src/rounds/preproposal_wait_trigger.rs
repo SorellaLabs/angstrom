@@ -42,12 +42,11 @@ impl Clone for PreProposalWaitTrigger {
 }
 
 impl PreProposalWaitTrigger {
+    /// Starts at the configured minimum, including after a restart; each round
+    /// adds its own jitter.
     pub fn new(config: ConsensusTimingConfig) -> Self {
-        let mut rng = rand::rng();
-        let jitter = Duration::from_millis(rng.random_range(3..=40));
-
         Self {
-            wait_duration: config.default_duration() + jitter,
+            wait_duration: config.min_wait_time_ms(),
             start_instant: Instant::now(),
             check_interval: interval(CHECK_INTERVAL),
             config
@@ -159,6 +158,19 @@ mod tests {
             active
                 .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
                 .is_ready()
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_restarted_node_starts_at_the_minimum_wait() {
+        let config =
+            ConsensusTimingConfig { min_wait_duration_ms: 9_000, max_wait_duration_ms: 11_200 };
+        let active = PreProposalWaitTrigger::new(config).update_for_new_round(None, Duration::ZERO);
+        assert!(
+            (Duration::from_millis(9_003)..=Duration::from_millis(9_040))
+                .contains(&active.wait_duration),
+            "{:?}",
+            active.wait_duration
         );
     }
 }

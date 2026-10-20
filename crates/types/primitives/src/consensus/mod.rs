@@ -76,10 +76,4 @@ impl ConsensusTimingConfig {
     pub const fn max_wait_time_ms(&self) -> Duration {
         Duration::from_millis(self.max_wait_duration_ms)
     }
-
-    pub fn default_duration(&self) -> Duration {
-        Duration::from_secs_f64(
-            (self.max_wait_time_ms() + self.min_wait_time_ms()).as_secs_f64() / 2.0
-        )
-    }
 }

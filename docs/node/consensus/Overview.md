@@ -16,7 +16,7 @@ proposal shortens the template by 200 ms.
 The sigmoid that maps the template into the configured range is centred at
 `min + max/2`, above the range. After a normal leader round its output is close
 to `min_wait_duration_ms`, so the cutoff is in practice `min_wait_duration_ms`
-plus jitter; before a node first leads, it is the configured midpoint. A leader
+plus jitter; a node also starts there, including after a restart. A leader
 round whose sample exceeds `max_wait_duration_ms` by a few hundred milliseconds
 moves that node's next cutoff later; one about 1 s longer moves it to about
 `max_wait_duration_ms` (11.2 s with `max_wait_duration_ms = 11200`), where later

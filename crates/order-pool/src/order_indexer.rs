@@ -316,13 +316,31 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                     // them so the validator reserves funds for them again.
                     self.revalidate_invalidated_orders(&valid.invalidates);
                     self.order_tracker.order_hash_to_peer_id.remove(&hash);
-                    self.order_tracker.order_hash_to_order_id.remove(&hash);
+                    let was_announced = self
+                        .order_tracker
+                        .order_hash_to_order_id
+                        .remove(&hash)
+                        .is_some();
                     self.order_tracker.insert_cancel_with_deadline(
                         valid.from(),
                         &hash,
                         valid.deadline()
                     );
                     self.order_storage.log_cancel_order(&valid.order);
+                    // A revalidated order was already published as `NewOrder`.
+                    if was_announced {
+                        self.subscribers.notify_order_subscribers(
+                            PoolManagerUpdate::CancelledOrder {
+                                is_tob:     matches!(
+                                    valid.order_id.location,
+                                    OrderLocation::Searcher
+                                ),
+                                order_hash: hash,
+                                user:       valid.from(),
+                                pool_id:    valid.pool_id
+                            }
+                        );
+                    }
                     self.subscribers.try_notify_validation_subscribers(
                         &hash,
                         OrderValidationResults::Invalid {
@@ -1434,6 +1452,8 @@ mod tests {
         indexer
             .handle_validated_order(OrderValidationResults::Valid(stored.clone()))
             .unwrap();
+        let (updates, mut received) = broadcast::channel(10);
+        indexer.subscribers = OrderSubscriptionTracker::new(updates);
         // Revalidation removes storage while retaining the validated owner index.
         assert!(
             indexer
@@ -1447,6 +1467,10 @@ mod tests {
             .handle_validated_order(OrderValidationResults::Valid(stored))
             .unwrap();
         assert!(matches!(result, PoolInnerEvent::None));
+        // Subscribers saw the order before revalidation, so they must see it go.
+        assert!(matches!(received.try_recv(), Ok(PoolManagerUpdate::CancelledOrder {
+            order_hash, user, ..
+        }) if order_hash == hash && user == owner.address()));
         assert!(!indexer.order_tracker.is_validating(&hash));
         assert!(
             !indexer

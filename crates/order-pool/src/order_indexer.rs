@@ -311,6 +311,10 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 // propagation of the result.
                 if self.order_tracker.is_valid_cancel(&hash, valid.from()) {
                     self.validator.cancel_order(valid.from(), hash);
+                    // Validation already released or flagged the orders this
+                    // one displaced (e.g. a same-nonce replacement); revalidate
+                    // them so the validator reserves funds for them again.
+                    self.revalidate_invalidated_orders(&valid.invalidates);
                     self.order_tracker.order_hash_to_peer_id.remove(&hash);
                     self.order_tracker.order_hash_to_order_id.remove(&hash);
                     self.order_tracker.insert_cancel_with_deadline(
@@ -353,23 +357,7 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 self.order_tracker
                     .new_valid_order(&hash, valid.from(), valid.order_id);
 
-                // for all the orders that get invalided, we will re-validate
-                // to calculate the proper amount of funding to
-                // unblock them.
-                let invalided_orders = valid
-                    .invalidates
-                    .iter()
-                    .flat_map(|order| {
-                        let id = self.order_tracker.order_hash_to_order_id.get(order)?;
-                        self.order_storage.remove_order_from_id(id)
-                    })
-                    .collect::<Vec<_>>();
-
-                for order in invalided_orders {
-                    self.order_tracker.start_validating(order.order_hash());
-                    self.validator
-                        .validate_order(OrderOrigin::ReValidation, order.order);
-                }
+                self.revalidate_invalidated_orders(&valid.invalidates);
 
                 if let Err(e) = self.insert_order(valid) {
                     tracing::error!(%e, "failed to insert valid order");
@@ -396,6 +384,24 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                 }
                 Ok(PoolInnerEvent::None)
             }
+        }
+    }
+
+    /// For all the orders that get invalided, we will re-validate to calculate
+    /// the proper amount of funding to unblock them.
+    fn revalidate_invalidated_orders(&mut self, invalidates: &[B256]) {
+        let invalided_orders = invalidates
+            .iter()
+            .flat_map(|order| {
+                let id = self.order_tracker.order_hash_to_order_id.get(order)?;
+                self.order_storage.remove_order_from_id(id)
+            })
+            .collect::<Vec<_>>();
+
+        for order in invalided_orders {
+            self.order_tracker.start_validating(order.order_hash());
+            self.validator
+                .validate_order(OrderOrigin::ReValidation, order.order);
         }
     }
 
@@ -1217,7 +1223,15 @@ mod tests {
         } else {
             create_test_order(signer.address(), pool_key, None, Some(signer.clone()))
         };
-        let stored = OrderWithStorageData {
+        (indexer, signer, validated_order(order, pool_id, vec![]))
+    }
+
+    fn validated_order(
+        order: AllOrders,
+        pool_id: PoolId,
+        invalidates: Vec<B256>
+    ) -> OrderWithStorageData<AllOrders> {
+        OrderWithStorageData {
             order_id: OrderId::from_all_orders(&order, pool_id),
             order,
             cancel_requested: false,
@@ -1227,10 +1241,24 @@ mod tests {
             is_currently_valid: None,
             is_valid: true,
             priority_data: Default::default(),
-            invalidates: vec![],
+            invalidates,
             tob_reward: U256::ZERO
-        };
-        (indexer, signer, stored)
+        }
+    }
+
+    /// A replacement of `displaced` by the same owner (a distinct hash).
+    fn replacement_order(
+        owner: &AngstromSigner<PrivateKeySigner>,
+        displaced: &OrderWithStorageData<AllOrders>
+    ) -> AllOrders {
+        UserOrderBuilder::new()
+            .standing()
+            .asset_in(displaced.token_in())
+            .asset_out(displaced.token_out())
+            .amount(900)
+            .signing_key(Some(owner.clone()))
+            .recipient(Address::random())
+            .build()
     }
 
     #[tokio::test]
@@ -1431,6 +1459,39 @@ mod tests {
                 .pending_orders_for_address(owner.address())
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn cancel_during_validation_revalidates_displaced_orders() {
+        let (mut indexer, owner, displaced) = cancellation_fixture(false);
+        let displaced_hash = displaced.order_hash();
+        indexer
+            .handle_validated_order(OrderValidationResults::Valid(displaced.clone()))
+            .unwrap();
+        let replacement = replacement_order(&owner, &displaced);
+        let hash = replacement.order_hash();
+        let (tx, _rx) = tokio::sync::oneshot::channel();
+        indexer.new_rpc_order(OrderOrigin::Local, replacement.clone(), tx);
+        assert!(!indexer.cancel_order(&CancelOrderRequest::new(owner.address(), hash, &owner)));
+
+        // Validating the replacement released the displaced order's
+        // reservation; cancelling the replacement must not leave the displaced
+        // order live in storage without one.
+        let result = indexer
+            .handle_validated_order(OrderValidationResults::Valid(validated_order(
+                replacement,
+                displaced.pool_id,
+                vec![displaced_hash]
+            )))
+            .unwrap();
+        assert!(matches!(result, PoolInnerEvent::None));
+        assert!(
+            indexer
+                .order_storage
+                .get_order_from_id(&displaced.order_id)
+                .is_none()
+        );
+        assert!(indexer.order_tracker.is_validating(&displaced_hash));
     }
 
     #[test]

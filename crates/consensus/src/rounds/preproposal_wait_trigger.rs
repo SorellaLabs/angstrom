@@ -1,20 +1,12 @@
-use std::{
-    future::Future,
-    sync::Arc,
-    task::Poll,
-    time::{Duration, Instant}
-};
+use std::{future::Future, task::Poll, time::Duration};
 
 use rand::Rng;
-use tokio::time::{Interval, interval};
+use tokio::time::{Instant, Interval, interval};
 
-use crate::{ConsensusTimingConfig, rounds::OrderStorage};
+use crate::ConsensusTimingConfig;
 
-/// The frequency we adjust our duration estimate. we have it super frequent
-/// because its very low overhead to check
+/// Poll the cutoff committed when the round starts.
 const CHECK_INTERVAL: Duration = Duration::from_millis(1);
-/// How much to scale per order in the order pool
-const ORDER_SCALING: Duration = Duration::from_millis(10);
 /// How close we want to be to the creation of the ethereum block
 const TARGET_SUBMISSION_TIME_POST_MAX: Duration = Duration::from_millis(200);
 /// The amount of the difference we scale by to reach
@@ -27,12 +19,10 @@ const SCALING_REM_ADJUSTMENT: u32 = 10;
 /// never miss a possible slot.
 #[derive(Debug)]
 pub struct PreProposalWaitTrigger {
-    /// the base wait duration that we scale down based on orders.
+    /// Fixed for an active round; only the template is adjusted between rounds.
     wait_duration:  Duration,
     /// the start instant
     start_instant:  Instant,
-    /// to track our scaling
-    order_storage:  Arc<OrderStorage>,
     /// Waker
     check_interval: Interval,
     config:         ConsensusTimingConfig
@@ -45,7 +35,6 @@ impl Clone for PreProposalWaitTrigger {
         Self {
             wait_duration:  self.wait_duration + jitter,
             start_instant:  Instant::now(),
-            order_storage:  self.order_storage.clone(),
             check_interval: interval(CHECK_INTERVAL),
             config:         self.config
         }
@@ -53,13 +42,12 @@ impl Clone for PreProposalWaitTrigger {
 }
 
 impl PreProposalWaitTrigger {
-    pub fn new(order_storage: Arc<OrderStorage>, config: ConsensusTimingConfig) -> Self {
+    pub fn new(config: ConsensusTimingConfig) -> Self {
         let mut rng = rand::rng();
         let jitter = Duration::from_millis(rng.random_range(3..=40));
 
         Self {
             wait_duration: config.default_duration() + jitter,
-            order_storage,
             start_instant: Instant::now(),
             check_interval: interval(CHECK_INTERVAL),
             config
@@ -131,7 +119,7 @@ impl PreProposalWaitTrigger {
     }
 }
 
-/// Resolves once the scaling has past the start
+/// Incoming orders cannot change an active round's cutoff.
 impl Future for PreProposalWaitTrigger {
     type Output = ();
 
@@ -140,13 +128,7 @@ impl Future for PreProposalWaitTrigger {
         cx: &mut std::task::Context<'_>
     ) -> std::task::Poll<Self::Output> {
         while self.check_interval.poll_tick(cx).is_ready() {
-            let order_cnt = self.order_storage.get_all_orders().total_orders();
-
-            let target_resolve = self
-                .wait_duration
-                .saturating_sub(ORDER_SCALING * order_cnt as u32);
-
-            if Instant::now().duration_since(self.start_instant) > target_resolve {
+            if Instant::now().duration_since(self.start_instant) > self.wait_duration {
                 return Poll::Ready(());
             }
         }
@@ -155,11 +137,93 @@ impl Future for PreProposalWaitTrigger {
     }
 }
 
-/// Details on how to adjust our duration,
-/// Given that angstroms matching engine is linear time.
-/// we scale the timeout estimation linearly.
+/// Prior-round feedback for the next round's cutoff.
 #[derive(Debug)]
 pub struct LastRoundInfo {
-    /// the start of the round to submitting the bundle
+    /// Round start through matching completion, before encoding and submission.
     pub time_to_complete: Duration
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::B256;
+    use angstrom_types::{
+        orders::OrderId,
+        sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
+    };
+    use futures::FutureExt;
+    use order_pool::{PoolConfig, order_storage::OrderStorage};
+
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn incoming_orders_do_not_advance_the_active_cutoff() {
+        let pool_id = B256::ZERO;
+        let storage = OrderStorage::new(&PoolConfig::with_pool_ids(vec![pool_id]));
+        let mut trigger = PreProposalWaitTrigger::new(ConsensusTimingConfig::default());
+        trigger.wait_duration = Duration::from_secs(9);
+        tokio::time::advance(Duration::from_millis(8_500)).await;
+        assert!(
+            trigger
+                .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
+                .is_pending()
+        );
+
+        for i in 1..=100u8 {
+            let order = OrderWithStorageData::<TopOfBlockOrder> {
+                pool_id,
+                order_id: OrderId { hash: B256::from([i; 32]), ..Default::default() },
+                ..Default::default()
+            };
+            storage.add_new_searcher_order(order).unwrap();
+        }
+        assert_eq!(storage.get_all_orders().total_orders(), 100);
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert!(
+            trigger
+                .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
+                .is_pending()
+        );
+        tokio::time::advance(Duration::from_millis(500)).await;
+        assert!(
+            trigger
+                .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
+                .is_ready()
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn next_round_feedback_cannot_change_an_active_round() {
+        let mut template = PreProposalWaitTrigger::new(ConsensusTimingConfig::default());
+        let active = template.update_for_new_round(None, Duration::from_secs(2));
+        let committed = active.start_instant + active.wait_duration;
+        let initial_base = template.wait_duration;
+        assert!(
+            active.wait_duration
+                >= initial_base + Duration::from_millis(3) - Duration::from_secs(2)
+        );
+        assert!(
+            active.wait_duration
+                <= initial_base + Duration::from_millis(40) - Duration::from_secs(2)
+        );
+
+        template.reset_before_submission();
+        let _next = template.update_for_new_round(
+            Some(LastRoundInfo { time_to_complete: Duration::from_secs(12) }),
+            Duration::from_secs(1)
+        );
+        assert_eq!(active.start_instant + active.wait_duration, committed);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_round_started_after_its_budget_is_due_immediately() {
+        let mut template = PreProposalWaitTrigger::new(ConsensusTimingConfig::default());
+        let mut active = template.update_for_new_round(None, Duration::from_secs(20));
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert!(
+            active
+                .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
+                .is_ready()
+        );
+    }
 }

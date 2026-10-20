@@ -30,6 +30,7 @@ tracing.workspace = true
 uniswap-v4.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 dashmap.workspace = true
 testing-tools.workspace = true
 tracing.workspace = true

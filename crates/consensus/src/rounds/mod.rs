@@ -90,10 +90,8 @@ where
         shared_state: SharedRoundState<P, Matching, S>,
         slot_clock: SystemTimeSlotClock
     ) -> Self {
-        let mut consensus_wait_duration = PreProposalWaitTrigger::new(
-            shared_state.order_storage.clone(),
-            shared_state.consensus_config
-        );
+        let mut consensus_wait_duration =
+            PreProposalWaitTrigger::new(shared_state.consensus_config);
 
         let next_slot_duration = slot_clock.duration_to_next_slot().unwrap();
         let elapsed_time = slot_clock.slot_duration() - next_slot_duration;

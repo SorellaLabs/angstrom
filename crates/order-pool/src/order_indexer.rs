@@ -302,6 +302,11 @@ impl<V: OrderValidatorHandle<Order = AllOrders>> OrderIndexer<V> {
                                 angstrom_types::primitive::OrderValidationError::InvalidOrderAtBlock
                         }
                     );
+                    // The stale result is not applied, but validation reserved
+                    // funds for it and released those of the orders it
+                    // displaced.
+                    self.validator.cancel_order(valid.from(), hash);
+                    self.revalidate_invalidated_orders(&valid.invalidates);
 
                     let peers = self.order_tracker.invalid_verification(hash);
                     return Ok(PoolInnerEvent::BadOrderMessages(peers));
@@ -1509,6 +1514,33 @@ mod tests {
             )))
             .unwrap();
         assert!(matches!(result, PoolInnerEvent::None));
+        assert!(
+            indexer
+                .order_storage
+                .get_order_from_id(&displaced.order_id)
+                .is_none()
+        );
+        assert!(indexer.order_tracker.is_validating(&displaced_hash));
+    }
+
+    #[tokio::test]
+    async fn stale_validation_revalidates_displaced_orders() {
+        let (mut indexer, owner, displaced) = cancellation_fixture(false);
+        let displaced_hash = displaced.order_hash();
+        indexer
+            .handle_validated_order(OrderValidationResults::Valid(displaced.clone()))
+            .unwrap();
+        let mut stale = validated_order(
+            replacement_order(&owner, &displaced),
+            displaced.pool_id,
+            vec![displaced_hash]
+        );
+        stale.valid_block = indexer.block_number + 1;
+
+        let result = indexer
+            .handle_validated_order(OrderValidationResults::Valid(stale))
+            .unwrap();
+        assert!(matches!(result, PoolInnerEvent::BadOrderMessages(_)));
         assert!(
             indexer
                 .order_storage

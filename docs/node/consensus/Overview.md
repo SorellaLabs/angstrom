@@ -80,28 +80,54 @@ The node logs in reth's default terminal format with ANSI colors, which put
 escape codes between each field name and `=`. Filter on `auction_stage` alone; the
 analyzer strips the codes. JSON and logfmt log formats are not supported.
 
-Copy the log to the analysis machine, preserving one file per node. Run:
+Copy the logs to the analysis machine, one file per node. Run:
 
 ```sh
-python3 docs/node/consensus/analyze_delivery.py auction-delivery.log > delivery.json
+python3 docs/node/consensus/analyze_delivery.py node-*.log > delivery.json
 python3 -B -m unittest discover -s docs/node/consensus -p 'test_delivery.py'
 ```
 
-The report includes per-round rows and p50/p95/p99/max latencies. A builder
-attempt is a round with a builder bundle request; it counts attempts with and
-without a successful response and, separately, attempts with at least one missing
-response. Per
-endpoint it gives requests, missing responses, RPC errors, rejections, successes
-and response-time quantiles. Per order-count bucket it gives the same attempt
-counts with cutoff-to-matching-complete, matching (`matching_ms`) and
-first-builder-success latencies. A missing response means a stalled endpoint or
-a response after the collection window. Latency quantiles cover only rounds where
-the event exists; read them next to the attempt counts, not as a success rate.
-Rounds with more than one cutoff (reorg, restart or mixed nodes) or with events
-before their cutoff are excluded and listed with the reason. Missing inclusion is
-unknown, not failure.
+The report has one summary per node file. Each includes per-round rows, with
+every endpoint's request and response slot offsets, and p50/p95/p99/max
+latencies. A builder attempt is a round with a builder bundle request; the
+summary counts attempts with and without a successful response and, separately,
+attempts with at least one missing response. Per endpoint it gives requests,
+missing responses, RPC errors, rejections, successes and response-time
+quantiles. Per order-count bucket it gives the same attempt counts with
+cutoff-to-matching-complete, matching (`matching_ms`) and first-builder-success
+latencies. A missing response means a stalled endpoint or a response after the
+collection window. Latency quantiles cover only rounds where the event exists;
+read them next to the attempt counts, not as a success rate. Rounds with more
+than one cutoff (reorg, restart or mixed nodes) or with events before their
+cutoff are excluded and listed with the reason. Missing inclusion is unknown,
+not failure.
 Historical logs without these events cannot reconstruct first successful response
 timing; the tool deliberately refuses to infer it from the all-responses event.
+
+### Inclusion by the builder that built the block
+
+A bundle can only land in a block built by a builder that receives it, so a miss
+on a block built by a builder outside our endpoints says nothing about send time.
+Export `target_block,builder` for the window from the indexer (for example
+`builder_name` in `mainnet.block_builder_metrics`), name each builder endpoint
+by its origin (as logged in `endpoint_origin`), and run all node files together:
+
+```sh
+python3 docs/node/consensus/analyze_delivery.py node-*.log --winners winners.csv \
+  --endpoint-builder https://rpc.buildernet.org=BuilderNet > delivery.json
+```
+
+`by_winning_builder.builders` then covers only leader rounds that sent a bundle
+and whose target block that builder won. Per builder, overall and per
+order-count bucket, it gives rounds won, rounds that sent to that builder's
+endpoints and that got a successful or missing response from them, inclusion
+counts and rate over rounds with an observed outcome, and the slot offsets of the
+first request to that builder (`send_slot_offset_ms`) and of its first
+successful response. `unmapped_winners` counts bundle rounds whose block was
+built by a builder with no mapped origin. The request offset is when the
+request future is first polled, after nonce, fee, gas estimation and signing; an
+indexer `submission_started` offset plus endpoint `latency_ms` omits that work
+and includes the response path, so it is neither send nor arrival time.
 
 ## Acceptance before deployment
 
@@ -123,6 +149,30 @@ route at high load. Set a numerical deadline for the first successful builder
 response slot offset before the comparison; the historical matching-only sample
 does not establish one. A later explicit cutoff or changed feedback
 estimator would require a separate decision and validation.
+
+Judge send time per integrated builder on the blocks it won
+(`by_winning_builder`), by order-count bucket, baseline against candidate.
+The old rule moved the cutoff 10 ms earlier per stored order, so the baseline
+has no busy rounds sending near the template time. Builder inclusion exists only
+on mainnet, so this comparison runs there in steps: the baseline, then this
+candidate at `min_wait_duration_ms = 9000`, then 9500 for about a day. Accept a
+step if inclusion per integrated builder, on the blocks it won and per
+order-count bucket, stays within about one percentage point of the baseline.
+Report the round counts with each rate: at about 96 % inclusion, telling a
+one-point difference from noise at 95 % confidence takes about 3,000 rounds per
+builder and bucket in both the baseline and the step, so a day can judge only the
+largest builder and bucket combinations; pool buckets or extend the step for the
+rest. Report each builder's send
+and first-success response slot offsets (p50, p95, p99, max) with the rates; a
+9.5 s minimum moves sends past anything the baseline has observed.
+
+Each step restarts the validators. With three validators a quorum needs two, so
+restart one at a time. A restarting node can hit the existing panic in
+`crates/types/src/block_sync.rs` ("Consensus tried to sign off on a proposal that
+didn't exist"); systemd restarts it, costing about 70 s each time. Exclude the
+rounds around every restart from both arms. Measure matching time on the
+validators' own build (`maxperf` profile, jemalloc, `target-cpu=native`), not a
+debug or CI build.
 
 This removes bid-induced cutoff movement. It does not remove deadline sniping or
 establish an economic improvement: compare LP reward, inclusion, and bidder net

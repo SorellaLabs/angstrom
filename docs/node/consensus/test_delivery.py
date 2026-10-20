@@ -1,6 +1,6 @@
 import unittest
 
-from analyze_delivery import read_events, summarize
+from analyze_delivery import read_events, summarize, summarize_winners
 
 CUTOFF = '2026-10-20T20:00:08.000000Z INFO auction_stage="cutoff" target_block={block} slot_offset_ms=8000 limit_count=0 searcher_count={orders}'
 
@@ -87,6 +87,29 @@ class DeliveryTest(unittest.TestCase):
             response("07.999000", "mev_boost", 0, "false", "false"),
         ]))
         self.assertEqual((result["rounds"], result["excluded"][0]["target_block"]), (0, 42))
+
+    def test_delivery_is_judged_only_on_blocks_the_mapped_builder_won(self):
+        def round_lines(block, success, included):
+            return [CUTOFF.format(block=block, orders=60),
+                    endpoint_event("08.001000", "endpoint_request", "mev_boost", 0, block=block),
+                    endpoint_event("08.001000", "endpoint_request", "angstrom", 1, block=block),
+                    response("08.020000", "mev_boost", 0, "true", success, block=block),
+                    response("08.030000", "angstrom", 1, "true", "true", block=block),
+                    f'2026-10-20T20:00:20.000000Z INFO auction_stage="inclusion" target_block={block} included={included}']
+        bombora_only = [CUTOFF.format(block=46, orders=60),
+                        endpoint_event("08.001000", "endpoint_request", "angstrom", 1, block=46)]
+        rows = summarize(read_events(round_lines(42, "true", "true") + round_lines(43, "true", "false")
+                                     + round_lines(44, "false", "false") + [CUTOFF.format(block=45, orders=0)]
+                                     + bombora_only))["per_round"]
+        report = summarize_winners(rows, {42: "Titan", 43: "Eureka", 44: "Titan", 45: "Titan", 46: "Titan"},
+                                   {"https://mev_boost0.example": "Titan", "https://angstrom1.example": "Bombora"})
+        titan = report["builders"]["Titan"]
+        self.assertEqual((titan["rounds_won"], titan["sent"], titan["with_success_response"]), (3, 2, 1))
+        self.assertEqual((titan["inclusion_observed"], titan["included"], titan["inclusion_rate"]), (2, 1, 0.5))
+        self.assertEqual(titan["send_slot_offset_ms"]["max"], 8001)
+        self.assertEqual(titan["success_response_slot_offset_ms"]["max"], 8020)
+        self.assertEqual(titan["by_order_count"]["51-100"]["rounds_won"], 3)
+        self.assertEqual(report["unmapped_winners"], {"Eureka": {"rounds": 1, "included": 0}})
 
     def test_ansi_colored_terminal_lines_parse(self):
         line = ('\x1b[2m2026-10-20T20:00:08.000000Z\x1b[0m \x1b[32m INFO\x1b[0m msg '

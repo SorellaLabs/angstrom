@@ -86,7 +86,12 @@ impl ProposalState {
 
         // queue building future
         waker.wake_by_ref();
-        tracing::info!("proposal");
+        tracing::info!(
+            auction_stage = "matching_started",
+            target_block = handles.block_height + 1,
+            slot_offset_ms,
+            "auction matching started"
+        );
 
         Self {
             matching_engine_future: Some(

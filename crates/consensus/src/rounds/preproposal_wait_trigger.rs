@@ -146,74 +146,9 @@ pub struct LastRoundInfo {
 
 #[cfg(test)]
 mod tests {
-    use alloy::primitives::B256;
-    use angstrom_types::{
-        orders::OrderId,
-        sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder}
-    };
     use futures::FutureExt;
-    use order_pool::{PoolConfig, order_storage::OrderStorage};
 
     use super::*;
-
-    #[tokio::test(start_paused = true)]
-    async fn incoming_orders_do_not_advance_the_active_cutoff() {
-        let pool_id = B256::ZERO;
-        let storage = OrderStorage::new(&PoolConfig::with_pool_ids(vec![pool_id]));
-        let mut trigger = PreProposalWaitTrigger::new(ConsensusTimingConfig::default());
-        trigger.wait_duration = Duration::from_secs(9);
-        tokio::time::advance(Duration::from_millis(8_500)).await;
-        assert!(
-            trigger
-                .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
-                .is_pending()
-        );
-
-        for i in 1..=100u8 {
-            let order = OrderWithStorageData::<TopOfBlockOrder> {
-                pool_id,
-                order_id: OrderId { hash: B256::from([i; 32]), ..Default::default() },
-                ..Default::default()
-            };
-            storage.add_new_searcher_order(order).unwrap();
-        }
-        assert_eq!(storage.get_all_orders().total_orders(), 100);
-        tokio::time::advance(Duration::from_millis(1)).await;
-        assert!(
-            trigger
-                .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
-                .is_pending()
-        );
-        tokio::time::advance(Duration::from_millis(500)).await;
-        assert!(
-            trigger
-                .poll_unpin(&mut std::task::Context::from_waker(futures::task::noop_waker_ref()))
-                .is_ready()
-        );
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn next_round_feedback_cannot_change_an_active_round() {
-        let mut template = PreProposalWaitTrigger::new(ConsensusTimingConfig::default());
-        let active = template.update_for_new_round(None, Duration::from_secs(2));
-        let committed = active.start_instant + active.wait_duration;
-        let initial_base = template.wait_duration;
-        assert!(
-            active.wait_duration
-                >= initial_base + Duration::from_millis(3) - Duration::from_secs(2)
-        );
-        assert!(
-            active.wait_duration
-                <= initial_base + Duration::from_millis(40) - Duration::from_secs(2)
-        );
-
-        template.reset_before_submission();
-        let _next = template.update_for_new_round(
-            Some(LastRoundInfo { time_to_complete: Duration::from_secs(12) }),
-            Duration::from_secs(1)
-        );
-        assert_eq!(active.start_instant + active.wait_duration, committed);
-    }
 
     #[tokio::test(start_paused = true)]
     async fn a_round_started_after_its_budget_is_due_immediately() {

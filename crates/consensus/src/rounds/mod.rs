@@ -524,18 +524,20 @@ pub mod tests {
     };
 
     use alloy::{
-        primitives::Address,
+        primitives::{Address, B256},
         providers::{ProviderBuilder, RootProvider, fillers::*, network::Ethereum, *},
         signers::local::PrivateKeySigner
     };
     use angstrom_metrics::ConsensusMetricsWrapper;
     use angstrom_types::{
         consensus::{
-            StromConsensusEvent,
+            ConsensusRoundName, StromConsensusEvent,
             slot_clock::{SlotClock, SystemTimeSlotClock}
         },
         contract_payloads::angstrom::{AngstromPoolConfigStore, UniswapAngstromRegistry},
+        orders::OrderId,
         primitive::{AngstromSigner, UniswapPoolRegistry},
+        sol_bindings::{grouped_orders::OrderWithStorageData, rpc_orders::TopOfBlockOrder},
         submission::SubmissionHandler
     };
     use dashmap::DashMap;
@@ -551,7 +553,9 @@ pub mod tests {
     use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
 
     use super::{
-        ConsensusMessage, RoundStateMachine, SharedRoundState, pre_proposal::PreProposalState
+        ConsensusMessage, RoundStateMachine, SharedRoundState,
+        bid_aggregation::BidAggregationState, pre_proposal::PreProposalState,
+        preproposal_wait_trigger::PreProposalWaitTrigger
     };
     use crate::{
         AngstromValidator, ConsensusTimingConfig,
@@ -867,5 +871,44 @@ pub mod tests {
             }
         }));
         assert!(state_machine.shared_state.messages.is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn incoming_orders_do_not_move_the_bid_aggregation_cutoff() {
+        let mut state_machine = setup_state_machine().await;
+        let pool_id = B256::ZERO;
+        let order_storage = Arc::new(OrderStorage::new(&PoolConfig::with_pool_ids(vec![pool_id])));
+        state_machine.shared_state.order_storage = order_storage.clone();
+        // Default timing with no slot time elapsed: 8.5 s plus two 3-40 ms
+        // jitters.
+        let trigger = PreProposalWaitTrigger::new(ConsensusTimingConfig::default())
+            .update_for_new_round(None, Duration::ZERO);
+        state_machine.set_state_machine_at(Box::new(BidAggregationState::new(trigger)));
+        pin_mut!(state_machine);
+        let mut cx = Context::from_waker(futures::task::noop_waker_ref());
+
+        // The removed rule took 10 ms per stored order, so 900 orders closed
+        // the auction at once.
+        for i in 0..900u16 {
+            let order = OrderWithStorageData::<TopOfBlockOrder> {
+                pool_id,
+                order_id: OrderId {
+                    hash: B256::left_padding_from(&i.to_be_bytes()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            order_storage.add_new_searcher_order(order).unwrap();
+        }
+        assert!(state_machine.as_mut().poll_next(&mut cx).is_pending());
+
+        tokio::time::advance(Duration::from_millis(8_500)).await;
+        assert!(state_machine.as_mut().poll_next(&mut cx).is_pending());
+
+        tokio::time::advance(Duration::from_millis(100)).await;
+        assert!(matches!(
+            state_machine.as_mut().poll_next(&mut cx),
+            Poll::Ready(Some(ConsensusMessage::StateChange(ConsensusRoundName::PreProposal)))
+        ));
     }
 }

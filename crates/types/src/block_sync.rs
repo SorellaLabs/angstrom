@@ -639,6 +639,79 @@ pub mod test {
         global_sync.sign_off_on_block(MOD1, 11, None);
     }
 
+    /// Modules subscribe to chain events before they register. A block that
+    /// completes in between is delivered to the module even though the sync
+    /// advanced without it (consensus at node startup).
+    #[test]
+    fn test_late_joiner_signs_off_on_block_completed_before_it_registered() {
+        let global_sync = GlobalBlockSync::new(10);
+
+        global_sync.register(MOD1);
+        global_sync.new_block(11);
+        global_sync.sign_off_on_block(MOD1, 11, None);
+        assert_eq!(global_sync.current_block_number(), 11);
+
+        global_sync.register(MOD2);
+        global_sync.finalize_modules();
+
+        // MOD2 received block 11 before it registered.
+        global_sync.sign_off_on_block(MOD2, 11, None);
+        assert!(!global_sync.has_proposal());
+
+        global_sync.new_block(12);
+        global_sync.sign_off_on_block(MOD2, 12, None);
+        assert_eq!(global_sync.current_block_number(), 11);
+        global_sync.sign_off_on_block(MOD1, 12, None);
+        assert_eq!(global_sync.current_block_number(), 12);
+        assert!(!global_sync.has_proposal());
+    }
+
+    #[test]
+    fn test_late_joiner_signs_off_on_block_completed_while_next_is_pending() {
+        let global_sync = GlobalBlockSync::new(10);
+
+        global_sync.register(MOD1);
+        global_sync.new_block(11);
+        global_sync.sign_off_on_block(MOD1, 11, None);
+        global_sync.register(MOD2);
+        global_sync.finalize_modules();
+        global_sync.new_block(12);
+
+        global_sync.sign_off_on_block(MOD2, 11, None);
+        global_sync.sign_off_on_block(MOD2, 12, None);
+        global_sync.sign_off_on_block(MOD1, 12, None);
+        assert_eq!(global_sync.current_block_number(), 12);
+        assert!(!global_sync.has_proposal());
+    }
+
+    #[test]
+    #[should_panic(expected = "tried to sign off on a proposal that didn't exist")]
+    fn test_repeated_sign_off_on_completed_block() {
+        let global_sync = GlobalBlockSync::new(10);
+
+        global_sync.register(MOD1);
+        global_sync.finalize_modules();
+        global_sync.new_block(11);
+        global_sync.sign_off_on_block(MOD1, 11, None);
+
+        global_sync.sign_off_on_block(MOD1, 11, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "tried to sign off on a incorrect proposal")]
+    fn test_late_joiner_signs_off_on_future_block() {
+        let global_sync = GlobalBlockSync::new(10);
+
+        global_sync.register(MOD1);
+        global_sync.new_block(11);
+        global_sync.sign_off_on_block(MOD1, 11, None);
+        global_sync.register(MOD2);
+        global_sync.finalize_modules();
+        global_sync.new_block(12);
+
+        global_sync.sign_off_on_block(MOD2, 13, None);
+    }
+
     #[test]
     fn test_clear_pending_state() {
         let global_sync = GlobalBlockSync::new(10);

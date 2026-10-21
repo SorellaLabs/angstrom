@@ -268,10 +268,18 @@ impl Future for Telemetry {
 }
 
 pub async fn init_telemetry(node_address: Address, shutdown_handle: GracefulShutdown) {
+    // S3 is the only output. Without it, leave the sender unset so recorders
+    // skip building messages nothing would read.
+    let s3 = match S3Storage::new().await {
+        Ok(s3) => s3,
+        Err(error) => {
+            warn!(%error, "telemetry disabled: S3 is unavailable");
+            return;
+        }
+    };
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let _ = TELEMETRY_SENDER.set(tx);
-    let handles =
-        vec![Box::new(S3Storage::new().await.unwrap()) as Box<dyn TelemetryOutput + Send>];
+    let handles = vec![Box::new(s3) as Box<dyn TelemetryOutput + Send>];
 
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()

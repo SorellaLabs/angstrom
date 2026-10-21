@@ -2,7 +2,7 @@ use std::error::Error;
 
 use angstrom_types::primitive::CHAIN_ID;
 use aws_config::{Region, from_env};
-use aws_sdk_s3::{Client, primitives::ByteStream};
+use aws_sdk_s3::{Client, config::ProvideCredentials, primitives::ByteStream};
 
 use crate::{blocklog::BlockLog, outputs::TelemetryOutput};
 
@@ -33,7 +33,9 @@ impl TelemetryOutput for S3Storage {
     ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
         let this = self.clone();
         Box::pin(async move {
-            this.store_snapshot(&blocklog).await.unwrap();
+            if let Err(error) = this.store_snapshot(&blocklog).await {
+                tracing::warn!(blocknum = blocklog.blocknum(), %error, "failed to store telemetry snapshot");
+            }
         })
     }
 }
@@ -41,6 +43,12 @@ impl TelemetryOutput for S3Storage {
 impl S3Storage {
     pub async fn new() -> Result<Self, Box<dyn Error>> {
         let config = from_env().region(Region::new(REGION)).load().await;
+        // Without credentials every upload would fail, so refuse up front.
+        config
+            .credentials_provider()
+            .ok_or("no AWS credentials provider")?
+            .provide_credentials()
+            .await?;
         let client = Client::new(&config);
 
         Ok(Self {

@@ -1,5 +1,7 @@
+use alloy::primitives::U256;
 use amount_set::EnsureAmountSet;
 use angstrom_types::{primitive::OrderValidationError, sol_bindings::RawPoolOrder};
+use deadline::{EnsureNotExpired, expiry_horizon};
 use gas_set::EnsureGasSet;
 use max_gas_lt_min::EnsureMaxGasLessThanMinAmount;
 use price_set::EnsurePriceSet;
@@ -7,32 +9,47 @@ use price_set::EnsurePriceSet;
 use crate::order::state::order_validators::partial_min_delta::PartialMinDelta;
 
 pub mod amount_set;
+pub mod clock;
+pub mod deadline;
 pub mod gas_set;
 pub mod max_gas_lt_min;
 pub mod partial_min_delta;
 pub mod price_set;
 
-pub const ORDER_VALIDATORS: [OrderValidator; 5] = [
+pub const ORDER_VALIDATORS: [OrderValidator; 6] = [
     OrderValidator::EnsureAmountSet(EnsureAmountSet),
     OrderValidator::EnsureGasSet(EnsureGasSet),
     OrderValidator::EnsurePriceSet(EnsurePriceSet),
     OrderValidator::EnsureMaxGasLessThanMinAmount(EnsureMaxGasLessThanMinAmount),
-    OrderValidator::PartialMinDelta(PartialMinDelta)
+    OrderValidator::PartialMinDelta(PartialMinDelta),
+    OrderValidator::EnsureNotExpired(EnsureNotExpired)
 ];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct OrderValidationState<'a, O: RawPoolOrder> {
-    order:   &'a O,
-    min_qty: Option<u128>
+    order:          &'a O,
+    min_qty:        Option<u128>,
+    /// Deadlines are judged against this rather than a clock read inside the
+    /// validator, so replay can supply the recorded time.
+    expiry_horizon: U256
 }
 
 impl<'a, O: RawPoolOrder> OrderValidationState<'a, O> {
-    pub const fn new(order: &'a O) -> Self {
-        Self { order, min_qty: None }
+    /// Judges deadlines against the system clock.
+    pub fn new(order: &'a O) -> Self {
+        Self::at(order, expiry_horizon())
+    }
+
+    pub const fn at(order: &'a O, expiry_horizon: U256) -> Self {
+        Self { order, min_qty: None, expiry_horizon }
     }
 
     pub const fn order(&self) -> &'a O {
         self.order
+    }
+
+    pub const fn expiry_horizon(&self) -> U256 {
+        self.expiry_horizon
     }
 
     pub fn min_qty_in_t0(&mut self) -> u128 {
@@ -63,7 +80,8 @@ pub enum OrderValidator {
     EnsureMaxGasLessThanMinAmount(EnsureMaxGasLessThanMinAmount),
     EnsurePriceSet(EnsurePriceSet),
     EnsureGasSet(EnsureGasSet),
-    PartialMinDelta(PartialMinDelta)
+    PartialMinDelta(PartialMinDelta),
+    EnsureNotExpired(EnsureNotExpired)
 }
 
 impl OrderValidation for OrderValidator {
@@ -78,14 +96,14 @@ impl OrderValidation for OrderValidator {
             }
             OrderValidator::EnsureGasSet(validator) => validator.validate_order(state),
             OrderValidator::EnsurePriceSet(validator) => validator.validate_order(state),
-            OrderValidator::PartialMinDelta(validator) => validator.validate_order(state)
+            OrderValidator::PartialMinDelta(validator) => validator.validate_order(state),
+            OrderValidator::EnsureNotExpired(validator) => validator.validate_order(state)
         }
     }
 }
 
 #[cfg(test)]
 pub fn make_base_order() -> angstrom_types::sol_bindings::grouped_orders::AllOrders {
-    use alloy::primitives::U256;
     use angstrom_types::{primitive::Ray, sol_bindings::grouped_orders::AllOrders};
     use testing_tools::type_generator::orders::UserOrderBuilder;
 
@@ -95,7 +113,7 @@ pub fn make_base_order() -> angstrom_types::sol_bindings::grouped_orders::AllOrd
         .amount(1000)
         .bid_min_price(Ray(U256::from(1)))
         .block(100)
-        .deadline(U256::from(999_999))
+        .deadline(expiry_horizon() + U256::from(3600))
         .nonce(0)
         .recipient(Default::default())
         .build()

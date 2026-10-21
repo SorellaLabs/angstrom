@@ -1,7 +1,8 @@
 use alloy_primitives::{Address, TxHash};
 use angstrom_types::contract_bindings::{
-    angstrom::Angstrom::AngstromInstance, controller_v_1::ControllerV1,
-    pool_gate::PoolGate::PoolGateInstance, position_fetcher::PositionFetcher
+    angstrom::Angstrom::AngstromInstance, angstrom_protocol_fee_config::AngstromProtocolFeeConfig,
+    controller_v_1::ControllerV1, pool_gate::PoolGate::PoolGateInstance,
+    position_fetcher::PositionFetcher
 };
 use tracing::{debug, info};
 
@@ -15,10 +16,12 @@ pub trait TestAngstromEnv: TestAnvilEnvironment + TestUniswapEnv {
 #[derive(Clone)]
 pub struct AngstromEnv<E: TestUniswapEnv> {
     #[allow(dead_code)]
-    inner:            E,
-    angstrom:         Address,
-    controller_v1:    Address,
-    position_fetcher: Address
+    inner: E,
+    angstrom: Address,
+    controller_v1: Address,
+    position_fetcher: Address,
+    protocol_fee_config: Address,
+    protocol_fee_config_deployed_block: u64
 }
 
 impl<E> AngstromEnv<E>
@@ -28,20 +31,38 @@ where
     pub async fn new(inner: E, nodes: Vec<Address>) -> eyre::Result<Self> {
         let angstrom = Self::deploy_angstrom(&inner, nodes).await?;
         let controller_v1 = Self::deploy_controller_v1(&inner, angstrom).await?;
+        let (protocol_fee_config, protocol_fee_config_deployed_block) =
+            Self::deploy_protocol_fee_config(&inner, angstrom).await?;
         let position_fetcher = Self::deploy_position_fetcher(&inner, angstrom).await?;
 
         info!("Environment deploy complete!");
 
-        Ok(Self { inner, angstrom, controller_v1, position_fetcher })
+        Ok(Self {
+            inner,
+            angstrom,
+            controller_v1,
+            position_fetcher,
+            protocol_fee_config,
+            protocol_fee_config_deployed_block
+        })
     }
 
     pub fn new_existing(
         inner: E,
         angstrom: Address,
         controller_v1: Address,
-        position_fetcher: Address
+        position_fetcher: Address,
+        protocol_fee_config: Address,
+        protocol_fee_config_deployed_block: u64
     ) -> Self {
-        Self { inner, angstrom, controller_v1, position_fetcher }
+        Self {
+            inner,
+            angstrom,
+            controller_v1,
+            position_fetcher,
+            protocol_fee_config,
+            protocol_fee_config_deployed_block
+        }
     }
 
     async fn deploy_angstrom(inner: &E, nodes: Vec<Address>) -> eyre::Result<Address> {
@@ -104,6 +125,35 @@ where
         Ok(controller_v1_addr)
     }
 
+    /// Deploys the config bound to `angstrom` with the same initial splits as
+    /// the live deployments (75% user LP share, 100% ToB LP share).
+    async fn deploy_protocol_fee_config(
+        inner: &E,
+        angstrom: Address
+    ) -> eyre::Result<(Address, u64)> {
+        debug!("Deploying AngstromProtocolFeeConfig...");
+        let provider = inner.provider();
+        let receipt = inner
+            .execute_then_mine(async move {
+                let pending = AngstromProtocolFeeConfig::deploy_builder(
+                    provider, angstrom, 750_000, 1_000_000
+                )
+                .send()
+                .await?;
+                eyre::Ok(pending.get_receipt().await?)
+            })
+            .await?;
+        let address = receipt
+            .contract_address
+            .ok_or_else(|| eyre::eyre!("AngstromProtocolFeeConfig deployment has no address"))?;
+        let block = receipt
+            .block_number
+            .ok_or_else(|| eyre::eyre!("AngstromProtocolFeeConfig deployment was not mined"))?;
+        debug!("AngstromProtocolFeeConfig deployed at: {address} in block {block}");
+
+        Ok((address, block))
+    }
+
     async fn deploy_position_fetcher(inner: &E, angstrom: Address) -> eyre::Result<Address> {
         debug!("Deploying PositionFetcher...");
         let position_fetcher_addr = *inner
@@ -130,6 +180,14 @@ where
 
     pub fn position_fetcher(&self) -> Address {
         self.position_fetcher
+    }
+
+    pub fn protocol_fee_config(&self) -> Address {
+        self.protocol_fee_config
+    }
+
+    pub fn protocol_fee_config_deployed_block(&self) -> u64 {
+        self.protocol_fee_config_deployed_block
     }
 }
 

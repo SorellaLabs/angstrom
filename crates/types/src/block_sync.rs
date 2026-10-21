@@ -130,6 +130,12 @@ impl BlockSyncProducer for GlobalBlockSync {
         tracing::info!(?self.pending_state, "current pending state");
     }
 
+    /// NOTE: this spin waits for every module to have signed off on
+    /// `max_reorg_block`. A module whose queue front is a sign-off for a
+    /// *higher* block - one this reorg is about to undo - never satisfies that
+    /// comparison, so a reorg racing an in-flight block progression spins
+    /// forever. Safe today only because a single producer drives both calls in
+    /// order; it is a live hazard if that ever changes.
     fn reorg(&self, reorg_range: RangeInclusive<u64>) {
         let max_reorg_block = reorg_range.clone().max().unwrap();
         while self.is_transitioning(max_reorg_block) {

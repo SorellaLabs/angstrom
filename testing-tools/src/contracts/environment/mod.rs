@@ -11,7 +11,7 @@ use futures::Future;
 use tracing::debug;
 
 use super::anvil::WalletProviderRpc;
-use crate::contracts::anvil::{LocalAnvilRpc, spawn_anvil};
+use crate::contracts::anvil::{LocalAnvilRpc, spawn_anvil, spawn_anvil_forked};
 
 pub mod angstrom;
 pub mod uniswap;
@@ -67,7 +67,17 @@ pub struct SpawnedAnvil {
 impl SpawnedAnvil {
     pub async fn new() -> eyre::Result<Self> {
         debug!("Spawning Anvil...");
-        let (anvil, provider) = spawn_anvil(7).await?;
+        Self::from_spawn(spawn_anvil(7).await?)
+    }
+
+    /// Forked from `fork_url`, which is what makes the create3 factory Angstrom
+    /// is deployed through available.
+    pub async fn new_forked(fork_url: &str) -> eyre::Result<Self> {
+        debug!("Spawning forked Anvil...");
+        Self::from_spawn(spawn_anvil_forked(7, fork_url).await?)
+    }
+
+    fn from_spawn((anvil, provider): (AnvilInstance, WalletProviderRpc)) -> eyre::Result<Self> {
         let controller = anvil.addresses()[7];
         debug!("Anvil spawned");
         Ok(Self { anvil: anvil.into(), provider, controller })

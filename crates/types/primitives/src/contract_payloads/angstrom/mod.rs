@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash, ops::Deref, sync::Arc};
 
-use alloy_eips::BlockId;
+use alloy_eips::{BlockId, BlockNumHash};
 use alloy_network::Network;
 use alloy_primitives::{Address, B256, I256, U256, keccak256};
 use alloy_provider::Provider;
@@ -22,7 +22,6 @@ mod tob;
 pub use order::{OrderQuantities, StandingValidation, UserOrder};
 pub use tob::*;
 
-pub const LP_DONATION_SPLIT: f64 = 0.75;
 // We set high for ticks
 const BASE_GAS_FOR_POOL: usize = 350_000;
 const BASE_EST_FOR_USER: usize = 90_000;
@@ -123,16 +122,27 @@ impl AngstromBundle {
     }
 }
 
-#[allow(unused)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct BundleGasDetails {
     /// total gas to execute the bundle on angstrom
-    total_gas_cost_wei: u64
+    total_gas_cost_wei: u64,
+    /// The parent H this was simulated against, with H+1 as the execution
+    /// environment. Carried on the result so a caller can tell which state
+    /// produced it; a number alone cannot, since same-height reorgs exist.
+    parent:             BlockNumHash
 }
 
 impl BundleGasDetails {
-    pub fn new(total_gas_cost_wei: u64) -> Self {
-        Self { total_gas_cost_wei }
+    pub fn new(total_gas_cost_wei: u64, parent: BlockNumHash) -> Self {
+        Self { total_gas_cost_wei, parent }
+    }
+
+    pub fn gas_used(&self) -> u64 {
+        self.total_gas_cost_wei
+    }
+
+    pub fn parent(&self) -> BlockNumHash {
+        self.parent
     }
 }
 
@@ -185,7 +195,7 @@ impl std::str::FromStr for AngstromPoolPartialKey {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AngPoolConfigEntry {
     pub pool_partial_key: AngstromPoolPartialKey,
     pub tick_spacing:     u16,

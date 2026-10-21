@@ -144,34 +144,22 @@ impl BlockLog {
         base64::prelude::BASE64_STANDARD.encode(&compressed)
     }
 
-    pub fn from_deflate_base64(data: &[u8]) -> Self {
-        let bytes = match base64::prelude::BASE64_STANDARD.decode(data) {
-            Ok(b) => b,
-            Err(e) => {
-                tracing::error!("Failed to decode base64: {}", e);
-                panic!()
-            }
-        };
-
-        let mut codec = flate2::read::DeflateDecoder::new(bytes.as_slice());
+    pub fn from_deflate_base64(data: &[u8]) -> eyre::Result<Self> {
+        let bytes = base64::prelude::BASE64_STANDARD.decode(data)?;
         let mut s = vec![];
-        if let Err(e) = codec.read_to_end(&mut s) {
-            tracing::error!("Failed to decompress data: {}", e);
-            panic!()
-        }
-
-        match serde_json::from_slice(&s) {
-            Ok(block_log) => block_log,
-            Err(e) => {
-                tracing::error!("Failed to deserialize BlockLog: {}", e);
-                panic!()
-            }
-        }
+        flate2::read::DeflateDecoder::new(bytes.as_slice()).read_to_end(&mut s)?;
+        Ok(serde_json::from_slice(&s)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use alloy_primitives::{Address, B256};
+    use angstrom_eth::telemetry::{AngstromChainUpdate, EthUpdaterSnapshot};
+    use angstrom_types::contract_payloads::protocol_fees::{DonationSplitSnapshot, DonationSplits};
+
     use super::BlockLog;
 
     #[test]
@@ -179,7 +167,36 @@ mod tests {
         // Very basic compress/decompress test
         let log = BlockLog::new(100);
         let compressed = log.to_deflate_base64_str();
-        let decompressed = BlockLog::from_deflate_base64(compressed.as_bytes());
+        let decompressed = BlockLog::from_deflate_base64(compressed.as_bytes()).unwrap();
         assert_eq!(log.blocknum, decompressed.blocknum, "Blocknum does not match");
+    }
+
+    #[test]
+    fn a_recording_without_the_protocol_fee_config_loads_with_none() {
+        let mut log = BlockLog::new(100);
+        log.eth_snapshot = Some(EthUpdaterSnapshot {
+            angstrom_address:    Address::ZERO,
+            periphery_address:   Address::ZERO,
+            chain_update:        AngstromChainUpdate::New(Arc::new(Default::default())),
+            angstrom_tokens:     Default::default(),
+            pool_store:          Default::default(),
+            node_set:            Default::default(),
+            protocol_fee_config: Some(DonationSplitSnapshot {
+                block_number: 0,
+                block_hash:   B256::ZERO,
+                splits:       DonationSplits::new(750_000, 1_000_000).unwrap()
+            }),
+            timestamp:           Default::default()
+        });
+        let mut json = serde_json::to_value(&log).unwrap();
+        json["eth_snapshot"]
+            .as_object_mut()
+            .unwrap()
+            .remove("protocol_fee_config")
+            .unwrap();
+
+        let loaded: BlockLog = serde_json::from_value(json).unwrap();
+
+        assert_eq!(loaded.eth_snapshot.unwrap().protocol_fee_config, None);
     }
 }

@@ -13,6 +13,7 @@ alloy.workspace = true
 angstrom-types.workspace = true
 anyhow.workspace = true
 chrono = { version = "0.4.41", features = ["serde"] }
+eyre.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 itertools.workspace = true

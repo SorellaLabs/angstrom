@@ -1560,6 +1560,7 @@ dependencies = [
  "angstrom-types",
  "anyhow",
  "chrono",
+ "eyre",
  "futures",
  "futures-util",
  "itertools 0.11.0",
@@ -1646,6 +1647,7 @@ dependencies = [
 name = "angstrom-rpc"
 version = "0.1.0"
 dependencies = [
+ "alloy-eips 2.5.0",
  "alloy-primitives",
  "angstrom-amm-quoter",
  "angstrom-metrics",
@@ -1707,6 +1709,7 @@ dependencies = [
  "itertools 0.11.0",
  "malachite",
  "pade",
+ "parking_lot",
  "reqwest 0.12.28",
  "reth",
  "reth-chainspec",
@@ -1724,6 +1727,7 @@ dependencies = [
  "testing-tools",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
  "tower",
  "tracing",
  "tracing-subscriber",
@@ -1753,6 +1757,7 @@ dependencies = [
  "alloy-signer 2.5.0",
  "alloy-signer-local 2.4.2",
  "alloy-sol-types",
+ "alloy-transport 2.5.0",
  "angstrom-types",
  "angstrom-types-constants",
  "base64 0.22.1",
@@ -1772,7 +1777,9 @@ dependencies = [
  "rand 0.9.4",
  "secp256k1 0.30.0",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "uniswap_v3_math",
 ]
@@ -13252,6 +13259,7 @@ dependencies = [
 name = "telemetry-recorder"
 version = "0.1.0"
 dependencies = [
+ "alloy 2.4.2",
  "angstrom-types",
  "chrono",
  "serde",
@@ -13284,6 +13292,7 @@ dependencies = [
  "angstrom",
  "angstrom-amm-quoter",
  "angstrom-eth",
+ "angstrom-metrics",
  "angstrom-network",
  "angstrom-rpc",
  "angstrom-types",
@@ -14165,6 +14174,7 @@ dependencies = [
  "revm-bytecode",
  "revm-primitives",
  "serde",
+ "serde_json",
  "telemetry-recorder",
  "thiserror 1.0.69",
  "tokio",
@@ -14276,6 +14286,7 @@ name = "validation"
 version = "0.1.0"
 dependencies = [
  "alloy 2.4.2",
+ "alloy-evm",
  "angstrom-metrics",
  "angstrom-types",
  "angstrom-utils",
@@ -14287,6 +14298,7 @@ dependencies = [
  "parking_lot",
  "proptest",
  "rand 0.9.4",
+ "reth-chainspec",
  "reth-primitives-traits",
  "reth-provider",
  "reth-revm",

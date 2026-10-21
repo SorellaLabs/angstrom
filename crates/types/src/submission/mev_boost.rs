@@ -75,7 +75,7 @@ impl ChainSubmitter for MevBoostSubmitter {
 
             let tx = self
                 .build_and_sign_tx_with_gas(signer, bundle, tx_features)
-                .await;
+                .await?;
 
             let hash = *tx.tx_hash();
 
@@ -84,11 +84,15 @@ impl ChainSubmitter for MevBoostSubmitter {
                 block_number: tx_features.target_block,
                 ..Default::default()
             };
+            let cancel = &tx_features.cancel;
 
             // Submit to all endpoints and collect per-endpoint timing
             let results: Vec<_> = iter(self.clients.clone())
                 .map(async |(client, url)| {
                     let endpoint_start = std::time::Instant::now();
+                    if cancel.is_cancelled() {
+                        return (url, Err(TransportErrorKind::custom_str("round reset")), 0);
+                    }
                     let result = client
                         .raw_request::<(&EthSendBundle,), EthBundleHash>(
                             "eth_sendBundle".into(),

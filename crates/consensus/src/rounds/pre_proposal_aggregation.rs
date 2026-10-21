@@ -53,9 +53,9 @@ impl PreProposalAggregationState {
         let searcher_count = orders.searcher.len();
 
         let metrics = BlockMetricsWrapper::new();
-        metrics.record_preproposals_collected(handles.block_height, pre_proposals.len());
+        metrics.record_preproposals_collected(handles.block_height.number, pre_proposals.len());
         metrics.record_state_transition(
-            handles.block_height,
+            handles.block_height.number,
             "PreProposalAggregation",
             slot_offset_ms,
             limit_count,
@@ -64,7 +64,7 @@ impl PreProposalAggregationState {
 
         // generate my pre_proposal aggregation
         let my_preproposal_aggregation = PreProposalAggregation::new(
-            handles.block_height,
+            handles.block_height.number,
             &handles.signer,
             pre_proposals.into_iter().collect::<Vec<_>>()
         );
@@ -133,7 +133,7 @@ where
         // if  we are the leader, then we will transition
         if cur_preproposals_aggs >= twthr && handles.i_am_leader() {
             // Record that we are the leader for this block
-            BlockMetricsWrapper::new().record_is_leader(handles.block_height, true);
+            BlockMetricsWrapper::new().record_is_leader(handles.block_height.number, true);
 
             tracing::info!(
                 ?cur_preproposals_aggs,

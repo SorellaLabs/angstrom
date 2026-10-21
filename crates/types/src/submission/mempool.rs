@@ -1,6 +1,7 @@
 use alloy::{
     eips::Encodable2718,
-    providers::{Provider, ProviderBuilder, RootProvider}
+    providers::{Provider, ProviderBuilder, RootProvider},
+    transports::TransportErrorKind
 };
 use alloy_primitives::Address;
 use futures::stream::{StreamExt, iter};
@@ -53,15 +54,19 @@ impl ChainSubmitter for MempoolSubmitter {
 
             let tx = self
                 .build_and_sign_tx_with_gas(signer, bundle, tx_features)
-                .await;
+                .await?;
 
             let encoded_tx = tx.encoded_2718();
             let tx_hash = *tx.tx_hash();
+            let cancel = &tx_features.cancel;
 
             // Submit to all endpoints and collect per-endpoint timing
             let results: Vec<_> = iter(self.clients.clone())
                 .map(async |(client, url)| {
                     let endpoint_start = std::time::Instant::now();
+                    if cancel.is_cancelled() {
+                        return (url, Err(TransportErrorKind::custom_str("round reset")), 0);
+                    }
                     let result = client
                         .send_raw_transaction(&encoded_tx)
                         .await

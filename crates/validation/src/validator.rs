@@ -1,9 +1,12 @@
 use std::{fmt::Debug, sync::Arc, task::Poll};
 
-use alloy::primitives::{Address, B256, U256};
+use alloy::{
+    eips::BlockNumHash,
+    primitives::{Address, B256, U256}
+};
 use angstrom_types::{
     contract_payloads::angstrom::{AngstromBundle, BundleGasDetails},
-    reth_db_wrapper::SetBlock
+    reth_db_wrapper::AtBlock
 };
 use futures_util::{Future, FutureExt};
 use telemetry_recorder::telemetry_event;
@@ -21,7 +24,8 @@ use crate::{
         },
         state::{
             account::{UserAccountProcessor, user::UserAccounts},
-            db_state_utils::StateFetchUtils,
+            db_state_utils::{Repoint, StateFetchUtils},
+            order_validators::clock::ValidationClock,
             pools::PoolsTracker
         }
     }
@@ -33,14 +37,19 @@ pub enum ValidationRequest {
     /// gas cost has be delegated to each user order. ensures we won't have a
     /// failure.
     Bundle {
-        sender: tokio::sync::oneshot::Sender<eyre::Result<BundleGasDetails>>,
-        bundle: AngstromBundle
+        sender:      tokio::sync::oneshot::Sender<eyre::Result<BundleGasDetails>>,
+        bundle:      AngstromBundle,
+        /// The parent H to simulate against. Named by the caller, and carried
+        /// back on the result.
+        parent_hash: B256
     },
     NewBlock {
-        sender:       tokio::sync::oneshot::Sender<OrderValidationResults>,
-        block_number: u64,
-        orders:       Vec<B256>,
-        addresses:    Vec<Address>
+        sender:    tokio::sync::oneshot::Sender<OrderValidationResults>,
+        /// The head, named by the notification rather than looked up, so a
+        /// same-height reorg is followed to the branch it names.
+        block:     BlockNumHash,
+        orders:    Vec<B256>,
+        addresses: Vec<Address>
     },
     Nonce {
         sender:       tokio::sync::oneshot::Sender<u64>,
@@ -68,6 +77,7 @@ pub struct Validator<DB, Pools, Fetch> {
     order_validator:  OrderValidator<DB, Pools, Fetch>,
     bundle_validator: BundleValidator<DB>,
     utils:            SharedTools,
+    /// The state source order validation takes a fresh view of on each block.
     db:               Arc<DB>
 }
 
@@ -76,13 +86,15 @@ where
     DB: Unpin
         + Clone
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + revm::DatabaseRef
         + Send
         + Sync
         + 'static
-        + SetBlock,
+        + AtBlock,
     Pools: PoolsTracker + Send + Sync + 'static,
-    Fetch: StateFetchUtils + Send + Sync + 'static,
+    Fetch: StateFetchUtils + Repoint<DB> + Send + Sync + 'static,
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug
 {
     pub fn new(
@@ -93,6 +105,12 @@ where
         db: Arc<DB>
     ) -> Self {
         Self { order_validator, rx, utils, bundle_validator, db }
+    }
+
+    /// Replay installs its recorded-time clock here, so deadline admission
+    /// judges orders by when they were recorded rather than by today.
+    pub fn set_clock(&mut self, clock: ValidationClock) {
+        self.order_validator.state.set_clock(clock);
     }
 
     pub fn set_user_account(&mut self, account: UserAccounts) {
@@ -118,38 +136,44 @@ where
                 &mut self.utils.thread_pool,
                 self.utils.metrics.clone()
             ),
-            ValidationRequest::Bundle { sender, bundle } => {
-                tracing::debug!("simulating bundle");
-                let bn = self
-                    .order_validator
-                    .block_number
-                    .load(std::sync::atomic::Ordering::SeqCst);
+            ValidationRequest::Bundle { sender, bundle, parent_hash } => {
+                tracing::debug!(?parent_hash, "simulating bundle");
                 self.bundle_validator.simulate_bundle(
                     sender,
                     bundle,
+                    parent_hash,
                     &mut self.utils.thread_pool,
-                    self.utils.metrics.clone(),
-                    bn
+                    self.utils.metrics.clone()
                 );
             }
-            ValidationRequest::NewBlock { sender, block_number, orders, addresses } => {
+            ValidationRequest::NewBlock { sender, block, orders, addresses } => {
                 tracing::debug!("transitioning to new block");
+                // Order validation follows the head through a fresh view per block,
+                // never by moving a view a queued simulation may be reading through.
+                self.order_validator
+                    .repoint(Arc::new(self.db.at_block(block)));
                 self.utils.metrics.eth_transition_updates(|| {
                     self.order_validator
-                        .on_new_block(block_number, orders, addresses);
+                        .on_new_block(block.number, orders, addresses);
                 });
-
-                self.db.set_block(block_number);
 
                 let gas_updates = self.utils.token_pricing_ref().generate_gas_updates();
                 sender
                     .send(OrderValidationResults::TransitionedToBlock(gas_updates))
                     .unwrap();
-                telemetry_event!(block_number, self.utils.token_pricing_ref().to_snapshot());
+                telemetry_event!(block.number, self.utils.token_pricing_ref().to_snapshot());
             }
             ValidationRequest::Nonce { sender, user_address } => {
-                let nonce = self.order_validator.fetch_nonce(user_address);
-                let _ = sender.send(nonce);
+                match self.order_validator.fetch_nonce(user_address) {
+                    Ok(nonce) => {
+                        let _ = sender.send(nonce);
+                    }
+                    // Dropping `sender` fails this one request. Unreadable state, such as
+                    // a branch a reorg just removed, must not stop the validator.
+                    Err(error) => {
+                        tracing::error!(%error, ?user_address, "could not fetch a valid nonce")
+                    }
+                }
             }
             ValidationRequest::GasEstimation {
                 sender,
@@ -208,12 +232,14 @@ where
         + 'static
         + revm::DatabaseRef
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + Send
         + Sync
-        + SetBlock,
+        + AtBlock,
     <DB as revm::DatabaseRef>::Error: Send + Sync + Debug,
     Pools: PoolsTracker + Send + Sync + Unpin + 'static,
-    Fetch: StateFetchUtils + Send + Sync + Unpin + 'static
+    Fetch: StateFetchUtils + Repoint<DB> + Send + Sync + Unpin + 'static
 {
     type Output = ();
 
@@ -237,5 +263,149 @@ where
         }
 
         self.utils.poll_unpin(cx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::atomic::AtomicU64, task::Poll};
+
+    use angstrom_types::primitive::AngstromAddressConfig;
+    use tokio::{runtime::Handle, sync::oneshot};
+    use uniswap_v4::uniswap::pool_manager::SyncedUniswapPools;
+
+    use super::*;
+    use crate::{
+        bundle::tests::{FakeDb, PARENT, PARENT_NUMBER},
+        common::{TokenPriceGenerator, key_split_threadpool::KeySplitThreadpool},
+        order::{
+            sim::SimValidation,
+            state::{db_state_utils::FetchUtils, pools::AngstromPoolsTracker}
+        }
+    };
+
+    type TestValidator = Validator<FakeDb, AngstromPoolsTracker, FetchUtils<FakeDb>>;
+
+    /// A validator over `db`, plus the request sender that keeps it alive: a
+    /// closed request channel is its shutdown signal.
+    async fn validator(db: FakeDb) -> (TestValidator, UnboundedSender<ValidationRequest>) {
+        AngstromAddressConfig::INTERNAL_TESTNET.try_init();
+        let angstrom = Address::repeat_byte(0xaa);
+        let node = Address::repeat_byte(0xbb);
+        let db = Arc::new(db);
+        let pools = SyncedUniswapPools::new(Default::default(), tokio::sync::mpsc::channel(1).0);
+
+        let order_validator = OrderValidator::new(
+            SimValidation::new(db.clone(), angstrom, node),
+            Arc::new(AtomicU64::new(PARENT_NUMBER)),
+            AngstromPoolsTracker::new(angstrom, Default::default()),
+            FetchUtils::new(angstrom, db.clone()),
+            pools.clone()
+        )
+        .await;
+        let utils = SharedTools::new(
+            TokenPriceGenerator::from_snapshot(pools, HashMap::new(), Address::ZERO, 0),
+            Box::pin(futures::stream::pending()),
+            KeySplitThreadpool::new(Handle::current(), 1)
+        );
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let validator = Validator::new(
+            rx,
+            order_validator,
+            BundleValidator::new(db.clone(), angstrom, node),
+            utils,
+            db
+        );
+
+        (validator, tx)
+    }
+
+    /// The block order validation's state reads are pinned to.
+    fn order_view(validator: &TestValidator) -> Option<BlockNumHash> {
+        validator
+            .order_validator
+            .state
+            .user_account_tracker
+            .fetch_utils
+            .db
+            .pinned()
+    }
+
+    fn new_block(
+        validator: &mut TestValidator,
+        block: BlockNumHash
+    ) -> oneshot::Receiver<OrderValidationResults> {
+        let (sender, rx) = oneshot::channel();
+        validator.on_new_validation_request(ValidationRequest::NewBlock {
+            sender,
+            block,
+            orders: vec![],
+            addresses: vec![]
+        });
+        rx
+    }
+
+    /// Polls `validator` until `rx` resolves. A queued simulation only runs
+    /// while the validator's thread pool is polled.
+    async fn drive<T>(validator: &mut TestValidator, rx: oneshot::Receiver<T>) -> T {
+        tokio::select! {
+            res = rx => res.unwrap(),
+            _ = futures::future::poll_fn(|cx| {
+                let _ = validator.poll_unpin(cx);
+                Poll::<()>::Pending
+            }) => unreachable!()
+        }
+    }
+
+    #[tokio::test]
+    async fn a_new_block_and_a_queued_simulation_cannot_move_each_other() {
+        let db = FakeDb::knowing(PARENT_NUMBER);
+        let (mut validator, _keep_open) = validator(db.clone()).await;
+        let parent = BlockNumHash::new(PARENT_NUMBER, PARENT);
+
+        // Queue a simulation against the parent. It runs only once polled.
+        let (sender, rx) = oneshot::channel();
+        validator.on_new_validation_request(ValidationRequest::Bundle {
+            sender,
+            bundle: AngstromBundle::new(vec![], vec![], vec![], vec![], vec![]),
+            parent_hash: PARENT
+        });
+
+        // Move the head under it before it has run.
+        let head = BlockNumHash::new(PARENT_NUMBER + 1, B256::repeat_byte(0xb2));
+        new_block(&mut validator, head).await.unwrap();
+        assert_eq!(order_view(&validator), Some(head));
+
+        // It still resolved the parent it was handed, and every read it made went
+        // through a view of that parent — not the head that arrived meanwhile.
+        let details = drive(&mut validator, rx).await.unwrap();
+        assert_eq!(details.parent(), parent);
+        let reads = db.reads();
+        assert!(!reads.is_empty(), "the simulation read nothing");
+        assert!(reads.iter().all(|read| *read == Some(parent)), "{reads:?}");
+
+        // And running it moved nothing the other way: order validation still reads
+        // the head.
+        assert_eq!(order_view(&validator), Some(head));
+    }
+
+    #[tokio::test]
+    async fn a_transition_pins_order_validation_to_the_block_it_names() {
+        let db = FakeDb::knowing(PARENT_NUMBER);
+        let (mut validator, _keep_open) = validator(db.clone()).await;
+        let head = BlockNumHash::new(PARENT_NUMBER + 1, B256::repeat_byte(0xb2));
+        let other_branch = BlockNumHash::new(head.number, B256::repeat_byte(0xc3));
+
+        new_block(&mut validator, head).await.unwrap();
+        assert_eq!(order_view(&validator), Some(head));
+
+        // Same height, different branch: followed, not mistaken for the block it
+        // already has.
+        new_block(&mut validator, other_branch).await.unwrap();
+        assert_eq!(order_view(&validator), Some(other_branch));
+
+        // Neither transition looked anything up, so no unavailable state can stop
+        // one.
+        assert_eq!(db.reads(), vec![]);
     }
 }

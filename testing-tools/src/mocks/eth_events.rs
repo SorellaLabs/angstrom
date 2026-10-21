@@ -1,3 +1,4 @@
+use alloy::eips::BlockNumHash;
 use alloy_primitives::{Address, B256};
 use angstrom_eth::manager::EthEvent;
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
@@ -14,7 +15,7 @@ impl MockEthEventHandle {
         (Self { tx }, UnboundedReceiverStream::new(rx))
     }
 
-    pub fn trigger_new_block(&self, block: u64) {
+    pub fn trigger_new_block(&self, block: BlockNumHash) {
         self.tx
             .send(EthEvent::NewBlock(block))
             .expect("failed to send");
@@ -22,12 +23,12 @@ impl MockEthEventHandle {
 
     pub fn block_state_transition(
         &self,
-        block_number: u64,
+        block: BlockNumHash,
         filled_orders: Vec<B256>,
         address_changeset: Vec<Address>
     ) {
         self.tx
-            .send(EthEvent::NewBlockTransitions { block_number, filled_orders, address_changeset })
+            .send(EthEvent::NewBlockTransitions { block, filled_orders, address_changeset })
             .expect("failed to send");
     }
 
@@ -37,9 +38,14 @@ impl MockEthEventHandle {
             .expect("state changes")
     }
 
-    pub fn reorged_orders(&self, orders: Vec<B256>) {
+    pub fn reorged_orders(&self, orders: Vec<B256>, tip: BlockNumHash) {
         self.tx
-            .send(EthEvent::ReorgedOrders(orders, 0..=0))
+            .send(EthEvent::ReorgedOrders {
+                orders,
+                range: tip.number..=tip.number,
+                tip,
+                address_changeset: vec![]
+            })
             .expect("state changes")
     }
 }
@@ -60,7 +66,7 @@ impl MockEthSubscription {
         UnboundedReceiverStream::new(rx)
     }
 
-    pub fn trigger_new_block(&self, block: u64) {
+    pub fn trigger_new_block(&self, block: BlockNumHash) {
         for s in self.subscribers.iter() {
             s.send(EthEvent::NewBlock(block)).expect("failed to send");
         }

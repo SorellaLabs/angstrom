@@ -3,6 +3,7 @@ use std::{
     sync::OnceLock
 };
 
+use alloy::{eips::BlockNumHash, primitives::B256};
 use angstrom_types::{
     consensus::{ConsensusRoundName, StromConsensusEvent},
     contract_bindings::angstrom::Angstrom::PoolKey,
@@ -39,6 +40,14 @@ macro_rules! telemetry_event {
 
 pub trait OrderTelemetryExt {
     fn into_message(self) -> Option<TelemetryMessage>;
+}
+
+/// A ready-made message passes through, so `telemetry_event!(message)` works
+/// for variants that have no tuple conversion.
+impl OrderTelemetryExt for TelemetryMessage {
+    fn into_message(self) -> Option<TelemetryMessage> {
+        Some(self)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +107,29 @@ pub enum TelemetryMessage {
         timestamp: chrono::DateTime<Utc>,
         message:   String,
         backtrace: String
+    },
+    /// A bundle this node handed to its submitters, keyed by the hashes of the
+    /// orders in it and stamped with the parent it was built and priced on.
+    /// `blocknum` is the block it targeted.
+    BundleSubmitted {
+        blocknum:            u64,
+        timestamp:           chrono::DateTime<Utc>,
+        construction_parent: BlockNumHash,
+        order_hashes:        Vec<B256>
+    },
+    /// A bundle observed in canonical block `blocknum`, keyed the same way and
+    /// stamped with that block's parent. Joined with [`Self::BundleSubmitted`]
+    /// on `order_hashes`, a construction parent that differs from the
+    /// inclusion parent is a bundle that executed on a state it was not built
+    /// for.
+    BundleIncluded {
+        blocknum:         u64,
+        timestamp:        chrono::DateTime<Utc>,
+        /// The block's own hash, so two records at one height — a same-height
+        /// reorg the bundle landed on both sides of — stay distinguishable.
+        inclusion_block:  B256,
+        inclusion_parent: B256,
+        order_hashes:     Vec<B256>
     }
 }
 
@@ -108,7 +140,37 @@ impl TelemetryMessage {
             TelemetryMessage::CancelOrder { timestamp, .. } => *timestamp,
             TelemetryMessage::Consensus { timestamp, .. } => *timestamp,
             TelemetryMessage::ConsensusStateChange { timestamp, .. } => *timestamp,
+            TelemetryMessage::BundleSubmitted { timestamp, .. } => *timestamp,
+            TelemetryMessage::BundleIncluded { timestamp, .. } => *timestamp,
             _ => panic!("this event isn't timestamped")
+        }
+    }
+
+    pub fn bundle_submitted(
+        target_block: u64,
+        construction_parent: BlockNumHash,
+        order_hashes: Vec<B256>
+    ) -> Self {
+        Self::BundleSubmitted {
+            blocknum: target_block,
+            timestamp: Utc::now(),
+            construction_parent,
+            order_hashes
+        }
+    }
+
+    pub fn bundle_included(
+        block: u64,
+        inclusion_block: B256,
+        inclusion_parent: B256,
+        order_hashes: Vec<B256>
+    ) -> Self {
+        Self::BundleIncluded {
+            blocknum: block,
+            timestamp: Utc::now(),
+            inclusion_block,
+            inclusion_parent,
+            order_hashes
         }
     }
 }

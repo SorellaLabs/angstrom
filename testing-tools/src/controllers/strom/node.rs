@@ -355,6 +355,9 @@ where
 
     pub fn start_conensus(&self) {
         self.state_lock.set_consensus(true);
+        // Consensus is the last block-sync module to run, so blocks can now be
+        // applied without opening a proposal nobody signs off.
+        self.strom.release_canonical_updates();
     }
 
     pub fn stop_consensus(&self) {

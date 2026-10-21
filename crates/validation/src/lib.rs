@@ -13,7 +13,7 @@ use std::{
 use alloy::primitives::Address;
 use angstrom_types::{
     contract_payloads::angstrom::AngstromPoolConfigStore, pair_with_price::PairsWithPrice,
-    reth_db_wrapper::SetBlock
+    reth_db_wrapper::AtBlock
 };
 use bundle::BundleValidator;
 use common::SharedTools;
@@ -44,8 +44,10 @@ pub fn init_validation<
     DB: Unpin
         + Clone
         + 'static
-        + SetBlock
+        + AtBlock
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + revm::DatabaseRef
         + Send
         + Sync
@@ -81,8 +83,10 @@ pub fn init_validation_replay<
     DB: Unpin
         + Clone
         + 'static
-        + SetBlock
+        + AtBlock
         + reth_provider::BlockNumReader
+        + reth_provider::HeaderProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + revm::DatabaseRef
         + Send
         + Sync

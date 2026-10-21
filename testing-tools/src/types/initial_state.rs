@@ -7,7 +7,7 @@ use angstrom_types::{
     contract_bindings::{angstrom::Angstrom::PoolKey, mintable_mock_erc_20::MintableMockERC20},
     primitive::{
         ANGSTROM_ADDRESS, CONTROLLER_V1_ADDRESS, POOL_MANAGER_ADDRESS, POSITION_MANAGER_ADDRESS,
-        SqrtPriceX96
+        PROTOCOL_FEE_CONFIG_ADDRESS, PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK, SqrtPriceX96
     }
 };
 
@@ -199,12 +199,14 @@ pub struct InitialStateConfig {
 
 #[derive(Debug, Clone, Copy)]
 pub struct DeployedAddresses {
-    pub angstrom_address:         Address,
-    pub pool_gate_address:        Address,
-    pub controller_v1_address:    Address,
-    pub position_fetcher_address: Address,
-    pub pool_manager_address:     Address,
-    pub position_manager_address: Address
+    pub angstrom_address:                   Address,
+    pub pool_gate_address:                  Address,
+    pub controller_v1_address:              Address,
+    pub position_fetcher_address:           Address,
+    pub pool_manager_address:               Address,
+    pub position_manager_address:           Address,
+    pub protocol_fee_config_address:        Address,
+    pub protocol_fee_config_deployed_block: u64
 }
 
 impl DeployedAddresses {
@@ -213,6 +215,9 @@ impl DeployedAddresses {
         let controller_v1_address = CONTROLLER_V1_ADDRESS.get().cloned().unwrap();
         let position_manager_address = POSITION_MANAGER_ADDRESS.get().cloned().unwrap();
         let pool_manager_address = POOL_MANAGER_ADDRESS.get().cloned().unwrap();
+        let protocol_fee_config_address = PROTOCOL_FEE_CONFIG_ADDRESS.get().cloned().unwrap();
+        let protocol_fee_config_deployed_block =
+            PROTOCOL_FEE_CONFIG_DEPLOYED_BLOCK.get().cloned().unwrap();
 
         Self {
             angstrom_address,
@@ -220,7 +225,9 @@ impl DeployedAddresses {
             controller_v1_address,
             position_fetcher_address,
             pool_manager_address,
-            position_manager_address
+            position_manager_address,
+            protocol_fee_config_address,
+            protocol_fee_config_deployed_block
         }
     }
 }

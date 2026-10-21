@@ -4,7 +4,13 @@ use std::{
     sync::{Arc, atomic::AtomicUsize}
 };
 
-use alloy::{self, eips::BlockId, network::Network, primitives::Address, providers::Provider};
+use alloy::{
+    self,
+    eips::{BlockId, BlockNumHash},
+    network::Network,
+    primitives::Address,
+    providers::Provider
+};
 use alloy_primitives::U256;
 use angstrom::components::StromHandles;
 use angstrom_eth::manager::EthEvent;
@@ -18,9 +24,10 @@ use angstrom_types::{
         angstrom::{
             AngPoolConfigEntry, AngstromPoolConfigStore, AngstromPoolPartialKey,
             UniswapAngstromRegistry
-        }
+        },
+        protocol_fees::DonationSplitSnapshot
     },
-    primitive::{AngstromSigner, UniswapPoolRegistry},
+    primitive::{AngstromSigner, PROTOCOL_FEE_CONFIG_ADDRESS, UniswapPoolRegistry},
     submission::SubmissionHandler
 };
 use consensus::{AngstromValidator, ConsensusManager, ManagerNetworkDeps};
@@ -291,6 +298,31 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
     // spinup matching engine
     let matching_handle = MatchingManager::spawn(executor.clone(), validation_client.clone());
 
+    // The config read and consensus both name `block_id` by hash, so resolve it
+    // rather than handing either a placeholder.
+    let block_hash = provider
+        .rpc_provider()
+        .get_block_by_number(block_id.into())
+        .await?
+        .ok_or_else(|| eyre::eyre!("block {block_id} not found"))?
+        .header
+        .hash;
+
+    // Set by `AnvilInitializer::new` from the harness's own deployment.
+    let protocol_fee_config_address = *PROTOCOL_FEE_CONFIG_ADDRESS.get().ok_or_else(|| {
+        eyre::eyre!(
+            "the harness did not deploy and initialize `AngstromProtocolFeeConfig` (see \
+             `AngstromEnv::new` / `AnvilInitializer::new`)"
+        )
+    })?;
+    let protocol_fee_config = DonationSplitSnapshot::load_from_chain(
+        protocol_fee_config_address,
+        block_id,
+        block_hash,
+        &provider.rpc_provider()
+    )
+    .await?;
+
     let (state_tx, state_rx) = tokio::sync::mpsc::unbounded_channel();
     let manager = ConsensusManager::new(
         ManagerNetworkDeps::new(
@@ -302,7 +334,7 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         validators,
         order_storage.clone(),
         deploy_block,
-        block_id,
+        BlockNumHash::new(block_id, block_hash),
         uni_ang_registry,
         uniswap_pools.clone(),
         submission_handler,
@@ -311,7 +343,8 @@ pub async fn initialize_strom_components_at_block<Provider: WithWalletProvider>(
         handles.consensus_rx_rpc,
         Some(state_tx),
         consensus::ConsensusTimingConfig::default(),
-        SystemTimeSlotClock::new_default().unwrap()
+        SystemTimeSlotClock::new_default().unwrap(),
+        protocol_fee_config
     );
 
     executor.spawn_critical_with_graceful_shutdown_signal("consensus", move |grace| {

@@ -9,7 +9,7 @@ use std::{
     task::Waker
 };
 
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 
 /// Producer to block syncing events
 pub trait BlockSyncProducer: Debug + Clone + Send + Sync + Unpin + 'static {
@@ -69,6 +69,10 @@ pub struct GlobalBlockSync {
     /// the modules with there current sign off state for the transition of
     /// pending state -> cur state
     registered_modules:     Arc<DashMap<&'static str, VecDeque<SignOffState>>>,
+    /// registered modules that have not had a sign off accepted yet. Modules
+    /// subscribe to chain events before they register, so their first events
+    /// can be for blocks that completed before they joined.
+    joining_modules:        Arc<DashSet<&'static str>>,
     /// Avoids having a module join the set while running. This is to ensure
     /// no race conditions.
     all_modules_registered: Arc<AtomicBool>
@@ -80,6 +84,7 @@ impl GlobalBlockSync {
             block_number:           Arc::new(AtomicU64::new(block_number)),
             pending_state:          Arc::new(RwLock::new(VecDeque::with_capacity(2))),
             registered_modules:     Arc::new(DashMap::default()),
+            joining_modules:        Arc::new(DashSet::default()),
             all_modules_registered: AtomicBool::new(false).into()
         }
     }
@@ -161,6 +166,7 @@ impl BlockSyncConsumer for GlobalBlockSync {
         if !self.proper_proposal(&GlobalBlockState::PendingReorg(block_range.clone())) {
             panic!("{module} tried to sign off on a incorrect proposal");
         }
+        self.joining_modules.remove(module);
 
         let check = SignOffState::HandledReorg(waker);
 
@@ -196,20 +202,31 @@ impl BlockSyncConsumer for GlobalBlockSync {
 
     fn sign_off_on_block(&self, module: &'static str, block_number: u64, waker: Option<Waker>) {
         tracing::info!(?module, ?block_number, "module signed off for block");
-        // check to see if there is pending state
-        if self.pending_state.read().unwrap().is_empty() {
-            panic!("{module} tried to sign off on a proposal that didn't exist");
+        let proposal = GlobalBlockState::PendingProgression(block_number);
+        {
+            let pending_state = self.pending_state.read().unwrap();
+            if !pending_state.contains(&proposal) {
+                if self.joining_modules.contains(module)
+                    && block_number <= self.current_block_number()
+                {
+                    tracing::info!(
+                        ?module,
+                        ?block_number,
+                        "ignoring sign off on a block completed before the module registered"
+                    );
+                    return;
+                }
+                // check to see if there is pending state
+                if pending_state.is_empty() {
+                    panic!("{module} tried to sign off on a proposal that didn't exist");
+                }
+                panic!(
+                    "{module} tried to sign off on a incorrect proposal. current proposals: \
+                     {pending_state:?}, got proposal: {proposal:?}"
+                );
+            }
         }
-        // ensure the block number is cur_block + 1
-        if !self.proper_proposal(&GlobalBlockState::PendingProgression(block_number)) {
-            panic!(
-                "{} tried to sign off on a incorrect proposal. current proposals: {:?}, got \
-                 proposal: {:?}",
-                module,
-                self.pending_state,
-                GlobalBlockState::PendingProgression(block_number)
-            );
-        }
+        self.joining_modules.remove(module);
 
         let check = SignOffState::ReadyForNextBlock(waker, block_number);
 
@@ -232,12 +249,13 @@ impl BlockSyncConsumer for GlobalBlockSync {
                 return;
             };
 
-            drop(lock);
-
+            // advance under the lock so sign offs never see the proposal gone but the
+            // block number not yet advanced
             if let GlobalBlockState::PendingProgression(block_number) = new_state {
                 tracing::info!(handled_state=?new_state, "new block has been handled successfully");
                 self.block_number.store(block_number, Ordering::SeqCst);
             }
+            drop(lock);
 
             // reset sign off state
             self.registered_modules.iter_mut().for_each(|mut v| {
@@ -281,6 +299,7 @@ impl BlockSyncConsumer for GlobalBlockSync {
         {
             panic!("module registered twice with global block sync");
         }
+        self.joining_modules.insert(module_name);
     }
 }
 
